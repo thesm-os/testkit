@@ -254,15 +254,21 @@ linters:
       - common-false-positives
     rules:
       # Test functions are naturally large (table-driven, setup,
-      # multi-phase scenarios). Complexity linters add noise.
+      # multi-phase scenarios). Complexity and constant linters add noise.
       - path: '_test\.go'
-        linters: [gocognit, maintidx, cyclop, funlen]
+        linters: [gocognit, maintidx, cyclop, funlen, goconst]
 
-      # Test helpers and test files may use panic() for unreachable
-      # guards, return (nil, nil) from stubs, and use deterministic
-      # math/rand. These are intentional patterns.
+      # Test helpers, test files, and the gen engine may use panic()
+      # for unreachable guards, return (nil, nil) from stubs, use
+      # deterministic math/rand, and fmt.Sprintf for buffer writing.
       - path: '(_test\.go|testutil/|.*test/)'
         linters: [forbidigo, nilnil, unparam]
+
+      # gen/ engine legitimately uses fmt.Fprintf for buffer writing,
+      # fmt.Sprintf for error messages, and fmt.Errorf. When
+      # golangci-lint runs from inside gen/, paths are just filenames.
+      - path: '(render|write|output|loader|method|directive|errors|imports)\.go'
+        linters: [forbidigo]
 
       # fieldalignment is noise for a test infrastructure library —
       # structs here are not on hot paths.

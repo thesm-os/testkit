@@ -1,0 +1,147 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+package gen
+
+import (
+	"go/ast"
+	"strings"
+)
+
+const (
+	testkitDirectivePrefix  = "//testkit:"
+	generateDirectivePrefix = "//go:generate testkit "
+)
+
+// Directives returns all //testkit: annotations on the doc comment
+// of a top-level type declaration.
+func (p *Package) Directives(objectName string) []Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || ts.Name.Name != objectName {
+					continue
+				}
+				doc := ts.Doc
+				if doc == nil {
+					doc = gd.Doc
+				}
+				return parseDirectivesFromCommentGroup(doc)
+			}
+		}
+	}
+	return nil
+}
+
+// MethodDirectives returns all //testkit: annotations on a method
+// of an interface or concrete type.
+func (p *Package) MethodDirectives(typeName, methodName string) []Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			switch d := decl.(type) {
+			case *ast.GenDecl:
+				for _, spec := range d.Specs {
+					ts, ok := spec.(*ast.TypeSpec)
+					if !ok || ts.Name.Name != typeName {
+						continue
+					}
+					iface, ok := ts.Type.(*ast.InterfaceType)
+					if !ok {
+						continue
+					}
+					for _, field := range iface.Methods.List {
+						if len(field.Names) > 0 && field.Names[0].Name == methodName {
+							return parseDirectivesFromCommentGroup(field.Doc)
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				if d.Recv == nil || d.Name.Name != methodName {
+					continue
+				}
+				if recvTypeName(d.Recv) == typeName {
+					return parseDirectivesFromCommentGroup(d.Doc)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// GenerateDirectives returns all //go:generate testkit directives
+// found in the package's source files.
+func (p *Package) GenerateDirectives() []GenerateDirective {
+	var result []GenerateDirective
+	for _, f := range p.Syntax {
+		for _, cg := range f.Comments {
+			for _, c := range cg.List {
+				if !strings.HasPrefix(c.Text, generateDirectivePrefix) {
+					continue
+				}
+				d := parseGenerateDirective(c.Text)
+				d.File = p.Fset.Position(c.Pos()).Filename
+				d.Line = p.Fset.Position(c.Pos()).Line
+				result = append(result, d)
+			}
+		}
+	}
+	return result
+}
+
+// parseDirectivesFromCommentGroup extracts //testkit: directives from
+// a comment group.
+func parseDirectivesFromCommentGroup(doc *ast.CommentGroup) []Directive {
+	if doc == nil {
+		return nil
+	}
+	var result []Directive
+	for _, c := range doc.List {
+		text := strings.TrimSpace(c.Text)
+		if !strings.HasPrefix(text, testkitDirectivePrefix) {
+			continue
+		}
+		body := strings.TrimPrefix(text, testkitDirectivePrefix)
+		parts := strings.Fields(body)
+		if len(parts) == 0 {
+			continue
+		}
+		result = append(result, Directive{
+			Name: parts[0],
+			Args: parts[1:],
+		})
+	}
+	return result
+}
+
+// parseGenerateDirective parses a //go:generate testkit line into a
+// GenerateDirective. Extracts subcommand, -o flag, and type arguments.
+func parseGenerateDirective(text string) GenerateDirective {
+	body := strings.TrimPrefix(text, generateDirectivePrefix)
+	parts := strings.Fields(body)
+	if len(parts) == 0 {
+		return GenerateDirective{}
+	}
+
+	d := GenerateDirective{Generator: parts[0]}
+	parts = parts[1:]
+
+	// Parse flags and collect remaining args as type names.
+	for i := 0; i < len(parts); i++ {
+		if parts[i] == "-o" && i+1 < len(parts) {
+			d.Output = parts[i+1]
+			i++ // skip value
+			continue
+		}
+		// Skip other flags (start with -)
+		if strings.HasPrefix(parts[i], "-") {
+			continue
+		}
+		d.Types = append(d.Types, parts[i])
+	}
+	return d
+}
