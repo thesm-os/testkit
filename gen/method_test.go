@@ -17,7 +17,7 @@ func TestMethodInfo(t *testing.T) {
 	iface, err := pkg.Interface("Store")
 	testkit.NoError(t, err, "must load Store")
 
-	var get, put, del gen.MethodInfo
+	var get, put, del, find gen.MethodInfo
 	for _, m := range iface.Methods {
 		switch m.Name {
 		case "Get":
@@ -26,6 +26,8 @@ func TestMethodInfo(t *testing.T) {
 			put = m
 		case "Delete":
 			del = m
+		case "Find":
+			find = m
 		}
 	}
 
@@ -54,6 +56,7 @@ func TestMethodInfo(t *testing.T) {
 	t.Run("IsVariadic", func(t *testing.T) {
 		t.Parallel()
 		testkit.False(t, get.IsVariadic(), "Get is not variadic")
+		testkit.True(t, find.IsVariadic(), "Find is variadic")
 	})
 
 	t.Run("ParamList", func(t *testing.T) {
@@ -112,6 +115,22 @@ func TestMethodInfo(t *testing.T) {
 			Contains("error", "must include error result")
 	})
 
+	t.Run("variadic ParamList uses ellipsis", func(t *testing.T) {
+		t.Parallel()
+		tracker := gen.NewImportTracker("example.com/test")
+		got := find.ParamList(tracker)
+		testkit.Assert(t, got).Contains("...string", "variadic must use ellipsis")
+	})
+
+	t.Run("variadic FuncType uses ellipsis", func(t *testing.T) {
+		t.Parallel()
+		tracker := gen.NewImportTracker("example.com/test")
+		got := find.FuncType(tracker)
+		testkit.Assert(t, got).
+			Contains("...string", "variadic must use ellipsis in func type").
+			Contains("func(", "must start with func(")
+	})
+
 	t.Run("no-param method HasContext is false", func(t *testing.T) {
 		t.Parallel()
 		concretePkg := loadTestPackage(t, "concrete")
@@ -142,7 +161,7 @@ func TestMethodInfo(t *testing.T) {
 	})
 }
 
-func TestInterfaceInfo_TypeParams(t *testing.T) {
+func TestInterfaceInfoTypeParams(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "generics")
 	iface, err := pkg.Interface("Cache")
@@ -228,6 +247,81 @@ func TestZeroValueOf(t *testing.T) {
 		iface := types.NewInterfaceType(nil, nil)
 		iface.Complete()
 		testkit.Equal(t, gen.ZeroValueOf(iface, tracker), "nil", "interface zero")
+	})
+
+	t.Run("named struct uses qualified suffix", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		iface, err := pkg.Interface("Store")
+		testkit.NoError(t, err, "must load Store")
+		var get gen.MethodInfo
+		for _, m := range iface.Methods {
+			if m.Name == "Get" {
+				get = m
+			}
+		}
+		resultType := get.Signature.Results().At(0).Type()
+		tr := gen.NewImportTracker("example.com/other")
+		got := gen.ZeroValueOf(resultType, tr)
+		testkit.Assert(t, got).Contains("{}", "named struct zero uses suffix")
+	})
+
+	t.Run("array uses suffix", func(t *testing.T) {
+		t.Parallel()
+		arr := types.NewArray(types.Typ[types.Int], 3)
+		got := gen.ZeroValueOf(arr, tracker)
+		testkit.Assert(t, got).Contains("{}", "array zero uses suffix")
+	})
+
+	t.Run("named interface is nil", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		obj := pkg.Pkg.Scope().Lookup("Store")
+		got := gen.ZeroValueOf(obj.Type(), tracker)
+		testkit.Equal(t, got, "nil", "named interface zero is nil")
+	})
+}
+
+func TestStructInfoTypeParams(t *testing.T) {
+	t.Parallel()
+	pkg := loadTestPackage(t, "generics")
+
+	t.Run("generic struct has type params", func(t *testing.T) {
+		t.Parallel()
+		s, err := pkg.Struct("Pair")
+		testkit.NoError(t, err, "must load Pair")
+		testkit.Len(t, s.TypeParams, 2, "must have 2 type params")
+		testkit.Equal(t, s.TypeParams[0].Name, "A", "first is A")
+		testkit.Equal(t, s.TypeParams[1].Name, "B", "second is B")
+	})
+
+	t.Run("TypeParamDecl renders declaration", func(t *testing.T) {
+		t.Parallel()
+		s, err := pkg.Struct("Pair")
+		testkit.NoError(t, err, "must load Pair")
+		tracker := gen.NewImportTracker("example.com/test")
+		got := s.TypeParamDecl(tracker)
+		testkit.Assert(t, got).
+			Contains("[", "must have brackets").
+			Contains("A", "must include A").
+			Contains("B", "must include B")
+	})
+
+	t.Run("TypeParamArgs renders args", func(t *testing.T) {
+		t.Parallel()
+		s, err := pkg.Struct("Pair")
+		testkit.NoError(t, err, "must load Pair")
+		testkit.Equal(t, s.TypeParamArgs(), "[A, B]", "must render type args")
+	})
+
+	t.Run("non-generic struct returns empty", func(t *testing.T) {
+		t.Parallel()
+		basicPkg := loadTestPackage(t, "basic")
+		s, err := basicPkg.Struct("Item")
+		testkit.NoError(t, err, "must load Item")
+		tracker := gen.NewImportTracker("example.com/test")
+		testkit.Equal(t, s.TypeParamDecl(tracker), "", "non-generic must be empty")
+		testkit.Equal(t, s.TypeParamArgs(), "", "non-generic must be empty")
 	})
 }
 

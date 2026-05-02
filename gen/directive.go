@@ -5,6 +5,7 @@ package gen
 
 import (
 	"go/ast"
+	"go/token"
 	"strings"
 )
 
@@ -66,6 +67,94 @@ func (p *Package) MethodDirectives(typeName, methodName string) []Directive {
 				}
 				if recvTypeName(d.Recv) == typeName {
 					return parseDirectivesFromCommentGroup(d.Doc)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// FieldDirectives returns all //testkit: annotations on a struct field.
+func (p *Package) FieldDirectives(typeName, fieldName string) []Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || ts.Name.Name != typeName {
+					continue
+				}
+				strct, ok := ts.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				for _, field := range strct.Fields.List {
+					for _, name := range field.Names {
+						if name.Name == fieldName {
+							return parseDirectivesFromCommentGroup(field.Doc)
+						}
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// VarDirectives returns all //testkit: annotations on a package-level
+// variable declaration.
+func (p *Package) VarDirectives(varName string) []Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range vs.Names {
+					if name.Name == varName {
+						doc := vs.Doc
+						if doc == nil {
+							doc = gd.Doc
+						}
+						return parseDirectivesFromCommentGroup(doc)
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// ConstDirectives returns all //testkit: annotations on a package-level
+// constant declaration.
+func (p *Package) ConstDirectives(varName string) []Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok || gd.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, name := range vs.Names {
+					if name.Name == varName {
+						doc := vs.Doc
+						if doc == nil {
+							doc = gd.Doc
+						}
+						return parseDirectivesFromCommentGroup(doc)
+					}
 				}
 			}
 		}

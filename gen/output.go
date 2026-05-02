@@ -79,6 +79,13 @@ func OutputImportPath(outputPath string, pkg *Package) (string, error) {
 	return pkg.Pkg.Path() + "/" + filepath.ToSlash(dir), nil
 }
 
+// TestPathFrom derives the companion test file path from an impl path.
+// "storetest/store.gen.go" → "storetest/store.gen_test.go".
+func TestPathFrom(implPath string) string {
+	ext := filepath.Ext(implPath)
+	return strings.TrimSuffix(implPath, ext) + TestFileSuffix
+}
+
 // ValidateTypes checks that all named types exist in the package and
 // are of the expected kind. Returns a slice of positioned errors for
 // any failures.

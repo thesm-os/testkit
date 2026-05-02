@@ -10,6 +10,47 @@ import (
 	"go.thesmos.sh/testkit/gen"
 )
 
+func TestFuncMap(t *testing.T) {
+	t.Parallel()
+	fm := gen.FuncMap()
+
+	t.Run("contains all expected functions", func(t *testing.T) {
+		t.Parallel()
+		expected := []string{
+			"toLower", "toUpper", "title", "camelCase", "lowerCamelCase",
+			"snakeCase", "join", "quote", "isContext", "isError",
+			"isPointer", "isSlice", "isMap", "isChan",
+		}
+		for _, name := range expected {
+			testkit.True(t, fm[name] != nil, "must have "+name)
+		}
+	})
+
+	t.Run("functions work in template", func(t *testing.T) {
+		t.Parallel()
+		tmpl := `package foo
+
+const A = "{{ toLower "HELLO" }}"
+const B = "{{ toUpper "hello" }}"
+const C = "{{ title "id" }}"
+const D = "{{ camelCase "hello_world" }}"
+const E = "{{ lowerCamelCase "hello_world" }}"
+const F = "{{ snakeCase "HelloWorld" }}"
+const G = {{ quote "test" }}
+`
+		got, err := gen.Render(tmpl, nil, gen.Header{Subcommand: "test"})
+		testkit.NoError(t, err, "render must succeed")
+		s := string(got)
+		testkit.Assert(t, s).
+			Contains(`"hello"`, "toLower").
+			Contains(`"HELLO"`, "toUpper").
+			Contains(`"ID"`, "title with initialism").
+			Contains(`"HelloWorld"`, "camelCase").
+			Contains(`"helloWorld"`, "lowerCamelCase").
+			Contains(`"hello_world"`, "snakeCase")
+	})
+}
+
 func TestRender(t *testing.T) {
 	t.Parallel()
 

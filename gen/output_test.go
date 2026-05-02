@@ -41,6 +41,22 @@ func TestDerivePackageName(t *testing.T) {
 	})
 }
 
+func TestTestPathFrom(t *testing.T) {
+	t.Parallel()
+
+	t.Run("appends _test.go suffix", func(t *testing.T) {
+		t.Parallel()
+		got := gen.TestPathFrom("storetest/store.gen.go")
+		testkit.Equal(t, got, "storetest/store.gen_test.go", "must append _test.go")
+	})
+
+	t.Run("handles root path", func(t *testing.T) {
+		t.Parallel()
+		got := gen.TestPathFrom("errors.gen.go")
+		testkit.Equal(t, got, "errors.gen_test.go", "must work for root path")
+	})
+}
+
 func TestOutputImportPath(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "basic")
@@ -94,6 +110,13 @@ func TestValidateTypes(t *testing.T) {
 		t.Parallel()
 		errs := gen.ValidateTypes(pkg, []string{"Store", "Item", "Status"}, gen.KindAny)
 		testkit.Len(t, errs, 0, "must pass for any named type")
+	})
+
+	t.Run("interface when struct expected", func(t *testing.T) {
+		t.Parallel()
+		errs := gen.ValidateTypes(pkg, []string{"Store"}, gen.KindStruct)
+		testkit.Len(t, errs, 1, "must fail for interface when struct expected")
+		testkit.Assert(t, errs[0].Message).Contains("not a struct", "must describe mismatch")
 	})
 
 	t.Run("multiple errors collected", func(t *testing.T) {

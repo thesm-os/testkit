@@ -3,7 +3,10 @@
 
 package directives
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 //go:generate testkit stub -o storetest/in_memory_store.gen.go Store
 //go:generate testkit recording -o storetest/recording_store.gen.go Store
@@ -26,6 +29,33 @@ type Store interface {
 }
 
 // Item is a stored value.
+//
+//testkit:immutable
 type Item struct {
+	//testkit:optional
+	// ID uniquely identifies the item.
 	ID string
+
+	// Name has no directives.
+	Name string
 }
+
+// ErrNotFound is returned when the item does not exist.
+//
+//testkit:sentinel
+var ErrNotFound = errors.New("not found")
+
+// ErrConflict is returned on write conflicts.
+var ErrConflict = errors.New("conflict")
+
+// Status represents an item status.
+type Status int
+
+const (
+	//testkit:default
+	// StatusPending is the initial status.
+	StatusPending Status = iota
+
+	// StatusActive has no directives.
+	StatusActive
+)

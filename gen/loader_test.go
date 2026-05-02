@@ -42,13 +42,13 @@ func TestPackage(t *testing.T) {
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
 		testkit.Equal(t, iface.Name, "Store", "name must match")
-		testkit.Len(t, iface.Methods, 3, "must have 3 methods")
+		testkit.Len(t, iface.Methods, 4, "must have 4 methods")
 
 		names := make([]string, len(iface.Methods))
 		for i, m := range iface.Methods {
 			names[i] = m.Name
 		}
-		testkit.Equal(t, names, []string{"Delete", "Get", "Put"}, "must be sorted")
+		testkit.Equal(t, names, []string{"Delete", "Find", "Get", "Put"}, "must be sorted")
 	})
 
 	t.Run("Interface extracts method doc comments", func(t *testing.T) {
@@ -156,6 +156,18 @@ func TestPackage(t *testing.T) {
 			names[i] = v.Name
 		}
 		testkit.Equal(t, names, []string{"ErrConflict", "ErrNotFound"}, "must be sorted")
+	})
+
+	t.Run("ErrorVars with file filter", func(t *testing.T) {
+		t.Parallel()
+		vars := pkg.ErrorVars("basic.go")
+		testkit.True(t, len(vars) > 0, "must find vars in basic.go")
+	})
+
+	t.Run("ErrorVars with nonexistent file filter returns empty", func(t *testing.T) {
+		t.Parallel()
+		vars := pkg.ErrorVars("nonexistent.go")
+		testkit.Len(t, vars, 0, "must be empty for nonexistent file")
 	})
 
 	t.Run("ConstsOfType returns sorted constants", func(t *testing.T) {

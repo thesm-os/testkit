@@ -14,9 +14,16 @@ func TestDirectives(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "directives")
 
-	t.Run("type with no directives returns nil", func(t *testing.T) {
+	t.Run("type with directive", func(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.Directives("Item")
+		testkit.Len(t, dirs, 1, "must have 1 directive")
+		testkit.Equal(t, dirs[0].Name, "immutable", "directive name")
+	})
+
+	t.Run("type with no directives returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.Directives("Status")
 		testkit.True(t, dirs == nil, "must return nil for undirected type")
 	})
 
@@ -66,6 +73,106 @@ func TestMethodDirectives(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.MethodDirectives("Nonexistent", "Get")
 		testkit.True(t, dirs == nil, "must return nil for missing type")
+	})
+
+	t.Run("concrete method directive", func(t *testing.T) {
+		t.Parallel()
+		concretePkg := loadTestPackage(t, "concrete")
+		dirs := concretePkg.MethodDirectives("Service", "Run")
+		testkit.Len(t, dirs, 1, "must have 1 directive")
+		testkit.Equal(t, dirs[0].Name, "timeout", "directive name")
+		testkit.Equal(t, dirs[0].Args, []string{"5s"}, "directive args")
+	})
+
+	t.Run("concrete method without directives", func(t *testing.T) {
+		t.Parallel()
+		concretePkg := loadTestPackage(t, "concrete")
+		dirs := concretePkg.MethodDirectives("Service", "Stop")
+		testkit.Len(t, dirs, 0, "must have no directives")
+	})
+}
+
+func TestFieldDirectives(t *testing.T) {
+	t.Parallel()
+	pkg := loadTestPackage(t, "directives")
+
+	t.Run("field with directive", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.FieldDirectives("Item", "ID")
+		testkit.Len(t, dirs, 1, "must have 1 directive")
+		testkit.Equal(t, dirs[0].Name, "optional", "directive name")
+	})
+
+	t.Run("field with no directives", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.FieldDirectives("Item", "Name")
+		testkit.Len(t, dirs, 0, "must have no directives")
+	})
+
+	t.Run("nonexistent field returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.FieldDirectives("Item", "Nonexistent")
+		testkit.True(t, dirs == nil, "must return nil")
+	})
+
+	t.Run("nonexistent type returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.FieldDirectives("Nonexistent", "ID")
+		testkit.True(t, dirs == nil, "must return nil")
+	})
+
+	t.Run("interface type returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.FieldDirectives("Store", "Get")
+		testkit.True(t, dirs == nil, "must return nil for non-struct")
+	})
+}
+
+func TestVarDirectives(t *testing.T) {
+	t.Parallel()
+	pkg := loadTestPackage(t, "directives")
+
+	t.Run("var with directive", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.VarDirectives("ErrNotFound")
+		testkit.Len(t, dirs, 1, "must have 1 directive")
+		testkit.Equal(t, dirs[0].Name, "sentinel", "directive name")
+	})
+
+	t.Run("var with no directives", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.VarDirectives("ErrConflict")
+		testkit.Len(t, dirs, 0, "must have no directives")
+	})
+
+	t.Run("nonexistent var returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.VarDirectives("Nonexistent")
+		testkit.True(t, dirs == nil, "must return nil")
+	})
+}
+
+func TestConstDirectives(t *testing.T) {
+	t.Parallel()
+	pkg := loadTestPackage(t, "directives")
+
+	t.Run("const with directive", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.ConstDirectives("StatusPending")
+		testkit.Len(t, dirs, 1, "must have 1 directive")
+		testkit.Equal(t, dirs[0].Name, "default", "directive name")
+	})
+
+	t.Run("const with no directives", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.ConstDirectives("StatusActive")
+		testkit.Len(t, dirs, 0, "must have no directives")
+	})
+
+	t.Run("nonexistent const returns nil", func(t *testing.T) {
+		t.Parallel()
+		dirs := pkg.ConstDirectives("Nonexistent")
+		testkit.True(t, dirs == nil, "must return nil")
 	})
 }
 

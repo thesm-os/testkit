@@ -34,6 +34,8 @@ type Store interface {
 	Put(ctx context.Context, item Item) error
 	// Delete removes an item by ID.
 	Delete(ctx context.Context, id string) error
+	// Find retrieves multiple items by IDs.
+	Find(ctx context.Context, ids ...string) ([]Item, error)
 }
 
 // Item is a stored value.
