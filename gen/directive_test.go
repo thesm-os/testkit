@@ -1,12 +1,13 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
 
 func TestDirectives(t *testing.T) {
@@ -82,7 +83,7 @@ func TestGenerateDirectives(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.GenerateDirectives()
 		// Find the stub directive.
-		var stub GenerateDirective
+		var stub gen.GenerateDirective
 		for _, d := range dirs {
 			if d.Generator == "stub" {
 				stub = d
@@ -97,7 +98,7 @@ func TestGenerateDirectives(t *testing.T) {
 	t.Run("parses builder directive with output", func(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.GenerateDirectives()
-		var builder GenerateDirective
+		var builder gen.GenerateDirective
 		for _, d := range dirs {
 			if d.Generator == "builder" {
 				builder = d
@@ -116,31 +117,5 @@ func TestGenerateDirectives(t *testing.T) {
 			testkit.Assert(t, d.File).IsNotEmpty("must have filename")
 			testkit.True(t, d.Line > 0, "must have line number")
 		}
-	})
-}
-
-func TestParseGenerateDirective(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty body returns empty directive", func(t *testing.T) {
-		t.Parallel()
-		d := parseGenerateDirective("//go:generate testkit ")
-		testkit.Equal(t, d.Generator, "", "must be empty")
-	})
-
-	t.Run("subcommand only", func(t *testing.T) {
-		t.Parallel()
-		d := parseGenerateDirective("//go:generate testkit sentinel")
-		testkit.Equal(t, d.Generator, "sentinel", "generator")
-		testkit.Len(t, d.Types, 0, "no types")
-		testkit.Equal(t, d.Output, "", "no output")
-	})
-
-	t.Run("skips unknown flags", func(t *testing.T) {
-		t.Parallel()
-		d := parseGenerateDirective("//go:generate testkit stub -v -o out.go Store")
-		testkit.Equal(t, d.Generator, "stub", "generator")
-		testkit.Equal(t, d.Output, "out.go", "output")
-		testkit.Equal(t, d.Types, []string{"Store"}, "types")
 	})
 }

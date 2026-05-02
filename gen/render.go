@@ -40,8 +40,8 @@ func FuncMap() template.FuncMap {
 		"snakeCase":      SnakeCase,
 		"join":           strings.Join,
 		"quote":          strconv.Quote,
-		"isContext":      isContextType,
-		"isError":        isErrorType,
+		"isContext":      IsContextType,
+		"isError":        IsErrorType,
 		"isPointer":      func(t types.Type) bool { _, ok := t.(*types.Pointer); return ok },
 		"isSlice":        func(t types.Type) bool { _, ok := t.Underlying().(*types.Slice); return ok },
 		"isMap":          func(t types.Type) bool { _, ok := t.Underlying().(*types.Map); return ok },
@@ -105,5 +105,3 @@ func RenderTemplate(tmpl *template.Template, name string, data any, header Heade
 	}
 	return formatted, nil
 }
-
-// String transform helpers (Title, CamelCase, etc.) are in naming.go.

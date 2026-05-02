@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
 	"errors"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
 
 func TestError(t *testing.T) {
@@ -17,7 +18,7 @@ func TestError(t *testing.T) {
 	t.Run("with valid position includes file and line", func(t *testing.T) {
 		t.Parallel()
 		pos := token.Position{Filename: "store.go", Line: 42, Column: 5}
-		e := Errorf(pos, "type %q not found", "Store")
+		e := gen.Errorf(pos, "type %q not found", "Store")
 		testkit.Assert(t, e.Error()).
 			Contains("store.go", "must include filename").
 			Contains("42", "must include line number").
@@ -26,7 +27,7 @@ func TestError(t *testing.T) {
 
 	t.Run("without position omits file info", func(t *testing.T) {
 		t.Parallel()
-		e := Errorf(token.Position{}, "something failed")
+		e := gen.Errorf(token.Position{}, "something failed")
 		testkit.Equal(t, e.Error(), "something failed", "must be plain message")
 	})
 
@@ -34,7 +35,7 @@ func TestError(t *testing.T) {
 		t.Parallel()
 		cause := errors.New("underlying")
 		pos := token.Position{Filename: "store.go", Line: 10}
-		e := WrapErr(pos, cause, "loading failed")
+		e := gen.WrapErr(pos, cause, "loading failed")
 		testkit.Assert(t, e.Error()).
 			Contains("store.go", "must include filename").
 			Contains("loading failed", "must include message").
@@ -44,20 +45,20 @@ func TestError(t *testing.T) {
 	t.Run("with cause but no position", func(t *testing.T) {
 		t.Parallel()
 		cause := errors.New("underlying")
-		e := WrapErr(token.Position{}, cause, "loading failed")
+		e := gen.WrapErr(token.Position{}, cause, "loading failed")
 		testkit.Equal(t, e.Error(), "loading failed: underlying", "must format message: cause")
 	})
 
 	t.Run("Unwrap returns cause", func(t *testing.T) {
 		t.Parallel()
 		cause := errors.New("root cause")
-		e := WrapErr(token.Position{}, cause, "wrapper")
+		e := gen.WrapErr(token.Position{}, cause, "wrapper")
 		testkit.True(t, errors.Is(e, cause), "must unwrap to cause")
 	})
 
 	t.Run("Unwrap returns nil when no cause", func(t *testing.T) {
 		t.Parallel()
-		e := Errorf(token.Position{}, "no cause")
+		e := gen.Errorf(token.Position{}, "no cause")
 		testkit.True(t, e.Unwrap() == nil, "must return nil without cause")
 	})
 }

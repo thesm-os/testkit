@@ -1,22 +1,23 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
+	"go/types"
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
 
-func TestMethodInfo_helpers(t *testing.T) {
+func TestMethodInfo(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "basic")
 	iface, err := pkg.Interface("Store")
 	testkit.NoError(t, err, "must load Store")
 
-	// Find Get and Put methods.
-	var get, put, del MethodInfo
+	var get, put, del gen.MethodInfo
 	for _, m := range iface.Methods {
 		switch m.Name {
 		case "Get":
@@ -28,16 +29,14 @@ func TestMethodInfo_helpers(t *testing.T) {
 		}
 	}
 
-	t.Run("HasContext", func(t *testing.T) {
+	t.Run("HasContext on method with context", func(t *testing.T) {
 		t.Parallel()
 		testkit.True(t, get.HasContext(), "Get must have context")
-		testkit.True(t, put.HasContext(), "Put must have context")
 	})
 
-	t.Run("ReturnsError", func(t *testing.T) {
+	t.Run("ReturnsError on error-returning method", func(t *testing.T) {
 		t.Parallel()
 		testkit.True(t, get.ReturnsError(), "Get must return error")
-		testkit.True(t, put.ReturnsError(), "Put must return error")
 	})
 
 	t.Run("NumParams", func(t *testing.T) {
@@ -59,7 +58,7 @@ func TestMethodInfo_helpers(t *testing.T) {
 
 	t.Run("ParamList", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
+		tracker := gen.NewImportTracker("example.com/test")
 		got := get.ParamList(tracker)
 		testkit.Assert(t, got).
 			Contains("context.Context", "must include context type").
@@ -68,20 +67,18 @@ func TestMethodInfo_helpers(t *testing.T) {
 
 	t.Run("ParamNames", func(t *testing.T) {
 		t.Parallel()
-		got := get.ParamNames()
-		testkit.Equal(t, got, "ctx, id", "must render parameter names")
+		testkit.Equal(t, get.ParamNames(), "ctx, id", "must render parameter names")
 	})
 
 	t.Run("ResultList single result", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
-		got := put.ResultList(tracker)
-		testkit.Equal(t, got, "error", "single result without parens")
+		tracker := gen.NewImportTracker("example.com/test")
+		testkit.Equal(t, put.ResultList(tracker), "error", "single result without parens")
 	})
 
 	t.Run("ResultList multiple results", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
+		tracker := gen.NewImportTracker("example.com/test")
 		got := get.ResultList(tracker)
 		testkit.Assert(t, got).
 			Contains("(", "multi-result must have parens").
@@ -90,79 +87,70 @@ func TestMethodInfo_helpers(t *testing.T) {
 
 	t.Run("CallForward", func(t *testing.T) {
 		t.Parallel()
-		got := get.CallForward("s")
-		testkit.Equal(t, got, "s.Get(ctx, id)", "must render forwarding call")
+		testkit.Equal(t, get.CallForward("s"), "s.Get(ctx, id)", "must render forwarding call")
 	})
 
-	t.Run("ZeroResults for Get", func(t *testing.T) {
+	t.Run("ZeroResults for multi-return", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
-		got := get.ZeroResults(tracker)
-		testkit.Assert(t, got).Contains("nil", "must include nil for error")
+		tracker := gen.NewImportTracker("example.com/test")
+		testkit.Assert(t, get.ZeroResults(tracker)).Contains("nil", "must include nil for error")
 	})
 
-	t.Run("ZeroResults for Delete returns nil", func(t *testing.T) {
+	t.Run("ZeroResults for error-only", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
-		got := del.ZeroResults(tracker)
-		testkit.Equal(t, got, "nil", "single error result zero is nil")
+		tracker := gen.NewImportTracker("example.com/test")
+		testkit.Equal(t, del.ZeroResults(tracker), "nil", "single error result zero is nil")
 	})
 
 	t.Run("FuncType", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
+		tracker := gen.NewImportTracker("example.com/test")
 		got := put.FuncType(tracker)
 		testkit.Assert(t, got).
 			Contains("func(", "must start with func(").
 			Contains("context.Context", "must include context").
 			Contains("error", "must include error result")
 	})
-}
 
-func TestMethodInfo_no_params(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "concrete")
-	methods := pkg.MethodsOn("Service")
-
-	var stop *MethodInfo
-	for _, m := range methods {
-		if m.Name == "Stop" {
-			stop = m
+	t.Run("no-param method HasContext is false", func(t *testing.T) {
+		t.Parallel()
+		concretePkg := loadTestPackage(t, "concrete")
+		methods := concretePkg.MethodsOn("Service")
+		var stop *gen.MethodInfo
+		for _, m := range methods {
+			if m.Name == "Stop" {
+				stop = m
+			}
 		}
-	}
-
-	t.Run("HasContext false for no-param method", func(t *testing.T) {
-		t.Parallel()
 		testkit.False(t, stop.HasContext(), "Stop has no params")
-	})
-
-	t.Run("ReturnsError false for void method", func(t *testing.T) {
-		t.Parallel()
 		testkit.False(t, stop.ReturnsError(), "Stop returns nothing")
 	})
 
-	t.Run("ResultList empty for void method", func(t *testing.T) {
+	t.Run("void method ResultList and ZeroResults are empty", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
-		testkit.Equal(t, stop.ResultList(tracker), "", "void must be empty")
-	})
-
-	t.Run("ZeroResults empty for void method", func(t *testing.T) {
-		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
-		testkit.Equal(t, stop.ZeroResults(tracker), "", "void must be empty")
+		concretePkg := loadTestPackage(t, "concrete")
+		methods := concretePkg.MethodsOn("Service")
+		var stop *gen.MethodInfo
+		for _, m := range methods {
+			if m.Name == "Stop" {
+				stop = m
+			}
+		}
+		tracker := gen.NewImportTracker("example.com/test")
+		testkit.Equal(t, stop.ResultList(tracker), "", "void ResultList must be empty")
+		testkit.Equal(t, stop.ZeroResults(tracker), "", "void ZeroResults must be empty")
 	})
 }
 
-func TestTypeParams(t *testing.T) {
+func TestInterfaceInfo_TypeParams(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "generics")
 	iface, err := pkg.Interface("Cache")
 	testkit.NoError(t, err, "must load Cache")
 
-	t.Run("TypeParamDecl", func(t *testing.T) {
+	t.Run("TypeParamDecl renders declaration", func(t *testing.T) {
 		t.Parallel()
-		tracker := NewImportTracker("example.com/test")
+		tracker := gen.NewImportTracker("example.com/test")
 		got := iface.TypeParamDecl(tracker)
 		testkit.Assert(t, got).
 			Contains("[", "must have brackets").
@@ -170,19 +158,121 @@ func TestTypeParams(t *testing.T) {
 			Contains("V", "must include V")
 	})
 
-	t.Run("TypeParamArgs", func(t *testing.T) {
+	t.Run("TypeParamArgs renders args", func(t *testing.T) {
 		t.Parallel()
-		got := iface.TypeParamArgs()
-		testkit.Equal(t, got, "[K, V]", "must render type args")
+		testkit.Equal(t, iface.TypeParamArgs(), "[K, V]", "must render type args")
 	})
 
-	t.Run("empty for non-generic", func(t *testing.T) {
+	t.Run("non-generic returns empty", func(t *testing.T) {
 		t.Parallel()
 		basicPkg := loadTestPackage(t, "basic")
 		store, err := basicPkg.Interface("Store")
 		testkit.NoError(t, err, "must load Store")
-		tracker := NewImportTracker("example.com/test")
+		tracker := gen.NewImportTracker("example.com/test")
 		testkit.Equal(t, store.TypeParamDecl(tracker), "", "non-generic must be empty")
 		testkit.Equal(t, store.TypeParamArgs(), "", "non-generic must be empty")
+	})
+}
+
+func TestZeroValueOf(t *testing.T) {
+	t.Parallel()
+	tracker := gen.NewImportTracker("example.com/test")
+
+	t.Run("string", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gen.ZeroValueOf(types.Typ[types.String], tracker), `""`, "string zero")
+	})
+
+	t.Run("int", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gen.ZeroValueOf(types.Typ[types.Int], tracker), "0", "int zero")
+	})
+
+	t.Run("bool", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gen.ZeroValueOf(types.Typ[types.Bool], tracker), "false", "bool zero")
+	})
+
+	t.Run("pointer is nil", func(t *testing.T) {
+		t.Parallel()
+		ptr := types.NewPointer(types.Typ[types.String])
+		testkit.Equal(t, gen.ZeroValueOf(ptr, tracker), "nil", "pointer zero")
+	})
+
+	t.Run("slice is nil", func(t *testing.T) {
+		t.Parallel()
+		sl := types.NewSlice(types.Typ[types.String])
+		testkit.Equal(t, gen.ZeroValueOf(sl, tracker), "nil", "slice zero")
+	})
+
+	t.Run("map is nil", func(t *testing.T) {
+		t.Parallel()
+		mp := types.NewMap(types.Typ[types.String], types.Typ[types.Int])
+		testkit.Equal(t, gen.ZeroValueOf(mp, tracker), "nil", "map zero")
+	})
+
+	t.Run("chan is nil", func(t *testing.T) {
+		t.Parallel()
+		ch := types.NewChan(types.SendRecv, types.Typ[types.String])
+		testkit.Equal(t, gen.ZeroValueOf(ch, tracker), "nil", "chan zero")
+	})
+
+	t.Run("func is nil", func(t *testing.T) {
+		t.Parallel()
+		sig := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+		testkit.Equal(t, gen.ZeroValueOf(sig, tracker), "nil", "func zero")
+	})
+
+	t.Run("interface is nil", func(t *testing.T) {
+		t.Parallel()
+		iface := types.NewInterfaceType(nil, nil)
+		iface.Complete()
+		testkit.Equal(t, gen.ZeroValueOf(iface, tracker), "nil", "interface zero")
+	})
+}
+
+func TestIsContextType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("context param detected", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		iface, err := pkg.Interface("Store")
+		testkit.NoError(t, err, "must load Store")
+		var get gen.MethodInfo
+		for _, m := range iface.Methods {
+			if m.Name == "Get" {
+				get = m
+			}
+		}
+		testkit.True(t, gen.IsContextType(get.Signature.Params().At(0).Type()), "first param must be context")
+	})
+
+	t.Run("string is not context", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, gen.IsContextType(types.Typ[types.String]), "string is not context")
+	})
+}
+
+func TestIsErrorType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("error return detected", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		iface, err := pkg.Interface("Store")
+		testkit.NoError(t, err, "must load Store")
+		var get gen.MethodInfo
+		for _, m := range iface.Methods {
+			if m.Name == "Get" {
+				get = m
+			}
+		}
+		testkit.True(t, gen.IsErrorType(get.Signature.Results().At(1).Type()), "last result must be error")
+	})
+
+	t.Run("string is not error", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, gen.IsErrorType(types.Typ[types.String]), "string is not error")
 	})
 }

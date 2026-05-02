@@ -8,8 +8,8 @@ import "embed"
 //go:embed templates/*.tmpl
 var templateFS embed.FS
 
-// templateFile returns the content of an embedded template file.
-func templateFile(name string) string {
+// TemplateFile returns the content of an embedded template file.
+func TemplateFile(name string) string {
 	data, err := templateFS.ReadFile("templates/" + name)
 	if err != nil {
 		// Templates are embedded at compile time — a missing template

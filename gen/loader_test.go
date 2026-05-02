@@ -1,40 +1,22 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
 	"path/filepath"
-	"runtime"
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
-
-func testdataDir(t *testing.T) string {
-	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot determine test file location")
-	}
-	return filepath.Join(filepath.Dir(file), "testdata")
-}
-
-func loadTestPackage(t *testing.T, subdir string) *Package {
-	t.Helper()
-	loader := NewLoader()
-	dir := filepath.Join(testdataDir(t), subdir)
-	pkg, err := loader.Load(".", dir)
-	testkit.NoError(t, err, "must load package")
-	return pkg
-}
 
 func TestLoader(t *testing.T) {
 	t.Parallel()
 
 	t.Run("caches by import path", func(t *testing.T) {
 		t.Parallel()
-		loader := NewLoader()
+		loader := gen.NewLoader()
 		dir := filepath.Join(testdataDir(t), "basic")
 		p1, err := loader.Load(".", dir)
 		testkit.NoError(t, err, "first load")
@@ -45,28 +27,23 @@ func TestLoader(t *testing.T) {
 
 	t.Run("returns error for nonexistent package", func(t *testing.T) {
 		t.Parallel()
-		loader := NewLoader()
+		loader := gen.NewLoader()
 		_, err := loader.Load(".", "/nonexistent/path/to/package")
 		testkit.Error(t, err, "must fail for nonexistent package")
 	})
 }
 
-func TestPackage_Interface(t *testing.T) {
+func TestPackage(t *testing.T) {
 	t.Parallel()
 	pkg := loadTestPackage(t, "basic")
 
-	t.Run("loads Store interface", func(t *testing.T) {
+	t.Run("Interface loads and sorts methods", func(t *testing.T) {
 		t.Parallel()
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
 		testkit.Equal(t, iface.Name, "Store", "name must match")
 		testkit.Len(t, iface.Methods, 3, "must have 3 methods")
-	})
 
-	t.Run("methods are sorted by name", func(t *testing.T) {
-		t.Parallel()
-		iface, err := pkg.Interface("Store")
-		testkit.NoError(t, err, "must find Store")
 		names := make([]string, len(iface.Methods))
 		for i, m := range iface.Methods {
 			names[i] = m.Name
@@ -74,7 +51,7 @@ func TestPackage_Interface(t *testing.T) {
 		testkit.Equal(t, names, []string{"Delete", "Get", "Put"}, "must be sorted")
 	})
 
-	t.Run("method doc comments are extracted", func(t *testing.T) {
+	t.Run("Interface extracts method doc comments", func(t *testing.T) {
 		t.Parallel()
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
@@ -84,52 +61,42 @@ func TestPackage_Interface(t *testing.T) {
 				getDoc = m.Doc
 			}
 		}
-		testkit.Assert(t, getDoc).Contains("retrieves an item", "must extract doc comment")
+		testkit.Assert(t, getDoc).Contains("retrieves an item", "must extract doc")
 	})
 
-	t.Run("type doc comment is extracted", func(t *testing.T) {
+	t.Run("Interface extracts type doc comment", func(t *testing.T) {
 		t.Parallel()
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
 		testkit.Assert(t, iface.Doc).Contains("manages items", "must extract type doc")
 	})
 
-	t.Run("not found returns error", func(t *testing.T) {
+	t.Run("Interface not found returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Interface("Nonexistent")
 		testkit.Error(t, err, "must fail for missing type")
 	})
 
-	t.Run("struct type returns error", func(t *testing.T) {
+	t.Run("Interface on struct returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Interface("Item")
-		testkit.Error(t, err, "must fail for struct, not interface")
+		testkit.Error(t, err, "must fail for struct")
 	})
 
-	t.Run("no type params for non-generic", func(t *testing.T) {
+	t.Run("Interface has no type params for non-generic", func(t *testing.T) {
 		t.Parallel()
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
-		testkit.Len(t, iface.TypeParams, 0, "non-generic must have no type params")
+		testkit.Len(t, iface.TypeParams, 0, "non-generic has no type params")
 	})
-}
 
-func TestPackage_Struct(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("loads Item struct", func(t *testing.T) {
+	t.Run("Struct loads fields with export status", func(t *testing.T) {
 		t.Parallel()
 		s, err := pkg.Struct("Item")
 		testkit.NoError(t, err, "must find Item")
 		testkit.Equal(t, s.Name, "Item", "name must match")
 		testkit.Len(t, s.Fields, 4, "must have 4 fields including unexported")
-	})
 
-	t.Run("field info includes export status", func(t *testing.T) {
-		t.Parallel()
-		s, err := pkg.Struct("Item")
-		testkit.NoError(t, err, "must find Item")
 		var exported, unexported int
 		for _, f := range s.Fields {
 			if f.Exported {
@@ -138,107 +105,75 @@ func TestPackage_Struct(t *testing.T) {
 				unexported++
 			}
 		}
-		testkit.Equal(t, exported, 3, "must have 3 exported fields")
-		testkit.Equal(t, unexported, 1, "must have 1 unexported field")
+		testkit.Equal(t, exported, 3, "3 exported fields")
+		testkit.Equal(t, unexported, 1, "1 unexported field")
 	})
 
-	t.Run("not found returns error", func(t *testing.T) {
+	t.Run("Struct not found returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Struct("Nonexistent")
 		testkit.Error(t, err, "must fail for missing type")
 	})
 
-	t.Run("interface type returns error", func(t *testing.T) {
+	t.Run("Struct on interface returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Struct("Store")
-		testkit.Error(t, err, "must fail for interface, not struct")
+		testkit.Error(t, err, "must fail for interface")
 	})
-}
 
-func TestPackage_Var(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("loads ErrNotFound", func(t *testing.T) {
+	t.Run("Var loads with doc comment", func(t *testing.T) {
 		t.Parallel()
 		v, err := pkg.Var("ErrNotFound")
 		testkit.NoError(t, err, "must find ErrNotFound")
 		testkit.Equal(t, v.Name, "ErrNotFound", "name must match")
-	})
-
-	t.Run("doc comment is extracted", func(t *testing.T) {
-		t.Parallel()
-		v, err := pkg.Var("ErrNotFound")
-		testkit.NoError(t, err, "must find ErrNotFound")
 		testkit.Assert(t, v.Doc).Contains("not found", "must extract doc")
 	})
 
-	t.Run("not found returns error", func(t *testing.T) {
+	t.Run("Var not found returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Var("Nonexistent")
-		testkit.Error(t, err, "must fail for missing var")
+		testkit.Error(t, err, "must fail")
 	})
-}
 
-func TestPackage_Const(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("loads StatusPending", func(t *testing.T) {
+	t.Run("Const loads value", func(t *testing.T) {
 		t.Parallel()
 		c, err := pkg.Const("StatusPending")
 		testkit.NoError(t, err, "must find StatusPending")
 		testkit.Equal(t, c.Name, "StatusPending", "name must match")
 	})
 
-	t.Run("not found returns error", func(t *testing.T) {
+	t.Run("Const not found returns error", func(t *testing.T) {
 		t.Parallel()
 		_, err := pkg.Const("Nonexistent")
-		testkit.Error(t, err, "must fail for missing const")
+		testkit.Error(t, err, "must fail")
 	})
-}
 
-func TestPackage_ErrorVars(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("returns only exported Err* vars sorted", func(t *testing.T) {
+	t.Run("ErrorVars returns sorted exported Err* vars", func(t *testing.T) {
 		t.Parallel()
 		vars := pkg.ErrorVars()
 		names := make([]string, len(vars))
 		for i, v := range vars {
 			names[i] = v.Name
 		}
-		testkit.Equal(t, names, []string{"ErrConflict", "ErrNotFound"}, "must return sorted Err* vars")
+		testkit.Equal(t, names, []string{"ErrConflict", "ErrNotFound"}, "must be sorted")
 	})
-}
 
-func TestPackage_ConstsOfType(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("returns Status constants sorted", func(t *testing.T) {
+	t.Run("ConstsOfType returns sorted constants", func(t *testing.T) {
 		t.Parallel()
 		consts := pkg.ConstsOfType("Status")
 		names := make([]string, len(consts))
 		for i, c := range consts {
 			names[i] = c.Name
 		}
-		testkit.Equal(t, names, []string{"StatusActive", "StatusClosed", "StatusPending"}, "must return sorted")
+		testkit.Equal(t, names, []string{"StatusActive", "StatusClosed", "StatusPending"}, "must be sorted")
 	})
 
-	t.Run("returns empty for nonexistent type", func(t *testing.T) {
+	t.Run("ConstsOfType returns empty for nonexistent", func(t *testing.T) {
 		t.Parallel()
-		consts := pkg.ConstsOfType("Nonexistent")
-		testkit.Len(t, consts, 0, "must be empty")
+		testkit.Len(t, pkg.ConstsOfType("Nonexistent"), 0, "must be empty")
 	})
-}
 
-func TestPackage_Interfaces_scan(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("returns all exported interfaces sorted", func(t *testing.T) {
+	t.Run("Interfaces returns all exported interfaces sorted", func(t *testing.T) {
 		t.Parallel()
 		ifaces := pkg.Interfaces()
 		names := make([]string, len(ifaces))
@@ -247,13 +182,8 @@ func TestPackage_Interfaces_scan(t *testing.T) {
 		}
 		testkit.Equal(t, names, []string{"Store"}, "must return Store")
 	})
-}
 
-func TestPackage_Structs_scan(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "basic")
-
-	t.Run("returns all exported structs sorted", func(t *testing.T) {
+	t.Run("Structs returns all exported structs sorted", func(t *testing.T) {
 		t.Parallel()
 		structs := pkg.Structs()
 		names := make([]string, len(structs))
@@ -262,39 +192,22 @@ func TestPackage_Structs_scan(t *testing.T) {
 		}
 		testkit.Equal(t, names, []string{"Item"}, "must return Item")
 	})
-}
 
-func TestPackage_Generics(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "generics")
-
-	t.Run("loads generic interface with type params", func(t *testing.T) {
+	t.Run("MethodsOn returns sorted methods on concrete type", func(t *testing.T) {
 		t.Parallel()
-		iface, err := pkg.Interface("Cache")
-		testkit.NoError(t, err, "must find Cache")
-		testkit.Len(t, iface.TypeParams, 2, "must have 2 type params")
-		testkit.Equal(t, iface.TypeParams[0].Name, "K", "first param must be K")
-		testkit.Equal(t, iface.TypeParams[1].Name, "V", "second param must be V")
-	})
-}
-
-func TestPackage_MethodsOn(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "concrete")
-
-	t.Run("returns methods on concrete type sorted", func(t *testing.T) {
-		t.Parallel()
-		methods := pkg.MethodsOn("Service")
+		concretePkg := loadTestPackage(t, "concrete")
+		methods := concretePkg.MethodsOn("Service")
 		names := make([]string, len(methods))
 		for i, m := range methods {
 			names[i] = m.Name
 		}
-		testkit.Equal(t, names, []string{"Run", "Stop"}, "must return sorted methods")
+		testkit.Equal(t, names, []string{"Run", "Stop"}, "must be sorted")
 	})
 
-	t.Run("method doc is extracted", func(t *testing.T) {
+	t.Run("MethodsOn extracts doc comment", func(t *testing.T) {
 		t.Parallel()
-		methods := pkg.MethodsOn("Service")
+		concretePkg := loadTestPackage(t, "concrete")
+		methods := concretePkg.MethodsOn("Service")
 		var runDoc string
 		for _, m := range methods {
 			if m.Name == "Run" {
@@ -304,36 +217,43 @@ func TestPackage_MethodsOn(t *testing.T) {
 		testkit.Assert(t, runDoc).Contains("executes", "must extract doc")
 	})
 
-	t.Run("nonexistent type returns nil", func(t *testing.T) {
+	t.Run("MethodsOn returns nil for nonexistent type", func(t *testing.T) {
 		t.Parallel()
-		methods := pkg.MethodsOn("Nonexistent")
-		testkit.True(t, methods == nil, "must return nil for missing type")
+		concretePkg := loadTestPackage(t, "concrete")
+		testkit.True(t, concretePkg.MethodsOn("Nonexistent") == nil, "must return nil")
 	})
-}
 
-func TestPackage_EmbeddedFlattening(t *testing.T) {
-	t.Parallel()
-	pkg := loadTestPackage(t, "embedded")
-
-	t.Run("ReadWriter has Read and Write", func(t *testing.T) {
+	t.Run("embedded interface methods are flattened", func(t *testing.T) {
 		t.Parallel()
-		iface, err := pkg.Interface("ReadWriter")
+		embeddedPkg := loadTestPackage(t, "embedded")
+		rw, err := embeddedPkg.Interface("ReadWriter")
 		testkit.NoError(t, err, "must find ReadWriter")
-		names := make([]string, len(iface.Methods))
-		for i, m := range iface.Methods {
+		names := make([]string, len(rw.Methods))
+		for i, m := range rw.Methods {
 			names[i] = m.Name
 		}
-		testkit.Equal(t, names, []string{"Read", "Write"}, "must flatten embedded methods")
+		testkit.Equal(t, names, []string{"Read", "Write"}, "must flatten embedded")
 	})
 
-	t.Run("TripleReader has Close Read Write", func(t *testing.T) {
+	t.Run("deeply embedded interface methods are flattened", func(t *testing.T) {
 		t.Parallel()
-		iface, err := pkg.Interface("TripleReader")
+		embeddedPkg := loadTestPackage(t, "embedded")
+		triple, err := embeddedPkg.Interface("TripleReader")
 		testkit.NoError(t, err, "must find TripleReader")
-		names := make([]string, len(iface.Methods))
-		for i, m := range iface.Methods {
+		names := make([]string, len(triple.Methods))
+		for i, m := range triple.Methods {
 			names[i] = m.Name
 		}
 		testkit.Equal(t, names, []string{"Close", "Read", "Write"}, "must flatten recursively")
+	})
+
+	t.Run("generic interface has type params", func(t *testing.T) {
+		t.Parallel()
+		genericsPkg := loadTestPackage(t, "generics")
+		iface, err := genericsPkg.Interface("Cache")
+		testkit.NoError(t, err, "must find Cache")
+		testkit.Len(t, iface.TypeParams, 2, "must have 2 type params")
+		testkit.Equal(t, iface.TypeParams[0].Name, "K", "first is K")
+		testkit.Equal(t, iface.TypeParams[1].Name, "V", "second is V")
 	})
 }

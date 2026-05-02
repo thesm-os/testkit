@@ -1,13 +1,13 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
-	"strings"
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
 
 func TestRender(t *testing.T) {
@@ -19,8 +19,8 @@ func TestRender(t *testing.T) {
 
 func Hello() string { return "hello" }
 `
-		header := Header{Subcommand: "test", Args: "test -o foo.go"}
-		got, err := Render(tmpl, nil, header)
+		header := gen.Header{Subcommand: "test", Args: "test -o foo.go"}
+		got, err := gen.Render(tmpl, nil, header)
 		testkit.NoError(t, err, "render must succeed")
 		s := string(got)
 		testkit.Assert(t, s).
@@ -33,8 +33,8 @@ func Hello() string { return "hello" }
 		t.Parallel()
 		tmpl := `package foo
 `
-		header := Header{Subcommand: "integration", BuildTag: "integration"}
-		got, err := Render(tmpl, nil, header)
+		header := gen.Header{Subcommand: "integration", BuildTag: "integration"}
+		got, err := gen.Render(tmpl, nil, header)
 		testkit.NoError(t, err, "render must succeed")
 		testkit.Assert(t, string(got)).Contains("//go:build integration", "must have build tag")
 	})
@@ -45,7 +45,7 @@ func Hello() string { return "hello" }
 
 func F() { fmt.Println("hello") }
 `
-		got, err := Render(tmpl, nil, Header{Subcommand: "test"})
+		got, err := gen.Render(tmpl, nil, gen.Header{Subcommand: "test"})
 		testkit.NoError(t, err, "render must succeed")
 		testkit.Assert(t, string(got)).Contains(`"fmt"`, "must add fmt import")
 	})
@@ -57,21 +57,21 @@ func F() { fmt.Println("hello") }
 const Name = "{{.Name}}"
 `
 		data := struct{ Name string }{"World"}
-		got, err := Render(tmpl, data, Header{Subcommand: "test"})
+		got, err := gen.Render(tmpl, data, gen.Header{Subcommand: "test"})
 		testkit.NoError(t, err, "render must succeed")
 		testkit.Assert(t, string(got)).Contains(`"World"`, "must render data")
 	})
 
 	t.Run("invalid template returns error", func(t *testing.T) {
 		t.Parallel()
-		_, err := Render(`{{.Invalid`, nil, Header{Subcommand: "test"})
+		_, err := gen.Render(`{{.Invalid`, nil, gen.Header{Subcommand: "test"})
 		testkit.Error(t, err, "must fail on invalid template")
 	})
 
 	t.Run("template execution error returns error", func(t *testing.T) {
 		t.Parallel()
-		_, err := Render(`package foo
-{{.Missing.Field}}`, nil, Header{Subcommand: "test"})
+		_, err := gen.Render(`package foo
+{{.Missing.Field}}`, nil, gen.Header{Subcommand: "test"})
 		testkit.Error(t, err, "must fail on execution error")
 	})
 
@@ -79,75 +79,20 @@ const Name = "{{.Name}}"
 		t.Parallel()
 		tmpl := `package foo
 `
-		got, err := Render(tmpl, nil, Header{Subcommand: "test"})
+		got, err := gen.Render(tmpl, nil, gen.Header{Subcommand: "test"})
 		testkit.NoError(t, err, "render must succeed")
 		testkit.Assert(t, string(got)).NotContains("Source:", "must omit source line")
 	})
-}
-
-func TestFuncMap_strings(t *testing.T) {
-	t.Parallel()
-
-	t.Run("camelCase", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, CamelCase("hello_world"), "HelloWorld", "underscore split")
-		testkit.Equal(t, CamelCase("helloWorld"), "HelloWorld", "camel boundary")
-	})
-
-	t.Run("lowerCamelCase", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, LowerCamelCase("hello_world"), "helloWorld", "underscore split")
-	})
-
-	t.Run("snakeCase", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, SnakeCase("HelloWorld"), "hello_world", "camel to snake")
-		testkit.Equal(t, SnakeCase("hello-world"), "hello_world", "hyphen to snake")
-	})
-
-	t.Run("title", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, Title("hello"), "Hello", "capitalize first")
-		testkit.Equal(t, Title(""), "", "empty string")
-	})
-}
-
-func TestRenderTemplate(t *testing.T) {
-	t.Parallel()
 
 	t.Run("executes named template", func(t *testing.T) {
 		t.Parallel()
-		set := NewTemplateSet()
+		set := gen.NewTemplateSet()
 		_, err := set.Parse(`{{define "main"}}package foo
 func F() {}
 {{end}}`)
 		testkit.NoError(t, err, "parse must succeed")
-		got, renderErr := RenderTemplate(set, "main", nil, Header{Subcommand: "test"})
+		got, renderErr := gen.RenderTemplate(set, "main", nil, gen.Header{Subcommand: "test"})
 		testkit.NoError(t, renderErr, "render must succeed")
 		testkit.Assert(t, string(got)).Contains("func F()", "must render named template")
-	})
-}
-
-func TestSplitWords(t *testing.T) {
-	t.Parallel()
-
-	t.Run("underscore", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, strings.Join(SplitWords("hello_world"), ","), "hello,world", "split on underscore")
-	})
-
-	t.Run("camelCase", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, strings.Join(SplitWords("helloWorld"), ","), "hello,World", "split on camel")
-	})
-
-	t.Run("hyphen", func(t *testing.T) {
-		t.Parallel()
-		testkit.Equal(t, strings.Join(SplitWords("hello-world"), ","), "hello,world", "split on hyphen")
-	})
-
-	t.Run("empty", func(t *testing.T) {
-		t.Parallel()
-		testkit.Len(t, SplitWords(""), 0, "empty returns no words")
 	})
 }

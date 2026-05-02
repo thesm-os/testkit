@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package gen
+package gen_test
 
 import (
 	"os"
@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 )
 
 func TestWriteResult(t *testing.T) {
@@ -17,12 +18,12 @@ func TestWriteResult(t *testing.T) {
 	t.Run("creates directories and writes files", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "sub/file.go", Content: []byte("package sub\n")},
 			},
 		}
-		err := WriteResult(result, dir, false)
+		err := gen.WriteResult(result, dir, false)
 		testkit.NoError(t, err, "write must succeed")
 
 		data, readErr := os.ReadFile(filepath.Join(dir, "sub", "file.go"))
@@ -40,12 +41,12 @@ func TestWriteResult(t *testing.T) {
 		err = os.WriteFile(filepath.Join(dir, "sub", "file.go"), []byte("old"), 0o644) //nolint:gosec
 		testkit.NoError(t, err, "write old")
 
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "sub/file.go", Content: []byte("new")},
 			},
 		}
-		err = WriteResult(result, dir, false)
+		err = gen.WriteResult(result, dir, false)
 		testkit.NoError(t, err, "overwrite must succeed")
 
 		data, readErr := os.ReadFile(filepath.Join(dir, "sub", "file.go"))
@@ -61,12 +62,12 @@ func TestWriteResult(t *testing.T) {
 		err := os.WriteFile(filepath.Join(dir, "file.go"), content, 0o644) //nolint:gosec
 		testkit.NoError(t, err, "setup")
 
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "file.go", Content: content},
 			},
 		}
-		err = WriteResult(result, dir, true)
+		err = gen.WriteResult(result, dir, true)
 		testkit.NoError(t, err, "check must pass when identical")
 	})
 
@@ -77,12 +78,12 @@ func TestWriteResult(t *testing.T) {
 		err := os.WriteFile(filepath.Join(dir, "file.go"), []byte("old\n"), 0o644) //nolint:gosec
 		testkit.NoError(t, err, "setup")
 
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "file.go", Content: []byte("new\n")},
 			},
 		}
-		err = WriteResult(result, dir, true)
+		err = gen.WriteResult(result, dir, true)
 		testkit.Error(t, err, "check must fail when different")
 		testkit.Assert(t, err.Error()).
 			Contains("would change", "must mention changes").
@@ -92,12 +93,12 @@ func TestWriteResult(t *testing.T) {
 	t.Run("check mode reports new files", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "new_file.go", Content: []byte("package foo\n")},
 			},
 		}
-		err := WriteResult(result, dir, true)
+		err := gen.WriteResult(result, dir, true)
 		testkit.Error(t, err, "check must fail for new file")
 		testkit.Assert(t, err.Error()).Contains("does not exist", "must report missing file")
 	})
@@ -105,13 +106,13 @@ func TestWriteResult(t *testing.T) {
 	t.Run("writes multiple files", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		result := &Result{
-			Files: []OutputFile{
+		result := &gen.Result{
+			Files: []gen.OutputFile{
 				{Path: "a.go", Content: []byte("package a\n")},
 				{Path: "b.go", Content: []byte("package b\n")},
 			},
 		}
-		err := WriteResult(result, dir, false)
+		err := gen.WriteResult(result, dir, false)
 		testkit.NoError(t, err, "must write both files")
 
 		_, err1 := os.Stat(filepath.Join(dir, "a.go"))

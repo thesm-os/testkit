@@ -10,9 +10,12 @@ import (
 )
 
 const (
-	testFileSuffix = "_test.go"
-	testPkgSuffix  = "_test"
-	currentDir     = "."
+	// TestFileSuffix is the Go convention for test file names.
+	TestFileSuffix = "_test.go"
+	// TestPkgSuffix is the Go convention for external test package names.
+	TestPkgSuffix = "_test"
+
+	currentDir = "."
 )
 
 // Options holds per-invocation settings for a generator.
@@ -49,11 +52,11 @@ func DerivePackageName(outputPath, sourcePkgName string, cfg Config) string {
 	base := filepath.Base(outputPath)
 
 	// _test.go files in the source directory.
-	if dir == currentDir && strings.HasSuffix(base, testFileSuffix) {
+	if dir == currentDir && strings.HasSuffix(base, TestFileSuffix) {
 		if cfg.TestPackageStyle == TestPackageStyleInternal {
 			return sourcePkgName
 		}
-		return sourcePkgName + testPkgSuffix
+		return sourcePkgName + TestPkgSuffix
 	}
 
 	// Same directory as source.

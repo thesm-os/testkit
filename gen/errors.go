@@ -8,6 +8,10 @@ import (
 	"go/token"
 )
 
+// EmptyPos is the zero-value token.Position, used when an error has no
+// specific source location.
+var EmptyPos token.Position
+
 // TypeKind constrains what kind of named type a generator expects.
 type TypeKind int
 

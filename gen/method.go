@@ -27,7 +27,7 @@ func (m *MethodInfo) HasContext() bool {
 	if params.Len() == 0 {
 		return false
 	}
-	return isContextType(params.At(0).Type())
+	return IsContextType(params.At(0).Type())
 }
 
 // ReturnsError reports whether the last result is the error interface.
@@ -36,7 +36,7 @@ func (m *MethodInfo) ReturnsError() bool {
 	if results.Len() == 0 {
 		return false
 	}
-	return isErrorType(results.At(results.Len() - 1).Type())
+	return IsErrorType(results.At(results.Len() - 1).Type())
 }
 
 // NumParams returns the number of parameters (excluding receiver).
@@ -111,7 +111,7 @@ func (m *MethodInfo) ZeroResults(t *ImportTracker) string {
 	}
 	parts := make([]string, results.Len())
 	for i := range results.Len() {
-		parts[i] = zeroValueOf(results.At(i).Type(), t)
+		parts[i] = ZeroValueOf(results.At(i).Type(), t)
 	}
 	return strings.Join(parts, ", ")
 }
@@ -202,9 +202,8 @@ func tupleString(tuple *types.Tuple, t *ImportTracker, variadic bool) string {
 	return strings.Join(parts, ", ")
 }
 
-// ParamName moved to naming.go.
-
-func zeroValueOf(typ types.Type, t *ImportTracker) string {
+// ZeroValueOf returns the Go zero-value literal for a type.
+func ZeroValueOf(typ types.Type, t *ImportTracker) string {
 	switch u := typ.Underlying().(type) {
 	case *types.Basic:
 		switch {
@@ -233,7 +232,8 @@ func zeroValueOf(typ types.Type, t *ImportTracker) string {
 	return zeroNil
 }
 
-func isContextType(typ types.Type) bool {
+// IsContextType reports whether typ is context.Context.
+func IsContextType(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
 	if !ok {
 		return false
@@ -243,7 +243,8 @@ func isContextType(typ types.Type) bool {
 		named.Obj().Name() == contextTypName
 }
 
-func isErrorType(typ types.Type) bool {
+// IsErrorType reports whether typ is the built-in error interface.
+func IsErrorType(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
 	if ok {
 		return named.Obj().Pkg() == nil && named.Obj().Name() == errorTypName
