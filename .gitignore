@@ -1,32 +1,68 @@
-# If you prefer the allow list template instead of the deny list, see community template:
-# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
-#
-# Binaries for programs and plugins
+# ----------------------------------------------------------------------
+# Binaries and compiled outputs
+# ----------------------------------------------------------------------
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+bin/
+dist/
 
-# Test binary, built with `go test -c`
+# ----------------------------------------------------------------------
+# Test and coverage outputs
+# ----------------------------------------------------------------------
 *.test
-
-# Code coverage profiles and other test artifacts
 *.out
-coverage.*
-*.coverprofile
-profile.cov
+fuzz/
+rapid/
+coverage/
+coverage.txt
+coverage.html
+profile.out
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
+# ----------------------------------------------------------------------
+# Build artifacts
+# ----------------------------------------------------------------------
+artifacts/
 
-# Go workspace file
-go.work
-go.work.sum
+# ----------------------------------------------------------------------
+# Dependency directories
+# ----------------------------------------------------------------------
+vendor/
 
-# env file
+# ----------------------------------------------------------------------
+# IDEs, editors, and AI
+# ----------------------------------------------------------------------
+.idea/
+.vscode/
+.codex/
+.claude/
+.gemini/
+*.swp
+*.swo
+*~
+
+# ----------------------------------------------------------------------
+# Agentic / LLM
+# ----------------------------------------------------------------------
+superpowers/
+AGENT.md
+CLAUDE.md
+GEMINI.md
+
+# ----------------------------------------------------------------------
+# OS-specific files
+# ----------------------------------------------------------------------
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+
+# ----------------------------------------------------------------------
+# Secrets
+# ----------------------------------------------------------------------
 .env
-
-# Editor/IDE
-# .idea/
-# .vscode/
+*.local
+secrets.json
