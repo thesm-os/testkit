@@ -212,8 +212,8 @@ func TestTableTest(t *testing.T) {
 		t.Parallel()
 		var ran []int
 		cases := []namedCase{
-			{name: "first", value: 1},
-			{name: "second", value: 2},
+			{name: "case-a", value: 1},
+			{name: "case-b", value: 2},
 		}
 		// We can't easily verify subtest names here, but we can verify
 		// the function is called for each case.

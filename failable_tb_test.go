@@ -39,9 +39,9 @@ func TestFailableTB(t *testing.T) {
 	t.Run("Fatal records first failure only", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		f.Fatal("first")
-		f.Fatal("second")
-		if f.Msg() != "first" {
+		f.Fatal("fatal-one")
+		f.Fatal("fatal-two")
+		if f.Msg() != "fatal-one" {
 			t.Fatalf("should capture first message, got: %q", f.Msg())
 		}
 	})
@@ -49,9 +49,9 @@ func TestFailableTB(t *testing.T) {
 	t.Run("Errorf overwrites message each time", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		f.Errorf("first")
-		f.Errorf("second")
-		if f.Msg() != "second" {
+		f.Errorf("err-one")
+		f.Errorf("err-two")
+		if f.Msg() != "err-two" {
 			t.Fatalf("Errorf should overwrite, got: %q", f.Msg())
 		}
 		if !f.Failed() {
