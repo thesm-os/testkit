@@ -1,0 +1,63 @@
+# Commit-lint configuration for testkit.
+#
+# Used by:
+#   - .github/workflows/commitlint.yml (CI gate)
+#   - local pre-commit hook (commit-msg stage)
+#
+# To run locally:
+#   npx --yes @commitlint/cli@latest --extends @commitlint/config-conventional --from=origin/main
+
+extends:
+  - "@commitlint/config-conventional"
+
+rules:
+  # Allowed types
+  type-enum:
+    - 2 # error
+    - always
+    - - feat
+      - fix
+      - refactor
+      - perf
+      - docs
+      - test
+      - build
+      - ci
+      - chore
+      - revert
+
+  # Allowed scopes — optional, but must be from this list when used.
+  scope-enum:
+    - 2 # error
+    - always
+    - - assertions    # Equal, ErrorIs, fluent Assert chain
+      - recording     # Recorder, filtering, waiting, hooks, gating
+      - fault         # FaultInjector
+      - bench         # StartContract, allocation/latency ceilings
+      - golden        # AssertGolden, scrubbers
+      - polling       # RetryUntil, AssertEventually
+      - concurrency   # ConcurrentStress, GoroutineLeak
+      - context       # Timeout
+      - helpers       # TestError, SeededRand, FailableTB, TableTest, etc.
+      - gen           # generator + validator engine
+      - cmd           # CLI wrapper
+      - container     # testcontainers sub-module
+      - httptest      # HTTP assertion sub-module
+      - oteltest      # OTel assertion sub-module
+      - clitest       # CLI testing sub-module
+      - ci            # CI/CD workflows
+      - deps          # dependency updates
+  scope-empty: [0]    # scope is optional
+
+  # Subject line limits
+  header-max-length: [2, always, 72]
+  subject-empty: [2, never]
+  subject-full-stop: [2, never, "."]
+
+  # Disable case enforcement — allows proper nouns and acronyms.
+  subject-case: [0]
+
+  # Body and footer discipline
+  body-leading-blank: [2, always]
+  footer-leading-blank: [2, always]
+  body-max-line-length: [2, always, 100]

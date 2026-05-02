@@ -1,0 +1,42 @@
+# testkit dogfoods its own configuration format.
+#
+# This file serves dual purpose:
+#   1. Project conventions for testkit's own generated code
+#   2. Validator configuration for testkit's own CI
+
+output:
+  test_package_suffix: test
+  generated_suffix: .gen.go
+  test_package_style: external
+
+validators:
+  error_prefix:
+    enabled: true
+    dirs:
+      - "."
+    exclude_tests: true
+
+  coverage:
+    enabled: true
+    layers:
+      - path: "."
+        line: 100
+        branch: 100
+      - path: "gen/..."
+        line: 100
+        branch: 100
+      - path: "container/..."
+        line: 100
+        branch: 100
+      - path: "httptest/..."
+        line: 100
+        branch: 100
+      - path: "oteltest/..."
+        line: 100
+        branch: 100
+      - path: "clitest/..."
+        line: 100
+        branch: 100
+    excludes:
+      - path: "cmd/..."
+        reason: thin CLI wiring
