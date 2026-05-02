@@ -1,0 +1,14 @@
+{{define "calltypes"}}
+// --- Call types ---
+{{range .Methods}}{{if not .Skip}}
+// {{.CallType}} records one invocation of {{$.QualifiedType}}.{{.Name}}.
+type {{.CallType}} struct {
+{{- range .Params}}
+	{{.FieldName}} {{.TypeStr}}
+{{- end}}
+{{- range .Results}}
+	{{.FieldName}} {{.TypeStr}}
+{{- end}}
+}
+{{end}}{{end}}
+{{end}}

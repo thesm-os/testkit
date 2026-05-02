@@ -101,6 +101,8 @@ linters:
             - go.thesmos.sh/testkit/cmd
             - go.thesmos.sh/testkit/gen
             - github.com/google/go-cmp
+            - github.com/spf13/cobra
+            - github.com/spf13/viper
         gen:
           list-mode: lax
           files:
@@ -289,10 +291,10 @@ linters:
         linters: [gosec]
         text: "G302:"
 
-      # cmd module legitimately uses fmt.* for CLI output.
-      # When golangci-lint runs per-module from cmd/, paths are
-      # relative to the module root (testkit/main.go, not cmd/testkit/main.go).
-      - path: "testkit/"
+      # cmd module legitimately uses fmt.* for CLI output and panic
+      # for unreachable guards. When golangci-lint runs per-module
+      # from cmd/, paths are relative to the module root.
+      - path: "(testkit/|internal/cli/)"
         linters: [forbidigo]
 
       # testutil/ golden file tests cannot be parallelized.

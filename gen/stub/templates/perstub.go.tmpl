@@ -1,0 +1,30 @@
+{{define "perstub"}}
+// --- Per-method stubs ---
+{{range $m := .Methods}}{{if not $m.Skip}}
+// {{$m.StubType}} controls behavior and records calls for {{$m.Name}}.
+type {{$m.StubType}} struct {
+	*testkit.MethodStub[{{$m.CallType}}]
+	fn       {{$m.FuncTypeStr}}
+	fallback *{{$m.ReturnType}}
+}
+
+type {{$m.ReturnType}} struct {
+{{- range $m.Results}}
+	{{.FieldName}} {{.TypeStr}}
+{{- end}}
+}
+
+// Returns sets a fixed return value for {{$m.Name}}.
+func (s *{{$m.StubType}}) Returns({{$m.ReturnParams}}) *{{$m.StubType}} {
+	s.fallback = &{{$m.ReturnType}}{{"{"}}{{$m.ReturnFieldAssign}}}
+	return s
+}
+
+// Func sets a function override for {{$m.Name}}.
+func (s *{{$m.StubType}}) Func(fn {{$m.FuncTypeStr}}) *{{$m.StubType}} {
+	s.fn = fn
+	return s
+}
+{{if $m.Sentinels}}{{template "sentinels" $m}}{{end}}
+{{end}}{{end}}
+{{end}}

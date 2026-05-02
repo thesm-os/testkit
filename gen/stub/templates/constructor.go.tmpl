@@ -1,0 +1,69 @@
+{{define "constructor"}}
+// --- {{.StubName}} ---
+
+// {{.StubName}}Option configures a [{{.StubName}}] at construction time.
+type {{.StubName}}Option func(*{{.StubName}})
+
+// {{.StubName}}Strict enables strict mode — unconfigured methods fail the test.
+func {{.StubName}}Strict() {{.StubName}}Option {
+	return func(s *{{.StubName}}) { s.strict = true }
+}
+
+// {{.StubName}}DelegateTo wraps a real implementation — all calls delegate to
+// impl and are recorded on the outer stub.
+func {{.StubName}}DelegateTo(impl {{.QualifiedType}}) {{.StubName}}Option {
+	return func(s *{{.StubName}}) {
+{{- range .Methods}}{{if not .Skip}}
+		s.On{{.Name}}.Func(impl.{{.Name}})
+{{- end}}{{end}}
+	}
+}
+{{range .Methods}}{{if not .Skip}}
+// With{{$.TypeName}}{{.Name}} sets a function override at construction time.
+func With{{$.TypeName}}{{.Name}}(fn {{.FuncTypeStr}}) {{$.StubName}}Option {
+	return func(s *{{$.StubName}}) { s.On{{.Name}}.Func(fn) }
+}
+{{end}}{{end}}
+
+// {{.StubName}} is a configurable test double for [{{.QualifiedType}}].
+type {{.StubName}} struct {
+{{- range .Methods}}{{if not .Skip}}
+	On{{.Name}} *{{.StubType}}
+{{- end}}{{end}}
+	strict bool
+}
+
+// New{{.StubName}} creates a stub. Pass tb for auto-verification of
+// expectations at test cleanup. Pass nil for a pure stub.
+func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}} {
+	s := &{{.StubName}}{
+{{- range .Methods}}{{if not .Skip}}
+		On{{.Name}}: &{{.StubType}}{MethodStub: testkit.NewMethodStub[{{.CallType}}](tb, "{{$.TypeName}}.{{.Name}}")},
+{{- end}}{{end}}
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.strict {
+{{- range .Methods}}{{if not .Skip}}
+		s.On{{.Name}}.Strict()
+{{- end}}{{end}}
+	}
+	if tb != nil {
+		tb.Cleanup(func() {
+{{- range .Methods}}{{if not .Skip}}
+			s.On{{.Name}}.Verify()
+{{- end}}{{end}}
+		})
+	}
+	return s
+}
+
+// Reset clears recorded calls, fault counters, and call-count expectations.
+// Func, Returns, and Faults configuration is preserved.
+func (s *{{.StubName}}) Reset() {
+{{- range .Methods}}{{if not .Skip}}
+	s.On{{.Name}}.Reset()
+{{- end}}{{end}}
+}
+{{end}}

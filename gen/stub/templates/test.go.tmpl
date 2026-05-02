@@ -1,0 +1,90 @@
+{{define "test"}}
+package {{.PackageName}}
+{{template "imports" .}}
+{{- range $iface := .Interfaces}}
+
+func Test{{$iface.StubName}}(t *testing.T) {
+	t.Parallel()
+
+	errTest := testkit.TestError("{{$iface.TypeName}}-stub-test")
+{{range $m := $iface.Methods}}{{if not $m.Skip}}
+	t.Run("{{$m.Name}} default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.ZeroAssertCallExpr}}
+	})
+{{if $m.ReturnsError}}
+	t.Run("{{$m.Name}} fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		s.On{{$m.Name}}.Faults(errTest, 1)
+		{{$m.FaultTestCallExpr}}
+	})
+{{end}}
+	t.Run("{{$m.Name}} Func override", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.FuncOverrideTestExpr}}
+	})
+
+	t.Run("{{$m.Name}} Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.ReturnsTestCallExpr}}
+	})
+
+	t.Run("{{$m.Name}} records calls", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.IgnoredCallExpr}}
+		s.On{{$m.Name}}.AssertCalledOnce(t, "must record {{$m.Name}} call")
+	})
+
+	t.Run("With{{$iface.TypeName}}{{$m.Name}} constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}With{{$iface.TypeName}}{{$m.Name}}({{$m.FuncTypeStr}} {
+			called = true
+			return {{$m.ZeroReturn}}
+		}))
+		{{$m.IgnoredCallExpr}}
+		testkit.True(t, called, "With{{$iface.TypeName}}{{$m.Name}} must be called")
+	})
+{{end}}{{end}}
+	t.Run("Reset clears all recordings", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+{{- range $iface.Methods}}{{if not .Skip}}
+		{{.IgnoredCallExpr}}
+{{- end}}{{end}}
+		s.Reset()
+{{- range $iface.Methods}}{{if not .Skip}}
+		s.On{{.Name}}.AssertNotCalled(t, "{{.Name}} must be cleared after Reset")
+{{- end}}{{end}}
+	})
+
+	t.Run("Strict mode fails on unconfigured call", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(f, {{$.GenQualifier}}{{$iface.StubName}}Strict())
+		{{(index $iface.Methods 0).IgnoredCallExpr}}
+		testkit.True(t, f.Failed(), "strict mode must fail on unconfigured call")
+	})
+
+	t.Run("DelegateTo forwards to implementation", func(t *testing.T) {
+		t.Parallel()
+		inner := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+{{- range $iface.Methods}}{{if not .Skip}}
+		inner.On{{.Name}}.Returns({{.ZeroReturn}})
+{{- end}}{{end}}
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}DelegateTo(inner))
+{{- range $iface.Methods}}{{if not .Skip}}
+		{{.IgnoredCallExpr}}
+{{- end}}{{end}}
+{{- range $iface.Methods}}{{if not .Skip}}
+		s.On{{.Name}}.AssertCalledOnce(t, "{{.Name}} must delegate")
+{{- end}}{{end}}
+	})
+}
+{{end}}
+{{end}}

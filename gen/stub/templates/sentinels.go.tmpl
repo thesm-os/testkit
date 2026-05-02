@@ -1,0 +1,9 @@
+{{define "sentinels"}}
+{{- range $s := .Sentinels}}
+// Fault{{$s.ShortName}} sets a one-shot fault returning {{$s.VarName}}.
+func (s *{{$.StubType}}) Fault{{$s.ShortName}}() *{{$.StubType}} {
+	s.Faults({{$s.Qualified}}, 1)
+	return s
+}
+{{end -}}
+{{end}}

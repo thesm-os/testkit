@@ -1,0 +1,24 @@
+{{define "stub"}}
+package {{.PackageName}}
+{{template "imports" .}}
+{{- range $iface := .Interfaces}}
+
+// Compile-time interface check.
+var _ {{$iface.QualifiedType}} = (*{{$iface.StubName}})(nil)
+
+{{template "calltypes" $iface}}
+{{template "perstub" $iface}}
+{{template "constructor" $iface}}
+{{template "methods" $iface}}
+{{- end}}
+{{end}}
+
+{{define "imports"}}
+{{- if .Imports}}
+import (
+{{- range .Imports}}
+	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{- end}}
+)
+{{- end}}
+{{end}}

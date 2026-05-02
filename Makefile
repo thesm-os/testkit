@@ -38,7 +38,9 @@ LDFLAGS    := -ldflags="-X go.thesmos.sh/testkit/cmd/internal/version.buildVersi
 GO_FILES := $(shell find . -type f -name '*.go' \
 	! -path './vendor/*' \
 	! -path './dist/*' \
-	! -path './.git/*')
+	! -path './.git/*' \
+	! -name '*.gen.go' \
+	! -name '*.gen_test.go')
 
 # ─── Helper: run a command in each module ────────────────────────
 # Usage: $(call foreach_module,go test ./...)

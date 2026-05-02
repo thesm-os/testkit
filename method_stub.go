@@ -8,12 +8,11 @@ import "testing"
 // MethodStub is a generic per-method test double that combines recording,
 // fault injection, strict mode, and call count expectations. Generated
 // stub code embeds one MethodStub per interface method and adds type-specific
-// dispatch (Returns, WhenCalledWith, Func).
+// dispatch (Func, Returns).
 //
 //	type GetStub struct {
 //	    *testkit.MethodStub[GetCall]
 //	    fn       func(context.Context, string) (Item, error)
-//	    matchers []getMatcher
 //	    fallback *getReturn
 //	}
 type MethodStub[C any] struct {

@@ -19,6 +19,13 @@ const (
 
 	// DefaultTestPackageStyle is the default test package naming convention.
 	DefaultTestPackageStyle = TestPackageStyleExternal
+
+	// DefaultStubFilePattern is the base name pattern for generated stub files.
+	// "{type}" is replaced with the lowercased type name.
+	DefaultStubFilePattern = "{type}_stub"
+
+	// DefaultStubTypeSuffix is appended to the type name for generated stub types.
+	DefaultStubTypeSuffix = "Stub"
 )
 
 // Config holds project-wide conventions that influence code generation.
@@ -37,6 +44,21 @@ type Config struct {
 	// Use [TestPackageStyleExternal] or [TestPackageStyleInternal].
 	// Default: [DefaultTestPackageStyle].
 	TestPackageStyle string
+
+	// Stub holds naming conventions for the stub generator.
+	Stub StubConfig
+}
+
+// StubConfig holds naming conventions for the stub generator.
+type StubConfig struct {
+	// FilePattern is the base name pattern for generated stub files.
+	// "{type}" is replaced with the lowercased type name.
+	// Default: [DefaultStubFilePattern].
+	FilePattern string
+
+	// TypeSuffix is appended to the type name for generated stub types.
+	// Default: [DefaultStubTypeSuffix].
+	TypeSuffix string
 }
 
 // DefaultConfig returns a Config with all default values.
@@ -45,5 +67,9 @@ func DefaultConfig() Config {
 		TestPackageSuffix: DefaultTestPackageSuffix,
 		GeneratedSuffix:   DefaultGeneratedSuffix,
 		TestPackageStyle:  DefaultTestPackageStyle,
+		Stub: StubConfig{
+			FilePattern: DefaultStubFilePattern,
+			TypeSuffix:  DefaultStubTypeSuffix,
+		},
 	}
 }
