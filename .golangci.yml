@@ -279,10 +279,11 @@ linters:
         linters: [gosec]
         text: "G302:"
 
-      # cmd/ legitimately uses fmt.Fprint* for CLI output.
-      - path: "cmd/"
+      # cmd module legitimately uses fmt.* for CLI output.
+      # When golangci-lint runs per-module from cmd/, paths are
+      # relative to the module root (testkit/main.go, not cmd/testkit/main.go).
+      - path: "testkit/"
         linters: [forbidigo]
-        text: 'fmt\.(Fprint|Fprintf|Fprintln|Printf)'
 
       # testutil/ golden file tests cannot be parallelized.
       - path: "testutil/"

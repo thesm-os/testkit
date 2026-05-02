@@ -1,6 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
+// testkit generates test infrastructure for Go projects.
 package main
 
 import (

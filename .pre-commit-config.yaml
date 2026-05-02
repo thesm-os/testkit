@@ -43,6 +43,6 @@ repos:
     hooks:
       - id: commitlint
         name: commitlint
-        entry: npx --yes @commitlint/cli@latest --extends @commitlint/config-conventional --edit
+        entry: npx --yes --package @commitlint/cli@latest --package @commitlint/config-conventional@latest -- commitlint --edit
         language: system
         stages: [commit-msg]
