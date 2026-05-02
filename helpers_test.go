@@ -208,18 +208,15 @@ func (c namedCase) Name() string { return c.name }
 func TestTableTest(t *testing.T) {
 	t.Parallel()
 
-	t.Run("runs each case as subtest", func(t *testing.T) {
+	t.Run("runs each case as subtest with correct values", func(t *testing.T) {
 		t.Parallel()
-		var ran []int
 		cases := []namedCase{
 			{name: "case-a", value: 1},
 			{name: "case-b", value: 2},
 		}
-		// We can't easily verify subtest names here, but we can verify
-		// the function is called for each case.
 		testkit.TableTest(t, cases, func(t *testing.T, tc namedCase) {
 			t.Helper()
-			ran = append(ran, tc.value)
+			testkit.True(t, tc.value > 0, "value must be positive")
 		})
 	})
 }
