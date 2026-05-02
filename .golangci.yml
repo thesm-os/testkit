@@ -102,15 +102,20 @@ linters:
             - go.thesmos.sh/testkit/gen
             - github.com/google/go-cmp
         gen:
-          list-mode: strict
+          list-mode: lax
           files:
             - "**/gen/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/gen
-            - github.com/google/go-cmp
-            - golang.org/x/tools
+          deny:
+            - pkg: go.thesmos.sh/testkit/cmd
+              desc: "gen must not import cmd"
+            - pkg: go.thesmos.sh/testkit/container
+              desc: "gen must not import sub-packages"
+            - pkg: go.thesmos.sh/testkit/httptest
+              desc: "gen must not import sub-packages"
+            - pkg: go.thesmos.sh/testkit/oteltest
+              desc: "gen must not import sub-packages"
+            - pkg: go.thesmos.sh/testkit/clitest
+              desc: "gen must not import sub-packages"
         container:
           list-mode: strict
           files:
