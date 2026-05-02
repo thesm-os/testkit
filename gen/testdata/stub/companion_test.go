@@ -24,6 +24,7 @@ func NewInMemoryStore(opts ...StoreStubOption) *StoreStub {
 		WithStorePut(state.put),
 		WithStoreDelete(state.delete),
 		WithStoreList(state.list),
+		WithStoreFind(state.find),
 	}
 	return NewStoreStub(nil, append(base, opts...)...)
 }
@@ -56,6 +57,20 @@ func (s *storeState) delete(_ context.Context, id string) error {
 	}
 	delete(s.items, id)
 	return nil
+}
+
+func (s *storeState) find(_ context.Context, ids ...string) ([]Item, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make([]Item, 0, len(ids))
+	for _, id := range ids {
+		item, ok := s.items[id]
+		if !ok {
+			return nil, ErrNotFound
+		}
+		result = append(result, item)
+	}
+	return result, nil
 }
 
 func (s *storeState) list(_ context.Context) []Item {

@@ -18,7 +18,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 	t.Run("{{$m.Name}} default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := {{$gen}}{{$dot}}New{{$iface.StubName}}(t)
-		{{$m.IgnoredCallExpr}}
+		{{$m.ZeroAssertCallExpr}}
 	})
 {{if $m.ReturnsError}}
 	t.Run("{{$m.Name}} fault injection fires", func(t *testing.T) {

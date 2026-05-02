@@ -13,6 +13,9 @@ var _ {{$iface.QualifiedType}} = (*{{$iface.StubName}})(nil)
 // --- Call types ---
 {{range $iface.Methods}}
 // {{.CallType}} records one invocation of {{$iface.QualifiedType}}.{{.Name}}.
+{{- if .Doc}}
+{{.Doc}}
+{{- end}}
 type {{.CallType}} struct {
 {{- range .Params}}
 	{{.FieldName}} {{.TypeStr}}
@@ -61,7 +64,9 @@ func {{$iface.StubName}}Strict() {{$iface.StubName}}Option {
 	return func(s *{{$iface.StubName}}) { s.strict = true }
 }
 
-// {{$iface.StubName}}DelegateTo wraps a real implementation — all calls delegate and are recorded.
+// {{$iface.StubName}}DelegateTo wraps a real implementation — all calls delegate to
+// impl and are recorded on the outer stub. Note: if impl is itself a stub,
+// both the outer and inner stub record the call independently.
 func {{$iface.StubName}}DelegateTo(impl {{$iface.QualifiedType}}) {{$iface.StubName}}Option {
 	return func(s *{{$iface.StubName}}) {
 {{- range $iface.Methods}}
@@ -110,7 +115,9 @@ func New{{$iface.StubName}}(tb testing.TB, opts ...{{$iface.StubName}}Option) *{
 	return s
 }
 
-// Reset clears all recordings, fault counters, and expectations.
+// Reset clears recorded calls, fault counters, and call-count expectations.
+// Func, Returns, and Faults configuration is preserved — behavior sticks,
+// observations rewind.
 func (s *{{$iface.StubName}}) Reset() {
 {{- range $iface.Methods}}
 	s.On{{.Name}}.Reset()
@@ -128,7 +135,7 @@ func (s *{{$iface.StubName}}) {{$m.Name}}({{$m.ParamListStr}}){{if $m.ResultList
 	}
 {{- end}}
 	if s.On{{$m.Name}}.fn != nil {
-		{{$m.ResultVarDecl}}s.On{{$m.Name}}.fn({{$m.ParamNames}})
+		{{$m.ResultVarDecl}}s.On{{$m.Name}}.fn({{$m.ParamNamesSpread}})
 		call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}{{$m.ResultFieldAssignVars}}}
 		s.On{{$m.Name}}.Record(call)
 		return {{$m.ResultVarNames}}

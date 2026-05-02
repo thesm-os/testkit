@@ -17,27 +17,42 @@ var _ stub.Store = (*StoreStub)(nil)
 // --- Call types ---
 
 // StoreDeleteCall records one invocation of stub.Store.Delete.
+// Delete removes an item by ID.
 type StoreDeleteCall struct {
 	Ctx context.Context
-	Id  string
+	ID  string
 	Err error
 }
 
+// StoreFindCall records one invocation of stub.Store.Find.
+// Find retrieves multiple items by IDs. Variadic parameter —
+// exercises variadic method stub generation.
+type StoreFindCall struct {
+	Ctx    context.Context
+	Ids    []string
+	Result []stub.Item
+	Err    error
+}
+
 // StoreGetCall records one invocation of stub.Store.Get.
+// Get retrieves an item by ID.
 type StoreGetCall struct {
 	Ctx    context.Context
-	Id     string
+	ID     string
 	Result stub.Item
 	Err    error
 }
 
 // StoreListCall records one invocation of stub.Store.List.
+// List returns all items. No error return — tests that
+// WithFault is only generated for error-returning methods.
 type StoreListCall struct {
 	Ctx    context.Context
 	Result []stub.Item
 }
 
 // StorePutCall records one invocation of stub.Store.Put.
+// Put stores an item.
 type StorePutCall struct {
 	Ctx  context.Context
 	Item stub.Item
@@ -65,6 +80,30 @@ func (s *StoreDeleteStub) Returns(err error) *StoreDeleteStub {
 
 // Func sets a function override for Delete.
 func (s *StoreDeleteStub) Func(fn func(context.Context, string) error) *StoreDeleteStub {
+	s.fn = fn
+	return s
+}
+
+// StoreFindStub controls behavior and records calls for Find.
+type StoreFindStub struct {
+	*testkit.MethodStub[StoreFindCall]
+	fn       func(context.Context, ...string) ([]stub.Item, error)
+	fallback *storeFindReturn
+}
+
+type storeFindReturn struct {
+	Result []stub.Item
+	Err    error
+}
+
+// Returns sets a fixed return value for Find.
+func (s *StoreFindStub) Returns(result []stub.Item, err error) *StoreFindStub {
+	s.fallback = &storeFindReturn{Result: result, Err: err}
+	return s
+}
+
+// Func sets a function override for Find.
+func (s *StoreFindStub) Func(fn func(context.Context, ...string) ([]stub.Item, error)) *StoreFindStub {
 	s.fn = fn
 	return s
 }
@@ -149,10 +188,13 @@ func StoreStubStrict() StoreStubOption {
 	return func(s *StoreStub) { s.strict = true }
 }
 
-// StoreStubDelegateTo wraps a real implementation — all calls delegate and are recorded.
+// StoreStubDelegateTo wraps a real implementation — all calls delegate to
+// impl and are recorded on the outer stub. Note: if impl is itself a stub,
+// both the outer and inner stub record the call independently.
 func StoreStubDelegateTo(impl stub.Store) StoreStubOption {
 	return func(s *StoreStub) {
 		s.OnDelete.Func(impl.Delete)
+		s.OnFind.Func(impl.Find)
 		s.OnGet.Func(impl.Get)
 		s.OnList.Func(impl.List)
 		s.OnPut.Func(impl.Put)
@@ -162,6 +204,11 @@ func StoreStubDelegateTo(impl stub.Store) StoreStubOption {
 // WithStoreDelete sets a function override at construction time.
 func WithStoreDelete(fn func(context.Context, string) error) StoreStubOption {
 	return func(s *StoreStub) { s.OnDelete.Func(fn) }
+}
+
+// WithStoreFind sets a function override at construction time.
+func WithStoreFind(fn func(context.Context, ...string) ([]stub.Item, error)) StoreStubOption {
+	return func(s *StoreStub) { s.OnFind.Func(fn) }
 }
 
 // WithStoreGet sets a function override at construction time.
@@ -182,6 +229,7 @@ func WithStorePut(fn func(context.Context, stub.Item) error) StoreStubOption {
 // StoreStub is a configurable test double for [stub.Store].
 type StoreStub struct {
 	OnDelete *StoreDeleteStub
+	OnFind   *StoreFindStub
 	OnGet    *StoreGetStub
 	OnList   *StoreListStub
 	OnPut    *StorePutStub
@@ -193,6 +241,7 @@ type StoreStub struct {
 func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	s := &StoreStub{
 		OnDelete: &StoreDeleteStub{MethodStub: testkit.NewMethodStub[StoreDeleteCall](tb, "Store.Delete")},
+		OnFind:   &StoreFindStub{MethodStub: testkit.NewMethodStub[StoreFindCall](tb, "Store.Find")},
 		OnGet:    &StoreGetStub{MethodStub: testkit.NewMethodStub[StoreGetCall](tb, "Store.Get")},
 		OnList:   &StoreListStub{MethodStub: testkit.NewMethodStub[StoreListCall](tb, "Store.List")},
 		OnPut:    &StorePutStub{MethodStub: testkit.NewMethodStub[StorePutCall](tb, "Store.Put")},
@@ -202,6 +251,7 @@ func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	}
 	if s.strict {
 		s.OnDelete.Strict()
+		s.OnFind.Strict()
 		s.OnGet.Strict()
 		s.OnList.Strict()
 		s.OnPut.Strict()
@@ -209,6 +259,7 @@ func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	if tb != nil {
 		tb.Cleanup(func() {
 			s.OnDelete.Verify()
+			s.OnFind.Verify()
 			s.OnGet.Verify()
 			s.OnList.Verify()
 			s.OnPut.Verify()
@@ -217,9 +268,12 @@ func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	return s
 }
 
-// Reset clears all recordings, fault counters, and expectations.
+// Reset clears recorded calls, fault counters, and call-count expectations.
+// Func, Returns, and Faults configuration is preserved — behavior sticks,
+// observations rewind.
 func (s *StoreStub) Reset() {
 	s.OnDelete.Reset()
+	s.OnFind.Reset()
 	s.OnGet.Reset()
 	s.OnList.Reset()
 	s.OnPut.Reset()
@@ -229,47 +283,70 @@ func (s *StoreStub) Reset() {
 
 func (s *StoreStub) Delete(ctx context.Context, id string) error {
 	if fired, faultErr := s.OnDelete.ShouldFault(); fired {
-		call := StoreDeleteCall{Ctx: ctx, Id: id, Err: faultErr}
+		call := StoreDeleteCall{Ctx: ctx, ID: id, Err: faultErr}
 		s.OnDelete.Record(call)
 		return faultErr
 	}
 	if s.OnDelete.fn != nil {
 		r0 := s.OnDelete.fn(ctx, id)
-		call := StoreDeleteCall{Ctx: ctx, Id: id, Err: r0}
+		call := StoreDeleteCall{Ctx: ctx, ID: id, Err: r0}
 		s.OnDelete.Record(call)
 		return r0
 	}
 	if s.OnDelete.fallback != nil {
 		f := s.OnDelete.fallback
-		call := StoreDeleteCall{Ctx: ctx, Id: id, Err: f.Err}
+		call := StoreDeleteCall{Ctx: ctx, ID: id, Err: f.Err}
 		s.OnDelete.Record(call)
 		return f.Err
 	}
 	s.OnDelete.FailUnexpected(ctx, id)
-	s.OnDelete.Record(StoreDeleteCall{Ctx: ctx, Id: id})
+	s.OnDelete.Record(StoreDeleteCall{Ctx: ctx, ID: id})
 	return nil
+}
+
+func (s *StoreStub) Find(ctx context.Context, ids ...string) ([]stub.Item, error) {
+	if fired, faultErr := s.OnFind.ShouldFault(); fired {
+		call := StoreFindCall{Ctx: ctx, Ids: ids, Err: faultErr}
+		s.OnFind.Record(call)
+		return nil, faultErr
+	}
+	if s.OnFind.fn != nil {
+		r0, r1 := s.OnFind.fn(ctx, ids...)
+		call := StoreFindCall{Ctx: ctx, Ids: ids, Result: r0, Err: r1}
+		s.OnFind.Record(call)
+		return r0, r1
+	}
+	if s.OnFind.fallback != nil {
+		f := s.OnFind.fallback
+		call := StoreFindCall{Ctx: ctx, Ids: ids, Result: f.Result, Err: f.Err}
+		s.OnFind.Record(call)
+		return f.Result, f.Err
+	}
+	s.OnFind.FailUnexpected(ctx, ids)
+	s.OnFind.Record(StoreFindCall{Ctx: ctx, Ids: ids})
+	return nil, nil
 }
 
 func (s *StoreStub) Get(ctx context.Context, id string) (stub.Item, error) {
 	if fired, faultErr := s.OnGet.ShouldFault(); fired {
-		call := StoreGetCall{Ctx: ctx, Id: id, Err: faultErr}
+		call := StoreGetCall{Ctx: ctx, ID: id, Err: faultErr}
 		s.OnGet.Record(call)
 		return stub.Item{}, faultErr
 	}
 	if s.OnGet.fn != nil {
 		r0, r1 := s.OnGet.fn(ctx, id)
-		call := StoreGetCall{Ctx: ctx, Id: id, Result: r0, Err: r1}
+		call := StoreGetCall{Ctx: ctx, ID: id, Result: r0, Err: r1}
 		s.OnGet.Record(call)
 		return r0, r1
 	}
 	if s.OnGet.fallback != nil {
 		f := s.OnGet.fallback
-		call := StoreGetCall{Ctx: ctx, Id: id, Result: f.Result, Err: f.Err}
+		call := StoreGetCall{Ctx: ctx, ID: id, Result: f.Result, Err: f.Err}
 		s.OnGet.Record(call)
 		return f.Result, f.Err
 	}
 	s.OnGet.FailUnexpected(ctx, id)
-	s.OnGet.Record(StoreGetCall{Ctx: ctx, Id: id})
+	s.OnGet.Record(StoreGetCall{Ctx: ctx, ID: id})
 	return stub.Item{}, nil
 }
 

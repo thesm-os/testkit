@@ -111,7 +111,10 @@ func (s *MethodStub[C]) Verify() {
 	}
 }
 
-// Reset clears all recordings and resets fault counters.
+// Reset clears recorded calls, resets fault counters, and clears
+// Times/TimesAtLeast expectations. It does NOT clear Func, Returns,
+// or Faults configuration — behavior is preserved, only observations
+// are rewound. This matches the pattern: config sticks, counters rewind.
 func (s *MethodStub[C]) Reset() {
 	s.Recorder.Reset()
 	if s.fault != nil {

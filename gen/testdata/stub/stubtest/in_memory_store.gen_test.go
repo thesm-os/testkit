@@ -20,7 +20,8 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Delete default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := stubtest.NewStoreStub(t)
-		_ = s.Delete(t.Context(), "")
+		r0 := s.Delete(t.Context(), "")
+		testkit.NoError(t, r0, "default Delete must not error")
 	})
 
 	t.Run("Delete fault injection fires", func(t *testing.T) {
@@ -67,10 +68,67 @@ func TestStoreStub(t *testing.T) {
 		testkit.True(t, called, "WithStoreDelete must be called")
 	})
 
+	t.Run("Find default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stubtest.NewStoreStub(t)
+		r0, r1 := s.Find(t.Context())
+		testkit.Equal(t, r0, nil, "default Find Result must be zero")
+		testkit.NoError(t, r1, "default Find must not error")
+	})
+
+	t.Run("Find fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stubtest.NewStoreStub(t)
+		s.OnFind.Faults(errTest, 1)
+		r0, r1 := s.Find(t.Context())
+		testkit.ErrorIs(t, r1, errTest, "fault must fire on Find")
+		_ = r0
+	})
+
+	t.Run("Find Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stubtest.NewStoreStub(t)
+		s.OnFind.Func(func(context.Context, ...string) ([]stub.Item, error) {
+			return []stub.Item{}, errTest
+		})
+		r0, r1 := s.Find(t.Context())
+		testkit.ErrorIs(t, r1, errTest, "Func must override Find")
+		_ = r0
+	})
+
+	t.Run("Find Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stubtest.NewStoreStub(t)
+		s.OnFind.Returns([]stub.Item{}, errTest)
+		r0, r1 := s.Find(t.Context())
+		testkit.ErrorIs(t, r1, errTest, "Returns must set error on Find")
+		_ = r0
+	})
+
+	t.Run("Find records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stubtest.NewStoreStub(t)
+		_, _ = s.Find(t.Context())
+		s.OnFind.AssertCalledOnce(t, "must record Find call")
+	})
+
+	t.Run("WithStoreFind constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stubtest.NewStoreStub(t, stubtest.WithStoreFind(func(context.Context, ...string) ([]stub.Item, error) {
+			called = true
+			return nil, nil
+		}))
+		_, _ = s.Find(t.Context())
+		testkit.True(t, called, "WithStoreFind must be called")
+	})
+
 	t.Run("Get default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := stubtest.NewStoreStub(t)
-		_, _ = s.Get(t.Context(), "")
+		r0, r1 := s.Get(t.Context(), "")
+		testkit.Equal(t, r0, stub.Item{}, "default Get Result must be zero")
+		testkit.NoError(t, r1, "default Get must not error")
 	})
 
 	t.Run("Get fault injection fires", func(t *testing.T) {
@@ -123,7 +181,8 @@ func TestStoreStub(t *testing.T) {
 	t.Run("List default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := stubtest.NewStoreStub(t)
-		_ = s.List(t.Context())
+		r0 := s.List(t.Context())
+		testkit.Equal(t, r0, nil, "default List Result must be zero")
 	})
 
 	t.Run("List Func override", func(t *testing.T) {
@@ -165,7 +224,8 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Put default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := stubtest.NewStoreStub(t)
-		_ = s.Put(t.Context(), stub.Item{})
+		r0 := s.Put(t.Context(), stub.Item{})
+		testkit.NoError(t, r0, "default Put must not error")
 	})
 
 	t.Run("Put fault injection fires", func(t *testing.T) {
@@ -216,11 +276,13 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := stubtest.NewStoreStub(t)
 		_ = s.Delete(t.Context(), "")
+		_, _ = s.Find(t.Context())
 		_, _ = s.Get(t.Context(), "")
 		_ = s.List(t.Context())
 		_ = s.Put(t.Context(), stub.Item{})
 		s.Reset()
 		s.OnDelete.AssertNotCalled(t, "Delete must be cleared after Reset")
+		s.OnFind.AssertNotCalled(t, "Find must be cleared after Reset")
 		s.OnGet.AssertNotCalled(t, "Get must be cleared after Reset")
 		s.OnList.AssertNotCalled(t, "List must be cleared after Reset")
 		s.OnPut.AssertNotCalled(t, "Put must be cleared after Reset")
@@ -238,15 +300,18 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		inner := stubtest.NewStoreStub(t)
 		inner.OnDelete.Returns(nil)
+		inner.OnFind.Returns(nil, nil)
 		inner.OnGet.Returns(stub.Item{}, nil)
 		inner.OnList.Returns(nil)
 		inner.OnPut.Returns(nil)
 		s := stubtest.NewStoreStub(t, stubtest.StoreStubDelegateTo(inner))
 		_ = s.Delete(t.Context(), "")
+		_, _ = s.Find(t.Context())
 		_, _ = s.Get(t.Context(), "")
 		_ = s.List(t.Context())
 		_ = s.Put(t.Context(), stub.Item{})
 		s.OnDelete.AssertCalledOnce(t, "Delete must delegate")
+		s.OnFind.AssertCalledOnce(t, "Find must delegate")
 		s.OnGet.AssertCalledOnce(t, "Get must delegate")
 		s.OnList.AssertCalledOnce(t, "List must delegate")
 		s.OnPut.AssertCalledOnce(t, "Put must delegate")

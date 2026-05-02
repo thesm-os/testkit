@@ -111,6 +111,7 @@ func GenerateStub(pkg *Package, typeNames []string, cfg Config, opts Options) (*
 
 type stubMethodData struct {
 	Name string // "Get"
+	Doc  string // interface method doc, each line prefixed with "// "
 
 	// Type names for generated types.
 	CallType    string // "GetCall"
@@ -120,10 +121,11 @@ type stubMethodData struct {
 	WhenType    string // "getWhen"
 
 	// Rendered signature parts.
-	FuncTypeStr   string // "func(context.Context, string) (store.Item, error)"
-	ParamListStr  string // "ctx context.Context, id string"
-	ResultListStr string // "(store.Item, error)"
-	ParamNames    string // "ctx, id"
+	FuncTypeStr      string // "func(context.Context, string) (store.Item, error)"
+	ParamListStr     string // "ctx context.Context, id string"
+	ResultListStr    string // "(store.Item, error)"
+	ParamNames       string // "ctx, id" — for recording/struct literals
+	ParamNamesSpread string // "ctx, id..." — for forwarding variadic calls
 
 	// Fields for call/return types.
 	Params  []stubFieldData
@@ -152,9 +154,10 @@ type stubMethodData struct {
 	ErrVarName           string
 	NonErrResultVars     string
 	IgnoredCallExpr      string
+	ZeroAssertCallExpr   string // call + assert all returns are zero
 	FaultTestCallExpr    string
-	ReturnsTestCallExpr  string // snippet for Returns() test
-	FuncOverrideTestExpr string // snippet for Func() override test
+	ReturnsTestCallExpr  string
+	FuncOverrideTestExpr string
 }
 
 type stubFieldData struct {
@@ -217,6 +220,10 @@ func buildStubMethodData(ifaceName string, m MethodInfo, tracker *ImportTracker)
 	funcTypeStr := m.FuncType(tracker)
 	paramListStr := m.ParamList(tracker)
 	paramNames := m.ParamNames()
+	paramNamesSpread := paramNames
+	if m.IsVariadic() && sig.Params().Len() > 0 {
+		paramNamesSpread = paramNames + "..."
+	}
 	resultListStr := m.ResultList(tracker)
 
 	// ReturnParams for Returns() method: "result store.Item, err error"
@@ -241,9 +248,10 @@ func buildStubMethodData(ifaceName string, m MethodInfo, tracker *ImportTracker)
 	returnFromFallback := buildReturnFromPrefix(results, "f")
 
 	// Test helpers.
-	zeroParamValues := buildZeroParamValues(sig.Params(), tracker)
+	zeroParamValues := buildZeroParamValues(sig.Params(), tracker, m.IsVariadic())
 	errVarName, nonErrResultVars := buildErrVarNames(results, returnsError)
 	ignoredCallExpr := buildIgnoredCallExpr(m.Name, zeroParamValues, len(results))
+	zeroAssertCallExpr := buildZeroAssertCallExpr(m.Name, zeroParamValues, results, sig.Results(), tracker)
 	faultTestCallExpr := buildFaultTestCallExpr(
 		m.Name, zeroParamValues, errVarName,
 		nonErrResultVars, results, returnsError,
@@ -258,16 +266,18 @@ func buildStubMethodData(ifaceName string, m MethodInfo, tracker *ImportTracker)
 
 	return stubMethodData{
 		Name:        m.Name,
+		Doc:         formatDocComment(m.Doc),
 		CallType:    prefix + "Call",
 		StubType:    prefix + "Stub",
 		MatcherType: lowerPrefix + "Matcher",
 		ReturnType:  lowerPrefix + "Return",
 		WhenType:    lowerPrefix + "When",
 
-		FuncTypeStr:   funcTypeStr,
-		ParamListStr:  paramListStr,
-		ResultListStr: resultListStr,
-		ParamNames:    paramNames,
+		FuncTypeStr:      funcTypeStr,
+		ParamListStr:     paramListStr,
+		ResultListStr:    resultListStr,
+		ParamNames:       paramNames,
+		ParamNamesSpread: paramNamesSpread,
 
 		Params:  params,
 		Results: results,
@@ -289,6 +299,7 @@ func buildStubMethodData(ifaceName string, m MethodInfo, tracker *ImportTracker)
 		ErrVarName:                errVarName,
 		NonErrResultVars:          nonErrResultVars,
 		IgnoredCallExpr:           ignoredCallExpr,
+		ZeroAssertCallExpr:        zeroAssertCallExpr,
 		FaultTestCallExpr:         faultTestCallExpr,
 		ReturnsTestCallExpr:       returnsTestCallExpr,
 		FuncOverrideTestExpr:      funcOverrideTestExpr,
@@ -317,13 +328,14 @@ func buildResultFields(tuple *types.Tuple, tracker *ImportTracker) []stubFieldDa
 		v := tuple.At(i)
 		name := v.Name()
 		if name == "" {
-			// Derive name from type: error → Err, otherwise Result/Result2/etc.
+			// Derive name from type: error → Err, otherwise Result/Result0/Result1/etc.
 			if isErrorType(v.Type()) {
 				name = errFieldName
-			} else if i == 0 {
+			} else if tuple.Len() == 1 || (tuple.Len() == 2 && isErrorType(tuple.At(1).Type())) {
+				// Single non-error result, or (Result, error) pair.
 				name = resultFieldName
 			} else {
-				name = resultFieldName + paramName(i)
+				name = resultFieldName + string(rune('0'+i))
 			}
 		} else {
 			name = title(name)
@@ -420,9 +432,14 @@ func buildReturnFromPrefix(results []stubFieldData, prefix string) string {
 }
 
 // buildZeroParamValues: "t.Context(), \"\"" — zero values for test calls.
-func buildZeroParamValues(tuple *types.Tuple, tracker *ImportTracker) string {
-	parts := make([]string, tuple.Len())
-	for i := range tuple.Len() {
+// Variadic params are omitted (pass zero args).
+func buildZeroParamValues(tuple *types.Tuple, tracker *ImportTracker, variadic bool) string {
+	count := tuple.Len()
+	if variadic && count > 0 {
+		count-- // omit variadic param — pass zero args
+	}
+	parts := make([]string, count)
+	for i := range count {
 		typ := tuple.At(i).Type()
 		if isContextType(typ) {
 			parts[i] = "t.Context()"
@@ -449,6 +466,33 @@ func buildErrVarNames(results []stubFieldData, returnsError bool) (errVar, nonEr
 	}
 	nonErrVars = strings.Join(nonErr, ", ")
 	return errVar, nonErrVars
+}
+
+// buildZeroAssertCallExpr calls the method and asserts each return is zero.
+func buildZeroAssertCallExpr(
+	methodName, zeroParams string, results []stubFieldData,
+	tuple *types.Tuple, tracker *ImportTracker,
+) string {
+	if len(results) == 0 {
+		return "s." + methodName + "(" + zeroParams + ")"
+	}
+	vars := make([]string, len(results))
+	for i := range results {
+		vars[i] = "r" + string(rune('0'+i))
+	}
+	var b strings.Builder
+	b.WriteString(strings.Join(vars, ", ") + " := s." + methodName + "(" + zeroParams + ")")
+	for i, r := range results {
+		zero := zeroValueOf(tuple.At(i).Type(), tracker)
+		if r.FieldName == errFieldName {
+			b.WriteString("\n\t\ttestkit.NoError(t, " + vars[i] +
+				", \"default " + methodName + " must not error\")")
+		} else {
+			b.WriteString("\n\t\ttestkit.Equal(t, " + vars[i] + ", " + zero +
+				", \"default " + methodName + " " + r.FieldName + " must be zero\")")
+		}
+	}
+	return b.String()
 }
 
 // buildIgnoredCallExpr: "s.List(t.Context())" or "_, _ = s.Get(t.Context(), \"\")"
@@ -586,6 +630,23 @@ func buildFuncOverrideTestExpr(
 		}
 	}
 	return b.String()
+}
+
+// formatDocComment prefixes each line of doc with "// " so it can be
+// pasted directly into generated Go source.
+func formatDocComment(doc string) string {
+	if doc == "" {
+		return ""
+	}
+	lines := strings.Split(doc, "\n")
+	for i, line := range lines {
+		if line == "" {
+			lines[i] = "//"
+		} else {
+			lines[i] = "// " + line
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func defaultStubPath(typeName string, cfg Config) string {

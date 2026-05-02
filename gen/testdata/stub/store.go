@@ -37,4 +37,8 @@ type Store interface {
 	// List returns all items. No error return — tests that
 	// WithFault is only generated for error-returning methods.
 	List(ctx context.Context) []Item
+
+	// Find retrieves multiple items by IDs. Variadic parameter —
+	// exercises variadic method stub generation.
+	Find(ctx context.Context, ids ...string) ([]Item, error)
 }

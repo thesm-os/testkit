@@ -109,9 +109,58 @@ func RenderTemplate(tmpl *template.Template, name string, data any, header Heade
 
 // --- string transform helpers ---
 
+// commonInitialisms is the set of Go-conventional initialisms that
+// should be fully uppercased in exported names. Matches the set used
+// by golint/staticcheck.
+var commonInitialisms = map[string]bool{
+	"ACL":   true,
+	"API":   true,
+	"ASCII": true,
+	"CPU":   true,
+	"CSS":   true,
+	"DNS":   true,
+	"EOF":   true,
+	"GUID":  true,
+	"HTML":  true,
+	"HTTP":  true,
+	"HTTPS": true,
+	"ID":    true,
+	"IP":    true,
+	"JSON":  true,
+	"LHS":   true,
+	"QPS":   true,
+	"RAM":   true,
+	"RHS":   true,
+	"RPC":   true,
+	"SLA":   true,
+	"SMTP":  true,
+	"SQL":   true,
+	"SSH":   true,
+	"TCP":   true,
+	"TLS":   true,
+	"TTL":   true,
+	"UDP":   true,
+	"UI":    true,
+	"UID":   true,
+	"URI":   true,
+	"URL":   true,
+	"UTF8":  true,
+	"UUID":  true,
+	"VM":    true,
+	"XML":   true,
+	"XMPP":  true,
+	"XSS":   true,
+}
+
+// title uppercases the first letter of s, with awareness of Go
+// initialisms. "id" → "ID", "url" → "URL", "name" → "Name".
 func title(s string) string {
 	if s == "" {
 		return s
+	}
+	upper := strings.ToUpper(s)
+	if commonInitialisms[upper] {
+		return upper
 	}
 	r := []rune(s)
 	r[0] = unicode.ToUpper(r[0])
