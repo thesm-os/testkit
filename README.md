@@ -243,4 +243,4 @@ Full reference documentation lives in [`docs/testkit/`](docs/testkit/README.md):
 
 ## License
 
-[BUSL-1.1](LICENSE)
+[MIT](LICENSE)
