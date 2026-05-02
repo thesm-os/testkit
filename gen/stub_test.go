@@ -64,9 +64,10 @@ func TestGenerateStub(t *testing.T) {
 		testkit.Assert(t, impl).
 			Contains("s.OnGet.ShouldFault()", "Get returns error, must check fault").
 			Contains("s.OnPut.ShouldFault()", "Put returns error, must check fault").
-			Contains("s.OnDelete.ShouldFault()", "Delete returns error, must check fault")
-		// List does not return error — no fault check.
-		testkit.Assert(t, impl).NotContains("s.OnList.ShouldFault()", "List has no error, must not check fault")
+			Contains("s.OnDelete.ShouldFault()", "Delete returns error, must check fault").
+			Contains("s.OnList.ShouldFault()", "List returns error, must check fault")
+		// Count does not return error — no fault check.
+		testkit.Assert(t, impl).NotContains("s.OnCount.ShouldFault()", "Count has no error, must not check fault")
 	})
 
 	t.Run("has DO NOT EDIT header", func(t *testing.T) {

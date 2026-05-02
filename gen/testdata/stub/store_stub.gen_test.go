@@ -5,7 +5,9 @@ package stub_test
 
 import (
 	"context"
+	"io"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/testdata/stub"
@@ -15,6 +17,100 @@ func TestStoreStub(t *testing.T) {
 	t.Parallel()
 
 	errTest := testkit.TestError("Store-stub-test")
+
+	t.Run("Close default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.Close()
+		testkit.NoError(t, r0, "default Close must not error")
+	})
+
+	t.Run("Close fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnClose.Faults(errTest, 1)
+		r0 := s.Close()
+		testkit.ErrorIs(t, r0, errTest, "fault must fire on Close")
+	})
+
+	t.Run("Close Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnClose.Func(func() error {
+			return errTest
+		})
+		r0 := s.Close()
+		testkit.ErrorIs(t, r0, errTest, "Func must override Close")
+	})
+
+	t.Run("Close Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnClose.Returns(errTest)
+		r0 := s.Close()
+		testkit.ErrorIs(t, r0, errTest, "Returns must set error on Close")
+	})
+
+	t.Run("Close records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.Close()
+		s.OnClose.AssertCalledOnce(t, "must record Close call")
+	})
+
+	t.Run("WithStoreClose constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreClose(func() error {
+			called = true
+			return nil
+		}))
+		_ = s.Close()
+		testkit.True(t, called, "WithStoreClose must be called")
+	})
+
+	t.Run("Count default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.Count(t.Context())
+		testkit.Equal(t, r0, 0, "default Count Result must be zero")
+	})
+
+	t.Run("Count Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnCount.Func(func(context.Context) int {
+			return 0
+		})
+		r0 := s.Count(t.Context())
+		_ = r0
+	})
+
+	t.Run("Count Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnCount.Returns(0)
+		r0 := s.Count(t.Context())
+		_ = r0
+	})
+
+	t.Run("Count records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.Count(t.Context())
+		s.OnCount.AssertCalledOnce(t, "must record Count call")
+	})
+
+	t.Run("WithStoreCount constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreCount(func(context.Context) int {
+			called = true
+			return 0
+		}))
+		_ = s.Count(t.Context())
+		testkit.True(t, called, "WithStoreCount must be called")
+	})
 
 	t.Run("Delete default returns zero", func(t *testing.T) {
 		t.Parallel()
@@ -34,7 +130,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Delete Func override", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnDelete.Func(func(context.Context, string) error {
+		s.OnDelete.Func(func(context.Context, stub.ID) error {
 			return errTest
 		})
 		r0 := s.Delete(t.Context(), "")
@@ -59,12 +155,63 @@ func TestStoreStub(t *testing.T) {
 	t.Run("WithStoreDelete constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := stub.NewStoreStub(t, stub.WithStoreDelete(func(context.Context, string) error {
+		s := stub.NewStoreStub(t, stub.WithStoreDelete(func(context.Context, stub.ID) error {
 			called = true
 			return nil
 		}))
 		_ = s.Delete(t.Context(), "")
 		testkit.True(t, called, "WithStoreDelete must be called")
+	})
+
+	t.Run("Export default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.Export(t.Context(), nil)
+		testkit.NoError(t, r0, "default Export must not error")
+	})
+
+	t.Run("Export fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnExport.Faults(errTest, 1)
+		r0 := s.Export(t.Context(), nil)
+		testkit.ErrorIs(t, r0, errTest, "fault must fire on Export")
+	})
+
+	t.Run("Export Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnExport.Func(func(context.Context, io.Writer) error {
+			return errTest
+		})
+		r0 := s.Export(t.Context(), nil)
+		testkit.ErrorIs(t, r0, errTest, "Func must override Export")
+	})
+
+	t.Run("Export Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnExport.Returns(errTest)
+		r0 := s.Export(t.Context(), nil)
+		testkit.ErrorIs(t, r0, errTest, "Returns must set error on Export")
+	})
+
+	t.Run("Export records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.Export(t.Context(), nil)
+		s.OnExport.AssertCalledOnce(t, "must record Export call")
+	})
+
+	t.Run("WithStoreExport constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreExport(func(context.Context, io.Writer) error {
+			called = true
+			return nil
+		}))
+		_ = s.Export(t.Context(), nil)
+		testkit.True(t, called, "WithStoreExport must be called")
 	})
 
 	t.Run("Find default returns zero", func(t *testing.T) {
@@ -87,8 +234,8 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Find Func override", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnFind.Func(func(context.Context, ...string) ([]stub.Item, error) {
-			return []stub.Item{}, errTest
+		s.OnFind.Func(func(context.Context, ...stub.ID) ([]stub.Item, error) {
+			return nil, errTest
 		})
 		r0, r1 := s.Find(t.Context())
 		testkit.ErrorIs(t, r1, errTest, "Func must override Find")
@@ -98,7 +245,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Find Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnFind.Returns([]stub.Item{}, errTest)
+		s.OnFind.Returns(nil, errTest)
 		r0, r1 := s.Find(t.Context())
 		testkit.ErrorIs(t, r1, errTest, "Returns must set error on Find")
 		_ = r0
@@ -114,7 +261,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("WithStoreFind constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := stub.NewStoreStub(t, stub.WithStoreFind(func(context.Context, ...string) ([]stub.Item, error) {
+		s := stub.NewStoreStub(t, stub.WithStoreFind(func(context.Context, ...stub.ID) ([]stub.Item, error) {
 			called = true
 			return nil, nil
 		}))
@@ -142,7 +289,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Get Func override", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnGet.Func(func(context.Context, string) (stub.Item, error) {
+		s.OnGet.Func(func(context.Context, stub.ID) (stub.Item, error) {
 			return stub.Item{}, errTest
 		})
 		r0, r1 := s.Get(t.Context(), "")
@@ -169,7 +316,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("WithStoreGet constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := stub.NewStoreStub(t, stub.WithStoreGet(func(context.Context, string) (stub.Item, error) {
+		s := stub.NewStoreStub(t, stub.WithStoreGet(func(context.Context, stub.ID) (stub.Item, error) {
 			called = true
 			return stub.Item{}, nil
 		}))
@@ -177,47 +324,263 @@ func TestStoreStub(t *testing.T) {
 		testkit.True(t, called, "WithStoreGet must be called")
 	})
 
+	t.Run("GetOptional default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.GetOptional(t.Context(), "")
+		testkit.Equal(t, r0, nil, "default GetOptional Result must be zero")
+	})
+
+	t.Run("GetOptional Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnGetOptional.Func(func(context.Context, stub.ID) *stub.Item {
+			return nil
+		})
+		r0 := s.GetOptional(t.Context(), "")
+		_ = r0
+	})
+
+	t.Run("GetOptional Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnGetOptional.Returns(nil)
+		r0 := s.GetOptional(t.Context(), "")
+		_ = r0
+	})
+
+	t.Run("GetOptional records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.GetOptional(t.Context(), "")
+		s.OnGetOptional.AssertCalledOnce(t, "must record GetOptional call")
+	})
+
+	t.Run("WithStoreGetOptional constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreGetOptional(func(context.Context, stub.ID) *stub.Item {
+			called = true
+			return nil
+		}))
+		_ = s.GetOptional(t.Context(), "")
+		testkit.True(t, called, "WithStoreGetOptional must be called")
+	})
+
+	t.Run("Import default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0, r1 := s.Import(t.Context(), nil)
+		testkit.Equal(t, r0, 0, "default Import Result must be zero")
+		testkit.NoError(t, r1, "default Import must not error")
+	})
+
+	t.Run("Import fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnImport.Faults(errTest, 1)
+		r0, r1 := s.Import(t.Context(), nil)
+		testkit.ErrorIs(t, r1, errTest, "fault must fire on Import")
+		_ = r0
+	})
+
+	t.Run("Import Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnImport.Func(func(context.Context, io.Reader) (int, error) {
+			return 0, errTest
+		})
+		r0, r1 := s.Import(t.Context(), nil)
+		testkit.ErrorIs(t, r1, errTest, "Func must override Import")
+		_ = r0
+	})
+
+	t.Run("Import Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnImport.Returns(0, errTest)
+		r0, r1 := s.Import(t.Context(), nil)
+		testkit.ErrorIs(t, r1, errTest, "Returns must set error on Import")
+		_ = r0
+	})
+
+	t.Run("Import records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_, _ = s.Import(t.Context(), nil)
+		s.OnImport.AssertCalledOnce(t, "must record Import call")
+	})
+
+	t.Run("WithStoreImport constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreImport(func(context.Context, io.Reader) (int, error) {
+			called = true
+			return 0, nil
+		}))
+		_, _ = s.Import(t.Context(), nil)
+		testkit.True(t, called, "WithStoreImport must be called")
+	})
+
 	t.Run("List default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		r0 := s.List(t.Context())
-		testkit.Equal(t, r0, nil, "default List Result must be zero")
+		r0, r1 := s.List(t.Context(), stub.ListOptions{})
+		testkit.Equal(t, r0, stub.ListResult{}, "default List Result must be zero")
+		testkit.NoError(t, r1, "default List must not error")
+	})
+
+	t.Run("List fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnList.Faults(errTest, 1)
+		r0, r1 := s.List(t.Context(), stub.ListOptions{})
+		testkit.ErrorIs(t, r1, errTest, "fault must fire on List")
+		_ = r0
 	})
 
 	t.Run("List Func override", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnList.Func(func(context.Context) []stub.Item {
-			return []stub.Item{}
+		s.OnList.Func(func(context.Context, stub.ListOptions) (stub.ListResult, error) {
+			return stub.ListResult{}, errTest
 		})
-		r0 := s.List(t.Context())
+		r0, r1 := s.List(t.Context(), stub.ListOptions{})
+		testkit.ErrorIs(t, r1, errTest, "Func must override List")
 		_ = r0
 	})
 
 	t.Run("List Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		s.OnList.Returns([]stub.Item{})
-		r0 := s.List(t.Context())
+		s.OnList.Returns(stub.ListResult{}, errTest)
+		r0, r1 := s.List(t.Context(), stub.ListOptions{})
+		testkit.ErrorIs(t, r1, errTest, "Returns must set error on List")
 		_ = r0
 	})
 
 	t.Run("List records calls", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
-		_ = s.List(t.Context())
+		_, _ = s.List(t.Context(), stub.ListOptions{})
 		s.OnList.AssertCalledOnce(t, "must record List call")
 	})
 
 	t.Run("WithStoreList constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := stub.NewStoreStub(t, stub.WithStoreList(func(context.Context) []stub.Item {
+		s := stub.NewStoreStub(t, stub.WithStoreList(func(context.Context, stub.ListOptions) (stub.ListResult, error) {
+			called = true
+			return stub.ListResult{}, nil
+		}))
+		_, _ = s.List(t.Context(), stub.ListOptions{})
+		testkit.True(t, called, "WithStoreList must be called")
+	})
+
+	t.Run("MetadataFor default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0, r1 := s.MetadataFor(t.Context(), "")
+		testkit.Equal(t, r0, nil, "default MetadataFor Result must be zero")
+		testkit.NoError(t, r1, "default MetadataFor must not error")
+	})
+
+	t.Run("MetadataFor fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnMetadataFor.Faults(errTest, 1)
+		r0, r1 := s.MetadataFor(t.Context(), "")
+		testkit.ErrorIs(t, r1, errTest, "fault must fire on MetadataFor")
+		_ = r0
+	})
+
+	t.Run("MetadataFor Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnMetadataFor.Func(func(context.Context, stub.ID) (map[string]string, error) {
+			return nil, errTest
+		})
+		r0, r1 := s.MetadataFor(t.Context(), "")
+		testkit.ErrorIs(t, r1, errTest, "Func must override MetadataFor")
+		_ = r0
+	})
+
+	t.Run("MetadataFor Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnMetadataFor.Returns(nil, errTest)
+		r0, r1 := s.MetadataFor(t.Context(), "")
+		testkit.ErrorIs(t, r1, errTest, "Returns must set error on MetadataFor")
+		_ = r0
+	})
+
+	t.Run("MetadataFor records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_, _ = s.MetadataFor(t.Context(), "")
+		s.OnMetadataFor.AssertCalledOnce(t, "must record MetadataFor call")
+	})
+
+	t.Run("WithStoreMetadataFor constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreMetadataFor(func(context.Context, stub.ID) (map[string]string, error) {
+			called = true
+			return nil, nil
+		}))
+		_, _ = s.MetadataFor(t.Context(), "")
+		testkit.True(t, called, "WithStoreMetadataFor must be called")
+	})
+
+	t.Run("Ping default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.Ping(t.Context())
+		testkit.NoError(t, r0, "default Ping must not error")
+	})
+
+	t.Run("Ping fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPing.Faults(errTest, 1)
+		r0 := s.Ping(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "fault must fire on Ping")
+	})
+
+	t.Run("Ping Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPing.Func(func(context.Context) error {
+			return errTest
+		})
+		r0 := s.Ping(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "Func must override Ping")
+	})
+
+	t.Run("Ping Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPing.Returns(errTest)
+		r0 := s.Ping(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "Returns must set error on Ping")
+	})
+
+	t.Run("Ping records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.Ping(t.Context())
+		s.OnPing.AssertCalledOnce(t, "must record Ping call")
+	})
+
+	t.Run("WithStorePing constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStorePing(func(context.Context) error {
 			called = true
 			return nil
 		}))
-		_ = s.List(t.Context())
-		testkit.True(t, called, "WithStoreList must be called")
+		_ = s.Ping(t.Context())
+		testkit.True(t, called, "WithStorePing must be called")
 	})
 
 	t.Run("Put default returns zero", func(t *testing.T) {
@@ -271,48 +634,251 @@ func TestStoreStub(t *testing.T) {
 		testkit.True(t, called, "WithStorePut must be called")
 	})
 
+	t.Run("PutMany default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.PutMany(t.Context())
+		testkit.NoError(t, r0, "default PutMany must not error")
+	})
+
+	t.Run("PutMany fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPutMany.Faults(errTest, 1)
+		r0 := s.PutMany(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "fault must fire on PutMany")
+	})
+
+	t.Run("PutMany Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPutMany.Func(func(context.Context, ...stub.Item) error {
+			return errTest
+		})
+		r0 := s.PutMany(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "Func must override PutMany")
+	})
+
+	t.Run("PutMany Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnPutMany.Returns(errTest)
+		r0 := s.PutMany(t.Context())
+		testkit.ErrorIs(t, r0, errTest, "Returns must set error on PutMany")
+	})
+
+	t.Run("PutMany records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.PutMany(t.Context())
+		s.OnPutMany.AssertCalledOnce(t, "must record PutMany call")
+	})
+
+	t.Run("WithStorePutMany constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStorePutMany(func(context.Context, ...stub.Item) error {
+			called = true
+			return nil
+		}))
+		_ = s.PutMany(t.Context())
+		testkit.True(t, called, "WithStorePutMany must be called")
+	})
+
+	t.Run("Tags default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0 := s.Tags(t.Context())
+		testkit.Equal(t, r0, nil, "default Tags Result must be zero")
+	})
+
+	t.Run("Tags Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnTags.Func(func(context.Context) []string {
+			return nil
+		})
+		r0 := s.Tags(t.Context())
+		_ = r0
+	})
+
+	t.Run("Tags Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnTags.Returns(nil)
+		r0 := s.Tags(t.Context())
+		_ = r0
+	})
+
+	t.Run("Tags records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_ = s.Tags(t.Context())
+		s.OnTags.AssertCalledOnce(t, "must record Tags call")
+	})
+
+	t.Run("WithStoreTags constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreTags(func(context.Context) []string {
+			called = true
+			return nil
+		}))
+		_ = s.Tags(t.Context())
+		testkit.True(t, called, "WithStoreTags must be called")
+	})
+
+	t.Run("Touch default returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		r0, r1, r2 := s.Touch(t.Context(), "")
+		testkit.Equal(t, r0, time.Time{}, "default Touch Before must be zero")
+		testkit.Equal(t, r1, time.Time{}, "default Touch After must be zero")
+		testkit.NoError(t, r2, "default Touch must not error")
+	})
+
+	t.Run("Touch fault injection fires", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnTouch.Faults(errTest, 1)
+		r0, r1, r2 := s.Touch(t.Context(), "")
+		testkit.ErrorIs(t, r2, errTest, "fault must fire on Touch")
+		_ = r0
+		_ = r1
+	})
+
+	t.Run("Touch Func override", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnTouch.Func(func(context.Context, stub.ID) (time.Time, time.Time, error) {
+			return time.Time{}, time.Time{}, errTest
+		})
+		r0, r1, r2 := s.Touch(t.Context(), "")
+		testkit.ErrorIs(t, r2, errTest, "Func must override Touch")
+		_ = r0
+		_ = r1
+	})
+
+	t.Run("Touch Returns fixed value", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		s.OnTouch.Returns(time.Time{}, time.Time{}, errTest)
+		r0, r1, r2 := s.Touch(t.Context(), "")
+		testkit.ErrorIs(t, r2, errTest, "Returns must set error on Touch")
+		_ = r0
+		_ = r1
+	})
+
+	t.Run("Touch records calls", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewStoreStub(t)
+		_, _, _ = s.Touch(t.Context(), "")
+		s.OnTouch.AssertCalledOnce(t, "must record Touch call")
+	})
+
+	t.Run("WithStoreTouch constructor option", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := stub.NewStoreStub(t, stub.WithStoreTouch(func(context.Context, stub.ID) (time.Time, time.Time, error) {
+			called = true
+			return time.Time{}, time.Time{}, nil
+		}))
+		_, _, _ = s.Touch(t.Context(), "")
+		testkit.True(t, called, "WithStoreTouch must be called")
+	})
+
 	t.Run("Reset clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := stub.NewStoreStub(t)
+		_ = s.Close()
+		_ = s.Count(t.Context())
 		_ = s.Delete(t.Context(), "")
+		_ = s.Export(t.Context(), nil)
 		_, _ = s.Find(t.Context())
 		_, _ = s.Get(t.Context(), "")
-		_ = s.List(t.Context())
+		_ = s.GetOptional(t.Context(), "")
+		_, _ = s.Import(t.Context(), nil)
+		_, _ = s.List(t.Context(), stub.ListOptions{})
+		_, _ = s.MetadataFor(t.Context(), "")
+		_ = s.Ping(t.Context())
 		_ = s.Put(t.Context(), stub.Item{})
+		_ = s.PutMany(t.Context())
+		_ = s.Tags(t.Context())
+		_, _, _ = s.Touch(t.Context(), "")
 		s.Reset()
+		s.OnClose.AssertNotCalled(t, "Close must be cleared after Reset")
+		s.OnCount.AssertNotCalled(t, "Count must be cleared after Reset")
 		s.OnDelete.AssertNotCalled(t, "Delete must be cleared after Reset")
+		s.OnExport.AssertNotCalled(t, "Export must be cleared after Reset")
 		s.OnFind.AssertNotCalled(t, "Find must be cleared after Reset")
 		s.OnGet.AssertNotCalled(t, "Get must be cleared after Reset")
+		s.OnGetOptional.AssertNotCalled(t, "GetOptional must be cleared after Reset")
+		s.OnImport.AssertNotCalled(t, "Import must be cleared after Reset")
 		s.OnList.AssertNotCalled(t, "List must be cleared after Reset")
+		s.OnMetadataFor.AssertNotCalled(t, "MetadataFor must be cleared after Reset")
+		s.OnPing.AssertNotCalled(t, "Ping must be cleared after Reset")
 		s.OnPut.AssertNotCalled(t, "Put must be cleared after Reset")
+		s.OnPutMany.AssertNotCalled(t, "PutMany must be cleared after Reset")
+		s.OnTags.AssertNotCalled(t, "Tags must be cleared after Reset")
+		s.OnTouch.AssertNotCalled(t, "Touch must be cleared after Reset")
 	})
 
 	t.Run("Strict mode fails on unconfigured call", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
 		s := stub.NewStoreStub(f, stub.StoreStubStrict())
-		_ = s.Delete(t.Context(), "")
+		_ = s.Close()
 		testkit.True(t, f.Failed(), "strict mode must fail on unconfigured call")
 	})
 
 	t.Run("DelegateTo forwards to implementation", func(t *testing.T) {
 		t.Parallel()
 		inner := stub.NewStoreStub(t)
+		inner.OnClose.Returns(nil)
+		inner.OnCount.Returns(0)
 		inner.OnDelete.Returns(nil)
+		inner.OnExport.Returns(nil)
 		inner.OnFind.Returns(nil, nil)
 		inner.OnGet.Returns(stub.Item{}, nil)
-		inner.OnList.Returns(nil)
+		inner.OnGetOptional.Returns(nil)
+		inner.OnImport.Returns(0, nil)
+		inner.OnList.Returns(stub.ListResult{}, nil)
+		inner.OnMetadataFor.Returns(nil, nil)
+		inner.OnPing.Returns(nil)
 		inner.OnPut.Returns(nil)
+		inner.OnPutMany.Returns(nil)
+		inner.OnTags.Returns(nil)
+		inner.OnTouch.Returns(time.Time{}, time.Time{}, nil)
 		s := stub.NewStoreStub(t, stub.StoreStubDelegateTo(inner))
+		_ = s.Close()
+		_ = s.Count(t.Context())
 		_ = s.Delete(t.Context(), "")
+		_ = s.Export(t.Context(), nil)
 		_, _ = s.Find(t.Context())
 		_, _ = s.Get(t.Context(), "")
-		_ = s.List(t.Context())
+		_ = s.GetOptional(t.Context(), "")
+		_, _ = s.Import(t.Context(), nil)
+		_, _ = s.List(t.Context(), stub.ListOptions{})
+		_, _ = s.MetadataFor(t.Context(), "")
+		_ = s.Ping(t.Context())
 		_ = s.Put(t.Context(), stub.Item{})
+		_ = s.PutMany(t.Context())
+		_ = s.Tags(t.Context())
+		_, _, _ = s.Touch(t.Context(), "")
+		s.OnClose.AssertCalledOnce(t, "Close must delegate")
+		s.OnCount.AssertCalledOnce(t, "Count must delegate")
 		s.OnDelete.AssertCalledOnce(t, "Delete must delegate")
+		s.OnExport.AssertCalledOnce(t, "Export must delegate")
 		s.OnFind.AssertCalledOnce(t, "Find must delegate")
 		s.OnGet.AssertCalledOnce(t, "Get must delegate")
+		s.OnGetOptional.AssertCalledOnce(t, "GetOptional must delegate")
+		s.OnImport.AssertCalledOnce(t, "Import must delegate")
 		s.OnList.AssertCalledOnce(t, "List must delegate")
+		s.OnMetadataFor.AssertCalledOnce(t, "MetadataFor must delegate")
+		s.OnPing.AssertCalledOnce(t, "Ping must delegate")
 		s.OnPut.AssertCalledOnce(t, "Put must delegate")
+		s.OnPutMany.AssertCalledOnce(t, "PutMany must delegate")
+		s.OnTags.AssertCalledOnce(t, "Tags must delegate")
+		s.OnTouch.AssertCalledOnce(t, "Touch must delegate")
 	})
 }

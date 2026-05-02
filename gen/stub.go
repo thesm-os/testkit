@@ -163,6 +163,7 @@ type stubMethodData struct {
 type stubFieldData struct {
 	FieldName string // "Ctx", "ID", "Result", "Err"
 	TypeStr   string // "context.Context", "string"
+	ZeroValue string // "\"\"", "0", "nil", "Item{}"
 }
 
 type stubIfaceData struct {
@@ -343,6 +344,7 @@ func buildResultFields(tuple *types.Tuple, tracker *ImportTracker) []stubFieldDa
 		fields = append(fields, stubFieldData{
 			FieldName: name,
 			TypeStr:   types.TypeString(v.Type(), tracker.Qualifier()),
+			ZeroValue: zeroValueOf(v.Type(), tracker),
 		})
 	}
 	return fields
@@ -559,7 +561,7 @@ func buildReturnsTestExpr(
 		if r.FieldName == errFieldName {
 			retArgs[i] = "errTest"
 		} else {
-			retArgs[i] = r.TypeStr + "{}"
+			retArgs[i] = r.ZeroValue
 		}
 	}
 
@@ -602,7 +604,7 @@ func buildFuncOverrideTestExpr(
 		if r.FieldName == errFieldName {
 			retVals[i] = "errTest"
 		} else {
-			retVals[i] = r.TypeStr + "{}"
+			retVals[i] = r.ZeroValue
 		}
 	}
 	b.WriteString(strings.Join(retVals, ", "))
