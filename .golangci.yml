@@ -259,10 +259,9 @@ linters:
       - path: '(_test\.go|testutil/|.*test/)'
         linters: [forbidigo, nilnil, unparam]
 
-      # fieldalignment matters on hot-path production structs.
-      # Test infrastructure churn on field additions is noise.
-      - path: '(_test\.go|testutil/|.*test/)'
-        linters: [govet]
+      # fieldalignment is noise for a test infrastructure library —
+      # structs here are not on hot paths.
+      - linters: [govet]
         text: "fieldalignment:"
 
       # G115: integer overflow on conversion.
