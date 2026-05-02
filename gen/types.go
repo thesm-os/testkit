@@ -69,11 +69,12 @@ type TypeParamInfo struct {
 // ConstInfo holds a named constant — used by the enum generator to
 // find iota-based const blocks.
 type ConstInfo struct {
-	Name  string
-	Type  types.Type
-	Value constant.Value
-	Doc   string
-	Pos   token.Position
+	Name    string
+	Type    types.Type
+	Value   constant.Value
+	Doc     string // doc comment above the constant
+	Comment string // inline comment after the constant (e.g. "// Pending")
+	Pos     token.Position
 }
 
 // VarInfo holds a named package-level variable — used by the sentinel

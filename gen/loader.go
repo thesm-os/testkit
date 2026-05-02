@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/token"
 	"go/types"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -211,8 +212,10 @@ func (p *Package) Structs() []*StructInfo {
 }
 
 // ErrorVars returns all exported package-level variables whose name
-// starts with "Err", sorted by name.
-func (p *Package) ErrorVars() []*VarInfo {
+// starts with "Err", sorted by name. If sourceFile is non-empty, only
+// variables declared in that file are returned (for file-scoped generation
+// via $GOFILE).
+func (p *Package) ErrorVars(sourceFile ...string) []*VarInfo {
 	var result []*VarInfo
 	scope := p.Pkg.Scope()
 	for _, name := range scope.Names() {
@@ -226,6 +229,13 @@ func (p *Package) ErrorVars() []*VarInfo {
 		}
 		if !strings.HasPrefix(v.Name(), "Err") {
 			continue
+		}
+		// File-scoped filter.
+		if len(sourceFile) > 0 && sourceFile[0] != "" {
+			pos := p.position(obj)
+			if filepath.Base(pos.Filename) != sourceFile[0] {
+				continue
+			}
 		}
 		result = append(result, &VarInfo{
 			Name: v.Name(),
@@ -260,11 +270,12 @@ func (p *Package) ConstsOfType(typeName string) []*ConstInfo {
 			continue
 		}
 		result = append(result, &ConstInfo{
-			Name:  c.Name(),
-			Type:  c.Type(),
-			Value: c.Val(),
-			Doc:   p.docFor(c.Name()),
-			Pos:   p.position(obj),
+			Name:    c.Name(),
+			Type:    c.Type(),
+			Value:   c.Val(),
+			Doc:     p.docFor(c.Name()),
+			Comment: p.inlineCommentFor(c.Name()),
+			Pos:     p.position(obj),
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
@@ -401,6 +412,31 @@ func (p *Package) docFor(name string) string {
 								return strings.TrimSpace(doc.Text())
 							}
 						}
+					}
+				}
+			}
+		}
+	}
+	return ""
+}
+
+// inlineCommentFor returns the inline comment (after the declaration)
+// for a named constant or variable. Returns empty if no inline comment.
+func (p *Package) inlineCommentFor(name string) string {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for _, n := range vs.Names {
+					if n.Name == name && vs.Comment != nil {
+						return strings.TrimSpace(vs.Comment.Text())
 					}
 				}
 			}
