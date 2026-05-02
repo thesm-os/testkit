@@ -189,7 +189,7 @@ type stubTestTemplateData struct {
 // --- builders ---
 
 func buildStubIfaceData(name, srcQualifier string, info *InterfaceInfo, tracker *ImportTracker) stubIfaceData {
-	qualified := qualifyType(srcQualifier, name)
+	qualified := QualifyType(srcQualifier, name)
 	methods := make([]stubMethodData, 0, len(info.Methods))
 	for _, m := range info.Methods {
 		methods = append(methods, buildStubMethodData(name, m, tracker))
@@ -267,7 +267,7 @@ func buildStubMethodData(ifaceName string, m MethodInfo, tracker *ImportTracker)
 
 	return stubMethodData{
 		Name:        m.Name,
-		Doc:         formatDocComment(m.Doc),
+		Doc:         FormatDocComment(m.Doc),
 		CallType:    prefix + "Call",
 		StubType:    prefix + "Stub",
 		MatcherType: lowerPrefix + "Matcher",
@@ -313,10 +313,10 @@ func buildParamFields(tuple *types.Tuple, tracker *ImportTracker) []stubFieldDat
 		v := tuple.At(i)
 		name := v.Name()
 		if name == "" {
-			name = paramName(i)
+			name = ParamName(i)
 		}
 		fields = append(fields, stubFieldData{
-			FieldName: title(name),
+			FieldName: Title(name),
 			TypeStr:   types.TypeString(v.Type(), tracker.Qualifier()),
 		})
 	}
@@ -339,7 +339,7 @@ func buildResultFields(tuple *types.Tuple, tracker *ImportTracker) []stubFieldDa
 				name = resultFieldName + string(rune('0'+i))
 			}
 		} else {
-			name = title(name)
+			name = Title(name)
 		}
 		fields = append(fields, stubFieldData{
 			FieldName: name,
@@ -632,23 +632,6 @@ func buildFuncOverrideTestExpr(
 		}
 	}
 	return b.String()
-}
-
-// formatDocComment prefixes each line of doc with "// " so it can be
-// pasted directly into generated Go source.
-func formatDocComment(doc string) string {
-	if doc == "" {
-		return ""
-	}
-	lines := strings.Split(doc, "\n")
-	for i, line := range lines {
-		if line == "" {
-			lines[i] = "//"
-		} else {
-			lines[i] = "// " + line
-		}
-	}
-	return strings.Join(lines, "\n")
 }
 
 func defaultStubPath(typeName string, cfg Config) string {

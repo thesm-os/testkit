@@ -64,7 +64,7 @@ func GenerateEnum(pkg *Package, typeNames []string, cfg Config, opts Options) (*
 
 		enums = append(enums, enumData{
 			TypeName:      typeName,
-			QualifiedType: qualifyType(qualifier, typeName),
+			QualifiedType: QualifyType(qualifier, typeName),
 			Values:        values,
 			MaxValue:      maxVal,
 		})
@@ -113,11 +113,4 @@ type enumTemplateData struct {
 	PkgQualifier string
 	ImportPath   string
 	Enums        []enumData
-}
-
-func qualifyType(qualifier, typeName string) string {
-	if qualifier == "" {
-		return typeName
-	}
-	return qualifier + "." + typeName
 }

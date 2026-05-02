@@ -80,7 +80,7 @@ func GenerateSentinel(pkg *Package, cfg Config, opts Options) (*Result, error) {
 // Package "store" → "StoreSentinel".
 // Package "store" + file "errors_auth.go" → "StoreAuthSentinel".
 func deriveSentinelTestName(pkgName, sourceFile string) string {
-	base := title(pkgName)
+	base := Title(pkgName)
 	if sourceFile == "" {
 		return base + "Sentinel"
 	}
@@ -90,7 +90,7 @@ func deriveSentinelTestName(pkgName, sourceFile string) string {
 	if filePart == "" {
 		return base + "Sentinel"
 	}
-	return base + title(filePart) + "Sentinel"
+	return base + Title(filePart) + "Sentinel"
 }
 
 // --- data types ---

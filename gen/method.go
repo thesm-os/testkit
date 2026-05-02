@@ -71,7 +71,7 @@ func (m *MethodInfo) ParamNames() string {
 	for i := range params.Len() {
 		name := params.At(i).Name()
 		if name == "" {
-			name = paramName(i)
+			name = ParamName(i)
 		}
 		names[i] = name
 	}
@@ -187,7 +187,7 @@ func tupleString(tuple *types.Tuple, t *ImportTracker, variadic bool) string {
 		v := tuple.At(i)
 		name := v.Name()
 		if name == "" {
-			name = paramName(i)
+			name = ParamName(i)
 		}
 		typeStr := types.TypeString(v.Type(), t.Qualifier())
 		if variadic && i == tuple.Len()-1 {
@@ -202,10 +202,7 @@ func tupleString(tuple *types.Tuple, t *ImportTracker, variadic bool) string {
 	return strings.Join(parts, ", ")
 }
 
-func paramName(i int) string {
-	// Generate names: p0, p1, p2...
-	return "p" + strings.Repeat("", 0) + string(rune('0'+i))
-}
+// ParamName moved to naming.go.
 
 func zeroValueOf(typ types.Type, t *ImportTracker) string {
 	switch u := typ.Underlying().(type) {

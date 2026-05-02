@@ -90,25 +90,25 @@ func TestFuncMap_strings(t *testing.T) {
 
 	t.Run("camelCase", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, camelCase("hello_world"), "HelloWorld", "underscore split")
-		testkit.Equal(t, camelCase("helloWorld"), "HelloWorld", "camel boundary")
+		testkit.Equal(t, CamelCase("hello_world"), "HelloWorld", "underscore split")
+		testkit.Equal(t, CamelCase("helloWorld"), "HelloWorld", "camel boundary")
 	})
 
 	t.Run("lowerCamelCase", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, lowerCamelCase("hello_world"), "helloWorld", "underscore split")
+		testkit.Equal(t, LowerCamelCase("hello_world"), "helloWorld", "underscore split")
 	})
 
 	t.Run("snakeCase", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, snakeCase("HelloWorld"), "hello_world", "camel to snake")
-		testkit.Equal(t, snakeCase("hello-world"), "hello_world", "hyphen to snake")
+		testkit.Equal(t, SnakeCase("HelloWorld"), "hello_world", "camel to snake")
+		testkit.Equal(t, SnakeCase("hello-world"), "hello_world", "hyphen to snake")
 	})
 
 	t.Run("title", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, title("hello"), "Hello", "capitalize first")
-		testkit.Equal(t, title(""), "", "empty string")
+		testkit.Equal(t, Title("hello"), "Hello", "capitalize first")
+		testkit.Equal(t, Title(""), "", "empty string")
 	})
 }
 
@@ -133,21 +133,21 @@ func TestSplitWords(t *testing.T) {
 
 	t.Run("underscore", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, strings.Join(splitWords("hello_world"), ","), "hello,world", "split on underscore")
+		testkit.Equal(t, strings.Join(SplitWords("hello_world"), ","), "hello,world", "split on underscore")
 	})
 
 	t.Run("camelCase", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, strings.Join(splitWords("helloWorld"), ","), "hello,World", "split on camel")
+		testkit.Equal(t, strings.Join(SplitWords("helloWorld"), ","), "hello,World", "split on camel")
 	})
 
 	t.Run("hyphen", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, strings.Join(splitWords("hello-world"), ","), "hello,world", "split on hyphen")
+		testkit.Equal(t, strings.Join(SplitWords("hello-world"), ","), "hello,world", "split on hyphen")
 	})
 
 	t.Run("empty", func(t *testing.T) {
 		t.Parallel()
-		testkit.Len(t, splitWords(""), 0, "empty returns no words")
+		testkit.Len(t, SplitWords(""), 0, "empty returns no words")
 	})
 }
