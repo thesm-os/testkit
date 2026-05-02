@@ -1,101 +1,104 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// Package directive provides the pluggable directive system for testkit
-// generators. Each directive (errors, concurrent, allocs, etc.) is
-// implemented as a [Handler] that processes //testkit: annotations and
-// returns template extension blocks for generators to inject.
+// Package directive provides the known-directive registry and
+// composition validation for testkit generators. Actual directive
+// processing is done by enricher functions in each generator package
+// (gen/stub/, gen/suite/, etc.) — this package handles validation
+// and documentation concerns.
 package directive
 
-import "sort"
+import (
+	"sort"
+	"strings"
 
-// Handler processes a //testkit: directive for generators. Each handler
-// is registered once and called per method that carries the directive.
-type Handler interface {
-	// Name returns the directive name ("errors", "concurrent", etc.).
-	Name() string
+	"go.thesmos.sh/testkit/gen"
+)
 
-	// Process is called for each method carrying this directive.
-	// It returns blocks to inject at template extension points.
-	Process(ctx Context) (*Output, error)
+// Descriptor describes a known directive for validation and
+// documentation. Unlike the previous Handler interface, descriptors
+// do not process directives — enricher functions in each generator
+// package handle that.
+type Descriptor struct {
+	// Name is the directive name ("errors", "concurrent", etc.).
+	Name string
+
+	// Description is a one-line summary for documentation.
+	Description string
+
+	// Args describes expected arguments ("ErrName [ErrName...]" or
+	// "" for no-arg directives).
+	Args string
+
+	// Generators lists which generators consume this directive.
+	Generators []string
+
+	// Phase is the implementation phase (1-6) from the spec.
+	Phase int
 }
 
-// Context provides the information a handler needs to process a directive.
-type Context struct {
-	// Args are the parsed directive arguments.
-	// e.g. for "//testkit:errors ErrNotFound ErrConflict" → ["ErrNotFound", "ErrConflict"]
-	Args []string
-
-	// Generator is the name of the generator consuming this directive
-	// ("stub", "suite", "model"). Handlers can produce different output
-	// per generator.
-	Generator string
-
-	// MethodName is the interface method this directive is attached to.
-	MethodName string
-
-	// InterfaceName is the interface this method belongs to.
-	InterfaceName string
-}
-
-// Output is what a handler returns — blocks to inject at named
-// extension points in generator templates.
-type Output struct {
-	Blocks []Block
-}
-
-// Block is a template extension injected at a named point.
-type Block struct {
-	// ExtensionPoint is where to inject: "stub-method-options",
-	// "stub-method-dispatch", "suite-subtests", etc.
-	ExtensionPoint string
-
-	// Content is pre-rendered Go source to inject.
-	Content string
-}
-
-// Registry holds directive handlers and provides lookup by name.
+// Registry holds directive descriptors and provides validation.
 type Registry struct {
-	handlers map[string]Handler
+	descriptors map[string]Descriptor
 }
 
 // NewRegistry creates an empty [Registry].
 func NewRegistry() *Registry {
-	return &Registry{handlers: make(map[string]Handler)}
+	return &Registry{descriptors: make(map[string]Descriptor)}
 }
 
-// Register adds a handler. Panics if a handler with the same name
-// is already registered.
-func (r *Registry) Register(h Handler) {
-	name := h.Name()
-	if _, exists := r.handlers[name]; exists {
-		panic("directive: duplicate handler: " + name) //nolint:forbidigo
+// Register adds a directive descriptor. Panics if a descriptor with
+// the same name is already registered.
+func (r *Registry) Register(d Descriptor) {
+	if _, exists := r.descriptors[d.Name]; exists {
+		panic("directive: duplicate descriptor: " + d.Name) //nolint:forbidigo
 	}
-	r.handlers[name] = h
+	r.descriptors[d.Name] = d
 }
 
-// Get returns the handler for the given directive name, or nil.
-func (r *Registry) Get(name string) Handler {
-	return r.handlers[name]
+// Get returns the descriptor for the given name and true, or a zero
+// Descriptor and false if not found.
+func (r *Registry) Get(name string) (Descriptor, bool) {
+	d, ok := r.descriptors[name]
+	return d, ok
+}
+
+// IsKnown reports whether the directive name is registered.
+func (r *Registry) IsKnown(name string) bool {
+	_, ok := r.descriptors[name]
+	return ok
 }
 
 // Names returns all registered directive names in sorted order.
 func (r *Registry) Names() []string {
-	names := make([]string, 0, len(r.handlers))
-	for name := range r.handlers {
+	names := make([]string, 0, len(r.descriptors))
+	for name := range r.descriptors {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
 }
 
-// Process looks up the handler for the named directive and calls it.
-// Returns nil output if no handler is registered (unknown directives
-// are silently ignored — generators may warn about them separately).
-func (r *Registry) Process(name string, ctx Context) (*Output, error) {
-	h := r.handlers[name]
-	if h == nil {
-		return nil, nil //nolint:nilnil // nil output signals "no handler registered"
+// Validate checks that all directives on the given methods are known.
+// Unknown directives are errors (strict-by-default). Directives with
+// the "experimental:" prefix produce warnings via the warn callback
+// instead of errors.
+func (r *Registry) Validate(methods []gen.MethodInfo, warn func(string)) []error {
+	var errs []error
+	for _, m := range methods {
+		for _, d := range m.Directives {
+			if strings.HasPrefix(d.Name, "experimental:") {
+				if warn != nil {
+					warn("experimental directive " + d.Name + " on " + m.Name)
+				}
+				continue
+			}
+			if !r.IsKnown(d.Name) {
+				errs = append(errs, gen.Errorf(m.Pos,
+					"unknown directive %q on method %s", d.Name, m.Name,
+				))
+			}
+		}
 	}
-	return h.Process(ctx)
+	return errs
 }

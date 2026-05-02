@@ -7,19 +7,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen"
 	"go.thesmos.sh/testkit/gen/directive"
 )
-
-type fakeHandler struct {
-	name   string
-	output *directive.Output
-}
-
-func (h *fakeHandler) Name() string { return h.name }
-
-func (h *fakeHandler) Process(_ directive.Context) (*directive.Output, error) {
-	return h.output, nil
-}
 
 func TestRegistry(t *testing.T) {
 	t.Parallel()
@@ -27,25 +17,35 @@ func TestRegistry(t *testing.T) {
 	t.Run("Register and Get", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		h := &fakeHandler{name: "errors"}
-		r.Register(h)
+		r.Register(directive.Descriptor{Name: "errors", Description: "sentinel errors"})
 
-		got := r.Get("errors")
-		testkit.True(t, got == h, "must return registered handler")
+		d, ok := r.Get("errors")
+		testkit.True(t, ok, "must find registered descriptor")
+		testkit.Equal(t, d.Name, "errors", "name must match")
+		testkit.Equal(t, d.Description, "sentinel errors", "description must match")
 	})
 
-	t.Run("Get returns nil for unknown", func(t *testing.T) {
+	t.Run("Get returns false for unknown", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		testkit.True(t, r.Get("nonexistent") == nil, "must return nil")
+		_, ok := r.Get("nonexistent")
+		testkit.False(t, ok, "must return false for unknown")
+	})
+
+	t.Run("IsKnown", func(t *testing.T) {
+		t.Parallel()
+		r := directive.NewRegistry()
+		r.Register(directive.Descriptor{Name: "errors"})
+		testkit.True(t, r.IsKnown("errors"), "must be known")
+		testkit.False(t, r.IsKnown("nonexistent"), "must not be known")
 	})
 
 	t.Run("Names returns sorted list", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		r.Register(&fakeHandler{name: "errors"})
-		r.Register(&fakeHandler{name: "concurrent"})
-		r.Register(&fakeHandler{name: "allocs"})
+		r.Register(directive.Descriptor{Name: "errors"})
+		r.Register(directive.Descriptor{Name: "concurrent"})
+		r.Register(directive.Descriptor{Name: "allocs"})
 
 		testkit.Equal(t, r.Names(), []string{"allocs", "concurrent", "errors"}, "must be sorted")
 	})
@@ -53,10 +53,10 @@ func TestRegistry(t *testing.T) {
 	t.Run("duplicate registration panics", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		r.Register(&fakeHandler{name: "errors"})
+		r.Register(directive.Descriptor{Name: "errors"})
 
 		testkit.Panics(t, func() {
-			r.Register(&fakeHandler{name: "errors"})
+			r.Register(directive.Descriptor{Name: "errors"})
 		}, "must panic on duplicate")
 	})
 
@@ -67,38 +67,61 @@ func TestRegistry(t *testing.T) {
 	})
 }
 
-func TestProcess(t *testing.T) {
+func TestValidate(t *testing.T) {
 	t.Parallel()
 
-	t.Run("calls registered handler", func(t *testing.T) {
+	t.Run("known directives pass", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		r.Register(&fakeHandler{
-			name: "errors",
-			output: &directive.Output{
-				Blocks: []directive.Block{
-					{ExtensionPoint: "stub-options", Content: "// injected"},
-				},
-			},
-		})
+		r.Register(directive.Descriptor{Name: "errors"})
+		r.Register(directive.Descriptor{Name: "idempotent"})
 
-		out, err := r.Process("errors", directive.Context{
-			Args:          []string{"ErrNotFound"},
-			Generator:     "stub",
-			MethodName:    "Get",
-			InterfaceName: "Store",
-		})
-		testkit.NoError(t, err, "must succeed")
-		testkit.Len(t, out.Blocks, 1, "must return one block")
-		testkit.Equal(t, out.Blocks[0].ExtensionPoint, "stub-options", "extension point")
-		testkit.Equal(t, out.Blocks[0].Content, "// injected", "content")
+		methods := []gen.MethodInfo{
+			{Name: "Get", Directives: []gen.Directive{
+				{Name: "errors", Args: []string{"ErrNotFound"}},
+				{Name: "idempotent"},
+			}},
+		}
+		errs := r.Validate(methods, nil)
+		testkit.Len(t, errs, 0, "known directives must pass")
 	})
 
-	t.Run("unknown directive returns nil", func(t *testing.T) {
+	t.Run("unknown directive is error", func(t *testing.T) {
 		t.Parallel()
 		r := directive.NewRegistry()
-		out, err := r.Process("unknown", directive.Context{})
-		testkit.NoError(t, err, "must not error")
-		testkit.True(t, out == nil, "must return nil for unknown")
+		r.Register(directive.Descriptor{Name: "errors"})
+
+		methods := []gen.MethodInfo{
+			{Name: "Get", Directives: []gen.Directive{
+				{Name: "idempotnet"},
+			}},
+		}
+		errs := r.Validate(methods, nil)
+		testkit.Len(t, errs, 1, "unknown directive must error")
+		testkit.Assert(t, errs[0].Error()).Contains("idempotnet", "must name the typo")
+	})
+
+	t.Run("experimental prefix warns instead of erroring", func(t *testing.T) {
+		t.Parallel()
+		r := directive.NewRegistry()
+
+		var warnings []string
+		methods := []gen.MethodInfo{
+			{Name: "Get", Directives: []gen.Directive{
+				{Name: "experimental:linearizable"},
+			}},
+		}
+		errs := r.Validate(methods, func(msg string) { warnings = append(warnings, msg) })
+		testkit.Len(t, errs, 0, "experimental must not error")
+		testkit.Len(t, warnings, 1, "must produce warning")
+		testkit.Assert(t, warnings[0]).Contains("experimental:linearizable", "must name directive")
+	})
+
+	t.Run("no directives passes", func(t *testing.T) {
+		t.Parallel()
+		r := directive.NewRegistry()
+		methods := []gen.MethodInfo{{Name: "Get"}}
+		errs := r.Validate(methods, nil)
+		testkit.Len(t, errs, 0, "no directives must pass")
 	})
 }

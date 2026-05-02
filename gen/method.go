@@ -62,10 +62,8 @@ func (m *MethodInfo) ParamList(t *ImportTracker) string {
 	return tupleString(m.Signature.Params(), t, m.Signature.Variadic())
 }
 
-// ParamNames renders just the parameter names, comma-separated.
-//
-//	"ctx, id"
-func (m *MethodInfo) ParamNames() string {
+// ParamNameList returns individual parameter names as a slice.
+func (m *MethodInfo) ParamNameList() []string {
 	params := m.Signature.Params()
 	names := make([]string, params.Len())
 	for i := range params.Len() {
@@ -74,6 +72,26 @@ func (m *MethodInfo) ParamNames() string {
 			name = ParamName(i)
 		}
 		names[i] = name
+	}
+	return names
+}
+
+// ParamNames renders just the parameter names, comma-separated.
+//
+//	"ctx, id"
+func (m *MethodInfo) ParamNames() string {
+	return strings.Join(m.ParamNameList(), ", ")
+}
+
+// ParamNamesSpread renders parameter names for a forwarding call.
+// For variadic methods, the last parameter is spread with "...".
+//
+//	"ctx, ids..." (variadic)
+//	"ctx, id"    (non-variadic)
+func (m *MethodInfo) ParamNamesSpread() string {
+	names := m.ParamNameList()
+	if m.Signature.Variadic() && len(names) > 0 {
+		names[len(names)-1] += "..."
 	}
 	return strings.Join(names, ", ")
 }
@@ -93,11 +111,13 @@ func (m *MethodInfo) ResultList(t *ImportTracker) string {
 	return s
 }
 
-// CallForward renders a forwarding call expression.
+// CallForward renders a forwarding call expression. For variadic
+// methods, the last parameter is spread with "...".
 //
 //	"recv.Get(ctx, id)"
+//	"recv.Find(ctx, ids...)"
 func (m *MethodInfo) CallForward(recv string) string {
-	return recv + "." + m.Name + "(" + m.ParamNames() + ")"
+	return recv + "." + m.Name + "(" + m.ParamNamesSpread() + ")"
 }
 
 // ZeroResults renders the zero values for all result types,

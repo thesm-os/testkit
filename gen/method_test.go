@@ -68,9 +68,24 @@ func TestMethodInfo(t *testing.T) {
 			Contains("string", "must include string type")
 	})
 
+	t.Run("ParamNameList", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, get.ParamNameList(), []string{"ctx", "id"}, "must return individual names")
+	})
+
 	t.Run("ParamNames", func(t *testing.T) {
 		t.Parallel()
 		testkit.Equal(t, get.ParamNames(), "ctx, id", "must render parameter names")
+	})
+
+	t.Run("ParamNamesSpread non-variadic", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, get.ParamNamesSpread(), "ctx, id", "non-variadic must match ParamNames")
+	})
+
+	t.Run("ParamNamesSpread variadic", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, find.ParamNamesSpread(), "ctx, ids...", "variadic must spread last param")
 	})
 
 	t.Run("ResultList single result", func(t *testing.T) {
@@ -88,9 +103,14 @@ func TestMethodInfo(t *testing.T) {
 			Contains("error", "must include error")
 	})
 
-	t.Run("CallForward", func(t *testing.T) {
+	t.Run("CallForward non-variadic", func(t *testing.T) {
 		t.Parallel()
 		testkit.Equal(t, get.CallForward("s"), "s.Get(ctx, id)", "must render forwarding call")
+	})
+
+	t.Run("CallForward variadic spreads", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, find.CallForward("s"), "s.Find(ctx, ids...)", "variadic must spread")
 	})
 
 	t.Run("ZeroResults for multi-return", func(t *testing.T) {
