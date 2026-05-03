@@ -44,7 +44,7 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 			QualifiedType: qualifiedType,
 			tracker:       tracker,
 		}
-		md.Directives = pkg.EffectiveMethodDirectives(typeName, m.Name)
+		md.Directives = pkg.EffectiveMethodDirectives(iface.OriginName, m.Name)
 
 		// Detect method shape and iter returns.
 		md.Shape = gen.DetectShape(m, tracker, md.Directives)

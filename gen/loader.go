@@ -90,7 +90,9 @@ func (p *Package) Interface(name string) (*InterfaceInfo, error) {
 	if obj == nil {
 		return nil, Errorf(token.Position{}, "type %q not found in package %s", name, p.Pkg.Name())
 	}
-	named, ok := obj.Type().(*types.Named)
+	// Unwrap type aliases (e.g., type X = GenericInterface[K, V]).
+	t := types.Unalias(obj.Type())
+	named, ok := t.(*types.Named)
 	if !ok {
 		return nil, Errorf(p.position(obj), "type %q is not a named type", name)
 	}
@@ -433,13 +435,17 @@ func (p *Package) ErrorTypeHasUnwrap(typeName string) bool {
 // --- internal helpers ---
 
 func (p *Package) buildInterfaceInfo(name string, named *types.Named, iface *types.Interface) *InterfaceInfo {
+	// For type aliases of generic instantiations (type X = Iface[K, V]),
+	// directives and docs are on the origin type, not the alias.
+	originName := named.Obj().Name()
+
 	methods := make([]MethodInfo, 0, iface.NumMethods())
 	for fn := range iface.Methods() {
 		sig := fn.Type().(*types.Signature)
 		methods = append(methods, MethodInfo{
 			Name:      fn.Name(),
 			Signature: sig,
-			Doc:       p.methodDoc(name, fn.Name()),
+			Doc:       p.methodDoc(originName, fn.Name()),
 			Pos:       p.position(fn),
 		})
 	}
@@ -447,10 +453,11 @@ func (p *Package) buildInterfaceInfo(name string, named *types.Named, iface *typ
 
 	return &InterfaceInfo{
 		Name:       name,
+		OriginName: originName,
 		Type:       iface,
 		Methods:    methods,
 		TypeParams: extractTypeParams(named),
-		Doc:        p.docFor(name),
+		Doc:        p.docFor(originName),
 		Pos:        p.position(named.Obj()),
 	}
 }

@@ -118,6 +118,22 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("return v.Key", "must extract Key in refmap")
 	})
 
+	t.Run("renders generic ItemRepository", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generic")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"ItemRepository"}, gen.DefaultConfig(), gen.Options{
+			Output: "repotest/repo_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("AssertItemRepositoryModel", "must use alias name")
+		testkit.Assert(t, content).Contains("generic.ItemRepository", "must use qualified alias type")
+		testkit.Assert(t, content).Contains("action.Deleter", "must pick up //testkit:deleter via origin")
+		testkit.Assert(t, content).Contains("generic.ErrNotFound", "must pick up sentinel via origin")
+		testkit.Assert(t, content).Contains("AUTO-DELETE-RETURNS-NOT-FOUND", "must derive delete law")
+	})
+
 	t.Run("renders richstruct Store", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "richstruct")
@@ -264,5 +280,20 @@ func TestGenerate(t *testing.T) {
 		want, err := os.ReadFile(goldenFile)
 		testkit.NoError(t, err, "must read golden file")
 		testkit.Equal(t, string(result.Files[0].Content), string(want), "richstruct model must match golden")
+	})
+
+	t.Run("golden/generic", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generic")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"ItemRepository"}, gen.DefaultConfig(), gen.Options{
+			Output: "repotest/repo_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "generic", "repotest", "repo_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic model must match golden")
 	})
 }

@@ -142,7 +142,7 @@ func ValidateTypes(pkg *Package, names []string, kind TypeKind) []*Error {
 		if kind == KindAny {
 			continue
 		}
-		named, ok := obj.Type().(*types.Named)
+		named, ok := types.Unalias(obj.Type()).(*types.Named)
 		if !ok {
 			errs = append(errs, Errorf(
 				pkg.Fset.Position(obj.Pos()),

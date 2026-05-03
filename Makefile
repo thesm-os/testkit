@@ -209,7 +209,8 @@ GEN_TESTDATA := \
 	gen/model/testdata/unknown/processortest \
 	gen/model/testdata/keyfield/storetest \
 	gen/model/testdata/multisentinel/vaulttest \
-	gen/model/testdata/richstruct/storetest
+	gen/model/testdata/richstruct/storetest \
+	gen/model/testdata/generic/repotest
 
 # ─── Testing ─────────────────────────────────────────────────────
 

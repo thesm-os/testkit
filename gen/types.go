@@ -14,6 +14,7 @@ import (
 // interface methods are included, sorted by name.
 type InterfaceInfo struct {
 	Name       string
+	OriginName string // For directive/doc lookup; differs from Name for type aliases of generic instantiations.
 	Type       *types.Interface
 	Methods    []MethodInfo
 	TypeParams []TypeParamInfo
