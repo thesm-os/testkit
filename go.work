@@ -7,5 +7,6 @@ use (
 	container
 	gen
 	httptest
+	model
 	oteltest
 )
