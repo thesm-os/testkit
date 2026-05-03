@@ -83,18 +83,30 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("StoreBenchOnGet", "must have plug-in option for Get")
 	})
 
-	t.Run("golden/basic", func(t *testing.T) {
-		t.Parallel()
-		pkg := loadTestPackage(t, "basic")
-		g := &bench.Generator{}
-		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
-			Output: "storetest/store_bench.gen.go",
-		})
-		testkit.NoError(t, err, "must generate")
+	goldens := []struct {
+		name     string
+		dir      string
+		typeName string
+		output   string
+	}{
+		{"basic", "basic", "Store", "storetest/store_bench.gen.go"},
+		{"allshapes", "allshapes", "Service", "servicetest/service_bench.gen.go"},
+	}
 
-		goldenFile := filepath.Join(benchTestdataDir(t), "basic", "storetest", "store_bench.gen.go")
-		want, err := os.ReadFile(goldenFile)
-		testkit.NoError(t, err, "must read golden file")
-		testkit.Equal(t, string(result.Files[0].Content), string(want), "basic bench must match golden")
-	})
+	for _, fx := range goldens {
+		t.Run("golden/"+fx.name, func(t *testing.T) {
+			t.Parallel()
+			pkg := loadTestPackage(t, fx.dir)
+			g := &bench.Generator{}
+			result, err := g.Generate(pkg, []string{fx.typeName}, gen.DefaultConfig(), gen.Options{
+				Output: fx.output,
+			})
+			testkit.NoError(t, err, "must generate "+fx.name)
+
+			goldenFile := filepath.Join(benchTestdataDir(t), fx.dir, filepath.Dir(fx.output), filepath.Base(fx.output))
+			want, err := os.ReadFile(goldenFile)
+			testkit.NoError(t, err, "must read golden file for "+fx.name)
+			testkit.Equal(t, string(result.Files[0].Content), string(want), fx.name+" bench must match golden")
+		})
+	}
 }

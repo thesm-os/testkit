@@ -80,12 +80,24 @@ func benchStoreDelete(b *testing.B, factory func() basic.Store, cfg *storeBenchC
 	})
 	if len(cfg.onDelete) > 0 {
 		b.Run("Delete", func(b *testing.B) {
-			for _, fn := range cfg.onDelete {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
-				fn(b, impl)
+				return impl
+			}
+			wctx := testkit.BenchWriterContext[basic.Store, string]{
+				B: b,
+				WriterBindings: testkit.WriterBindings[basic.Store, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v string) error {
+						return impl.Delete(ctx, v)
+					},
+				},
+			}
+			for _, a := range cfg.onDelete {
+				a(wctx)
 			}
 		})
 	}
@@ -144,12 +156,24 @@ func benchStoreLegacyPut(b *testing.B, factory func() basic.Store, cfg *storeBen
 	})
 	if len(cfg.onLegacyPut) > 0 {
 		b.Run("LegacyPut", func(b *testing.B) {
-			for _, fn := range cfg.onLegacyPut {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
-				fn(b, impl)
+				return impl
+			}
+			wctx := testkit.BenchWriterContext[basic.Store, basic.Item]{
+				B: b,
+				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
+						return impl.LegacyPut(ctx, v)
+					},
+				},
+			}
+			for _, a := range cfg.onLegacyPut {
+				a(wctx)
 			}
 		})
 	}
@@ -170,12 +194,24 @@ func benchStorePing(b *testing.B, factory func() basic.Store, cfg *storeBenchCon
 	})
 	if len(cfg.onPing) > 0 {
 		b.Run("Ping", func(b *testing.B) {
-			for _, fn := range cfg.onPing {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
-				fn(b, impl)
+				return impl
+			}
+			lctx := testkit.BenchLifecycleContext[basic.Store]{
+				B: b,
+				LifecycleBindings: testkit.LifecycleBindings[basic.Store]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store) error {
+						return impl.Ping(ctx)
+					},
+				},
+			}
+			for _, a := range cfg.onPing {
+				a(lctx)
 			}
 		})
 	}
@@ -196,12 +232,24 @@ func benchStorePut(b *testing.B, factory func() basic.Store, cfg *storeBenchConf
 	})
 	if len(cfg.onPut) > 0 {
 		b.Run("Put", func(b *testing.B) {
-			for _, fn := range cfg.onPut {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
-				fn(b, impl)
+				return impl
+			}
+			wctx := testkit.BenchWriterContext[basic.Store, basic.Item]{
+				B: b,
+				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
+						return impl.Put(ctx, v)
+					},
+				},
+			}
+			for _, a := range cfg.onPut {
+				a(wctx)
 			}
 		})
 	}
@@ -230,7 +278,7 @@ func StoreBenchOnCount(assertions ...func(*testing.B, basic.Store)) StoreBenchOp
 }
 
 // StoreBenchOnDelete adds plug-in bench primitives for the Delete method.
-func StoreBenchOnDelete(assertions ...func(*testing.B, basic.Store)) StoreBenchOption {
+func StoreBenchOnDelete(assertions ...testkit.BenchWriter[basic.Store, string]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
@@ -244,21 +292,21 @@ func StoreBenchOnGet(assertions ...testkit.BenchReader[basic.Store, string, basi
 }
 
 // StoreBenchOnLegacyPut adds plug-in bench primitives for the LegacyPut method.
-func StoreBenchOnLegacyPut(assertions ...func(*testing.B, basic.Store)) StoreBenchOption {
+func StoreBenchOnLegacyPut(assertions ...testkit.BenchWriter[basic.Store, basic.Item]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onLegacyPut = append(c.onLegacyPut, assertions...)
 	}
 }
 
 // StoreBenchOnPing adds plug-in bench primitives for the Ping method.
-func StoreBenchOnPing(assertions ...func(*testing.B, basic.Store)) StoreBenchOption {
+func StoreBenchOnPing(assertions ...testkit.BenchLifecycle[basic.Store]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onPing = append(c.onPing, assertions...)
 	}
 }
 
 // StoreBenchOnPut adds plug-in bench primitives for the Put method.
-func StoreBenchOnPut(assertions ...func(*testing.B, basic.Store)) StoreBenchOption {
+func StoreBenchOnPut(assertions ...testkit.BenchWriter[basic.Store, basic.Item]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
@@ -273,11 +321,11 @@ type storeBenchConfig struct {
 	prePopulate func(context.Context, basic.Store)
 	custom      []storeBenchCustomSub
 	onCount     []func(*testing.B, basic.Store)
-	onDelete    []func(*testing.B, basic.Store)
+	onDelete    []testkit.BenchWriter[basic.Store, string]
 	onGet       []testkit.BenchReader[basic.Store, string, basic.Item]
-	onLegacyPut []func(*testing.B, basic.Store)
-	onPing      []func(*testing.B, basic.Store)
-	onPut       []func(*testing.B, basic.Store)
+	onLegacyPut []testkit.BenchWriter[basic.Store, basic.Item]
+	onPing      []testkit.BenchLifecycle[basic.Store]
+	onPut       []testkit.BenchWriter[basic.Store, basic.Item]
 }
 
 func newStoreBenchConfig(opts ...StoreBenchOption) storeBenchConfig {

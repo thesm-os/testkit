@@ -15,7 +15,7 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 		}
 	})
 
-{{- /* Plug-in dispatch for shaped methods */}}
+{{- /* Plug-in dispatch — typed context per shape */}}
 {{- if .IsReader}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
@@ -37,6 +37,182 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 			}
 			for _, a := range cfg.on{{.Name}} {
 				a(rctx)
+			}
+		})
+	}
+{{- else if .IsWriter}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			wctx := testkit.BenchWriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				B: b,
+				WriterBindings: testkit.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, v)
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(wctx)
+			}
+		})
+	}
+{{- else if .IsDeleter}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			dctx := testkit.BenchDeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+				B: b,
+				DeleterBindings: testkit.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(dctx)
+			}
+		})
+	}
+{{- else if .IsAggregator}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			actx := testkit.BenchAggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				B: b,
+				AggregatorBindings: testkit.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
+						return impl.{{.Name}}(ctx)
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(actx)
+			}
+		})
+	}
+{{- else if .IsLifecycle}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			lctx := testkit.BenchLifecycleContext[{{.QualifiedType}}]{
+				B: b,
+				LifecycleBindings: testkit.LifecycleBindings[{{.QualifiedType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
+						return impl.{{.Name}}(ctx)
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(lctx)
+			}
+		})
+	}
+{{- else if .IsStreamReader}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			sctx := testkit.BenchStreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+				B: b,
+				StreamBindings: testkit.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+{{- if .Shape.IterInfo.Seq2Error}}
+						return impl.{{.Name}}({{.StreamCallArgs}})
+{{- else}}
+						return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
+							for v := range impl.{{.Name}}({{.StreamCallArgs}}) {
+								if !yield(v, nil) { return }
+							}
+						}
+{{- end}}
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(sctx)
+			}
+		})
+	}
+{{- else if .IsPure}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			pctx := testkit.BenchPureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				B: b,
+				PureBindings: testkit.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
+						return impl.{{.Name}}({{.PureCallArgs}})
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(pctx)
+			}
+		})
+	}
+{{- else if .IsPredicate}}
+	if len(cfg.on{{.Name}}) > 0 {
+		b.Run("{{.Name}}", func(b *testing.B) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(b.Context(), impl)
+				}
+				return impl
+			}
+			pctx := testkit.BenchPredicateContext[{{.QualifiedType}}]{
+				B: b,
+				PredicateBindings: testkit.PredicateBindings[{{.QualifiedType}}]{
+					Factory: prePopFactory,
+					Call: func(impl {{.QualifiedType}}) bool {
+						return impl.{{.Name}}({{.PureCallArgs}})
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(pctx)
 			}
 		})
 	}

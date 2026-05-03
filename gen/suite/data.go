@@ -281,6 +281,20 @@ func (m *SpecMethodData) OnMethodBenchType() string {
 	switch m.Shape.Shape {
 	case gen.ShapeReader:
 		return "testkit.BenchReader[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeWriter:
+		return "testkit.BenchWriter[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeDeleter:
+		return "testkit.BenchDeleter[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
+	case gen.ShapeStreamReader:
+		return "testkit.BenchStream[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+	case gen.ShapeAggregator:
+		return "testkit.BenchAggregator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeLifecycle:
+		return "testkit.BenchLifecycle[" + m.QualifiedType + "]"
+	case gen.ShapePure:
+		return "testkit.BenchPure[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case gen.ShapePredicate:
+		return "testkit.BenchPredicate[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.B, " + m.QualifiedType + ")"
 	}
