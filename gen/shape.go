@@ -1,14 +1,9 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package suite
+package gen
 
-import (
-	"go/types"
-
-	"go.thesmos.sh/testkit/gen"
-	"go.thesmos.sh/testkit/gen/directive"
-)
+import "go/types"
 
 // MethodShape classifies an interface method by its signature pattern.
 // The generator uses the shape to emit type-safe On<Method> options
@@ -39,10 +34,10 @@ const (
 // type parameters for that shape.
 type ShapeInfo struct {
 	Shape    MethodShape
-	KeyType  string          // qualified type for K (Reader/Deleter)
-	ValType  string          // qualified type for V
-	RetType  string          // qualified type for R (Writer with result)
-	IterInfo gen.IterSeqInfo // for StreamReader
+	KeyType  string      // qualified type for K (Reader/Deleter)
+	ValType  string      // qualified type for V
+	RetType  string      // qualified type for R (Writer with result)
+	IterInfo IterSeqInfo // for StreamReader
 }
 
 // DetectShape classifies a method by its signature pattern.
@@ -57,7 +52,7 @@ type ShapeInfo struct {
 //  7. ctx only + (T, error) return → Aggregator
 //  8. ctx only + error return → Lifecycle
 //  9. Otherwise → Unknown
-func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.Directive) ShapeInfo {
+func DetectShape(m MethodInfo, tracker *ImportTracker, directives []Directive) ShapeInfo {
 	sig := m.Signature
 	params := sig.Params()
 	results := sig.Results()
@@ -71,7 +66,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 	var nonCtxParams []*types.Var
 	for i := range paramCount {
 		p := params.At(i)
-		if gen.IsContextType(p.Type()) {
+		if IsContextType(p.Type()) {
 			ctxIdx = i
 		} else {
 			nonCtxParams = append(nonCtxParams, p)
@@ -84,7 +79,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 	hasError := false
 	errIdx := -1
 	for i := range resCount {
-		if gen.IsErrorType(results.At(i).Type()) {
+		if IsErrorType(results.At(i).Type()) {
 			hasError = true
 			errIdx = i
 		}
@@ -92,7 +87,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 
 	// Rule 1: iter.Seq or iter.Seq2 return → StreamReader.
 	for i := range resCount {
-		info := gen.AnalyzeIterReturn(results.At(i).Type(), tracker)
+		info := AnalyzeIterReturn(results.At(i).Type(), tracker)
 		if info.IsSeq || info.IsSeq2 {
 			return ShapeInfo{
 				Shape:    ShapeStreamReader,
@@ -112,7 +107,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 	if !hasCtx && !hasError {
 		info := ShapeInfo{Shape: ShapePure}
 		if resCount > 0 {
-			info.ValType = gen.TypeStr(results.At(0).Type(), tracker)
+			info.ValType = TypeStr(results.At(0).Type(), tracker)
 		}
 		return info
 	}
@@ -124,9 +119,12 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 	}
 
 	// Check for //testkit:deleter directive.
+	// The constant lives in gen/directive but we can't import it
+	// without creating a cycle (directive imports gen). The string
+	// is stable — it's the directive name parsed from source comments.
 	isDeleter := false
 	for _, d := range directives {
-		if d.Name == directive.DirDeleter {
+		if d.Name == "deleter" {
 			isDeleter = true
 			break
 		}
@@ -135,7 +133,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 	// Rules 4-6: ctx + one non-ctx param.
 	if hasCtx && len(nonCtxParams) == 1 {
 		p := nonCtxParams[0]
-		keyType := gen.TypeStr(p.Type(), tracker)
+		keyType := TypeStr(p.Type(), tracker)
 
 		// Rule 4: (V, error) with V != error → Reader.
 		if nonErrResults == 1 {
@@ -143,7 +141,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 			if errIdx == 0 {
 				valIdx = 1
 			}
-			valType := gen.TypeStr(results.At(valIdx).Type(), tracker)
+			valType := TypeStr(results.At(valIdx).Type(), tracker)
 			return ShapeInfo{
 				Shape:   ShapeReader,
 				KeyType: keyType,
@@ -171,7 +169,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 			if errIdx == 0 {
 				retIdx = 1
 			}
-			retType := gen.TypeStr(results.At(retIdx).Type(), tracker)
+			retType := TypeStr(results.At(retIdx).Type(), tracker)
 			return ShapeInfo{
 				Shape:   ShapeWriter,
 				ValType: keyType,
@@ -188,7 +186,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 			if errIdx == 0 {
 				retIdx = 1
 			}
-			valType := gen.TypeStr(results.At(retIdx).Type(), tracker)
+			valType := TypeStr(results.At(retIdx).Type(), tracker)
 			return ShapeInfo{
 				Shape:   ShapeAggregator,
 				ValType: valType,

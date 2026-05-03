@@ -1,23 +1,42 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package suite_test
+package gen_test
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen"
 	"go.thesmos.sh/testkit/gen/directive"
-	"go.thesmos.sh/testkit/gen/suite"
 )
+
+func suiteTestdataDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot determine test file location")
+	}
+	return filepath.Join(filepath.Dir(file), "suite", "testdata")
+}
+
+func loadSuiteTestPackage(t *testing.T, subdir string) *gen.Package {
+	t.Helper()
+	loader := gen.NewLoader()
+	dir := filepath.Join(suiteTestdataDir(t), subdir)
+	pkg, err := loader.Load(".", dir)
+	testkit.NoError(t, err, "must load package")
+	return pkg
+}
 
 func TestDetectShape(t *testing.T) {
 	t.Parallel()
 
 	t.Run("basic.Store", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "basic")
+		pkg := loadSuiteTestPackage(t, "basic")
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must load Store")
 		tracker := gen.NewImportTracker("example.com/test")
@@ -25,15 +44,15 @@ func TestDetectShape(t *testing.T) {
 		for _, tc := range []struct {
 			method     string
 			directives []gen.Directive
-			wantShape  suite.MethodShape
+			wantShape  gen.MethodShape
 		}{
-			{"Get", nil, suite.ShapeReader},
-			{"Put", nil, suite.ShapeWriter},
-			{"Delete", nil, suite.ShapeWriter},
-			{"Delete", []gen.Directive{{Name: directive.DirDeleter}}, suite.ShapeDeleter},
-			{"Count", nil, suite.ShapeUnknown},
-			{"Ping", nil, suite.ShapeLifecycle},
-			{"LegacyPut", nil, suite.ShapeWriter},
+			{"Get", nil, gen.ShapeReader},
+			{"Put", nil, gen.ShapeWriter},
+			{"Delete", nil, gen.ShapeWriter},
+			{"Delete", []gen.Directive{{Name: directive.DirDeleter}}, gen.ShapeDeleter},
+			{"Count", nil, gen.ShapeUnknown},
+			{"Ping", nil, gen.ShapeLifecycle},
+			{"LegacyPut", nil, gen.ShapeWriter},
 		} {
 			t.Run(tc.method, func(t *testing.T) {
 				t.Parallel()
@@ -47,7 +66,7 @@ func TestDetectShape(t *testing.T) {
 				if m.Name == "" {
 					t.Fatalf("method %s not found", tc.method)
 				}
-				info := suite.DetectShape(m, tracker, tc.directives)
+				info := gen.DetectShape(m, tracker, tc.directives)
 				testkit.Equal(t, info.Shape, tc.wantShape,
 					tc.method+" must be "+tc.wantShape.String())
 			})
@@ -56,7 +75,7 @@ func TestDetectShape(t *testing.T) {
 
 	t.Run("basic.Store Reader key/val types", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "basic")
+		pkg := loadSuiteTestPackage(t, "basic")
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must load Store")
 		tracker := gen.NewImportTracker("example.com/test")
@@ -68,26 +87,26 @@ func TestDetectShape(t *testing.T) {
 				break
 			}
 		}
-		info := suite.DetectShape(get, tracker, nil)
-		testkit.Equal(t, info.Shape, suite.ShapeReader, "Get must be Reader")
+		info := gen.DetectShape(get, tracker, nil)
+		testkit.Equal(t, info.Shape, gen.ShapeReader, "Get must be Reader")
 		testkit.Assert(t, info.KeyType).Contains("string", "key type must be string")
 		testkit.Assert(t, info.ValType).Contains("Item", "val type must be Item")
 	})
 
 	t.Run("iterators.Scanner", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "iterators")
+		pkg := loadSuiteTestPackage(t, "iterators")
 		iface, err := pkg.Interface("Scanner")
 		testkit.NoError(t, err, "must load Scanner")
 		tracker := gen.NewImportTracker("example.com/test")
 
 		for _, tc := range []struct {
 			method    string
-			wantShape suite.MethodShape
+			wantShape gen.MethodShape
 		}{
-			{"Keys", suite.ShapeStreamReader},
-			{"Scan", suite.ShapeStreamReader},
-			{"Count", suite.ShapeAggregator},
+			{"Keys", gen.ShapeStreamReader},
+			{"Scan", gen.ShapeStreamReader},
+			{"Count", gen.ShapeAggregator},
 		} {
 			t.Run(tc.method, func(t *testing.T) {
 				t.Parallel()
@@ -98,7 +117,7 @@ func TestDetectShape(t *testing.T) {
 						break
 					}
 				}
-				info := suite.DetectShape(m, tracker, nil)
+				info := gen.DetectShape(m, tracker, nil)
 				testkit.Equal(t, info.Shape, tc.wantShape,
 					tc.method+" must be "+tc.wantShape.String())
 			})
@@ -107,19 +126,19 @@ func TestDetectShape(t *testing.T) {
 
 	t.Run("mixed.Processor", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "mixed")
+		pkg := loadSuiteTestPackage(t, "mixed")
 		iface, err := pkg.Interface("Processor")
 		testkit.NoError(t, err, "must load Processor")
 		tracker := gen.NewImportTracker("example.com/test")
 
 		for _, tc := range []struct {
 			method    string
-			wantShape suite.MethodShape
+			wantShape gen.MethodShape
 		}{
-			{"Run", suite.ShapeLifecycle},
-			{"Process", suite.ShapeWriter},
-			{"Describe", suite.ShapePure},
-			{"LegacyProcess", suite.ShapeWriter},
+			{"Run", gen.ShapeLifecycle},
+			{"Process", gen.ShapeWriter},
+			{"Describe", gen.ShapePure},
+			{"LegacyProcess", gen.ShapeWriter},
 		} {
 			t.Run(tc.method, func(t *testing.T) {
 				t.Parallel()
@@ -130,7 +149,7 @@ func TestDetectShape(t *testing.T) {
 						break
 					}
 				}
-				info := suite.DetectShape(m, tracker, nil)
+				info := gen.DetectShape(m, tracker, nil)
 				testkit.Equal(t, info.Shape, tc.wantShape,
 					tc.method+" must be "+tc.wantShape.String())
 			})
@@ -139,18 +158,18 @@ func TestDetectShape(t *testing.T) {
 
 	t.Run("nocontext.Cache", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "nocontext")
+		pkg := loadSuiteTestPackage(t, "nocontext")
 		iface, err := pkg.Interface("Cache")
 		testkit.NoError(t, err, "must load Cache")
 		tracker := gen.NewImportTracker("example.com/test")
 
 		for _, tc := range []struct {
 			method    string
-			wantShape suite.MethodShape
+			wantShape gen.MethodShape
 		}{
-			{"Get", suite.ShapeUnknown},
-			{"Set", suite.ShapeUnknown},
-			{"Len", suite.ShapePure},
+			{"Get", gen.ShapeUnknown},
+			{"Set", gen.ShapeUnknown},
+			{"Len", gen.ShapePure},
 		} {
 			t.Run(tc.method, func(t *testing.T) {
 				t.Parallel()
@@ -161,7 +180,7 @@ func TestDetectShape(t *testing.T) {
 						break
 					}
 				}
-				info := suite.DetectShape(m, tracker, nil)
+				info := gen.DetectShape(m, tracker, nil)
 				testkit.Equal(t, info.Shape, tc.wantShape,
 					tc.method+" must be "+tc.wantShape.String())
 			})
@@ -170,17 +189,17 @@ func TestDetectShape(t *testing.T) {
 
 	t.Run("erroronly.Closer", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadTestPackage(t, "erroronly")
+		pkg := loadSuiteTestPackage(t, "erroronly")
 		iface, err := pkg.Interface("Closer")
 		testkit.NoError(t, err, "must load Closer")
 		tracker := gen.NewImportTracker("example.com/test")
 
 		for _, tc := range []struct {
 			method    string
-			wantShape suite.MethodShape
+			wantShape gen.MethodShape
 		}{
-			{"Open", suite.ShapeLifecycle},
-			{"Close", suite.ShapeLifecycle},
+			{"Open", gen.ShapeLifecycle},
+			{"Close", gen.ShapeLifecycle},
 		} {
 			t.Run(tc.method, func(t *testing.T) {
 				t.Parallel()
@@ -191,7 +210,7 @@ func TestDetectShape(t *testing.T) {
 						break
 					}
 				}
-				info := suite.DetectShape(m, tracker, nil)
+				info := gen.DetectShape(m, tracker, nil)
 				testkit.Equal(t, info.Shape, tc.wantShape,
 					tc.method+" must be "+tc.wantShape.String())
 			})

@@ -45,8 +45,8 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		md.Directives = pkg.EffectiveMethodDirectives(typeName, m.Name)
 
 		// Detect method shape and iter returns.
-		md.Shape = DetectShape(m, tracker, md.Directives)
-		if md.Shape.Shape == ShapeStreamReader {
+		md.Shape = gen.DetectShape(m, tracker, md.Directives)
+		if md.Shape.Shape == gen.ShapeStreamReader {
 			md.Iter = md.Shape.IterInfo
 			tracker.AddPath("iter")
 		}

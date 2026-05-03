@@ -1,9 +1,6 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// Package suite implements the spec generator for testkit. It produces
-// AssertContract functions with per-method conformance subtests derived
-// from //testkit: directives on Go interface definitions.
 package suite
 
 import (
@@ -66,7 +63,7 @@ type SpecMethodData struct {
 
 	// Auto-detected from signature — no directive needed.
 	Iter  gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return info
-	Shape ShapeInfo       // method shape (Reader/Writer/Stream/etc.)
+	Shape gen.ShapeInfo   // method shape (Reader/Writer/Stream/etc.)
 }
 
 // hasDirectives reports whether this method has any spec-relevant directives.
@@ -93,49 +90,49 @@ func (m *SpecMethodData) LowerInterfaceName() string {
 }
 
 // IsReader reports whether the method has Reader shape.
-func (m *SpecMethodData) IsReader() bool { return m.Shape.Shape == ShapeReader }
+func (m *SpecMethodData) IsReader() bool { return m.Shape.Shape == gen.ShapeReader }
 
 // IsWriter reports whether the method has Writer shape.
-func (m *SpecMethodData) IsWriter() bool { return m.Shape.Shape == ShapeWriter }
+func (m *SpecMethodData) IsWriter() bool { return m.Shape.Shape == gen.ShapeWriter }
 
 // IsStreamReader reports whether the method has StreamReader shape.
-func (m *SpecMethodData) IsStreamReader() bool { return m.Shape.Shape == ShapeStreamReader }
+func (m *SpecMethodData) IsStreamReader() bool { return m.Shape.Shape == gen.ShapeStreamReader }
 
 // IsLifecycle reports whether the method has Lifecycle shape.
-func (m *SpecMethodData) IsLifecycle() bool { return m.Shape.Shape == ShapeLifecycle }
+func (m *SpecMethodData) IsLifecycle() bool { return m.Shape.Shape == gen.ShapeLifecycle }
 
 // IsPure reports whether the method has Pure shape.
-func (m *SpecMethodData) IsPure() bool { return m.Shape.Shape == ShapePure }
+func (m *SpecMethodData) IsPure() bool { return m.Shape.Shape == gen.ShapePure }
 
 // IsAggregator reports whether the method has Aggregator shape.
-func (m *SpecMethodData) IsAggregator() bool { return m.Shape.Shape == ShapeAggregator }
+func (m *SpecMethodData) IsAggregator() bool { return m.Shape.Shape == gen.ShapeAggregator }
 
 // IsDeleter reports whether the method has Deleter shape.
-func (m *SpecMethodData) IsDeleter() bool { return m.Shape.Shape == ShapeDeleter }
+func (m *SpecMethodData) IsDeleter() bool { return m.Shape.Shape == gen.ShapeDeleter }
 
 // IsPredicate reports whether the method has Predicate shape.
-func (m *SpecMethodData) IsPredicate() bool { return m.Shape.Shape == ShapePredicate }
+func (m *SpecMethodData) IsPredicate() bool { return m.Shape.Shape == gen.ShapePredicate }
 
 // OnMethodAssertionType renders the Go type expression for the On<Method>
 // assertion parameter. For Reader: testkit.ReaderAssertion[T, K, V].
 // For Unknown/untyped: func(*testing.T, T).
 func (m *SpecMethodData) OnMethodAssertionType() string {
 	switch m.Shape.Shape {
-	case ShapeReader:
+	case gen.ShapeReader:
 		return "testkit.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
-	case ShapeWriter:
+	case gen.ShapeWriter:
 		return "testkit.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
-	case ShapeDeleter:
+	case gen.ShapeDeleter:
 		return "testkit.DeleterAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
-	case ShapeStreamReader:
+	case gen.ShapeStreamReader:
 		return "testkit.StreamAssertion[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
-	case ShapeAggregator:
+	case gen.ShapeAggregator:
 		return "testkit.AggregatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
-	case ShapeLifecycle:
+	case gen.ShapeLifecycle:
 		return "testkit.LifecycleAssertion[" + m.QualifiedType + "]"
-	case ShapePure:
+	case gen.ShapePure:
 		return "testkit.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
-	case ShapePredicate:
+	case gen.ShapePredicate:
 		return "testkit.PredicateAssertion[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
