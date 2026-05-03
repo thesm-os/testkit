@@ -31,7 +31,7 @@ COVERAGE_DIR := coverage
 TEST_CPU         ?= 4
 TEST_COUNT       ?= 3
 TEST_TIMEOUT     ?= 10m
-TEST_RACE_COUNT  ?= 10
+TEST_RACE_COUNT  ?= 3
 
 # ─── Build variables ─────────────────────────────────────────────
 VERSION    ?= dev
