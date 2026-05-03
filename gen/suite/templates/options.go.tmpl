@@ -1,0 +1,23 @@
+{{define "options"}}
+// {{.InterfaceName}}Option configures [Assert{{.InterfaceName}}Contract].
+type {{.InterfaceName}}Option func(*{{.LowerInterfaceName}}Config)
+
+// {{.InterfaceName}}Setup runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory. Expensive
+// setup should live in the factory closure with t.Cleanup for teardown.
+func {{.InterfaceName}}Setup(fn func(t testing.TB, s {{.QualifiedType}})) {{.InterfaceName}}Option {
+	return func(c *{{.LowerInterfaceName}}Config) { c.setup = fn }
+}
+
+type {{.LowerInterfaceName}}Config struct {
+	setup func(t testing.TB, s {{.QualifiedType}})
+}
+
+func new{{.InterfaceName}}Config(opts ...{{.InterfaceName}}Option) {{.LowerInterfaceName}}Config {
+	var cfg {{.LowerInterfaceName}}Config
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg
+}
+{{end}}

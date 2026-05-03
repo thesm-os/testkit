@@ -67,6 +67,8 @@ func (s *{{$m.StubType}}) FaultForOtherPartitions(key {{$m.Partition.FieldType}}
 	return s
 }
 {{end}}
+{{- /* Yields/YieldsError only for iter.Seq[V] and iter.Seq2[V, error].
+       General iter.Seq2[K, V] has no clean variadic helper — consumers use Func. */}}
 {{- if or $m.Iter.IsSeq $m.Iter.Seq2Error}}
 // Yields configures the stub to yield the given items from an iterator.
 func (s *{{$m.StubType}}) Yields(items ...{{$m.Iter.ElemType}}) *{{$m.StubType}} {

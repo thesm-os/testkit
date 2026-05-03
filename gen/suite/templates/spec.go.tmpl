@@ -1,0 +1,35 @@
+{{define "spec"}}
+package {{.PackageName}}
+{{template "imports" .}}
+
+// Assert{{.InterfaceName}}Contract runs conformance assertions against
+// implementations of [{{.QualifiedType}}] produced by factory.
+//
+// Baseline tests are auto-detected from method signatures. Directive-derived
+// tests add contract-specific assertions on top. Subtests that need
+// pre-populated state skip when Setup is not configured.
+func Assert{{.InterfaceName}}Contract(
+	t *testing.T,
+	factory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}Option,
+) {
+	t.Helper()
+	cfg := new{{.InterfaceName}}Config(opts...)
+	_ = cfg
+{{range $m := .Methods}}{{if not $m.Skip}}
+{{- template "subtests" $m}}
+{{- end}}{{end}}
+}
+
+{{template "options" .}}
+{{end}}
+
+{{define "imports"}}
+{{- if .Imports}}
+import (
+{{- range .Imports}}
+	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{- end}}
+)
+{{- end}}
+{{end}}

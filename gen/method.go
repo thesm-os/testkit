@@ -255,6 +255,26 @@ func ZeroValueOf(typ types.Type, t *ImportTracker) string {
 	return zeroNil
 }
 
+// ZeroCallArgs renders comma-separated zero-value arguments for calling a
+// method. Context params use t.Context(), variadic params are omitted,
+// others use [ZeroValueOf].
+func ZeroCallArgs(sig *types.Signature, tracker *ImportTracker) string {
+	params := sig.Params()
+	n := params.Len()
+	if sig.Variadic() {
+		n--
+	}
+	parts := make([]string, n)
+	for i := range n {
+		if IsContextType(params.At(i).Type()) {
+			parts[i] = "t.Context()"
+		} else {
+			parts[i] = ZeroValueOf(params.At(i).Type(), tracker)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 // TypeStr renders a Go type as source code using the tracker's qualifier.
 func TypeStr(typ types.Type, tracker *ImportTracker) string {
 	return types.TypeString(typ, tracker.Qualifier())

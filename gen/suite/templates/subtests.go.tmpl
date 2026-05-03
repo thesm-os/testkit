@@ -1,0 +1,202 @@
+{{define "subtests"}}
+{{- /* ================================================================ */}}
+{{- /* AUTO-DETECTED BASELINE TESTS — no directive needed               */}}
+{{- /* ================================================================ */}}
+
+{{- /* Smoke test — every method, no panic on zero-value args */}}
+	t.Run("{{.Name}}/smoke", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		{{.IgnoredCallExpr "s"}}
+	})
+{{- /* Ctx cancelled → context error */}}
+{{- if and .HasContext .ReturnsError}}
+
+	t.Run("{{.Name}}/ctx cancellation", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertCtxCancellation(t, func(ctx context.Context) error {
+			{{.CtxCallExpr}}
+		})
+	})
+
+	t.Run("{{.Name}}/ctx deadline", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertCtxDeadline(t, func(ctx context.Context) error {
+			{{.CtxCallExpr}}
+		})
+	})
+{{- end}}
+{{- /* Nil context — no panic */}}
+{{- if and .HasContext .ReturnsError}}
+
+	t.Run("{{.Name}}/nil context", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertNilCtx(t, func(ctx context.Context) error {
+			{{.NilCtxCallExpr}}
+		})
+	})
+{{- end}}
+{{- /* Nil-input tests — per nilable param */}}
+{{- range $p := .NilableParams}}
+
+	t.Run("{{$.Name}}/nil {{$p.FieldName}}", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertNilSafe(t, func() {
+			{{$.NilParamCallExpr $p.Index}}
+		})
+	})
+{{- end}}
+{{- /* Iterator: empty iteration */}}
+{{- if .Iter.IsSeq}}
+
+	t.Run("{{.Name}}/empty iteration", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		count := 0
+		for v := range {{.IterCallExpr "s"}} {
+			_ = v
+			count++
+		}
+		_ = count
+	})
+
+	t.Run("{{.Name}}/break mid-stream", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		for v := range {{.IterCallExpr "s"}} {
+			_ = v
+			break
+		}
+	})
+
+	t.Run("{{.Name}}/double iteration", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		for v := range {{.IterCallExpr "s"}} {
+			_ = v
+		}
+		for v := range {{.IterCallExpr "s"}} {
+			_ = v
+		}
+	})
+{{- end}}
+{{- /* Iterator: Seq2[V, error] — error-free, error mid-stream, break, double */}}
+{{- if .Iter.Seq2Error}}
+
+	t.Run("{{.Name}}/iterate no error", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		for v, err := range {{.IterCallExpr "s"}} {
+			_ = v
+			if err != nil {
+				t.Fatalf("unexpected error during iteration: %v", err)
+			}
+		}
+	})
+
+	t.Run("{{.Name}}/break mid-stream", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		for v, err := range {{.IterCallExpr "s"}} {
+			_ = v
+			_ = err
+			break
+		}
+	})
+
+	t.Run("{{.Name}}/double iteration", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		for v, err := range {{.IterCallExpr "s"}} {
+			_ = v
+			_ = err
+		}
+		for v, err := range {{.IterCallExpr "s"}} {
+			_ = v
+			_ = err
+		}
+	})
+{{- end}}
+
+{{- /* ================================================================ */}}
+{{- /* DIRECTIVE-DERIVED TESTS                                          */}}
+{{- /* ================================================================ */}}
+
+{{- /* Sentinel error subtests — one per sentinel */}}
+{{- range $s := .Sentinels}}
+
+	t.Run("{{$.Name}}/returns {{$s.ShortName}}", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		{{$.ErrCallExpr ""}}
+		testkit.ErrorIs(t, err, {{$s.Qualified}},
+			"{{$.Name}} with zero-value input must return {{$s.VarName}}")
+	})
+{{- end}}
+{{- /* NilSafe subtest */}}
+{{- if .NilSafe}}
+
+	t.Run("{{.Name}}/nilsafe", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertNilSafe(t, func() {
+			{{.IgnoredCallExpr "factory()"}}
+		})
+	})
+{{- end}}
+{{- /* Timeout subtest */}}
+{{- if .Timeout}}
+
+	t.Run("{{.Name}}/timeout {{.Timeout}}", func(t *testing.T) {
+		t.Parallel()
+		testkit.AssertTimeout(t, {{.TimeoutDuration}}, func(ctx context.Context) error {
+			{{.CtxCallExpr}}
+		})
+	})
+{{- end}}
+{{- /* Pure subtest */}}
+{{- if .Pure}}
+
+	t.Run("{{.Name}}/pure", func(t *testing.T) {
+		t.Parallel()
+		if cfg.setup == nil {
+			t.Skip("Setup not configured")
+		}
+		s := factory()
+		cfg.setup(t, s)
+		testkit.AssertPure(t,
+			func() {{.PureObserveType}} {
+				{{.PureObserveCallExpr "s"}}
+			},
+			func() { {{.IgnoredCallExpr "s"}} },
+		)
+	})
+{{- end}}
+{{- /* Deprecated skip */}}
+{{- if .Deprecated}}
+
+	t.Run("{{.Name}}/deprecated", func(t *testing.T) {
+		t.Logf("{{.Name}} is deprecated, use {{.Deprecated}} instead")
+		t.Skip("deprecated method")
+	})
+{{- end}}
+{{- /* Validates subtests — one per field */}}
+{{- range $field := .Validates}}
+
+	t.Run("{{$.Name}}/validates {{$field}}", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		{{$.ValidatesCallExpr $field}}
+	})
+{{- end}}
+{{- /* Bounded subtest */}}
+{{- if .BoundedMin}}
+
+	t.Run("{{.Name}}/bounded {{.BoundedMin}} {{.BoundedMax}}", func(t *testing.T) {
+		t.Parallel()
+		s := factory()
+		testkit.AssertBounded(t, {{.BoundedMin}}, {{.BoundedMax}}, func() {{.BoundedResultType}} {
+			return {{.BoundedCallExpr "s"}}
+		})
+	})
+{{- end}}
+{{- end}}
