@@ -1,0 +1,198 @@
+{{define "model"}}
+package {{.PackageName}}
+{{template "model_imports" .}}
+
+// Assert{{.InterfaceName}}Model runs property-based state-machine tests against
+// implementations of [{{.QualifiedType}}] produced by sutFactory.
+//
+//	Shapes:        {{.ShapeSummary}}
+//	CRUD:          {{if .IsCRUD}}yes{{else}}no{{end}}
+//	Key field:     {{if .KeyField}}{{.KeyField}}{{else}}none{{end}}
+//	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
+//	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via StoreModelActions{{else}}none{{end}}
+//	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
+func Assert{{.InterfaceName}}Model(
+	t *testing.T,
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	t.Helper()
+	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+
+	// Generators — local to this function, not package-level.
+{{- if .ReaderMethod}}
+	keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{"a", "b", "c", "d", "e"})
+{{- end}}
+{{- if and .WriterMethod .KeyField}}
+	valGen := rapid.Custom(func(rt *rapid.T) {{.WriterMethod.Shape.ValType}} {
+		var v {{.WriterMethod.Shape.ValType}}
+		v.{{.KeyField}} = keyGen.Draw(rt, "val_key")
+		return v
+	})
+{{- end}}
+
+	// Reference: consumer-supplied or synthesized.
+	refFactory := cfg.refFactory
+{{- if and .IsCRUD .KeyField}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refmap.NewMapStore(
+				func(v {{.WriterMethod.Shape.ValType}}) {{.ReaderMethod.Shape.KeyType}} { return v.{{.KeyField}} },
+				{{firstSentinel .ReaderMethod}},
+			)
+		}
+	}
+{{- else}}
+	if refFactory == nil {
+		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via WithReference " +
+			"(Tier 0 synthesis unavailable: interface is not CRUD-shaped or keyfield not detected)")
+	}
+{{- end}}
+
+	// Actions: consumer-supplied or auto-derived.
+	actions := cfg.actions
+	if len(actions) == 0 {
+		actions = []model.Action[{{.QualifiedType}}]{
+{{- range .Methods}}{{if not .Skip}}
+{{- if .IsReader}}
+			action.Reader("{{.Name}}", keyGen,
+				func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+					return impl.{{.Name}}(ctx, k)
+				},
+			),
+{{- else if .IsWriter}}
+			action.Writer("{{.Name}}", {{writerGen .}},
+				func(ctx context.Context, impl {{$.QualifiedType}}, v {{.Shape.ValType}}) error {
+					return impl.{{.Name}}(ctx, v)
+				},
+			),
+{{- else if .IsDeleter}}
+			action.Deleter("{{.Name}}", keyGen,
+				func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) error {
+					return impl.{{.Name}}(ctx, k)
+				},
+			),
+{{- else if .IsAggregator}}
+			action.Aggregator("{{.Name}}",
+				func(ctx context.Context, impl {{$.QualifiedType}}) ({{.Shape.ValType}}, error) {
+					return impl.{{.Name}}(ctx)
+				},
+			),
+{{- else if .IsLifecycle}}
+			action.Lifecycle("{{.Name}}",
+				func(ctx context.Context, impl {{$.QualifiedType}}) error {
+					return impl.{{.Name}}(ctx)
+				},
+			),
+{{- end}}
+{{- end}}{{end}}
+		}
+	}
+	actions = append(actions, cfg.extraActions...)
+
+	// Laws: auto-derived + consumer-supplied.
+	laws := model.NewRegistry[{{.QualifiedType}}]()
+{{- if and .IsCRUD .KeyField .ReaderMethod}}
+	laws.Add(law.ReadAfterWrite[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
+		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
+		},
+		Keys: keyGen,
+	})
+{{- end}}
+{{- if and .HasDeleter .ReaderMethod}}
+	laws.Add(law.DeleteReturnsNotFound[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
+		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
+		},
+		Keys:     keyGen,
+		Sentinel: {{firstSentinel .ReaderMethod}},
+	})
+{{- end}}
+{{- if .HasCount}}
+	laws.Add(law.CountEqualsReference[{{.QualifiedType}}, {{.CountMethod.Shape.ValType}}]{
+		Count: func(rt *rapid.T, impl {{.QualifiedType}}) ({{.CountMethod.Shape.ValType}}, error) {
+			return impl.{{.CountMethod.Name}}(rt.Context())
+		},
+	})
+{{- end}}
+	for _, l := range cfg.laws {
+		laws.Add(l)
+	}
+	for _, id := range cfg.skipLaws {
+		laws.SkipByID(id)
+	}
+
+	model.Assert(t, sutFactory,
+		model.WithReference(refFactory),
+		model.WithActions(actions...),
+		model.WithLaws(laws),
+	)
+}
+
+// {{.InterfaceName}}ModelOption configures [Assert{{.InterfaceName}}Model].
+type {{.InterfaceName}}ModelOption func(*{{.InterfaceName | toLower}}ModelConfig)
+
+// {{.InterfaceName}}ModelReference overrides the auto-synthesized reference
+// with a consumer-supplied implementation.
+func {{.InterfaceName}}ModelReference(factory func() {{.QualifiedType}}) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.refFactory = factory }
+}
+
+// {{.InterfaceName}}ModelActions replaces all auto-derived actions.
+func {{.InterfaceName}}ModelActions(actions ...model.Action[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.actions = actions }
+}
+
+// {{.InterfaceName}}ModelExtraActions appends actions to the auto-derived set.
+// Use this to add coverage for Unknown-shaped methods without replacing
+// the auto-derived Reader/Writer/Deleter/etc. actions.
+func {{.InterfaceName}}ModelExtraActions(actions ...model.Action[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.extraActions = append(c.extraActions, actions...) }
+}
+
+// {{.InterfaceName}}ModelLaw adds a custom law to the registry.
+func {{.InterfaceName}}ModelLaw(l law.Law[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.laws = append(c.laws, l) }
+}
+
+// {{.InterfaceName}}ModelSkipLaw skips an auto-derived law by ID.
+func {{.InterfaceName}}ModelSkipLaw(id string) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.skipLaws = append(c.skipLaws, id) }
+}
+
+type {{.InterfaceName | toLower}}ModelConfig struct {
+	refFactory   func() {{.QualifiedType}}
+	actions      []model.Action[{{.QualifiedType}}]
+	extraActions []model.Action[{{.QualifiedType}}]
+	laws         []law.Law[{{.QualifiedType}}]
+	skipLaws     []string
+}
+
+func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.InterfaceName | toLower}}ModelConfig {
+	var cfg {{.InterfaceName | toLower}}ModelConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg
+}
+{{end}}
+
+{{define "model_imports"}}
+import (
+	"context"
+	"testing"
+
+	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/model"
+	"go.thesmos.sh/testkit/model/action"
+	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/refmap"
+{{- range .Imports}}
+{{- if ne .Path "testing"}}
+	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{- end}}
+{{- end}}
+)
+{{end}}

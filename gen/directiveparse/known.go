@@ -186,4 +186,8 @@ var knownDirectives = []Descriptor{
 		Name: "deleter", Description: "marks method as delete-by-key shape",
 		Generators: []string{genStub, genSuite}, Phase: 1,
 	},
+	{
+		Name: "keyfield", Description: "key extraction field for reference synthesis",
+		Args: "FieldName", Generators: []string{genModel}, Phase: 1,
+	},
 }

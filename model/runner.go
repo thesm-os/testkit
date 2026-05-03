@@ -117,6 +117,12 @@ func WithActions[T any](actions ...Action[T]) Option[T] {
 	return func(c *Config[T]) { c.Actions = actions }
 }
 
+// WithLaws sets the entire law registry. Used by the generator to pass
+// the pre-built auto-law registry.
+func WithLaws[T any](r *Registry[T]) Option[T] {
+	return func(c *Config[T]) { c.Laws = r }
+}
+
 // WithLaw adds a law to the registry.
 func WithLaw[T any](l law.Law[T]) Option[T] {
 	return func(c *Config[T]) {

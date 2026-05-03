@@ -21,4 +21,5 @@ const (
 	Retryable         = "retryable"
 	RetrySucceedsOn   = "retry-succeeds-on-attempt"
 	Deleter           = "deleter"
+	KeyField          = "keyfield"
 )

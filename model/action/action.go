@@ -44,7 +44,7 @@ func Reader[T any, K comparable, V any](
 
 // Writer creates an action for a Writer-shaped method: func(ctx, V) error.
 // Draws a value from the provided generator, calls both SUT and ref.
-func Writer[T any, V any](
+func Writer[T, V any](
 	name string,
 	values *rapid.Generator[V],
 	write func(context.Context, T, V) error,
@@ -123,7 +123,7 @@ func Lifecycle[T any](
 
 // Pure creates an action for a Pure-shaped method: func(T) R.
 // Calls both SUT and ref, compares results. No context.
-func Pure[T any, R any](
+func Pure[T, R any](
 	name string,
 	call func(T) R,
 ) model.Action[T] {
@@ -160,7 +160,7 @@ func Predicate[T any](
 // Stream creates an action for a StreamReader-shaped method that
 // returns all items. Calls both SUT and ref, collects results,
 // compares. Uses the provided collect function to drain the iterator.
-func Stream[T any, V any](
+func Stream[T, V any](
 	name string,
 	collect func(context.Context, T) ([]V, error),
 ) model.Action[T] {
@@ -194,4 +194,3 @@ func Unknown[T any](
 		},
 	}
 }
-
