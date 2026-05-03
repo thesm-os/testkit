@@ -10,13 +10,19 @@ import (
 	"testing"
 )
 
+// DeleterBindings holds the reusable shape wiring for a Deleter-shaped method.
+// Shared by suite (via DeleterContext) and future generators (bench, model).
+type DeleterBindings[T any, K comparable] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) error
+}
+
 // DeleterContext provides a typed factory and call function to Deleter-shape
 // primitives. A Deleter-shaped method has the signature func(ctx, K) error
 // and requires the //testkit:deleter directive.
 type DeleterContext[T any, K comparable] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T, K) error
+	T *testing.T
+	DeleterBindings[T, K]
 }
 
 // DeleterAssertion is a typed conformance primitive for Deleter-shaped methods.

@@ -28,10 +28,12 @@ func (s *listStore) List() iter.Seq2[string, error] {
 func streamCtx(t *testing.T, items []string) testkit.StreamContext[*listStore, string] {
 	t.Helper()
 	return testkit.StreamContext[*listStore, string]{
-		T:       t,
-		Factory: func() *listStore { return &listStore{items: items} },
-		Call: func(_ context.Context, s *listStore) iter.Seq2[string, error] {
-			return s.List()
+		T: t,
+		StreamBindings: testkit.StreamBindings[*listStore, string]{
+			Factory: func() *listStore { return &listStore{items: items} },
+			Call: func(_ context.Context, s *listStore) iter.Seq2[string, error] {
+				return s.List()
+			},
 		},
 	}
 }

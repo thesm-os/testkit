@@ -7,12 +7,18 @@ import (
 	"testing"
 )
 
+// PredicateBindings holds the reusable shape wiring for a Predicate-shaped method.
+// Shared by suite (via PredicateContext) and future generators (bench, model).
+type PredicateBindings[T any] struct {
+	Factory func() T
+	Call    func(T) bool
+}
+
 // PredicateContext provides a typed factory and call function to
 // Predicate-shape primitives. A Predicate-shaped method returns bool only.
 type PredicateContext[T any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(T) bool
+	T *testing.T
+	PredicateBindings[T]
 }
 
 // PredicateAssertion is a typed conformance primitive for Predicate-shaped methods.

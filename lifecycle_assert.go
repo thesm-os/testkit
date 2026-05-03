@@ -9,13 +9,19 @@ import (
 	"testing"
 )
 
+// LifecycleBindings holds the reusable shape wiring for a Lifecycle-shaped method.
+// Shared by suite (via LifecycleContext) and future generators (bench, model).
+type LifecycleBindings[T any] struct {
+	Factory func() T
+	Call    func(context.Context, T) error
+}
+
 // LifecycleContext provides a typed factory and call function to
 // Lifecycle-shape primitives. A Lifecycle-shaped method has the
 // signature func(ctx) error.
 type LifecycleContext[T any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T) error
+	T *testing.T
+	LifecycleBindings[T]
 }
 
 // LifecycleAssertion is a typed conformance primitive for Lifecycle-shaped methods.

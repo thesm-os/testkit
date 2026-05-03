@@ -32,10 +32,12 @@ func (r *mapReader) Get(_ context.Context, key string) (string, error) {
 func readerCtx(t *testing.T, data map[string]string) testkit.ReaderContext[*mapReader, string, string] {
 	t.Helper()
 	return testkit.ReaderContext[*mapReader, string, string]{
-		T:       t,
-		Factory: func() *mapReader { return newMapReader(data) },
-		Call: func(ctx context.Context, r *mapReader, k string) (string, error) {
-			return r.Get(ctx, k)
+		T: t,
+		ReaderBindings: testkit.ReaderBindings[*mapReader, string, string]{
+			Factory: func() *mapReader { return newMapReader(data) },
+			Call: func(ctx context.Context, r *mapReader, k string) (string, error) {
+				return r.Get(ctx, k)
+			},
 		},
 	}
 }

@@ -31,8 +31,8 @@ func AssertCacheContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[nocontext.Cache]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[nocontext.Cache]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -107,10 +107,12 @@ func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 				return impl
 			}
 			pctx := testkit.PureContext[nocontext.Cache, int]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl nocontext.Cache) int {
-					return impl.Len()
+				T: t,
+				PureBindings: testkit.PureBindings[nocontext.Cache, int]{
+					Factory: prePopFactory,
+					Call: func(impl nocontext.Cache) int {
+						return impl.Len()
+					},
 				},
 			}
 			for _, a := range cfg.onLen {

@@ -8,13 +8,19 @@ import (
 	"testing"
 )
 
+// CrossBindings holds the reusable shape wiring for cross-method assertions.
+// Shared by suite (via CrossContext) and future generators (bench, model).
+type CrossBindings[T any] struct {
+	Factory func() T
+}
+
 // CrossContext provides a factory and test handle to cross-method primitives.
 // Cross-method assertions compose multiple interface methods via consumer-
 // provided typed closures. PrePopulate is not applied — cross-method
 // primitives are self-sufficient and manage their own state.
 type CrossContext[T any] struct {
-	T       *testing.T
-	Factory func() T
+	T *testing.T
+	CrossBindings[T]
 }
 
 // CrossMethodAssertion is a conformance primitive that spans multiple methods

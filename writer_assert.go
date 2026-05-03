@@ -8,15 +8,21 @@ import (
 	"testing"
 )
 
+// WriterBindings holds the reusable shape wiring for a Writer-shaped method.
+// Shared by suite (via WriterContext) and future generators (bench, model).
+type WriterBindings[T any, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, V) error
+}
+
 // WriterContext provides typed domain inputs and a typed call function to
 // Writer-shape primitives. Populated by generator-emitted options.
 //
 // A Writer-shaped method has the signature func(ctx, V) error
 // or func(ctx, V) (R, error).
 type WriterContext[T any, V any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T, V) error
+	T *testing.T
+	WriterBindings[T, V]
 }
 
 // WriterAssertion is a typed conformance primitive for Writer-shaped methods.

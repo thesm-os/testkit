@@ -37,10 +37,12 @@ func (l *lifecycle) Close(ctx context.Context) error {
 func lifecycleCtx(t *testing.T) testkit.LifecycleContext[*lifecycle] {
 	t.Helper()
 	return testkit.LifecycleContext[*lifecycle]{
-		T:       t,
-		Factory: newLifecycle,
-		Call: func(ctx context.Context, l *lifecycle) error {
-			return l.Open(ctx)
+		T: t,
+		LifecycleBindings: testkit.LifecycleBindings[*lifecycle]{
+			Factory: newLifecycle,
+			Call: func(ctx context.Context, l *lifecycle) error {
+				return l.Open(ctx)
+			},
 		},
 	}
 }
@@ -60,10 +62,12 @@ func TestAssertLifecycleIdempotent(t *testing.T) {
 func TestAssertLifecycleRespectsContext(t *testing.T) {
 	t.Parallel()
 	ctx := testkit.LifecycleContext[*lifecycle]{
-		T:       t,
-		Factory: func() *lifecycle { l := newLifecycle(); l.opened = true; return l },
-		Call: func(ctx context.Context, l *lifecycle) error {
-			return l.Close(ctx)
+		T: t,
+		LifecycleBindings: testkit.LifecycleBindings[*lifecycle]{
+			Factory: func() *lifecycle { l := newLifecycle(); l.opened = true; return l },
+			Call: func(ctx context.Context, l *lifecycle) error {
+				return l.Close(ctx)
+			},
 		},
 	}
 	testkit.AssertLifecycleRespectsContext[*lifecycle]()(ctx)

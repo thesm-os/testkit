@@ -29,10 +29,12 @@ func (s *delStore) Delete(_ context.Context, key string) error {
 func deleterCtx(t *testing.T) testkit.DeleterContext[*delStore, string] {
 	t.Helper()
 	return testkit.DeleterContext[*delStore, string]{
-		T:       t,
-		Factory: newDelStore,
-		Call: func(ctx context.Context, s *delStore, k string) error {
-			return s.Delete(ctx, k)
+		T: t,
+		DeleterBindings: testkit.DeleterBindings[*delStore, string]{
+			Factory: newDelStore,
+			Call: func(ctx context.Context, s *delStore, k string) error {
+				return s.Delete(ctx, k)
+			},
 		},
 	}
 }

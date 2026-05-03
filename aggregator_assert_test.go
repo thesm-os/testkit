@@ -19,10 +19,12 @@ func (c *itemCounter) Count(_ context.Context) (int, error) { return c.n, nil }
 func aggregatorCtx(t *testing.T, n int) testkit.AggregatorContext[*itemCounter, int] {
 	t.Helper()
 	return testkit.AggregatorContext[*itemCounter, int]{
-		T:       t,
-		Factory: func() *itemCounter { return newItemCounter(n) },
-		Call: func(ctx context.Context, c *itemCounter) (int, error) {
-			return c.Count(ctx)
+		T: t,
+		AggregatorBindings: testkit.AggregatorBindings[*itemCounter, int]{
+			Factory: func() *itemCounter { return newItemCounter(n) },
+			Call: func(ctx context.Context, c *itemCounter) (int, error) {
+				return c.Count(ctx)
+			},
 		},
 	}
 }

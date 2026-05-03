@@ -9,14 +9,20 @@ import (
 	"testing"
 )
 
+// StreamBindings holds the reusable shape wiring for a StreamReader-shaped method.
+// Shared by suite (via StreamContext) and future generators (bench, model).
+type StreamBindings[T any, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T) iter.Seq2[V, error]
+}
+
 // StreamContext provides typed domain inputs and a typed call function to
 // Stream-shape primitives. Populated by generator-emitted options.
 //
 // A StreamReader-shaped method returns iter.Seq[V] or iter.Seq2[V, error].
 type StreamContext[T any, V any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T) iter.Seq2[V, error]
+	T *testing.T
+	StreamBindings[T, V]
 }
 
 // StreamAssertion is a typed conformance primitive for StreamReader-shaped methods.

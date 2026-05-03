@@ -30,8 +30,8 @@ func AssertCloserContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[erroronly.Closer]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[erroronly.Closer]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -94,10 +94,12 @@ func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerCo
 				return impl
 			}
 			lctx := testkit.LifecycleContext[erroronly.Closer]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl erroronly.Closer) error {
-					return impl.Close(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[erroronly.Closer]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl erroronly.Closer) error {
+						return impl.Close(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onClose {
@@ -156,10 +158,12 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 				return impl
 			}
 			lctx := testkit.LifecycleContext[erroronly.Closer]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl erroronly.Closer) error {
-					return impl.Open(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[erroronly.Closer]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl erroronly.Closer) error {
+						return impl.Open(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onOpen {

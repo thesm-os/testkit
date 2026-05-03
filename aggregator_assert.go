@@ -9,13 +9,19 @@ import (
 	"testing"
 )
 
+// AggregatorBindings holds the reusable shape wiring for an Aggregator-shaped method.
+// Shared by suite (via AggregatorContext) and future generators (bench, model).
+type AggregatorBindings[T any, R any] struct {
+	Factory func() T
+	Call    func(context.Context, T) (R, error)
+}
+
 // AggregatorContext provides a typed factory and call function to
 // Aggregator-shape primitives. An Aggregator-shaped method has the
 // signature func(ctx) (T, error) — no key, scalar return.
 type AggregatorContext[T any, R any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T) (R, error)
+	T *testing.T
+	AggregatorBindings[T, R]
 }
 
 // AggregatorAssertion is a typed conformance primitive for Aggregator-shaped methods.

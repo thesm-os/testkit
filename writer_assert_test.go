@@ -39,10 +39,12 @@ func (w *mapWriter) Get(_ context.Context, key string) (entry, error) {
 func writerCtx(t *testing.T) testkit.WriterContext[*mapWriter, entry] {
 	t.Helper()
 	return testkit.WriterContext[*mapWriter, entry]{
-		T:       t,
-		Factory: newMapWriter,
-		Call: func(ctx context.Context, w *mapWriter, e entry) error {
-			return w.Put(ctx, e)
+		T: t,
+		WriterBindings: testkit.WriterBindings[*mapWriter, entry]{
+			Factory: newMapWriter,
+			Call: func(ctx context.Context, w *mapWriter, e entry) error {
+				return w.Put(ctx, e)
+			},
 		},
 	}
 }
@@ -69,14 +71,16 @@ func TestAssertWriteRejectInvalid(t *testing.T) {
 	t.Parallel()
 	// mapWriter accepts everything, so use a custom call that rejects empty keys.
 	ctx := testkit.WriterContext[*mapWriter, entry]{
-		T:       t,
-		Factory: newMapWriter,
-		Call: func(_ context.Context, w *mapWriter, e entry) error {
-			if e.Key == "" {
-				return errNotFound // reuse as "invalid"
-			}
-			w.data[e.Key] = e.Value
-			return nil
+		T: t,
+		WriterBindings: testkit.WriterBindings[*mapWriter, entry]{
+			Factory: newMapWriter,
+			Call: func(_ context.Context, w *mapWriter, e entry) error {
+				if e.Key == "" {
+					return errNotFound // reuse as "invalid"
+				}
+				w.data[e.Key] = e.Value
+				return nil
+			},
 		},
 	}
 	testkit.AssertWriteRejectInvalid[*mapWriter, entry](entry{}, errNotFound)(ctx)

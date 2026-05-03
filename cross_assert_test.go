@@ -36,7 +36,7 @@ func (s *kvStore) Delete(_ context.Context, key string) error {
 
 func TestAssertReadAfterWrite(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
+	ctx := testkit.CrossContext[*kvStore]{T: t, CrossBindings: testkit.CrossBindings[*kvStore]{Factory: newKVStore}}
 	testkit.AssertReadAfterWrite[*kvStore, string, entry](
 		entry{Key: "a", Value: "alpha"},
 		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
@@ -50,7 +50,7 @@ func TestAssertReadAfterWrite(t *testing.T) {
 
 func TestAssertDeleteRemovesValue(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
+	ctx := testkit.CrossContext[*kvStore]{T: t, CrossBindings: testkit.CrossBindings[*kvStore]{Factory: newKVStore}}
 	testkit.AssertDeleteRemovesValue[*kvStore, string, entry](
 		entry{Key: "a", Value: "alpha"},
 		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
@@ -66,7 +66,7 @@ func TestAssertDeleteRemovesValue(t *testing.T) {
 
 func TestAssertStreamReflectsMutations(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
+	ctx := testkit.CrossContext[*kvStore]{T: t, CrossBindings: testkit.CrossBindings[*kvStore]{Factory: newKVStore}}
 	testkit.AssertStreamReflectsMutations[*kvStore, string, entry](
 		[]entry{{Key: "a", Value: "alpha"}, {Key: "b", Value: "beta"}},
 		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },

@@ -32,8 +32,8 @@ func AssertScannerContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[iterators.Scanner]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[iterators.Scanner]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -88,10 +88,12 @@ func runScannerCount(t *testing.T, factory func() iterators.Scanner, cfg *scanne
 				return impl
 			}
 			actx := testkit.AggregatorContext[iterators.Scanner, int]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl iterators.Scanner) (int, error) {
-					return impl.Count(ctx)
+				T: t,
+				AggregatorBindings: testkit.AggregatorBindings[iterators.Scanner, int]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl iterators.Scanner) (int, error) {
+						return impl.Count(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onCount {
@@ -150,16 +152,18 @@ func runScannerKeys(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 				return impl
 			}
 			sctx := testkit.StreamContext[iterators.Scanner, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[string, error] {
-					return func(yield func(string, error) bool) {
-						for v := range impl.Keys(ctx) {
-							if !yield(v, nil) {
-								return
+				T: t,
+				StreamBindings: testkit.StreamBindings[iterators.Scanner, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[string, error] {
+						return func(yield func(string, error) bool) {
+							for v := range impl.Keys(ctx) {
+								if !yield(v, nil) {
+									return
+								}
 							}
 						}
-					}
+					},
 				},
 			}
 			for _, a := range cfg.onKeys {
@@ -221,10 +225,12 @@ func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 				return impl
 			}
 			sctx := testkit.StreamContext[iterators.Scanner, iterators.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[iterators.Item, error] {
-					return impl.Scan(ctx, "")
+				T: t,
+				StreamBindings: testkit.StreamBindings[iterators.Scanner, iterators.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[iterators.Item, error] {
+						return impl.Scan(ctx, "")
+					},
 				},
 			}
 			for _, a := range cfg.onScan {

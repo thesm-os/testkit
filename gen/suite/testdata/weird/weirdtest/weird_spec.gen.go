@@ -33,8 +33,8 @@ func AssertCodecContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[weird.Codec]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[weird.Codec]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -65,10 +65,12 @@ func runCodecContentType(t *testing.T, factory func() weird.Codec, cfg *codecCon
 				return impl
 			}
 			pctx := testkit.PureContext[weird.Codec, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl weird.Codec) string {
-					return impl.ContentType()
+				T: t,
+				PureBindings: testkit.PureBindings[weird.Codec, string]{
+					Factory: prePopFactory,
+					Call: func(impl weird.Codec) string {
+						return impl.ContentType()
+					},
 				},
 			}
 			for _, a := range cfg.onContentType {
@@ -166,10 +168,12 @@ func runCodecHandles(t *testing.T, factory func() weird.Codec, cfg *codecConfig)
 				return impl
 			}
 			pctx := testkit.PredicateContext[weird.Codec]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl weird.Codec) bool {
-					return impl.Handles("")
+				T: t,
+				PredicateBindings: testkit.PredicateBindings[weird.Codec]{
+					Factory: prePopFactory,
+					Call: func(impl weird.Codec) bool {
+						return impl.Handles("")
+					},
 				},
 			}
 			for _, a := range cfg.onHandles {

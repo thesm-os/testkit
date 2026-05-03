@@ -33,8 +33,8 @@ func AssertStoreContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[writers.Store]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[writers.Store]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -89,10 +89,12 @@ func runStoreDelete(t *testing.T, factory func() writers.Store, cfg *storeConfig
 				return impl
 			}
 			dctx := testkit.DeleterContext[writers.Store, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl writers.Store, k string) error {
-					return impl.Delete(ctx, k)
+				T: t,
+				DeleterBindings: testkit.DeleterBindings[writers.Store, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl writers.Store, k string) error {
+						return impl.Delete(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onDelete {
@@ -152,10 +154,12 @@ func runStoreGet(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 				return impl
 			}
 			rctx := testkit.ReaderContext[writers.Store, string, writers.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl writers.Store, k string) (writers.Item, error) {
-					return impl.Get(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[writers.Store, string, writers.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl writers.Store, k string) (writers.Item, error) {
+						return impl.Get(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onGet {
@@ -217,10 +221,12 @@ func runStoreList(t *testing.T, factory func() writers.Store, cfg *storeConfig) 
 				return impl
 			}
 			sctx := testkit.StreamContext[writers.Store, writers.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl writers.Store) iter.Seq2[writers.Item, error] {
-					return impl.List(ctx)
+				T: t,
+				StreamBindings: testkit.StreamBindings[writers.Store, writers.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl writers.Store) iter.Seq2[writers.Item, error] {
+						return impl.List(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onList {
@@ -272,10 +278,12 @@ func runStorePut(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 				return impl
 			}
 			wctx := testkit.WriterContext[writers.Store, writers.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl writers.Store, v writers.Item) error {
-					return impl.Put(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[writers.Store, writers.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl writers.Store, v writers.Item) error {
+						return impl.Put(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onPut {

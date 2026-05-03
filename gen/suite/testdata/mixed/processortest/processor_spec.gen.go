@@ -31,8 +31,8 @@ func AssertProcessorContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[mixed.Processor]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[mixed.Processor]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -63,10 +63,12 @@ func runProcessorDescribe(t *testing.T, factory func() mixed.Processor, cfg *pro
 				return impl
 			}
 			pctx := testkit.PureContext[mixed.Processor, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl mixed.Processor) string {
-					return impl.Describe()
+				T: t,
+				PureBindings: testkit.PureBindings[mixed.Processor, string]{
+					Factory: prePopFactory,
+					Call: func(impl mixed.Processor) string {
+						return impl.Describe()
+					},
 				},
 			}
 			for _, a := range cfg.onDescribe {
@@ -130,10 +132,12 @@ func runProcessorLegacyProcess(t *testing.T, factory func() mixed.Processor, cfg
 				return impl
 			}
 			wctx := testkit.WriterContext[mixed.Processor, []byte]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
-					return impl.LegacyProcess(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[mixed.Processor, []byte]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
+						return impl.LegacyProcess(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onLegacyProcess {
@@ -207,10 +211,12 @@ func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *proc
 				return impl
 			}
 			wctx := testkit.WriterContext[mixed.Processor, []byte]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
-					return impl.Process(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[mixed.Processor, []byte]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
+						return impl.Process(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onProcess {

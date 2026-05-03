@@ -18,9 +18,11 @@ func (v *validator) IsValid() bool { return v.valid }
 func predicateCtx(t *testing.T, v bool) testkit.PredicateContext[*validator] {
 	t.Helper()
 	return testkit.PredicateContext[*validator]{
-		T:       t,
-		Factory: func() *validator { return newValidator(v) },
-		Call:    func(val *validator) bool { return val.IsValid() },
+		T: t,
+		PredicateBindings: testkit.PredicateBindings[*validator]{
+			Factory: func() *validator { return newValidator(v) },
+			Call:    func(val *validator) bool { return val.IsValid() },
+		},
 	}
 }
 

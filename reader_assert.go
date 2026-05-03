@@ -10,14 +10,20 @@ import (
 	"testing"
 )
 
+// ReaderBindings holds the reusable shape wiring for a Reader-shaped method.
+// Shared by suite (via ReaderContext) and future generators (bench, model).
+type ReaderBindings[T any, K comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) (V, error)
+}
+
 // ReaderContext provides a typed factory and call function to Reader-shape
 // primitives. Populated by generator-emitted On<Method> dispatch.
 //
 // A Reader-shaped method has the signature func(ctx, K) (V, error).
 type ReaderContext[T any, K comparable, V any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(context.Context, T, K) (V, error)
+	T *testing.T
+	ReaderBindings[T, K, V]
 }
 
 // ReaderAssertion is a typed conformance primitive for Reader-shaped methods.

@@ -30,8 +30,8 @@ func AssertServiceContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[multireturn.Service]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[multireturn.Service]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -93,10 +93,12 @@ func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serv
 				return impl
 			}
 			lctx := testkit.LifecycleContext[multireturn.Service]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl multireturn.Service) error {
-					return impl.Reset(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[multireturn.Service]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl multireturn.Service) error {
+						return impl.Reset(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onReset {

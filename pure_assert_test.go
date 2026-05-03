@@ -18,9 +18,11 @@ func (c *counter) Value() int { return c.n }
 func pureCtx(t *testing.T) testkit.PureContext[*counter, int] {
 	t.Helper()
 	return testkit.PureContext[*counter, int]{
-		T:       t,
-		Factory: newCounter,
-		Call:    func(c *counter) int { return c.Value() },
+		T: t,
+		PureBindings: testkit.PureBindings[*counter, int]{
+			Factory: newCounter,
+			Call:    func(c *counter) int { return c.Value() },
+		},
 	}
 }
 

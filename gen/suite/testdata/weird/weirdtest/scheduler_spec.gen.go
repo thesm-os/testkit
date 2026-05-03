@@ -36,8 +36,8 @@ func AssertSchedulerContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[weird.Scheduler]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[weird.Scheduler]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -100,10 +100,12 @@ func runSchedulerCancel(t *testing.T, factory func() weird.Scheduler, cfg *sched
 				return impl
 			}
 			dctx := testkit.DeleterContext[weird.Scheduler, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl weird.Scheduler, k string) error {
-					return impl.Cancel(ctx, k)
+				T: t,
+				DeleterBindings: testkit.DeleterBindings[weird.Scheduler, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl weird.Scheduler, k string) error {
+						return impl.Cancel(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onCancel {
@@ -155,10 +157,12 @@ func runSchedulerFlush(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 				return impl
 			}
 			lctx := testkit.LifecycleContext[weird.Scheduler]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl weird.Scheduler) error {
-					return impl.Flush(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[weird.Scheduler]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl weird.Scheduler) error {
+						return impl.Flush(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onFlush {
@@ -186,10 +190,12 @@ func runSchedulerName(t *testing.T, factory func() weird.Scheduler, cfg *schedul
 				return impl
 			}
 			pctx := testkit.PureContext[weird.Scheduler, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl weird.Scheduler) string {
-					return impl.Name()
+				T: t,
+				PureBindings: testkit.PureBindings[weird.Scheduler, string]{
+					Factory: prePopFactory,
+					Call: func(impl weird.Scheduler) string {
+						return impl.Name()
+					},
 				},
 			}
 			for _, a := range cfg.onName {
@@ -241,10 +247,12 @@ func runSchedulerRunning(t *testing.T, factory func() weird.Scheduler, cfg *sche
 				return impl
 			}
 			actx := testkit.AggregatorContext[weird.Scheduler, int]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl weird.Scheduler) (int, error) {
-					return impl.Running(ctx)
+				T: t,
+				AggregatorBindings: testkit.AggregatorBindings[weird.Scheduler, int]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl weird.Scheduler) (int, error) {
+						return impl.Running(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onRunning {
@@ -349,10 +357,12 @@ func runSchedulerStatus(t *testing.T, factory func() weird.Scheduler, cfg *sched
 				return impl
 			}
 			rctx := testkit.ReaderContext[weird.Scheduler, string, weird.TaskStatus]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl weird.Scheduler, k string) (weird.TaskStatus, error) {
-					return impl.Status(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[weird.Scheduler, string, weird.TaskStatus]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl weird.Scheduler, k string) (weird.TaskStatus, error) {
+						return impl.Status(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onStatus {
@@ -414,10 +424,12 @@ func runSchedulerTasks(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 				return impl
 			}
 			sctx := testkit.StreamContext[weird.Scheduler, weird.TaskStatus]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl weird.Scheduler) iter.Seq2[weird.TaskStatus, error] {
-					return impl.Tasks(ctx)
+				T: t,
+				StreamBindings: testkit.StreamBindings[weird.Scheduler, weird.TaskStatus]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl weird.Scheduler) iter.Seq2[weird.TaskStatus, error] {
+						return impl.Tasks(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onTasks {

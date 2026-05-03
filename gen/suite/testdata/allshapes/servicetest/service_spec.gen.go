@@ -37,8 +37,8 @@ func AssertServiceContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[allshapes.Service]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[allshapes.Service]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -93,10 +93,12 @@ func runServiceClose(t *testing.T, factory func() allshapes.Service, cfg *servic
 				return impl
 			}
 			lctx := testkit.LifecycleContext[allshapes.Service]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service) error {
-					return impl.Close(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[allshapes.Service]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service) error {
+						return impl.Close(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onClose {
@@ -148,10 +150,12 @@ func runServiceCount(t *testing.T, factory func() allshapes.Service, cfg *servic
 				return impl
 			}
 			actx := testkit.AggregatorContext[allshapes.Service, int]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service) (int, error) {
-					return impl.Count(ctx)
+				T: t,
+				AggregatorBindings: testkit.AggregatorBindings[allshapes.Service, int]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service) (int, error) {
+						return impl.Count(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onCount {
@@ -203,10 +207,12 @@ func runServiceDelete(t *testing.T, factory func() allshapes.Service, cfg *servi
 				return impl
 			}
 			dctx := testkit.DeleterContext[allshapes.Service, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service, k string) error {
-					return impl.Delete(ctx, k)
+				T: t,
+				DeleterBindings: testkit.DeleterBindings[allshapes.Service, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service, k string) error {
+						return impl.Delete(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onDelete {
@@ -234,10 +240,12 @@ func runServiceDescribe(t *testing.T, factory func() allshapes.Service, cfg *ser
 				return impl
 			}
 			pctx := testkit.PureContext[allshapes.Service, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl allshapes.Service) string {
-					return impl.Describe()
+				T: t,
+				PureBindings: testkit.PureBindings[allshapes.Service, string]{
+					Factory: prePopFactory,
+					Call: func(impl allshapes.Service) string {
+						return impl.Describe()
+					},
 				},
 			}
 			for _, a := range cfg.onDescribe {
@@ -297,10 +305,12 @@ func runServiceGet(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 				return impl
 			}
 			rctx := testkit.ReaderContext[allshapes.Service, string, allshapes.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service, k string) (allshapes.Item, error) {
-					return impl.Get(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[allshapes.Service, string, allshapes.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service, k string) (allshapes.Item, error) {
+						return impl.Get(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onGet {
@@ -328,10 +338,12 @@ func runServiceIsEmpty(t *testing.T, factory func() allshapes.Service, cfg *serv
 				return impl
 			}
 			pctx := testkit.PredicateContext[allshapes.Service]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl allshapes.Service) bool {
-					return impl.IsEmpty()
+				T: t,
+				PredicateBindings: testkit.PredicateBindings[allshapes.Service]{
+					Factory: prePopFactory,
+					Call: func(impl allshapes.Service) bool {
+						return impl.IsEmpty()
+					},
 				},
 			}
 			for _, a := range cfg.onIsEmpty {
@@ -393,10 +405,12 @@ func runServiceList(t *testing.T, factory func() allshapes.Service, cfg *service
 				return impl
 			}
 			sctx := testkit.StreamContext[allshapes.Service, allshapes.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service) iter.Seq2[allshapes.Item, error] {
-					return impl.List(ctx)
+				T: t,
+				StreamBindings: testkit.StreamBindings[allshapes.Service, allshapes.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service) iter.Seq2[allshapes.Item, error] {
+						return impl.List(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onList {
@@ -448,10 +462,12 @@ func runServicePut(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 				return impl
 			}
 			wctx := testkit.WriterContext[allshapes.Service, allshapes.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl allshapes.Service, v allshapes.Item) error {
-					return impl.Put(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[allshapes.Service, allshapes.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl allshapes.Service, v allshapes.Item) error {
+						return impl.Put(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onPut {

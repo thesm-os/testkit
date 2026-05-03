@@ -21,8 +21,8 @@ func Assert{{.InterfaceName}}Contract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[{{.QualifiedType}}]{
-			T:       t,
-			Factory: factory,
+			T:            t,
+			CrossBindings: testkit.CrossBindings[{{.QualifiedType}}]{Factory: factory},
 		}
 		a(cctx)
 	}

@@ -16,10 +16,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			rctx := testkit.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
-					return impl.{{.Name}}(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+						return impl.{{.Name}}(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -38,10 +40,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			wctx := testkit.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
-					return impl.{{.Name}}(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -60,18 +64,20 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			sctx := testkit.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+				T: t,
+				StreamBindings: testkit.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
-					return impl.{{.Name}}({{.StreamCallArgs}})
+						return impl.{{.Name}}({{.StreamCallArgs}})
 {{- else}}
-					return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
-						for v := range impl.{{.Name}}({{.StreamCallArgs}}) {
-							if !yield(v, nil) { return }
+						return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
+							for v := range impl.{{.Name}}({{.StreamCallArgs}}) {
+								if !yield(v, nil) { return }
+							}
 						}
-					}
 {{- end}}
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -90,10 +96,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			dctx := testkit.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
-					return impl.{{.Name}}(ctx, k)
+				T: t,
+				DeleterBindings: testkit.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -112,10 +120,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			actx := testkit.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
-					return impl.{{.Name}}(ctx)
+				T: t,
+				AggregatorBindings: testkit.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
+						return impl.{{.Name}}(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -134,10 +144,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			lctx := testkit.LifecycleContext[{{.QualifiedType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
-					return impl.{{.Name}}(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[{{.QualifiedType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
+						return impl.{{.Name}}(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -156,10 +168,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			pctx := testkit.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
-					return impl.{{.Name}}({{.PureCallArgs}})
+				T: t,
+				PureBindings: testkit.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
+						return impl.{{.Name}}({{.PureCallArgs}})
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {
@@ -178,10 +192,12 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				return impl
 			}
 			pctx := testkit.PredicateContext[{{.QualifiedType}}]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(impl {{.QualifiedType}}) bool {
-					return impl.{{.Name}}({{.PureCallArgs}})
+				T: t,
+				PredicateBindings: testkit.PredicateBindings[{{.QualifiedType}}]{
+					Factory: prePopFactory,
+					Call: func(impl {{.QualifiedType}}) bool {
+						return impl.{{.Name}}({{.PureCallArgs}})
+					},
 				},
 			}
 			for _, a := range cfg.on{{.Name}} {

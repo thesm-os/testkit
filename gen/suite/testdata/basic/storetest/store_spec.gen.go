@@ -35,8 +35,8 @@ func AssertStoreContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[basic.Store]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[basic.Store]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -120,10 +120,12 @@ func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) 
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, string]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl basic.Store, v string) error {
-					return impl.Delete(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[basic.Store, string]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v string) error {
+						return impl.Delete(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onDelete {
@@ -199,10 +201,12 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				return impl
 			}
 			rctx := testkit.ReaderContext[basic.Store, string, basic.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
-					return impl.Get(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[basic.Store, string, basic.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
+						return impl.Get(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onGet {
@@ -259,10 +263,12 @@ func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfi
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, basic.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
-					return impl.LegacyPut(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
+						return impl.LegacyPut(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onLegacyPut {
@@ -322,10 +328,12 @@ func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				return impl
 			}
 			lctx := testkit.LifecycleContext[basic.Store]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl basic.Store) error {
-					return impl.Ping(ctx)
+				T: t,
+				LifecycleBindings: testkit.LifecycleBindings[basic.Store]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store) error {
+						return impl.Ping(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onPing {
@@ -384,10 +392,12 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, basic.Item]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
-					return impl.Put(ctx, v)
+				T: t,
+				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
+						return impl.Put(ctx, v)
+					},
 				},
 			}
 			for _, a := range cfg.onPut {

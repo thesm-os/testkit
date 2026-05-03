@@ -7,13 +7,19 @@ import (
 	"testing"
 )
 
+// PureBindings holds the reusable shape wiring for a Pure-shaped method.
+// Shared by suite (via PureContext) and future generators (bench, model).
+type PureBindings[T any, R any] struct {
+	Factory func() T
+	Call    func(T) R
+}
+
 // PureContext provides a typed factory and call function to Pure-shape
 // primitives. A Pure-shaped method has no context parameter and no error
 // return — func(...) T.
 type PureContext[T any, R any] struct {
-	T       *testing.T
-	Factory func() T
-	Call    func(T) R
+	T *testing.T
+	PureBindings[T, R]
 }
 
 // PureAssertion is a typed conformance primitive for Pure-shaped methods.

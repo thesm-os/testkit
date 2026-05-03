@@ -32,8 +32,8 @@ func AssertRegistryContract(
 
 	for _, a := range cfg.onAll {
 		cctx := testkit.CrossContext[readers.Registry]{
-			T:       t,
-			Factory: factory,
+			T:             t,
+			CrossBindings: testkit.CrossBindings[readers.Registry]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -88,10 +88,12 @@ func runRegistryCount(t *testing.T, factory func() readers.Registry, cfg *regist
 				return impl
 			}
 			actx := testkit.AggregatorContext[readers.Registry, int]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl readers.Registry) (int, error) {
-					return impl.Count(ctx)
+				T: t,
+				AggregatorBindings: testkit.AggregatorBindings[readers.Registry, int]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl readers.Registry) (int, error) {
+						return impl.Count(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onCount {
@@ -153,10 +155,12 @@ func runRegistryList(t *testing.T, factory func() readers.Registry, cfg *registr
 				return impl
 			}
 			sctx := testkit.StreamContext[readers.Registry, readers.Handler]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl readers.Registry) iter.Seq2[readers.Handler, error] {
-					return impl.List(ctx)
+				T: t,
+				StreamBindings: testkit.StreamBindings[readers.Registry, readers.Handler]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl readers.Registry) iter.Seq2[readers.Handler, error] {
+						return impl.List(ctx)
+					},
 				},
 			}
 			for _, a := range cfg.onList {
@@ -216,10 +220,12 @@ func runRegistryLookup(t *testing.T, factory func() readers.Registry, cfg *regis
 				return impl
 			}
 			rctx := testkit.ReaderContext[readers.Registry, string, readers.Handler]{
-				T:       t,
-				Factory: prePopFactory,
-				Call: func(ctx context.Context, impl readers.Registry, k string) (readers.Handler, error) {
-					return impl.Lookup(ctx, k)
+				T: t,
+				ReaderBindings: testkit.ReaderBindings[readers.Registry, string, readers.Handler]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl readers.Registry, k string) (readers.Handler, error) {
+						return impl.Lookup(ctx, k)
+					},
 				},
 			}
 			for _, a := range cfg.onLookup {
