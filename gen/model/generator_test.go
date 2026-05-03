@@ -58,6 +58,109 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("StoreModelOption", "must have option type")
 	})
 
+	t.Run("renders allshapes Service", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "allshapes")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Service"}, gen.DefaultConfig(), gen.Options{
+			Output: "servicetest/service_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("action.Pure", "must emit Pure action")
+		testkit.Assert(t, content).Contains("action.Predicate", "must emit Predicate action")
+		testkit.Assert(t, content).Contains("action.Stream", "must emit Stream action")
+		testkit.Assert(t, content).Contains("action.Lifecycle", "must emit Lifecycle action")
+		testkit.Assert(t, content).Contains("action.Deleter", "must emit Deleter action")
+		testkit.Assert(t, content).Contains("ServiceModelReference", "must require reference (non-refmap)")
+		testkit.Assert(t, content).NotContains("refmap.NewMapStore", "must not synthesize refmap for non-pure-CRUD")
+	})
+
+	t.Run("renders noncrud Closer", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "noncrud")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Closer"}, gen.DefaultConfig(), gen.Options{
+			Output: "closertest/closer_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("action.Lifecycle", "must emit Lifecycle action")
+		testkit.Assert(t, content).NotContains("refmap.NewMapStore", "must not synthesize refmap for non-CRUD")
+		testkit.Assert(t, content).Contains("CloserModelReference", "must have reference option")
+		testkit.Assert(t, content).Contains("CRUD:          no", "must report non-CRUD")
+	})
+
+	t.Run("renders unknown Processor", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "unknown")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Processor"}, gen.DefaultConfig(), gen.Options{
+			Output: "processortest/processor_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("Skipped:", "must have Skipped line")
+		testkit.Assert(t, content).Contains("Process(Unknown)", "must report Process as Unknown")
+	})
+
+	t.Run("renders keyfield Store", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "keyfield")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "storetest/store_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("Key field:     Key", "must use directive keyfield")
+		testkit.Assert(t, content).Contains(`"Key": keyGen.AsAny()`, "must override Key in MakeCustom")
+		testkit.Assert(t, content).Contains("return v.Key", "must extract Key in refmap")
+	})
+
+	t.Run("renders richstruct Store", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "richstruct")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "storetest/store_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("rapid.MakeCustom", "must use MakeCustom")
+		testkit.Assert(t, content).Contains(`"ID": keyGen.AsAny()`, "must override keyfield")
+		testkit.Assert(t, content).Contains("refmap.NewMapStore", "must synthesize refmap (pure CRUD)")
+	})
+
+	t.Run("renders multisentinel Vault", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "multisentinel")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Vault"}, gen.DefaultConfig(), gen.Options{
+			Output: "vaulttest/vault_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("multisentinel.ErrNotFound", "must pick first sentinel")
+		testkit.Assert(t, content).NotContains("multisentinel.ErrSealed", "must not use second sentinel")
+		testkit.Assert(t, content).Contains("refmap.NewMapStore", "must synthesize refmap (pure CRUD)")
+		testkit.Assert(t, content).Contains(`Ref:           auto (refmap.MapStore)`, "must show auto ref")
+	})
+
+	t.Run("renders allshapes ref header", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "allshapes")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Service"}, gen.DefaultConfig(), gen.Options{
+			Output: "servicetest/service_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).
+			Contains("supply via ServiceModelReference", "must explain ref unavailable")
+		testkit.Assert(t, content).Contains("Close", "must list blocking methods")
+	})
+
 	t.Run("golden/basic", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "basic")
@@ -71,5 +174,95 @@ func TestGenerate(t *testing.T) {
 		want, err := os.ReadFile(goldenFile)
 		testkit.NoError(t, err, "must read golden file")
 		testkit.Equal(t, string(result.Files[0].Content), string(want), "basic model must match golden")
+	})
+
+	t.Run("golden/allshapes", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "allshapes")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Service"}, gen.DefaultConfig(), gen.Options{
+			Output: "servicetest/service_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "allshapes", "servicetest", "service_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "allshapes model must match golden")
+	})
+
+	t.Run("golden/noncrud", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "noncrud")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Closer"}, gen.DefaultConfig(), gen.Options{
+			Output: "closertest/closer_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "noncrud", "closertest", "closer_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "noncrud model must match golden")
+	})
+
+	t.Run("golden/unknown", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "unknown")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Processor"}, gen.DefaultConfig(), gen.Options{
+			Output: "processortest/processor_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "unknown", "processortest", "processor_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "unknown model must match golden")
+	})
+
+	t.Run("golden/keyfield", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "keyfield")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "storetest/store_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "keyfield", "storetest", "store_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "keyfield model must match golden")
+	})
+
+	t.Run("golden/multisentinel", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "multisentinel")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Vault"}, gen.DefaultConfig(), gen.Options{
+			Output: "vaulttest/vault_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "multisentinel", "vaulttest", "vault_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "multisentinel model must match golden")
+	})
+
+	t.Run("golden/richstruct", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "richstruct")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "storetest/store_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "richstruct", "storetest", "store_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "richstruct model must match golden")
 	})
 }

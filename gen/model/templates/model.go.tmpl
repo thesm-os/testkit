@@ -8,8 +8,9 @@ package {{.PackageName}}
 //	Shapes:        {{.ShapeSummary}}
 //	CRUD:          {{if .IsCRUD}}yes{{else}}no{{end}}
 //	Key field:     {{if .KeyField}}{{.KeyField}}{{else}}none{{end}}
+//	Ref:           {{if .CanSynthesizeRef}}auto (refmap.MapStore){{else if .RefBlockers}}supply via {{.InterfaceName}}ModelReference ({{join .RefBlockers ", "}} not in MapStore){{else}}supply via {{.InterfaceName}}ModelReference{{end}}
 //	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
-//	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via StoreModelActions{{else}}none{{end}}
+//	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model(
 	t *testing.T,
@@ -24,16 +25,18 @@ func Assert{{.InterfaceName}}Model(
 	keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{"a", "b", "c", "d", "e"})
 {{- end}}
 {{- if and .WriterMethod .KeyField}}
-	valGen := rapid.Custom(func(rt *rapid.T) {{.WriterMethod.Shape.ValType}} {
-		var v {{.WriterMethod.Shape.ValType}}
-		v.{{.KeyField}} = keyGen.Draw(rt, "val_key")
-		return v
+	valGen := rapid.MakeCustom[{{.WriterMethod.Shape.ValType}}](rapid.MakeConfig{
+		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+			reflect.TypeOf({{.WriterMethod.Shape.ValType}}{}): {
+				"{{.KeyField}}": keyGen.AsAny(),
+			},
+		},
 	})
 {{- end}}
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
-{{- if and .IsCRUD .KeyField}}
+{{- if and .CanSynthesizeRef .KeyField}}
 	if refFactory == nil {
 		refFactory = func() {{.QualifiedType}} {
 			return refmap.NewMapStore(
@@ -44,8 +47,7 @@ func Assert{{.InterfaceName}}Model(
 	}
 {{- else}}
 	if refFactory == nil {
-		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via WithReference " +
-			"(Tier 0 synthesis unavailable: interface is not CRUD-shaped or keyfield not detected)")
+		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via {{.InterfaceName}}ModelReference")
 	}
 {{- end}}
 
@@ -82,6 +84,31 @@ func Assert{{.InterfaceName}}Model(
 			action.Lifecycle("{{.Name}}",
 				func(ctx context.Context, impl {{$.QualifiedType}}) error {
 					return impl.{{.Name}}(ctx)
+				},
+			),
+{{- else if .IsPure}}
+			action.Pure("{{.Name}}",
+				func(impl {{$.QualifiedType}}) {{.Shape.ValType}} {
+					return impl.{{.Name}}()
+				},
+			),
+{{- else if .IsPredicate}}
+			action.Predicate("{{.Name}}",
+				func(impl {{$.QualifiedType}}) bool {
+					return impl.{{.Name}}()
+				},
+			),
+{{- else if .IsStreamReader}}
+			action.Stream("{{.Name}}",
+				func(ctx context.Context, impl {{$.QualifiedType}}) ([]{{.Shape.IterInfo.ElemType}}, error) {
+					var items []{{.Shape.IterInfo.ElemType}}
+					for v, err := range impl.{{.Name}}(ctx) {
+						if err != nil {
+							return nil, err
+						}
+						items = append(items, v)
+					}
+					return items, nil
 				},
 			),
 {{- end}}
@@ -181,6 +208,7 @@ func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.
 {{define "model_imports"}}
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"pgregory.net/rapid"

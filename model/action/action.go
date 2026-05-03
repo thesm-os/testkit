@@ -9,6 +9,8 @@ package action
 
 import (
 	"context"
+	"fmt"
+	"sort"
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
@@ -159,7 +161,9 @@ func Predicate[T any](
 
 // Stream creates an action for a StreamReader-shaped method that
 // returns all items. Calls both SUT and ref, collects results,
-// compares. Uses the provided collect function to drain the iterator.
+// compares. Order-insensitive: results are sorted by string
+// representation before comparison since map-backed stores produce
+// non-deterministic iteration order.
 func Stream[T, V any](
 	name string,
 	collect func(context.Context, T) ([]V, error),
@@ -173,12 +177,21 @@ func Stream[T, V any](
 				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
 			}
 			if sutErr == nil {
+				sortByString(sutItems)
+				sortByString(refItems)
 				if diff := cmp.Diff(refItems, sutItems); diff != "" {
 					rt.Fatalf("%s: SUT/ref disagree:\n%s", name, diff)
 				}
 			}
 		},
 	}
+}
+
+// sortByString sorts a slice by the Sprint representation of each element.
+func sortByString[V any](s []V) {
+	sort.Slice(s, func(i, j int) bool {
+		return fmt.Sprint(s[i]) < fmt.Sprint(s[j])
+	})
 }
 
 // Unknown creates an action for an Unknown-shaped method.

@@ -60,7 +60,7 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	}
 
 	// Build model-specific data.
-	md := buildModelData(data, pkg)
+	md := buildData(data)
 
 	tmplSet := gen.NewTemplateSet()
 	tmplSet.Funcs(md.templateFuncs())

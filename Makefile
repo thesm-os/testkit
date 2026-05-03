@@ -203,7 +203,13 @@ GEN_TESTDATA := \
 	gen/suite/testdata/weird/weirdtest \
 	gen/bench/testdata/basic/storetest \
 	gen/bench/testdata/allshapes/servicetest \
-	gen/model/testdata/basic/storetest
+	gen/model/testdata/basic/storetest \
+	gen/model/testdata/allshapes/servicetest \
+	gen/model/testdata/noncrud/closertest \
+	gen/model/testdata/unknown/processortest \
+	gen/model/testdata/keyfield/storetest \
+	gen/model/testdata/multisentinel/vaulttest \
+	gen/model/testdata/richstruct/storetest
 
 # ─── Testing ─────────────────────────────────────────────────────
 

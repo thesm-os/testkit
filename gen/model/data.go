@@ -13,12 +13,21 @@ import (
 	"go.thesmos.sh/testkit/gen/suite"
 )
 
-// ModelData extends SpecData with model-specific analysis.
-type ModelData struct {
+// Data extends SpecData with model-specific analysis.
+type Data struct {
 	*suite.SpecData
 
 	// HasCRUD is true when the interface has at least Reader + Writer shapes.
 	HasCRUD bool
+
+	// CanSynthesizeRef is true when refmap.MapStore can satisfy the full
+	// interface — i.e. every non-skipped method is Reader, Writer, Deleter,
+	// Aggregator, or StreamReader shaped (the shapes MapStore implements).
+	CanSynthesizeRef bool
+
+	// RefBlockers lists method names whose shapes prevent refmap synthesis.
+	// Empty when CanSynthesizeRef is true.
+	RefBlockers []string
 
 	// KeyField is the struct field name used for key extraction.
 	// Set from //testkit:keyfield directive or heuristic ("ID" field).
@@ -41,10 +50,10 @@ type ModelData struct {
 }
 
 // IsCRUD reports whether Tier 0 reference synthesis is possible.
-func (d *ModelData) IsCRUD() bool { return d.HasCRUD }
+func (d *Data) IsCRUD() bool { return d.HasCRUD }
 
-// templateFuncs returns template functions that need access to ModelData.
-func (d *ModelData) templateFuncs() template.FuncMap {
+// templateFuncs returns template functions that need access to Data.
+func (d *Data) templateFuncs() template.FuncMap {
 	return template.FuncMap{
 		"writerGen": func(m *suite.SpecMethodData) string {
 			return d.WriterGenName(m)
@@ -61,7 +70,7 @@ func (d *ModelData) templateFuncs() template.FuncMap {
 // WriterGenName returns the generator variable name for a Writer-shaped
 // method. If the method's V type matches the Reader's K type, returns
 // the key generator; otherwise returns the value generator.
-func (d *ModelData) WriterGenName(m *suite.SpecMethodData) string {
+func (d *Data) WriterGenName(m *suite.SpecMethodData) string {
 	if d.ReaderMethod != nil && m.Shape.ValType == d.ReaderMethod.Shape.KeyType {
 		return "keyGen"
 	}
@@ -69,16 +78,16 @@ func (d *ModelData) WriterGenName(m *suite.SpecMethodData) string {
 }
 
 // HasDeleter reports whether a Deleter-shaped method was detected.
-func (d *ModelData) HasDeleter() bool { return d.DeleterMethod != nil }
+func (d *Data) HasDeleter() bool { return d.DeleterMethod != nil }
 
 // HasCount reports whether an Aggregator-shaped method returning int was detected.
-func (d *ModelData) HasCount() bool { return d.CountMethod != nil }
+func (d *Data) HasCount() bool { return d.CountMethod != nil }
 
 // HasStream reports whether a StreamReader-shaped method was detected.
-func (d *ModelData) HasStream() bool { return d.StreamMethod != nil }
+func (d *Data) HasStream() bool { return d.StreamMethod != nil }
 
-func buildModelData(spec *suite.SpecData, pkg *gen.Package) *ModelData {
-	md := &ModelData{SpecData: spec}
+func buildData(spec *suite.SpecData) *Data {
+	md := &Data{SpecData: spec}
 
 	// Detect shapes.
 	for _, m := range spec.Methods {
@@ -111,6 +120,8 @@ func buildModelData(spec *suite.SpecData, pkg *gen.Package) *ModelData {
 			if md.StreamMethod == nil {
 				md.StreamMethod = m
 			}
+		case gen.ShapeLifecycle, gen.ShapePure, gen.ShapePredicate:
+			// Handled by template; no first-method tracking needed.
 		case gen.ShapeUnknown:
 			md.SkippedMethods = append(md.SkippedMethods,
 				m.Name+"("+m.Shape.Shape.String()+")")
@@ -119,9 +130,26 @@ func buildModelData(spec *suite.SpecData, pkg *gen.Package) *ModelData {
 
 	md.HasCRUD = md.ReaderMethod != nil && md.WriterMethod != nil
 
+	// CanSynthesizeRef: true only when every non-skipped method is a
+	// shape that refmap.MapStore implements.
+	md.CanSynthesizeRef = md.HasCRUD
+	for _, m := range spec.Methods {
+		if m.Skip {
+			continue
+		}
+		switch m.Shape.Shape {
+		case gen.ShapeReader, gen.ShapeWriter, gen.ShapeDeleter,
+			gen.ShapeAggregator, gen.ShapeStreamReader:
+			// MapStore covers these.
+		default:
+			md.RefBlockers = append(md.RefBlockers, m.Name)
+			md.CanSynthesizeRef = false
+		}
+	}
+
 	// Find keyfield directive or heuristic.
 	if md.HasCRUD {
-		md.KeyField = findKeyField(spec, pkg)
+		md.KeyField = findKeyField(spec)
 	}
 
 	// Determine auto-laws.
@@ -141,7 +169,7 @@ func buildModelData(spec *suite.SpecData, pkg *gen.Package) *ModelData {
 // findKeyField looks for //testkit:keyfield directive on any method,
 // then falls back to heuristic: struct field named "ID" on the preferred
 // Writer method's V type.
-func findKeyField(spec *suite.SpecData, _ *gen.Package) string {
+func findKeyField(spec *suite.SpecData) string {
 	// Check directives on each method for keyfield.
 	for _, m := range spec.Methods {
 		for _, d := range m.Directives {
@@ -166,22 +194,22 @@ func findKeyField(spec *suite.SpecData, _ *gen.Package) string {
 }
 
 // findIDField checks if the Writer method's V parameter type is a struct
-// with a field named "ID" (case-insensitive).
+// (or pointer-to-struct) with a field named "ID" (case-insensitive).
 func findIDField(m *suite.SpecMethodData) string {
-	params := m.Signature.Params()
-	for i := range params.Len() {
-		p := params.At(i)
+	for p := range m.Signature.Params().Variables() {
 		if gen.IsContextType(p.Type()) {
 			continue
 		}
-		// This is V. Dereference named types to get the struct.
-		underlying := p.Type().Underlying()
-		st, ok := underlying.(*types.Struct)
+		// This is V. Dereference pointer and named types to get the struct.
+		t := p.Type()
+		if ptr, ok := t.(*types.Pointer); ok {
+			t = ptr.Elem()
+		}
+		st, ok := t.Underlying().(*types.Struct)
 		if !ok {
 			return "" // not a struct — can't extract key field
 		}
-		for j := range st.NumFields() {
-			f := st.Field(j)
+		for f := range st.Fields() {
 			if strings.EqualFold(f.Name(), "ID") {
 				return f.Name()
 			}
@@ -191,15 +219,18 @@ func findIDField(m *suite.SpecMethodData) string {
 	return ""
 }
 
-// isStructValType reports whether the Writer method's V parameter is a struct type.
+// isStructValType reports whether the Writer method's V parameter is a
+// struct or pointer-to-struct type.
 func isStructValType(m *suite.SpecMethodData) bool {
-	params := m.Signature.Params()
-	for i := range params.Len() {
-		p := params.At(i)
+	for p := range m.Signature.Params().Variables() {
 		if gen.IsContextType(p.Type()) {
 			continue
 		}
-		_, ok := p.Type().Underlying().(*types.Struct)
+		t := p.Type()
+		if ptr, ok := t.(*types.Pointer); ok {
+			t = ptr.Elem()
+		}
+		_, ok := t.Underlying().(*types.Struct)
 		return ok
 	}
 	return false
