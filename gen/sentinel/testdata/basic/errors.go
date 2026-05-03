@@ -4,10 +4,11 @@
 package basic
 
 import (
-	"context"
 	"errors"
 	"fmt"
 )
+
+//go:generate testkit sentinel -o errors.gen_test.go
 
 // ErrNotFound is returned when an item is not found.
 var ErrNotFound = errors.New("basic: not found")
@@ -15,29 +16,8 @@ var ErrNotFound = errors.New("basic: not found")
 // ErrConflict is returned on duplicate key.
 var ErrConflict = errors.New("basic: conflict")
 
-// internalVar is unexported — should not appear in ErrorVars.
-var internalVar = errors.New("basic: internal")
-
-// Status represents an item status.
-type Status int
-
-const (
-	StatusPending Status = iota
-	StatusActive
-	StatusClosed
-)
-
-// Store manages items.
-type Store interface {
-	// Get retrieves an item by ID.
-	Get(ctx context.Context, id string) (Item, error)
-	// Put stores an item.
-	Put(ctx context.Context, item Item) error
-	// Delete removes an item by ID.
-	Delete(ctx context.Context, id string) error
-	// Find retrieves multiple items by IDs.
-	Find(ctx context.Context, ids ...string) ([]Item, error)
-}
+// ErrForbidden is returned when access is denied.
+var ErrForbidden = errors.New("basic: forbidden")
 
 // ValidationError is a custom error type with fields.
 type ValidationError struct {
@@ -66,25 +46,18 @@ func (e *NotFoundError) Is(target error) bool {
 	return ok
 }
 
-// WrappedError demonstrates an error type with Unwrap.
+// WrappedError wraps an underlying error.
 type WrappedError struct {
+	Msg   string
 	Cause error
 }
 
 // Error implements the error interface.
 func (e *WrappedError) Error() string {
-	return fmt.Sprintf("basic: wrapped: %v", e.Cause)
+	return fmt.Sprintf("basic: %s: %v", e.Msg, e.Cause)
 }
 
 // Unwrap returns the underlying error.
 func (e *WrappedError) Unwrap() error {
 	return e.Cause
-}
-
-// Item is a stored value.
-type Item struct {
-	ID   string
-	Name string
-	Tags []string
-	age  int // unexported field
 }

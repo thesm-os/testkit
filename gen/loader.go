@@ -313,6 +313,91 @@ func (p *Package) MethodsOn(typeName string) []*MethodInfo {
 	return result
 }
 
+// ErrorTypes returns all exported struct types that implement the error
+// interface (via pointer receiver), sorted by name. These are custom
+// error types like NotFoundError with an Error() string method.
+func (p *Package) ErrorTypes() []*StructInfo {
+	errorIface := types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+	var result []*StructInfo
+	scope := p.Pkg.Scope()
+	for _, name := range scope.Names() {
+		obj := scope.Lookup(name)
+		if !obj.Exported() {
+			continue
+		}
+		named, ok := obj.Type().(*types.Named)
+		if !ok {
+			continue
+		}
+		if _, ok := named.Underlying().(*types.Struct); !ok {
+			continue
+		}
+		// Check if *T implements error.
+		ptrType := types.NewPointer(named)
+		if !types.Implements(ptrType, errorIface) {
+			continue
+		}
+		result = append(result, p.buildStructInfo(name, named, named.Underlying().(*types.Struct)))
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })
+	return result
+}
+
+// ErrorTypeHasIs reports whether the named error type has a custom
+// Is(error) bool method for matching semantics.
+func (p *Package) ErrorTypeHasIs(typeName string) bool {
+	obj := p.Pkg.Scope().Lookup(typeName)
+	if obj == nil {
+		return false
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	mset := types.NewMethodSet(types.NewPointer(named))
+	for sel := range mset.Methods() {
+		fn, ok := sel.Obj().(*types.Func)
+		if !ok || fn.Name() != "Is" {
+			continue
+		}
+		sig := fn.Type().(*types.Signature)
+		if sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+			continue
+		}
+		paramIsError := IsErrorType(sig.Params().At(0).Type()) ||
+			sig.Params().At(0).Type().String() == "error"
+		if paramIsError {
+			return true
+		}
+	}
+	return false
+}
+
+// ErrorTypeHasUnwrap reports whether the named error type has an
+// Unwrap() error method for error chain traversal.
+func (p *Package) ErrorTypeHasUnwrap(typeName string) bool {
+	obj := p.Pkg.Scope().Lookup(typeName)
+	if obj == nil {
+		return false
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	mset := types.NewMethodSet(types.NewPointer(named))
+	for sel := range mset.Methods() {
+		fn, ok := sel.Obj().(*types.Func)
+		if !ok || fn.Name() != "Unwrap" {
+			continue
+		}
+		sig := fn.Type().(*types.Signature)
+		if sig.Params().Len() == 0 && sig.Results().Len() == 1 {
+			return true
+		}
+	}
+	return false
+}
+
 // --- internal helpers ---
 
 func (p *Package) buildInterfaceInfo(name string, named *types.Named, iface *types.Interface) *InterfaceInfo {

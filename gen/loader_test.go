@@ -202,7 +202,8 @@ func TestPackage(t *testing.T) {
 		for i, s := range structs {
 			names[i] = s.Name
 		}
-		testkit.Equal(t, names, []string{"Item"}, "must return Item")
+		want := []string{"Item", "NotFoundError", "ValidationError", "WrappedError"}
+		testkit.Equal(t, names, want, "must return all exported structs")
 	})
 
 	t.Run("MethodsOn returns sorted methods on concrete type", func(t *testing.T) {
@@ -257,6 +258,48 @@ func TestPackage(t *testing.T) {
 			names[i] = m.Name
 		}
 		testkit.Equal(t, names, []string{"Close", "Read", "Write"}, "must flatten recursively")
+	})
+
+	t.Run("ErrorTypes returns custom error types", func(t *testing.T) {
+		t.Parallel()
+		errorTypes := pkg.ErrorTypes()
+		names := make([]string, len(errorTypes))
+		for i, et := range errorTypes {
+			names[i] = et.Name
+		}
+		want := []string{"NotFoundError", "ValidationError", "WrappedError"}
+		testkit.Equal(t, names, want, "must find error types sorted")
+	})
+
+	t.Run("ErrorTypes skips non-error structs", func(t *testing.T) {
+		t.Parallel()
+		errorTypes := pkg.ErrorTypes()
+		for _, et := range errorTypes {
+			testkit.True(t, et.Name != "Item", "Item is not an error type")
+		}
+	})
+
+	t.Run("ErrorTypeHasIs detects Is method", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, pkg.ErrorTypeHasIs("NotFoundError"), "NotFoundError has Is")
+		testkit.False(t, pkg.ErrorTypeHasIs("ValidationError"), "ValidationError has no Is")
+	})
+
+	t.Run("ErrorTypeHasUnwrap detects Unwrap method", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, pkg.ErrorTypeHasUnwrap("WrappedError"), "WrappedError has Unwrap")
+		testkit.False(t, pkg.ErrorTypeHasUnwrap("ValidationError"), "ValidationError has no Unwrap")
+		testkit.False(t, pkg.ErrorTypeHasUnwrap("NotFoundError"), "NotFoundError has no Unwrap")
+	})
+
+	t.Run("ErrorTypeHasIs returns false for nonexistent type", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, pkg.ErrorTypeHasIs("Nonexistent"), "nonexistent type")
+	})
+
+	t.Run("ErrorTypeHasUnwrap returns false for nonexistent type", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, pkg.ErrorTypeHasUnwrap("Nonexistent"), "nonexistent type")
 	})
 
 	t.Run("generic interface has type params", func(t *testing.T) {
