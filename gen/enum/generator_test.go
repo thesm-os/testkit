@@ -52,6 +52,38 @@ func TestGenerate(t *testing.T) {
 			Contains("distinct", "distinct subtest")
 	})
 
+	t.Run("Status has parse and marshal tests", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		g := &enum.Generator{}
+		result, err := g.Generate(
+			pkg, []string{"Status"},
+			gen.DefaultConfig(), gen.Options{Output: "enum.gen_test.go"},
+		)
+		testkit.NoError(t, err, "must generate")
+		got := string(result.Files[0].Content)
+		testkit.Assert(t, got).
+			Contains("parse round-trip", "must have parse test").
+			Contains("marshal text round-trip", "must have marshal test")
+	})
+
+	t.Run("generator finds correct Status values", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "basic")
+		data, err := enum.Analyze(
+			pkg, []string{"Status"},
+			gen.DefaultConfig(), gen.Options{Output: "enum.gen_test.go"},
+		)
+		testkit.NoError(t, err, "must analyze")
+		testkit.Len(t, data.Enums, 1, "must find 1 enum")
+		names := make([]string, len(data.Enums[0].Values))
+		for i, v := range data.Enums[0].Values {
+			names[i] = v.Name
+		}
+		want := []string{"StatusActive", "StatusClosed", "StatusPending"}
+		testkit.Equal(t, names, want, "must find all Status values")
+	})
+
 	t.Run("output skips stringer for Priority", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "basic")

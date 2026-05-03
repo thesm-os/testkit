@@ -2,6 +2,9 @@
 package {{.PackageName}}
 
 import (
+{{- if .HasJSON}}
+	"encoding/json"
+{{- end}}
 {{- if .HasStringer}}
 	"fmt"
 {{- end}}
@@ -26,6 +29,7 @@ func Test{{$e.TypeName}}Enum(t *testing.T) {
 		wantStr  string
 {{- end}}
 	}
+
 	all := []enumEntry{
 {{- range $e.Values}}
 		{
@@ -44,6 +48,14 @@ func Test{{$e.TypeName}}Enum(t *testing.T) {
 			"must have exactly {{len $e.Values}} values")
 	})
 
+{{if $e.ZeroValueName}}
+	t.Run("zero value is {{$e.ZeroValueName}}", func(t *testing.T) {
+		t.Parallel()
+		var zero {{$q}}{{$e.TypeName}}
+		testkit.Equal(t, zero, {{$q}}{{$e.ZeroValueName}},
+			"zero value must equal first iota declaration")
+	})
+{{end}}
 	t.Run("all values are distinct", func(t *testing.T) {
 		t.Parallel()
 		seen := make(map[{{$q}}{{$e.TypeName}}]string)
@@ -68,10 +80,78 @@ func Test{{$e.TypeName}}Enum(t *testing.T) {
 
 	t.Run("out of range uses fallback format", func(t *testing.T) {
 		t.Parallel()
-		outOfRange := {{$q}}{{$e.TypeName}}({{$e.MaxValue}} + 1)
-		expected := fmt.Sprintf("{{$e.TypeName}}(%d)", {{$e.MaxValue}}+1)
+		outOfRange := {{$q}}{{$e.TypeName}}(len(all))
+		expected := fmt.Sprintf("{{$e.TypeName}}(%d)", len(all))
 		testkit.Equal(t, outOfRange.String(), expected,
 			"out-of-range value must use fallback format")
+	})
+{{end}}
+{{- if $e.HasParse}}
+	t.Run("parse round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				got, err := {{$q}}{{$e.ParseFunc}}(tt.value.String())
+				testkit.NoError(t, err, "{{$e.ParseFunc}} must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"{{$e.ParseFunc}} → String round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("parse rejects unknown string", func(t *testing.T) {
+		t.Parallel()
+		_, err := {{$q}}{{$e.ParseFunc}}("<invalid-{{$e.TypeName}}>")
+		testkit.Error(t, err, "{{$e.ParseFunc}} must reject unknown string")
+	})
+{{end}}
+{{- if $e.HasMarshalText}}
+	t.Run("marshal text round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				data, err := tt.value.MarshalText()
+				testkit.NoError(t, err, "MarshalText must succeed for "+tt.name)
+				var got {{$q}}{{$e.TypeName}}
+				err = got.UnmarshalText(data)
+				testkit.NoError(t, err, "UnmarshalText must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"MarshalText → UnmarshalText round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("unmarshal rejects unknown text", func(t *testing.T) {
+		t.Parallel()
+		var got {{$q}}{{$e.TypeName}}
+		err := got.UnmarshalText([]byte("<invalid-{{$e.TypeName}}>"))
+		testkit.Error(t, err, "UnmarshalText must reject unknown text")
+	})
+{{end}}
+{{- if $e.HasMarshalJSON}}
+	t.Run("json round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				data, err := json.Marshal(tt.value)
+				testkit.NoError(t, err, "json.Marshal must succeed for "+tt.name)
+				var got {{$q}}{{$e.TypeName}}
+				err = json.Unmarshal(data, &got)
+				testkit.NoError(t, err, "json.Unmarshal must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"json round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("json unmarshal rejects unknown", func(t *testing.T) {
+		t.Parallel()
+		var got {{$q}}{{$e.TypeName}}
+		err := json.Unmarshal([]byte(`"<invalid-{{$e.TypeName}}>"`), &got)
+		testkit.Error(t, err, "json.Unmarshal must reject unknown value")
 	})
 {{end}}
 }

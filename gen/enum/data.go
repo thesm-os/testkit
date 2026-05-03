@@ -36,12 +36,27 @@ func (d *Data) HasStringer() bool {
 	return false
 }
 
+// HasJSON reports whether any enum implements MarshalJSON/UnmarshalJSON.
+func (d *Data) HasJSON() bool {
+	for _, e := range d.Enums {
+		if e.HasMarshalJSON {
+			return true
+		}
+	}
+	return false
+}
+
 // TypeData holds one enum type and its constant values.
 type TypeData struct {
-	TypeName  string  // "Status"
-	Values    []Value // sorted by name
-	MaxValue  int64   // highest iota value for boundary test
-	HasString bool    // true if the type has a String() string method
+	TypeName       string  // "Status"
+	Values         []Value // sorted by name
+	MaxValue       int64   // highest iota value for boundary test
+	HasString      bool    // true if the type has a String() string method
+	HasParse       bool    // true if Parse<Type>(string) (<Type>, error) exists
+	ParseFunc      string  // "ParseStatus"
+	HasMarshalText bool    // true if the type implements encoding.TextMarshaler/TextUnmarshaler
+	HasMarshalJSON bool    // true if the type implements json.Marshaler/json.Unmarshaler
+	ZeroValueName  string  // "StatusPending" — the constant with IntValue == 0
 }
 
 // Value holds one constant of an enum type.
@@ -82,9 +97,14 @@ func Analyze(
 			continue
 		}
 
+		parseFunc := "Parse" + typeName
 		ed := TypeData{
-			TypeName:  typeName,
-			HasString: hasStringMethod(pkg, typeName),
+			TypeName:       typeName,
+			HasString:      hasStringMethod(pkg, typeName),
+			HasParse:       hasParseFunc(pkg, parseFunc, typeName),
+			ParseFunc:      parseFunc,
+			HasMarshalText: hasMarshalText(pkg, typeName),
+			HasMarshalJSON: hasMarshalJSON(pkg, typeName),
 		}
 
 		var maxVal int64
@@ -112,6 +132,12 @@ func Analyze(
 			})
 		}
 		ed.MaxValue = maxVal
+		for _, v := range ed.Values {
+			if v.IntValue == 0 {
+				ed.ZeroValueName = v.Name
+				break
+			}
+		}
 		enums = append(enums, ed)
 	}
 
@@ -145,6 +171,85 @@ func hasStringMethod(pkg *gen.Package, typeName string) bool {
 		}
 	}
 	return false
+}
+
+// hasParseFunc checks if Parse<Type>(string) (<Type>, error) exists.
+func hasParseFunc(pkg *gen.Package, funcName, typeName string) bool {
+	obj := pkg.Pkg.Scope().Lookup(funcName)
+	if obj == nil {
+		return false
+	}
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	sig := fn.Type().(*types.Signature)
+	if sig.Params().Len() != 1 || sig.Results().Len() != 2 {
+		return false
+	}
+	b, ok := sig.Params().At(0).Type().(*types.Basic)
+	if !ok || b.Kind() != types.String {
+		return false
+	}
+	named, ok := sig.Results().At(0).Type().(*types.Named)
+	if !ok || named.Obj().Name() != typeName {
+		return false
+	}
+	return sig.Results().At(1).Type().String() == "error"
+}
+
+// hasMarshalText checks if a type implements both MarshalText and UnmarshalText.
+func hasMarshalText(pkg *gen.Package, typeName string) bool {
+	obj := pkg.Pkg.Scope().Lookup(typeName)
+	if obj == nil {
+		return false
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	mset := types.NewMethodSet(types.NewPointer(named))
+	var hasMarshal, hasUnmarshal bool
+	for sel := range mset.Methods() {
+		fn, ok := sel.Obj().(*types.Func)
+		if !ok {
+			continue
+		}
+		switch fn.Name() {
+		case "MarshalText":
+			hasMarshal = true
+		case "UnmarshalText":
+			hasUnmarshal = true
+		}
+	}
+	return hasMarshal && hasUnmarshal
+}
+
+// hasMarshalJSON checks if a type implements both MarshalJSON and UnmarshalJSON.
+func hasMarshalJSON(pkg *gen.Package, typeName string) bool {
+	obj := pkg.Pkg.Scope().Lookup(typeName)
+	if obj == nil {
+		return false
+	}
+	named, ok := obj.Type().(*types.Named)
+	if !ok {
+		return false
+	}
+	mset := types.NewMethodSet(types.NewPointer(named))
+	var hasMarshal, hasUnmarshal bool
+	for sel := range mset.Methods() {
+		fn, ok := sel.Obj().(*types.Func)
+		if !ok {
+			continue
+		}
+		switch fn.Name() {
+		case "MarshalJSON":
+			hasMarshal = true
+		case "UnmarshalJSON":
+			hasUnmarshal = true
+		}
+	}
+	return hasMarshal && hasUnmarshal
 }
 
 // stripPrefix removes the type name prefix from a const name.

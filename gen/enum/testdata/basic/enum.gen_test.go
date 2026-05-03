@@ -4,6 +4,7 @@
 package basic_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -20,6 +21,7 @@ func TestStatusEnum(t *testing.T) {
 		name    string
 		wantStr string
 	}
+
 	all := []enumEntry{
 		{
 			value:   basic.StatusActive,
@@ -42,6 +44,13 @@ func TestStatusEnum(t *testing.T) {
 		t.Parallel()
 		testkit.Len(t, all, 3,
 			"must have exactly 3 values")
+	})
+
+	t.Run("zero value is StatusPending", func(t *testing.T) {
+		t.Parallel()
+		var zero basic.Status
+		testkit.Equal(t, zero, basic.StatusPending,
+			"zero value must equal first iota declaration")
 	})
 
 	t.Run("all values are distinct", func(t *testing.T) {
@@ -68,10 +77,75 @@ func TestStatusEnum(t *testing.T) {
 
 	t.Run("out of range uses fallback format", func(t *testing.T) {
 		t.Parallel()
-		outOfRange := basic.Status(2 + 1)
-		expected := fmt.Sprintf("Status(%d)", 2+1)
+		outOfRange := basic.Status(len(all))
+		expected := fmt.Sprintf("Status(%d)", len(all))
 		testkit.Equal(t, outOfRange.String(), expected,
 			"out-of-range value must use fallback format")
+	})
+
+	t.Run("parse round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				got, err := basic.ParseStatus(tt.value.String())
+				testkit.NoError(t, err, "ParseStatus must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"ParseStatus → String round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("parse rejects unknown string", func(t *testing.T) {
+		t.Parallel()
+		_, err := basic.ParseStatus("<invalid-Status>")
+		testkit.Error(t, err, "ParseStatus must reject unknown string")
+	})
+
+	t.Run("marshal text round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				data, err := tt.value.MarshalText()
+				testkit.NoError(t, err, "MarshalText must succeed for "+tt.name)
+				var got basic.Status
+				err = got.UnmarshalText(data)
+				testkit.NoError(t, err, "UnmarshalText must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"MarshalText → UnmarshalText round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("unmarshal rejects unknown text", func(t *testing.T) {
+		t.Parallel()
+		var got basic.Status
+		err := got.UnmarshalText([]byte("<invalid-Status>"))
+		testkit.Error(t, err, "UnmarshalText must reject unknown text")
+	})
+
+	t.Run("json round-trip", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				data, err := json.Marshal(tt.value)
+				testkit.NoError(t, err, "json.Marshal must succeed for "+tt.name)
+				var got basic.Status
+				err = json.Unmarshal(data, &got)
+				testkit.NoError(t, err, "json.Unmarshal must succeed for "+tt.name)
+				testkit.Equal(t, got, tt.value,
+					"json round-trip for "+tt.name)
+			})
+		}
+	})
+
+	t.Run("json unmarshal rejects unknown", func(t *testing.T) {
+		t.Parallel()
+		var got basic.Status
+		err := json.Unmarshal([]byte(`"<invalid-Status>"`), &got)
+		testkit.Error(t, err, "json.Unmarshal must reject unknown value")
 	})
 
 }
@@ -83,6 +157,7 @@ func TestPriorityEnum(t *testing.T) {
 		value basic.Priority
 		name  string
 	}
+
 	all := []enumEntry{
 		{
 			value: basic.PriorityHigh,
@@ -102,6 +177,13 @@ func TestPriorityEnum(t *testing.T) {
 		t.Parallel()
 		testkit.Len(t, all, 3,
 			"must have exactly 3 values")
+	})
+
+	t.Run("zero value is PriorityLow", func(t *testing.T) {
+		t.Parallel()
+		var zero basic.Priority
+		testkit.Equal(t, zero, basic.PriorityLow,
+			"zero value must equal first iota declaration")
 	})
 
 	t.Run("all values are distinct", func(t *testing.T) {
