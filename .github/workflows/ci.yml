@@ -8,10 +8,16 @@ on:
 permissions:
   contents: read
 
+env:
+  # CI runners are slower than dev laptops; per-package go test deadline
+  # is aligned with the GitHub job-level timeout at 30 minutes.
+  TEST_TIMEOUT: 30m
+
 jobs:
   vet-build:
     name: Vet + Build
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -23,6 +29,7 @@ jobs:
   tidy:
     name: Modules tidy
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -33,6 +40,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -50,6 +58,7 @@ jobs:
   test:
     name: Test (race + 10x)
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
@@ -60,6 +69,7 @@ jobs:
   coverage:
     name: Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6

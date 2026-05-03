@@ -100,19 +100,19 @@ Review the generated files. Commit them to version control.
 
 ```makefile
 check-generated:
-	go generate ./...
-	@if ! git diff --quiet -- '*.gen.go' '*.gen_test.go'; then \
-	    echo "generated files are stale — run: go generate ./..."; \
-	    git diff --stat -- '*.gen.go' '*.gen_test.go'; \
-	    exit 1; \
-	fi
+ go generate ./...
+ @if ! git diff --quiet -- '*.gen.go' '*.gen_test.go'; then \
+     echo "generated files are stale — run: go generate ./..."; \
+     git diff --stat -- '*.gen.go' '*.gen_test.go'; \
+     exit 1; \
+ fi
 ```
 
 When validators ship, add them similarly:
 
 ```makefile
 check-testkit:
-	testkit validate proto-sync migration depguard wire
+ testkit validate proto-sync migration depguard wire
 
 check: lint test check-generated check-testkit
 ```

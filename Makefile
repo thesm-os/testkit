@@ -25,8 +25,13 @@ BIN_DIR      := bin
 COVERAGE_DIR := coverage
 
 # ─── Test tuning ─────────────────────────────────────────────────
-TEST_CPU   ?= 4
-TEST_COUNT ?= 3
+# TEST_TIMEOUT applies to test, test-race, and test-bench. Override
+# from the command line for slower runners or longer suites:
+#   make test TEST_TIMEOUT=30m
+TEST_CPU         ?= 4
+TEST_COUNT       ?= 3
+TEST_TIMEOUT     ?= 10m
+TEST_RACE_COUNT  ?= 10
 
 # ─── Build variables ─────────────────────────────────────────────
 VERSION    ?= dev
@@ -85,7 +90,11 @@ help:
 	@echo "  clean              Remove build artifacts and caches"
 	@echo ""
 	@echo "$(YELLOW)Modules:$(NC) $(MODULES)"
-	@echo "$(YELLOW)Flags:$(NC)   FLAGS=\"-run TestFoo\"  extra flags for test commands"
+	@echo "$(YELLOW)Flags:$(NC)   FLAGS=\"-run TestFoo\"          extra flags for test commands"
+	@echo "          TEST_TIMEOUT=30m              per-package go test deadline"
+	@echo "          TEST_COUNT=1                  iteration count for plain tests"
+	@echo "          TEST_RACE_COUNT=3             iteration count for test-race"
+	@echo "          TEST_CPU=8                    -cpu=N for parallel scheduling"
 	@echo ""
 	@echo "$(RED)Naming:$(NC)  test-* runs tests; check-* enforces a quality gate"
 
@@ -175,14 +184,20 @@ GEN_TESTDATA := \
 	gen/builder/testdata/generics/genericstest \
 	gen/builder/testdata/nested/nestedtest \
 	gen/sentinel/testdata/basic \
-	gen/enum/testdata/basic
+	gen/enum/testdata/basic \
+	gen/suite/testdata/basic/storetest \
+	gen/suite/testdata/nocontext/cachetest \
+	gen/suite/testdata/multireturn/servicetest \
+	gen/suite/testdata/mixed/processortest \
+	gen/suite/testdata/erroronly/closertest \
+	gen/suite/testdata/iterators/scannertest
 
 # ─── Testing ─────────────────────────────────────────────────────
 
 test: test-generated
-	@echo "$(BLUE)Running tests...$(NC)"
+	@echo "$(BLUE)Running tests (timeout=$(TEST_TIMEOUT))...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
-	$(call foreach_module,$(GO) test -coverprofile=$(CURDIR)/$(COVERAGE_DIR)/$$(basename $$PWD).out -covermode=atomic -cpu=$(TEST_CPU) -count=$(TEST_COUNT) $(FLAGS) ./...)
+	$(call foreach_module,$(GO) test -coverprofile=$(CURDIR)/$(COVERAGE_DIR)/$$(basename $$PWD).out -covermode=atomic -cpu=$(TEST_CPU) -count=$(TEST_COUNT) -timeout=$(TEST_TIMEOUT) $(FLAGS) ./...)
 	@echo "$(GREEN)Tests passed$(NC)"
 
 test-generated:
@@ -195,13 +210,13 @@ test-generated:
 	@echo "$(GREEN)Generated tests passed$(NC)"
 
 test-race:
-	@echo "$(BLUE)Running tests with race detector...$(NC)"
-	$(call foreach_module,$(GO) test -race -count=10 -timeout=10m $(FLAGS) ./...)
+	@echo "$(BLUE)Running tests with race detector (count=$(TEST_RACE_COUNT), timeout=$(TEST_TIMEOUT))...$(NC)"
+	$(call foreach_module,$(GO) test -race -count=$(TEST_RACE_COUNT) -timeout=$(TEST_TIMEOUT) $(FLAGS) ./...)
 	@echo "$(GREEN)No races detected$(NC)"
 
 test-bench:
-	@echo "$(BLUE)Running benchmarks...$(NC)"
-	$(call foreach_module,$(GO) test -bench=. -run=^$$ -benchmem $(FLAGS) ./...)
+	@echo "$(BLUE)Running benchmarks (timeout=$(TEST_TIMEOUT))...$(NC)"
+	$(call foreach_module,$(GO) test -bench=. -run=^$$ -benchmem -timeout=$(TEST_TIMEOUT) $(FLAGS) ./...)
 
 test-coverage: test
 	@echo "$(BLUE)Generating coverage reports...$(NC)"
