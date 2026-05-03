@@ -100,6 +100,58 @@ func TestEnrich(t *testing.T) {
 		testkit.Error(t, err, "must fail with no args")
 	})
 
+	t.Run("errors with invalid sentinel returns error", func(t *testing.T) {
+		t.Parallel()
+		data, pkg := analyzeDirectives(t)
+		// Inject a directive with a nonexistent sentinel.
+		for _, m := range data.Interfaces[0].Methods {
+			if m.Name == "Delete" {
+				m.Directives = append(m.Directives, gen.Directive{
+					Name: "errors",
+					Args: []string{"ErrNonexistent"},
+				})
+			}
+		}
+		err := stub.Enrich(data, pkg)
+		testkit.Error(t, err, "must fail for invalid sentinel")
+	})
+
+	t.Run("errors with no args returns error", func(t *testing.T) {
+		t.Parallel()
+		data, pkg := analyzeDirectives(t)
+		for _, m := range data.Interfaces[0].Methods {
+			if m.Name == "Delete" {
+				m.Directives = append(m.Directives, gen.Directive{
+					Name: "errors",
+				})
+			}
+		}
+		err := stub.Enrich(data, pkg)
+		testkit.Error(t, err, "must fail with no args")
+	})
+
+	t.Run("errors with same-package qualifier is unqualified", func(t *testing.T) {
+		t.Parallel()
+		// When output is in the same package, the qualifier is empty
+		// and sentinel names are unqualified.
+		pkg := loadTestPackage(t, "directives")
+		data, err := stub.Analyze(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "store_stub.gen.go", // same directory = same package
+		})
+		testkit.NoError(t, err, "must analyze")
+		enrichErr := stub.Enrich(data, pkg)
+		testkit.NoError(t, enrichErr, "must enrich")
+
+		var get *stub.MethodData
+		for _, m := range data.Interfaces[0].Methods {
+			if m.Name == "Get" {
+				get = m
+			}
+		}
+		// When output is same package, sentinel should not be qualified.
+		testkit.Equal(t, get.Sentinels[0].Qualified, "ErrNotFound", "same-package must be unqualified")
+	})
+
 	t.Run("skips directives not relevant to stub", func(t *testing.T) {
 		t.Parallel()
 		data, pkg := analyzeDirectives(t)

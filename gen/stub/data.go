@@ -32,6 +32,17 @@ type InterfaceData struct {
 	sourcePkgPath string // source package import path (for qualifying sentinels)
 }
 
+// HasErrorMethod reports whether any method in this interface returns error.
+// Used by test templates to conditionally declare errTest.
+func (d *InterfaceData) HasErrorMethod() bool {
+	for _, m := range d.Methods {
+		if m.ReturnsError() {
+			return true
+		}
+	}
+	return false
+}
+
 // MethodData holds one method with base fields and directive-enriched
 // fields. Template helper methods delegate to gen.MethodInfo with the
 // stored ImportTracker.
@@ -243,9 +254,46 @@ func (m *MethodData) ErrFieldName() string {
 	return ""
 }
 
+// HasResults reports whether the method has any return values.
+func (m *MethodData) HasResults() bool {
+	return len(m.Results) > 0
+}
+
 // Note: ReturnsError(), HasContext(), ParamNames(), ParamNamesSpread(),
 // IsVariadic(), NumParams(), NumResults() are promoted from the
 // embedded gen.MethodInfo and available to templates directly.
+
+// SampleReturn renders non-zero sample values for all results, comma-separated.
+// Used by test templates to set Returns with values that can be asserted.
+// Error positions use errTest.
+//
+//	"basic.Item{ID: \"test-result\"}, errTest"
+func (m *MethodData) SampleReturn() string {
+	parts := make([]string, len(m.Results))
+	for i, r := range m.Results {
+		if r.IsError {
+			parts[i] = "errTest"
+		} else {
+			parts[i] = gen.SampleValueOf(m.Signature.Results().At(i).Type(), r.FieldName, m.tracker)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// SampleReturnNoError renders non-zero sample values for all results,
+// comma-separated. Error positions use nil. Used by "Returns fixed value"
+// tests where we don't want to trigger error assertions.
+func (m *MethodData) SampleReturnNoError() string {
+	parts := make([]string, len(m.Results))
+	for i, r := range m.Results {
+		if r.IsError {
+			parts[i] = "nil"
+		} else {
+			parts[i] = gen.SampleValueOf(m.Signature.Results().At(i).Type(), r.FieldName, m.tracker)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
 
 // --- Test expression helpers (used by test.go.tmpl) ---
 
@@ -325,8 +373,8 @@ func (m *MethodData) FaultTestCallExpr() string {
 	return strings.TrimSpace(b.String())
 }
 
-// FuncOverrideTestExpr renders a test that sets a Func override and
-// verifies it was called.
+// FuncOverrideTestExpr renders a test that sets a Func override,
+// calls the method, and asserts the custom return values come through.
 func (m *MethodData) FuncOverrideTestExpr() string {
 	var b strings.Builder
 	b.WriteString("called := false\n")
@@ -336,28 +384,107 @@ func (m *MethodData) FuncOverrideTestExpr() string {
 	b.WriteString(m.FuncTypeStr())
 	b.WriteString(" {\n")
 	b.WriteString("\t\tcalled = true\n")
-	b.WriteString("\t\treturn ")
-	b.WriteString(m.ZeroReturn())
-	b.WriteString("\n\t})\n")
-	b.WriteString("\t")
-	b.WriteString(m.IgnoredCallExpr())
-	b.WriteString("\n")
-	b.WriteString(`	testkit.True(t, called, "Func must be called")`)
-	return b.String()
+	if len(m.Results) > 0 {
+		b.WriteString("\t\treturn ")
+		b.WriteString(m.SampleReturnNoError())
+		b.WriteString("\n")
+	}
+	b.WriteString("\t})\n")
+
+	paramZeros := m.buildZeroParamValues()
+	if len(m.Results) > 0 {
+		names := m.resultNames()
+		b.WriteString("\t")
+		b.WriteString(strings.Join(names, ", "))
+		b.WriteString(" := s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(strings.Join(paramZeros, ", "))
+		b.WriteString(")\n")
+		b.WriteString(`	testkit.True(t, called, "Func must be called")`)
+		b.WriteString("\n")
+		for i, r := range m.Results {
+			name := names[i]
+			if r.IsError {
+				b.WriteString("\ttestkit.NoError(t, ")
+				b.WriteString(name)
+				b.WriteString(`, "Func must not error")`)
+			} else {
+				sample := gen.SampleValueOf(m.Signature.Results().At(i).Type(), r.FieldName, m.tracker)
+				b.WriteString("\ttestkit.Equal(t, ")
+				b.WriteString(name)
+				b.WriteString(", ")
+				b.WriteString(sample)
+				b.WriteString(`, "Func must return set value")`)
+			}
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("\ts.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(strings.Join(paramZeros, ", "))
+		b.WriteString(")\n")
+		b.WriteString(`	testkit.True(t, called, "Func must be called")`)
+	}
+	return strings.TrimSpace(b.String())
 }
 
-// ReturnsTestCallExpr renders a test that sets Returns and verifies
-// the fixed values are returned.
+// ReturnsTestCallExpr renders a test that sets Returns with sample
+// values, calls the method, and asserts the returned values match.
 func (m *MethodData) ReturnsTestCallExpr() string {
+	paramZeros := m.buildZeroParamValues()
 	var b strings.Builder
+
+	if len(m.Results) == 0 {
+		// Void method — no Returns(), just call.
+		b.WriteString("s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(strings.Join(paramZeros, ", "))
+		b.WriteString(")")
+		return b.String()
+	}
+
 	b.WriteString("s.On")
 	b.WriteString(m.Name)
 	b.WriteString(".Returns(")
-	b.WriteString(m.ZeroReturn())
+	b.WriteString(m.SampleReturnNoError())
 	b.WriteString(")\n")
-	b.WriteString("\t")
-	b.WriteString(m.IgnoredCallExpr())
-	return b.String()
+
+	if len(m.Results) > 0 {
+		names := m.resultNames()
+		b.WriteString("\t")
+		b.WriteString(strings.Join(names, ", "))
+		b.WriteString(" := s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(strings.Join(paramZeros, ", "))
+		b.WriteString(")\n")
+		for i, r := range m.Results {
+			name := names[i]
+			if r.IsError {
+				b.WriteString("\ttestkit.NoError(t, ")
+				b.WriteString(name)
+				b.WriteString(`, "Returns must not error")`)
+			} else {
+				sample := gen.SampleValueOf(m.Signature.Results().At(i).Type(), r.FieldName, m.tracker)
+				b.WriteString("\ttestkit.Equal(t, ")
+				b.WriteString(name)
+				b.WriteString(", ")
+				b.WriteString(sample)
+				b.WriteString(`, "Returns must return set value")`)
+			}
+			b.WriteString("\n")
+		}
+	} else {
+		b.WriteString("\ts.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(strings.Join(paramZeros, ", "))
+		b.WriteString(")")
+	}
+	return strings.TrimSpace(b.String())
 }
 
 // IgnoredCallExpr renders a call expression that discards results.
@@ -384,16 +511,17 @@ func (m *MethodData) IgnoredCallExpr() string {
 }
 
 // buildZeroParamValues returns zero-value expressions for each parameter.
+// Variadic parameters are omitted entirely — callers should invoke the
+// method without passing any variadic args (e.g. s.Find(ctx) not s.Find(ctx, nil)).
 func (m *MethodData) buildZeroParamValues() []string {
 	params := m.Signature.Params()
-	values := make([]string, params.Len())
-	for i := range params.Len() {
-		typ := params.At(i).Type()
-		if m.Signature.Variadic() && i == params.Len()-1 {
-			values[i] = "nil"
-		} else {
-			values[i] = gen.ZeroValueOf(typ, m.tracker)
-		}
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n-- // skip the variadic param
+	}
+	values := make([]string, n)
+	for i := range n {
+		values[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
 	}
 	return values
 }

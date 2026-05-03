@@ -8,8 +8,8 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/gen/stub/testdata/basic"
-	"go.thesmos.sh/testkit/gen/stub/testdata/basic/storetest"
+	"go.thesmos.sh/testkit/gen/stub/testdata/directives"
+	"go.thesmos.sh/testkit/gen/stub/testdata/directives/storetest"
 )
 
 func TestStoreStub(t *testing.T) {
@@ -75,7 +75,7 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		result, err := s.Get(nil, "")
-		testkit.Equal(t, result, basic.Item{}, "Get must return zero")
+		testkit.Equal(t, result, directives.Item{}, "Get must return zero")
 		testkit.NoError(t, err, "Get must not error")
 	})
 
@@ -91,22 +91,22 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		called := false
-		s.OnGet.Func(func(context.Context, string) (basic.Item, error) {
+		s.OnGet.Func(func(context.Context, string) (directives.Item, error) {
 			called = true
-			return basic.Item{}, nil
+			return directives.Item{}, nil
 		})
 		result, err := s.Get(nil, "")
 		testkit.True(t, called, "Func must be called")
-		testkit.Equal(t, result, basic.Item{}, "Func must return set value")
+		testkit.Equal(t, result, directives.Item{}, "Func must return set value")
 		testkit.NoError(t, err, "Func must not error")
 	})
 
 	t.Run("Get Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		s.OnGet.Returns(basic.Item{}, nil)
+		s.OnGet.Returns(directives.Item{}, nil)
 		result, err := s.Get(nil, "")
-		testkit.Equal(t, result, basic.Item{}, "Returns must return set value")
+		testkit.Equal(t, result, directives.Item{}, "Returns must return set value")
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
@@ -120,9 +120,9 @@ func TestStoreStub(t *testing.T) {
 	t.Run("WithStoreGet constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := storetest.NewStoreStub(t, storetest.WithStoreGet(func(context.Context, string) (basic.Item, error) {
+		s := storetest.NewStoreStub(t, storetest.WithStoreGet(func(context.Context, string) (directives.Item, error) {
 			called = true
-			return basic.Item{}, nil
+			return directives.Item{}, nil
 		}))
 		_, _ = s.Get(nil, "")
 		testkit.True(t, called, "WithStoreGet must be called")
@@ -131,7 +131,7 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Put default returns zero", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		err := s.Put(nil, basic.Item{})
+		err := s.Put(nil, directives.Item{})
 		testkit.NoError(t, err, "Put must not error")
 	})
 
@@ -139,7 +139,7 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnPut.Faults(errTest, 1)
-		err := s.Put(nil, basic.Item{})
+		err := s.Put(nil, directives.Item{})
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 	})
 
@@ -147,11 +147,11 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		called := false
-		s.OnPut.Func(func(context.Context, basic.Item) error {
+		s.OnPut.Func(func(context.Context, directives.Item) error {
 			called = true
 			return nil
 		})
-		err := s.Put(nil, basic.Item{})
+		err := s.Put(nil, directives.Item{})
 		testkit.True(t, called, "Func must be called")
 		testkit.NoError(t, err, "Func must not error")
 	})
@@ -160,25 +160,25 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnPut.Returns(nil)
-		err := s.Put(nil, basic.Item{})
+		err := s.Put(nil, directives.Item{})
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
 	t.Run("Put records calls", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		_ = s.Put(nil, basic.Item{})
+		_ = s.Put(nil, directives.Item{})
 		s.OnPut.AssertCalledOnce(t, "must record Put call")
 	})
 
 	t.Run("WithStorePut constructor option", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := storetest.NewStoreStub(t, storetest.WithStorePut(func(context.Context, basic.Item) error {
+		s := storetest.NewStoreStub(t, storetest.WithStorePut(func(context.Context, directives.Item) error {
 			called = true
 			return nil
 		}))
-		_ = s.Put(nil, basic.Item{})
+		_ = s.Put(nil, directives.Item{})
 		testkit.True(t, called, "WithStorePut must be called")
 	})
 
@@ -187,7 +187,7 @@ func TestStoreStub(t *testing.T) {
 		s := storetest.NewStoreStub(t)
 		_ = s.Delete(nil, "")
 		_, _ = s.Get(nil, "")
-		_ = s.Put(nil, basic.Item{})
+		_ = s.Put(nil, directives.Item{})
 		s.Reset()
 		s.OnDelete.AssertNotCalled(t, "Delete must be cleared after Reset")
 		s.OnGet.AssertNotCalled(t, "Get must be cleared after Reset")
@@ -206,12 +206,12 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		inner := storetest.NewStoreStub(t)
 		inner.OnDelete.Returns(nil)
-		inner.OnGet.Returns(basic.Item{}, nil)
+		inner.OnGet.Returns(directives.Item{}, nil)
 		inner.OnPut.Returns(nil)
 		s := storetest.NewStoreStub(t, storetest.StoreStubDelegateTo(inner))
 		_ = s.Delete(nil, "")
 		_, _ = s.Get(nil, "")
-		_ = s.Put(nil, basic.Item{})
+		_ = s.Put(nil, directives.Item{})
 		s.OnDelete.AssertCalledOnce(t, "Delete must delegate")
 		s.OnGet.AssertCalledOnce(t, "Get must delegate")
 		s.OnPut.AssertCalledOnce(t, "Put must delegate")

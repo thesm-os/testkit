@@ -14,6 +14,8 @@ var ErrNotFound = errors.New("not found")
 // ErrConflict is returned on write conflicts.
 var ErrConflict = errors.New("conflict")
 
+//go:generate testkit stub -o storetest/store_stub.gen.go Store
+
 // Store manages items.
 type Store interface {
 	//testkit:errors ErrNotFound ErrConflict
@@ -24,7 +26,8 @@ type Store interface {
 	// Put stores an item.
 	Put(ctx context.Context, item Item) error
 
-	// Delete has no directives.
+	//testkit:deprecated PutBatch
+	// Delete is deprecated in favor of PutBatch.
 	Delete(ctx context.Context, id string) error
 }
 

@@ -115,6 +115,8 @@ install:
 # ─── Code generation ─────────────────────────────────────────────
 
 generate:
+	@echo "$(BLUE)Building testkit binary...$(NC)"
+	cd cmd && $(GO) install ./testkit/
 	@echo "$(BLUE)Running code generation...$(NC)"
 	$(call foreach_module,$(GO) generate ./...)
 	@$(MAKE) fmt

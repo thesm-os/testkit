@@ -32,13 +32,25 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		return nil, err
 	}
 
-	// 3. Enrich: run directive enrichers.
+	// 3. Validate directives (strict-by-default: unknown = error).
+	reg := directive.DefaultRegistry()
+	for i := range data.Interfaces {
+		methods := make([]gen.MethodInfo, len(data.Interfaces[i].Methods))
+		for j, m := range data.Interfaces[i].Methods {
+			methods[j] = m.MethodInfo
+		}
+		if errs := reg.Validate(methods, nil); len(errs) > 0 {
+			return nil, errs[0]
+		}
+	}
+
+	// 4. Enrich: run directive enrichers.
 	enrichErr := Enrich(data, pkg)
 	if enrichErr != nil {
 		return nil, enrichErr
 	}
 
-	// 4. Validate composition.
+	// 5. Validate composition.
 	for i := range data.Interfaces {
 		for _, m := range data.Interfaces[i].Methods {
 			issues := directive.ValidateComposition(m.Directives)
@@ -50,7 +62,7 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		}
 	}
 
-	// 5. Parse templates.
+	// 6. Parse templates.
 	tmpl, parseErr := gen.NewTemplateSet().ParseFS(templateFS, "templates/*.tmpl")
 	if parseErr != nil {
 		return nil, fmt.Errorf("parse templates: %w", parseErr)
@@ -61,13 +73,13 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		Args:       "stub " + strings.Join(args, " "),
 	}
 
-	// 6. Render stub file.
+	// 7. Render stub file.
 	stubContent, renderErr := gen.RenderTemplate(tmpl, "stub", data, header)
 	if renderErr != nil {
 		return nil, fmt.Errorf("render stub: %w", renderErr)
 	}
 
-	// 7. Build test data and render test file.
+	// 8. Build test data and render test file.
 	stubImportPath, pathErr := gen.OutputImportPath(opts.Output, pkg)
 	if pathErr != nil {
 		return nil, fmt.Errorf("compute stub import path: %w", pathErr)

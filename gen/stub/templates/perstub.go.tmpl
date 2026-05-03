@@ -5,9 +5,11 @@
 type {{$m.StubType}} struct {
 	*testkit.MethodStub[{{$m.CallType}}]
 	fn       {{$m.FuncTypeStr}}
+{{- if $m.HasResults}}
 	fallback *{{$m.ReturnType}}
+{{- end}}
 }
-
+{{if $m.HasResults}}
 type {{$m.ReturnType}} struct {
 {{- range $m.Results}}
 	{{.FieldName}} {{.TypeStr}}
@@ -19,7 +21,7 @@ func (s *{{$m.StubType}}) Returns({{$m.ReturnParams}}) *{{$m.StubType}} {
 	s.fallback = &{{$m.ReturnType}}{{"{"}}{{$m.ReturnFieldAssign}}}
 	return s
 }
-
+{{end}}
 // Func sets a function override for {{$m.Name}}.
 func (s *{{$m.StubType}}) Func(fn {{$m.FuncTypeStr}}) *{{$m.StubType}} {
 	s.fn = fn

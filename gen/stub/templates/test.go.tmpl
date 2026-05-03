@@ -5,8 +5,9 @@ package {{.PackageName}}
 
 func Test{{$iface.StubName}}(t *testing.T) {
 	t.Parallel()
-
+{{if $iface.HasErrorMethod}}
 	errTest := testkit.TestError("{{$iface.TypeName}}-stub-test")
+{{end -}}
 {{range $m := $iface.Methods}}{{if not $m.Skip}}
 	t.Run("{{$m.Name}} default returns zero", func(t *testing.T) {
 		t.Parallel()
@@ -26,13 +27,13 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 		{{$m.FuncOverrideTestExpr}}
 	})
-
+{{if $m.HasResults}}
 	t.Run("{{$m.Name}} Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 		{{$m.ReturnsTestCallExpr}}
 	})
-
+{{end}}
 	t.Run("{{$m.Name}} records calls", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
@@ -45,7 +46,9 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		called := false
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}With{{$iface.TypeName}}{{$m.Name}}({{$m.FuncTypeStr}} {
 			called = true
+{{- if $m.HasResults}}
 			return {{$m.ZeroReturn}}
+{{- end}}
 		}))
 		{{$m.IgnoredCallExpr}}
 		testkit.True(t, called, "With{{$iface.TypeName}}{{$m.Name}} must be called")
@@ -74,9 +77,9 @@ func Test{{$iface.StubName}}(t *testing.T) {
 	t.Run("DelegateTo forwards to implementation", func(t *testing.T) {
 		t.Parallel()
 		inner := {{$.GenQualifier}}New{{$iface.StubName}}(t)
-{{- range $iface.Methods}}{{if not .Skip}}
+{{- range $iface.Methods}}{{if not .Skip}}{{if .HasResults}}
 		inner.On{{.Name}}.Returns({{.ZeroReturn}})
-{{- end}}{{end}}
+{{- end}}{{end}}{{end}}
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}DelegateTo(inner))
 {{- range $iface.Methods}}{{if not .Skip}}
 		{{.IgnoredCallExpr}}
