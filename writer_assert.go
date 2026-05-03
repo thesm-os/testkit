@@ -9,7 +9,7 @@ import (
 )
 
 // WriterBindings holds the reusable shape wiring for a Writer-shaped method.
-// Shared by suite (via WriterContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type WriterBindings[T any, V any] struct {
 	Factory func() T
 	Call    func(context.Context, T, V) error

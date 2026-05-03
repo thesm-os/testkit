@@ -15,9 +15,10 @@ import (
 // AssertScannerContract runs conformance assertions against
 // implementations of [iterators.Scanner] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 12 across 3 methods
+//	Shapes detected:  Aggregator (Count), StreamReader (Keys, Scan)
+//	Directives:       none
+//	Plug-in points:   ScannerOnCount, ScannerOnKeys, ScannerOnScan, ScannerOnAll, ScannerCustom
 func AssertScannerContract(
 	t *testing.T,
 	factory func() iterators.Scanner,

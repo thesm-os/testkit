@@ -15,9 +15,10 @@ import (
 // AssertServiceContract runs conformance assertions against
 // implementations of [allshapes.Service] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 27 across 8 methods
+//	Shapes detected:  Reader (Get), Writer (Put), Deleter (Delete), Aggregator (Count), StreamReader (List), Lifecycle (Close), Pure (Describe), Predicate (IsEmpty)
+//	Directives:       errors (Get→ErrNotFound)
+//	Plug-in points:   ServiceOnClose, ServiceOnCount, ServiceOnDelete, ServiceOnDescribe, ServiceOnGet, ServiceOnIsEmpty, ServiceOnList, ServiceOnPut, ServiceOnAll, ServiceCustom
 func AssertServiceContract(
 	t *testing.T,
 	factory func() allshapes.Service,

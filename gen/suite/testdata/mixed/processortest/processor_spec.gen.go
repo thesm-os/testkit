@@ -14,9 +14,10 @@ import (
 // AssertProcessorContract runs conformance assertions against
 // implementations of [mixed.Processor] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 14 across 3 methods
+//	Shapes detected:  Writer (LegacyProcess, Process), Pure (Describe)
+//	Directives:       deprecated (LegacyProcess→ProcessV2), errors (Process→ErrInvalidInput), nilsafe (Process)
+//	Plug-in points:   ProcessorOnDescribe, ProcessorOnLegacyProcess, ProcessorOnProcess, ProcessorOnAll, ProcessorCustom
 func AssertProcessorContract(
 	t *testing.T,
 	factory func() mixed.Processor,

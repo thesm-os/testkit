@@ -14,9 +14,10 @@ import (
 // AssertCacheContract runs conformance assertions against
 // implementations of [nocontext.Cache] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 7 across 3 methods
+//	Shapes detected:  Pure (Len), Unknown (Get, Set)
+//	Directives:       errors (Get→ErrMiss), nilsafe (Get), bounded (Len: 0..10000), nilsafe (Set)
+//	Plug-in points:   CacheOnGet, CacheOnLen, CacheOnSet, CacheOnAll, CacheCustom
 func AssertCacheContract(
 	t *testing.T,
 	factory func() nocontext.Cache,

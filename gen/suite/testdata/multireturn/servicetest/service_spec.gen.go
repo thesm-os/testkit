@@ -14,9 +14,10 @@ import (
 // AssertServiceContract runs conformance assertions against
 // implementations of [multireturn.Service] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 10 across 2 methods
+//	Shapes detected:  Lifecycle (Reset), Unknown (Status)
+//	Directives:       nilsafe (Reset), pure (Status)
+//	Plug-in points:   ServiceOnReset, ServiceOnStatus, ServiceOnAll, ServiceCustom
 func AssertServiceContract(
 	t *testing.T,
 	factory func() multireturn.Service,

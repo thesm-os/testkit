@@ -14,9 +14,10 @@ import (
 // AssertCodecContract runs conformance assertions against
 // implementations of [weird.Codec] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 10 across 5 methods
+//	Shapes detected:  Pure (ContentType), Predicate (Handles), Unknown (Decode, Encode, MarshalBinary)
+//	Directives:       none
+//	Plug-in points:   CodecOnContentType, CodecOnDecode, CodecOnEncode, CodecOnHandles, CodecOnMarshalBinary, CodecOnAll, CodecCustom
 func AssertCodecContract(
 	t *testing.T,
 	factory func() weird.Codec,

@@ -10,7 +10,7 @@ import (
 )
 
 // StreamBindings holds the reusable shape wiring for a StreamReader-shaped method.
-// Shared by suite (via StreamContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type StreamBindings[T any, V any] struct {
 	Factory func() T
 	Call    func(context.Context, T) iter.Seq2[V, error]

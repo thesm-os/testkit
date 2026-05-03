@@ -40,6 +40,129 @@ func (d *SpecData) HasContent() bool {
 	return false
 }
 
+// ShapeSummary returns a one-line summary of detected shapes, e.g.
+// "Reader (Get), Writer (Put, Delete), Lifecycle (Ping), Unknown (Count)".
+func (d *SpecData) ShapeSummary() string {
+	groups := make(map[gen.MethodShape][]string)
+	order := []gen.MethodShape{
+		gen.ShapeReader, gen.ShapeWriter, gen.ShapeDeleter,
+		gen.ShapeAggregator, gen.ShapeStreamReader, gen.ShapeLifecycle,
+		gen.ShapePure, gen.ShapePredicate, gen.ShapeUnknown,
+	}
+	for _, m := range d.Methods {
+		if m.Skip {
+			continue
+		}
+		groups[m.Shape.Shape] = append(groups[m.Shape.Shape], m.Name)
+	}
+	var parts []string
+	for _, shape := range order {
+		names := groups[shape]
+		if len(names) == 0 {
+			continue
+		}
+		parts = append(parts, shape.String()+" ("+strings.Join(names, ", ")+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
+// DirectiveSummary returns a one-line summary of consumed directives, e.g.
+// "errors (Get→ErrNotFound), nilsafe (Put), timeout (Ping: 5s)".
+func (d *SpecData) DirectiveSummary() string {
+	var parts []string
+	for _, m := range d.Methods {
+		if m.Skip {
+			continue
+		}
+		for _, s := range m.Sentinels {
+			parts = append(parts, fmt.Sprintf("errors (%s→%s)", m.Name, s.VarName))
+		}
+		if m.NilSafe {
+			parts = append(parts, fmt.Sprintf("nilsafe (%s)", m.Name))
+		}
+		if m.Timeout != "" {
+			parts = append(parts, fmt.Sprintf("timeout (%s: %s)", m.Name, m.Timeout))
+		}
+		if m.Pure {
+			parts = append(parts, fmt.Sprintf("pure (%s)", m.Name))
+		}
+		if m.BoundedMin != "" {
+			parts = append(parts, fmt.Sprintf("bounded (%s: %s..%s)", m.Name, m.BoundedMin, m.BoundedMax))
+		}
+		if m.Deprecated != "" {
+			parts = append(parts, fmt.Sprintf("deprecated (%s→%s)", m.Name, m.Deprecated))
+		}
+	}
+	if len(parts) == 0 {
+		return "none"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// PluginPoints returns the list of plug-in option function names.
+func (d *SpecData) PluginPoints() string {
+	var points []string
+	for _, m := range d.Methods {
+		if m.Skip {
+			continue
+		}
+		points = append(points, d.InterfaceName+"On"+m.Name)
+	}
+	points = append(points, d.InterfaceName+"OnAll")
+	points = append(points, d.InterfaceName+"Custom")
+	return strings.Join(points, ", ")
+}
+
+// DefaultSubtestCount returns the number of auto-generated subtests.
+func (d *SpecData) DefaultSubtestCount() int {
+	count := 0
+	for _, m := range d.Methods {
+		if m.Skip {
+			continue
+		}
+		count++ // smoke — always
+		if m.HasContext() && m.ReturnsError() {
+			count += 3 // ctx cancellation, ctx deadline, nil context
+		}
+		count += len(m.nilableParams()) // nil-input per param
+		if m.Iter.IsSeq {
+			count += 3 // empty iteration, break, double
+		}
+		if m.Iter.Seq2Error {
+			count += 3 // iterate no error, break, double
+		}
+		count += len(m.Sentinels)
+		if m.NilSafe {
+			count++
+		}
+		if m.Timeout != "" {
+			count++
+		}
+		if m.Pure {
+			count++
+		}
+		if m.BoundedMin != "" {
+			count++
+		}
+		if m.Deprecated != "" {
+			count++
+		}
+		count += len(m.Validates)
+	}
+	return count
+}
+
+// ActiveMethodCount returns the number of non-skipped methods.
+func (d *SpecData) ActiveMethodCount() int {
+	count := 0
+	for _, m := range d.Methods {
+		if !m.Skip {
+			count++
+		}
+	}
+	return count
+}
+
 // SpecMethodData holds one method with directive-enriched fields.
 type SpecMethodData struct {
 	gen.MethodInfo

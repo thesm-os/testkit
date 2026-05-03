@@ -10,7 +10,7 @@ import (
 )
 
 // LifecycleBindings holds the reusable shape wiring for a Lifecycle-shaped method.
-// Shared by suite (via LifecycleContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type LifecycleBindings[T any] struct {
 	Factory func() T
 	Call    func(context.Context, T) error

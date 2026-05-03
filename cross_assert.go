@@ -9,7 +9,7 @@ import (
 )
 
 // CrossBindings holds the reusable shape wiring for cross-method assertions.
-// Shared by suite (via CrossContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type CrossBindings[T any] struct {
 	Factory func() T
 }

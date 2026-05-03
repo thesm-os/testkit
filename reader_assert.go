@@ -11,7 +11,7 @@ import (
 )
 
 // ReaderBindings holds the reusable shape wiring for a Reader-shaped method.
-// Shared by suite (via ReaderContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type ReaderBindings[T any, K comparable, V any] struct {
 	Factory func() T
 	Call    func(context.Context, T, K) (V, error)

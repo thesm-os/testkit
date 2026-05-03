@@ -8,7 +8,7 @@ import (
 )
 
 // PureBindings holds the reusable shape wiring for a Pure-shaped method.
-// Shared by suite (via PureContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type PureBindings[T any, R any] struct {
 	Factory func() T
 	Call    func(T) R

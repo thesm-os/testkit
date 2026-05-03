@@ -8,7 +8,7 @@ import (
 )
 
 // PredicateBindings holds the reusable shape wiring for a Predicate-shaped method.
-// Shared by suite (via PredicateContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type PredicateBindings[T any] struct {
 	Factory func() T
 	Call    func(T) bool

@@ -11,7 +11,7 @@ import (
 )
 
 // DeleterBindings holds the reusable shape wiring for a Deleter-shaped method.
-// Shared by suite (via DeleterContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type DeleterBindings[T any, K comparable] struct {
 	Factory func() T
 	Call    func(context.Context, T, K) error

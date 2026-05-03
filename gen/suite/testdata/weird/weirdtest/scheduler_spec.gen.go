@@ -15,9 +15,10 @@ import (
 // AssertSchedulerContract runs conformance assertions against
 // implementations of [weird.Scheduler] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 27 across 7 methods
+//	Shapes detected:  Reader (Status), Deleter (Cancel), Aggregator (Running), StreamReader (Tasks), Lifecycle (Flush), Pure (Name), Unknown (Schedule)
+//	Directives:       errors (Cancel→ErrNotScheduled), errors (Status→ErrNotScheduled)
+//	Plug-in points:   SchedulerOnCancel, SchedulerOnFlush, SchedulerOnName, SchedulerOnRunning, SchedulerOnSchedule, SchedulerOnStatus, SchedulerOnTasks, SchedulerOnAll, SchedulerCustom
 func AssertSchedulerContract(
 	t *testing.T,
 	factory func() weird.Scheduler,

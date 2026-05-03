@@ -10,7 +10,7 @@ import (
 )
 
 // AggregatorBindings holds the reusable shape wiring for an Aggregator-shaped method.
-// Shared by suite (via AggregatorContext) and future generators (bench, model).
+// Shared substrate for shape-driven generators.
 type AggregatorBindings[T any, R any] struct {
 	Factory func() T
 	Call    func(context.Context, T) (R, error)

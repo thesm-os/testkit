@@ -15,9 +15,10 @@ import (
 // AssertStoreContract runs conformance assertions against
 // implementations of [basic.Store] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 27 across 6 methods
+//	Shapes detected:  Reader (Get), Writer (Delete, LegacyPut, Put), Lifecycle (Ping), Unknown (Count)
+//	Directives:       bounded (Count: 0..1000), errors (Get→ErrNotFound), pure (Get), deprecated (LegacyPut→PutBatch), timeout (Ping: 5s), nilsafe (Put)
+//	Plug-in points:   StoreOnCount, StoreOnDelete, StoreOnGet, StoreOnLegacyPut, StoreOnPing, StoreOnPut, StoreOnAll, StoreCustom
 func AssertStoreContract(
 	t *testing.T,
 	factory func() basic.Store,

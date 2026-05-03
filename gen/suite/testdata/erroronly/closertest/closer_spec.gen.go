@@ -14,9 +14,10 @@ import (
 // AssertCloserContract runs conformance assertions against
 // implementations of [erroronly.Closer] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 10 across 2 methods
+//	Shapes detected:  Lifecycle (Close, Open)
+//	Directives:       errors (Close→ErrClosed), nilsafe (Open)
+//	Plug-in points:   CloserOnClose, CloserOnOpen, CloserOnAll, CloserCustom
 func AssertCloserContract(
 	t *testing.T,
 	factory func() erroronly.Closer,

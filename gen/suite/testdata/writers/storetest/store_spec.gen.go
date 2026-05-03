@@ -15,9 +15,10 @@ import (
 // AssertStoreContract runs conformance assertions against
 // implementations of [writers.Store] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 17 across 4 methods
+//	Shapes detected:  Reader (Get), Writer (Put), Deleter (Delete), StreamReader (List)
+//	Directives:       errors (Get→ErrNotFound)
+//	Plug-in points:   StoreOnDelete, StoreOnGet, StoreOnList, StoreOnPut, StoreOnAll, StoreCustom
 func AssertStoreContract(
 	t *testing.T,
 	factory func() writers.Store,

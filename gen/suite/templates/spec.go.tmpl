@@ -5,9 +5,10 @@ package {{.PackageName}}
 // Assert{{.InterfaceName}}Contract runs conformance assertions against
 // implementations of [{{.QualifiedType}}] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: {{.DefaultSubtestCount}} across {{.ActiveMethodCount}} methods
+//	Shapes detected:  {{.ShapeSummary}}
+//	Directives:       {{.DirectiveSummary}}
+//	Plug-in points:   {{.PluginPoints}}
 func Assert{{.InterfaceName}}Contract(
 	t *testing.T,
 	factory func() {{.QualifiedType}},

@@ -15,9 +15,10 @@ import (
 // AssertRegistryContract runs conformance assertions against
 // implementations of [readers.Registry] produced by factory.
 //
-// Default subtests are auto-detected from method signatures. Directive-derived
-// subtests add contract assertions. Plug-in primitives via On<Method> add
-// typed shape-specific assertions.
+//	Default subtests: 13 across 3 methods
+//	Shapes detected:  Reader (Lookup), Aggregator (Count), StreamReader (List)
+//	Directives:       errors (Lookup→ErrNotRegistered)
+//	Plug-in points:   RegistryOnCount, RegistryOnList, RegistryOnLookup, RegistryOnAll, RegistryCustom
 func AssertRegistryContract(
 	t *testing.T,
 	factory func() readers.Registry,
