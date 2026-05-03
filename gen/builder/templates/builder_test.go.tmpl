@@ -1,0 +1,45 @@
+{{define "builder-test"}}
+package {{.PackageName}}
+
+{{template "imports" .}}
+
+{{- range $s := .Structs}}
+
+func Test{{$s.BuilderName}}(t *testing.T) {
+	t.Parallel()
+{{if not $s.HasUnexportedFields}}
+	t.Run("Build returns zero value", func(t *testing.T) {
+		t.Parallel()
+		got := {{$.GenQualifier}}New{{$s.BuilderName}}().Build()
+		testkit.Equal(t, got, {{$s.QualifiedType}}{}, "must return zero value")
+	})
+{{else}}
+	t.Run("Build does not panic", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$.GenQualifier}}New{{$s.BuilderName}}().Build()
+	})
+{{end}}
+{{- range $f := $s.Fields}}
+	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.SampleValue}}
+		got := {{$.GenQualifier}}New{{$s.BuilderName}}().
+			With{{$f.Name}}(sample).
+			Build()
+		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+	})
+{{end}}
+	t.Run("chaining sets multiple fields", func(t *testing.T) {
+		t.Parallel()
+		b := {{$.GenQualifier}}New{{$s.BuilderName}}()
+{{- range $s.Fields}}
+		b.With{{.Name}}({{.SampleValue}})
+{{- end}}
+		got := b.Build()
+{{- range $s.Fields}}
+		testkit.Equal(t, got.{{.Name}}, {{.SampleValue}}, "{{.Name}} must be set")
+{{- end}}
+	})
+}
+{{end}}
+{{end}}

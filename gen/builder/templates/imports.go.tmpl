@@ -1,0 +1,9 @@
+{{define "imports"}}
+{{- if .Imports}}
+import (
+{{- range .Imports}}
+	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{- end}}
+)
+{{- end}}
+{{end}}
