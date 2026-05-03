@@ -4,6 +4,7 @@
 package testkit
 
 import (
+	"context"
 	"iter"
 	"testing"
 )
@@ -15,9 +16,7 @@ import (
 type StreamContext[T any, V any] struct {
 	T       *testing.T
 	Factory func() T
-	// Call returns the iterator. For iter.Seq2[V, error], the consumer
-	// wraps the call to return iter.Seq2[V, error] directly.
-	Call func(T) iter.Seq2[V, error]
+	Call    func(context.Context, T) iter.Seq2[V, error]
 }
 
 // StreamAssertion is a typed conformance primitive for StreamReader-shaped methods.
@@ -29,21 +28,22 @@ func AssertStreamCompletes[T, V any]() StreamAssertion[T, V] {
 		ctx.T.Run("stream completes", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			for _, err := range ctx.Call(impl) {
+			for _, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "stream must not yield error")
 			}
 		})
 	}
 }
 
-// AssertStreamRespectsBreak breaks the iterator after the first item and
-// asserts no panic or resource leak.
+// AssertStreamRespectsBreak breaks the iteration after the first yield and
+// verifies the break is legal (no error reported on the broken yield).
+// Panics inside range propagate to the test (Go default).
 func AssertStreamRespectsBreak[T, V any]() StreamAssertion[T, V] {
 	return func(ctx StreamContext[T, V]) {
 		ctx.T.Run("stream respects break", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			for _, err := range ctx.Call(impl) {
+			for _, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "first yield must not error")
 				break
 			}
@@ -58,10 +58,10 @@ func AssertStreamReentrant[T, V any]() StreamAssertion[T, V] {
 		ctx.T.Run("stream reentrant", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			for _, err := range ctx.Call(impl) {
+			for _, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "first iteration must not error")
 			}
-			for _, err := range ctx.Call(impl) {
+			for _, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "second iteration must not error")
 			}
 		})
@@ -79,13 +79,16 @@ func AssertStreamYieldsInOrder[T, V any](
 			impl := ctx.Factory()
 			var prev V
 			i := 0
-			for v, err := range ctx.Call(impl) {
+			for v, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "stream must not error")
 				if i > 0 && !less(prev, v) {
 					t.Errorf("stream order violated at position %d", i)
 				}
 				prev = v
 				i++
+			}
+			if i < 2 {
+				t.Fatalf("AssertStreamYieldsInOrder: stream yielded %d items, requires >= 2", i)
 			}
 		})
 	}
@@ -100,7 +103,7 @@ func AssertStreamHasNoDuplicates[T, V any, K comparable](
 			t.Parallel()
 			impl := ctx.Factory()
 			seen := make(map[K]bool)
-			for v, err := range ctx.Call(impl) {
+			for v, err := range ctx.Call(t.Context(), impl) {
 				NoError(t, err, "stream must not error")
 				k := extractKey(v)
 				if seen[k] {

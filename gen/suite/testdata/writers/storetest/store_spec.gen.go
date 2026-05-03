@@ -84,7 +84,7 @@ func runStoreDelete(t *testing.T, factory func() writers.Store, cfg *storeConfig
 			for _, fn := range cfg.onDelete {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -137,14 +137,14 @@ func runStoreGet(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 			prePopFactory := func() writers.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			rctx := testkit.ReaderContext[writers.Store, string, writers.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl writers.Store, ctx context.Context, k string) (writers.Item, error) {
+				Call: func(ctx context.Context, impl writers.Store, k string) (writers.Item, error) {
 					return impl.Get(ctx, k)
 				},
 			}
@@ -202,15 +202,15 @@ func runStoreList(t *testing.T, factory func() writers.Store, cfg *storeConfig) 
 			prePopFactory := func() writers.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			sctx := testkit.StreamContext[writers.Store, writers.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl writers.Store) iter.Seq2[writers.Item, error] {
-					return impl.List(t.Context())
+				Call: func(ctx context.Context, impl writers.Store) iter.Seq2[writers.Item, error] {
+					return impl.List(ctx)
 				},
 			}
 			for _, a := range cfg.onList {
@@ -257,14 +257,14 @@ func runStorePut(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 			prePopFactory := func() writers.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[writers.Store, writers.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl writers.Store, ctx context.Context, v writers.Item) error {
+				Call: func(ctx context.Context, impl writers.Store, v writers.Item) error {
 					return impl.Put(ctx, v)
 				},
 			}
@@ -280,7 +280,7 @@ type StoreOption func(*storeConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s writers.Store)) StoreOption {
+func PrePopulate(fn func(ctx context.Context, s writers.Store)) StoreOption {
 	return func(c *storeConfig) { c.prePopulate = fn }
 }
 
@@ -333,7 +333,7 @@ type customSubtest struct {
 }
 
 type storeConfig struct {
-	prePopulate func(testing.TB, writers.Store)
+	prePopulate func(context.Context, writers.Store)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[writers.Store]
 	onDelete    []func(*testing.T, writers.Store)

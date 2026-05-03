@@ -17,7 +17,7 @@ import (
 type ReaderContext[T any, K comparable, V any] struct {
 	T       *testing.T
 	Factory func() T
-	Call    func(T, context.Context, K) (V, error)
+	Call    func(context.Context, T, K) (V, error)
 }
 
 // ReaderAssertion is a typed conformance primitive for Reader-shaped methods.
@@ -30,7 +30,7 @@ func AssertReturnsForKey[T any, K comparable, V any](key K, want V) ReaderAssert
 		ctx.T.Run(fmt.Sprintf("returns for key %v", key), func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			got, err := ctx.Call(impl, t.Context(), key)
+			got, err := ctx.Call(t.Context(), impl, key)
 			NoError(t, err, "reader must not error for known key")
 			Equal(t, got, want, "reader must return expected value")
 		})
@@ -44,7 +44,7 @@ func AssertReturnsSentinel[T any, K comparable, V any](unknown K, sentinel error
 		ctx.T.Run(fmt.Sprintf("returns sentinel for %v", unknown), func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			_, err := ctx.Call(impl, t.Context(), unknown)
+			_, err := ctx.Call(t.Context(), impl, unknown)
 			ErrorIs(t, err, sentinel, "reader must return sentinel for unknown key")
 		})
 	}
@@ -60,10 +60,10 @@ func AssertConsistentReads[T any, K comparable, V any](key K, n int) ReaderAsser
 			}
 			t.Parallel()
 			impl := ctx.Factory()
-			first, err := ctx.Call(impl, t.Context(), key)
+			first, err := ctx.Call(t.Context(), impl, key)
 			NoError(t, err, "first read must not error")
 			for i := 1; i < n; i++ {
-				got, err := ctx.Call(impl, t.Context(), key)
+				got, err := ctx.Call(t.Context(), impl, key)
 				NoError(t, err, "read must not error")
 				Equal(t, got, first, "read must be consistent")
 			}
@@ -82,7 +82,7 @@ func AssertReadsAreNonMutating[T any, K comparable, V any, S comparable](
 			t.Parallel()
 			impl := ctx.Factory()
 			before := observe(impl)
-			_, _ = ctx.Call(impl, t.Context(), key)
+			_, _ = ctx.Call(t.Context(), impl, key)
 			after := observe(impl)
 			Equal(t, before, after, "read must not mutate observable state")
 		})
@@ -104,7 +104,7 @@ func AssertReaderConcurrentSafe[T any, K comparable, V any](
 			for range workers {
 				wg.Go(func() {
 					for range iters {
-						_, _ = ctx.Call(impl, t.Context(), key)
+						_, _ = ctx.Call(t.Context(), impl, key)
 					}
 				})
 			}

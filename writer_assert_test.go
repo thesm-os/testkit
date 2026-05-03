@@ -41,7 +41,7 @@ func writerCtx(t *testing.T) testkit.WriterContext[*mapWriter, entry] {
 	return testkit.WriterContext[*mapWriter, entry]{
 		T:       t,
 		Factory: newMapWriter,
-		Call: func(w *mapWriter, ctx context.Context, e entry) error {
+		Call: func(ctx context.Context, w *mapWriter, e entry) error {
 			return w.Put(ctx, e)
 		},
 	}
@@ -71,7 +71,7 @@ func TestAssertWriteRejectInvalid(t *testing.T) {
 	ctx := testkit.WriterContext[*mapWriter, entry]{
 		T:       t,
 		Factory: newMapWriter,
-		Call: func(w *mapWriter, _ context.Context, e entry) error {
+		Call: func(_ context.Context, w *mapWriter, e entry) error {
 			if e.Key == "" {
 				return errNotFound // reuse as "invalid"
 			}

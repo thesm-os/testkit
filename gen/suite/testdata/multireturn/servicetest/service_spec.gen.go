@@ -88,7 +88,7 @@ func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serv
 			for _, fn := range cfg.onReset {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -135,7 +135,7 @@ func runServiceStatus(t *testing.T, factory func() multireturn.Service, cfg *ser
 			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.prePopulate(t, s)
+		cfg.prePopulate(t.Context(), s)
 		testkit.AssertPure(t,
 			func() multireturn.Stats {
 				v, _, _ := s.Status(t.Context())
@@ -149,7 +149,7 @@ func runServiceStatus(t *testing.T, factory func() multireturn.Service, cfg *ser
 			for _, fn := range cfg.onStatus {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -162,7 +162,7 @@ type ServiceOption func(*serviceConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s multireturn.Service)) ServiceOption {
+func PrePopulate(fn func(ctx context.Context, s multireturn.Service)) ServiceOption {
 	return func(c *serviceConfig) { c.prePopulate = fn }
 }
 
@@ -201,7 +201,7 @@ type customSubtest struct {
 }
 
 type serviceConfig struct {
-	prePopulate func(testing.TB, multireturn.Service)
+	prePopulate func(context.Context, multireturn.Service)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[multireturn.Service]
 	onReset     []func(*testing.T, multireturn.Service)

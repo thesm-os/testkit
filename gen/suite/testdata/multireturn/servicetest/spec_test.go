@@ -4,6 +4,7 @@
 package servicetest_test
 
 import (
+	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit/gen/suite/testdata/multireturn"
@@ -15,6 +16,6 @@ func TestInMemoryServiceContract(t *testing.T) {
 	factory := func() multireturn.Service { return multireturn.NewInMemoryService() }
 
 	servicetest.AssertServiceContract(t, factory,
-		servicetest.PrePopulate(func(_ testing.TB, _ multireturn.Service) {}),
+		servicetest.PrePopulate(func(_ context.Context, _ multireturn.Service) {}),
 	)
 }

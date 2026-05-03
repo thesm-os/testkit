@@ -83,7 +83,7 @@ func runScannerCount(t *testing.T, factory func() iterators.Scanner, cfg *scanne
 			for _, fn := range cfg.onCount {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -135,16 +135,16 @@ func runScannerKeys(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 			prePopFactory := func() iterators.Scanner {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			sctx := testkit.StreamContext[iterators.Scanner, string]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl iterators.Scanner) iter.Seq2[string, error] {
+				Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[string, error] {
 					return func(yield func(string, error) bool) {
-						for v := range impl.Keys(t.Context()) {
+						for v := range impl.Keys(ctx) {
 							if !yield(v, nil) {
 								return
 							}
@@ -206,15 +206,15 @@ func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 			prePopFactory := func() iterators.Scanner {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			sctx := testkit.StreamContext[iterators.Scanner, iterators.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl iterators.Scanner) iter.Seq2[iterators.Item, error] {
-					return impl.Scan(t.Context(), "")
+				Call: func(ctx context.Context, impl iterators.Scanner) iter.Seq2[iterators.Item, error] {
+					return impl.Scan(ctx, "")
 				},
 			}
 			for _, a := range cfg.onScan {
@@ -229,7 +229,7 @@ type ScannerOption func(*scannerConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s iterators.Scanner)) ScannerOption {
+func PrePopulate(fn func(ctx context.Context, s iterators.Scanner)) ScannerOption {
 	return func(c *scannerConfig) { c.prePopulate = fn }
 }
 
@@ -275,7 +275,7 @@ type customSubtest struct {
 }
 
 type scannerConfig struct {
-	prePopulate func(testing.TB, iterators.Scanner)
+	prePopulate func(context.Context, iterators.Scanner)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[iterators.Scanner]
 	onCount     []func(*testing.T, iterators.Scanner)

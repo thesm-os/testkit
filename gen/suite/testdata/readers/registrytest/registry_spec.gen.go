@@ -83,7 +83,7 @@ func runRegistryCount(t *testing.T, factory func() readers.Registry, cfg *regist
 			for _, fn := range cfg.onCount {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -138,15 +138,15 @@ func runRegistryList(t *testing.T, factory func() readers.Registry, cfg *registr
 			prePopFactory := func() readers.Registry {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			sctx := testkit.StreamContext[readers.Registry, readers.Handler]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl readers.Registry) iter.Seq2[readers.Handler, error] {
-					return impl.List(t.Context())
+				Call: func(ctx context.Context, impl readers.Registry) iter.Seq2[readers.Handler, error] {
+					return impl.List(ctx)
 				},
 			}
 			for _, a := range cfg.onList {
@@ -201,14 +201,14 @@ func runRegistryLookup(t *testing.T, factory func() readers.Registry, cfg *regis
 			prePopFactory := func() readers.Registry {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			rctx := testkit.ReaderContext[readers.Registry, string, readers.Handler]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl readers.Registry, ctx context.Context, k string) (readers.Handler, error) {
+				Call: func(ctx context.Context, impl readers.Registry, k string) (readers.Handler, error) {
 					return impl.Lookup(ctx, k)
 				},
 			}
@@ -224,7 +224,7 @@ type RegistryOption func(*registryConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s readers.Registry)) RegistryOption {
+func PrePopulate(fn func(ctx context.Context, s readers.Registry)) RegistryOption {
 	return func(c *registryConfig) { c.prePopulate = fn }
 }
 
@@ -270,7 +270,7 @@ type customSubtest struct {
 }
 
 type registryConfig struct {
-	prePopulate func(testing.TB, readers.Registry)
+	prePopulate func(context.Context, readers.Registry)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[readers.Registry]
 	onCount     []func(*testing.T, readers.Registry)

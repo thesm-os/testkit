@@ -133,6 +133,25 @@ func (m *SpecMethodData) ZeroCallArgs() string {
 	return gen.ZeroCallArgs(m.Signature, m.tracker)
 }
 
+// StreamCallArgs renders arguments for calling this method inside a stream
+// dispatch closure where context.Context is available as "ctx".
+func (m *SpecMethodData) StreamCallArgs() string {
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	parts := make([]string, n)
+	for i := range n {
+		if gen.IsContextType(params.At(i).Type()) {
+			parts[i] = "ctx"
+		} else {
+			parts[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
 // --- Template helper methods ---
 
 // IterCallExpr renders a call on recv that returns the iterator result.

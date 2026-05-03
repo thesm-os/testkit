@@ -162,7 +162,7 @@
 			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.prePopulate(t, s)
+		cfg.prePopulate(t.Context(), s)
 		testkit.AssertPure(t,
 			func() {{.PureObserveType}} {
 				{{.PureObserveCallExpr "s"}}

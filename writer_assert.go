@@ -16,7 +16,7 @@ import (
 type WriterContext[T any, V any] struct {
 	T       *testing.T
 	Factory func() T
-	Call    func(T, context.Context, V) error
+	Call    func(context.Context, T, V) error
 }
 
 // WriterAssertion is a typed conformance primitive for Writer-shaped methods.
@@ -28,7 +28,7 @@ func AssertWriteSucceeds[T, V any](sample V) WriterAssertion[T, V] {
 		ctx.T.Run("write succeeds", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			err := ctx.Call(impl, t.Context(), sample)
+			err := ctx.Call(t.Context(), impl, sample)
 			NoError(t, err, "write must succeed for sample value")
 		})
 	}
@@ -45,7 +45,7 @@ func AssertWriteIsObservable[T, V any, K comparable](
 		ctx.T.Run("write is observable", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			err := ctx.Call(impl, t.Context(), sample)
+			err := ctx.Call(t.Context(), impl, sample)
 			NoError(t, err, "write must succeed")
 			k := extractKey(sample)
 			got, err := reader(impl, t.Context(), k)
@@ -62,7 +62,7 @@ func AssertWriteRejectInvalid[T, V any](invalid V, sentinel error) WriterAsserti
 		ctx.T.Run("write rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			err := ctx.Call(impl, t.Context(), invalid)
+			err := ctx.Call(t.Context(), impl, invalid)
 			Error(t, err, "write must reject invalid value")
 			if sentinel != nil {
 				ErrorIs(t, err, sentinel, "write must return expected sentinel")
@@ -82,9 +82,9 @@ func AssertWriteOverwrite[T, V any, K comparable](
 		ctx.T.Run("write overwrites", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			err := ctx.Call(impl, t.Context(), first)
+			err := ctx.Call(t.Context(), impl, first)
 			NoError(t, err, "first write must succeed")
-			err = ctx.Call(impl, t.Context(), second)
+			err = ctx.Call(t.Context(), impl, second)
 			NoError(t, err, "second write must succeed")
 			k := extractKey(second)
 			got, err := reader(impl, t.Context(), k)

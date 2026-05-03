@@ -4,6 +4,7 @@
 package cachetest
 
 import (
+	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -72,7 +73,7 @@ func runCacheGet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 			for _, fn := range cfg.onGet {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -101,7 +102,7 @@ func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 			for _, fn := range cfg.onLen {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -129,7 +130,7 @@ func runCacheSet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 			for _, fn := range cfg.onSet {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -142,7 +143,7 @@ type CacheOption func(*cacheConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s nocontext.Cache)) CacheOption {
+func PrePopulate(fn func(ctx context.Context, s nocontext.Cache)) CacheOption {
 	return func(c *cacheConfig) { c.prePopulate = fn }
 }
 
@@ -188,7 +189,7 @@ type customSubtest struct {
 }
 
 type cacheConfig struct {
-	prePopulate func(testing.TB, nocontext.Cache)
+	prePopulate func(context.Context, nocontext.Cache)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[nocontext.Cache]
 	onGet       []func(*testing.T, nocontext.Cache)

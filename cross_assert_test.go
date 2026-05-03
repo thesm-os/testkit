@@ -34,27 +34,13 @@ func (s *kvStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-func (s *kvStore) All() []string {
-	out := make([]string, 0, len(s.data))
-	for _, v := range s.data {
-		out = append(out, v)
-	}
-	return out
-}
-
-// Wrap kvStore methods to match the cross-method primitive signatures.
-// Cross-method uses entry{Key, Value} for V and string for K.
-
 func TestAssertReadAfterWrite(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{
-		T:       t,
-		Factory: newKVStore,
-	}
+	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
 	testkit.AssertReadAfterWrite[*kvStore, string, entry](
 		entry{Key: "a", Value: "alpha"},
-		func(s *kvStore, ctx context.Context, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(s *kvStore, ctx context.Context, k string) (entry, error) {
+		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+		func(ctx context.Context, s *kvStore, k string) (entry, error) {
 			v, err := s.Get(ctx, k)
 			return entry{Key: k, Value: v}, err
 		},
@@ -64,15 +50,12 @@ func TestAssertReadAfterWrite(t *testing.T) {
 
 func TestAssertDeleteRemovesValue(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{
-		T:       t,
-		Factory: newKVStore,
-	}
+	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
 	testkit.AssertDeleteRemovesValue[*kvStore, string, entry](
 		entry{Key: "a", Value: "alpha"},
-		func(s *kvStore, ctx context.Context, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(s *kvStore, ctx context.Context, k string) error { return s.Delete(ctx, k) },
-		func(s *kvStore, ctx context.Context, k string) (entry, error) {
+		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+		func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
+		func(ctx context.Context, s *kvStore, k string) (entry, error) {
 			v, err := s.Get(ctx, k)
 			return entry{Key: k, Value: v}, err
 		},
@@ -83,14 +66,12 @@ func TestAssertDeleteRemovesValue(t *testing.T) {
 
 func TestAssertStreamReflectsMutations(t *testing.T) {
 	t.Parallel()
-	ctx := testkit.CrossContext[*kvStore]{
-		T:       t,
-		Factory: newKVStore,
-	}
+	ctx := testkit.CrossContext[*kvStore]{T: t, Factory: newKVStore}
 	testkit.AssertStreamReflectsMutations[*kvStore, string, entry](
 		[]entry{{Key: "a", Value: "alpha"}, {Key: "b", Value: "beta"}},
-		func(s *kvStore, ctx context.Context, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(s *kvStore) []entry {
+		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+		func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
+		func(ctx context.Context, s *kvStore) []entry {
 			out := make([]entry, 0, len(s.data))
 			for k, v := range s.data {
 				out = append(out, entry{Key: k, Value: v})

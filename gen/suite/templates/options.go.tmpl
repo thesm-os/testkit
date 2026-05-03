@@ -4,7 +4,7 @@ type {{.InterfaceName}}Option func(*{{.LowerInterfaceName}}Config)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s {{.QualifiedType}})) {{.InterfaceName}}Option {
+func PrePopulate(fn func(ctx context.Context, s {{.QualifiedType}})) {{.InterfaceName}}Option {
 	return func(c *{{.LowerInterfaceName}}Config) { c.prePopulate = fn }
 }
 
@@ -36,7 +36,7 @@ type customSubtest struct {
 }
 
 type {{.LowerInterfaceName}}Config struct {
-	prePopulate func(testing.TB, {{.QualifiedType}})
+	prePopulate func(context.Context, {{.QualifiedType}})
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[{{.QualifiedType}}]
 {{- range .Methods}}{{if not .Skip}}

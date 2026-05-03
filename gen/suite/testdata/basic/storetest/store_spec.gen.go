@@ -70,7 +70,7 @@ func runStoreCount(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 			for _, fn := range cfg.onCount {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -115,14 +115,14 @@ func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) 
 			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, string]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl basic.Store, ctx context.Context, v string) error {
+				Call: func(ctx context.Context, impl basic.Store, v string) error {
 					return impl.Delete(ctx, v)
 				},
 			}
@@ -180,7 +180,7 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.prePopulate(t, s)
+		cfg.prePopulate(t.Context(), s)
 		testkit.AssertPure(t,
 			func() basic.Item {
 				v, _ := s.Get(t.Context(), "")
@@ -194,14 +194,14 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			rctx := testkit.ReaderContext[basic.Store, string, basic.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl basic.Store, ctx context.Context, k string) (basic.Item, error) {
+				Call: func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
 					return impl.Get(ctx, k)
 				},
 			}
@@ -254,14 +254,14 @@ func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfi
 			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, basic.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl basic.Store, ctx context.Context, v basic.Item) error {
+				Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 					return impl.LegacyPut(ctx, v)
 				},
 			}
@@ -317,7 +317,7 @@ func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 			for _, fn := range cfg.onPing {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -369,14 +369,14 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[basic.Store, basic.Item]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl basic.Store, ctx context.Context, v basic.Item) error {
+				Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 					return impl.Put(ctx, v)
 				},
 			}
@@ -392,7 +392,7 @@ type StoreOption func(*storeConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s basic.Store)) StoreOption {
+func PrePopulate(fn func(ctx context.Context, s basic.Store)) StoreOption {
 	return func(c *storeConfig) { c.prePopulate = fn }
 }
 
@@ -459,7 +459,7 @@ type customSubtest struct {
 }
 
 type storeConfig struct {
-	prePopulate func(testing.TB, basic.Store)
+	prePopulate func(context.Context, basic.Store)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[basic.Store]
 	onCount     []func(*testing.T, basic.Store)

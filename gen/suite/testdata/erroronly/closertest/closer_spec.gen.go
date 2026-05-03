@@ -89,7 +89,7 @@ func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerCo
 			for _, fn := range cfg.onClose {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -141,7 +141,7 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 			for _, fn := range cfg.onOpen {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -154,7 +154,7 @@ type CloserOption func(*closerConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s erroronly.Closer)) CloserOption {
+func PrePopulate(fn func(ctx context.Context, s erroronly.Closer)) CloserOption {
 	return func(c *closerConfig) { c.prePopulate = fn }
 }
 
@@ -193,7 +193,7 @@ type customSubtest struct {
 }
 
 type closerConfig struct {
-	prePopulate func(testing.TB, erroronly.Closer)
+	prePopulate func(context.Context, erroronly.Closer)
 	custom      []customSubtest
 	onAll       []testkit.CrossMethodAssertion[erroronly.Closer]
 	onClose     []func(*testing.T, erroronly.Closer)

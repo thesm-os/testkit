@@ -4,6 +4,7 @@
 package testkit_test
 
 import (
+	"context"
 	"iter"
 	"testing"
 
@@ -29,7 +30,7 @@ func streamCtx(t *testing.T, items []string) testkit.StreamContext[*listStore, s
 	return testkit.StreamContext[*listStore, string]{
 		T:       t,
 		Factory: func() *listStore { return &listStore{items: items} },
-		Call: func(s *listStore) iter.Seq2[string, error] {
+		Call: func(_ context.Context, s *listStore) iter.Seq2[string, error] {
 			return s.List()
 		},
 	}

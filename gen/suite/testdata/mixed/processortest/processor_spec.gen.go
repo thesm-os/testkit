@@ -58,7 +58,7 @@ func runProcessorDescribe(t *testing.T, factory func() mixed.Processor, cfg *pro
 			for _, fn := range cfg.onDescribe {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}
@@ -115,14 +115,14 @@ func runProcessorLegacyProcess(t *testing.T, factory func() mixed.Processor, cfg
 			prePopFactory := func() mixed.Processor {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[mixed.Processor, []byte]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl mixed.Processor, ctx context.Context, v []byte) error {
+				Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
 					return impl.LegacyProcess(ctx, v)
 				},
 			}
@@ -192,14 +192,14 @@ func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *proc
 			prePopFactory := func() mixed.Processor {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[mixed.Processor, []byte]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl mixed.Processor, ctx context.Context, v []byte) error {
+				Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
 					return impl.Process(ctx, v)
 				},
 			}
@@ -215,7 +215,7 @@ type ProcessorOption func(*processorConfig)
 
 // PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(t testing.TB, s mixed.Processor)) ProcessorOption {
+func PrePopulate(fn func(ctx context.Context, s mixed.Processor)) ProcessorOption {
 	return func(c *processorConfig) { c.prePopulate = fn }
 }
 
@@ -261,7 +261,7 @@ type customSubtest struct {
 }
 
 type processorConfig struct {
-	prePopulate     func(testing.TB, mixed.Processor)
+	prePopulate     func(context.Context, mixed.Processor)
 	custom          []customSubtest
 	onAll           []testkit.CrossMethodAssertion[mixed.Processor]
 	onDescribe      []func(*testing.T, mixed.Processor)

@@ -4,6 +4,7 @@
 package storetest_test
 
 import (
+	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -16,8 +17,8 @@ func TestInMemoryStoreContract(t *testing.T) {
 	factory := func() basic.Store { return basic.NewInMemoryStore() }
 
 	storetest.AssertStoreContract(t, factory,
-		storetest.PrePopulate(func(t testing.TB, s basic.Store) {
-			_ = s.Put(t.(*testing.T).Context(), basic.Item{ID: "known-1", Name: "test"})
+		storetest.PrePopulate(func(ctx context.Context, s basic.Store) {
+			_ = s.Put(ctx, basic.Item{ID: "known-1", Name: "test"})
 		}),
 		storetest.OnGet(
 			testkit.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),

@@ -34,7 +34,7 @@ func readerCtx(t *testing.T, data map[string]string) testkit.ReaderContext[*mapR
 	return testkit.ReaderContext[*mapReader, string, string]{
 		T:       t,
 		Factory: func() *mapReader { return newMapReader(data) },
-		Call: func(r *mapReader, ctx context.Context, k string) (string, error) {
+		Call: func(ctx context.Context, r *mapReader, k string) (string, error) {
 			return r.Get(ctx, k)
 		},
 	}

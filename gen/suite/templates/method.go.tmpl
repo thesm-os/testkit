@@ -11,14 +11,14 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			prePopFactory := func() {{.QualifiedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			rctx := testkit.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl {{.QualifiedType}}, ctx context.Context, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+				Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
 					return impl.{{.Name}}(ctx, k)
 				},
 			}
@@ -33,14 +33,14 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			prePopFactory := func() {{.QualifiedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			wctx := testkit.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl {{.QualifiedType}}, ctx context.Context, v {{.Shape.ValType}}) error {
+				Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
 					return impl.{{.Name}}(ctx, v)
 				},
 			}
@@ -55,19 +55,19 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			prePopFactory := func() {{.QualifiedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
 			sctx := testkit.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
 				T:       t,
 				Factory: prePopFactory,
-				Call: func(impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+				Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
-					return impl.{{.Name}}({{.ZeroCallArgs}})
+					return impl.{{.Name}}({{.StreamCallArgs}})
 {{- else}}
 					return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
-						for v := range impl.{{.Name}}({{.ZeroCallArgs}}) {
+						for v := range impl.{{.Name}}({{.StreamCallArgs}}) {
 							if !yield(v, nil) { return }
 						}
 					}
@@ -85,7 +85,7 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			for _, fn := range cfg.on{{.Name}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
-					cfg.prePopulate(t, impl)
+					cfg.prePopulate(t.Context(), impl)
 				}
 				fn(t, impl)
 			}

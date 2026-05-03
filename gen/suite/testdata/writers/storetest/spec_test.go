@@ -17,8 +17,8 @@ func TestInMemoryStoreContract(t *testing.T) {
 	factory := func() writers.Store { return writers.NewInMemoryStore() }
 
 	storetest.AssertStoreContract(t, factory,
-		storetest.PrePopulate(func(t testing.TB, s writers.Store) {
-			_ = s.Put(t.(*testing.T).Context(), writers.Item{ID: "known-1", Name: "test"})
+		storetest.PrePopulate(func(ctx context.Context, s writers.Store) {
+			_ = s.Put(ctx, writers.Item{ID: "known-1", Name: "test"})
 		}),
 
 		// Reader plug-ins on Get.
@@ -50,23 +50,23 @@ func TestInMemoryStoreContract(t *testing.T) {
 		storetest.OnAll(
 			testkit.AssertReadAfterWrite[writers.Store, string, writers.Item](
 				writers.Item{ID: "cross-1", Name: "cross"},
-				func(s writers.Store, ctx context.Context, item writers.Item) error {
+				func(ctx context.Context, s writers.Store, item writers.Item) error {
 					return s.Put(ctx, item)
 				},
-				func(s writers.Store, ctx context.Context, id string) (writers.Item, error) {
+				func(ctx context.Context, s writers.Store, id string) (writers.Item, error) {
 					return s.Get(ctx, id)
 				},
 				func(item writers.Item) string { return item.ID },
 			),
 			testkit.AssertDeleteRemovesValue[writers.Store, string, writers.Item](
 				writers.Item{ID: "del-1", Name: "delete-me"},
-				func(s writers.Store, ctx context.Context, item writers.Item) error {
+				func(ctx context.Context, s writers.Store, item writers.Item) error {
 					return s.Put(ctx, item)
 				},
-				func(s writers.Store, ctx context.Context, id string) error {
+				func(ctx context.Context, s writers.Store, id string) error {
 					return s.Delete(ctx, id)
 				},
-				func(s writers.Store, ctx context.Context, id string) (writers.Item, error) {
+				func(ctx context.Context, s writers.Store, id string) (writers.Item, error) {
 					return s.Get(ctx, id)
 				},
 				func(item writers.Item) string { return item.ID },
