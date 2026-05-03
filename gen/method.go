@@ -259,6 +259,12 @@ func ZeroValueOf(typ types.Type, t *ImportTracker) string {
 // method. Context params use t.Context(), variadic params are omitted,
 // others use [ZeroValueOf].
 func ZeroCallArgs(sig *types.Signature, tracker *ImportTracker) string {
+	return ZeroCallArgsWithCtx(sig, tracker, "t.Context()")
+}
+
+// ZeroCallArgsWithCtx renders zero-value arguments for calling a method,
+// using ctxExpr for context.Context parameters.
+func ZeroCallArgsWithCtx(sig *types.Signature, tracker *ImportTracker, ctxExpr string) string {
 	params := sig.Params()
 	n := params.Len()
 	if sig.Variadic() {
@@ -267,7 +273,7 @@ func ZeroCallArgs(sig *types.Signature, tracker *ImportTracker) string {
 	parts := make([]string, n)
 	for i := range n {
 		if IsContextType(params.At(i).Type()) {
-			parts[i] = "t.Context()"
+			parts[i] = ctxExpr
 		} else {
 			parts[i] = ZeroValueOf(params.At(i).Type(), tracker)
 		}

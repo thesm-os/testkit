@@ -1,0 +1,44 @@
+{{define "bench_options"}}
+// {{.InterfaceName}}BenchOption configures [Benchmark{{.InterfaceName}}Contract].
+type {{.InterfaceName}}BenchOption func(*{{.LowerInterfaceName}}BenchConfig)
+
+// {{.InterfaceName}}BenchPrePopulate runs before each benchmark against a fresh impl.
+func {{.InterfaceName}}BenchPrePopulate(fn func(ctx context.Context, s {{.QualifiedType}})) {{.InterfaceName}}BenchOption {
+	return func(c *{{.LowerInterfaceName}}BenchConfig) { c.prePopulate = fn }
+}
+
+// {{.InterfaceName}}BenchCustom adds a free-form sub-benchmark.
+func {{.InterfaceName}}BenchCustom(name string, fn func(*testing.B, {{.QualifiedType}})) {{.InterfaceName}}BenchOption {
+	return func(c *{{.LowerInterfaceName}}BenchConfig) {
+		c.custom = append(c.custom, {{.LowerInterfaceName}}BenchCustomSub{name: name, fn: fn})
+	}
+}
+{{range $m := .Methods}}{{if not $m.Skip}}
+// {{$.InterfaceName}}BenchOn{{$m.Name}} adds plug-in bench primitives for the {{$m.Name}} method.
+func {{$.InterfaceName}}BenchOn{{$m.Name}}(assertions ...{{$m.OnMethodBenchType}}) {{$.InterfaceName}}BenchOption {
+	return func(c *{{$.LowerInterfaceName}}BenchConfig) {
+		c.on{{$m.Name}} = append(c.on{{$m.Name}}, assertions...)
+	}
+}
+{{end}}{{end}}
+type {{.LowerInterfaceName}}BenchCustomSub struct {
+	name string
+	fn   func(*testing.B, {{.QualifiedType}})
+}
+
+type {{.LowerInterfaceName}}BenchConfig struct {
+	prePopulate func(context.Context, {{.QualifiedType}})
+	custom      []{{.LowerInterfaceName}}BenchCustomSub
+{{- range .Methods}}{{if not .Skip}}
+	on{{.Name}} []{{.OnMethodBenchType}}
+{{- end}}{{end}}
+}
+
+func new{{.InterfaceName}}BenchConfig(opts ...{{.InterfaceName}}BenchOption) {{.LowerInterfaceName}}BenchConfig {
+	var cfg {{.LowerInterfaceName}}BenchConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg
+}
+{{end}}

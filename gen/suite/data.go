@@ -151,6 +151,19 @@ func (d *SpecData) DefaultSubtestCount() int {
 	return count
 }
 
+// BenchPluginPoints returns the list of bench plug-in option function names.
+func (d *SpecData) BenchPluginPoints() string {
+	var points []string
+	for _, m := range d.Methods {
+		if m.Skip {
+			continue
+		}
+		points = append(points, d.InterfaceName+"BenchOn"+m.Name)
+	}
+	points = append(points, d.InterfaceName+"BenchCustom")
+	return strings.Join(points, ", ")
+}
+
 // ActiveMethodCount returns the number of non-skipped methods.
 func (d *SpecData) ActiveMethodCount() int {
 	count := 0
@@ -258,6 +271,18 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 		return "testkit.PredicateAssertion[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
+	}
+}
+
+// OnMethodBenchType renders the Go type expression for the BenchOn<Method>
+// assertion parameter. For Reader: testkit.BenchReaderAssertion[T, K, V].
+// For unsupported shapes: func(*testing.B, T).
+func (m *SpecMethodData) OnMethodBenchType() string {
+	switch m.Shape.Shape {
+	case gen.ShapeReader:
+		return "testkit.BenchReader[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	default:
+		return "func(*testing.B, " + m.QualifiedType + ")"
 	}
 }
 
@@ -508,6 +533,28 @@ func (m *SpecMethodData) ErrCallExpr(inputExpr string) string {
 		return m.buildCallExpr("s", inputExpr, true)
 	}
 	return m.buildCallExpr("s", "", true)
+}
+
+// BenchIgnoredCallExpr renders a call on recv that discards all results,
+// using b.Context() for context parameters (bench-compatible).
+func (m *SpecMethodData) BenchIgnoredCallExpr(recv string) string {
+	var b strings.Builder
+	results := m.Signature.Results()
+	if results.Len() > 0 {
+		blanks := make([]string, results.Len())
+		for i := range blanks {
+			blanks[i] = "_"
+		}
+		b.WriteString(strings.Join(blanks, ", "))
+		b.WriteString(" = ")
+	}
+	b.WriteString(recv)
+	b.WriteString(".")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(gen.ZeroCallArgsWithCtx(m.Signature, m.tracker, "b.Context()"))
+	b.WriteString(")")
+	return b.String()
 }
 
 // IgnoredCallExpr renders a call on recv that discards all results.
