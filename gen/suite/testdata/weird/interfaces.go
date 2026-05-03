@@ -56,10 +56,10 @@ type Task struct {
 
 // TaskStatus holds runtime info about a scheduled task.
 type TaskStatus struct {
-	ID        string
-	Running   bool
-	LastRun   time.Time
-	RunCount  int
+	ID       string
+	Running  bool
+	LastRun  time.Time
+	RunCount int
 }
 
 // Scheduler exercises multi-param methods (falls to Unknown),

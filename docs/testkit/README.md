@@ -16,7 +16,7 @@
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, golden-file helpers) and the generator engine in `gen/` are stable. Four generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**. The remaining generators (`suite`, `model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, shape-typed assertion contexts, golden-file helpers) and the generator engine in `gen/` are stable. Five generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
 
 ## Documentation
 
@@ -44,8 +44,8 @@ Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strateg
 | [`builder`](generators/builder.md) | Fluent fixture builders with `With*`, `Append*`, `Mutate`, `Clone` (ready) |
 | [`sentinel`](generators/sentinel.md) | Prefix, uniqueness, non-overlap, unwrap-chain, custom-error round-trip (ready) |
 | [`enum`](generators/enum.md) | Exhaustiveness, stringer, Parse, MarshalText/JSON round-trip (ready) |
+| [`suite`](generators/suite.md) | Tier 1: `Assert<Iface>Contract` with shape-detected subtests + typed plug-in points (ready) |
 | [`codec`](generators/codec.md) | `codectest.Spec[T]` + suite + bench + fuzz seeds + wire fixtures (planned) |
-| [`suite`](generators/suite.md) | Tier 1: `AssertContract` with one subtest per (method × directive) (planned) |
 | [`model`](generators/model.md) | Tier 2-3: rapid state-machine, differential, workload (planned) |
 | [`bench`](generators/bench.md) | Tier 4: `BenchmarkContract` with allocs/latency/complexity gates (planned) |
 | [`sim`](generators/sim.md) | Tier 5: subsystem simulation harness (planned) |

@@ -108,8 +108,7 @@ func (d *SpecData) PluginPoints() string {
 		}
 		points = append(points, d.InterfaceName+"On"+m.Name)
 	}
-	points = append(points, d.InterfaceName+"OnAll")
-	points = append(points, d.InterfaceName+"Custom")
+	points = append(points, d.InterfaceName+"OnAll", d.InterfaceName+"Custom")
 	return strings.Join(points, ", ")
 }
 

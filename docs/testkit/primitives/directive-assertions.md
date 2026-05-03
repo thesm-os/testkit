@@ -23,7 +23,31 @@ testkit.AssertCtxCancellation(t, func(ctx context.Context) error {
 })
 ```
 
-Calls `fn` with an already-cancelled context. Asserts the returned error wraps `context.Canceled` or `context.DeadlineExceeded`. Methods that respect context cancellation must return promptly with a context error. Used by the `ctx` directive.
+Calls `fn` with an already-cancelled context. Asserts the returned error wraps `context.Canceled` or `context.DeadlineExceeded`. Methods that respect context cancellation must return promptly with a context error.
+
+## AssertCtxDeadline
+
+```go
+testkit.AssertCtxDeadline(t, func(ctx context.Context) error {
+    err := pinger.Ping(ctx)
+    return err
+})
+```
+
+Calls `fn` with a context whose deadline is already in the past. Asserts the returned error is a context error. Distinguishes deadline handling from cancellation; some implementations only check `ctx.Err()` against `context.Canceled` and miss `DeadlineExceeded`.
+
+## AssertNilCtx
+
+```go
+testkit.AssertNilCtx(t, func(ctx context.Context) error {
+    err := store.Delete(nil, "id")
+    return err
+})
+```
+
+Calls `fn` with a `nil` context. Asserts the call does not panic. Methods are not required to do anything sensible with a nil context — the contract is that they must not crash. Most well-behaved methods either return early with an error or treat nil as `context.Background()`.
+
+`AssertCtxCancellation`, `AssertCtxDeadline`, and `AssertNilCtx` together form the auto-detected context coverage for ctx-taking methods in the suite generator. They run by default on every Reader, Writer, Deleter, Aggregator, and Lifecycle method without requiring a directive.
 
 ## AssertTimeout
 

@@ -4,7 +4,7 @@ How to integrate testkit into an existing Go project.
 
 ## Status
 
-Pre-1.0. Four generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**. The remaining generators (`suite`, `model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
+Pre-1.0. Five generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
 
 ## Prerequisites
 
@@ -121,13 +121,14 @@ check: lint test check-generated check-testkit
 
 testkit does not require all-or-nothing adoption. Recommended order, given today's state:
 
-1. **Primitives.** Import `testkit` for assertions, `MethodStub`, fault injection, recorders. No config file, no CLI. Immediate value.
+1. **Primitives.** Import `testkit` for assertions, `MethodStub`, fault injection, recorders, shape-typed contexts. No config file, no CLI. Immediate value.
 2. **`sentinel`.** Add `//go:generate testkit sentinel` to packages with `Err*` variables and custom error types. Catches prefix violations and accidental aliasing. Quick win.
 3. **`enum`.** Add `//go:generate testkit enum` to packages with iota constants. Catches new constants without test coverage, broken stringers, broken Marshal pairs. Quick win.
 4. **`builder`.** Add `//go:generate testkit builder` for fixtures used across many tests. Eliminates brittle inline `Item{...}` construction.
 5. **`stub`.** Add `//go:generate testkit stub` for interfaces with multiple implementations. The largest time saver for any codebase with non-trivial interfaces.
+6. **`suite`.** Add `//go:generate testkit suite` for any interface with a documented contract. Provides Tier 1 conformance — auto-detected ctx coverage and shape-typed plug-in points where the consumer composes assertions from `testkit/<shape>_assert.go`.
 
-When the remaining generators ship, the natural extension order is `suite` → `bench` → `model` → `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
+When the remaining generators ship, the natural extension order is `bench` → `model` → `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
 
 ## Updating generated code
 

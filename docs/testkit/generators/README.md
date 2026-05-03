@@ -4,7 +4,7 @@ A CLI tool that reads Go type definitions and proto descriptors and emits the te
 
 All generators use `go/types` for Go source analysis and `protodesc` for proto schema. Generators are invoked via `//go:generate` directives in the source package — no central type registry. Project-wide conventions (suffix, test package style, directive composition) live in `.testkit.yml`; see [Configuration](../configuration.md).
 
-**Status.** Four generators ship today: `stub`, `builder`, `sentinel`, `enum`. The remaining generators (`suite`, `model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
+**Status.** Five generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
 
 ## CLI
 
@@ -100,7 +100,7 @@ The generators that consume directives:
 | [`sentinel`](sentinel.md) | static | ready | Prefix, uniqueness, non-overlap, unwrap-chain, custom-error round-trip |
 | [`enum`](enum.md) | static | ready | Exhaustiveness, stringer round-trip, out-of-range, optional Marshal/Parse |
 | [`codec`](codec.md) | wire | planned | `codectest.Spec[T]`, round-trip suite + bench + fuzz seeds + `testdata/wire/*.bin` fixtures |
-| [`suite`](suite.md) | 1 | planned | `AssertContract(t, factory, opts...)` — one subtest per (method × directive) |
+| [`suite`](suite.md) | 1 | ready | `Assert<Iface>Contract(t, factory, opts...)` with shape-detected subtests + typed plug-in points |
 | [`model`](model.md) | 2-3 | planned | rapid state-machine: `RunStateMachine` + `RunDifferential` + `RunWorkload` |
 | [`bench`](bench.md) | 4 | planned | `BenchmarkContract(b, factory, opts...)` with `AllocsMax(N)` / `LatencyMax(X)` per directive |
 | [`sim`](sim.md) | 5 | planned | Subsystem simulation harness — engine clock + rand + capture-on-failure + workloads + invariants |

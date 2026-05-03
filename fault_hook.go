@@ -9,26 +9,30 @@ import "context"
 // These are the C parameter for Fault[C] when injecting faults into
 // Bindings. Only pre-invocation inputs are captured — results are not
 // available at fault-decision time.
+//
+// Ctx is stored as a struct field (not passed as a parameter) because
+// these are value snapshots for fault-predicate inspection, not
+// request-scoped flow. The containedctx lint is suppressed accordingly.
 
 // ReaderCall captures the input arguments to a Reader-shaped Call.
 // V is unused as a field but preserved for type-level distinction
 // with ReaderBindings[T, K, V].
 type ReaderCall[T any, K comparable, V any] struct {
-	Ctx  context.Context
+	Ctx  context.Context //nolint:containedctx // fault predicate input, not request flow
 	Impl T
 	Key  K
 }
 
 // WriterCall captures the input arguments to a Writer-shaped Call.
 type WriterCall[T any, V any] struct {
-	Ctx  context.Context
+	Ctx  context.Context //nolint:containedctx // fault predicate input, not request flow
 	Impl T
 	Val  V
 }
 
 // DeleterCall captures the input arguments to a Deleter-shaped Call.
 type DeleterCall[T any, K comparable] struct {
-	Ctx  context.Context
+	Ctx  context.Context //nolint:containedctx // fault predicate input, not request flow
 	Impl T
 	Key  K
 }
@@ -37,13 +41,13 @@ type DeleterCall[T any, K comparable] struct {
 // R is unused as a field but preserved for type-level distinction
 // with AggregatorBindings[T, R].
 type AggregatorCall[T any, R any] struct {
-	Ctx  context.Context
+	Ctx  context.Context //nolint:containedctx // fault predicate input, not request flow
 	Impl T
 }
 
 // LifecycleCall captures the input arguments to a Lifecycle-shaped Call.
 type LifecycleCall[T any] struct {
-	Ctx  context.Context
+	Ctx  context.Context //nolint:containedctx // fault predicate input, not request flow
 	Impl T
 }
 
@@ -65,7 +69,7 @@ func WithReaderFaults[T any, K comparable, V any](
 			for _, f := range faults {
 				if fired, err := f.ShouldFire(call, clock); fired {
 					var zero V
-					return zero, err
+					return zero, err //nolint:wrapcheck // fault errors pass through unwrapped for errors.Is
 				}
 			}
 			return b.Call(ctx, impl, k)
@@ -76,7 +80,7 @@ func WithReaderFaults[T any, K comparable, V any](
 // WithWriterFaults wraps a WriterBindings' Call to apply fault strategies.
 // If no faults are provided, the bindings are returned unchanged (zero cost).
 // Faults are evaluated in order; the first to fire short-circuits with its error.
-func WithWriterFaults[T any, V any](
+func WithWriterFaults[T, V any](
 	b WriterBindings[T, V],
 	clock Clock,
 	faults ...Fault[WriterCall[T, V]],
@@ -90,7 +94,7 @@ func WithWriterFaults[T any, V any](
 			call := WriterCall[T, V]{Ctx: ctx, Impl: impl, Val: v}
 			for _, f := range faults {
 				if fired, err := f.ShouldFire(call, clock); fired {
-					return err
+					return err //nolint:wrapcheck // fault errors pass through unwrapped for errors.Is
 				}
 			}
 			return b.Call(ctx, impl, v)
@@ -115,7 +119,7 @@ func WithDeleterFaults[T any, K comparable](
 			call := DeleterCall[T, K]{Ctx: ctx, Impl: impl, Key: k}
 			for _, f := range faults {
 				if fired, err := f.ShouldFire(call, clock); fired {
-					return err
+					return err //nolint:wrapcheck // fault errors pass through unwrapped for errors.Is
 				}
 			}
 			return b.Call(ctx, impl, k)
@@ -126,7 +130,7 @@ func WithDeleterFaults[T any, K comparable](
 // WithAggregatorFaults wraps an AggregatorBindings' Call to apply fault strategies.
 // If no faults are provided, the bindings are returned unchanged (zero cost).
 // Faults are evaluated in order; the first to fire short-circuits with its error.
-func WithAggregatorFaults[T any, R any](
+func WithAggregatorFaults[T, R any](
 	b AggregatorBindings[T, R],
 	clock Clock,
 	faults ...Fault[AggregatorCall[T, R]],
@@ -141,7 +145,7 @@ func WithAggregatorFaults[T any, R any](
 			for _, f := range faults {
 				if fired, err := f.ShouldFire(call, clock); fired {
 					var zero R
-					return zero, err
+					return zero, err //nolint:wrapcheck // fault errors pass through unwrapped for errors.Is
 				}
 			}
 			return b.Call(ctx, impl)
@@ -166,7 +170,7 @@ func WithLifecycleFaults[T any](
 			call := LifecycleCall[T]{Ctx: ctx, Impl: impl}
 			for _, f := range faults {
 				if fired, err := f.ShouldFire(call, clock); fired {
-					return err
+					return err //nolint:wrapcheck // fault errors pass through unwrapped for errors.Is
 				}
 			}
 			return b.Call(ctx, impl)
