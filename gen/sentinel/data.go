@@ -7,7 +7,11 @@
 // unwrap chain preservation, and errors.As type matching.
 package sentinel
 
-import "go.thesmos.sh/testkit/gen"
+import (
+	"strings"
+
+	"go.thesmos.sh/testkit/gen"
+)
 
 // Data is the top-level template data for a sentinel generation run.
 type Data struct {
@@ -26,19 +30,24 @@ type ErrorVar struct {
 	Doc  string // doc comment
 }
 
+const errorTypeName = "error"
+
 // ErrorType holds one exported type implementing the error interface.
 type ErrorType struct {
-	Name      string      // "NotFoundError"
-	Fields    []FieldData // exported fields
-	HasIs     bool        // has Is(error) bool method
-	HasUnwrap bool        // has Unwrap() error method
+	Name        string      // "NotFoundError"
+	Fields      []FieldData // exported fields
+	HasIs       bool        // has Is(error) bool method
+	HasUnwrap   bool        // has Unwrap() error method
+	UnwrapField string      // "Cause" — the error field Unwrap returns (if HasUnwrap)
 }
 
 // FieldData holds one exported field of an error type.
 type FieldData struct {
-	Name        string // "ID"
-	TypeStr     string // "string"
-	SampleValue string // `"test-id"`
+	Name             string // "ID"
+	TypeStr          string // "string"
+	SampleValue      string // `"test-id"` or `errors.New("test-cause")`
+	FormatCheckValue string // "test-id" — plain string to check in Error() output
+	IsError          bool   // true if field type is error (use ErrorIs, not Equal)
 }
 
 // HasContent reports whether there are any sentinels or error types to test.
@@ -97,11 +106,28 @@ func Analyze(pkg *gen.Package, cfg gen.Config, opts gen.Options) (*Data, error) 
 			if !f.Exported {
 				continue
 			}
+			sample := gen.SampleValueOf(f.Type, f.Name, tracker)
+			formatCheck := ""
+			if f.Type.String() == errorTypeName {
+				// For error-typed fields, use a real error instead of nil.
+				lowerName := strings.ToLower(f.Name)
+				sample = `errors.New("test-` + lowerName + `")`
+				formatCheck = "test-" + lowerName
+			} else if f.Type.String() == "string" {
+				// For string fields, the format check is the unquoted value.
+				formatCheck = "test-" + strings.ToLower(f.Name)
+			}
 			et.Fields = append(et.Fields, FieldData{
-				Name:        f.Name,
-				TypeStr:     f.Type.String(),
-				SampleValue: gen.SampleValueOf(f.Type, f.Name, tracker),
+				Name:             f.Name,
+				TypeStr:          f.Type.String(),
+				SampleValue:      sample,
+				FormatCheckValue: formatCheck,
+				IsError:          f.Type.String() == errorTypeName,
 			})
+			// Find the error-typed field for Unwrap tests.
+			if et.HasUnwrap && f.Type.String() == errorTypeName {
+				et.UnwrapField = f.Name
+			}
 		}
 		errorTypes = append(errorTypes, et)
 	}

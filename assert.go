@@ -47,6 +47,17 @@ func ErrorIs(tb testing.TB, err, target error, msg string) {
 	}
 }
 
+// ErrorIsNot calls tb.Fatalf if [errors.Is](err, target) returns true. Use
+// this to verify that two errors are distinct — they must not satisfy Is.
+//
+//	testkit.ErrorIsNot(t, errA, errB, "ErrNotFound must not match ErrConflict")
+func ErrorIsNot(tb testing.TB, err, target error, msg string) {
+	tb.Helper()
+	if errors.Is(err, target) {
+		tb.Fatalf("%s: errors.Is(%v, %v) = true, want false", msg, err, target)
+	}
+}
+
 // ErrorAs calls tb.Fatalf if [errors.As] cannot unwrap err into a value of
 // type T. On success it returns the unwrapped value, allowing further
 // inspection without a second type assertion.

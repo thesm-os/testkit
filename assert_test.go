@@ -141,6 +141,28 @@ func TestErrorIs(t *testing.T) {
 	})
 }
 
+func TestErrorIsNot(t *testing.T) {
+	t.Parallel()
+
+	t.Run("different errors pass", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.ErrorIsNot(f, errors.New("a"), errors.New("b"), "must not match")
+		if f.Failed() {
+			t.Fatalf("should pass for different errors, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("same sentinel fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.ErrorIsNot(f, errSentinel, errSentinel, "must not match")
+		if !f.Failed() {
+			t.Fatal("should fail for same sentinel")
+		}
+	})
+}
+
 type customError struct{ Code int }
 
 func (*customError) Error() string { return "custom" }

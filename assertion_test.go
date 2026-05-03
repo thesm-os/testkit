@@ -347,6 +347,38 @@ func TestAssertion_IsError(t *testing.T) {
 	})
 }
 
+func TestAssertion_IsNotError(t *testing.T) {
+	t.Parallel()
+
+	t.Run("different errors pass", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, errors.New("a")).IsNotError(errors.New("b"), "must not match")
+		if f.Failed() {
+			t.Fatalf("should pass for different errors, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("same sentinel fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		sentinel := errors.New("sentinel")
+		testkit.Assert(f, sentinel).IsNotError(sentinel, "must not match")
+		if !f.Failed() {
+			t.Fatal("should fail for same sentinel")
+		}
+	})
+
+	t.Run("non-error type fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "not an error").IsNotError(errors.New("x"), "must be error")
+		if !f.Failed() {
+			t.Fatal("should fail for non-error type")
+		}
+	})
+}
+
 func TestAssertion_Matches(t *testing.T) {
 	t.Parallel()
 

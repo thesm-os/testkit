@@ -167,6 +167,19 @@ func (a *Assertion[T]) IsError(target error, msg string) *Assertion[T] {
 	return a
 }
 
+// IsNotError calls tb.Fatalf if got (which must implement error) satisfies
+// [errors.Is](got, target). Use to assert two errors are distinct.
+func (a *Assertion[T]) IsNotError(target error, msg string) *Assertion[T] {
+	a.tb.Helper()
+	err, ok := any(a.got).(error)
+	if !ok {
+		a.tb.Fatalf("%s: got is not an error: %+v", msg, a.got)
+		return a
+	}
+	ErrorIsNot(a.tb, err, target, msg)
+	return a
+}
+
 // Matches calls tb.Fatalf if got (string or []byte) does not match the
 // regular expression pattern. An invalid pattern is itself a fatal error.
 //

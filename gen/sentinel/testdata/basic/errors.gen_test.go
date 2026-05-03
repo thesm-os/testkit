@@ -5,10 +5,13 @@ package basic_test
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
 	"go.thesmos.sh/testkit/gen/sentinel/testdata/basic"
+
+	"go.thesmos.sh/testkit"
 )
 
 func TestBasicSentinelErrors(t *testing.T) {
@@ -30,12 +33,8 @@ func TestBasicSentinelErrors(t *testing.T) {
 		for _, e := range all {
 			t.Run(e.name+" has correct prefix", func(t *testing.T) {
 				t.Parallel()
-				if !strings.HasPrefix(e.err.Error(), prefix) {
-					t.Errorf(
-						"%s: error %q must start with %q",
-						e.name, e.err.Error(), prefix,
-					)
-				}
+				testkit.True(t, strings.HasPrefix(e.err.Error(), prefix),
+					e.name+" must start with "+prefix)
 			})
 		}
 	})
@@ -45,12 +44,9 @@ func TestBasicSentinelErrors(t *testing.T) {
 		seen := make(map[string]string)
 		for _, e := range all {
 			msg := e.err.Error()
-			if other, ok := seen[msg]; ok {
-				t.Errorf(
-					"%s and %s have identical .Error(): %q",
-					e.name, other, msg,
-				)
-			}
+			other, dup := seen[msg]
+			testkit.False(t, dup,
+				e.name+" and "+other+" have identical .Error(): "+msg)
 			seen[msg] = e.name
 		}
 	})
@@ -64,12 +60,8 @@ func TestBasicSentinelErrors(t *testing.T) {
 				}
 				t.Run(a.name+" is not "+b.name, func(t *testing.T) {
 					t.Parallel()
-					if errors.Is(a.err, b.err) {
-						t.Errorf(
-							"%s must not satisfy errors.Is(%s)",
-							a.name, b.name,
-						)
-					}
+					testkit.ErrorIsNot(t, a.err, b.err,
+						a.name+" must not match "+b.name)
 				})
 			}
 		}
@@ -81,9 +73,8 @@ func TestBasicSentinelErrors(t *testing.T) {
 			t.Run(e.name+" preserves chain when wrapped", func(t *testing.T) {
 				t.Parallel()
 				wrapped := errors.Join(e.err, errors.New("extra context"))
-				if !errors.Is(wrapped, e.err) {
-					t.Errorf("wrapped %s must satisfy errors.Is", e.name)
-				}
+				testkit.ErrorIs(t, wrapped, e.err,
+					"wrapped "+e.name+" must satisfy errors.Is")
 			})
 		}
 	})
@@ -94,47 +85,70 @@ func TestNotFoundError(t *testing.T) {
 
 	t.Run("errors.As extracts type", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.NotFoundError
+		wantEntity := "test-entity"
 		err := &basic.NotFoundError{
-			Entity: "test-entity",
+			Entity: wantEntity,
 		}
-		if !errors.As(err, &target) {
-			t.Fatal("errors.As must succeed for *NotFoundError")
-		}
-		if target.Entity != "test-entity" {
-			t.Errorf("Entity: got %v, want %v", target.Entity, "test-entity")
-		}
+		target := testkit.ErrorAs[*basic.NotFoundError](t, err,
+			"errors.As must succeed for *NotFoundError")
+		testkit.Equal(t, target.Entity, wantEntity,
+			"Entity must round-trip through errors.As")
 	})
 
-	t.Run("survives wrapping", func(t *testing.T) {
+	t.Run("survives errors.Join wrapping", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.NotFoundError
 		original := &basic.NotFoundError{
 			Entity: "test-entity",
 		}
 		wrapped := errors.Join(original, errors.New("extra context"))
-		if !errors.As(wrapped, &target) {
-			t.Fatal("errors.As must work through wrapping for *NotFoundError")
-		}
+		_ = testkit.ErrorAs[*basic.NotFoundError](t, wrapped,
+			"errors.As must work through errors.Join")
 	})
 
-	t.Run("Error returns non-empty string", func(t *testing.T) {
+	t.Run("survives fmt.Errorf wrapping", func(t *testing.T) {
 		t.Parallel()
-		err := &basic.NotFoundError{}
-		if err.Error() == "" {
-			t.Error("Error() must return non-empty string")
+		original := &basic.NotFoundError{
+			Entity: "test-entity",
 		}
+		wrapped := fmt.Errorf("context: %w", original)
+		_ = testkit.ErrorAs[*basic.NotFoundError](t, wrapped,
+			"errors.As must work through fmt.Errorf")
 	})
 
-	t.Run("Is matching works", func(t *testing.T) {
+	t.Run("Error format includes all fields", func(t *testing.T) {
+		t.Parallel()
+		err := &basic.NotFoundError{
+			Entity: "test-entity",
+		}
+		got := err.Error()
+		testkit.Assert(t, got).
+			IsNotEmpty("Error() must return non-empty string").
+			Contains("test-entity", "Error() must include Entity value")
+	})
+
+	t.Run("Is matches same type", func(t *testing.T) {
+		t.Parallel()
+		a := &basic.NotFoundError{}
+		b := &basic.NotFoundError{}
+		testkit.ErrorIs(t, a, b, "Is must match same type")
+	})
+
+	t.Run("Is matches across instances with different fields", func(t *testing.T) {
 		t.Parallel()
 		a := &basic.NotFoundError{
 			Entity: "test-entity",
 		}
 		b := &basic.NotFoundError{}
-		if !errors.Is(a, b) {
-			t.Error("Is must match same type")
-		}
+		testkit.ErrorIs(t, a, b,
+			"Is must match across instances regardless of field values")
+	})
+
+	t.Run("Is rejects different error types", func(t *testing.T) {
+		t.Parallel()
+		err := &basic.NotFoundError{}
+		other := errors.New("different error")
+		testkit.ErrorIsNot(t, err, other,
+			"Is must reject different error types")
 	})
 
 }
@@ -144,41 +158,53 @@ func TestValidationError(t *testing.T) {
 
 	t.Run("errors.As extracts type", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.ValidationError
+		wantField := "test-field"
+		wantMessage := "test-message"
 		err := &basic.ValidationError{
-			Field:   "test-field",
-			Message: "test-message",
+			Field:   wantField,
+			Message: wantMessage,
 		}
-		if !errors.As(err, &target) {
-			t.Fatal("errors.As must succeed for *ValidationError")
-		}
-		if target.Field != "test-field" {
-			t.Errorf("Field: got %v, want %v", target.Field, "test-field")
-		}
-		if target.Message != "test-message" {
-			t.Errorf("Message: got %v, want %v", target.Message, "test-message")
-		}
+		target := testkit.ErrorAs[*basic.ValidationError](t, err,
+			"errors.As must succeed for *ValidationError")
+		testkit.Equal(t, target.Field, wantField,
+			"Field must round-trip through errors.As")
+		testkit.Equal(t, target.Message, wantMessage,
+			"Message must round-trip through errors.As")
 	})
 
-	t.Run("survives wrapping", func(t *testing.T) {
+	t.Run("survives errors.Join wrapping", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.ValidationError
 		original := &basic.ValidationError{
 			Field:   "test-field",
 			Message: "test-message",
 		}
 		wrapped := errors.Join(original, errors.New("extra context"))
-		if !errors.As(wrapped, &target) {
-			t.Fatal("errors.As must work through wrapping for *ValidationError")
-		}
+		_ = testkit.ErrorAs[*basic.ValidationError](t, wrapped,
+			"errors.As must work through errors.Join")
 	})
 
-	t.Run("Error returns non-empty string", func(t *testing.T) {
+	t.Run("survives fmt.Errorf wrapping", func(t *testing.T) {
 		t.Parallel()
-		err := &basic.ValidationError{}
-		if err.Error() == "" {
-			t.Error("Error() must return non-empty string")
+		original := &basic.ValidationError{
+			Field:   "test-field",
+			Message: "test-message",
 		}
+		wrapped := fmt.Errorf("context: %w", original)
+		_ = testkit.ErrorAs[*basic.ValidationError](t, wrapped,
+			"errors.As must work through fmt.Errorf")
+	})
+
+	t.Run("Error format includes all fields", func(t *testing.T) {
+		t.Parallel()
+		err := &basic.ValidationError{
+			Field:   "test-field",
+			Message: "test-message",
+		}
+		got := err.Error()
+		testkit.Assert(t, got).
+			IsNotEmpty("Error() must return non-empty string").
+			Contains("test-field", "Error() must include Field value").
+			Contains("test-message", "Error() must include Message value")
 	})
 
 }
@@ -188,48 +214,73 @@ func TestWrappedError(t *testing.T) {
 
 	t.Run("errors.As extracts type", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.WrappedError
+		wantMsg := "test-msg"
+		wantCause := errors.New("test-cause")
 		err := &basic.WrappedError{
-			Msg:   "test-msg",
-			Cause: nil,
+			Msg:   wantMsg,
+			Cause: wantCause,
 		}
-		if !errors.As(err, &target) {
-			t.Fatal("errors.As must succeed for *WrappedError")
-		}
-		if target.Msg != "test-msg" {
-			t.Errorf("Msg: got %v, want %v", target.Msg, "test-msg")
-		}
-		if target.Cause != nil {
-			t.Errorf("Cause: got %v, want %v", target.Cause, nil)
-		}
+		target := testkit.ErrorAs[*basic.WrappedError](t, err,
+			"errors.As must succeed for *WrappedError")
+		testkit.Equal(t, target.Msg, wantMsg,
+			"Msg must round-trip through errors.As")
+		testkit.ErrorIs(t, target.Cause, wantCause,
+			"Cause must round-trip through errors.As")
 	})
 
-	t.Run("survives wrapping", func(t *testing.T) {
+	t.Run("survives errors.Join wrapping", func(t *testing.T) {
 		t.Parallel()
-		var target *basic.WrappedError
 		original := &basic.WrappedError{
 			Msg:   "test-msg",
-			Cause: nil,
+			Cause: errors.New("test-cause"),
 		}
 		wrapped := errors.Join(original, errors.New("extra context"))
-		if !errors.As(wrapped, &target) {
-			t.Fatal("errors.As must work through wrapping for *WrappedError")
-		}
+		_ = testkit.ErrorAs[*basic.WrappedError](t, wrapped,
+			"errors.As must work through errors.Join")
 	})
 
-	t.Run("Error returns non-empty string", func(t *testing.T) {
+	t.Run("survives fmt.Errorf wrapping", func(t *testing.T) {
 		t.Parallel()
-		err := &basic.WrappedError{}
-		if err.Error() == "" {
-			t.Error("Error() must return non-empty string")
+		original := &basic.WrappedError{
+			Msg:   "test-msg",
+			Cause: errors.New("test-cause"),
 		}
+		wrapped := fmt.Errorf("context: %w", original)
+		_ = testkit.ErrorAs[*basic.WrappedError](t, wrapped,
+			"errors.As must work through fmt.Errorf")
 	})
 
-	t.Run("Unwrap is accessible", func(t *testing.T) {
+	t.Run("Error format includes all fields", func(t *testing.T) {
 		t.Parallel()
-		err := &basic.WrappedError{}
-		// Verify Unwrap() does not panic on zero value.
-		_ = err.Unwrap()
+		err := &basic.WrappedError{
+			Msg:   "test-msg",
+			Cause: errors.New("test-cause"),
+		}
+		got := err.Error()
+		testkit.Assert(t, got).
+			IsNotEmpty("Error() must return non-empty string").
+			Contains("test-msg", "Error() must include Msg value").
+			Contains("test-cause", "Error() must include Cause value")
+	})
+
+	t.Run("Unwrap returns cause", func(t *testing.T) {
+		t.Parallel()
+		cause := errors.New("inner cause")
+		err := &basic.WrappedError{
+			Cause: cause,
+		}
+		got := err.Unwrap()
+		testkit.ErrorIs(t, got, cause, "Unwrap must return the cause")
+	})
+
+	t.Run("errors.Is traverses Unwrap chain", func(t *testing.T) {
+		t.Parallel()
+		sentinel := errors.New("findable")
+		err := &basic.WrappedError{
+			Cause: sentinel,
+		}
+		testkit.ErrorIs(t, err, sentinel,
+			"errors.Is must find sentinel through Unwrap chain")
 	})
 
 }
