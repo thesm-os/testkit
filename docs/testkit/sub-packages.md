@@ -1,18 +1,12 @@
 # testkit Sub-packages
 
-Optional sub-packages with additional dependencies.
-Import only what you need — the core `testkit` package
-has no transitive dependency on any of these.
+Optional sub-packages with isolated dependencies. Each sub-package is a separate Go module so projects opt in to additional deps only when needed — the core `testkit` package never carries them transitively.
+
+> **Status:** the sub-package modules exist (`testkit/container`, `testkit/httptest`, `testkit/oteltest`, `testkit/clitest`) but are placeholders pending implementation. The shapes below describe the planned API. Track each module's `doc.go` for current state.
 
 ## testkit/container
 
-Container lifecycle management via `testcontainers-go`.
-
-### SharedContainer
-
-Starts one container for the entire test binary via
-`TestMain`, with automatic cleanup. Eliminates per-test
-container startup overhead and orphaned containers.
+Container lifecycle management for integration tests via [`testcontainers-go`](https://github.com/testcontainers/testcontainers-go). Planned: a `SharedContainer` primitive that starts one container per test binary via `TestMain` with automatic cleanup, eliminating per-test startup overhead and orphaned containers. Will support Docker, Podman (rootless), and containerd; the Ryuk reaper handled automatically based on runtime detection.
 
 ```go
 import "go.thesmos.sh/testkit/container"
@@ -28,26 +22,21 @@ func TestMain(m *testing.M) {
 }
 ```
 
-Supports Docker, Podman (rootless), and containerd.
-The Ryuk reaper is handled automatically based on
-runtime detection.
-
 ## testkit/httptest
 
 HTTP response assertion helpers. stdlib `net/http` only.
 
-| Function | Description |
+| Planned function | Description |
 |----------|-------------|
-| `AssertStatus(t, resp, code, msg)` | Fails if resp.StatusCode != code |
+| `AssertStatus(t, resp, code, msg)` | Fails if `resp.StatusCode != code` |
 | `AssertJSON(t, resp, &target, msg)` | Decodes JSON body into target |
 | `AssertHeader(t, resp, key, want, msg)` | Checks response header value |
 
 ## testkit/oteltest
 
-OpenTelemetry metric assertions. Depends on
-`go.opentelemetry.io/otel/sdk`.
+OpenTelemetry metric assertions. Depends on `go.opentelemetry.io/otel/sdk`.
 
-| Function | Description |
+| Planned function | Description |
 |----------|-------------|
 | `AssertCounterDelta(t, meter, name, delta, msg)` | Counter incremented by delta |
 | `AssertGaugeValue(t, meter, name, value, msg)` | Gauge at expected value |
@@ -55,12 +44,9 @@ OpenTelemetry metric assertions. Depends on
 
 ## testkit/clitest
 
-CLI binary testing via `os/exec`.
+CLI binary testing via `os/exec`. The substrate the [`smoke`](generators/smoke.md) generator targets.
 
-### RunBinary
-
-Runs a compiled binary, captures stdout, stderr, and exit
-code.
+Planned `RunBinary` runs a compiled binary, captures stdout, stderr, exit code:
 
 ```go
 import "go.thesmos.sh/testkit/clitest"
@@ -83,18 +69,14 @@ testkit.Equal(t, result.ExitCode, 0, "migrate must succeed")
 | Option | Description |
 |--------|-------------|
 | `WithEnv(key, val)` | Set environment variable |
-| `WithTimeout(d)` | Kill process after d |
+| `WithTimeout(d)` | Kill process after `d` |
 | `WithStdin(r)` | Pipe reader to stdin |
 | `WithDir(path)` | Set working directory |
 
-### AssertExitCode
-
-Convenience assertion that includes stdout/stderr in the
-failure message on mismatch.
+`AssertExitCode` will be a convenience that includes stdout/stderr in the failure message on mismatch:
 
 ```go
-clitest.AssertExitCode(t, result, 0,
-    "server must start cleanly")
+clitest.AssertExitCode(t, result, 0, "server must start cleanly")
 // On failure:
 //   server must start cleanly
 //     got exit code 1, want 0

@@ -4,67 +4,56 @@ Smaller utilities that don't warrant their own document.
 
 ## TestError
 
-Creates a named, deterministic error for use in test
-fixtures. Replaces ad-hoc `errors.New("boom")` with a
-traceable, `errors.Is`-compatible sentinel.
+Creates a named, deterministic sentinel error for fixtures. Replaces ad-hoc `errors.New("boom")` with a traceable, `errors.Is`-compatible value.
 
 ```go
 var errBoom = testkit.TestError("boom")
 // errBoom.Error() == "testkit: boom"
 
-stub := NewStubStore(
-    testkit.WithPutFault(errBoom, 3),
-)
+stub.OnPut.Faults(errBoom, 3)
 err := stub.Put(ctx, req)
 testkit.ErrorIs(t, err, errBoom, "must propagate fault")
 ```
 
-Every `TestError` is distinct — `TestError("x")` and
-`TestError("x")` are two different errors that do not
-satisfy `errors.Is`.
+`TestError("x")` always returns the same error for the same name; two calls with different names return distinct errors.
 
 ## RequireEnv
 
-Skips the test if an environment variable is not set;
-returns its value if present.
+Skips the test if the named environment variable is not set; returns its value if present.
 
 ```go
 func TestPostgres_Integration(t *testing.T) {
     dsn := testkit.RequireEnv(t, "DATABASE_URL")
-    pool, err := pgxpool.New(ctx, dsn)
+    pool, err := pgxpool.New(t.Context(), dsn)
+    // ...
 }
 ```
 
 ## SeededRand
 
-Deterministic `*rand.Rand` seeded from the test's name
-via FNV-1a hash. Two runs of the same test produce
-byte-identical sequences.
+Returns a deterministic `*rand.Rand` seeded from the FNV-1a hash of `tb.Name()`. Two runs of the same test produce byte-identical sequences.
 
 ```go
 rng := testkit.SeededRand(t)
 idx := rng.IntN(len(items))
 ```
 
-Underlying source is `math/rand/v2` PCG generator.
+Backed by `math/rand/v2` PCG.
 
 ## MustMarshal / MustUnmarshal
 
-Fixture construction helpers that fatal the test on
-marshal/unmarshal failure.
+Fixture construction helpers that fatal on JSON error.
 
 ```go
 data := testkit.MustMarshal(t, fixture)
 testkit.MustUnmarshal(t, data, &target)
 ```
 
-Do NOT use for the subject-under-test's marshal behaviour.
+Do **not** use these for the subject under test's marshal behavior — that's what the `codec` generator is for.
 
 ## FailingReader / FailingWriter
 
-`io.Reader` / `io.Writer` that return successful bytes
-for the first N bytes, then return an error on every
-subsequent call. Simulates mid-stream failures.
+`io.Reader` / `io.Writer` that succeeds for the first N bytes, then fails on every subsequent call.
 
 ```go
 r := &testkit.FailingReader{
@@ -74,10 +63,11 @@ r := &testkit.FailingReader{
 }
 ```
 
+Used to simulate mid-stream failures.
+
 ## Quiet
 
-Suppresses `log/slog` default output for the duration of
-a test. Tests using Quiet must NOT call `t.Parallel`.
+Suppresses `log/slog` default-handler output for the duration of the test by replacing the default with a discard handler. Tests using `Quiet` must NOT call `t.Parallel()` — they mutate process-global state.
 
 ```go
 func TestSubsystem_LogsOnFailure(t *testing.T) {
@@ -88,29 +78,28 @@ func TestSubsystem_LogsOnFailure(t *testing.T) {
 
 ## FailableTB
 
-Stub `testing.TB` that captures the first `Fatalf` /
-`Fatal` / `Errorf` without aborting the host goroutine.
-For negative-space tests.
+Stub `testing.TB` that captures the first `Fatalf`/`Fatal`/`Errorf` without aborting the host goroutine. Used to verify that an assertion helper actually fails when expected.
 
 ```go
 ftb := testkit.NewFailableTB().WithName("TestFoo")
-someAssertionHelper(ftb, badInput)
-testkit.True(t, ftb.Failed(), "must fatal on bad input")
+testkit.Equal(ftb, 1, 2, "must fail")
+testkit.True(t, ftb.Failed(), "must record failure")
+testkit.Contains(t, ftb.Msg(), "must fail", "captured message")
 ```
 
-| Method | Description |
-|--------|-------------|
-| `NewFailableTB()` | Create fresh stub |
-| `WithName(s)` | Set `Name()` return (fluent) |
-| `Failed() bool` | Any fatal/error recorded? |
-| `Msg() string` | First captured failure message |
-| `Logs() []string` | Captured `Logf` lines |
-| `HelperCalls() int` | Number of `Helper()` invocations |
+| Method | Purpose |
+|--------|---------|
+| `NewFailableTB()` | Construct |
+| `WithName(s)` | Set `Name()` (fluent) |
+| `Failed()` / `Msg()` | Inspect captured failure |
+| `Logs()` | Captured `Logf` lines |
+| `HelperCalls()` | Number of `Helper()` invocations |
+| `Cleanup(fn)` / `RunCleanups()` | LIFO cleanup simulation |
+| `Context()` | Context cancelled on Fatal |
 
 ## TempFile
 
-Creates a temp file with content in one call. Cleanup is
-automatic via `t.TempDir`.
+Creates a temp file in `tb.TempDir()` with content. Cleanup is automatic.
 
 ```go
 path := testkit.TempFile(t, "config.json", []byte(`{"key":"val"}`))
@@ -118,37 +107,37 @@ path := testkit.TempFile(t, "config.json", []byte(`{"key":"val"}`))
 
 ## FreePort
 
-Finds a free TCP port without races. Binds to `:0`, reads
-the assigned port.
+Finds a free TCP port without races. Binds to `:0`, reads the assigned port, closes the listener.
 
 ```go
-port, cleanup := testkit.FreePort(t)
-defer cleanup()
+port := testkit.FreePort(t)
 startServer(port)
 ```
 
-## SortedKeys[K, V]
+## SortedKeys
 
-Extracts and sorts map keys for deterministic test output.
+Extracts and sorts map keys for deterministic iteration in tests.
 
 ```go
-keys := testkit.SortedKeys(myMap)
+for _, k := range testkit.SortedKeys(myMap) {
+    ...
+}
 ```
 
-## DiffMap[K, V]
+## MapDiff / DiffMap
 
-Compares two `map[K]V` values and produces a structured
-diff (added keys, removed keys, changed values).
+Compares two maps and returns a structured difference (added keys, removed keys, changed values). Values are compared using `cmp.Equal`.
 
 ```go
 diff := testkit.DiffMap(before, after)
 testkit.Len(t, diff.Added, 1, "one key added")
 ```
 
-## TableTest[T]
+`MapDiff` is the result type; `DiffMap` is the constructor.
 
-Generic table-driven test runner with automatic subtest
-naming from the `Name` field.
+## TableTest
+
+Generic table-driven test runner. Subtest names come from each case's `Name` field (or a `Name() string` method).
 
 ```go
 testkit.TableTest(t, []struct {
@@ -163,14 +152,14 @@ testkit.TableTest(t, []struct {
 })
 ```
 
-## Rapid Generators
+## Rapid generators
 
 Typed wrappers over `pgregory.net/rapid` primitives.
 
-| Function | Description |
-|----------|-------------|
+| Function | Returns |
+|----------|---------|
 | `DrawString(t, prefix)` | `prefix-<random>` |
-| `DrawBytes(t, maxLen)` | Random byte slice up to maxLen |
-| `DrawEnum[T ~uint8](t, max)` | Random enum value in [1, max] |
-| `DrawUint64(t)` | Positive uint64 |
-| `DrawInt(t, min, max)` | Random int in [min, max] |
+| `DrawBytes(t, maxLen)` | Random byte slice up to `maxLen` |
+| `DrawEnum[T ~uint8](t, max)` | Random enum value in `[0, max]` |
+| `DrawUint64(t)` | Random uint64 |
+| `DrawInt(t, lo, hi)` | Random int in `[lo, hi]` |

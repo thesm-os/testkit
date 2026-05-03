@@ -1,158 +1,123 @@
 # testkit Configuration
 
-Project-wide conventions and validator settings live in
-`.testkit.yml` at the repository root. Individual
-generators are invoked via `//go:generate` directives in
-Go source files — the YAML file does NOT list types or
-interfaces to generate for.
+Project-wide conventions live in `.testkit.yml`. Generators themselves are invoked via `//go:generate` directives in Go source — the YAML file does not list types or interfaces. Validators read their config from the same file.
 
 ## What goes where
 
 | Concern | Where it lives |
 |---------|---------------|
-| Which types to generate stubs/builders/etc. for | `//go:generate testkit <cmd>` in source |
-| Output file path per generation | `-o` flag on the directive |
-| Project-wide output conventions | `.testkit.yml` |
+| Which types to generate stubs/builders/etc. for | `//go:generate testkit <cmd>` directives |
+| Output file path per directive | `-o` flag on the directive |
+| Project-wide output conventions (suffix, package style, stub naming) | `.testkit.yml` |
 | Validator configuration | `.testkit.yml` |
 
 ## Minimal example
 
 ```yaml
-proto_root: api/proto
-
 output:
   test_package_suffix: test
   generated_suffix: .gen.go
+  test_package_style: external
 ```
 
-## Full reference
+## Fields
+
+### Output conventions
 
 ```yaml
-# ─── Proto root ─────────────────────────────────────────
-# Root directory for .proto files relative to repo root.
-# Used by the codec generator and proto-sync validator.
-proto_root: api/proto
-
-# ─── Output conventions ────────────────────────────────
 output:
-  # Suffix appended to package name for test packages.
-  # "test" produces store/storetest/.
-  # Used as the default when -o is not specified.
+  # Suffix appended to the source package name to produce the test package
+  # directory. "test" produces store → storetest. Default: "test".
   test_package_suffix: test
 
-  # Suffix for generated files. All generated files end
-  # with this suffix so they can be excluded from manual
-  # review and regenerated without loss.
+  # Suffix for generated files. All generated files end with this so they
+  # can be excluded from manual review and regenerated without loss.
+  # Default: ".gen.go".
   generated_suffix: .gen.go
 
   # Package naming convention for generated test files.
-  # "external" produces package foo_test (black-box).
-  # "internal" produces package foo (white-box).
-  # Default: external.
+  #   "external" produces package foo_test (black-box).
+  #   "internal" produces package foo (white-box).
+  # Default: "external".
   test_package_style: external
+```
 
-# ─── Doc root ──────────────────────────────────────────
-# Base directory for pkgdoc generator output.
-# Default: docs/compliance/package-audit
-doc_root: docs/compliance/package-audit
+### Stub naming
 
-# ─── Validators ────────────────────────────────────────
+```yaml
+stub:
+  # Base name pattern for generated stub files. {type} is replaced with
+  # the lowercased type name. Default: "{type}_stub".
+  file-pattern: "{type}_stub"
 
+  # Suffix appended to the type name for generated stub types.
+  # E.g., interface "Store" with default produces "StoreStub".
+  # Default: "Stub".
+  type-suffix: Stub
+```
+
+### Validators
+
+Validator config is documented per-validator under [`validators/`](validators/README.md). Each validator key follows the same pattern:
+
+```yaml
 validators:
-  # Proto sync: verify generated codecs match proto source.
-  proto_sync:
+  error_prefix:
     enabled: true
-    # Packages allowed to have proto messages without
-    # corresponding Go structs (e.g., consumed third-party
-    # protos not generated locally).
-    skip_packages: []
+    dirs: ["."]
+    exclude_tests: true
 
-  # Migration chain: verify SQL migrations are contiguous.
-  migration:
-    enabled: true
-    dirs:
-      - plugins/postgres/schema
-    naming: "{seq:03d}-{description}.sql"
-    reversible: false
-    # Go source file containing RequiredSchemaVersion.
-    version_source: plugins/postgres/pool.go
-
-  # Depguard: verify import graph matches layer rules.
-  depguard:
+  coverage:
     enabled: true
     layers:
-      - name: model
-        pattern: "example.com/myapp/model/..."
-        deny:
-          - "example.com/myapp/service/..."
-          - "example.com/myapp/plugins/..."
-      - name: service
-        pattern: "example.com/myapp/service/..."
-        deny:
-          - "example.com/myapp/plugins/..."
-      - name: plugins
-        pattern: "example.com/myapp/plugins/*"
-        deny_siblings: true
-
-  # Wire freshness: verify golden .bin files are current.
-  wire:
-    enabled: true
+      - path: "."
+        line: 100
+        branch: 100
+    excludes:
+      - path: "cmd/..."
+        reason: thin CLI wiring
 ```
 
 ## Config resolution
 
-1. testkit looks for `.testkit.yml` in the current
-   directory, then walks parent directories up to the
-   repository root (first `go.work` or `.git` parent).
-2. The `-config` flag (available on all subcommands)
-   overrides automatic discovery.
-3. Missing optional sections use defaults. An absent
-   `.testkit.yml` is valid — all defaults apply.
+1. testkit looks for `.testkit.yml` in the current directory, then walks parent directories up to the repository root (first `go.work` or `.git` parent).
+2. The `--config` flag overrides automatic discovery.
+3. Missing optional sections use defaults. An absent `.testkit.yml` is valid — all defaults apply.
 
-## Environment variables
+## Global flags
 
-| Variable | Effect |
-|----------|--------|
-| `TESTKIT_CONFIG` | Path to config file (same as `-config`) |
-| `TESTKIT_VERBOSE` | Enable verbose output (same as `-v`) |
+Available on every subcommand:
+
+| Flag | Purpose |
+|------|---------|
+| `--config <path>` | Override config-file discovery |
+| `--check` | Dry-run: compare output against existing files; exit non-zero on diff |
+| `--verbose` | Verbose logging |
 
 ## Generated file header
 
-Every generated file includes a header comment:
+Every generated file begins with:
 
 ```go
 // Code generated by testkit <subcommand>. DO NOT EDIT.
-// Source: testkit <subcommand> <args>
+// Source: <source-file>:<line> (testkit <subcommand> <args>)
 ```
 
-This header is used by editors and linters to suppress
-warnings on generated code, and makes `git grep
-"Code generated by testkit"` a reliable way to find all
-generated files.
+Editors and linters use this header to suppress warnings on generated code, and `git grep "Code generated by testkit"` finds every generated file in the repo.
 
-## Interaction with //go:generate
+## Interaction with `//go:generate`
 
-The YAML file influences generators only through
-conventions (suffix, test package style, doc root). The
-generators themselves are declared in source:
+The YAML file influences generators only through conventions (suffix, package style, stub naming). Type arguments and output paths come from the directive:
 
 ```go
 // store/generate.go
-
 package store
 
-//go:generate testkit stub -o storetest/in_memory_store.gen.go Store
-//go:generate testkit stub -o storetest/in_memory_cache.gen.go Cache
-//go:generate testkit recording -o storetest/recording_store.gen.go Store
-//go:generate testkit recording -o storetest/recording_projection.gen.go Projection
-//go:generate testkit builder -o storetest/builders.gen.go User Entry
-//go:generate testkit model -o storetest/store_model.gen.go Store
-//go:generate testkit suite -o storetest/store_spec.gen.go Store
-//go:generate testkit suite -o storetest/cache_spec.gen.go Cache
-//go:generate testkit sentinel -o errors.gen_test.go
-//go:generate testkit enum -o status_enum.gen_test.go Status
+//go:generate testkit stub      -o storetest/store_stub.gen.go    Store
+//go:generate testkit stub      -o storetest/cache_stub.gen.go    Cache
+//go:generate testkit builder   -o storetest/builders.gen.go      User Item
+//go:generate testkit sentinel  -o errors.gen_test.go
+//go:generate testkit enum      -o status_enum.gen_test.go        Status
 ```
 
-Running `go generate ./...` processes all directives.
-The YAML file is read once per invocation for output
-conventions; the types come from the directive arguments.
+Running `go generate ./...` processes all directives. The YAML file is read once per invocation for output conventions; the type list comes from the directive arguments.

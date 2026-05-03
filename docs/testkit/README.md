@@ -1,37 +1,22 @@
 # testkit
 
-`go.thesmos.sh/testkit` is a standalone test infrastructure
-toolkit for Go projects. It provides two things:
+`go.thesmos.sh/testkit` is a standalone test infrastructure toolkit for Go projects. It provides:
 
-1. **Primitives** — reusable test utilities (assertions,
-   recording, fault injection, containers, benchmarking)
-   that every Go project needs.
-
-2. **Generators** — a `//go:generate`-driven CLI that
-   reads Go types and proto descriptors and emits
-   mechanical test boilerplate (stubs, builders, models,
-   suites, specs) with 100% coverage of the generated
-   plumbing.
+1. **Primitives** — reusable test utilities (assertions, recording, fault injection, virtual clock, benchmarking contracts, golden files) every Go project needs.
+2. **Generators** — a `//go:generate`-driven CLI that reads Go types and proto descriptors and emits mechanical test boilerplate (stubs, builders, models, suites, specs) plus the tests that prove the generated plumbing is correct.
+3. **Validators** — CI-time structural checks that enforce invariants across the codebase (proto sync, depguard, migration chain, REQ traceability, parallel safety, and more).
 
 ## Principles
 
-- **Zero domain knowledge.** The toolkit knows Go types,
-  not business logic. Domain-specific behaviour is always
-  injected by the caller.
+- **Zero domain knowledge.** testkit knows Go types and proto descriptors, not business logic. Domain semantics are always injected by the caller.
+- **Standalone module.** No dependency on any application module. Adopt by importing, not by forking.
+- **`//go:generate`-driven.** Generators are invoked via standard Go directives. Project-wide conventions live in `.testkit.yml`.
+- **Generated plumbing has its own tests.** Every generator emits both the artifact and the test file that exercises it; coverage of the generated code is 100%.
+- **Stubs are the substrate.** A single `MethodStub[Call]` primitive composes recording, fault injection, latency, virtual clock, strict mode, and call-count expectations. Every conformance tier (suite, model, bench, sim, chaos, replay) builds on it.
 
-- **Injectable.** Generated stubs, models, and suites
-  accept domain logic via constructor arguments and oracle
-  interfaces. The generator produces plumbing; the
-  developer provides semantics.
+## Status
 
-- **Standalone module.** No dependency on any application
-  module. Projects adopt testkit by importing it, not by
-  forking it.
-
-- **`//go:generate`-driven.** Generators are invoked via
-  standard Go generate directives in source files — no
-  central type registry. Project-wide conventions live in
-  `.testkit.yml`.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, golden-file helpers) and the generator engine in `gen/` are stable. Four generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**. The remaining generators (`suite`, `model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
 
 ## Documentation
 
@@ -39,32 +24,36 @@ toolkit for Go projects. It provides two things:
 |----------|-------------|
 | **Primitives** | |
 | [Overview](primitives/README.md) | Index of all primitives + dependencies |
-| [Assertions](primitives/assertions.md) | Positional + fluent with go-cmp diffs |
-| [Recording](primitives/recording.md) | Recorder[T] — filtering, waiting, hooks, gating |
-| [Fault injection](primitives/fault-injection.md) | FaultInjector |
-| [Concurrency](primitives/concurrency.md) | ConcurrentStress, GoroutineLeak |
-| [Benchmarking](primitives/benchmarking.md) | Contract |
-| [Golden files](primitives/golden-files.md) | AssertGolden + Scrubbers |
-| [Context](primitives/context.md) | Timeout (Go 1.24+ `t.Context()` for the rest) |
-| [Polling](primitives/polling.md) | RetryUntil, AssertEventually |
-| [Helpers](primitives/helpers.md) | TestError, RequireEnv, SeededRand, FailableTB, etc. |
+| [Assertions](primitives/assertions.md) | Positional + fluent helpers with go-cmp diffs |
+| [Directive assertions](primitives/directive-assertions.md) | `AssertNilSafe`, `AssertCtxCancellation`, `AssertTimeout`, `AssertPure`, `AssertBounded` |
+| [MethodStub](primitives/method-stub.md) | Generic per-method test double primitive |
+| [Recording](primitives/recording.md) | `Recorder[T]` — filtering, waiting, hooks, gating, timestamping, bench mode |
+| [Fault injection](primitives/fault-injection.md) | `Fault` interface + 5 strategies + `And`/`Or` composition |
+| [Clock](primitives/clock.md) | `Clock` interface + `RealClock` + `TestClock` |
+| [OrderTracker](primitives/order-tracker.md) | Cross-method call-order constraints |
+| [RandSource](primitives/rand.md) | Pluggable RNG for probabilistic faults |
+| [Concurrency](primitives/concurrency.md) | `ConcurrentStress`, `GoroutineLeak`, `Timeout` |
+| [Benchmarking](primitives/benchmarking.md) | `Contract` for allocation and latency gates |
+| [Golden files](primitives/golden-files.md) | `AssertGolden` + scrubbers |
+| [Polling](primitives/polling.md) | `RetryUntil`, `AssertEventually` |
+| [Context](primitives/context.md) | `t.Context()` + `Timeout` wrapper |
+| [Helpers](primitives/helpers.md) | `TestError`, `RequireEnv`, `SeededRand`, `MustMarshal`, `Quiet`, `FailableTB`, `TempFile`, `FreePort`, `SortedKeys`, `TableTest`, `MapDiff`, rapid generators |
 | **Generators** | |
-| [Overview](generators/README.md) | CLI interface, output conventions, priority order |
-| [In-Memory Stubs](generators/stub.md) | Three-tier stub + generated tests |
-| [Recording Wrappers](generators/recording.md) | Call-capturing decorator + assertion helpers |
-| [Fixture Builders](generators/builder.md) | Fluent `With*` builders + generated tests |
-| [State Machine Models](generators/model.md) | rapid.StateMachine with oracle interface |
-| [Conformance Suites](generators/suite.md) | Per-contract subtests from `//testkit:` directives |
-| [Codec Test Specs](generators/codec.md) | `codectest.Spec[T]` from proto |
-| [Error Sentinels](generators/sentinel.md) | Prefix, non-overlap, uniqueness |
-| [Enum Tests](generators/enum.md) | Exhaustiveness, stringer, boundary |
-| [Differential](generators/differential.md) | Fan-out comparing N implementations |
-| [Wire Snapshots](generators/wire.md) | Regenerate golden `.bin` files |
-| [Package Audit](generators/pkgdoc.md) | Compliance audit skeleton with auto-fill + refresh |
-| [Integration](generators/integration.md) | TestMain + container + suite wiring |
-| [Smoke Test](generators/smoke.md) | One-call-per-method baseline |
-| [Sim Workload](generators/simworkload.md) | Random dispatch for sim drivers |
-| [Scaffold](generators/scaffold.md) | One-time companion file generation |
+| [Overview](generators/README.md) | CLI interface, output conventions, tier framing |
+| [`stub`](generators/stub.md) | Per-method test doubles — runtime substrate for tiers 1-5 (ready) |
+| [`builder`](generators/builder.md) | Fluent fixture builders with `With*`, `Append*`, `Mutate`, `Clone` (ready) |
+| [`sentinel`](generators/sentinel.md) | Prefix, uniqueness, non-overlap, unwrap-chain, custom-error round-trip (ready) |
+| [`enum`](generators/enum.md) | Exhaustiveness, stringer, Parse, MarshalText/JSON round-trip (ready) |
+| [`codec`](generators/codec.md) | `codectest.Spec[T]` + suite + bench + fuzz seeds + wire fixtures (planned) |
+| [`suite`](generators/suite.md) | Tier 1: `AssertContract` with one subtest per (method × directive) (planned) |
+| [`model`](generators/model.md) | Tier 2-3: rapid state-machine, differential, workload (planned) |
+| [`bench`](generators/bench.md) | Tier 4: `BenchmarkContract` with allocs/latency/complexity gates (planned) |
+| [`sim`](generators/sim.md) | Tier 5: subsystem simulation harness (planned) |
+| [`chaos`](generators/chaos.md) | Tier 5: continuous fault simulation on top of sim (planned) |
+| [`differential-rollout`](generators/differential-rollout.md) | Tier 5: shadow-traffic comparison harness (planned) |
+| [`replay`](generators/replay.md) | Tier 5: production-trace replay (planned) |
+| [`smoke`](generators/smoke.md) | Cobra command coverage with golden output (planned) |
+| [`pkgdoc`](generators/pkgdoc.md) | Compliance audit-doc skeleton with auto-fill + refresh (planned) |
 | **Validators — Structural** | |
 | [Overview](validators/README.md) | All 18 validators + CI integration guide |
 | [Proto-Sync](validators/proto-sync.md) | Proto files match generated Go |

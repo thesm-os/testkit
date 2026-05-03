@@ -2,9 +2,7 @@
 
 ## t.Context() (Go 1.24+)
 
-Go 1.24 added `testing.TB.Context()` which returns a
-context cancelled when the test finishes. Use `t.Context()`
-directly — testkit does not wrap it.
+Use `t.Context()` directly. testkit does not wrap it. The returned context is cancelled when the test finishes; child contexts and goroutines respect that cancellation.
 
 ```go
 func TestStore_Put(t *testing.T) {
@@ -14,25 +12,33 @@ func TestStore_Put(t *testing.T) {
 }
 ```
 
-All testkit code examples use `t.Context()` rather than
-`context.Background()`.
+All testkit examples use `t.Context()` rather than `context.Background()`.
 
 ## Timeout
 
-Wraps `t.Context()` with a deadline and **fails the test**
-with a clear message if the deadline fires. For
-integration tests where a hung operation should be a loud
-failure, not a quiet cancellation.
+`testkit.Timeout(t, d)` wraps `t.Context()` with a deadline and **fails the test loudly** if the deadline fires before the test completes — not a quiet cancellation.
 
 ```go
 ctx := testkit.Timeout(t, 10*time.Second)
-// If the subject hangs, the test fails with:
-//   "Timeout: 10s deadline exceeded"
-// instead of silently cancelling.
 result, err := subject.SlowOperation(ctx)
+// On hang: "Timeout: 10s deadline exceeded" instead of silent cancel
 ```
 
-Internally wraps `t.Context()` with `context.WithDeadline`
-and registers a `t.Cleanup` that checks whether the
-deadline cause was the timeout (vs. test completion) and
-calls `t.Fatal` if so.
+For integration tests where a hung operation must be a loud failure. See [concurrency.md](concurrency.md).
+
+## AssertCtxCancellation / AssertTimeout
+
+To assert that a method respects context cancellation or honors a deadline, use the directive-driven helpers:
+
+```go
+testkit.AssertCtxCancellation(t, func(ctx context.Context) error {
+    _, err := store.Get(ctx, "id")
+    return err
+})
+
+testkit.AssertTimeout(t, 5*time.Second, func(ctx context.Context) error {
+    return runner.Run(ctx)
+})
+```
+
+See [directive-assertions.md](directive-assertions.md).

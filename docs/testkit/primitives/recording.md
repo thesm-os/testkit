@@ -1,146 +1,135 @@
 # Recording
 
-## Recorder[T]
+`Recorder[T]` is the thread-safe call log that captures values of type `T`. It is the core observation primitive used by `MethodStub`, simulation drivers, and integration tests.
 
-Thread-safe call log with filtering, waiting, hooks, and
-gating. The core observation primitive for stubs,
-recording wrappers, simulation, and integration tests.
+## Construction and basic recording
 
 ```go
-rec := testkit.NewRecorder[MyRequest]()
-rec.Record(req)
-calls := rec.Calls()  // defensive copy
-testkit.Len(t, calls, 3, "expected 3 calls")
+rec := testkit.NewRecorder[PutCall]()
+rec.Record(PutCall{Key: "a", Value: "1"})
+calls := rec.Calls()         // defensive copy
+testkit.Len(t, calls, 1, "expected 1 call")
 ```
 
-## Core methods
-
-| Method | Description |
-|--------|-------------|
+| Method | Purpose |
+|--------|---------|
 | `NewRecorder[T]()` | Create empty recorder |
-| `Record(v T)` | Append value, fire hooks, unblock waiters |
+| `Record(v T)` | Append; fire hooks; unblock waiters; respect gates |
 | `Calls() []T` | Defensive copy of all recorded values |
+| `Timestamped() []RecordedCall[T]` | Defensive copy with per-call timestamps |
 | `CallCount() int` | Number of recorded values |
-| `LastCall() T` | Most recent value |
-| `Reset()` | Clear the log |
+| `LastCall() T` | Most recent value; `tb.Fatalf` if none |
+| `Reset()` | Clear log; preserve hooks, gates, clock |
 
 ## Assertion helpers
 
-Convenience methods that combine count checking with
-value retrieval. Reduce the most common three-line
-pattern to one line.
-
-| Method | Description |
-|--------|-------------|
-| `AssertCalledOnce(t, msg) T` | Fails unless exactly 1 call; returns it |
-| `AssertCalledN(t, n, msg) []T` | Fails unless exactly n calls; returns them |
-| `AssertNotCalled(t, msg)` | Fails if any calls were recorded |
+Combine count check with value retrieval. Replaces the common three-line pattern.
 
 ```go
-// Before:
-testkit.Equal(t, rec.Puts.CallCount(), 1, "one put")
-call := rec.Puts.LastCall()
-
-// After:
-call := rec.Puts.AssertCalledOnce(t, "one put")
+call := rec.AssertCalledOnce(t, "single put")
+calls := rec.AssertCalledN(t, 3, "three puts")
+rec.AssertNotCalled(t, "Put must not run yet")
 ```
+
+| Method | Purpose |
+|--------|---------|
+| `AssertCalledOnce(t, msg) T` | Exactly 1 call; returns it |
+| `AssertCalledN(t, n, msg) []T` | Exactly n calls; returns them |
+| `AssertNotCalled(t, msg)` | No calls recorded |
 
 ## Filtering
 
-Query recorded calls by predicate. Returns a new slice
-(does not mutate the recorder).
-
 ```go
-active := rec.Puts.Filter(func(c StorePutCall) bool {
-    return c.Req.Status == StatusActive
-})
-testkit.Len(t, active, 2, "two puts with active status")
+active := rec.Filter(func(c StorePutCall) bool { return c.Status == StatusActive })
+testkit.Len(t, active, 2, "two active puts")
+
+c, ok := rec.First(func(c StorePutCall) bool { return c.ID == "x" })
+present := rec.Any(func(c StorePutCall) bool { return c.ID == "x" })
+allActive := rec.All(func(c StorePutCall) bool { return c.Status == StatusActive })
 ```
 
-| Method | Description |
-|--------|-------------|
-| `Filter(pred func(T) bool) []T` | Returns calls matching predicate |
-| `First(pred func(T) bool) (T, bool)` | First matching call |
-| `Any(pred func(T) bool) bool` | True if any call matches |
-| `All(pred func(T) bool) bool` | True if all calls match |
+| Method | Returns |
+|--------|---------|
+| `Filter(pred)` | All matching values |
+| `First(pred)` | First match + ok bool |
+| `Any(pred)` / `All(pred)` | Bool |
 
 ## Waiting
 
-For asynchronous tests where calls arrive on goroutines
-outside the test's control (integration tests, sim
-engines). Blocks until the condition is met or the
-timeout fires.
+For asynchronous tests where calls arrive on goroutines outside the test's control. Uses condition variables — no polling, no `time.Sleep`.
 
 ```go
-// Wait until 3 Put calls have arrived:
-rec.Puts.WaitForN(t, 3, 5*time.Second)
+rec.WaitForN(t, 3, 5*time.Second)
 
-// Wait until a specific call arrives:
-rec.Puts.WaitFor(t, func(c StorePutCall) bool {
-    return c.Req.Status == StatusActive
-}, 5*time.Second, "active put must arrive")
+rec.WaitFor(t, func(c StorePutCall) bool { return c.Status == StatusActive },
+    5*time.Second, "active put must arrive")
 ```
 
-| Method | Description |
-|--------|-------------|
-| `WaitForN(t, n, timeout)` | Block until n calls recorded |
-| `WaitFor(t, pred, timeout, msg)` | Block until predicate matches |
-
-Internally uses a condition variable signalled by
-`Record`. No polling, no sleep.
+Timeouts route through the configured `Clock` — pass a `TestClock` and use `Advance` to step over the deadline deterministically.
 
 ## Hooks
 
-Callbacks fired synchronously on every `Record` call.
-For wiring observation into sim engines without polling.
+Synchronous callbacks fired on every `Record`. Used to wire observation into simulation engines.
 
 ```go
-rec.Puts.OnRecord(func(c StorePutCall) {
-    trace.Append(tick, Event{Kind: "put", Data: c.Req})
+rec.OnRecord(func(c PutCall) {
+    trace.Append(tick, Event{Kind: "put", Data: c})
 })
 ```
 
-| Method | Description |
-|--------|-------------|
-| `OnRecord(fn func(T))` | Register a hook (multiple allowed) |
+Multiple hooks are allowed. They run under the recorder mutex — keep them fast. For expensive work, send to a channel inside the hook.
 
-Hooks run under the recorder's mutex — keep them fast.
-For expensive work, send to a channel inside the hook.
+## Gates
 
-## Gating
-
-Blocks `Record` calls until the gate is released. For
-testing race conditions and ordering-sensitive scenarios
-where you need to control exactly when a method completes.
+Block `Record` calls until released. Used to create deterministic race conditions.
 
 ```go
-gate := rec.Puts.NewGate()
+gate := rec.NewGate()
 
-// This goroutine blocks inside Record until gate.Release():
 go func() {
-    _ = store.Put(ctx, req)  // blocks at recording layer
+    _ = store.Put(ctx, req) // blocks at recording layer
 }()
 
-// Do something that should happen while Put is blocked:
-_, _ = store.Get(ctx, key)
-
-// Now let the Put through:
-gate.Release()
+_, _ = store.Get(ctx, key) // happens while Put is blocked
+gate.Release()              // let the Put through
 ```
 
-| Method | Description |
-|--------|-------------|
-| `NewGate() *Gate` | Install a gate that blocks Record |
+| Method | Behavior |
+|--------|----------|
+| `NewGate()` | Install a gate; only one may be active at a time |
 | `gate.Release()` | Unblock all waiting Record calls |
 | `gate.ReleaseOne()` | Unblock exactly one waiting Record call |
 
-Gates compose with hooks and waiting — a gated `Record`
-fires hooks and unblocks waiters only after the gate
-releases.
+Gates compose with hooks and waiters — a gated `Record` fires hooks and unblocks waiters only after the gate releases.
+
+## Timestamping
+
+```go
+rec.WithClock(clk) // optional — defaults to RealClock
+
+rec.Record(c1)
+rec.Record(c2)
+
+stamped := rec.Timestamped()
+// stamped[0].Time = clock.Now() at the moment c1 was recorded
+// stamped[1].Time = clock.Now() at the moment c2 was recorded
+```
+
+`RecordedCall[T]` wraps the value with the timestamp of when it was recorded. The clock is the one configured via `WithClock` (default: real time). When the recorder is embedded in a `MethodStub`, the stub's clock propagates here automatically.
+
+## Bench mode
+
+```go
+rec.BenchMode()
+```
+
+Disables call recording — `Record` becomes a no-op. No allocation, no hooks, no gate checks. Dispatch (Func, Returns, Faults) still works through the enclosing `MethodStub`. The `bench` generator enables this automatically; consumers writing their own benchmarks against generated stubs do the same.
 
 ## Concurrency
 
-All Recorder methods are thread-safe via mutex.
-`WaitForN` and `WaitFor` use condition variables (not
-polling). Gates use condition variables internally.
-Generated recording wrappers inherit this safety.
+All Recorder methods are thread-safe via mutex. `WaitForN` and `WaitFor` use condition variables. Gates use condition variables internally. Generated stub code inherits this safety.
+
+## See also
+
+- [MethodStub](method-stub.md) — embeds `*Recorder[T]`
+- [Clock](clock.md) — drives `Timestamped` and `WaitForN` timeouts
