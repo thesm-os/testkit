@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"go.thesmos.sh/testkit/gen"
 )
@@ -34,11 +35,33 @@ func Analyze(
 		}
 
 		qualifier := tracker.AddPath(pkg.Pkg.Path())
+		typeParamDecl := s.TypeParamDecl(tracker)
+		typeParamArgs := s.TypeParamArgs()
+		isGeneric := typeParamDecl != ""
+
+		qualifiedType := gen.QualifyType(qualifier, name) + typeParamArgs
+
+		// For generics, compute concrete test instantiation types
+		// and build a mapping from type param names to concrete types.
+		testTypeArgs := ""
+		testQualifiedType := qualifiedType
+		var typeParamMap map[string]string
+		if isGeneric {
+			testTypeArgs = defaultTestTypeArgs(s.TypeParams)
+			testQualifiedType = gen.QualifyType(qualifier, name) + testTypeArgs
+			typeParamMap = buildTypeParamMap(s.TypeParams)
+		}
+
 		sd := StructData{
 			Name:                name,
 			BuilderName:         name + "Builder",
-			QualifiedType:       gen.QualifyType(qualifier, name),
+			QualifiedType:       qualifiedType,
 			HasUnexportedFields: gen.HasUnexportedFields(s.Type),
+			TypeParamDecl:       typeParamDecl,
+			TypeParamArgs:       typeParamArgs,
+			IsGeneric:           isGeneric,
+			TestTypeArgs:        testTypeArgs,
+			TestQualifiedType:   testQualifiedType,
 		}
 
 		// Check for convention-based defaults: <Type>Defaults() <Type>
@@ -65,10 +88,29 @@ func Analyze(
 				SampleValue: gen.SampleValueOf(f.Type, f.Name, tracker),
 			}
 
-			// Detect slice types for variadic setters.
-			if sl, ok := f.Type.Underlying().(*types.Slice); ok {
-				fd.IsSlice = true
-				fd.ElemTypeStr = types.TypeString(sl.Elem(), tracker.Qualifier())
+			// Detect field type shapes for specialized setters.
+			switch ut := f.Type.Underlying().(type) {
+			case *types.Slice:
+				elemStr := types.TypeString(ut.Elem(), tracker.Qualifier())
+				if elemStr == "byte" {
+					fd.IsBytes = true
+				} else {
+					fd.IsSlice = true
+					fd.ElemTypeStr = elemStr
+				}
+			case *types.Map:
+				fd.IsMap = true
+				fd.MapKeyTypeStr = types.TypeString(ut.Key(), tracker.Qualifier())
+				fd.MapValTypeStr = types.TypeString(ut.Elem(), tracker.Qualifier())
+				fd.MapKeySample = gen.SampleValueOf(ut.Key(), "Key", tracker)
+				fd.MapValSample = gen.SampleValueOf(ut.Elem(), "Val", tracker)
+			case *types.Struct:
+				fd.IsStruct = true
+			}
+
+			// Check the original type (not underlying) for pointers.
+			if _, ok := f.Type.(*types.Pointer); ok {
+				fd.IsPointer = true
 			}
 
 			// Check for //testkit:default directive on the field.
@@ -80,6 +122,13 @@ func Analyze(
 						sd.HasFieldDefaults = true
 					}
 				}
+			}
+
+			// For generic structs, resolve type parameter names to
+			// concrete types for test assertions.
+			if isGeneric && typeParamMap != nil {
+				fd.TestTypeStr = resolveTypeStr(fd.TypeStr, typeParamMap)
+				fd.TestSample = sampleForConcreteType(fd.TestTypeStr, fd.Name)
 			}
 
 			sd.Fields = append(sd.Fields, fd)
@@ -100,6 +149,58 @@ func Analyze(
 		Imports:     tracker.Imports(),
 		Structs:     structs,
 	}, nil
+}
+
+// defaultConcreteTypes are the concrete types used to instantiate
+// generic type parameters in generated tests.
+var defaultConcreteTypes = []string{"string", "int", "bool", "float64"}
+
+// defaultTestTypeArgs maps type parameters to concrete types for tests.
+func defaultTestTypeArgs(params []gen.TypeParamInfo) string {
+	names := make([]string, len(params))
+	for i := range params {
+		names[i] = defaultConcreteTypes[i%len(defaultConcreteTypes)]
+	}
+	return "[" + strings.Join(names, ", ") + "]"
+}
+
+// buildTypeParamMap maps type parameter names to default concrete types.
+func buildTypeParamMap(params []gen.TypeParamInfo) map[string]string {
+	m := make(map[string]string, len(params))
+	for i, p := range params {
+		m[p.Name] = defaultConcreteTypes[i%len(defaultConcreteTypes)]
+	}
+	return m
+}
+
+// resolveTypeStr replaces type parameter names with concrete types.
+// "T" → "string", "[]T" → "[]string", etc.
+func resolveTypeStr(typeStr string, paramMap map[string]string) string {
+	result := typeStr
+	for param, concrete := range paramMap {
+		result = strings.ReplaceAll(result, param, concrete)
+	}
+	return result
+}
+
+// sampleForConcreteType returns a sample value for a resolved concrete type.
+func sampleForConcreteType(concreteType, fieldName string) string {
+	switch concreteType {
+	case "string":
+		return `"test-` + strings.ToLower(fieldName) + `"`
+	case "int":
+		return "42"
+	case "bool":
+		return "true"
+	case "float64":
+		return "3.14"
+	default:
+		if elemType, ok := strings.CutPrefix(concreteType, "[]"); ok {
+			inner := sampleForConcreteType(elemType, fieldName)
+			return concreteType + "{" + inner + "}"
+		}
+		return concreteType + "{}"
+	}
 }
 
 // hasDefaultsFunc checks if a function named funcName exists in the

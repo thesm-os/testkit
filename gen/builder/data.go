@@ -25,24 +25,39 @@ type StructData struct {
 	HasDefaults         bool        // true if <Type>Defaults() exists in output package
 	DefaultsFunc        string      // "ItemDefaults" or "" if no defaults
 	HasFieldDefaults    bool        // true if any field has //testkit:default
+	TypeParamDecl       string      // "[T any]" or "" for non-generic
+	TypeParamArgs       string      // "[T]" or "" for non-generic
+	IsGeneric           bool        // true if struct has type parameters
+	TestTypeArgs        string      // "[string]" — concrete types for generated tests
+	TestQualifiedType   string      // "generics.Container[string]" — for test assertions
 }
 
 // FieldData holds one exported field for a With* setter.
 type FieldData struct {
-	Name         string // "ID"
-	TypeStr      string // "string"
-	SampleValue  string // `"test-id"` — non-zero sample for tests
-	IsSlice      bool   // true if the field type is a slice (variadic setter)
-	ElemTypeStr  string // "string" for []string (only set when IsSlice)
-	DefaultValue string // from //testkit:default "value" or "" if none
+	Name          string // "ID"
+	TypeStr       string // "string"
+	SampleValue   string // `"test-id"` — non-zero sample for tests
+	IsSlice       bool   // true if the field type is a slice (variadic setter)
+	ElemTypeStr   string // "string" for []string (only set when IsSlice)
+	IsMap         bool   // true if the field type is a map
+	MapKeyTypeStr string // "string" for map[string]int (only set when IsMap)
+	MapValTypeStr string // "int" for map[string]int (only set when IsMap)
+	MapKeySample  string // `"test-key"` — sample key for tests
+	MapValSample  string // `"test-val"` — sample value for tests
+	IsBytes       bool   // true if the field type is []byte
+	IsStruct      bool   // true if the field type is a struct (named or anonymous)
+	IsPointer     bool   // true if the field type is a pointer
+	DefaultValue  string // from //testkit:default "value" or "" if none
+	TestTypeStr   string // concrete type for generic test instantiation ("string" for "T")
+	TestSample    string // sample value using concrete type (`"test-name"` for string)
 }
 
-// FirstComparableField returns the first non-slice field, or the
-// first field if all are slices. Used by test templates for Clone
-// assertions where != must compile.
+// FirstComparableField returns the first field that supports !=
+// comparison and has a non-zero sample value (basic types: string,
+// int, bool). Falls back to the first field if none qualify.
 func (s *StructData) FirstComparableField() FieldData {
 	for _, f := range s.Fields {
-		if !f.IsSlice {
+		if !f.IsSlice && !f.IsMap && !f.IsBytes && !f.IsStruct && !f.IsPointer {
 			return f
 		}
 	}

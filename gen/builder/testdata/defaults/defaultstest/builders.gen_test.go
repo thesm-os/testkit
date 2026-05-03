@@ -13,8 +13,12 @@ import (
 
 func TestRequestBuilder(t *testing.T) {
 	t.Parallel()
+	t.Run("NewRequest builds without panic", func(t *testing.T) {
+		t.Parallel()
+		_ = defaultstest.NewRequest().Build()
+	})
 
-	t.Run("Build returns zero value from NewRequestFrom", func(t *testing.T) {
+	t.Run("NewRequestFrom zero value round-trips", func(t *testing.T) {
 		t.Parallel()
 		got := defaultstest.NewRequestFrom(defaults.Request{}).Build()
 		testkit.Equal(t, got, defaults.Request{}, "must return zero value")
@@ -31,9 +35,18 @@ func TestRequestBuilder(t *testing.T) {
 		t.Parallel()
 		sample := []byte{42}
 		got := defaultstest.NewRequestFrom(defaults.Request{}).
-			WithData(sample...).
+			WithData(sample).
 			Build()
 		testkit.Equal(t, got.Data, sample, "must set Data")
+	})
+
+	t.Run("WithDataString sets from string", func(t *testing.T) {
+		t.Parallel()
+		got := defaultstest.NewRequestFrom(defaults.Request{}).
+			WithDataString("hello").
+			Build()
+		testkit.Equal(t, string(got.Data), "hello",
+			"WithDataString must convert")
 	})
 
 	t.Run("WithRunID sets field", func(t *testing.T) {
@@ -54,7 +67,7 @@ func TestRequestBuilder(t *testing.T) {
 		testkit.Equal(t, got.Token, sample, "must set Token")
 	})
 
-	t.Run("Clone forks independent copy", func(t *testing.T) {
+	t.Run("Clone forks independent scalar", func(t *testing.T) {
 		t.Parallel()
 		base := defaultstest.NewRequestFrom(defaults.Request{})
 		clone := base.Clone()
@@ -63,6 +76,20 @@ func TestRequestBuilder(t *testing.T) {
 		modified := clone.Build()
 		testkit.True(t, original.RunID != modified.RunID,
 			"Clone must produce independent copy")
+	})
+
+	t.Run("Clone deep-copies Data bytes", func(t *testing.T) {
+		t.Parallel()
+		base := defaultstest.NewRequestFrom(defaults.Request{}).
+			WithDataString("original")
+		clone := base.Clone()
+		clone.WithDataString("modified")
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Equal(t, string(original.Data), "original",
+			"original bytes must be unchanged after clone mutation")
+		testkit.Equal(t, string(modified.Data), "modified",
+			"clone must have new bytes")
 	})
 
 	t.Run("Mutate modifies value", func(t *testing.T) {

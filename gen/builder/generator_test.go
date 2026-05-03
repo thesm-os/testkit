@@ -75,7 +75,7 @@ func TestGenerate(t *testing.T) {
 			Contains("WithID sets field", "per-field test").
 			Contains("Clone forks", "clone test").
 			Contains("Mutate modifies", "mutate test").
-			Contains("does not panic", "unexported fields guard")
+			Contains("NewItem builds without panic", "zero constructor test")
 	})
 
 	t.Run("defaults convention detected", func(t *testing.T) {
@@ -146,6 +146,40 @@ func TestGenerate(t *testing.T) {
 		wantTest, readTestErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen_test.go"))
 		testkit.NoError(t, readTestErr, "must read golden test")
 		testkit.Equal(t, string(result.Files[1].Content), string(wantTest), "test must match golden")
+	})
+
+	t.Run("generics type parameters threaded", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generics")
+		g := &builder.Generator{}
+		result, err := g.Generate(
+			pkg, []string{"Container", "Pair"},
+			gen.DefaultConfig(), gen.Options{Output: "genericstest/builders.gen.go"},
+		)
+		testkit.NoError(t, err, "must generate")
+		got := string(result.Files[0].Content)
+		testkit.Assert(t, got).
+			Contains("ContainerBuilder[T any]", "generic type decl").
+			Contains("NewContainer[T any]()", "generic constructor").
+			Contains("WithItems(v ...T)", "generic variadic setter").
+			Contains("PairBuilder[A any, B any]", "multi-param generic").
+			Contains("WithFirst(v A)", "generic field setter")
+	})
+
+	t.Run("golden/generics", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generics")
+		g := &builder.Generator{}
+		result, err := g.Generate(
+			pkg, []string{"Container", "Pair"},
+			gen.DefaultConfig(), gen.Options{Output: "genericstest/builders.gen.go"},
+		)
+		testkit.NoError(t, err, "must generate")
+
+		goldenDir := filepath.Join(testdataDir(t), "generics", "genericstest")
+		wantImpl, readErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen.go"))
+		testkit.NoError(t, readErr, "must read golden impl")
+		testkit.Equal(t, string(result.Files[0].Content), string(wantImpl), "impl must match golden")
 	})
 
 	t.Run("missing type returns error", func(t *testing.T) {

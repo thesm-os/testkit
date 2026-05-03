@@ -26,8 +26,14 @@ func NewRequestFrom(v defaults.Request) *RequestBuilder {
 }
 
 // WithData sets the Data field.
-func (b *RequestBuilder) WithData(v ...byte) *RequestBuilder {
+func (b *RequestBuilder) WithData(v []byte) *RequestBuilder {
 	b.v.Data = v
+	return b
+}
+
+// WithDataString sets Data from a string.
+func (b *RequestBuilder) WithDataString(s string) *RequestBuilder {
+	b.v.Data = []byte(s)
 	return b
 }
 
@@ -50,10 +56,14 @@ func (b *RequestBuilder) Mutate(fn func(*defaults.Request)) *RequestBuilder {
 	return b
 }
 
-// Clone returns a copy of the builder. Use to fork variants
-// from a shared base.
+// Clone returns a deep copy of the builder. Slice and map fields
+// are copied so mutations to the clone do not affect the original.
 func (b *RequestBuilder) Clone() *RequestBuilder {
-	return &RequestBuilder{v: b.v}
+	out := &RequestBuilder{v: b.v}
+	if b.v.Data != nil {
+		out.v.Data = append([]byte(nil), b.v.Data...)
+	}
+	return out
 }
 
 // Build returns the constructed [defaults.Request].

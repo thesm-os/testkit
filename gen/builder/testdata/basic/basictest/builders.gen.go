@@ -36,9 +36,36 @@ func (b *ItemBuilder) WithCount(v int) *ItemBuilder {
 	return b
 }
 
+// WithData sets the Data field.
+func (b *ItemBuilder) WithData(v []byte) *ItemBuilder {
+	b.v.Data = v
+	return b
+}
+
+// WithDataString sets Data from a string.
+func (b *ItemBuilder) WithDataString(s string) *ItemBuilder {
+	b.v.Data = []byte(s)
+	return b
+}
+
 // WithID sets the ID field.
 func (b *ItemBuilder) WithID(v string) *ItemBuilder {
 	b.v.ID = v
+	return b
+}
+
+// WithMetadata replaces the Metadata map.
+func (b *ItemBuilder) WithMetadata(m map[string]string) *ItemBuilder {
+	b.v.Metadata = m
+	return b
+}
+
+// WithMetadataEntry adds or replaces a single entry in Metadata.
+func (b *ItemBuilder) WithMetadataEntry(k string, v string) *ItemBuilder {
+	if b.v.Metadata == nil {
+		b.v.Metadata = map[string]string{}
+	}
+	b.v.Metadata[k] = v
 	return b
 }
 
@@ -48,9 +75,15 @@ func (b *ItemBuilder) WithName(v string) *ItemBuilder {
 	return b
 }
 
-// WithTags sets the Tags field.
+// WithTags replaces the Tags slice.
 func (b *ItemBuilder) WithTags(v ...string) *ItemBuilder {
 	b.v.Tags = v
+	return b
+}
+
+// AppendTags appends to the Tags slice.
+func (b *ItemBuilder) AppendTags(v ...string) *ItemBuilder {
+	b.v.Tags = append(b.v.Tags, v...)
 	return b
 }
 
@@ -61,10 +94,23 @@ func (b *ItemBuilder) Mutate(fn func(*basic.Item)) *ItemBuilder {
 	return b
 }
 
-// Clone returns a copy of the builder. Use to fork variants
-// from a shared base.
+// Clone returns a deep copy of the builder. Slice and map fields
+// are copied so mutations to the clone do not affect the original.
 func (b *ItemBuilder) Clone() *ItemBuilder {
-	return &ItemBuilder{v: b.v}
+	out := &ItemBuilder{v: b.v}
+	if b.v.Data != nil {
+		out.v.Data = append([]byte(nil), b.v.Data...)
+	}
+	if b.v.Metadata != nil {
+		out.v.Metadata = make(map[string]string, len(b.v.Metadata))
+		for k, v := range b.v.Metadata {
+			out.v.Metadata[k] = v
+		}
+	}
+	if b.v.Tags != nil {
+		out.v.Tags = append([]string(nil), b.v.Tags...)
+	}
+	return out
 }
 
 // Build returns the constructed [basic.Item].

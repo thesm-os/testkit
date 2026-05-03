@@ -110,6 +110,12 @@ func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) str
 	case *types.Struct:
 		return types.TypeString(typ, tracker.Qualifier()) + zeroSuffix
 	case *types.Pointer:
+		// Only produce &Type{} for struct/named types — basic types
+		// like *string can't use composite literal syntax.
+		if _, isStruct := u.Elem().Underlying().(*types.Struct); isStruct {
+			elemStr := types.TypeString(u.Elem(), tracker.Qualifier())
+			return "&" + elemStr + zeroSuffix
+		}
 		return zeroNil
 	case *types.Signature, *types.Chan, *types.Interface:
 		return zeroNil

@@ -13,8 +13,7 @@ import (
 
 func TestItemBuilder(t *testing.T) {
 	t.Parallel()
-
-	t.Run("Build does not panic", func(t *testing.T) {
+	t.Run("NewItem builds without panic", func(t *testing.T) {
 		t.Parallel()
 		_ = basictest.NewItem().Build()
 	})
@@ -37,6 +36,24 @@ func TestItemBuilder(t *testing.T) {
 		testkit.Equal(t, got.Count, sample, "must set Count")
 	})
 
+	t.Run("WithData sets field", func(t *testing.T) {
+		t.Parallel()
+		sample := []byte{42}
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithData(sample).
+			Build()
+		testkit.Equal(t, got.Data, sample, "must set Data")
+	})
+
+	t.Run("WithDataString sets from string", func(t *testing.T) {
+		t.Parallel()
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithDataString("hello").
+			Build()
+		testkit.Equal(t, string(got.Data), "hello",
+			"WithDataString must convert")
+	})
+
 	t.Run("WithID sets field", func(t *testing.T) {
 		t.Parallel()
 		sample := "test-id"
@@ -44,6 +61,25 @@ func TestItemBuilder(t *testing.T) {
 			WithID(sample).
 			Build()
 		testkit.Equal(t, got.ID, sample, "must set ID")
+	})
+
+	t.Run("WithMetadata replaces map", func(t *testing.T) {
+		t.Parallel()
+		sample := map[string]string{"test-metadata": "test-metadata"}
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithMetadata(sample).
+			Build()
+		testkit.Equal(t, got.Metadata, sample, "must set Metadata")
+	})
+
+	t.Run("WithMetadataEntry lazy-inits and adds", func(t *testing.T) {
+		t.Parallel()
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithMetadataEntry("test-key", "test-val").
+			Build()
+		testkit.True(t, got.Metadata != nil, "lazy-init map")
+		testkit.Equal(t, got.Metadata["test-key"], "test-val",
+			"entry must be added")
 	})
 
 	t.Run("WithName sets field", func(t *testing.T) {
@@ -55,16 +91,29 @@ func TestItemBuilder(t *testing.T) {
 		testkit.Equal(t, got.Name, sample, "must set Name")
 	})
 
-	t.Run("WithTags sets field", func(t *testing.T) {
+	t.Run("WithTags replaces existing slice", func(t *testing.T) {
 		t.Parallel()
-		sample := []string{"test-tags"}
+		replacement := []string{"test-tags"}
 		got := basictest.NewItemFrom(basic.Item{}).
-			WithTags(sample...).
+			WithTags(replacement...).
+			WithTags(replacement...).
 			Build()
-		testkit.Equal(t, got.Tags, sample, "must set Tags")
+		testkit.Equal(t, got.Tags, replacement,
+			"With must replace, not append — second call overwrites first")
 	})
 
-	t.Run("Clone forks independent copy", func(t *testing.T) {
+	t.Run("AppendTags preserves existing", func(t *testing.T) {
+		t.Parallel()
+		seed := []string{"test-tags"}
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithTags(seed...).
+			AppendTags(seed...).
+			Build()
+		testkit.Len(t, got.Tags, len(seed)*2,
+			"Append must preserve existing + add new")
+	})
+
+	t.Run("Clone forks independent scalar", func(t *testing.T) {
 		t.Parallel()
 		base := basictest.NewItemFrom(basic.Item{})
 		clone := base.Clone()
@@ -73,6 +122,50 @@ func TestItemBuilder(t *testing.T) {
 		modified := clone.Build()
 		testkit.True(t, original.Active != modified.Active,
 			"Clone must produce independent copy")
+	})
+
+	t.Run("Clone deep-copies Data bytes", func(t *testing.T) {
+		t.Parallel()
+		base := basictest.NewItemFrom(basic.Item{}).
+			WithDataString("original")
+		clone := base.Clone()
+		clone.WithDataString("modified")
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Equal(t, string(original.Data), "original",
+			"original bytes must be unchanged after clone mutation")
+		testkit.Equal(t, string(modified.Data), "modified",
+			"clone must have new bytes")
+	})
+
+	t.Run("Clone deep-copies Metadata map", func(t *testing.T) {
+		t.Parallel()
+		base := basictest.NewItemFrom(basic.Item{}).
+			WithMetadataEntry("test-key", "test-val")
+		clone := base.Clone()
+		clone.Mutate(func(v *basic.Item) {
+			delete(v.Metadata, "test-key")
+		})
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.Metadata, 1,
+			"original map must be unchanged after clone deletes")
+		testkit.Len(t, modified.Metadata, 0,
+			"clone map must reflect the delete")
+	})
+
+	t.Run("Clone deep-copies Tags slice", func(t *testing.T) {
+		t.Parallel()
+		seed := []string{"test-tags"}
+		base := basictest.NewItemFrom(basic.Item{}).WithTags(seed...)
+		clone := base.Clone()
+		clone.AppendTags(seed...)
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.Tags, len(seed),
+			"original slice must be unchanged after clone mutation")
+		testkit.Len(t, modified.Tags, len(seed)*2,
+			"clone must have appended elements")
 	})
 
 	t.Run("Mutate modifies value", func(t *testing.T) {

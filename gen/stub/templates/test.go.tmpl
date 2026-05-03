@@ -22,6 +22,14 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		{{$m.FaultTestCallExpr}}
 	})
 {{end}}
+{{- range $s := $m.Sentinels}}
+	t.Run("{{$m.Name}} Fault{{$s.ShortName}} fires", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		s.On{{$m.Name}}.Fault{{$s.ShortName}}()
+		{{$m.FaultTestCallExpr}}
+	})
+{{end}}
 	t.Run("{{$m.Name}} Func override", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)

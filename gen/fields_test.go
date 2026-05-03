@@ -160,11 +160,11 @@ func TestSampleValueOf(t *testing.T) {
 		testkit.Assert(t, got).Contains("map[string]int", "must have map type")
 	})
 
-	t.Run("pointer is nil", func(t *testing.T) {
+	t.Run("pointer to basic type is nil", func(t *testing.T) {
 		t.Parallel()
 		ptr := types.NewPointer(types.Typ[types.String])
 		got := gen.SampleValueOf(ptr, "Ref", tracker)
-		testkit.Equal(t, got, "nil", "pointer sample is nil")
+		testkit.Equal(t, got, "nil", "pointer to basic type")
 	})
 
 	t.Run("func is nil", func(t *testing.T) {

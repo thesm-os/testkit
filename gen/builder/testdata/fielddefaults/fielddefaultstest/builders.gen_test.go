@@ -13,8 +13,12 @@ import (
 
 func TestConfigBuilder(t *testing.T) {
 	t.Parallel()
+	t.Run("NewConfig builds without panic", func(t *testing.T) {
+		t.Parallel()
+		_ = fielddefaultstest.NewConfig().Build()
+	})
 
-	t.Run("Build returns zero value from NewConfigFrom", func(t *testing.T) {
+	t.Run("NewConfigFrom zero value round-trips", func(t *testing.T) {
 		t.Parallel()
 		got := fielddefaultstest.NewConfigFrom(fielddefaults.Config{}).Build()
 		testkit.Equal(t, got, fielddefaults.Config{}, "must return zero value")
@@ -23,13 +27,12 @@ func TestConfigBuilder(t *testing.T) {
 	t.Run("NewConfig uses field defaults", func(t *testing.T) {
 		t.Parallel()
 		got := fielddefaultstest.NewConfig().Build()
-		zero := fielddefaults.Config{}
-		testkit.True(t, got.Host != zero.Host,
-			"Host must have non-zero default")
-		testkit.True(t, got.Port != zero.Port,
-			"Port must have non-zero default")
-		testkit.True(t, got.Verbose != zero.Verbose,
-			"Verbose must have non-zero default")
+		testkit.Equal(t, got.Host, "localhost",
+			"Host default must match directive")
+		testkit.Equal(t, got.Port, 8080,
+			"Port default must match directive")
+		testkit.Equal(t, got.Verbose, true,
+			"Verbose default must match directive")
 	})
 
 	t.Run("WithHost sets field", func(t *testing.T) {
@@ -68,7 +71,7 @@ func TestConfigBuilder(t *testing.T) {
 		testkit.Equal(t, got.Verbose, sample, "must set Verbose")
 	})
 
-	t.Run("Clone forks independent copy", func(t *testing.T) {
+	t.Run("Clone forks independent scalar", func(t *testing.T) {
 		t.Parallel()
 		base := fielddefaultstest.NewConfigFrom(fielddefaults.Config{})
 		clone := base.Clone()

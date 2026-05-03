@@ -87,6 +87,22 @@ func TestStoreStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 	})
 
+	t.Run("Get FaultNotFound fires", func(t *testing.T) {
+		t.Parallel()
+		s := storetest.NewStoreStub(t)
+		s.OnGet.FaultNotFound()
+		_, err := s.Get(nil, "")
+		testkit.ErrorIs(t, err, errTest, "must return injected fault")
+	})
+
+	t.Run("Get FaultConflict fires", func(t *testing.T) {
+		t.Parallel()
+		s := storetest.NewStoreStub(t)
+		s.OnGet.FaultConflict()
+		_, err := s.Get(nil, "")
+		testkit.ErrorIs(t, err, errTest, "must return injected fault")
+	})
+
 	t.Run("Get Func override", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
@@ -139,6 +155,14 @@ func TestStoreStub(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnPut.Faults(errTest, 1)
+		err := s.Put(nil, directives.Item{})
+		testkit.ErrorIs(t, err, errTest, "must return injected fault")
+	})
+
+	t.Run("Put FaultConflict fires", func(t *testing.T) {
+		t.Parallel()
+		s := storetest.NewStoreStub(t)
+		s.OnPut.FaultConflict()
 		err := s.Put(nil, directives.Item{})
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 	})

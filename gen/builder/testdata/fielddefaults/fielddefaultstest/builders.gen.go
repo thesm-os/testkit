@@ -60,10 +60,11 @@ func (b *ConfigBuilder) Mutate(fn func(*fielddefaults.Config)) *ConfigBuilder {
 	return b
 }
 
-// Clone returns a copy of the builder. Use to fork variants
-// from a shared base.
+// Clone returns a deep copy of the builder. Slice and map fields
+// are copied so mutations to the clone do not affect the original.
 func (b *ConfigBuilder) Clone() *ConfigBuilder {
-	return &ConfigBuilder{v: b.v}
+	out := &ConfigBuilder{v: b.v}
+	return out
 }
 
 // Build returns the constructed [fielddefaults.Config].
