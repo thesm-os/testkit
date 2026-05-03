@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/gen/builder/testdata/basic"
 	"go.thesmos.sh/testkit/gen/builder/testdata/basic/basictest"
 )
 
@@ -15,13 +16,31 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("Build does not panic", func(t *testing.T) {
 		t.Parallel()
-		_ = basictest.NewItemBuilder().Build()
+		_ = basictest.NewItem().Build()
+	})
+
+	t.Run("WithActive sets field", func(t *testing.T) {
+		t.Parallel()
+		sample := true
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithActive(sample).
+			Build()
+		testkit.Equal(t, got.Active, sample, "must set Active")
+	})
+
+	t.Run("WithCount sets field", func(t *testing.T) {
+		t.Parallel()
+		sample := 42
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithCount(sample).
+			Build()
+		testkit.Equal(t, got.Count, sample, "must set Count")
 	})
 
 	t.Run("WithID sets field", func(t *testing.T) {
 		t.Parallel()
 		sample := "test-id"
-		got := basictest.NewItemBuilder().
+		got := basictest.NewItemFrom(basic.Item{}).
 			WithID(sample).
 			Build()
 		testkit.Equal(t, got.ID, sample, "must set ID")
@@ -30,52 +49,39 @@ func TestItemBuilder(t *testing.T) {
 	t.Run("WithName sets field", func(t *testing.T) {
 		t.Parallel()
 		sample := "test-name"
-		got := basictest.NewItemBuilder().
+		got := basictest.NewItemFrom(basic.Item{}).
 			WithName(sample).
 			Build()
 		testkit.Equal(t, got.Name, sample, "must set Name")
 	})
 
-	t.Run("WithCount sets field", func(t *testing.T) {
-		t.Parallel()
-		sample := 42
-		got := basictest.NewItemBuilder().
-			WithCount(sample).
-			Build()
-		testkit.Equal(t, got.Count, sample, "must set Count")
-	})
-
-	t.Run("WithActive sets field", func(t *testing.T) {
-		t.Parallel()
-		sample := true
-		got := basictest.NewItemBuilder().
-			WithActive(sample).
-			Build()
-		testkit.Equal(t, got.Active, sample, "must set Active")
-	})
-
 	t.Run("WithTags sets field", func(t *testing.T) {
 		t.Parallel()
 		sample := []string{"test-tags"}
-		got := basictest.NewItemBuilder().
-			WithTags(sample).
+		got := basictest.NewItemFrom(basic.Item{}).
+			WithTags(sample...).
 			Build()
 		testkit.Equal(t, got.Tags, sample, "must set Tags")
 	})
 
-	t.Run("chaining sets multiple fields", func(t *testing.T) {
+	t.Run("Clone forks independent copy", func(t *testing.T) {
 		t.Parallel()
-		b := basictest.NewItemBuilder()
-		b.WithID("test-id")
-		b.WithName("test-name")
-		b.WithCount(42)
-		b.WithActive(true)
-		b.WithTags([]string{"test-tags"})
-		got := b.Build()
-		testkit.Equal(t, got.ID, "test-id", "ID must be set")
-		testkit.Equal(t, got.Name, "test-name", "Name must be set")
-		testkit.Equal(t, got.Count, 42, "Count must be set")
-		testkit.Equal(t, got.Active, true, "Active must be set")
-		testkit.Equal(t, got.Tags, []string{"test-tags"}, "Tags must be set")
+		base := basictest.NewItemFrom(basic.Item{})
+		clone := base.Clone()
+		clone.WithActive(true)
+		original := base.Build()
+		modified := clone.Build()
+		testkit.True(t, original.Active != modified.Active,
+			"Clone must produce independent copy")
+	})
+
+	t.Run("Mutate modifies value", func(t *testing.T) {
+		t.Parallel()
+		got := basictest.NewItemFrom(basic.Item{}).
+			Mutate(func(v *basic.Item) {
+				v.Active = true
+			}).
+			Build()
+		testkit.Equal(t, got.Active, true, "Mutate must modify")
 	})
 }

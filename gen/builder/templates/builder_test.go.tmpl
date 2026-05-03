@@ -8,36 +8,77 @@ package {{.PackageName}}
 func Test{{$s.BuilderName}}(t *testing.T) {
 	t.Parallel()
 {{if not $s.HasUnexportedFields}}
-	t.Run("Build returns zero value", func(t *testing.T) {
+	t.Run("Build returns zero value from New{{$s.Name}}From", func(t *testing.T) {
 		t.Parallel()
-		got := {{$.GenQualifier}}New{{$s.BuilderName}}().Build()
+		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).Build()
 		testkit.Equal(t, got, {{$s.QualifiedType}}{}, "must return zero value")
 	})
 {{else}}
 	t.Run("Build does not panic", func(t *testing.T) {
 		t.Parallel()
-		_ = {{$.GenQualifier}}New{{$s.BuilderName}}().Build()
+		_ = {{$.GenQualifier}}New{{$s.Name}}().Build()
+	})
+{{end}}
+{{- if $s.HasDefaults}}
+	t.Run("New{{$s.Name}} uses defaults", func(t *testing.T) {
+		t.Parallel()
+		got := {{$.GenQualifier}}New{{$s.Name}}().Build()
+		want := {{$.GenQualifier}}{{$s.DefaultsFunc}}()
+		testkit.Equal(t, got, want, "New{{$s.Name}} must use {{$s.DefaultsFunc}}")
+	})
+{{else if $s.HasFieldDefaults}}
+	t.Run("New{{$s.Name}} uses field defaults", func(t *testing.T) {
+		t.Parallel()
+		got := {{$.GenQualifier}}New{{$s.Name}}().Build()
+		zero := {{$s.QualifiedType}}{}
+{{- range $s.Fields}}{{if .DefaultValue}}
+		testkit.True(t, got.{{.Name}} != zero.{{.Name}},
+			"{{.Name}} must have non-zero default")
+{{- end}}{{end}}
 	})
 {{end}}
 {{- range $f := $s.Fields}}
 	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
 		t.Parallel()
 		sample := {{$f.SampleValue}}
-		got := {{$.GenQualifier}}New{{$s.BuilderName}}().
+{{- if $f.IsSlice}}
+		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}(sample...).
+			Build()
+{{- else}}
+		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
 			With{{$f.Name}}(sample).
 			Build()
+{{- end}}
 		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
 	})
 {{end}}
-	t.Run("chaining sets multiple fields", func(t *testing.T) {
+	t.Run("Clone forks independent copy", func(t *testing.T) {
 		t.Parallel()
-		b := {{$.GenQualifier}}New{{$s.BuilderName}}()
-{{- range $s.Fields}}
-		b.With{{.Name}}({{.SampleValue}})
+		base := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{})
+		clone := base.Clone()
+{{- with $s.FirstComparableField}}
+		clone.With{{.Name}}({{.SampleValue}})
 {{- end}}
-		got := b.Build()
-{{- range $s.Fields}}
-		testkit.Equal(t, got.{{.Name}}, {{.SampleValue}}, "{{.Name}} must be set")
+		original := base.Build()
+		modified := clone.Build()
+{{- with $s.FirstComparableField}}
+		testkit.True(t, original.{{.Name}} != modified.{{.Name}},
+			"Clone must produce independent copy")
+{{- end}}
+	})
+
+	t.Run("Mutate modifies value", func(t *testing.T) {
+		t.Parallel()
+		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			Mutate(func(v *{{$s.QualifiedType}}) {
+{{- with $s.FirstComparableField}}
+				v.{{.Name}} = {{.SampleValue}}
+{{- end}}
+			}).
+			Build()
+{{- with $s.FirstComparableField}}
+		testkit.Equal(t, got.{{.Name}}, {{.SampleValue}}, "Mutate must modify")
 {{- end}}
 	})
 }

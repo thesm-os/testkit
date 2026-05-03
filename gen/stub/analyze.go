@@ -54,7 +54,7 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 				iface:      &ifaceData,
 			}
 			// Attach directives from source AST.
-			md.Directives = pkg.MethodDirectives(name, m.Name)
+			md.Directives = pkg.EffectiveMethodDirectives(name, m.Name)
 			methods = append(methods, md)
 		}
 		ifaceData.Methods = methods

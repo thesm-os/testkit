@@ -94,7 +94,10 @@ func (p *Package) FieldDirectives(typeName, fieldName string) []Directive {
 				for _, field := range strct.Fields.List {
 					for _, name := range field.Names {
 						if name.Name == fieldName {
-							return parseDirectivesFromCommentGroup(field.Doc)
+							// Merge doc comment and inline comment directives.
+							result := parseDirectivesFromCommentGroup(field.Doc)
+							result = append(result, parseDirectivesFromCommentGroup(field.Comment)...)
+							return result
 						}
 					}
 				}
@@ -162,6 +165,28 @@ func (p *Package) ConstDirectives(varName string) []Directive {
 	return nil
 }
 
+// EffectiveMethodDirectives returns the merged directives for a method,
+// combining interface-level directives (inherited by all methods) with
+// method-level directives. Interface-level directives appear first.
+// A method-level directive with the same name as an interface-level
+// one does NOT replace it — both are kept. Use an explicit
+// "//testkit:<name>" with no args on the method to clear an inherited
+// parameterised directive if needed.
+func (p *Package) EffectiveMethodDirectives(typeName, methodName string) []Directive {
+	inherited := p.Directives(typeName)
+	method := p.MethodDirectives(typeName, methodName)
+	if len(inherited) == 0 {
+		return method
+	}
+	if len(method) == 0 {
+		return inherited
+	}
+	merged := make([]Directive, 0, len(inherited)+len(method))
+	merged = append(merged, inherited...)
+	merged = append(merged, method...)
+	return merged
+}
+
 // GenerateDirectives returns all //go:generate testkit directives
 // found in the package's source files.
 func (p *Package) GenerateDirectives() []GenerateDirective {
@@ -182,8 +207,16 @@ func (p *Package) GenerateDirectives() []GenerateDirective {
 	return result
 }
 
+// assertDirectiveName is the batch directive that expands each
+// argument into a separate no-arg directive.
+//
+//	//testkit:assert idempotent concurrent ctx
+//
+// expands to three directives: idempotent, concurrent, ctx.
+const assertDirectiveName = "assert"
+
 // parseDirectivesFromCommentGroup extracts //testkit: directives from
-// a comment group.
+// a comment group. The "assert" batch directive is expanded inline.
 func parseDirectivesFromCommentGroup(doc *ast.CommentGroup) []Directive {
 	if doc == nil {
 		return nil
@@ -197,6 +230,13 @@ func parseDirectivesFromCommentGroup(doc *ast.CommentGroup) []Directive {
 		body := strings.TrimPrefix(text, testkitDirectivePrefix)
 		parts := strings.Fields(body)
 		if len(parts) == 0 {
+			continue
+		}
+		// Expand //testkit:assert a b c → directives a, b, c.
+		if parts[0] == assertDirectiveName {
+			for _, name := range parts[1:] {
+				result = append(result, Directive{Name: name})
+			}
 			continue
 		}
 		result = append(result, Directive{

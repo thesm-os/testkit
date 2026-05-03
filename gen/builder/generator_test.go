@@ -47,13 +47,16 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, got).
 			Contains("package basictest", "package name").
 			Contains("ItemBuilder", "builder type").
-			Contains("NewItemBuilder", "constructor").
+			Contains("NewItem()", "zero constructor").
+			Contains("NewItemFrom(", "from constructor").
 			Contains("WithID", "ID setter").
 			Contains("WithName", "Name setter").
 			Contains("WithCount", "Count setter").
 			Contains("WithActive", "Active setter").
-			Contains("WithTags", "Tags setter").
+			Contains("WithTags(v ...string)", "variadic Tags setter").
 			Contains("func (b *ItemBuilder) Build()", "Build method").
+			Contains("Mutate(", "Mutate escape hatch").
+			Contains("Clone()", "Clone method").
 			NotContains("Withhidden", "must skip unexported field")
 	})
 
@@ -70,7 +73,79 @@ func TestGenerate(t *testing.T) {
 			Contains("package basictest_test", "external test package").
 			Contains("TestItemBuilder", "test function").
 			Contains("WithID sets field", "per-field test").
+			Contains("Clone forks", "clone test").
+			Contains("Mutate modifies", "mutate test").
 			Contains("does not panic", "unexported fields guard")
+	})
+
+	t.Run("defaults convention detected", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "defaults")
+		g := &builder.Generator{}
+		result, err := g.Generate(pkg, []string{"Request"}, gen.DefaultConfig(), gen.Options{
+			Output:  "defaultstest/builders.gen.go",
+			WorkDir: filepath.Join(testdataDir(t), "defaults"),
+		})
+		testkit.NoError(t, err, "must generate")
+		got := string(result.Files[0].Content)
+		testkit.Assert(t, got).
+			Contains("RequestDefaults()", "must call defaults function").
+			Contains("NewRequest()", "zero-arg constructor")
+	})
+
+	t.Run("golden/defaults", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "defaults")
+		g := &builder.Generator{}
+		result, err := g.Generate(pkg, []string{"Request"}, gen.DefaultConfig(), gen.Options{
+			Output:  "defaultstest/builders.gen.go",
+			WorkDir: filepath.Join(testdataDir(t), "defaults"),
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenDir := filepath.Join(testdataDir(t), "defaults", "defaultstest")
+		wantImpl, readErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen.go"))
+		testkit.NoError(t, readErr, "must read golden impl")
+		testkit.Equal(t, string(result.Files[0].Content), string(wantImpl), "impl must match golden")
+
+		wantTest, readTestErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen_test.go"))
+		testkit.NoError(t, readTestErr, "must read golden test")
+		testkit.Equal(t, string(result.Files[1].Content), string(wantTest), "test must match golden")
+	})
+
+	t.Run("field defaults from directives", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "fielddefaults")
+		g := &builder.Generator{}
+		result, err := g.Generate(pkg, []string{"Config"}, gen.DefaultConfig(), gen.Options{
+			Output: "fielddefaultstest/builders.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		got := string(result.Files[0].Content)
+		testkit.Assert(t, got).
+			Contains(`Host:    "localhost"`, "field default for Host").
+			Contains("Port:    8080", "field default for Port").
+			Contains("Verbose: true", "field default for Verbose").
+			NotContains("Name:", "Name has no default")
+	})
+
+	t.Run("golden/fielddefaults", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "fielddefaults")
+		g := &builder.Generator{}
+		result, err := g.Generate(pkg, []string{"Config"}, gen.DefaultConfig(), gen.Options{
+			Output: "fielddefaultstest/builders.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenDir := filepath.Join(testdataDir(t), "fielddefaults", "fielddefaultstest")
+		wantImpl, readErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen.go"))
+		testkit.NoError(t, readErr, "must read golden impl")
+		testkit.Equal(t, string(result.Files[0].Content), string(wantImpl), "impl must match golden")
+
+		wantTest, readTestErr := os.ReadFile(filepath.Join(goldenDir, "builders.gen_test.go"))
+		testkit.NoError(t, readTestErr, "must read golden test")
+		testkit.Equal(t, string(result.Files[1].Content), string(wantTest), "test must match golden")
 	})
 
 	t.Run("missing type returns error", func(t *testing.T) {

@@ -8,15 +8,32 @@ import (
 )
 
 // ItemBuilder constructs [basic.Item] values for tests.
-// Start with [NewItemBuilder], override fields with With* setters,
-// call [ItemBuilder.Build].
+// Start with [NewItem] or [NewItemFrom], override fields
+// with With* setters, call [ItemBuilder.Build].
 type ItemBuilder struct {
 	v basic.Item
 }
 
-// NewItemBuilder creates a builder with zero values.
-func NewItemBuilder() *ItemBuilder {
+// NewItem creates a builder with zero values.
+func NewItem() *ItemBuilder {
 	return &ItemBuilder{}
+}
+
+// NewItemFrom creates a builder seeded with the given value.
+func NewItemFrom(v basic.Item) *ItemBuilder {
+	return &ItemBuilder{v: v}
+}
+
+// WithActive sets the Active field.
+func (b *ItemBuilder) WithActive(v bool) *ItemBuilder {
+	b.v.Active = v
+	return b
+}
+
+// WithCount sets the Count field.
+func (b *ItemBuilder) WithCount(v int) *ItemBuilder {
+	b.v.Count = v
+	return b
 }
 
 // WithID sets the ID field.
@@ -31,22 +48,23 @@ func (b *ItemBuilder) WithName(v string) *ItemBuilder {
 	return b
 }
 
-// WithCount sets the Count field.
-func (b *ItemBuilder) WithCount(v int) *ItemBuilder {
-	b.v.Count = v
-	return b
-}
-
-// WithActive sets the Active field.
-func (b *ItemBuilder) WithActive(v bool) *ItemBuilder {
-	b.v.Active = v
-	return b
-}
-
 // WithTags sets the Tags field.
-func (b *ItemBuilder) WithTags(v []string) *ItemBuilder {
+func (b *ItemBuilder) WithTags(v ...string) *ItemBuilder {
 	b.v.Tags = v
 	return b
+}
+
+// Mutate applies fn to the value under construction. Use for
+// deeply nested fields or mutations that don't warrant a setter.
+func (b *ItemBuilder) Mutate(fn func(*basic.Item)) *ItemBuilder {
+	fn(&b.v)
+	return b
+}
+
+// Clone returns a copy of the builder. Use to fork variants
+// from a shared base.
+func (b *ItemBuilder) Clone() *ItemBuilder {
+	return &ItemBuilder{v: b.v}
 }
 
 // Build returns the constructed [basic.Item].

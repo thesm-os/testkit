@@ -13,18 +13,24 @@ import (
 //go:generate testkit builder -o storetest/builders.gen.go Item
 
 // Store manages items.
+//
+//testkit:partition RunID
 type Store interface {
 	//testkit:errors ErrNotFound ErrConflict
 	//testkit:idempotent
 	// Get retrieves an item by ID.
 	Get(ctx context.Context, id string) (Item, error)
 
+	//testkit:assert concurrent ctx nilsafe
 	//testkit:errors ErrConflict
-	//testkit:concurrent
 	// Put stores an item.
 	Put(ctx context.Context, item Item) error
 
-	// Delete has no directives.
+	//testkit:assert atomic ctx
+	//testkit:assert nilsafe
+	//testkit:errors ErrNotFound
+	//testkit:errors ErrConflict
+	// Delete tests stacked assert and repeated errors.
 	Delete(ctx context.Context, id string) error
 }
 

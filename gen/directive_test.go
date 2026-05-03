@@ -48,19 +48,33 @@ func TestMethodDirectives(t *testing.T) {
 		testkit.Len(t, dirs[1].Args, 0, "idempotent has no args")
 	})
 
-	t.Run("Put has errors and concurrent directives", func(t *testing.T) {
+	t.Run("Put has assert-expanded and regular directives", func(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.MethodDirectives("Store", "Put")
-		testkit.Len(t, dirs, 2, "must have 2 directives")
-		testkit.Equal(t, dirs[0].Name, "errors", "first directive name")
-		testkit.Equal(t, dirs[0].Args, []string{"ErrConflict"}, "errors args")
-		testkit.Equal(t, dirs[1].Name, "concurrent", "second directive name")
+		testkit.Len(t, dirs, 4, "must have 4 directives (3 from assert + 1 errors)")
+		// assert expands first: concurrent, ctx, nilsafe
+		testkit.Equal(t, dirs[0].Name, "concurrent", "first from assert")
+		testkit.Len(t, dirs[0].Args, 0, "assert-expanded has no args")
+		testkit.Equal(t, dirs[1].Name, "ctx", "second from assert")
+		testkit.Equal(t, dirs[2].Name, "nilsafe", "third from assert")
+		// then errors on its own line
+		testkit.Equal(t, dirs[3].Name, "errors", "errors directive")
+		testkit.Equal(t, dirs[3].Args, []string{"ErrConflict"}, "errors args")
 	})
 
-	t.Run("Delete has no directives", func(t *testing.T) {
+	t.Run("Delete has stacked assert and repeated errors", func(t *testing.T) {
 		t.Parallel()
 		dirs := pkg.MethodDirectives("Store", "Delete")
-		testkit.Len(t, dirs, 0, "must have no directives")
+		// Two assert lines expand: atomic, ctx, nilsafe (3)
+		// Two errors lines: ErrNotFound, ErrConflict (2)
+		testkit.Len(t, dirs, 5, "must have 5 directives")
+		testkit.Equal(t, dirs[0].Name, "atomic", "first assert line")
+		testkit.Equal(t, dirs[1].Name, "ctx", "first assert line")
+		testkit.Equal(t, dirs[2].Name, "nilsafe", "second assert line")
+		testkit.Equal(t, dirs[3].Name, "errors", "first errors")
+		testkit.Equal(t, dirs[3].Args, []string{"ErrNotFound"}, "first errors args")
+		testkit.Equal(t, dirs[4].Name, "errors", "second errors")
+		testkit.Equal(t, dirs[4].Args, []string{"ErrConflict"}, "second errors args")
 	})
 
 	t.Run("nonexistent method returns nil", func(t *testing.T) {
@@ -89,6 +103,46 @@ func TestMethodDirectives(t *testing.T) {
 		concretePkg := loadTestPackage(t, "concrete")
 		dirs := concretePkg.MethodDirectives("Service", "Stop")
 		testkit.Len(t, dirs, 0, "must have no directives")
+	})
+}
+
+func TestEffectiveMethodDirectives(t *testing.T) {
+	t.Parallel()
+	pkg := loadTestPackage(t, "directives")
+
+	t.Run("inherits interface-level directives", func(t *testing.T) {
+		t.Parallel()
+		// Store has //testkit:partition RunID at the interface level.
+		// Get has //testkit:errors and //testkit:idempotent at method level.
+		// EffectiveMethodDirectives should return partition first, then method directives.
+		dirs := pkg.EffectiveMethodDirectives("Store", "Get")
+		testkit.True(t, len(dirs) > 2, "must have inherited + method directives")
+		testkit.Equal(t, dirs[0].Name, "partition", "inherited directive first")
+		testkit.Equal(t, dirs[0].Args, []string{"RunID"}, "inherited args")
+		testkit.Equal(t, dirs[1].Name, "errors", "method directive after inherited")
+	})
+
+	t.Run("method with no directives still gets inherited", func(t *testing.T) {
+		t.Parallel()
+		// Even if a method had no directives, EffectiveMethodDirectives
+		// would return the interface-level ones. But in our fixture
+		// all methods now have directives, so test Get which has both.
+		dirs := pkg.EffectiveMethodDirectives("Store", "Get")
+		found := false
+		for _, d := range dirs {
+			if d.Name == "partition" {
+				found = true
+			}
+		}
+		testkit.True(t, found, "partition must be inherited from interface")
+	})
+
+	t.Run("type without interface directives returns method only", func(t *testing.T) {
+		t.Parallel()
+		concretePkg := loadTestPackage(t, "concrete")
+		dirs := concretePkg.EffectiveMethodDirectives("Service", "Run")
+		testkit.Len(t, dirs, 1, "must have only method directive")
+		testkit.Equal(t, dirs[0].Name, "timeout", "method directive")
 	})
 }
 
