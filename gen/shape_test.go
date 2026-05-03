@@ -10,7 +10,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen"
-	"go.thesmos.sh/testkit/gen/directive"
+	"go.thesmos.sh/testkit/gen/directives"
 )
 
 func suiteTestdataDir(t *testing.T) string {
@@ -49,7 +49,7 @@ func TestDetectShape(t *testing.T) {
 			{"Get", nil, gen.ShapeReader},
 			{"Put", nil, gen.ShapeWriter},
 			{"Delete", nil, gen.ShapeWriter},
-			{"Delete", []gen.Directive{{Name: directive.DirDeleter}}, gen.ShapeDeleter},
+			{"Delete", []gen.Directive{{Name: directives.Deleter}}, gen.ShapeDeleter},
 			{"Count", nil, gen.ShapeUnknown},
 			{"Ping", nil, gen.ShapeLifecycle},
 			{"LegacyPut", nil, gen.ShapeWriter},

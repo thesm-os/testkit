@@ -3,20 +3,24 @@
 
 package directive
 
-import "go.thesmos.sh/testkit/gen"
+import (
+	"go.thesmos.sh/testkit/gen"
+	"go.thesmos.sh/testkit/gen/directives"
+)
 
-// Directive name constants used in composition rules.
+// Re-export directive name constants for backward compatibility.
+// The canonical definitions live in gen/directives.
 const (
-	DirPure              = "pure"
-	DirCacheable         = "cacheable"
-	DirIdempotent        = "idempotent"
-	DirMonotonic         = "monotonic"
-	DirSideEffect        = "sideeffect"
-	DirConcurrent        = "concurrent"
-	DirConcurrentReaders = "concurrent-readers"
-	DirRetryable         = "retryable"
-	DirRetrySucceedsOn   = "retry-succeeds-on-attempt"
-	DirDeleter           = "deleter"
+	DirPure              = directives.Pure
+	DirCacheable         = directives.Cacheable
+	DirIdempotent        = directives.Idempotent
+	DirMonotonic         = directives.Monotonic
+	DirSideEffect        = directives.SideEffect
+	DirConcurrent        = directives.Concurrent
+	DirConcurrentReaders = directives.ConcurrentReaders
+	DirRetryable         = directives.Retryable
+	DirRetrySucceedsOn   = directives.RetrySucceedsOn
+	DirDeleter           = directives.Deleter
 )
 
 // CompositionKind classifies a composition issue.

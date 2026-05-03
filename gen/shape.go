@@ -3,7 +3,11 @@
 
 package gen
 
-import "go/types"
+import (
+	"go/types"
+
+	"go.thesmos.sh/testkit/gen/directives"
+)
 
 // MethodShape classifies an interface method by its signature pattern.
 // The generator uses the shape to emit type-safe On<Method> options
@@ -52,7 +56,7 @@ type ShapeInfo struct {
 //  7. ctx only + (T, error) return → Aggregator
 //  8. ctx only + error return → Lifecycle
 //  9. Otherwise → Unknown
-func DetectShape(m MethodInfo, tracker *ImportTracker, directives []Directive) ShapeInfo {
+func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeInfo {
 	sig := m.Signature
 	params := sig.Params()
 	results := sig.Results()
@@ -119,12 +123,9 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, directives []Directive) S
 	}
 
 	// Check for //testkit:deleter directive.
-	// The constant lives in gen/directive but we can't import it
-	// without creating a cycle (directive imports gen). The string
-	// is stable — it's the directive name parsed from source comments.
 	isDeleter := false
-	for _, d := range directives {
-		if d.Name == "deleter" {
+	for _, d := range dirs {
+		if d.Name == directives.Deleter {
 			isDeleter = true
 			break
 		}
