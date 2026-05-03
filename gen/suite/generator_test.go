@@ -64,15 +64,19 @@ func TestGenerate(t *testing.T) {
 		name     string
 		dir      string
 		typeName string
+		output   string // explicit output path; empty = use first //go:generate directive
 	}{
-		{"basic", "basic", "Store"},
-		{"nocontext", "nocontext", "Cache"},
-		{"multireturn", "multireturn", "Service"},
-		{"mixed", "mixed", "Processor"},
-		{"erroronly", "erroronly", "Closer"},
-		{"iterators", "iterators", "Scanner"},
-		{"readers", "readers", "Registry"},
-		{"writers", "writers", "Store"},
+		{"basic", "basic", "Store", ""},
+		{"nocontext", "nocontext", "Cache", ""},
+		{"multireturn", "multireturn", "Service", ""},
+		{"mixed", "mixed", "Processor", ""},
+		{"erroronly", "erroronly", "Closer", ""},
+		{"iterators", "iterators", "Scanner", ""},
+		{"readers", "readers", "Registry", ""},
+		{"writers", "writers", "Store", ""},
+		{"allshapes", "allshapes", "Service", ""},
+		{"weird/codec", "weird", "Codec", "weirdtest/weird_spec.gen.go"},
+		{"weird/scheduler", "weird", "Scheduler", "weirdtest/scheduler_spec.gen.go"},
 	}
 
 	for _, fx := range fixtures {
@@ -81,10 +85,13 @@ func TestGenerate(t *testing.T) {
 			pkg := loadTestPackage(t, fx.dir)
 			g := &suite.Generator{}
 
-			dirs := pkg.GenerateDirectives()
-			outputPath := "storetest/store_spec.gen.go"
-			if len(dirs) > 0 {
-				outputPath = dirs[0].Output
+			outputPath := fx.output
+			if outputPath == "" {
+				dirs := pkg.GenerateDirectives()
+				outputPath = "storetest/store_spec.gen.go"
+				if len(dirs) > 0 {
+					outputPath = dirs[0].Output
+				}
 			}
 
 			result, err := g.Generate(pkg, []string{fx.typeName}, gen.DefaultConfig(), gen.Options{

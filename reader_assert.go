@@ -75,15 +75,15 @@ func AssertConsistentReads[T any, K comparable, V any](key K, n int) ReaderAsser
 // key, and asserts the observable state did not change.
 func AssertReadsAreNonMutating[T any, K comparable, V any, S comparable](
 	key K,
-	observe func(T) S,
+	observe func(context.Context, T) S,
 ) ReaderAssertion[T, K, V] {
 	return func(ctx ReaderContext[T, K, V]) {
 		ctx.T.Run("reads are non-mutating", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
-			before := observe(impl)
+			before := observe(t.Context(), impl)
 			_, _ = ctx.Call(t.Context(), impl, key)
-			after := observe(impl)
+			after := observe(t.Context(), impl)
 			Equal(t, before, after, "read must not mutate observable state")
 		})
 	}

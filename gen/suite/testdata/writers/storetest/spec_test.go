@@ -17,12 +17,12 @@ func TestInMemoryStoreContract(t *testing.T) {
 	factory := func() writers.Store { return writers.NewInMemoryStore() }
 
 	storetest.AssertStoreContract(t, factory,
-		storetest.PrePopulate(func(ctx context.Context, s writers.Store) {
+		storetest.StorePrePopulate(func(ctx context.Context, s writers.Store) {
 			_ = s.Put(ctx, writers.Item{ID: "known-1", Name: "test"})
 		}),
 
 		// Reader plug-ins on Get.
-		storetest.OnGet(
+		storetest.StoreOnGet(
 			testkit.AssertReturnsForKey[writers.Store, string, writers.Item](
 				"known-1", writers.Item{ID: "known-1", Name: "test"},
 			),
@@ -33,21 +33,21 @@ func TestInMemoryStoreContract(t *testing.T) {
 		),
 
 		// Writer plug-ins on Put.
-		storetest.OnPut(
+		storetest.StoreOnPut(
 			testkit.AssertWriteSucceeds[writers.Store, writers.Item](
 				writers.Item{ID: "new-1", Name: "new"},
 			),
 		),
 
 		// Stream plug-ins on List.
-		storetest.OnList(
+		storetest.StoreOnList(
 			testkit.AssertStreamCompletes[writers.Store, writers.Item](),
 			testkit.AssertStreamRespectsBreak[writers.Store, writers.Item](),
 			testkit.AssertStreamReentrant[writers.Store, writers.Item](),
 		),
 
 		// Cross-method: read-after-write.
-		storetest.OnAll(
+		storetest.StoreOnAll(
 			testkit.AssertReadAfterWrite[writers.Store, string, writers.Item](
 				writers.Item{ID: "cross-1", Name: "cross"},
 				func(ctx context.Context, s writers.Store, item writers.Item) error {

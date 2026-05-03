@@ -59,7 +59,7 @@ func TestAssertWriteIsObservable(t *testing.T) {
 	testkit.AssertWriteIsObservable[*mapWriter, entry, string](
 		entry{Key: "a", Value: "alpha"},
 		func(e entry) string { return e.Key },
-		func(w *mapWriter, ctx context.Context, k string) (entry, error) {
+		func(ctx context.Context, w *mapWriter, k string) (entry, error) {
 			return w.Get(ctx, k)
 		},
 	)(ctx)
@@ -89,7 +89,7 @@ func TestAssertWriteOverwrite(t *testing.T) {
 		entry{Key: "a", Value: "first"},
 		entry{Key: "a", Value: "second"},
 		func(e entry) string { return e.Key },
-		func(w *mapWriter, ctx context.Context, k string) (entry, error) {
+		func(ctx context.Context, w *mapWriter, k string) (entry, error) {
 			return w.Get(ctx, k)
 		},
 	)(ctx)

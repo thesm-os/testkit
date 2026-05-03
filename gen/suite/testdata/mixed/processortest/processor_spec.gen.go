@@ -55,12 +55,22 @@ func runProcessorDescribe(t *testing.T, factory func() mixed.Processor, cfg *pro
 	})
 	if len(cfg.onDescribe) > 0 {
 		t.Run("Describe", func(t *testing.T) {
-			for _, fn := range cfg.onDescribe {
+			prePopFactory := func() mixed.Processor {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			pctx := testkit.PureContext[mixed.Processor, string]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl mixed.Processor) string {
+					return impl.Describe()
+				},
+			}
+			for _, a := range cfg.onDescribe {
+				a(pctx)
 			}
 		})
 	}
@@ -213,58 +223,58 @@ func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *proc
 // ProcessorOption configures [AssertProcessorContract].
 type ProcessorOption func(*processorConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// ProcessorPrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s mixed.Processor)) ProcessorOption {
+func ProcessorPrePopulate(fn func(ctx context.Context, s mixed.Processor)) ProcessorOption {
 	return func(c *processorConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// ProcessorCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, mixed.Processor)) ProcessorOption {
+func ProcessorCustom(name string, fn func(*testing.T, mixed.Processor)) ProcessorOption {
 	return func(c *processorConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, processorCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnDescribe adds plug-in assertions for the Describe method.
-func OnDescribe(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+// ProcessorOnDescribe adds plug-in assertions for the Describe method.
+func ProcessorOnDescribe(assertions ...testkit.PureAssertion[mixed.Processor, string]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onDescribe = append(c.onDescribe, assertions...)
 	}
 }
 
-// OnLegacyProcess adds plug-in assertions for the LegacyProcess method.
-func OnLegacyProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
+// ProcessorOnLegacyProcess adds plug-in assertions for the LegacyProcess method.
+func ProcessorOnLegacyProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onLegacyProcess = append(c.onLegacyProcess, assertions...)
 	}
 }
 
-// OnProcess adds plug-in assertions for the Process method.
-func OnProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
+// ProcessorOnProcess adds plug-in assertions for the Process method.
+func ProcessorOnProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onProcess = append(c.onProcess, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[mixed.Processor]) ProcessorOption {
+// ProcessorOnAll adds cross-method assertions that span multiple methods.
+func ProcessorOnAll(assertions ...testkit.CrossMethodAssertion[mixed.Processor]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type processorCustomSubtest struct {
 	name string
 	fn   func(*testing.T, mixed.Processor)
 }
 
 type processorConfig struct {
 	prePopulate     func(context.Context, mixed.Processor)
-	custom          []customSubtest
+	custom          []processorCustomSubtest
 	onAll           []testkit.CrossMethodAssertion[mixed.Processor]
-	onDescribe      []func(*testing.T, mixed.Processor)
+	onDescribe      []testkit.PureAssertion[mixed.Processor, string]
 	onLegacyProcess []testkit.WriterAssertion[mixed.Processor, []byte]
 	onProcess       []testkit.WriterAssertion[mixed.Processor, []byte]
 }

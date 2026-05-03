@@ -13,6 +13,13 @@ import (
 // MethodShape classifies an interface method by its signature pattern.
 // The generator uses the shape to emit type-safe On<Method> options
 // accepting only primitives matching the detected shape.
+//
+// Observer alignment: plug-in primitives for each shape receive
+// context.Context in their closures if and only if the method itself
+// takes context.Context. Pure and Predicate methods are ctx-free by
+// definition (rules 2-3 require !hasCtx), so their observers
+// (PureContext, PredicateContext) are also ctx-free. This is
+// intentional, not an omission.
 type MethodShape int
 
 // Method shape constants.
@@ -94,16 +101,20 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 		}
 	}
 
-	// Rule 2: returns bool only → Predicate.
-	if resCount == 1 {
+	// Rule 2: returns bool only, no ctx → Predicate.
+	if !hasCtx && resCount == 1 {
 		if b, ok := results.At(0).Type().Underlying().(*types.Basic); ok && b.Kind() == types.Bool {
 			return ShapeInfo{Shape: ShapePredicate}
 		}
 	}
 
-	// Rule 3: no error return → Pure.
-	if !hasError {
-		return ShapeInfo{Shape: ShapePure}
+	// Rule 3: no error return, no ctx → Pure.
+	if !hasCtx && !hasError {
+		info := ShapeInfo{Shape: ShapePure}
+		if resCount > 0 {
+			info.ValType = gen.TypeStr(results.At(0).Type(), tracker)
+		}
+		return info
 	}
 
 	// From here, method returns error.
@@ -155,7 +166,7 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 		}
 
 		// Rule 6: (R, error) with R != error → Writer with result.
-		if nonErrResults >= 1 {
+		if nonErrResults == 1 {
 			retIdx := 0
 			if errIdx == 0 {
 				retIdx = 1
@@ -171,8 +182,8 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 
 	// Rules 7-8: ctx only (no non-ctx params).
 	if hasCtx && len(nonCtxParams) == 0 {
-		// Rule 7: (T, error) → Aggregator.
-		if nonErrResults >= 1 {
+		// Rule 7: (T, error) → Aggregator (exactly one non-error result + error).
+		if hasError && nonErrResults == 1 {
 			retIdx := 0
 			if errIdx == 0 {
 				retIdx = 1
@@ -184,8 +195,10 @@ func DetectShape(m gen.MethodInfo, tracker *gen.ImportTracker, directives []gen.
 			}
 		}
 
-		// Rule 8: error only → Lifecycle.
-		return ShapeInfo{Shape: ShapeLifecycle}
+		// Rule 8: error only (no non-error results) → Lifecycle.
+		if nonErrResults == 0 {
+			return ShapeInfo{Shape: ShapeLifecycle}
+		}
 	}
 
 	// Rule 9: fallback.

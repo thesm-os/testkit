@@ -81,12 +81,22 @@ func runStoreDelete(t *testing.T, factory func() writers.Store, cfg *storeConfig
 	})
 	if len(cfg.onDelete) > 0 {
 		t.Run("Delete", func(t *testing.T) {
-			for _, fn := range cfg.onDelete {
+			prePopFactory := func() writers.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			dctx := testkit.DeleterContext[writers.Store, string]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl writers.Store, k string) error {
+					return impl.Delete(ctx, k)
+				},
+			}
+			for _, a := range cfg.onDelete {
+				a(dctx)
 			}
 		})
 	}
@@ -278,65 +288,65 @@ func runStorePut(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 // StoreOption configures [AssertStoreContract].
 type StoreOption func(*storeConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// StorePrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s writers.Store)) StoreOption {
+func StorePrePopulate(fn func(ctx context.Context, s writers.Store)) StoreOption {
 	return func(c *storeConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// StoreCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, writers.Store)) StoreOption {
+func StoreCustom(name string, fn func(*testing.T, writers.Store)) StoreOption {
 	return func(c *storeConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, storeCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnDelete adds plug-in assertions for the Delete method.
-func OnDelete(assertions ...func(*testing.T, writers.Store)) StoreOption {
+// StoreOnDelete adds plug-in assertions for the Delete method.
+func StoreOnDelete(assertions ...testkit.DeleterAssertion[writers.Store, string]) StoreOption {
 	return func(c *storeConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
-// OnGet adds plug-in assertions for the Get method.
-func OnGet(assertions ...testkit.ReaderAssertion[writers.Store, string, writers.Item]) StoreOption {
+// StoreOnGet adds plug-in assertions for the Get method.
+func StoreOnGet(assertions ...testkit.ReaderAssertion[writers.Store, string, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
-// OnList adds plug-in assertions for the List method.
-func OnList(assertions ...testkit.StreamAssertion[writers.Store, writers.Item]) StoreOption {
+// StoreOnList adds plug-in assertions for the List method.
+func StoreOnList(assertions ...testkit.StreamAssertion[writers.Store, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
 }
 
-// OnPut adds plug-in assertions for the Put method.
-func OnPut(assertions ...testkit.WriterAssertion[writers.Store, writers.Item]) StoreOption {
+// StoreOnPut adds plug-in assertions for the Put method.
+func StoreOnPut(assertions ...testkit.WriterAssertion[writers.Store, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[writers.Store]) StoreOption {
+// StoreOnAll adds cross-method assertions that span multiple methods.
+func StoreOnAll(assertions ...testkit.CrossMethodAssertion[writers.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type storeCustomSubtest struct {
 	name string
 	fn   func(*testing.T, writers.Store)
 }
 
 type storeConfig struct {
 	prePopulate func(context.Context, writers.Store)
-	custom      []customSubtest
+	custom      []storeCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[writers.Store]
-	onDelete    []func(*testing.T, writers.Store)
+	onDelete    []testkit.DeleterAssertion[writers.Store, string]
 	onGet       []testkit.ReaderAssertion[writers.Store, string, writers.Item]
 	onList      []testkit.StreamAssertion[writers.Store, writers.Item]
 	onPut       []testkit.WriterAssertion[writers.Store, writers.Item]

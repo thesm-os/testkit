@@ -85,12 +85,22 @@ func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serv
 	})
 	if len(cfg.onReset) > 0 {
 		t.Run("Reset", func(t *testing.T) {
-			for _, fn := range cfg.onReset {
+			prePopFactory := func() multireturn.Service {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			lctx := testkit.LifecycleContext[multireturn.Service]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl multireturn.Service) error {
+					return impl.Reset(ctx)
+				},
+			}
+			for _, a := range cfg.onReset {
+				a(lctx)
 			}
 		})
 	}
@@ -160,51 +170,51 @@ func runServiceStatus(t *testing.T, factory func() multireturn.Service, cfg *ser
 // ServiceOption configures [AssertServiceContract].
 type ServiceOption func(*serviceConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// ServicePrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s multireturn.Service)) ServiceOption {
+func ServicePrePopulate(fn func(ctx context.Context, s multireturn.Service)) ServiceOption {
 	return func(c *serviceConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// ServiceCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, multireturn.Service)) ServiceOption {
+func ServiceCustom(name string, fn func(*testing.T, multireturn.Service)) ServiceOption {
 	return func(c *serviceConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, serviceCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnReset adds plug-in assertions for the Reset method.
-func OnReset(assertions ...func(*testing.T, multireturn.Service)) ServiceOption {
+// ServiceOnReset adds plug-in assertions for the Reset method.
+func ServiceOnReset(assertions ...testkit.LifecycleAssertion[multireturn.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onReset = append(c.onReset, assertions...)
 	}
 }
 
-// OnStatus adds plug-in assertions for the Status method.
-func OnStatus(assertions ...func(*testing.T, multireturn.Service)) ServiceOption {
+// ServiceOnStatus adds plug-in assertions for the Status method.
+func ServiceOnStatus(assertions ...func(*testing.T, multireturn.Service)) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onStatus = append(c.onStatus, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[multireturn.Service]) ServiceOption {
+// ServiceOnAll adds cross-method assertions that span multiple methods.
+func ServiceOnAll(assertions ...testkit.CrossMethodAssertion[multireturn.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type serviceCustomSubtest struct {
 	name string
 	fn   func(*testing.T, multireturn.Service)
 }
 
 type serviceConfig struct {
 	prePopulate func(context.Context, multireturn.Service)
-	custom      []customSubtest
+	custom      []serviceCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[multireturn.Service]
-	onReset     []func(*testing.T, multireturn.Service)
+	onReset     []testkit.LifecycleAssertion[multireturn.Service]
 	onStatus    []func(*testing.T, multireturn.Service)
 }
 

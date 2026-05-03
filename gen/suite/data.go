@@ -110,6 +110,12 @@ func (m *SpecMethodData) IsPure() bool { return m.Shape.Shape == ShapePure }
 // IsAggregator reports whether the method has Aggregator shape.
 func (m *SpecMethodData) IsAggregator() bool { return m.Shape.Shape == ShapeAggregator }
 
+// IsDeleter reports whether the method has Deleter shape.
+func (m *SpecMethodData) IsDeleter() bool { return m.Shape.Shape == ShapeDeleter }
+
+// IsPredicate reports whether the method has Predicate shape.
+func (m *SpecMethodData) IsPredicate() bool { return m.Shape.Shape == ShapePredicate }
+
 // OnMethodAssertionType renders the Go type expression for the On<Method>
 // assertion parameter. For Reader: testkit.ReaderAssertion[T, K, V].
 // For Unknown/untyped: func(*testing.T, T).
@@ -119,9 +125,18 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 		return "testkit.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case ShapeWriter:
 		return "testkit.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case ShapeDeleter:
+		return "testkit.DeleterAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
 	case ShapeStreamReader:
-		elemType := m.Shape.IterInfo.ElemType
-		return "testkit.StreamAssertion[" + m.QualifiedType + ", " + elemType + "]"
+		return "testkit.StreamAssertion[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+	case ShapeAggregator:
+		return "testkit.AggregatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case ShapeLifecycle:
+		return "testkit.LifecycleAssertion[" + m.QualifiedType + "]"
+	case ShapePure:
+		return "testkit.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case ShapePredicate:
+		return "testkit.PredicateAssertion[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
 	}
@@ -131,6 +146,21 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 // Context params use t.Context(), others use gen.ZeroValueOf.
 func (m *SpecMethodData) ZeroCallArgs() string {
 	return gen.ZeroCallArgs(m.Signature, m.tracker)
+}
+
+// PureCallArgs renders zero-value arguments for Pure-shaped methods.
+// Pure methods have no context, so all params get zero values.
+func (m *SpecMethodData) PureCallArgs() string {
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	parts := make([]string, n)
+	for i := range n {
+		parts[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // StreamCallArgs renders arguments for calling this method inside a stream

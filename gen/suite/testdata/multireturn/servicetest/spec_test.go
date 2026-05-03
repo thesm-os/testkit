@@ -7,6 +7,7 @@ import (
 	"context"
 	"testing"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/multireturn"
 	"go.thesmos.sh/testkit/gen/suite/testdata/multireturn/servicetest"
 )
@@ -16,6 +17,13 @@ func TestInMemoryServiceContract(t *testing.T) {
 	factory := func() multireturn.Service { return multireturn.NewInMemoryService() }
 
 	servicetest.AssertServiceContract(t, factory,
-		servicetest.PrePopulate(func(_ context.Context, _ multireturn.Service) {}),
+		servicetest.ServicePrePopulate(func(_ context.Context, _ multireturn.Service) {}),
+		servicetest.ServiceOnReset(
+			testkit.AssertLifecycleSucceeds[multireturn.Service](),
+		),
+		servicetest.ServiceOnStatus(func(t *testing.T, s multireturn.Service) {
+			_, _, err := s.Status(t.Context())
+			testkit.NoError(t, err, "Status must succeed")
+		}),
 	)
 }

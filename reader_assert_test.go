@@ -63,7 +63,7 @@ func TestAssertReadsAreNonMutating(t *testing.T) {
 	ctx := readerCtx(t, map[string]string{"x": "value"})
 	testkit.AssertReadsAreNonMutating[*mapReader, string, string, int](
 		"x",
-		func(r *mapReader) int { return len(r.data) },
+		func(_ context.Context, r *mapReader) int { return len(r.data) },
 	)(ctx)
 }
 

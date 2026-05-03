@@ -39,7 +39,7 @@ func AssertWriteSucceeds[T, V any](sample V) WriterAssertion[T, V] {
 func AssertWriteIsObservable[T, V any, K comparable](
 	sample V,
 	extractKey func(V) K,
-	reader func(T, context.Context, K) (V, error),
+	reader func(context.Context, T, K) (V, error),
 ) WriterAssertion[T, V] {
 	return func(ctx WriterContext[T, V]) {
 		ctx.T.Run("write is observable", func(t *testing.T) {
@@ -48,7 +48,7 @@ func AssertWriteIsObservable[T, V any, K comparable](
 			err := ctx.Call(t.Context(), impl, sample)
 			NoError(t, err, "write must succeed")
 			k := extractKey(sample)
-			got, err := reader(impl, t.Context(), k)
+			got, err := reader(t.Context(), impl, k)
 			NoError(t, err, "read-back must succeed")
 			Equal(t, got, sample, "read-back must return written value")
 		})
@@ -76,7 +76,7 @@ func AssertWriteRejectInvalid[T, V any](invalid V, sentinel error) WriterAsserti
 func AssertWriteOverwrite[T, V any, K comparable](
 	first, second V,
 	extractKey func(V) K,
-	reader func(T, context.Context, K) (V, error),
+	reader func(context.Context, T, K) (V, error),
 ) WriterAssertion[T, V] {
 	return func(ctx WriterContext[T, V]) {
 		ctx.T.Run("write overwrites", func(t *testing.T) {
@@ -87,7 +87,7 @@ func AssertWriteOverwrite[T, V any, K comparable](
 			err = ctx.Call(t.Context(), impl, second)
 			NoError(t, err, "second write must succeed")
 			k := extractKey(second)
-			got, err := reader(impl, t.Context(), k)
+			got, err := reader(t.Context(), impl, k)
 			NoError(t, err, "read-back must succeed")
 			Equal(t, got, second, "read-back must return second (overwritten) value")
 		})

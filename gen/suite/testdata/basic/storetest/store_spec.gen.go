@@ -314,12 +314,22 @@ func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 	})
 	if len(cfg.onPing) > 0 {
 		t.Run("Ping", func(t *testing.T) {
-			for _, fn := range cfg.onPing {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			lctx := testkit.LifecycleContext[basic.Store]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl basic.Store) error {
+					return impl.Ping(ctx)
+				},
+			}
+			for _, a := range cfg.onPing {
+				a(lctx)
 			}
 		})
 	}
@@ -390,83 +400,83 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 // StoreOption configures [AssertStoreContract].
 type StoreOption func(*storeConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// StorePrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s basic.Store)) StoreOption {
+func StorePrePopulate(fn func(ctx context.Context, s basic.Store)) StoreOption {
 	return func(c *storeConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// StoreCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, basic.Store)) StoreOption {
+func StoreCustom(name string, fn func(*testing.T, basic.Store)) StoreOption {
 	return func(c *storeConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, storeCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnCount adds plug-in assertions for the Count method.
-func OnCount(assertions ...func(*testing.T, basic.Store)) StoreOption {
+// StoreOnCount adds plug-in assertions for the Count method.
+func StoreOnCount(assertions ...func(*testing.T, basic.Store)) StoreOption {
 	return func(c *storeConfig) {
 		c.onCount = append(c.onCount, assertions...)
 	}
 }
 
-// OnDelete adds plug-in assertions for the Delete method.
-func OnDelete(assertions ...testkit.WriterAssertion[basic.Store, string]) StoreOption {
+// StoreOnDelete adds plug-in assertions for the Delete method.
+func StoreOnDelete(assertions ...testkit.WriterAssertion[basic.Store, string]) StoreOption {
 	return func(c *storeConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
-// OnGet adds plug-in assertions for the Get method.
-func OnGet(assertions ...testkit.ReaderAssertion[basic.Store, string, basic.Item]) StoreOption {
+// StoreOnGet adds plug-in assertions for the Get method.
+func StoreOnGet(assertions ...testkit.ReaderAssertion[basic.Store, string, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
-// OnLegacyPut adds plug-in assertions for the LegacyPut method.
-func OnLegacyPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
+// StoreOnLegacyPut adds plug-in assertions for the LegacyPut method.
+func StoreOnLegacyPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onLegacyPut = append(c.onLegacyPut, assertions...)
 	}
 }
 
-// OnPing adds plug-in assertions for the Ping method.
-func OnPing(assertions ...func(*testing.T, basic.Store)) StoreOption {
+// StoreOnPing adds plug-in assertions for the Ping method.
+func StoreOnPing(assertions ...testkit.LifecycleAssertion[basic.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPing = append(c.onPing, assertions...)
 	}
 }
 
-// OnPut adds plug-in assertions for the Put method.
-func OnPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
+// StoreOnPut adds plug-in assertions for the Put method.
+func StoreOnPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[basic.Store]) StoreOption {
+// StoreOnAll adds cross-method assertions that span multiple methods.
+func StoreOnAll(assertions ...testkit.CrossMethodAssertion[basic.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type storeCustomSubtest struct {
 	name string
 	fn   func(*testing.T, basic.Store)
 }
 
 type storeConfig struct {
 	prePopulate func(context.Context, basic.Store)
-	custom      []customSubtest
+	custom      []storeCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[basic.Store]
 	onCount     []func(*testing.T, basic.Store)
 	onDelete    []testkit.WriterAssertion[basic.Store, string]
 	onGet       []testkit.ReaderAssertion[basic.Store, string, basic.Item]
 	onLegacyPut []testkit.WriterAssertion[basic.Store, basic.Item]
-	onPing      []func(*testing.T, basic.Store)
+	onPing      []testkit.LifecycleAssertion[basic.Store]
 	onPut       []testkit.WriterAssertion[basic.Store, basic.Item]
 }
 

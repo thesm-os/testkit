@@ -21,7 +21,7 @@ func TestInMemoryRegistryContract(t *testing.T) {
 	}
 
 	registrytest.AssertRegistryContract(t, factory,
-		registrytest.OnLookup(
+		registrytest.RegistryOnLookup(
 			testkit.AssertReturnsForKey[readers.Registry, string, readers.Handler](
 				"handler-1", readers.Handler{Name: "handler-1", Version: 1},
 			),
@@ -32,7 +32,7 @@ func TestInMemoryRegistryContract(t *testing.T) {
 			testkit.AssertReaderConcurrentSafe[readers.Registry, string, readers.Handler]("handler-1", 4, 50),
 		),
 
-		registrytest.AssertCustom("List returns all registered handlers", func(t *testing.T, r readers.Registry) {
+		registrytest.RegistryCustom("List returns all registered handlers", func(t *testing.T, r readers.Registry) {
 			count := 0
 			for _, err := range r.List(t.Context()) {
 				testkit.NoError(t, err, "List must not error")

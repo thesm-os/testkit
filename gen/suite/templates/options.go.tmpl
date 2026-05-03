@@ -2,42 +2,42 @@
 // {{.InterfaceName}}Option configures [Assert{{.InterfaceName}}Contract].
 type {{.InterfaceName}}Option func(*{{.LowerInterfaceName}}Config)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// {{.InterfaceName}}PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s {{.QualifiedType}})) {{.InterfaceName}}Option {
+func {{.InterfaceName}}PrePopulate(fn func(ctx context.Context, s {{.QualifiedType}})) {{.InterfaceName}}Option {
 	return func(c *{{.LowerInterfaceName}}Config) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// {{.InterfaceName}}Custom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, {{.QualifiedType}})) {{.InterfaceName}}Option {
+func {{.InterfaceName}}Custom(name string, fn func(*testing.T, {{.QualifiedType}})) {{.InterfaceName}}Option {
 	return func(c *{{.LowerInterfaceName}}Config) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, {{.LowerInterfaceName}}CustomSubtest{name: name, fn: fn})
 	}
 }
 {{range $m := .Methods}}{{if not $m.Skip}}
-// On{{$m.Name}} adds plug-in assertions for the {{$m.Name}} method.
-func On{{$m.Name}}(assertions ...{{$m.OnMethodAssertionType}}) {{$.InterfaceName}}Option {
+// {{$.InterfaceName}}On{{$m.Name}} adds plug-in assertions for the {{$m.Name}} method.
+func {{$.InterfaceName}}On{{$m.Name}}(assertions ...{{$m.OnMethodAssertionType}}) {{$.InterfaceName}}Option {
 	return func(c *{{$.LowerInterfaceName}}Config) {
 		c.on{{$m.Name}} = append(c.on{{$m.Name}}, assertions...)
 	}
 }
 {{end}}{{end}}
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
+// {{.InterfaceName}}OnAll adds cross-method assertions that span multiple methods.
+func {{.InterfaceName}}OnAll(assertions ...testkit.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
 	return func(c *{{.LowerInterfaceName}}Config) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type {{.LowerInterfaceName}}CustomSubtest struct {
 	name string
 	fn   func(*testing.T, {{.QualifiedType}})
 }
 
 type {{.LowerInterfaceName}}Config struct {
 	prePopulate func(context.Context, {{.QualifiedType}})
-	custom      []customSubtest
+	custom      []{{.LowerInterfaceName}}CustomSubtest
 	onAll       []testkit.CrossMethodAssertion[{{.QualifiedType}}]
 {{- range .Methods}}{{if not .Skip}}
 	on{{.Name}} []{{.OnMethodAssertionType}}
@@ -52,4 +52,3 @@ func new{{.InterfaceName}}Config(opts ...{{.InterfaceName}}Option) {{.LowerInter
 	return cfg
 }
 {{end}}
-

@@ -192,7 +192,9 @@ GEN_TESTDATA := \
 	gen/suite/testdata/erroronly/closertest \
 	gen/suite/testdata/iterators/scannertest \
 	gen/suite/testdata/readers/registrytest \
-	gen/suite/testdata/writers/storetest
+	gen/suite/testdata/writers/storetest \
+	gen/suite/testdata/allshapes/servicetest \
+	gen/suite/testdata/weird/weirdtest
 
 # ─── Testing ─────────────────────────────────────────────────────
 

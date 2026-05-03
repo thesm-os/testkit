@@ -31,7 +31,7 @@ func TestDetectShape(t *testing.T) {
 			{"Put", nil, suite.ShapeWriter},
 			{"Delete", nil, suite.ShapeWriter},
 			{"Delete", []gen.Directive{{Name: directive.DirDeleter}}, suite.ShapeDeleter},
-			{"Count", nil, suite.ShapePure},
+			{"Count", nil, suite.ShapeUnknown},
 			{"Ping", nil, suite.ShapeLifecycle},
 			{"LegacyPut", nil, suite.ShapeWriter},
 		} {

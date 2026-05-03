@@ -86,12 +86,22 @@ func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerCo
 	})
 	if len(cfg.onClose) > 0 {
 		t.Run("Close", func(t *testing.T) {
-			for _, fn := range cfg.onClose {
+			prePopFactory := func() erroronly.Closer {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			lctx := testkit.LifecycleContext[erroronly.Closer]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl erroronly.Closer) error {
+					return impl.Close(ctx)
+				},
+			}
+			for _, a := range cfg.onClose {
+				a(lctx)
 			}
 		})
 	}
@@ -138,12 +148,22 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 	})
 	if len(cfg.onOpen) > 0 {
 		t.Run("Open", func(t *testing.T) {
-			for _, fn := range cfg.onOpen {
+			prePopFactory := func() erroronly.Closer {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			lctx := testkit.LifecycleContext[erroronly.Closer]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl erroronly.Closer) error {
+					return impl.Open(ctx)
+				},
+			}
+			for _, a := range cfg.onOpen {
+				a(lctx)
 			}
 		})
 	}
@@ -152,52 +172,52 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 // CloserOption configures [AssertCloserContract].
 type CloserOption func(*closerConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// CloserPrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s erroronly.Closer)) CloserOption {
+func CloserPrePopulate(fn func(ctx context.Context, s erroronly.Closer)) CloserOption {
 	return func(c *closerConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// CloserCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, erroronly.Closer)) CloserOption {
+func CloserCustom(name string, fn func(*testing.T, erroronly.Closer)) CloserOption {
 	return func(c *closerConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, closerCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnClose adds plug-in assertions for the Close method.
-func OnClose(assertions ...func(*testing.T, erroronly.Closer)) CloserOption {
+// CloserOnClose adds plug-in assertions for the Close method.
+func CloserOnClose(assertions ...testkit.LifecycleAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onClose = append(c.onClose, assertions...)
 	}
 }
 
-// OnOpen adds plug-in assertions for the Open method.
-func OnOpen(assertions ...func(*testing.T, erroronly.Closer)) CloserOption {
+// CloserOnOpen adds plug-in assertions for the Open method.
+func CloserOnOpen(assertions ...testkit.LifecycleAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onOpen = append(c.onOpen, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[erroronly.Closer]) CloserOption {
+// CloserOnAll adds cross-method assertions that span multiple methods.
+func CloserOnAll(assertions ...testkit.CrossMethodAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type closerCustomSubtest struct {
 	name string
 	fn   func(*testing.T, erroronly.Closer)
 }
 
 type closerConfig struct {
 	prePopulate func(context.Context, erroronly.Closer)
-	custom      []customSubtest
+	custom      []closerCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[erroronly.Closer]
-	onClose     []func(*testing.T, erroronly.Closer)
-	onOpen      []func(*testing.T, erroronly.Closer)
+	onClose     []testkit.LifecycleAssertion[erroronly.Closer]
+	onOpen      []testkit.LifecycleAssertion[erroronly.Closer]
 }
 
 func newCloserConfig(opts ...CloserOption) closerConfig {

@@ -99,12 +99,22 @@ func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 	})
 	if len(cfg.onLen) > 0 {
 		t.Run("Len", func(t *testing.T) {
-			for _, fn := range cfg.onLen {
+			prePopFactory := func() nocontext.Cache {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			pctx := testkit.PureContext[nocontext.Cache, int]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl nocontext.Cache) int {
+					return impl.Len()
+				},
+			}
+			for _, a := range cfg.onLen {
+				a(pctx)
 			}
 		})
 	}
@@ -141,59 +151,59 @@ func runCacheSet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 // CacheOption configures [AssertCacheContract].
 type CacheOption func(*cacheConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// CachePrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s nocontext.Cache)) CacheOption {
+func CachePrePopulate(fn func(ctx context.Context, s nocontext.Cache)) CacheOption {
 	return func(c *cacheConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// CacheCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, nocontext.Cache)) CacheOption {
+func CacheCustom(name string, fn func(*testing.T, nocontext.Cache)) CacheOption {
 	return func(c *cacheConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, cacheCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnGet adds plug-in assertions for the Get method.
-func OnGet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+// CacheOnGet adds plug-in assertions for the Get method.
+func CacheOnGet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
 	return func(c *cacheConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
-// OnLen adds plug-in assertions for the Len method.
-func OnLen(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+// CacheOnLen adds plug-in assertions for the Len method.
+func CacheOnLen(assertions ...testkit.PureAssertion[nocontext.Cache, int]) CacheOption {
 	return func(c *cacheConfig) {
 		c.onLen = append(c.onLen, assertions...)
 	}
 }
 
-// OnSet adds plug-in assertions for the Set method.
-func OnSet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+// CacheOnSet adds plug-in assertions for the Set method.
+func CacheOnSet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
 	return func(c *cacheConfig) {
 		c.onSet = append(c.onSet, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[nocontext.Cache]) CacheOption {
+// CacheOnAll adds cross-method assertions that span multiple methods.
+func CacheOnAll(assertions ...testkit.CrossMethodAssertion[nocontext.Cache]) CacheOption {
 	return func(c *cacheConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type cacheCustomSubtest struct {
 	name string
 	fn   func(*testing.T, nocontext.Cache)
 }
 
 type cacheConfig struct {
 	prePopulate func(context.Context, nocontext.Cache)
-	custom      []customSubtest
+	custom      []cacheCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[nocontext.Cache]
 	onGet       []func(*testing.T, nocontext.Cache)
-	onLen       []func(*testing.T, nocontext.Cache)
+	onLen       []testkit.PureAssertion[nocontext.Cache, int]
 	onSet       []func(*testing.T, nocontext.Cache)
 }
 

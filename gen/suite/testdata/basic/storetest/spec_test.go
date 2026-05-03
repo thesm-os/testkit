@@ -17,13 +17,41 @@ func TestInMemoryStoreContract(t *testing.T) {
 	factory := func() basic.Store { return basic.NewInMemoryStore() }
 
 	storetest.AssertStoreContract(t, factory,
-		storetest.PrePopulate(func(ctx context.Context, s basic.Store) {
+		storetest.StorePrePopulate(func(ctx context.Context, s basic.Store) {
 			_ = s.Put(ctx, basic.Item{ID: "known-1", Name: "test"})
 		}),
-		storetest.OnGet(
+		storetest.StoreOnGet(
 			testkit.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),
 			testkit.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
 			testkit.AssertConsistentReads[basic.Store, string, basic.Item]("known-1", 3),
 		),
+		storetest.StoreOnPut(
+			testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1", Name: "new"}),
+		),
+		storetest.StoreOnDelete(
+			testkit.AssertWriteSucceeds[basic.Store, string]("known-1"),
+		),
+		storetest.StoreOnPing(
+			testkit.AssertLifecycleSucceeds[basic.Store](),
+		),
+		storetest.StoreOnCount(func(t *testing.T, s basic.Store) {
+			c1 := s.Count(t.Context())
+			c2 := s.Count(t.Context())
+			testkit.Equal(t, c1, c2, "Count must be deterministic")
+		}),
+		storetest.StoreOnLegacyPut(
+			testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "legacy", Name: "legacy"}),
+		),
+		storetest.StoreOnAll(
+			testkit.AssertReadAfterWrite[basic.Store, string, basic.Item](
+				basic.Item{ID: "cross-1", Name: "cross"},
+				func(ctx context.Context, s basic.Store, item basic.Item) error { return s.Put(ctx, item) },
+				func(ctx context.Context, s basic.Store, id string) (basic.Item, error) { return s.Get(ctx, id) },
+				func(item basic.Item) string { return item.ID },
+			),
+		),
+		storetest.StoreCustom("custom subtest", func(t *testing.T, s basic.Store) {
+			testkit.NoError(t, s.Put(t.Context(), basic.Item{ID: "c", Name: "custom"}), "custom put")
+		}),
 	)
 }

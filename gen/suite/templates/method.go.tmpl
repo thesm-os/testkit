@@ -79,6 +79,116 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			}
 		})
 	}
+{{- else if .IsDeleter}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			dctx := testkit.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
+					return impl.{{.Name}}(ctx, k)
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(dctx)
+			}
+		})
+	}
+{{- else if .IsAggregator}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			actx := testkit.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
+					return impl.{{.Name}}(ctx)
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(actx)
+			}
+		})
+	}
+{{- else if .IsLifecycle}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			lctx := testkit.LifecycleContext[{{.QualifiedType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
+					return impl.{{.Name}}(ctx)
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(lctx)
+			}
+		})
+	}
+{{- else if .IsPure}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			pctx := testkit.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
+					return impl.{{.Name}}({{.PureCallArgs}})
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(pctx)
+			}
+		})
+	}
+{{- else if .IsPredicate}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			pctx := testkit.PredicateContext[{{.QualifiedType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl {{.QualifiedType}}) bool {
+					return impl.{{.Name}}({{.PureCallArgs}})
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(pctx)
+			}
+		})
+	}
 {{- else}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {

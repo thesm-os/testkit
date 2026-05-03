@@ -80,12 +80,22 @@ func runScannerCount(t *testing.T, factory func() iterators.Scanner, cfg *scanne
 	})
 	if len(cfg.onCount) > 0 {
 		t.Run("Count", func(t *testing.T) {
-			for _, fn := range cfg.onCount {
+			prePopFactory := func() iterators.Scanner {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			actx := testkit.AggregatorContext[iterators.Scanner, int]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl iterators.Scanner) (int, error) {
+					return impl.Count(ctx)
+				},
+			}
+			for _, a := range cfg.onCount {
+				a(actx)
 			}
 		})
 	}
@@ -227,58 +237,58 @@ func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 // ScannerOption configures [AssertScannerContract].
 type ScannerOption func(*scannerConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// ScannerPrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s iterators.Scanner)) ScannerOption {
+func ScannerPrePopulate(fn func(ctx context.Context, s iterators.Scanner)) ScannerOption {
 	return func(c *scannerConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// ScannerCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, iterators.Scanner)) ScannerOption {
+func ScannerCustom(name string, fn func(*testing.T, iterators.Scanner)) ScannerOption {
 	return func(c *scannerConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, scannerCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnCount adds plug-in assertions for the Count method.
-func OnCount(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+// ScannerOnCount adds plug-in assertions for the Count method.
+func ScannerOnCount(assertions ...testkit.AggregatorAssertion[iterators.Scanner, int]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onCount = append(c.onCount, assertions...)
 	}
 }
 
-// OnKeys adds plug-in assertions for the Keys method.
-func OnKeys(assertions ...testkit.StreamAssertion[iterators.Scanner, string]) ScannerOption {
+// ScannerOnKeys adds plug-in assertions for the Keys method.
+func ScannerOnKeys(assertions ...testkit.StreamAssertion[iterators.Scanner, string]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onKeys = append(c.onKeys, assertions...)
 	}
 }
 
-// OnScan adds plug-in assertions for the Scan method.
-func OnScan(assertions ...testkit.StreamAssertion[iterators.Scanner, iterators.Item]) ScannerOption {
+// ScannerOnScan adds plug-in assertions for the Scan method.
+func ScannerOnScan(assertions ...testkit.StreamAssertion[iterators.Scanner, iterators.Item]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onScan = append(c.onScan, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[iterators.Scanner]) ScannerOption {
+// ScannerOnAll adds cross-method assertions that span multiple methods.
+func ScannerOnAll(assertions ...testkit.CrossMethodAssertion[iterators.Scanner]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type scannerCustomSubtest struct {
 	name string
 	fn   func(*testing.T, iterators.Scanner)
 }
 
 type scannerConfig struct {
 	prePopulate func(context.Context, iterators.Scanner)
-	custom      []customSubtest
+	custom      []scannerCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[iterators.Scanner]
-	onCount     []func(*testing.T, iterators.Scanner)
+	onCount     []testkit.AggregatorAssertion[iterators.Scanner, int]
 	onKeys      []testkit.StreamAssertion[iterators.Scanner, string]
 	onScan      []testkit.StreamAssertion[iterators.Scanner, iterators.Item]
 }

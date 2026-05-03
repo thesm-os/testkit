@@ -80,12 +80,22 @@ func runRegistryCount(t *testing.T, factory func() readers.Registry, cfg *regist
 	})
 	if len(cfg.onCount) > 0 {
 		t.Run("Count", func(t *testing.T) {
-			for _, fn := range cfg.onCount {
+			prePopFactory := func() readers.Registry {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			actx := testkit.AggregatorContext[readers.Registry, int]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(ctx context.Context, impl readers.Registry) (int, error) {
+					return impl.Count(ctx)
+				},
+			}
+			for _, a := range cfg.onCount {
+				a(actx)
 			}
 		})
 	}
@@ -222,58 +232,58 @@ func runRegistryLookup(t *testing.T, factory func() readers.Registry, cfg *regis
 // RegistryOption configures [AssertRegistryContract].
 type RegistryOption func(*registryConfig)
 
-// PrePopulate runs before subtests that need pre-populated state.
+// RegistryPrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func PrePopulate(fn func(ctx context.Context, s readers.Registry)) RegistryOption {
+func RegistryPrePopulate(fn func(ctx context.Context, s readers.Registry)) RegistryOption {
 	return func(c *registryConfig) { c.prePopulate = fn }
 }
 
-// AssertCustom adds a free-form subtest to the contract. Use this for
+// RegistryCustom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func AssertCustom(name string, fn func(*testing.T, readers.Registry)) RegistryOption {
+func RegistryCustom(name string, fn func(*testing.T, readers.Registry)) RegistryOption {
 	return func(c *registryConfig) {
-		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+		c.custom = append(c.custom, registryCustomSubtest{name: name, fn: fn})
 	}
 }
 
-// OnCount adds plug-in assertions for the Count method.
-func OnCount(assertions ...func(*testing.T, readers.Registry)) RegistryOption {
+// RegistryOnCount adds plug-in assertions for the Count method.
+func RegistryOnCount(assertions ...testkit.AggregatorAssertion[readers.Registry, int]) RegistryOption {
 	return func(c *registryConfig) {
 		c.onCount = append(c.onCount, assertions...)
 	}
 }
 
-// OnList adds plug-in assertions for the List method.
-func OnList(assertions ...testkit.StreamAssertion[readers.Registry, readers.Handler]) RegistryOption {
+// RegistryOnList adds plug-in assertions for the List method.
+func RegistryOnList(assertions ...testkit.StreamAssertion[readers.Registry, readers.Handler]) RegistryOption {
 	return func(c *registryConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
 }
 
-// OnLookup adds plug-in assertions for the Lookup method.
-func OnLookup(assertions ...testkit.ReaderAssertion[readers.Registry, string, readers.Handler]) RegistryOption {
+// RegistryOnLookup adds plug-in assertions for the Lookup method.
+func RegistryOnLookup(assertions ...testkit.ReaderAssertion[readers.Registry, string, readers.Handler]) RegistryOption {
 	return func(c *registryConfig) {
 		c.onLookup = append(c.onLookup, assertions...)
 	}
 }
 
-// OnAll adds cross-method assertions that span multiple methods.
-func OnAll(assertions ...testkit.CrossMethodAssertion[readers.Registry]) RegistryOption {
+// RegistryOnAll adds cross-method assertions that span multiple methods.
+func RegistryOnAll(assertions ...testkit.CrossMethodAssertion[readers.Registry]) RegistryOption {
 	return func(c *registryConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type customSubtest struct {
+type registryCustomSubtest struct {
 	name string
 	fn   func(*testing.T, readers.Registry)
 }
 
 type registryConfig struct {
 	prePopulate func(context.Context, readers.Registry)
-	custom      []customSubtest
+	custom      []registryCustomSubtest
 	onAll       []testkit.CrossMethodAssertion[readers.Registry]
-	onCount     []func(*testing.T, readers.Registry)
+	onCount     []testkit.AggregatorAssertion[readers.Registry, int]
 	onList      []testkit.StreamAssertion[readers.Registry, readers.Handler]
 	onLookup    []testkit.ReaderAssertion[readers.Registry, string, readers.Handler]
 }
