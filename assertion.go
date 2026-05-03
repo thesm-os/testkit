@@ -202,12 +202,12 @@ func (a *Assertion[T]) Matches(pattern, msg string) *Assertion[T] {
 	return a
 }
 
-// Approximately calls tb.Fatalf if got (any numeric type) is not within
+// IsApproximately calls tb.Fatalf if got (any numeric type) is not within
 // tolerance of want. Comparison uses absolute difference:
 // |got - want| <= tolerance.
 //
-//	testkit.Assert(t, elapsed.Seconds()).Approximately(1.0, 0.05, "must complete in ~1s")
-func (a *Assertion[T]) Approximately(want, tolerance float64, msg string) *Assertion[T] {
+//	testkit.Assert(t, elapsed.Seconds()).IsApproximately(1.0, 0.05, "must complete in ~1s")
+func (a *Assertion[T]) IsApproximately(want, tolerance float64, msg string) *Assertion[T] {
 	a.tb.Helper()
 	f, ok := floatOf(a.got)
 	if !ok {
@@ -220,11 +220,11 @@ func (a *Assertion[T]) Approximately(want, tolerance float64, msg string) *Asser
 	return a
 }
 
-// Within calls tb.Fatalf if got (any numeric type) is not in the closed
+// IsWithin calls tb.Fatalf if got (any numeric type) is not in the closed
 // range [lo, hi].
 //
-//	testkit.Assert(t, port).Within(1024, 65535, "must be an unprivileged port")
-func (a *Assertion[T]) Within(lo, hi float64, msg string) *Assertion[T] {
+//	testkit.Assert(t, port).IsWithin(1024, 65535, "must be an unprivileged port")
+func (a *Assertion[T]) IsWithin(lo, hi float64, msg string) *Assertion[T] {
 	a.tb.Helper()
 	f, ok := floatOf(a.got)
 	if !ok {

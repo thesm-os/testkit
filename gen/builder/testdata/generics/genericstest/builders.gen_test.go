@@ -32,7 +32,7 @@ func TestContainerBuilder(t *testing.T) {
 		clone := base.Clone().WithLabel("test-label")
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.Label != modified.Label,
+		testkit.NotEqual(t, original.Label, modified.Label,
 			"Clone must produce independent copy")
 	})
 
@@ -121,7 +121,7 @@ func TestPairBuilder(t *testing.T) {
 		clone := base.Clone().WithFirst("test-first")
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.First != modified.First,
+		testkit.NotEqual(t, original.First, modified.First,
 			"Clone must produce independent copy")
 	})
 

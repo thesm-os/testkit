@@ -135,6 +135,37 @@ func Len(tb testing.TB, obj any, want int, msg string) {
 	}
 }
 
+// Contains calls tb.Fatalf if haystack does not contain needle. For strings
+// and []byte it checks for a substring. For slices and arrays it checks for
+// an element using [reflect.DeepEqual]. For maps it checks for a key.
+//
+//	testkit.Contains(t, resp.Body, "success", "response must contain success")
+func Contains(tb testing.TB, haystack, needle any, msg string) {
+	tb.Helper()
+	found, supported := contains(haystack, needle)
+	if !supported {
+		tb.Fatalf("%s: Contains not supported for %T", msg, haystack)
+	}
+	if !found {
+		tb.Fatalf("%s: %+v does not contain %+v", msg, haystack, needle)
+	}
+}
+
+// NotContains calls tb.Fatalf if haystack contains needle. See [Contains]
+// for the containment rules.
+//
+//	testkit.NotContains(t, resp.Body, "error", "response must not contain error")
+func NotContains(tb testing.TB, haystack, needle any, msg string) {
+	tb.Helper()
+	found, supported := contains(haystack, needle)
+	if !supported {
+		tb.Fatalf("%s: NotContains not supported for %T", msg, haystack)
+	}
+	if found {
+		tb.Fatalf("%s: %+v should not contain %+v", msg, haystack, needle)
+	}
+}
+
 // Panics calls tb.Fatalf if fn does not panic. On success it returns the
 // recovered value for further inspection.
 //
@@ -150,14 +181,14 @@ func Panics(tb testing.TB, fn func(), msg string) (recovered any) {
 	return nil
 }
 
-// AssertSequence calls tb.Fatalf if any adjacent pair (items[i-1], items[i])
+// Sequence calls tb.Fatalf if any adjacent pair (items[i-1], items[i])
 // does not satisfy pred. Empty and singleton slices pass trivially. The
 // failure message cites the index and both values of the first violation.
 //
-//	testkit.AssertSequence(t, timestamps, func(a, b time.Time) bool {
+//	testkit.Sequence(t, timestamps, func(a, b time.Time) bool {
 //	    return a.Before(b)
 //	}, "events must be in chronological order")
-func AssertSequence[T any](tb testing.TB, items []T, pred func(earlier, later T) bool, msg string) {
+func Sequence[T any](tb testing.TB, items []T, pred func(earlier, later T) bool, msg string) {
 	tb.Helper()
 	for i := 1; i < len(items); i++ {
 		if !pred(items[i-1], items[i]) {

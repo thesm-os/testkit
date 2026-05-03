@@ -78,7 +78,7 @@ func TestConfigBuilder(t *testing.T) {
 		clone.WithHost("test-host")
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.Host != modified.Host,
+		testkit.NotEqual(t, original.Host, modified.Host,
 			"Clone must produce independent copy")
 	})
 

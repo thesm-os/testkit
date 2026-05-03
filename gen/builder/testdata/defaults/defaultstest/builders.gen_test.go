@@ -74,7 +74,7 @@ func TestRequestBuilder(t *testing.T) {
 		clone.WithRunID("test-runid")
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.RunID != modified.RunID,
+		testkit.NotEqual(t, original.RunID, modified.RunID,
 			"Clone must produce independent copy")
 	})
 

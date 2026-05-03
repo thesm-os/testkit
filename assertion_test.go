@@ -428,13 +428,13 @@ func TestAssertion_Matches(t *testing.T) {
 	})
 }
 
-func TestAssertion_Approximately(t *testing.T) {
+func TestAssertion_IsApproximately(t *testing.T) {
 	t.Parallel()
 
 	t.Run("within tolerance passes", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, 3.14).Approximately(3.14159, 0.01, "must be close to pi")
+		testkit.Assert(f, 3.14).IsApproximately(3.14159, 0.01, "must be close to pi")
 		if f.Failed() {
 			t.Fatalf("should pass, got: %s", f.Msg())
 		}
@@ -443,7 +443,7 @@ func TestAssertion_Approximately(t *testing.T) {
 	t.Run("outside tolerance fails", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, 3.0).Approximately(3.14159, 0.01, "must be close to pi")
+		testkit.Assert(f, 3.0).IsApproximately(3.14159, 0.01, "must be close to pi")
 		if !f.Failed() {
 			t.Fatal("should fail")
 		}
@@ -452,7 +452,7 @@ func TestAssertion_Approximately(t *testing.T) {
 	t.Run("float32 works", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, float32(3.14)).Approximately(3.14, 0.01, "must be close")
+		testkit.Assert(f, float32(3.14)).IsApproximately(3.14, 0.01, "must be close")
 		if f.Failed() {
 			t.Fatalf("should pass for float32, got: %s", f.Msg())
 		}
@@ -461,20 +461,20 @@ func TestAssertion_Approximately(t *testing.T) {
 	t.Run("non-numeric type fails", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, "not a number").Approximately(1.0, 0.1, "must be numeric")
+		testkit.Assert(f, "not a number").IsApproximately(1.0, 0.1, "must be numeric")
 		if !f.Failed() {
 			t.Fatal("should fail for non-numeric type")
 		}
 	})
 }
 
-func TestAssertion_Within(t *testing.T) {
+func TestAssertion_IsWithin(t *testing.T) {
 	t.Parallel()
 
 	t.Run("value in range passes", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, 5).Within(1, 10, "must be in range")
+		testkit.Assert(f, 5).IsWithin(1, 10, "must be in range")
 		if f.Failed() {
 			t.Fatalf("should pass, got: %s", f.Msg())
 		}
@@ -483,7 +483,7 @@ func TestAssertion_Within(t *testing.T) {
 	t.Run("value out of range fails", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, 15).Within(1, 10, "must be in range")
+		testkit.Assert(f, 15).IsWithin(1, 10, "must be in range")
 		if !f.Failed() {
 			t.Fatal("should fail")
 		}
@@ -492,7 +492,7 @@ func TestAssertion_Within(t *testing.T) {
 	t.Run("uint works", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, uint(5)).Within(1, 10, "must be in range")
+		testkit.Assert(f, uint(5)).IsWithin(1, 10, "must be in range")
 		if f.Failed() {
 			t.Fatalf("should pass for uint, got: %s", f.Msg())
 		}
@@ -501,7 +501,7 @@ func TestAssertion_Within(t *testing.T) {
 	t.Run("non-numeric type fails", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.Assert(f, "not a number").Within(1, 10, "must be numeric")
+		testkit.Assert(f, "not a number").IsWithin(1, 10, "must be numeric")
 		if !f.Failed() {
 			t.Fatal("should fail for non-numeric type")
 		}

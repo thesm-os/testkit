@@ -28,7 +28,7 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 		clone := base.Clone().With{{.Name}}({{.TestSample}})
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.{{.Name}} != modified.{{.Name}},
+		testkit.NotEqual(t, original.{{.Name}}, modified.{{.Name}},
 			"Clone must produce independent copy")
 	})
 
@@ -160,7 +160,7 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
 			With{{$f.Name}}Entry({{$f.MapKeySample}}, {{$f.MapValSample}}).
 			Build()
-		testkit.True(t, got.{{$f.Name}} != nil, "lazy-init map")
+		testkit.Len(t, got.{{$f.Name}}, 1, "lazy-init map must have 1 entry")
 		testkit.Equal(t, got.{{$f.Name}}[{{$f.MapKeySample}}], {{$f.MapValSample}},
 			"entry must be added")
 	})
@@ -203,7 +203,7 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 		original := base.Build()
 		modified := clone.Build()
 {{- with $s.FirstComparableField}}
-		testkit.True(t, original.{{.Name}} != modified.{{.Name}},
+		testkit.NotEqual(t, original.{{.Name}}, modified.{{.Name}},
 			"Clone must produce independent copy")
 {{- end}}
 	})

@@ -163,6 +163,59 @@ func TestErrorIsNot(t *testing.T) {
 	})
 }
 
+func TestContains(t *testing.T) {
+	t.Parallel()
+
+	t.Run("string contains substring", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Contains(f, "hello world", "world", "must contain")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("string missing substring fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Contains(f, "hello", "world", "must contain")
+		if !f.Failed() {
+			t.Fatal("should fail for missing substring")
+		}
+	})
+
+	t.Run("slice contains element", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Contains(f, []string{"a", "b"}, "b", "must contain")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+}
+
+func TestNotContains(t *testing.T) {
+	t.Parallel()
+
+	t.Run("string not containing passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.NotContains(f, "hello", "world", "must not contain")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("string containing fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.NotContains(f, "hello world", "world", "must not contain")
+		if !f.Failed() {
+			t.Fatal("should fail for contained substring")
+		}
+	})
+}
+
 type customError struct{ Code int }
 
 func (*customError) Error() string { return "custom" }
@@ -357,13 +410,13 @@ func TestPanics(t *testing.T) {
 	})
 }
 
-func TestAssertSequence(t *testing.T) {
+func TestSequence(t *testing.T) {
 	t.Parallel()
 
 	t.Run("ascending ints pass", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.AssertSequence(f, []int{1, 2, 3}, func(a, b int) bool { return a < b }, "ascending")
+		testkit.Sequence(f, []int{1, 2, 3}, func(a, b int) bool { return a < b }, "ascending")
 		if f.Failed() {
 			t.Fatalf("should pass, got: %s", f.Msg())
 		}
@@ -372,7 +425,7 @@ func TestAssertSequence(t *testing.T) {
 	t.Run("non-ascending ints fail", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.AssertSequence(f, []int{1, 3, 2}, func(a, b int) bool { return a < b }, "ascending")
+		testkit.Sequence(f, []int{1, 3, 2}, func(a, b int) bool { return a < b }, "ascending")
 		if !f.Failed() {
 			t.Fatal("should fail for non-ascending")
 		}
@@ -384,7 +437,7 @@ func TestAssertSequence(t *testing.T) {
 	t.Run("empty slice passes", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.AssertSequence(f, []int{}, func(a, b int) bool { return a < b }, "empty")
+		testkit.Sequence(f, []int{}, func(a, b int) bool { return a < b }, "empty")
 		if f.Failed() {
 			t.Fatalf("empty slice should pass, got: %s", f.Msg())
 		}
@@ -393,7 +446,7 @@ func TestAssertSequence(t *testing.T) {
 	t.Run("singleton passes", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		testkit.AssertSequence(f, []int{42}, func(a, b int) bool { return a < b }, "single")
+		testkit.Sequence(f, []int{42}, func(a, b int) bool { return a < b }, "single")
 		if f.Failed() {
 			t.Fatalf("singleton should pass, got: %s", f.Msg())
 		}

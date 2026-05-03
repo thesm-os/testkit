@@ -85,7 +85,7 @@ func TestOrderBuilder(t *testing.T) {
 		clone.WithID("test-id")
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.ID != modified.ID,
+		testkit.NotEqual(t, original.ID, modified.ID,
 			"Clone must produce independent copy")
 	})
 

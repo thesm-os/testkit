@@ -48,12 +48,9 @@ func TestStatusEnum(t *testing.T) {
 		t.Parallel()
 		seen := make(map[basic.Status]string)
 		for _, tt := range all {
-			if prev, ok := seen[tt.value]; ok {
-				t.Errorf(
-					"duplicate: %s and %s both equal %d",
-					prev, tt.name, int(tt.value),
-				)
-			}
+			prev, dup := seen[tt.value]
+			testkit.False(t, dup,
+				tt.name+" and "+prev+" have identical value")
 			seen[tt.value] = tt.name
 		}
 	})
@@ -111,12 +108,9 @@ func TestPriorityEnum(t *testing.T) {
 		t.Parallel()
 		seen := make(map[basic.Priority]string)
 		for _, tt := range all {
-			if prev, ok := seen[tt.value]; ok {
-				t.Errorf(
-					"duplicate: %s and %s both equal %d",
-					prev, tt.name, int(tt.value),
-				)
-			}
+			prev, dup := seen[tt.value]
+			testkit.False(t, dup,
+				tt.name+" and "+prev+" have identical value")
 			seen[tt.value] = tt.name
 		}
 	})

@@ -77,7 +77,7 @@ func TestItemBuilder(t *testing.T) {
 		got := basictest.NewItemFrom(basic.Item{}).
 			WithMetadataEntry("test-key", "test-val").
 			Build()
-		testkit.True(t, got.Metadata != nil, "lazy-init map")
+		testkit.Len(t, got.Metadata, 1, "lazy-init map must have 1 entry")
 		testkit.Equal(t, got.Metadata["test-key"], "test-val",
 			"entry must be added")
 	})
@@ -120,7 +120,7 @@ func TestItemBuilder(t *testing.T) {
 		clone.WithActive(true)
 		original := base.Build()
 		modified := clone.Build()
-		testkit.True(t, original.Active != modified.Active,
+		testkit.NotEqual(t, original.Active, modified.Active,
 			"Clone must produce independent copy")
 	})
 
