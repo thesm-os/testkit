@@ -180,4 +180,10 @@ var knownDirectives = []Descriptor{
 		Name: "pagination", Description: "paginated results",
 		Args: "CursorField", Generators: []string{genSuite, genModel}, Phase: 4,
 	},
+
+	// Shape hints
+	{
+		Name: "deleter", Description: "marks method as delete-by-key shape",
+		Generators: []string{genStub, genSuite}, Phase: 1,
+	},
 }

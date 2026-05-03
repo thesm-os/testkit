@@ -48,6 +48,7 @@ type SpecMethodData struct {
 	gen.MethodInfo
 
 	// Base fields populated by Analyze.
+	InterfaceName string // "Store" — for naming generated functions
 	QualifiedType string // "store.Store" — for factory type
 	tracker       *gen.ImportTracker
 
@@ -64,7 +65,8 @@ type SpecMethodData struct {
 	Skip       bool           // integration-only: skip entirely
 
 	// Auto-detected from signature — no directive needed.
-	Iter gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return info
+	Iter  gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return info
+	Shape ShapeInfo       // method shape (Reader/Writer/Stream/etc.)
 }
 
 // hasDirectives reports whether this method has any spec-relevant directives.
@@ -80,6 +82,44 @@ type SentinelInfo struct {
 	VarName   string // "ErrNotFound"
 	ShortName string // "NotFound"
 	Qualified string // "store.ErrNotFound"
+}
+
+// LowerInterfaceName returns the interface name with first letter lowered.
+func (m *SpecMethodData) LowerInterfaceName() string {
+	if m.InterfaceName == "" {
+		return ""
+	}
+	return strings.ToLower(m.InterfaceName[:1]) + m.InterfaceName[1:]
+}
+
+// IsReader reports whether the method has Reader shape.
+func (m *SpecMethodData) IsReader() bool { return m.Shape.Shape == ShapeReader }
+
+// IsWriter reports whether the method has Writer shape.
+func (m *SpecMethodData) IsWriter() bool { return m.Shape.Shape == ShapeWriter }
+
+// IsStreamReader reports whether the method has StreamReader shape.
+func (m *SpecMethodData) IsStreamReader() bool { return m.Shape.Shape == ShapeStreamReader }
+
+// IsLifecycle reports whether the method has Lifecycle shape.
+func (m *SpecMethodData) IsLifecycle() bool { return m.Shape.Shape == ShapeLifecycle }
+
+// IsPure reports whether the method has Pure shape.
+func (m *SpecMethodData) IsPure() bool { return m.Shape.Shape == ShapePure }
+
+// IsAggregator reports whether the method has Aggregator shape.
+func (m *SpecMethodData) IsAggregator() bool { return m.Shape.Shape == ShapeAggregator }
+
+// OnMethodAssertionType renders the Go type expression for the On<Method>
+// assertion parameter. For Reader: testkit.ReaderAssertion[T, K, V].
+// For Unknown/untyped: func(*testing.T, T).
+func (m *SpecMethodData) OnMethodAssertionType() string {
+	switch m.Shape.Shape {
+	case ShapeReader:
+		return "testkit.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	default:
+		return "func(*testing.T, " + m.QualifiedType + ")"
+	}
 }
 
 // ZeroCallArgs renders zero-value arguments for calling this method.

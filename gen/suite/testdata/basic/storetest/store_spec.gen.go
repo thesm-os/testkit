@@ -15,9 +15,9 @@ import (
 // AssertStoreContract runs conformance assertions against
 // implementations of [basic.Store] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertStoreContract(
 	t *testing.T,
 	factory func() basic.Store,
@@ -25,7 +25,24 @@ func AssertStoreContract(
 ) {
 	t.Helper()
 	cfg := newStoreConfig(opts...)
-	_ = cfg
+
+	runStoreCount(t, factory, &cfg)
+	runStoreDelete(t, factory, &cfg)
+	runStoreGet(t, factory, &cfg)
+	runStoreLegacyPut(t, factory, &cfg)
+	runStorePing(t, factory, &cfg)
+	runStorePut(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runStoreCount(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
@@ -40,6 +57,22 @@ func AssertStoreContract(
 			return s.Count(t.Context())
 		})
 	})
+	if len(cfg.onCount) > 0 {
+		t.Run("Count", func(t *testing.T) {
+			for _, fn := range cfg.onCount {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
+
 	t.Run("Delete/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -69,6 +102,22 @@ func AssertStoreContract(
 			return err
 		})
 	})
+	if len(cfg.onDelete) > 0 {
+		t.Run("Delete", func(t *testing.T) {
+			for _, fn := range cfg.onDelete {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
+
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -109,11 +158,11 @@ func AssertStoreContract(
 
 	t.Run("Get/pure", func(t *testing.T) {
 		t.Parallel()
-		if cfg.setup == nil {
-			t.Skip("Setup not configured")
+		if cfg.prePopulate == nil {
+			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.setup(t, s)
+		cfg.prePopulate(t, s)
 		testkit.AssertPure(t,
 			func() basic.Item {
 				v, _ := s.Get(t.Context(), "")
@@ -122,6 +171,35 @@ func AssertStoreContract(
 			func() { _, _ = s.Get(t.Context(), "") },
 		)
 	})
+	if len(cfg.onGet) > 0 {
+		t.Run("Get", func(t *testing.T) {
+			prePopFactory := func() basic.Store {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				return impl
+			}
+			rctx := testkit.ReaderContext[basic.Store, string, basic.Item]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl basic.Store, ctx context.Context, k string) (basic.Item, error) {
+					return impl.Get(ctx, k)
+				},
+				Known:   cfg.known,
+				Unknown: cfg.unknown,
+				Want:    cfg.want,
+			}
+			for _, a := range cfg.onGet {
+				a(rctx)
+			}
+		})
+	}
+}
+
+func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
+
 	t.Run("LegacyPut/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -156,6 +234,22 @@ func AssertStoreContract(
 		t.Logf("LegacyPut is deprecated, use PutBatch instead")
 		t.Skip("deprecated method")
 	})
+	if len(cfg.onLegacyPut) > 0 {
+		t.Run("LegacyPut", func(t *testing.T) {
+			for _, fn := range cfg.onLegacyPut {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
+
 	t.Run("Ping/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -193,6 +287,22 @@ func AssertStoreContract(
 			return err
 		})
 	})
+	if len(cfg.onPing) > 0 {
+		t.Run("Ping", func(t *testing.T) {
+			for _, fn := range cfg.onPing {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
+	t.Helper()
+
 	t.Run("Put/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -229,20 +339,115 @@ func AssertStoreContract(
 			_ = factory().Put(t.Context(), basic.Item{})
 		})
 	})
+	if len(cfg.onPut) > 0 {
+		t.Run("Put", func(t *testing.T) {
+			for _, fn := range cfg.onPut {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // StoreOption configures [AssertStoreContract].
 type StoreOption func(*storeConfig)
 
-// StoreSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func StoreSetup(fn func(t testing.TB, s basic.Store)) StoreOption {
-	return func(c *storeConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s basic.Store)) StoreOption {
+	return func(c *storeConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnCount adds plug-in assertions for the Count method.
+func OnCount(assertions ...func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.onCount = append(c.onCount, assertions...)
+	}
+}
+
+// OnDelete adds plug-in assertions for the Delete method.
+func OnDelete(assertions ...func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.onDelete = append(c.onDelete, assertions...)
+	}
+}
+
+// OnGet adds plug-in assertions for the Get method.
+func OnGet(assertions ...testkit.ReaderAssertion[basic.Store, string, basic.Item]) StoreOption {
+	return func(c *storeConfig) {
+		c.onGet = append(c.onGet, assertions...)
+	}
+}
+
+// OnLegacyPut adds plug-in assertions for the LegacyPut method.
+func OnLegacyPut(assertions ...func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.onLegacyPut = append(c.onLegacyPut, assertions...)
+	}
+}
+
+// OnPing adds plug-in assertions for the Ping method.
+func OnPing(assertions ...func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.onPing = append(c.onPing, assertions...)
+	}
+}
+
+// OnPut adds plug-in assertions for the Put method.
+func OnPut(assertions ...func(*testing.T, basic.Store)) StoreOption {
+	return func(c *storeConfig) {
+		c.onPut = append(c.onPut, assertions...)
+	}
+}
+
+// Known adds a known key for Reader-shape primitives.
+func Known(keys ...string) StoreOption {
+	return func(c *storeConfig) { c.known = append(c.known, keys...) }
+}
+
+// Unknown adds an unknown key for Reader-shape primitives.
+func Unknown(keys ...string) StoreOption {
+	return func(c *storeConfig) { c.unknown = append(c.unknown, keys...) }
+}
+
+// Expect adds a (key, expected-value) pair for AssertReturnsForKey.
+func Expect(key string, value basic.Item) StoreOption {
+	return func(c *storeConfig) {
+		if c.want == nil {
+			c.want = make(map[string]basic.Item)
+		}
+		c.want[key] = value
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, basic.Store)
 }
 
 type storeConfig struct {
-	setup func(t testing.TB, s basic.Store)
+	prePopulate func(testing.TB, basic.Store)
+	custom      []customSubtest
+	onCount     []func(*testing.T, basic.Store)
+	onDelete    []func(*testing.T, basic.Store)
+	onGet       []testkit.ReaderAssertion[basic.Store, string, basic.Item]
+	onLegacyPut []func(*testing.T, basic.Store)
+	onPing      []func(*testing.T, basic.Store)
+	onPut       []func(*testing.T, basic.Store)
+	known       []string
+	unknown     []string
+	want        map[string]basic.Item
 }
 
 func newStoreConfig(opts ...StoreOption) storeConfig {

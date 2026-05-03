@@ -13,9 +13,9 @@ import (
 // AssertCacheContract runs conformance assertions against
 // implementations of [nocontext.Cache] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertCacheContract(
 	t *testing.T,
 	factory func() nocontext.Cache,
@@ -23,7 +23,21 @@ func AssertCacheContract(
 ) {
 	t.Helper()
 	cfg := newCacheConfig(opts...)
-	_ = cfg
+
+	runCacheGet(t, factory, &cfg)
+	runCacheLen(t, factory, &cfg)
+	runCacheSet(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runCacheGet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig) {
+	t.Helper()
 
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
@@ -45,6 +59,22 @@ func AssertCacheContract(
 			_, _ = factory().Get("")
 		})
 	})
+	if len(cfg.onGet) > 0 {
+		t.Run("Get", func(t *testing.T) {
+			for _, fn := range cfg.onGet {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig) {
+	t.Helper()
+
 	t.Run("Len/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -58,6 +88,22 @@ func AssertCacheContract(
 			return s.Len()
 		})
 	})
+	if len(cfg.onLen) > 0 {
+		t.Run("Len", func(t *testing.T) {
+			for _, fn := range cfg.onLen {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runCacheSet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig) {
+	t.Helper()
+
 	t.Run("Set/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -70,20 +116,68 @@ func AssertCacheContract(
 			_ = factory().Set("", "")
 		})
 	})
+	if len(cfg.onSet) > 0 {
+		t.Run("Set", func(t *testing.T) {
+			for _, fn := range cfg.onSet {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // CacheOption configures [AssertCacheContract].
 type CacheOption func(*cacheConfig)
 
-// CacheSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func CacheSetup(fn func(t testing.TB, s nocontext.Cache)) CacheOption {
-	return func(c *cacheConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s nocontext.Cache)) CacheOption {
+	return func(c *cacheConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, nocontext.Cache)) CacheOption {
+	return func(c *cacheConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnGet adds plug-in assertions for the Get method.
+func OnGet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+	return func(c *cacheConfig) {
+		c.onGet = append(c.onGet, assertions...)
+	}
+}
+
+// OnLen adds plug-in assertions for the Len method.
+func OnLen(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+	return func(c *cacheConfig) {
+		c.onLen = append(c.onLen, assertions...)
+	}
+}
+
+// OnSet adds plug-in assertions for the Set method.
+func OnSet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
+	return func(c *cacheConfig) {
+		c.onSet = append(c.onSet, assertions...)
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, nocontext.Cache)
 }
 
 type cacheConfig struct {
-	setup func(t testing.TB, s nocontext.Cache)
+	prePopulate func(testing.TB, nocontext.Cache)
+	custom      []customSubtest
+	onGet       []func(*testing.T, nocontext.Cache)
+	onLen       []func(*testing.T, nocontext.Cache)
+	onSet       []func(*testing.T, nocontext.Cache)
 }
 
 func newCacheConfig(opts ...CacheOption) cacheConfig {

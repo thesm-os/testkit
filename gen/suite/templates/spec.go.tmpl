@@ -5,9 +5,9 @@ package {{.PackageName}}
 // Assert{{.InterfaceName}}Contract runs conformance assertions against
 // implementations of [{{.QualifiedType}}] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func Assert{{.InterfaceName}}Contract(
 	t *testing.T,
 	factory func() {{.QualifiedType}},
@@ -15,11 +15,20 @@ func Assert{{.InterfaceName}}Contract(
 ) {
 	t.Helper()
 	cfg := new{{.InterfaceName}}Config(opts...)
-	_ = cfg
 {{range $m := .Methods}}{{if not $m.Skip}}
-{{- template "subtests" $m}}
+	run{{$.InterfaceName}}{{$m.Name}}(t, factory, &cfg)
 {{- end}}{{end}}
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
 }
+{{range $m := .Methods}}{{if not $m.Skip}}
+{{template "method" $m}}
+{{- end}}{{end}}
 
 {{template "options" .}}
 {{end}}

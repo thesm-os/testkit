@@ -14,9 +14,9 @@ import (
 // AssertScannerContract runs conformance assertions against
 // implementations of [iterators.Scanner] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertScannerContract(
 	t *testing.T,
 	factory func() iterators.Scanner,
@@ -24,7 +24,21 @@ func AssertScannerContract(
 ) {
 	t.Helper()
 	cfg := newScannerConfig(opts...)
-	_ = cfg
+
+	runScannerCount(t, factory, &cfg)
+	runScannerKeys(t, factory, &cfg)
+	runScannerScan(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runScannerCount(t *testing.T, factory func() iterators.Scanner, cfg *scannerConfig) {
+	t.Helper()
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
@@ -55,6 +69,22 @@ func AssertScannerContract(
 			return err
 		})
 	})
+	if len(cfg.onCount) > 0 {
+		t.Run("Count", func(t *testing.T) {
+			for _, fn := range cfg.onCount {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runScannerKeys(t *testing.T, factory func() iterators.Scanner, cfg *scannerConfig) {
+	t.Helper()
+
 	t.Run("Keys/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -91,6 +121,22 @@ func AssertScannerContract(
 			_ = v
 		}
 	})
+	if len(cfg.onKeys) > 0 {
+		t.Run("Keys", func(t *testing.T) {
+			for _, fn := range cfg.onKeys {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scannerConfig) {
+	t.Helper()
+
 	t.Run("Scan/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -130,20 +176,68 @@ func AssertScannerContract(
 			_ = err
 		}
 	})
+	if len(cfg.onScan) > 0 {
+		t.Run("Scan", func(t *testing.T) {
+			for _, fn := range cfg.onScan {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // ScannerOption configures [AssertScannerContract].
 type ScannerOption func(*scannerConfig)
 
-// ScannerSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func ScannerSetup(fn func(t testing.TB, s iterators.Scanner)) ScannerOption {
-	return func(c *scannerConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s iterators.Scanner)) ScannerOption {
+	return func(c *scannerConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, iterators.Scanner)) ScannerOption {
+	return func(c *scannerConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnCount adds plug-in assertions for the Count method.
+func OnCount(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+	return func(c *scannerConfig) {
+		c.onCount = append(c.onCount, assertions...)
+	}
+}
+
+// OnKeys adds plug-in assertions for the Keys method.
+func OnKeys(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+	return func(c *scannerConfig) {
+		c.onKeys = append(c.onKeys, assertions...)
+	}
+}
+
+// OnScan adds plug-in assertions for the Scan method.
+func OnScan(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+	return func(c *scannerConfig) {
+		c.onScan = append(c.onScan, assertions...)
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, iterators.Scanner)
 }
 
 type scannerConfig struct {
-	setup func(t testing.TB, s iterators.Scanner)
+	prePopulate func(testing.TB, iterators.Scanner)
+	custom      []customSubtest
+	onCount     []func(*testing.T, iterators.Scanner)
+	onKeys      []func(*testing.T, iterators.Scanner)
+	onScan      []func(*testing.T, iterators.Scanner)
 }
 
 func newScannerConfig(opts ...ScannerOption) scannerConfig {

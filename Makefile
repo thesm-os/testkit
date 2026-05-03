@@ -190,7 +190,8 @@ GEN_TESTDATA := \
 	gen/suite/testdata/multireturn/servicetest \
 	gen/suite/testdata/mixed/processortest \
 	gen/suite/testdata/erroronly/closertest \
-	gen/suite/testdata/iterators/scannertest
+	gen/suite/testdata/iterators/scannertest \
+	gen/suite/testdata/readers/registrytest
 
 # ─── Testing ─────────────────────────────────────────────────────
 

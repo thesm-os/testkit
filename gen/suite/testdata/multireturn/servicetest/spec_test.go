@@ -15,8 +15,6 @@ func TestInMemoryServiceContract(t *testing.T) {
 	factory := func() multireturn.Service { return multireturn.NewInMemoryService() }
 
 	servicetest.AssertServiceContract(t, factory,
-		servicetest.ServiceSetup(func(_ testing.TB, _ multireturn.Service) {
-			// Pre-populate: ensure Status has something to observe.
-		}),
+		servicetest.PrePopulate(func(_ testing.TB, _ multireturn.Service) {}),
 	)
 }

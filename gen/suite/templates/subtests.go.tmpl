@@ -158,11 +158,11 @@
 
 	t.Run("{{.Name}}/pure", func(t *testing.T) {
 		t.Parallel()
-		if cfg.setup == nil {
-			t.Skip("Setup not configured")
+		if cfg.prePopulate == nil {
+			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.setup(t, s)
+		cfg.prePopulate(t, s)
 		testkit.AssertPure(t,
 			func() {{.PureObserveType}} {
 				{{.PureObserveCallExpr "s"}}

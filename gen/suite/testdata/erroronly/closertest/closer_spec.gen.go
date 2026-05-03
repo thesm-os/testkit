@@ -14,9 +14,9 @@ import (
 // AssertCloserContract runs conformance assertions against
 // implementations of [erroronly.Closer] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertCloserContract(
 	t *testing.T,
 	factory func() erroronly.Closer,
@@ -24,7 +24,20 @@ func AssertCloserContract(
 ) {
 	t.Helper()
 	cfg := newCloserConfig(opts...)
-	_ = cfg
+
+	runCloserClose(t, factory, &cfg)
+	runCloserOpen(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerConfig) {
+	t.Helper()
 
 	t.Run("Close/smoke", func(t *testing.T) {
 		t.Parallel()
@@ -63,6 +76,22 @@ func AssertCloserContract(
 		testkit.ErrorIs(t, err, erroronly.ErrClosed,
 			"Close with zero-value input must return ErrClosed")
 	})
+	if len(cfg.onClose) > 0 {
+		t.Run("Close", func(t *testing.T) {
+			for _, fn := range cfg.onClose {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerConfig) {
+	t.Helper()
+
 	t.Run("Open/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -99,20 +128,60 @@ func AssertCloserContract(
 			_ = factory().Open(t.Context())
 		})
 	})
+	if len(cfg.onOpen) > 0 {
+		t.Run("Open", func(t *testing.T) {
+			for _, fn := range cfg.onOpen {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // CloserOption configures [AssertCloserContract].
 type CloserOption func(*closerConfig)
 
-// CloserSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func CloserSetup(fn func(t testing.TB, s erroronly.Closer)) CloserOption {
-	return func(c *closerConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s erroronly.Closer)) CloserOption {
+	return func(c *closerConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, erroronly.Closer)) CloserOption {
+	return func(c *closerConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnClose adds plug-in assertions for the Close method.
+func OnClose(assertions ...func(*testing.T, erroronly.Closer)) CloserOption {
+	return func(c *closerConfig) {
+		c.onClose = append(c.onClose, assertions...)
+	}
+}
+
+// OnOpen adds plug-in assertions for the Open method.
+func OnOpen(assertions ...func(*testing.T, erroronly.Closer)) CloserOption {
+	return func(c *closerConfig) {
+		c.onOpen = append(c.onOpen, assertions...)
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, erroronly.Closer)
 }
 
 type closerConfig struct {
-	setup func(t testing.TB, s erroronly.Closer)
+	prePopulate func(testing.TB, erroronly.Closer)
+	custom      []customSubtest
+	onClose     []func(*testing.T, erroronly.Closer)
+	onOpen      []func(*testing.T, erroronly.Closer)
 }
 
 func newCloserConfig(opts ...CloserOption) closerConfig {

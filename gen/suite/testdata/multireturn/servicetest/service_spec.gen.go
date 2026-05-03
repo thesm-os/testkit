@@ -14,9 +14,9 @@ import (
 // AssertServiceContract runs conformance assertions against
 // implementations of [multireturn.Service] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertServiceContract(
 	t *testing.T,
 	factory func() multireturn.Service,
@@ -24,7 +24,20 @@ func AssertServiceContract(
 ) {
 	t.Helper()
 	cfg := newServiceConfig(opts...)
-	_ = cfg
+
+	runServiceReset(t, factory, &cfg)
+	runServiceStatus(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serviceConfig) {
+	t.Helper()
 
 	t.Run("Reset/smoke", func(t *testing.T) {
 		t.Parallel()
@@ -62,6 +75,22 @@ func AssertServiceContract(
 			_ = factory().Reset(t.Context())
 		})
 	})
+	if len(cfg.onReset) > 0 {
+		t.Run("Reset", func(t *testing.T) {
+			for _, fn := range cfg.onReset {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runServiceStatus(t *testing.T, factory func() multireturn.Service, cfg *serviceConfig) {
+	t.Helper()
+
 	t.Run("Status/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -94,11 +123,11 @@ func AssertServiceContract(
 
 	t.Run("Status/pure", func(t *testing.T) {
 		t.Parallel()
-		if cfg.setup == nil {
-			t.Skip("Setup not configured")
+		if cfg.prePopulate == nil {
+			t.Skip("PrePopulate not configured")
 		}
 		s := factory()
-		cfg.setup(t, s)
+		cfg.prePopulate(t, s)
 		testkit.AssertPure(t,
 			func() multireturn.Stats {
 				v, _, _ := s.Status(t.Context())
@@ -107,20 +136,60 @@ func AssertServiceContract(
 			func() { _, _, _ = s.Status(t.Context()) },
 		)
 	})
+	if len(cfg.onStatus) > 0 {
+		t.Run("Status", func(t *testing.T) {
+			for _, fn := range cfg.onStatus {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // ServiceOption configures [AssertServiceContract].
 type ServiceOption func(*serviceConfig)
 
-// ServiceSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func ServiceSetup(fn func(t testing.TB, s multireturn.Service)) ServiceOption {
-	return func(c *serviceConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s multireturn.Service)) ServiceOption {
+	return func(c *serviceConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, multireturn.Service)) ServiceOption {
+	return func(c *serviceConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnReset adds plug-in assertions for the Reset method.
+func OnReset(assertions ...func(*testing.T, multireturn.Service)) ServiceOption {
+	return func(c *serviceConfig) {
+		c.onReset = append(c.onReset, assertions...)
+	}
+}
+
+// OnStatus adds plug-in assertions for the Status method.
+func OnStatus(assertions ...func(*testing.T, multireturn.Service)) ServiceOption {
+	return func(c *serviceConfig) {
+		c.onStatus = append(c.onStatus, assertions...)
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, multireturn.Service)
 }
 
 type serviceConfig struct {
-	setup func(t testing.TB, s multireturn.Service)
+	prePopulate func(testing.TB, multireturn.Service)
+	custom      []customSubtest
+	onReset     []func(*testing.T, multireturn.Service)
+	onStatus    []func(*testing.T, multireturn.Service)
 }
 
 func newServiceConfig(opts ...ServiceOption) serviceConfig {

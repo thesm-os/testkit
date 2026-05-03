@@ -38,19 +38,17 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 	for _, m := range iface.Methods {
 		md := &SpecMethodData{
 			MethodInfo:    m,
+			InterfaceName: typeName,
 			QualifiedType: qualifiedType,
 			tracker:       tracker,
 		}
 		md.Directives = pkg.EffectiveMethodDirectives(typeName, m.Name)
 
-		// Auto-detect iter.Seq / iter.Seq2 returns.
-		for r := range m.Signature.Results().Variables() {
-			info := gen.AnalyzeIterReturn(r.Type(), tracker)
-			if info.IsSeq || info.IsSeq2 {
-				md.Iter = info
-				tracker.AddPath("iter")
-				break
-			}
+		// Detect method shape and iter returns.
+		md.Shape = DetectShape(m, tracker, md.Directives)
+		if md.Shape.Shape == ShapeStreamReader {
+			md.Iter = md.Shape.IterInfo
+			tracker.AddPath("iter")
 		}
 
 		methods = append(methods, md)

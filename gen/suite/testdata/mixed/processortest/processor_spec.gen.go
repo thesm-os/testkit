@@ -14,9 +14,9 @@ import (
 // AssertProcessorContract runs conformance assertions against
 // implementations of [mixed.Processor] produced by factory.
 //
-// Baseline tests are auto-detected from method signatures. Directive-derived
-// tests add contract-specific assertions on top. Subtests that need
-// pre-populated state skip when Setup is not configured.
+// Default subtests are auto-detected from method signatures. Directive-derived
+// subtests add contract assertions. Plug-in primitives via On<Method> add
+// typed shape-specific assertions.
 func AssertProcessorContract(
 	t *testing.T,
 	factory func() mixed.Processor,
@@ -24,13 +24,43 @@ func AssertProcessorContract(
 ) {
 	t.Helper()
 	cfg := newProcessorConfig(opts...)
-	_ = cfg
+
+	runProcessorDescribe(t, factory, &cfg)
+	runProcessorLegacyProcess(t, factory, &cfg)
+	runProcessorProcess(t, factory, &cfg)
+
+	for _, custom := range cfg.custom {
+		t.Run(custom.name, func(t *testing.T) {
+			t.Parallel()
+			custom.fn(t, factory())
+		})
+	}
+}
+
+func runProcessorDescribe(t *testing.T, factory func() mixed.Processor, cfg *processorConfig) {
+	t.Helper()
 
 	t.Run("Describe/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
 		_ = s.Describe()
 	})
+	if len(cfg.onDescribe) > 0 {
+		t.Run("Describe", func(t *testing.T) {
+			for _, fn := range cfg.onDescribe {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runProcessorLegacyProcess(t *testing.T, factory func() mixed.Processor, cfg *processorConfig) {
+	t.Helper()
+
 	t.Run("LegacyProcess/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -72,6 +102,22 @@ func AssertProcessorContract(
 		t.Logf("LegacyProcess is deprecated, use ProcessV2 instead")
 		t.Skip("deprecated method")
 	})
+	if len(cfg.onLegacyProcess) > 0 {
+		t.Run("LegacyProcess", func(t *testing.T) {
+			for _, fn := range cfg.onLegacyProcess {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+}
+
+func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *processorConfig) {
+	t.Helper()
+
 	t.Run("Process/smoke", func(t *testing.T) {
 		t.Parallel()
 		s := factory()
@@ -123,20 +169,68 @@ func AssertProcessorContract(
 			_ = factory().Process(t.Context(), nil)
 		})
 	})
+	if len(cfg.onProcess) > 0 {
+		t.Run("Process", func(t *testing.T) {
+			for _, fn := range cfg.onProcess {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
 }
 
 // ProcessorOption configures [AssertProcessorContract].
 type ProcessorOption func(*processorConfig)
 
-// ProcessorSetup runs before subtests that need pre-populated state.
-// Called once per subtest against a fresh impl from the factory. Expensive
-// setup should live in the factory closure with t.Cleanup for teardown.
-func ProcessorSetup(fn func(t testing.TB, s mixed.Processor)) ProcessorOption {
-	return func(c *processorConfig) { c.setup = fn }
+// PrePopulate runs before subtests that need pre-populated state.
+// Called once per subtest against a fresh impl from the factory.
+func PrePopulate(fn func(t testing.TB, s mixed.Processor)) ProcessorOption {
+	return func(c *processorConfig) { c.prePopulate = fn }
+}
+
+// AssertCustom adds a free-form subtest to the contract. Use this for
+// contracts not expressible via shape-specific primitives.
+func AssertCustom(name string, fn func(*testing.T, mixed.Processor)) ProcessorOption {
+	return func(c *processorConfig) {
+		c.custom = append(c.custom, customSubtest{name: name, fn: fn})
+	}
+}
+
+// OnDescribe adds plug-in assertions for the Describe method.
+func OnDescribe(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+	return func(c *processorConfig) {
+		c.onDescribe = append(c.onDescribe, assertions...)
+	}
+}
+
+// OnLegacyProcess adds plug-in assertions for the LegacyProcess method.
+func OnLegacyProcess(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+	return func(c *processorConfig) {
+		c.onLegacyProcess = append(c.onLegacyProcess, assertions...)
+	}
+}
+
+// OnProcess adds plug-in assertions for the Process method.
+func OnProcess(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+	return func(c *processorConfig) {
+		c.onProcess = append(c.onProcess, assertions...)
+	}
+}
+
+type customSubtest struct {
+	name string
+	fn   func(*testing.T, mixed.Processor)
 }
 
 type processorConfig struct {
-	setup func(t testing.TB, s mixed.Processor)
+	prePopulate     func(testing.TB, mixed.Processor)
+	custom          []customSubtest
+	onDescribe      []func(*testing.T, mixed.Processor)
+	onLegacyProcess []func(*testing.T, mixed.Processor)
+	onProcess       []func(*testing.T, mixed.Processor)
 }
 
 func newProcessorConfig(opts ...ProcessorOption) processorConfig {

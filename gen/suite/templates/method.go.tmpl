@@ -1,0 +1,47 @@
+{{define "method"}}
+func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedType}}, cfg *{{.LowerInterfaceName}}Config) {
+	t.Helper()
+
+{{template "subtests" .}}
+
+{{- /* Plug-in dispatch — single method-named wrapper, primitives nest inside */}}
+{{- if .IsReader}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				return impl
+			}
+			rctx := testkit.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl {{.QualifiedType}}, ctx context.Context, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+					return impl.{{.Name}}(ctx, k)
+				},
+				Known:   cfg.known,
+				Unknown: cfg.unknown,
+				Want:    cfg.want,
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(rctx)
+			}
+		})
+	}
+{{- else}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			for _, fn := range cfg.on{{.Name}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				fn(t, impl)
+			}
+		})
+	}
+{{- end}}
+}
+{{end}}

@@ -71,6 +71,7 @@ func TestGenerate(t *testing.T) {
 		{"mixed", "mixed", "Processor"},
 		{"erroronly", "erroronly", "Closer"},
 		{"iterators", "iterators", "Scanner"},
+		{"readers", "readers", "Registry"},
 	}
 
 	for _, fx := range fixtures {
