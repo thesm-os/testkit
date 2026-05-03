@@ -127,7 +127,7 @@ generate:
 fmt: license
 	@echo "$(BLUE)Formatting Go...$(NC)"
 	gofumpt -l -w -extra .
-	gci write --section standard --section default --section "prefix(go.thesmos.sh/testkit)" --custom-order .
+	gci write --section standard --section default --section "prefix(go.thesmos.sh/testkit)" --custom-order --skip-generated .
 	@echo "$(BLUE)Formatting Markdown...$(NC)"
 	markdownlint-cli2 --fix "**/*.md" "#vendor" "#dist" "#node_modules" 2>/dev/null || true
 	@echo "$(GREEN)Done$(NC)"

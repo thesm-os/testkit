@@ -1,0 +1,82 @@
+{{define "enum"}}
+package {{.PackageName}}
+
+import (
+{{- if .HasStringer}}
+	"fmt"
+{{- end}}
+	"testing"
+{{- if .ImportPath}}
+
+	"{{.ImportPath}}"
+{{- end}}
+
+	"go.thesmos.sh/testkit"
+)
+{{- $q := .PkgQualifier}}{{if $q}}{{$q = printf "%s." $q}}{{end}}
+{{range $e := .Enums}}
+
+func Test{{$e.TypeName}}Enum(t *testing.T) {
+	t.Parallel()
+
+	type enumEntry struct {
+		value    {{$q}}{{$e.TypeName}}
+		name     string
+{{- if $e.HasString}}
+		wantStr  string
+{{- end}}
+	}
+	all := []enumEntry{
+{{- range $e.Values}}
+		{
+			value: {{$q}}{{.Name}},
+			name:  "{{.Name}}",
+{{- if $e.HasString}}
+			wantStr: "{{.ExpectedStr}}",
+{{- end}}
+		},
+{{- end}}
+	}
+
+	t.Run("exhaustive", func(t *testing.T) {
+		t.Parallel()
+		testkit.Len(t, all, {{len $e.Values}},
+			"must have exactly {{len $e.Values}} values")
+	})
+
+	t.Run("all values are distinct", func(t *testing.T) {
+		t.Parallel()
+		seen := make(map[{{$q}}{{$e.TypeName}}]string)
+		for _, tt := range all {
+			if prev, ok := seen[tt.value]; ok {
+				t.Errorf(
+					"duplicate: %s and %s both equal %d",
+					prev, tt.name, int(tt.value),
+				)
+			}
+			seen[tt.value] = tt.name
+		}
+	})
+{{if $e.HasString}}
+	t.Run("stringer", func(t *testing.T) {
+		t.Parallel()
+		for _, tt := range all {
+			t.Run(tt.name, func(t *testing.T) {
+				t.Parallel()
+				testkit.Equal(t, tt.value.String(), tt.wantStr,
+					tt.name+" String() must match")
+			})
+		}
+	})
+
+	t.Run("out of range uses fallback format", func(t *testing.T) {
+		t.Parallel()
+		outOfRange := {{$q}}{{$e.TypeName}}({{$e.MaxValue}} + 1)
+		expected := fmt.Sprintf("{{$e.TypeName}}(%d)", {{$e.MaxValue}}+1)
+		testkit.Equal(t, outOfRange.String(), expected,
+			"out-of-range value must use fallback format")
+	})
+{{end}}
+}
+{{end}}
+{{end}}
