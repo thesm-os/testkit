@@ -125,3 +125,37 @@ func TestValidateTypes(t *testing.T) {
 		testkit.Len(t, errs, 2, "must collect all errors")
 	})
 }
+
+func TestBuildTestFileInfo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("external style appends _test and adds import", func(t *testing.T) {
+		t.Parallel()
+		cfg := gen.DefaultConfig()
+		imports := []gen.Import{{Path: "testing"}}
+		info := gen.BuildTestFileInfo("storetest", imports, cfg, "example.com/storetest")
+		testkit.Equal(t, info.PackageName, "storetest_test", "must append _test")
+		testkit.Equal(t, info.GenQualifier, "storetest.", "must have qualifier")
+		testkit.Len(t, info.Imports, 2, "must add self-import")
+		testkit.Equal(t, info.Imports[1].Path, "example.com/storetest", "self-import path")
+	})
+
+	t.Run("internal style keeps package name", func(t *testing.T) {
+		t.Parallel()
+		cfg := gen.DefaultConfig()
+		cfg.TestPackageStyle = gen.TestPackageStyleInternal
+		imports := []gen.Import{{Path: "testing"}}
+		info := gen.BuildTestFileInfo("storetest", imports, cfg, "example.com/storetest")
+		testkit.Equal(t, info.PackageName, "storetest", "must keep name")
+		testkit.Equal(t, info.GenQualifier, "", "must have no qualifier")
+		testkit.Len(t, info.Imports, 1, "must not add self-import")
+	})
+
+	t.Run("does not mutate original imports", func(t *testing.T) {
+		t.Parallel()
+		cfg := gen.DefaultConfig()
+		imports := []gen.Import{{Path: "testing"}}
+		gen.BuildTestFileInfo("storetest", imports, cfg, "example.com/storetest")
+		testkit.Len(t, imports, 1, "original must not be modified")
+	})
+}

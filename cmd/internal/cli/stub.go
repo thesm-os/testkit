@@ -4,14 +4,9 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"go.thesmos.sh/testkit/gen"
 	"go.thesmos.sh/testkit/gen/stub"
 )
 
@@ -20,7 +15,9 @@ var stubCmd = &cobra.Command{
 	Short: "Generate test stubs for Go interfaces",
 	Long:  "Generate configurable test doubles with recording, fault injection, and strict mode.",
 	Args:  cobra.MinimumNArgs(1),
-	RunE:  runStub,
+	RunE: func(_ *cobra.Command, args []string) error {
+		return runGenerator(&stub.Generator{}, "stub.output", args)
+	},
 }
 
 func init() {
@@ -35,46 +32,4 @@ func init() {
 	_ = viper.BindPFlag("stub.type-suffix", stubCmd.Flags().Lookup("stub-type-suffix"))
 
 	rootCmd.AddCommand(stubCmd)
-}
-
-func runStub(_ *cobra.Command, args []string) error {
-	output := viper.GetString("stub.output")
-	if output == "" {
-		fmt.Fprintln(os.Stderr, "testkit stub: -o flag is required")
-		return errors.New("-o flag is required")
-	}
-
-	workDir := WorkDir()
-
-	cfg := gen.Config{
-		TestPackageSuffix: viper.GetString("test-package-suffix"),
-		GeneratedSuffix:   viper.GetString("generated-suffix"),
-		TestPackageStyle:  viper.GetString("test-package-style"),
-		Stub: gen.StubConfig{
-			FilePattern: viper.GetString("stub.file-pattern"),
-			TypeSuffix:  viper.GetString("stub.type-suffix"),
-		},
-	}
-
-	opts := gen.Options{
-		Output:     output,
-		Check:      viper.GetBool("check"),
-		Verbose:    viper.GetBool("verbose"),
-		WorkDir:    workDir,
-		SourceFile: os.Getenv("GOFILE"),
-	}
-
-	loader := gen.NewLoader()
-	pkg, err := loader.Load(".", workDir)
-	if err != nil {
-		return fmt.Errorf("load package: %w", err)
-	}
-
-	g := &stub.Generator{}
-	result, err := g.Generate(pkg, args, cfg, opts)
-	if err != nil {
-		return err
-	}
-
-	return gen.WriteResult(result, workDir, opts.Check)
 }

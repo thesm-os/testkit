@@ -101,31 +101,12 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	}, nil
 }
 
-// buildTestData creates a Data copy for the test file template.
-// For external test style, the package name gets _test appended and
-// references to stub types are qualified with the stub package name.
-// The import list is rebuilt to include the stub package itself since
-// goimports cannot auto-discover testdata packages.
-func buildTestData(data *Data, cfg gen.Config, stubImportPath string) *Data {
-	testPkgName := data.PackageName
-	genQualifier := ""
-
-	// Start with the stub file's imports.
-	imports := make([]gen.Import, len(data.Imports))
-	copy(imports, data.Imports)
-
-	if cfg.TestPackageStyle == gen.TestPackageStyleExternal {
-		testPkgName = data.PackageName + gen.TestPkgSuffix
-		genQualifier = data.PackageName + "."
-
-		// Add the stub package itself to the import list.
-		imports = append(imports, gen.Import{Path: stubImportPath})
-	}
-
+func buildTestData(data *Data, cfg gen.Config, genImportPath string) *Data {
+	info := gen.BuildTestFileInfo(data.PackageName, data.Imports, cfg, genImportPath)
 	return &Data{
-		PackageName:  testPkgName,
-		Imports:      imports,
+		PackageName:  info.PackageName,
+		Imports:      info.Imports,
 		Interfaces:   data.Interfaces,
-		GenQualifier: genQualifier,
+		GenQualifier: info.GenQualifier,
 	}
 }

@@ -74,24 +74,12 @@ func (*Generator) Generate(
 	}, nil
 }
 
-// buildTestData creates a Data copy for the test file with _test package.
-func buildTestData(data *Data, cfg gen.Config, builderImportPath string) *Data {
-	testPkgName := data.PackageName
-	genQualifier := ""
-
-	imports := make([]gen.Import, len(data.Imports))
-	copy(imports, data.Imports)
-
-	if cfg.TestPackageStyle == gen.TestPackageStyleExternal {
-		testPkgName = data.PackageName + gen.TestPkgSuffix
-		genQualifier = data.PackageName + "."
-		imports = append(imports, gen.Import{Path: builderImportPath})
-	}
-
+func buildTestData(data *Data, cfg gen.Config, genImportPath string) *Data {
+	info := gen.BuildTestFileInfo(data.PackageName, data.Imports, cfg, genImportPath)
 	return &Data{
-		PackageName:  testPkgName,
-		Imports:      imports,
+		PackageName:  info.PackageName,
+		Imports:      info.Imports,
 		Structs:      data.Structs,
-		GenQualifier: genQualifier,
+		GenQualifier: info.GenQualifier,
 	}
 }

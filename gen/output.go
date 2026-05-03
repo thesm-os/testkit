@@ -86,6 +86,44 @@ func TestPathFrom(implPath string) string {
 	return strings.TrimSuffix(implPath, ext) + TestFileSuffix
 }
 
+// TestFileInfo holds the derived package name, qualifier, and imports
+// for a generated test file. Used by generators that produce a companion
+// _test.go file alongside the implementation file.
+type TestFileInfo struct {
+	PackageName  string   // "storetest_test" or "storetest" for internal style
+	GenQualifier string   // "storetest." or "" for internal style
+	Imports      []Import // base imports + self-import for external style
+}
+
+// BuildTestFileInfo computes the test file metadata from the base package
+// name, imports, config, and the generated package's import path.
+// For external test style, it appends _test to the package name and adds
+// the generated package to the import list.
+func BuildTestFileInfo(
+	basePkgName string,
+	baseImports []Import,
+	cfg Config,
+	genImportPath string,
+) TestFileInfo {
+	imports := make([]Import, len(baseImports))
+	copy(imports, baseImports)
+
+	pkgName := basePkgName
+	qualifier := ""
+
+	if cfg.TestPackageStyle == TestPackageStyleExternal {
+		pkgName = basePkgName + TestPkgSuffix
+		qualifier = basePkgName + "."
+		imports = append(imports, Import{Path: genImportPath})
+	}
+
+	return TestFileInfo{
+		PackageName:  pkgName,
+		GenQualifier: qualifier,
+		Imports:      imports,
+	}
+}
+
 // ValidateTypes checks that all named types exist in the package and
 // are of the expected kind. Returns a slice of positioned errors for
 // any failures.
