@@ -13,6 +13,8 @@ import (
 	"go.thesmos.sh/testkit/gen"
 )
 
+const errVarName = "err" // default variable name for error results in generated test expressions
+
 // Data is the top-level template data for a stub generation run.
 type Data struct {
 	PackageName  string
@@ -30,6 +32,39 @@ type InterfaceData struct {
 	Methods       []*MethodData
 
 	sourcePkgPath string // source package import path (for qualifying sentinels)
+}
+
+// FirstContextMethod returns the first non-skipped method that has a
+// context.Context parameter, or nil if none exists. Used by test templates
+// for clock-aware tests gated on HasContext.
+func (d *InterfaceData) FirstContextMethod() *MethodData {
+	for _, m := range d.Methods {
+		if !m.Skip && m.HasContext() {
+			return m
+		}
+	}
+	return nil
+}
+
+// FirstErrorMethod returns the first non-skipped method that returns error,
+// or nil if none exists.
+func (d *InterfaceData) FirstErrorMethod() *MethodData {
+	for _, m := range d.Methods {
+		if !m.Skip && m.ReturnsError() {
+			return m
+		}
+	}
+	return nil
+}
+
+// HasOrderConstraint reports whether any method has an order-after directive.
+func (d *InterfaceData) HasOrderConstraint() bool {
+	for _, m := range d.Methods {
+		if !m.Skip && m.OrderAfter != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // HasErrorMethod reports whether any method in this interface returns error.
@@ -63,6 +98,16 @@ type MethodData struct {
 	Skip       bool           // integration-only: skip method emission
 	Deprecated string         // deprecated: replacement method name
 	Sentinels  []SentinelInfo // errors: fault helper methods
+	RetryN     int            // retry-succeeds-on-attempt: succeed on Nth call
+	Partition  *PartitionInfo // partition: per-field fault targeting
+	OrderAfter string         // order-after: must be called after this method
+}
+
+// PartitionInfo describes a partition field for per-key fault targeting.
+type PartitionInfo struct {
+	FieldPath string // "Req.RunID" — dot-separated path from call struct root
+	FieldName string // "RunID" — leaf field name, used in helper method names
+	FieldType string // "string" — Go type string for the partition key parameter
 }
 
 // SentinelInfo describes one sentinel error for fault helpers.
@@ -154,6 +199,42 @@ func (m *MethodData) ResultFieldAssignFallback() string {
 		b.WriteString(": f.")
 		b.WriteString(r.FieldName)
 		b.WriteString(", ")
+	}
+	return b.String()
+}
+
+// CallResultStampVars renders statements that stamp result variable values
+// onto an existing call struct.
+//
+//	"call.Result = r0\n\tcall.Err = r1"
+func (m *MethodData) CallResultStampVars() string {
+	var b strings.Builder
+	for i, r := range m.Results {
+		if i > 0 {
+			b.WriteString("\n\t")
+		}
+		b.WriteString("call.")
+		b.WriteString(r.FieldName)
+		b.WriteString(" = r")
+		b.WriteString(strconv.Itoa(i))
+	}
+	return b.String()
+}
+
+// CallResultStampFallback renders statements that stamp fallback values
+// onto an existing call struct.
+//
+//	"call.Result = f.Result\n\tcall.Err = f.Err"
+func (m *MethodData) CallResultStampFallback() string {
+	var b strings.Builder
+	for i, r := range m.Results {
+		if i > 0 {
+			b.WriteString("\n\t")
+		}
+		b.WriteString("call.")
+		b.WriteString(r.FieldName)
+		b.WriteString(" = f.")
+		b.WriteString(r.FieldName)
 	}
 	return b.String()
 }
@@ -373,6 +454,41 @@ func (m *MethodData) FaultTestCallExpr() string {
 	return strings.TrimSpace(b.String())
 }
 
+// SentinelFaultTestCallExpr renders a call that expects a specific sentinel error.
+func (m *MethodData) SentinelFaultTestCallExpr(qualifiedSentinel string) string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+
+	resultNames := make([]string, len(m.Results))
+	errName := ""
+	for i, r := range m.Results {
+		if r.IsError {
+			name := strings.ToLower(r.FieldName[:1]) + r.FieldName[1:]
+			resultNames[i] = name
+			errName = name
+		} else {
+			resultNames[i] = "_"
+		}
+	}
+
+	b.WriteString(strings.Join(resultNames, ", "))
+	b.WriteString(" := s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(strings.Join(paramZeros, ", "))
+	b.WriteString(")\n")
+	if errName != "" {
+		b.WriteString("\ttestkit.ErrorIs(t, ")
+		b.WriteString(errName)
+		b.WriteString(", ")
+		b.WriteString(qualifiedSentinel)
+		b.WriteString(`, "must return `)
+		b.WriteString(qualifiedSentinel)
+		b.WriteString(`")`)
+	}
+	return strings.TrimSpace(b.String())
+}
+
 // FuncOverrideTestExpr renders a test that sets a Func override,
 // calls the method, and asserts the custom return values come through.
 func (m *MethodData) FuncOverrideTestExpr() string {
@@ -510,6 +626,426 @@ func (m *MethodData) IgnoredCallExpr() string {
 	return b.String()
 }
 
+// RetryScheduleTestExpr renders a test that verifies the retry-succeeds-on-attempt
+// pattern: first N-1 calls fail, Nth call succeeds.
+func (m *MethodData) RetryScheduleTestExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	// Generate N calls. First N-1 assert error, last asserts success.
+	for call := 1; call <= m.RetryN; call++ {
+		resultNames := make([]string, len(m.Results))
+		for i, r := range m.Results {
+			if r.IsError {
+				resultNames[i] = "err" + strconv.Itoa(call)
+			} else {
+				resultNames[i] = "_"
+			}
+		}
+		b.WriteString("\t")
+		b.WriteString(strings.Join(resultNames, ", "))
+		b.WriteString(" := s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(")\n")
+	}
+
+	// Assert first N-1 fail, Nth succeeds.
+	for call := 1; call < m.RetryN; call++ {
+		b.WriteString("\ttestkit.ErrorIs(t, err")
+		b.WriteString(strconv.Itoa(call))
+		b.WriteString(`, errTest, "attempt `)
+		b.WriteString(strconv.Itoa(call))
+		b.WriteString(` must fail")`)
+		b.WriteString("\n")
+	}
+	b.WriteString("\ttestkit.NoError(t, err")
+	b.WriteString(strconv.Itoa(m.RetryN))
+	b.WriteString(`, "attempt `)
+	b.WriteString(strconv.Itoa(m.RetryN))
+	b.WriteString(` must succeed")`)
+
+	return strings.TrimSpace(b.String())
+}
+
+// FaultForPartitionTestExpr renders a test that verifies partition-targeted
+// faults fire for the matching key and pass for others.
+func (m *MethodData) FaultForPartitionTestExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+
+	// Build a sample call with the partition field set.
+	sampleKey := `"target-partition"`
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".FaultForPartition(")
+	b.WriteString(sampleKey)
+	b.WriteString(", errTest, 1)\n")
+
+	// Call with matching key — should fault.
+	resultNames := make([]string, len(m.Results))
+	errName := ""
+	for i, r := range m.Results {
+		if r.IsError {
+			resultNames[i] = errVarName
+			errName = errVarName
+		} else {
+			resultNames[i] = "_"
+		}
+	}
+	// Build a call with the partition field set to the matching key.
+	b.WriteString("\t")
+	b.WriteString(strings.Join(resultNames, ", "))
+	b.WriteString(" := s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	// Replace the param that contains the partition field.
+	for i, pz := range paramZeros {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		isPartitionParam := i < len(m.Params) && m.Partition != nil &&
+			strings.HasPrefix(m.Partition.FieldPath, m.Params[i].FieldName+".")
+		if isPartitionParam {
+			// This is the struct param containing the partition field.
+			// Emit a struct literal with the partition field set.
+			b.WriteString(m.Params[i].TypeStr)
+			b.WriteString("{")
+			b.WriteString(m.Partition.FieldName)
+			b.WriteString(": ")
+			b.WriteString(sampleKey)
+			b.WriteString("}")
+		} else {
+			b.WriteString(pz)
+		}
+	}
+	b.WriteString(")\n")
+	if errName != "" {
+		b.WriteString("\ttestkit.ErrorIs(t, ")
+		b.WriteString(errName)
+		b.WriteString(`, errTest, "must fault for matching partition key")`)
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+// FaultForOtherPartitionsTestExpr renders a test that verifies
+// FaultForOtherPartitions faults when the key does NOT match.
+func (m *MethodData) FaultForOtherPartitionsTestExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+
+	protectedKey := `"protected-partition"`
+	otherKey := `"other-partition"`
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".FaultForOtherPartitions(")
+	b.WriteString(protectedKey)
+	b.WriteString(", errTest, 1)\n")
+
+	// Call with non-matching key — should fault.
+	resultNames := make([]string, len(m.Results))
+	errName := ""
+	for i, r := range m.Results {
+		if r.IsError {
+			resultNames[i] = errVarName
+			errName = errVarName
+		} else {
+			resultNames[i] = "_"
+		}
+	}
+	b.WriteString("\t")
+	b.WriteString(strings.Join(resultNames, ", "))
+	b.WriteString(" := s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	for i, pz := range paramZeros {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		isPartitionParam := i < len(m.Params) && m.Partition != nil &&
+			strings.HasPrefix(m.Partition.FieldPath, m.Params[i].FieldName+".")
+		if isPartitionParam {
+			b.WriteString(m.Params[i].TypeStr)
+			b.WriteString("{")
+			b.WriteString(m.Partition.FieldName)
+			b.WriteString(": ")
+			b.WriteString(otherKey)
+			b.WriteString("}")
+		} else {
+			b.WriteString(pz)
+		}
+	}
+	b.WriteString(")\n")
+	if errName != "" {
+		b.WriteString("\ttestkit.ErrorIs(t, ")
+		b.WriteString(errName)
+		b.WriteString(`, errTest, "must fault for non-matching partition key")`)
+	}
+
+	return strings.TrimSpace(b.String())
+}
+
+// FaultsForExpiredCallExpr renders a call after the fault window has expired,
+// asserting that the error is nil. Uses = (not :=) for the error variable,
+// since it's already declared by the preceding FaultTestCallExpr. Non-error
+// results use _ (same as FaultTestCallExpr).
+func (m *MethodData) FaultsForExpiredCallExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+
+	// Match FaultTestCallExpr's variable pattern: _ for non-error, named for error.
+	resultNames := make([]string, len(m.Results))
+	errName := ""
+	for i, r := range m.Results {
+		if r.IsError {
+			name := strings.ToLower(r.FieldName[:1]) + r.FieldName[1:]
+			resultNames[i] = name
+			errName = name
+		} else {
+			resultNames[i] = "_"
+		}
+	}
+
+	if len(resultNames) > 0 {
+		b.WriteString(strings.Join(resultNames, ", "))
+		b.WriteString(" = s.")
+	} else {
+		b.WriteString("s.")
+	}
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(strings.Join(paramZeros, ", "))
+	b.WriteString(")\n")
+	if errName != "" {
+		b.WriteString("\ttestkit.NoError(t, ")
+		b.WriteString(errName)
+		b.WriteString(`, "`)
+		b.WriteString(m.Name)
+		b.WriteString(` must succeed after window expires")`)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// FaultPriorityTestExpr renders a test that configures both Func (which panics)
+// and Faults, calls the method, and asserts the fault wins. Only valid for
+// methods that return error.
+func (m *MethodData) FaultPriorityTestExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+
+	// Set a Func that panics — must not be called.
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".Func(")
+	b.WriteString(m.FuncTypeStr())
+	b.WriteString(" {\n")
+	b.WriteString("\t\tpanic(\"Func must not be called when Faults is configured\")\n")
+	b.WriteString("\t})\n")
+	b.WriteString("\ts.On")
+	b.WriteString(m.Name)
+	b.WriteString(".Faults(errTest, 1)\n")
+
+	// Call and assert fault error.
+	resultNames := make([]string, len(m.Results))
+	errName := ""
+	for i, r := range m.Results {
+		if r.IsError {
+			name := strings.ToLower(r.FieldName[:1]) + r.FieldName[1:]
+			resultNames[i] = name
+			errName = name
+		} else {
+			resultNames[i] = "_"
+		}
+	}
+	b.WriteString("\t")
+	b.WriteString(strings.Join(resultNames, ", "))
+	b.WriteString(" := s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(strings.Join(paramZeros, ", "))
+	b.WriteString(")\n")
+	if errName != "" {
+		b.WriteString("\ttestkit.ErrorIs(t, ")
+		b.WriteString(errName)
+		b.WriteString(`, errTest, "Faults must win over Func")`)
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// CountedFaultTestExpr renders a test that configures Faults(errTest, 3),
+// calls the method 3 times, and asserts calls 1-2 succeed while call 3 fails.
+// Only valid for methods that return error.
+func (m *MethodData) CountedFaultTestExpr() string {
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".Faults(errTest, 3)\n")
+
+	// Three calls with numbered error variables.
+	for call := 1; call <= 3; call++ {
+		resultNames := make([]string, len(m.Results))
+		for i, r := range m.Results {
+			if r.IsError {
+				resultNames[i] = "err" + strconv.Itoa(call)
+			} else {
+				resultNames[i] = "_"
+			}
+		}
+		b.WriteString("\t")
+		b.WriteString(strings.Join(resultNames, ", "))
+		b.WriteString(" := s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(")\n")
+	}
+
+	// Assert calls 1-2 succeed, call 3 fails.
+	b.WriteString("\ttestkit.NoError(t, err1, \"call 1 must succeed\")\n")
+	b.WriteString("\ttestkit.NoError(t, err2, \"call 2 must succeed\")\n")
+	b.WriteString("\ttestkit.ErrorIs(t, err3, errTest, \"call 3 must fault\")")
+
+	return strings.TrimSpace(b.String())
+}
+
+// CallAndAssertSampleExpr renders a call that asserts the returned values
+// match the expected non-zero sample values, WITHOUT setting Returns.
+// The caller is responsible for ensuring Returns (or DelegateTo) is
+// configured before this expression runs. Messages are context-neutral
+// so this works for both "Reset preserves config" and "DelegateTo
+// surfaces return values" tests.
+func (m *MethodData) CallAndAssertSampleExpr() string {
+	paramZeros := m.buildZeroParamValues()
+	var b strings.Builder
+
+	if len(m.Results) == 0 {
+		return ""
+	}
+
+	names := m.resultNames()
+	b.WriteString(strings.Join(names, ", "))
+	b.WriteString(" := s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(strings.Join(paramZeros, ", "))
+	b.WriteString(")\n")
+	for i, r := range m.Results {
+		name := names[i]
+		if r.IsError {
+			b.WriteString("\ttestkit.NoError(t, ")
+			b.WriteString(name)
+			b.WriteString(`, "`)
+			b.WriteString(m.Name)
+			b.WriteString(` must not error")`)
+		} else {
+			sample := gen.SampleValueOf(m.Signature.Results().At(i).Type(), r.FieldName, m.tracker)
+			b.WriteString("\ttestkit.Equal(t, ")
+			b.WriteString(name)
+			b.WriteString(", ")
+			b.WriteString(sample)
+			b.WriteString(`, "`)
+			b.WriteString(m.Name)
+			b.WriteString(` must return configured value")`)
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// SampleCallAndAssert renders a call with sample (non-zero) args,
+// captures the return in LastCall, and asserts each param field matches.
+// Used by TEST-3 (LastCall arg round-trip).
+func (m *MethodData) SampleCallAndAssert() string {
+	var b strings.Builder
+	paramSamples := m.buildSampleParamValues()
+
+	// Call with sample values, discard results.
+	if len(m.Results) > 0 {
+		blanks := make([]string, len(m.Results))
+		for i := range blanks {
+			blanks[i] = "_"
+		}
+		b.WriteString(strings.Join(blanks, ", "))
+		b.WriteString(" = s.")
+	} else {
+		b.WriteString("s.")
+	}
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(strings.Join(paramSamples, ", "))
+	b.WriteString(")\n")
+
+	// Capture via LastCall and assert each param field.
+	b.WriteString("\tcall := s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".LastCall(t)\n")
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n-- // skip variadic
+	}
+	for i := range n {
+		p := m.Params[i]
+		if gen.IsContextType(params.At(i).Type()) {
+			// Don't assert context equality — it's not comparable via Equal.
+			continue
+		}
+		b.WriteString("\ttestkit.Equal(t, call.")
+		b.WriteString(p.FieldName)
+		b.WriteString(", ")
+		b.WriteString(paramSamples[i])
+		b.WriteString(`, "`)
+		b.WriteString(p.FieldName)
+		b.WriteString(` must be recorded"`)
+		b.WriteString(")\n")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// HasNonContextParam reports whether the method has any parameter that
+// is not context.Context. Used to gate TEST-3 — methods with only context
+// have no interesting args to round-trip.
+func (m *MethodData) HasNonContextParam() bool {
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	for i := range n {
+		if !gen.IsContextType(params.At(i).Type()) {
+			return true
+		}
+	}
+	return false
+}
+
+// buildSampleParamValues returns sample (non-zero) values for each
+// parameter. Context gets t.Context(), other params get SampleValueOf.
+func (m *MethodData) buildSampleParamValues() []string {
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	values := make([]string, n)
+	for i := range n {
+		if gen.IsContextType(params.At(i).Type()) {
+			values[i] = "t.Context()"
+		} else {
+			values[i] = gen.SampleValueOf(params.At(i).Type(), m.Params[i].FieldName, m.tracker)
+		}
+	}
+	return values
+}
+
 // buildZeroParamValues returns zero-value expressions for each parameter.
 // Variadic parameters are omitted entirely — callers should invoke the
 // method without passing any variadic args (e.g. s.Find(ctx) not s.Find(ctx, nil)).
@@ -521,7 +1057,11 @@ func (m *MethodData) buildZeroParamValues() []string {
 	}
 	values := make([]string, n)
 	for i := range n {
-		values[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		if gen.IsContextType(params.At(i).Type()) {
+			values[i] = "t.Context()"
+		} else {
+			values[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		}
 	}
 	return values
 }

@@ -7,16 +7,26 @@ func (s *{{$.StubName}}) {{$m.Name}}({{$m.ParamList}}){{if $m.ResultList}} {{$m.
 		tb.Logf("{{$.TypeName}}.{{$m.Name}} is deprecated, use {{$m.Deprecated}} instead")
 	}
 {{- end}}
+{{- if $m.OrderAfter}}
+	s.order.AssertAfter("{{$m.Name}}", "{{$m.OrderAfter}}")
+{{- end}}
+	s.On{{$m.Name}}.SleepLatency()
+{{- if $.HasOrderConstraint}}
+	defer s.order.Record("{{$m.Name}}")
+{{- end}}
+	call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}}
 {{- if $m.ReturnsError}}
-	if fired, faultErr := s.On{{$m.Name}}.ShouldFault(); fired {
-		call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}{{$m.ErrFieldName}}: faultErr}
+	if fired, faultErr := s.On{{$m.Name}}.ShouldFaultFor(call); fired {
+		call.{{$m.ErrFieldName}} = faultErr
 		s.On{{$m.Name}}.Record(call)
 		return {{$m.FaultReturn}}
 	}
 {{- end}}
 	if s.On{{$m.Name}}.fn != nil {
 		{{$m.ResultVarDecl}}s.On{{$m.Name}}.fn({{$m.ParamNamesSpread}})
-		call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}{{$m.ResultFieldAssignVars}}}
+{{- if $m.HasResults}}
+		{{$m.CallResultStampVars}}
+{{- end}}
 		s.On{{$m.Name}}.Record(call)
 {{- if $m.HasResults}}
 		return {{$m.ResultVarNames}}
@@ -27,13 +37,13 @@ func (s *{{$.StubName}}) {{$m.Name}}({{$m.ParamList}}){{if $m.ResultList}} {{$m.
 {{- if $m.HasResults}}
 	if s.On{{$m.Name}}.fallback != nil {
 		f := s.On{{$m.Name}}.fallback
-		call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}{{$m.ResultFieldAssignFallback}}}
+		{{$m.CallResultStampFallback}}
 		s.On{{$m.Name}}.Record(call)
 		return {{$m.ReturnFromFallback}}
 	}
 {{- end}}
-	s.On{{$m.Name}}.FailUnexpected({{$m.ParamNames}})
-	s.On{{$m.Name}}.Record({{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}})
+	s.On{{$m.Name}}.FailUnexpectedCall(call)
+	s.On{{$m.Name}}.Record(call)
 {{- if $m.HasResults}}
 	return {{$m.ZeroReturn}}
 {{- end}}

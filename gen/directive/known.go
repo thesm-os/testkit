@@ -113,7 +113,7 @@ var knownDirectives = []Descriptor{
 		Generators: []string{genSuite, genModel}, Phase: 3,
 	},
 	{
-		Name: "retry-succeeds-on", Description: "transient-failure recovery",
+		Name: "retry-succeeds-on-attempt", Description: "transient-failure recovery",
 		Args: "N", Generators: []string{genStub, genSuite}, Phase: 3,
 	},
 
@@ -123,7 +123,7 @@ var knownDirectives = []Descriptor{
 		Args: "Method", Generators: []string{genSuite, genModel}, Phase: 3,
 	},
 	{
-		Name: "order", Description: "call ordering constraint",
+		Name: "order-after", Description: "call ordering constraint",
 		Args: "Method", Generators: []string{genStub, genSuite}, Phase: 3,
 	},
 

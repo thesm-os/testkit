@@ -312,6 +312,133 @@ func TestRecorder_gating(t *testing.T) {
 	})
 }
 
+func TestRecorder_timestamps(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Timestamped returns entries with timestamps", func(t *testing.T) {
+		t.Parallel()
+		origin := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		clk := testkit.NewTestClock(origin)
+		rec := testkit.NewRecorder[string]()
+		rec.WithClock(clk)
+
+		rec.Record("a")
+		clk.Advance(5 * time.Second)
+		rec.Record("b")
+
+		entries := rec.Timestamped()
+		testkit.Len(t, entries, 2, "must have 2 entries")
+		testkit.Equal(t, entries[0].Value, "a", "first value")
+		testkit.Equal(t, entries[0].At, origin, "first timestamp")
+		testkit.Equal(t, entries[1].Value, "b", "second value")
+		testkit.Equal(t, entries[1].At, origin.Add(5*time.Second), "second timestamp")
+	})
+
+	t.Run("Calls still returns plain values", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[int]()
+		rec.Record(1)
+		rec.Record(2)
+		testkit.Equal(t, rec.Calls(), []int{1, 2}, "Calls must return plain values")
+	})
+
+	t.Run("Timestamped returns defensive copy", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		rec.Record("a")
+		entries := rec.Timestamped()
+		entries[0].Value = "mutated"
+		testkit.Equal(t, rec.Timestamped()[0].Value, "a", "must not be aliased")
+	})
+
+	t.Run("Reset clears timestamps", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		rec.Record("a")
+		testkit.Len(t, rec.Timestamped(), 1, "must have entry")
+		rec.Reset()
+		testkit.Len(t, rec.Timestamped(), 0, "must be empty after Reset")
+	})
+
+	t.Run("timestamps use real time when no clock set", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		before := time.Now()
+		rec.Record("a")
+		after := time.Now()
+		entries := rec.Timestamped()
+		testkit.True(t, !entries[0].At.Before(before) && !entries[0].At.After(after),
+			"timestamp must be real wall-clock time")
+	})
+}
+
+func TestRecorderBenchMode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Record is no-op in bench mode", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		rec.BenchMode()
+		rec.Record("a")
+		rec.Record("b")
+		testkit.Equal(t, rec.CallCount(), 0, "bench mode must not record")
+		testkit.Len(t, rec.Calls(), 0, "must have no calls")
+		testkit.Len(t, rec.Timestamped(), 0, "must have no timestamps")
+	})
+
+	t.Run("hooks do not fire in bench mode", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		var seen []string
+		rec.OnRecord(func(v string) { seen = append(seen, v) })
+		rec.BenchMode()
+		rec.Record("a")
+		testkit.Len(t, seen, 0, "hooks must not fire in bench mode")
+	})
+
+	t.Run("gate is not checked in bench mode", func(t *testing.T) {
+		t.Parallel()
+		rec := testkit.NewRecorder[string]()
+		rec.NewGate() // active gate — would block normal Record
+		rec.BenchMode()
+		rec.Record("a") // must not block
+		testkit.Equal(t, rec.CallCount(), 0, "bench mode skips gate and record")
+	})
+}
+
+func TestRecorderClockAwareWaiting(t *testing.T) {
+	t.Parallel()
+
+	origin := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("WaitForN uses configured clock for timer", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(origin)
+		rec := testkit.NewRecorder[string]()
+		rec.WithClock(clk)
+
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			rec.Record("a")
+		}()
+		rec.WaitForN(t, 1, 10*time.Second)
+		testkit.Equal(t, rec.CallCount(), 1, "must record call")
+	})
+
+	t.Run("WaitFor uses configured clock for timer", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(origin)
+		rec := testkit.NewRecorder[string]()
+		rec.WithClock(clk)
+
+		go func() {
+			time.Sleep(10 * time.Millisecond)
+			rec.Record("target")
+		}()
+		rec.WaitFor(t, func(v string) bool { return v == "target" }, 10*time.Second, "must find")
+	})
+}
+
 func TestRecorder_concurrent_safety(t *testing.T) {
 	t.Parallel()
 

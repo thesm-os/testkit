@@ -15,7 +15,7 @@ const (
 	DirConcurrent        = "concurrent"
 	DirConcurrentReaders = "concurrent-readers"
 	DirRetryable         = "retryable"
-	DirRetrySucceedsOn   = "retry-succeeds-on"
+	DirRetrySucceedsOn   = "retry-succeeds-on-attempt"
 )
 
 // CompositionKind classifies a composition issue.

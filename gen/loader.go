@@ -119,6 +119,38 @@ func (p *Package) Struct(name string) (*StructInfo, error) {
 	return p.buildStructInfo(name, named, strct), nil
 }
 
+// ResolveVar looks up a variable by name. The name can be a bare identifier
+// (resolved in the source package) or a qualified name like "otherpkg.ErrXxx"
+// (resolved in the named import). Returns the VarInfo and the import path of
+// the package containing the variable (empty string for the source package).
+func (p *Package) ResolveVar(name string) (*VarInfo, string, error) {
+	parts := strings.SplitN(name, ".", 2)
+	if len(parts) == 1 {
+		// Bare identifier — resolve in source package.
+		v, err := p.Var(name)
+		return v, "", err
+	}
+	pkgName, varName := parts[0], parts[1]
+	for _, imp := range p.Pkg.Imports() {
+		if imp.Name() == pkgName {
+			obj := imp.Scope().Lookup(varName)
+			if obj == nil {
+				return nil, "", Errorf(token.Position{}, "var %q not found in package %s", varName, pkgName)
+			}
+			v, ok := obj.(*types.Var)
+			if !ok {
+				return nil, "", Errorf(token.Position{}, "%q in package %s is not a variable", varName, pkgName)
+			}
+			return &VarInfo{
+				Name: v.Name(),
+				Type: v.Type(),
+				Pos:  token.Position{},
+			}, imp.Path(), nil
+		}
+	}
+	return nil, "", Errorf(token.Position{}, "package %q not found in imports of %s", pkgName, p.Pkg.Name())
+}
+
 // Var looks up a named package-level variable. Returns a positioned
 // [Error] if not found or not a variable.
 func (p *Package) Var(name string) (*VarInfo, error) {

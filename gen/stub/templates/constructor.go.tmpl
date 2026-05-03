@@ -18,6 +18,38 @@ func {{.StubName}}DelegateTo(impl {{.QualifiedType}}) {{.StubName}}Option {
 {{- end}}{{end}}
 	}
 }
+// {{.StubName}}WithClock injects a [testkit.Clock] into all per-method stubs.
+// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// own clock implementation. Default is real wall-clock time.
+func {{.StubName}}WithClock(clk testkit.Clock) {{.StubName}}Option {
+	return func(s *{{.StubName}}) {
+{{- range .Methods}}{{if not .Skip}}
+		s.On{{.Name}}.WithClock(clk)
+{{- end}}{{end}}
+	}
+}
+
+// {{.StubName}}WithRandSource injects a [testkit.RandSource] into all per-method
+// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
+func {{.StubName}}WithRandSource(src testkit.RandSource) {{.StubName}}Option {
+	return func(s *{{.StubName}}) {
+{{- range .Methods}}{{if not .Skip}}
+		s.On{{.Name}}.WithRandSource(src)
+{{- end}}{{end}}
+	}
+}
+
+// {{.StubName}}BenchMode disables call recording on all per-method stubs. Use
+// this in benchmarks to avoid allocation overhead from accumulated call logs.
+// Dispatch (Func, Returns, Faults) still works normally.
+func {{.StubName}}BenchMode() {{.StubName}}Option {
+	return func(s *{{.StubName}}) {
+{{- range .Methods}}{{if not .Skip}}
+		s.On{{.Name}}.BenchMode()
+{{- end}}{{end}}
+	}
+}
 {{range .Methods}}{{if not .Skip}}
 // With{{$.TypeName}}{{.Name}} sets a function override at construction time.
 func With{{$.TypeName}}{{.Name}}(fn {{.FuncTypeStr}}) {{$.StubName}}Option {
@@ -30,6 +62,9 @@ type {{.StubName}} struct {
 {{- range .Methods}}{{if not .Skip}}
 	On{{.Name}} *{{.StubType}}
 {{- end}}{{end}}
+{{- if .HasOrderConstraint}}
+	order *testkit.OrderTracker
+{{- end}}
 	strict bool
 }
 
@@ -49,6 +84,9 @@ func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}}
 		s.On{{.Name}}.Strict()
 {{- end}}{{end}}
 	}
+{{- if .HasOrderConstraint}}
+	s.order = testkit.NewOrderTracker(tb, s.strict)
+{{- end}}
 	if tb != nil {
 		tb.Cleanup(func() {
 {{- range .Methods}}{{if not .Skip}}
@@ -65,5 +103,8 @@ func (s *{{.StubName}}) Reset() {
 {{- range .Methods}}{{if not .Skip}}
 	s.On{{.Name}}.Reset()
 {{- end}}{{end}}
+{{- if .HasOrderConstraint}}
+	s.order.Reset()
+{{- end}}
 }
 {{end}}

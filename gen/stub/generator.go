@@ -5,6 +5,7 @@ package stub
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"go.thesmos.sh/testkit/gen"
@@ -68,9 +69,32 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		return nil, fmt.Errorf("parse templates: %w", parseErr)
 	}
 
+	// Build source attribution from the interface positions.
+	var sourceFile string
+	if len(data.Interfaces) > 0 {
+		methods := data.Interfaces[0].Methods
+		if len(methods) > 0 {
+			// Find min/max line numbers across all methods.
+			minLine, maxLine := methods[0].Pos.Line, methods[0].Pos.Line
+			filename := methods[0].Pos.Filename
+			for _, m := range methods[1:] {
+				if m.Pos.Line < minLine {
+					minLine = m.Pos.Line
+				}
+				if m.Pos.Line > maxLine {
+					maxLine = m.Pos.Line
+				}
+			}
+			if filename != "" {
+				sourceFile = fmt.Sprintf("%s:%d-%d", filepath.Base(filename), minLine, maxLine)
+			}
+		}
+	}
+
 	header := gen.Header{
 		Subcommand: "stub",
 		Args:       "stub " + strings.Join(args, " "),
+		SourceFile: sourceFile,
 	}
 
 	// 7. Render stub file.

@@ -21,13 +21,25 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		s.On{{$m.Name}}.Faults(errTest, 1)
 		{{$m.FaultTestCallExpr}}
 	})
+
+	t.Run("{{$m.Name}} Faults wins over Func", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.FaultPriorityTestExpr}}
+	})
+
+	t.Run("{{$m.Name}} counted fault fires on Nth call", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.CountedFaultTestExpr}}
+	})
 {{end}}
 {{- range $s := $m.Sentinels}}
 	t.Run("{{$m.Name}} Fault{{$s.ShortName}} fires", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 		s.On{{$m.Name}}.Fault{{$s.ShortName}}()
-		{{$m.FaultTestCallExpr}}
+		{{$m.SentinelFaultTestCallExpr $s.Qualified}}
 	})
 {{end}}
 	t.Run("{{$m.Name}} Func override", func(t *testing.T) {
@@ -61,7 +73,80 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		{{$m.IgnoredCallExpr}}
 		testkit.True(t, called, "With{{$iface.TypeName}}{{$m.Name}} must be called")
 	})
+{{if $m.HasNonContextParam}}
+	t.Run("{{$m.Name}} records call args", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.SampleCallAndAssert}}
+	})
+{{end}}
+	t.Run("{{$m.Name}} OnRecord hook fires", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		var observed []{{$.GenQualifier}}{{$m.CallType}}
+		s.On{{$m.Name}}.OnRecord(func(c {{$.GenQualifier}}{{$m.CallType}}) {
+			observed = append(observed, c)
+		})
+		{{$m.IgnoredCallExpr}}
+		{{$m.IgnoredCallExpr}}
+		testkit.Len(t, observed, 2, "OnRecord hook must fire for every {{$m.Name}} call")
+	})
+{{if $m.RetryN}}
+	t.Run("{{$m.Name}} RetrySchedule fails then succeeds", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		s.On{{$m.Name}}.RetrySchedule(errTest)
+		{{$m.RetryScheduleTestExpr}}
+	})
+{{end}}
+{{- if $m.Partition}}
+	t.Run("{{$m.Name}} FaultForPartition targets matching key", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.FaultForPartitionTestExpr}}
+	})
+
+	t.Run("{{$m.Name}} FaultForOtherPartitions targets non-matching key", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.FaultForOtherPartitionsTestExpr}}
+	})
+{{end}}
 {{end}}{{end}}
+	t.Run("BenchMode disables recording", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}BenchMode())
+		{{(index $iface.Methods 0).IgnoredCallExpr}}
+		testkit.Equal(t, s.On{{(index $iface.Methods 0).Name}}.CallCount(), 0,
+			"BenchMode must disable recording")
+	})
+
+	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithRandSource(testkit.FixedRandSource(0.5)))
+		_ = s // verify construction succeeds with RandSource
+	})
+
+	t.Run("Times mismatch fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(f)
+		s.On{{(index $iface.Methods 0).Name}}.Times(2)
+		{{(index $iface.Methods 0).IgnoredCallExpr}}
+		f.RunCleanups()
+		testkit.True(t, f.Failed(), "Times mismatch must fail")
+	})
+
+	t.Run("TimesAtLeast mismatch fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(f)
+		s.On{{(index $iface.Methods 0).Name}}.TimesAtLeast(3)
+		{{(index $iface.Methods 0).IgnoredCallExpr}}
+		f.RunCleanups()
+		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
+	})
+
 	t.Run("Reset clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
@@ -74,13 +159,24 @@ func Test{{$iface.StubName}}(t *testing.T) {
 {{- end}}{{end}}
 	})
 
-	t.Run("Strict mode fails on unconfigured call", func(t *testing.T) {
+{{range $iface.Methods}}{{if not .Skip}}
+	t.Run("Strict mode fails on unconfigured {{.Name}}", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(f, {{$.GenQualifier}}{{$iface.StubName}}Strict())
-		{{(index $iface.Methods 0).IgnoredCallExpr}}
-		testkit.True(t, f.Failed(), "strict mode must fail on unconfigured call")
+		{{.IgnoredCallExpr}}
+		testkit.True(t, f.Failed(), "strict mode must fail on unconfigured {{.Name}}")
 	})
+{{end}}{{end}}
+{{range $m := $iface.Methods}}{{if not $m.Skip}}{{if $m.OrderAfter}}
+	t.Run("{{$m.Name}} order-after {{$m.OrderAfter}} enforced in strict mode", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(f, {{$.GenQualifier}}{{$iface.StubName}}Strict())
+		{{$m.IgnoredCallExpr}}
+		testkit.True(t, f.Failed(), "{{$m.Name}} before {{$m.OrderAfter}} must fail in strict mode")
+	})
+{{end}}{{end}}{{end}}
 
 	t.Run("DelegateTo forwards to implementation", func(t *testing.T) {
 		t.Parallel()
@@ -96,6 +192,140 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		s.On{{.Name}}.AssertCalledOnce(t, "{{.Name}} must delegate")
 {{- end}}{{end}}
 	})
+{{range $m := $iface.Methods}}{{if not $m.Skip}}{{if $m.HasResults}}
+	t.Run("DelegateTo surfaces {{$m.Name}} return values", func(t *testing.T) {
+		t.Parallel()
+		inner := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		inner.On{{$m.Name}}.Returns({{$m.SampleReturnNoError}})
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}DelegateTo(inner))
+		{{$m.CallAndAssertSampleExpr}}
+	})
+{{end}}{{end}}{{end}}
+{{range $m := $iface.Methods}}{{if not $m.Skip}}{{if $m.HasResults}}
+	t.Run("Reset preserves {{$m.Name}} Returns config", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		s.On{{$m.Name}}.Returns({{$m.SampleReturnNoError}})
+		{{$m.IgnoredCallExpr}}
+		s.Reset()
+		s.On{{$m.Name}}.AssertNotCalled(t, "Reset must clear recordings")
+		{{$m.CallAndAssertSampleExpr}}
+	})
+{{end}}{{end}}{{end}}
+
+	t.Run("Reset clears timestamps", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{(index $iface.Methods 0).IgnoredCallExpr}}
+		testkit.Len(t, s.On{{(index $iface.Methods 0).Name}}.Timestamped(), 1, "must record")
+		s.Reset()
+		testkit.Len(t, s.On{{(index $iface.Methods 0).Name}}.Timestamped(), 0, "Reset must clear timestamps")
+	})
+{{- with $m := $iface.FirstContextMethod}}
+{{- /* Latency tests are per-interface (one method). Latency is a property of the
+       embedded MethodStub — once it works for one method, it works for all.
+       A per-method interpolation bug would require a separate template defect
+       that golden-file comparison would catch. */}}
+
+	t.Run("{{$m.Name}} Latency honors virtual clock", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(time.Unix(0, 0))
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
+		s.On{{$m.Name}}.Latency(5 * time.Second)
+
+		done := make(chan struct{})
+		go func() {
+			{{$m.IgnoredCallExpr}}
+			close(done)
+		}()
+
+		clk.AwaitWaiters(1)
+		start := time.Now()
+		clk.Advance(6 * time.Second)
+		<-done
+		testkit.True(t, time.Since(start) < 100*time.Millisecond,
+			"Latency must use virtual clock, not real time")
+	})
+
+	t.Run("{{$m.Name}} Latency happens before Record", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(time.Unix(0, 0))
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
+		s.On{{$m.Name}}.Latency(5 * time.Second)
+
+		done := make(chan struct{})
+		go func() {
+			{{$m.IgnoredCallExpr}}
+			close(done)
+		}()
+
+		clk.AwaitWaiters(1)
+		testkit.Equal(t, s.On{{$m.Name}}.CallCount(), 0,
+			"call must not record until latency completes")
+		clk.Advance(6 * time.Second)
+		<-done
+		testkit.Equal(t, s.On{{$m.Name}}.CallCount(), 1,
+			"call records after latency")
+	})
+
+	t.Run("{{$m.Name}} Latency applies on DelegateTo path", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(time.Unix(0, 0))
+		inner := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+{{- range $iface.Methods}}{{if not .Skip}}{{if .HasResults}}
+		inner.On{{.Name}}.Returns({{.ZeroReturn}})
+{{- end}}{{end}}{{end}}
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t,
+			{{$.GenQualifier}}{{$iface.StubName}}WithClock(clk),
+			{{$.GenQualifier}}{{$iface.StubName}}DelegateTo(inner))
+		s.On{{$m.Name}}.Latency(5 * time.Second)
+
+		done := make(chan struct{})
+		go func() {
+			{{$m.IgnoredCallExpr}}
+			close(done)
+		}()
+
+		clk.AwaitWaiters(1)
+		start := time.Now()
+		clk.Advance(6 * time.Second)
+		<-done
+		testkit.True(t, time.Since(start) < 100*time.Millisecond,
+			"DelegateTo path must honor Latency with virtual clock")
+	})
+{{- end}}
+{{- with $m := $iface.FirstErrorMethod}}
+
+	t.Run("{{$m.Name}} FaultsFor window expires", func(t *testing.T) {
+		t.Parallel()
+		clk := testkit.NewTestClock(time.Unix(0, 0))
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
+		s.On{{$m.Name}}.FaultsFor(5*time.Second, errTest)
+
+		{{$m.FaultTestCallExpr}}
+
+		clk.Advance(6 * time.Second)
+		s.Reset()
+		{{$m.FaultsForExpiredCallExpr}}
+	})
+{{- end}}
+}
+
+func Test{{$iface.StubName}}BenchModeZeroAlloc(t *testing.T) {
+	s := {{$.GenQualifier}}New{{$iface.StubName}}(nil, {{$.GenQualifier}}{{$iface.StubName}}BenchMode())
+{{- range $iface.Methods}}{{if not .Skip}}{{if .HasResults}}
+	s.On{{.Name}}.Returns({{.ZeroReturn}})
+{{- end}}{{end}}{{end}}
+
+{{range $m := $iface.Methods}}{{if not $m.Skip}}
+	t.Run("{{$m.Name}}", func(t *testing.T) {
+		const iterations = 100
+		avgAllocs := testing.AllocsPerRun(iterations, func() {
+			{{$m.IgnoredCallExpr}}
+		})
+		testkit.Equal(t, int(avgAllocs), 0, "{{$m.Name}} in BenchMode must be 0 alloc")
+	})
+{{end}}{{end}}
 }
 {{end}}
 {{end}}

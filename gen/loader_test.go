@@ -158,6 +158,26 @@ func TestPackage(t *testing.T) {
 		testkit.Equal(t, names, []string{"ErrConflict", "ErrNotFound"}, "must be sorted")
 	})
 
+	t.Run("ResolveVar with bare name resolves locally", func(t *testing.T) {
+		t.Parallel()
+		v, importPath, err := pkg.ResolveVar("ErrNotFound")
+		testkit.NoError(t, err, "must resolve")
+		testkit.Equal(t, v.Name, "ErrNotFound", "name must match")
+		testkit.Equal(t, importPath, "", "local var has empty import path")
+	})
+
+	t.Run("ResolveVar with qualified nonexistent package returns error", func(t *testing.T) {
+		t.Parallel()
+		_, _, err := pkg.ResolveVar("nopkg.ErrFoo")
+		testkit.Error(t, err, "must fail for unknown package")
+	})
+
+	t.Run("ResolveVar with bare nonexistent name returns error", func(t *testing.T) {
+		t.Parallel()
+		_, _, err := pkg.ResolveVar("ErrNonexistent")
+		testkit.Error(t, err, "must fail for unknown var")
+	})
+
 	t.Run("ErrorVars with file filter", func(t *testing.T) {
 		t.Parallel()
 		vars := pkg.ErrorVars("basic.go")

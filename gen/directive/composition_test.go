@@ -71,18 +71,18 @@ func TestValidateComposition(t *testing.T) {
 		testkit.Equal(t, issues[0].Kind, directive.Conflict, "must be conflict")
 	})
 
-	t.Run("retry-succeeds-on requires retryable", func(t *testing.T) {
+	t.Run("retry-succeeds-on-attempt requires retryable", func(t *testing.T) {
 		t.Parallel()
-		dirs := []gen.Directive{{Name: "retry-succeeds-on", Args: []string{"3"}}}
+		dirs := []gen.Directive{{Name: "retry-succeeds-on-attempt", Args: []string{"3"}}}
 		issues := directive.ValidateComposition(dirs)
 		testkit.Len(t, issues, 1, "must detect missing required")
 		testkit.Equal(t, issues[0].Kind, directive.MissingRequired, "must be missing-required")
 		testkit.Assert(t, issues[0].Message).Contains("retryable", "must name required directive")
 	})
 
-	t.Run("retry-succeeds-on with retryable is fine", func(t *testing.T) {
+	t.Run("retry-succeeds-on-attempt with retryable is fine", func(t *testing.T) {
 		t.Parallel()
-		dirs := []gen.Directive{{Name: "retryable"}, {Name: "retry-succeeds-on", Args: []string{"3"}}}
+		dirs := []gen.Directive{{Name: "retryable"}, {Name: "retry-succeeds-on-attempt", Args: []string{"3"}}}
 		issues := directive.ValidateComposition(dirs)
 		testkit.Len(t, issues, 0, "must pass with required pair present")
 	})

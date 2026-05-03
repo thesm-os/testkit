@@ -133,6 +133,9 @@ func TestGenerate(t *testing.T) {
 		{"interfaces", "interfaces", "Processor", "processortest"},
 		{"nocontext", "nocontext", "Closer", "closertest"},
 		{"directives", "directives", "Store", "storetest"},
+		{"multireturns", "multireturns", "Service", "servicetest"},
+		{"companion", "companion", "Store", "storetest"},
+		{"newdirectives", "newdirectives", "Runner", "runnertest"},
 	}
 
 	for _, fx := range fixtures {

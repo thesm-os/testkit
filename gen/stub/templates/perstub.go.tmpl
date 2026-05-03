@@ -2,6 +2,11 @@
 // --- Per-method stubs ---
 {{range $m := .Methods}}{{if not $m.Skip}}
 // {{$m.StubType}} controls behavior and records calls for {{$m.Name}}.
+//
+// Concurrent-test primitives inherited from [testkit.MethodStub]:
+//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
+//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type {{$m.StubType}} struct {
 	*testkit.MethodStub[{{$m.CallType}}]
 	fn       {{$m.FuncTypeStr}}
@@ -28,5 +33,39 @@ func (s *{{$m.StubType}}) Func(fn {{$m.FuncTypeStr}}) *{{$m.StubType}} {
 	return s
 }
 {{if $m.Sentinels}}{{template "sentinels" $m}}{{end}}
+{{- if $m.RetryN}}
+// RetrySchedule configures a retry-succeeds-on-attempt fault pattern.
+// The first {{$m.RetryN}}-1 calls fail with err; call {{$m.RetryN}} and all subsequent
+// calls succeed.
+func (s *{{$m.StubType}}) RetrySchedule(err error) *{{$m.StubType}} {
+	s.SetFault(testkit.NewRetryFault[{{$m.CallType}}](err, {{$m.RetryN}}))
+	return s
+}
+{{end}}
+{{- if $m.Partition}}
+// FaultForPartition configures a fault that fires only when {{$m.Partition.FieldName}}
+// matches the given key. Fires on every nth matching call.
+func (s *{{$m.StubType}}) FaultForPartition(key {{$m.Partition.FieldType}}, err error, n int) *{{$m.StubType}} {
+	s.SetFault(testkit.And[{{$m.CallType}}](
+		testkit.NewPredicateFault[{{$m.CallType}}](err, func(c {{$m.CallType}}) bool {
+			return c.{{$m.Partition.FieldPath}} == key
+		}),
+		testkit.NewCountedFault[{{$m.CallType}}](err, n),
+	))
+	return s
+}
+
+// FaultForOtherPartitions configures a fault that fires only when {{$m.Partition.FieldName}}
+// does NOT match the given key. Fires on every nth non-matching call.
+func (s *{{$m.StubType}}) FaultForOtherPartitions(key {{$m.Partition.FieldType}}, err error, n int) *{{$m.StubType}} {
+	s.SetFault(testkit.And[{{$m.CallType}}](
+		testkit.NewPredicateFault[{{$m.CallType}}](err, func(c {{$m.CallType}}) bool {
+			return c.{{$m.Partition.FieldPath}} != key
+		}),
+		testkit.NewCountedFault[{{$m.CallType}}](err, n),
+	))
+	return s
+}
+{{end}}
 {{end}}{{end}}
 {{end}}

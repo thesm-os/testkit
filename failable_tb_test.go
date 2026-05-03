@@ -151,10 +151,34 @@ func TestFailableTB(t *testing.T) {
 		}
 	})
 
-	t.Run("Cleanup does not panic", func(t *testing.T) {
+	t.Run("Cleanup registers function", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
-		f.Cleanup(func() {}) // no-op, should not panic
+		called := false
+		f.Cleanup(func() { called = true })
+		f.RunCleanups()
+		if !called {
+			t.Fatal("Cleanup function must be called by RunCleanups")
+		}
+	})
+
+	t.Run("RunCleanups executes in LIFO order", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		var order []int
+		f.Cleanup(func() { order = append(order, 1) })
+		f.Cleanup(func() { order = append(order, 2) })
+		f.Cleanup(func() { order = append(order, 3) })
+		f.RunCleanups()
+		if len(order) != 3 || order[0] != 3 || order[1] != 2 || order[2] != 1 {
+			t.Fatalf("expected LIFO [3 2 1], got %v", order)
+		}
+	})
+
+	t.Run("RunCleanups with no cleanups does not panic", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.RunCleanups() // should not panic
 	})
 
 	t.Run("TempDir returns empty string", func(t *testing.T) {

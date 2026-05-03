@@ -6,6 +6,7 @@ package testkit
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 	"testing"
 )
@@ -26,6 +27,7 @@ type FailableTB struct {
 	name        string
 	msg         string
 	logs        []string
+	cleanups    []func()
 	helperCalls int
 	failed      bool
 }
@@ -146,8 +148,30 @@ func (f *FailableTB) Context() context.Context {
 	return f.ctx
 }
 
-// Cleanup is a no-op. Present to satisfy the [testing.TB] interface.
-func (*FailableTB) Cleanup(func()) {}
+// Cleanup registers a function to be called when [FailableTB.RunCleanups]
+// is invoked. Functions are called in LIFO order, matching [testing.T.Cleanup]
+// semantics.
+func (f *FailableTB) Cleanup(fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.cleanups = append(f.cleanups, fn)
+}
+
+// RunCleanups executes all registered cleanup functions in LIFO order.
+// This simulates the cleanup phase that [testing.T] runs after a test
+// completes. Use this to trigger [MethodStub.Verify] in tests that use
+// [FailableTB] instead of a real [testing.T].
+func (f *FailableTB) RunCleanups() {
+	f.mu.Lock()
+	fns := make([]func(), len(f.cleanups))
+	copy(fns, f.cleanups)
+	f.mu.Unlock()
+
+	// LIFO order.
+	for _, fn := range slices.Backward(fns) {
+		fn()
+	}
+}
 
 // TempDir is not supported on [FailableTB]. It always returns the empty
 // string. Use a real [testing.T] when temporary directories are needed.
