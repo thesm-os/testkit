@@ -4,7 +4,7 @@ How to integrate testkit into an existing Go project.
 
 ## Status
 
-Pre-1.0. Five generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
+Pre-1.0. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
 
 ## Prerequisites
 
@@ -127,8 +127,9 @@ testkit does not require all-or-nothing adoption. Recommended order, given today
 4. **`builder`.** Add `//go:generate testkit builder` for fixtures used across many tests. Eliminates brittle inline `Item{...}` construction.
 5. **`stub`.** Add `//go:generate testkit stub` for interfaces with multiple implementations. The largest time saver for any codebase with non-trivial interfaces.
 6. **`suite`.** Add `//go:generate testkit suite` for any interface with a documented contract. Provides Tier 1 conformance — auto-detected ctx coverage and shape-typed plug-in points where the consumer composes assertions from `testkit/<shape>_assert.go`.
+7. **`bench`.** Add `//go:generate testkit bench` for any interface where allocation or latency budgets matter. Provides Tier 4 — auto-detected hot-path benchmarks per method plus typed bench plug-ins from `testkit/bench_<shape>.go`.
 
-When the remaining generators ship, the natural extension order is `bench` → `model` → `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
+When the remaining generators ship, the natural extension order is `model` → `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
 
 ## Updating generated code
 

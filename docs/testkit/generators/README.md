@@ -4,7 +4,7 @@ A CLI tool that reads Go type definitions and proto descriptors and emits the te
 
 All generators use `go/types` for Go source analysis and `protodesc` for proto schema. Generators are invoked via `//go:generate` directives in the source package — no central type registry. Project-wide conventions (suffix, test package style, directive composition) live in `.testkit.yml`; see [Configuration](../configuration.md).
 
-**Status.** Five generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
+**Status.** Six generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`, `bench`. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
 
 ## CLI
 
@@ -102,7 +102,7 @@ The generators that consume directives:
 | [`codec`](codec.md) | wire | planned | `codectest.Spec[T]`, round-trip suite + bench + fuzz seeds + `testdata/wire/*.bin` fixtures |
 | [`suite`](suite.md) | 1 | ready | `Assert<Iface>Contract(t, factory, opts...)` with shape-detected subtests + typed plug-in points |
 | [`model`](model.md) | 2-3 | planned | rapid state-machine: `RunStateMachine` + `RunDifferential` + `RunWorkload` |
-| [`bench`](bench.md) | 4 | planned | `BenchmarkContract(b, factory, opts...)` with `AllocsMax(N)` / `LatencyMax(X)` per directive |
+| [`bench`](bench.md) | 4 | ready | `Benchmark<Iface>Contract(b, factory, opts...)` with shape-detected hot-path benchmarks + typed bench plug-ins |
 | [`sim`](sim.md) | 5 | planned | Subsystem simulation harness — engine clock + rand + capture-on-failure + workloads + invariants |
 | [`chaos`](chaos.md) | 5 | planned | Continuous fault simulation: random schedules, partitions, skew, restarts |
 | [`differential-rollout`](differential-rollout.md) | 5 | planned | Shadow-traffic harness with response comparison and divergence reporting |

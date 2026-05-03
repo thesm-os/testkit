@@ -16,7 +16,7 @@
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, shape-typed assertion contexts, golden-file helpers) and the generator engine in `gen/` are stable. Five generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**. The remaining generators (`model`, `bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine in `gen/` are stable. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
 
 ## Documentation
 
@@ -45,9 +45,9 @@ Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strateg
 | [`sentinel`](generators/sentinel.md) | Prefix, uniqueness, non-overlap, unwrap-chain, custom-error round-trip (ready) |
 | [`enum`](generators/enum.md) | Exhaustiveness, stringer, Parse, MarshalText/JSON round-trip (ready) |
 | [`suite`](generators/suite.md) | Tier 1: `Assert<Iface>Contract` with shape-detected subtests + typed plug-in points (ready) |
+| [`bench`](generators/bench.md) | Tier 4: `Benchmark<Iface>Contract` with shape-detected hot-paths + typed bench plug-ins (ready) |
 | [`codec`](generators/codec.md) | `codectest.Spec[T]` + suite + bench + fuzz seeds + wire fixtures (planned) |
 | [`model`](generators/model.md) | Tier 2-3: rapid state-machine, differential, workload (planned) |
-| [`bench`](generators/bench.md) | Tier 4: `BenchmarkContract` with allocs/latency/complexity gates (planned) |
 | [`sim`](generators/sim.md) | Tier 5: subsystem simulation harness (planned) |
 | [`chaos`](generators/chaos.md) | Tier 5: continuous fault simulation on top of sim (planned) |
 | [`differential-rollout`](generators/differential-rollout.md) | Tier 5: shadow-traffic comparison harness (planned) |

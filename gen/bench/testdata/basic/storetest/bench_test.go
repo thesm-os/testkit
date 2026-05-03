@@ -28,27 +28,17 @@ func BenchmarkInMemoryStoreContract(b *testing.B) {
 			testkit.BenchReaderConcurrentThroughput[basic.Store, string, basic.Item]("known-1", 4),
 		),
 
-		// Writer: untyped plug-in on Put.
-		storetest.StoreBenchOnPut(func(b *testing.B, s basic.Store) {
-			b.Run("put-new-item", func(b *testing.B) {
-				b.ResetTimer()
-				b.ReportAllocs()
-				for b.Loop() {
-					_ = s.Put(b.Context(), basic.Item{ID: "bench", Name: "bench"})
-				}
-			})
-		}),
+		// Writer: typed plug-in on Put.
+		storetest.StoreBenchOnPut(
+			testkit.BenchWriterHotPath[basic.Store, basic.Item](
+				basic.Item{ID: "bench", Name: "bench"},
+			),
+		),
 
-		// Lifecycle: untyped plug-in on Ping.
-		storetest.StoreBenchOnPing(func(b *testing.B, s basic.Store) {
-			b.Run("ping-hot-path", func(b *testing.B) {
-				b.ResetTimer()
-				b.ReportAllocs()
-				for b.Loop() {
-					_ = s.Ping(b.Context())
-				}
-			})
-		}),
+		// Lifecycle: typed plug-in on Ping.
+		storetest.StoreBenchOnPing(
+			testkit.BenchLifecycleAllocsWithin[basic.Store](0),
+		),
 
 		// Unknown: untyped plug-in on Count.
 		storetest.StoreBenchOnCount(func(b *testing.B, s basic.Store) {

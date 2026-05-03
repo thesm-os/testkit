@@ -208,7 +208,7 @@ check-compliance:
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion contexts, golden-file helpers) and the generator engine (`gen/`) are stable. Five generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**. The remaining nine are designed and documented but not yet implemented. Generator vocabulary and directive semantics may change in minor versions until the V1 cut. Consumers should pin and regenerate on upgrade.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine (`gen/`) are stable. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining eight are designed and documented but not yet implemented. Generator vocabulary and directive semantics may change in minor versions until the V1 cut. Consumers should pin and regenerate on upgrade.
 
 V1 commits to:
 
