@@ -76,7 +76,7 @@ func (s *RunnerAppendStub) Func(fn func(context.Context, newdirectives.AppendReq
 }
 
 // RetrySchedule configures a retry-succeeds-on-attempt fault pattern.
-// The first 3-1 calls fail with err; call 3 and all subsequent
+// The first 2 calls fail with err; call 3 and all subsequent
 // calls succeed.
 func (s *RunnerAppendStub) RetrySchedule(err error) *RunnerAppendStub {
 	s.SetFault(testkit.NewRetryFault[RunnerAppendCall](err, 3))

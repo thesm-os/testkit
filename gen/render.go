@@ -47,6 +47,7 @@ func FuncMap() template.FuncMap {
 		"isSlice":        func(t types.Type) bool { _, ok := t.Underlying().(*types.Slice); return ok },
 		"isMap":          func(t types.Type) bool { _, ok := t.Underlying().(*types.Map); return ok },
 		"isChan":         func(t types.Type) bool { _, ok := t.Underlying().(*types.Chan); return ok },
+		"sub":            func(a, b int) int { return a - b },
 	}
 }
 

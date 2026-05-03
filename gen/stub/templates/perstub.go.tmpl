@@ -35,7 +35,7 @@ func (s *{{$m.StubType}}) Func(fn {{$m.FuncTypeStr}}) *{{$m.StubType}} {
 {{if $m.Sentinels}}{{template "sentinels" $m}}{{end}}
 {{- if $m.RetryN}}
 // RetrySchedule configures a retry-succeeds-on-attempt fault pattern.
-// The first {{$m.RetryN}}-1 calls fail with err; call {{$m.RetryN}} and all subsequent
+// The first {{sub $m.RetryN 1}} calls fail with err; call {{$m.RetryN}} and all subsequent
 // calls succeed.
 func (s *{{$m.StubType}}) RetrySchedule(err error) *{{$m.StubType}} {
 	s.SetFault(testkit.NewRetryFault[{{$m.CallType}}](err, {{$m.RetryN}}))
@@ -64,6 +64,20 @@ func (s *{{$m.StubType}}) FaultForOtherPartitions(key {{$m.Partition.FieldType}}
 		}),
 		testkit.NewCountedFault[{{$m.CallType}}](err, n),
 	))
+	return s
+}
+{{end}}
+{{- if or $m.Iter.IsSeq $m.Iter.Seq2Error}}
+// Yields configures the stub to yield the given items from an iterator.
+func (s *{{$m.StubType}}) Yields(items ...{{$m.Iter.ElemType}}) *{{$m.StubType}} {
+	s.fn = {{$m.IterYieldsFuncBody}}
+	return s
+}
+{{end}}
+{{- if $m.Iter.Seq2Error}}
+// YieldsError configures the stub to yield the given items then a final error.
+func (s *{{$m.StubType}}) YieldsError(items []{{$m.Iter.ElemType}}, err error) *{{$m.StubType}} {
+	s.fn = {{$m.IterYieldsErrorFuncBody}}
 	return s
 }
 {{end}}

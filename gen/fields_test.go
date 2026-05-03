@@ -189,7 +189,7 @@ func TestSampleValueOf(t *testing.T) {
 		testkit.Equal(t, got, "nil", "interface sample is nil")
 	})
 
-	t.Run("named struct uses zero suffix", func(t *testing.T) {
+	t.Run("named struct populates first exported field", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "basic")
 		iface, err := pkg.Interface("Store")
@@ -203,7 +203,9 @@ func TestSampleValueOf(t *testing.T) {
 		resultType := getMethod.Signature.Results().At(0).Type()
 		tr := gen.NewImportTracker("example.com/other")
 		got := gen.SampleValueOf(resultType, "Result", tr)
-		testkit.Assert(t, got).Contains("{}", "named struct sample has zero suffix")
+		testkit.Assert(t, got).
+			Contains("Item{", "must be a struct literal").
+			Contains("ID:", "must populate first exported field")
 	})
 
 	t.Run("array uses zero suffix", func(t *testing.T) {

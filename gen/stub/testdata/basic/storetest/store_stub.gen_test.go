@@ -160,20 +160,20 @@ func TestStoreStub(t *testing.T) {
 		called := false
 		s.OnGet.Func(func(context.Context, string) (basic.Item, error) {
 			called = true
-			return basic.Item{}, nil
+			return basic.Item{ID: "test-id"}, nil
 		})
 		result, err := s.Get(t.Context(), "")
 		testkit.True(t, called, "Func must be called")
-		testkit.Equal(t, result, basic.Item{}, "Func must return set value")
+		testkit.Equal(t, result, basic.Item{ID: "test-id"}, "Func must return set value")
 		testkit.NoError(t, err, "Func must not error")
 	})
 
 	t.Run("Get Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		s.OnGet.Returns(basic.Item{}, nil)
+		s.OnGet.Returns(basic.Item{ID: "test-id"}, nil)
 		result, err := s.Get(t.Context(), "")
-		testkit.Equal(t, result, basic.Item{}, "Returns must return set value")
+		testkit.Equal(t, result, basic.Item{ID: "test-id"}, "Returns must return set value")
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
@@ -295,9 +295,9 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Put records call args", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		_ = s.Put(t.Context(), basic.Item{})
+		_ = s.Put(t.Context(), basic.Item{ID: "test-id"})
 		call := s.OnPut.LastCall(t)
-		testkit.Equal(t, call.Item, basic.Item{}, "Item must be recorded")
+		testkit.Equal(t, call.Item, basic.Item{ID: "test-id"}, "Item must be recorded")
 	})
 
 	t.Run("Put OnRecord hook fires", func(t *testing.T) {
@@ -409,10 +409,10 @@ func TestStoreStub(t *testing.T) {
 	t.Run("DelegateTo surfaces Get return values", func(t *testing.T) {
 		t.Parallel()
 		inner := storetest.NewStoreStub(t)
-		inner.OnGet.Returns(basic.Item{}, nil)
+		inner.OnGet.Returns(basic.Item{ID: "test-id"}, nil)
 		s := storetest.NewStoreStub(t, storetest.StoreStubDelegateTo(inner))
 		result, err := s.Get(t.Context(), "")
-		testkit.Equal(t, result, basic.Item{}, "Get must return configured value")
+		testkit.Equal(t, result, basic.Item{ID: "test-id"}, "Get must return configured value")
 		testkit.NoError(t, err, "Get must not error")
 	})
 
@@ -439,12 +439,12 @@ func TestStoreStub(t *testing.T) {
 	t.Run("Reset preserves Get Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
-		s.OnGet.Returns(basic.Item{}, nil)
+		s.OnGet.Returns(basic.Item{ID: "test-id"}, nil)
 		_, _ = s.Get(t.Context(), "")
 		s.Reset()
 		s.OnGet.AssertNotCalled(t, "Reset must clear recordings")
 		result, err := s.Get(t.Context(), "")
-		testkit.Equal(t, result, basic.Item{}, "Get must return configured value")
+		testkit.Equal(t, result, basic.Item{ID: "test-id"}, "Get must return configured value")
 		testkit.NoError(t, err, "Get must not error")
 	})
 

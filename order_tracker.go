@@ -36,8 +36,12 @@ func NewOrderTracker(tb testing.TB, strict bool) *OrderTracker {
 	}
 }
 
-// Record marks a method as having been called.
+// Record marks a method as having been called. In lenient mode (strict=false),
+// Record is a no-op — no allocation, no map write.
 func (o *OrderTracker) Record(method string) {
+	if !o.strict {
+		return
+	}
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.called[method] = true

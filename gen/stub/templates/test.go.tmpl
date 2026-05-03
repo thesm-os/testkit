@@ -112,6 +112,32 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		{{$m.FaultForOtherPartitionsTestExpr}}
 	})
 {{end}}
+{{- if or $m.Iter.IsSeq $m.Iter.Seq2Error}}
+	t.Run("{{$m.Name}} Yields returns configured items", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.IterYieldsTestExpr}}
+	})
+
+	t.Run("{{$m.Name}} Yields supports early break", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.IterYieldsBreakTestExpr}}
+	})
+{{end}}
+{{- if $m.Iter.Seq2Error}}
+	t.Run("{{$m.Name}} YieldsError yields items then error", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.IterYieldsErrorTestExpr}}
+	})
+
+	t.Run("{{$m.Name}} YieldsError supports early break", func(t *testing.T) {
+		t.Parallel()
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
+		{{$m.IterYieldsErrorBreakTestExpr}}
+	})
+{{end}}
 {{end}}{{end}}
 	t.Run("BenchMode disables recording", func(t *testing.T) {
 		t.Parallel()

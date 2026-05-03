@@ -12,12 +12,19 @@ import (
 func TestOrderTracker(t *testing.T) {
 	t.Parallel()
 
-	t.Run("Record marks method as called", func(t *testing.T) {
+	t.Run("Record marks method as called in strict mode", func(t *testing.T) {
 		t.Parallel()
-		ot := testkit.NewOrderTracker(t, false)
+		ot := testkit.NewOrderTracker(t, true)
 		testkit.False(t, ot.Called("Open"), "Open must not be called yet")
 		ot.Record("Open")
 		testkit.True(t, ot.Called("Open"), "Open must be called")
+	})
+
+	t.Run("Record is no-op in lenient mode", func(t *testing.T) {
+		t.Parallel()
+		ot := testkit.NewOrderTracker(t, false)
+		ot.Record("Open")
+		testkit.False(t, ot.Called("Open"), "lenient mode must not record")
 	})
 
 	t.Run("AssertAfter passes when prerequisite called", func(t *testing.T) {

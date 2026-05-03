@@ -1,5 +1,5 @@
 .PHONY: help bootstrap install generate fmt license vet lint lint-md \
-        test test-race test-bench test-coverage \
+        test test-generated test-race test-bench test-coverage \
         tidy check-tidy \
         check check-coverage check-vuln \
         build clean
@@ -153,13 +153,46 @@ lint-md:
 	@echo "$(BLUE)Linting Markdown...$(NC)"
 	markdownlint-cli2 "**/*.md" "#vendor" "#dist" "#node_modules"
 
+# ─── Generated testdata packages ────────────────────────────────
+# go test ./... excludes testdata/ by convention. These packages
+# contain generated code with tests that verify the generators
+# produce correct, compilable, 100%-covered output.
+GEN_TESTDATA := \
+	gen/stub/testdata/basic/storetest \
+	gen/stub/testdata/directives/storetest \
+	gen/stub/testdata/noerror/cachetest \
+	gen/stub/testdata/variadic/findertest \
+	gen/stub/testdata/namedreturns/servicetest \
+	gen/stub/testdata/interfaces/processortest \
+	gen/stub/testdata/nocontext/closertest \
+	gen/stub/testdata/multireturns/servicetest \
+	gen/stub/testdata/companion/storetest \
+	gen/stub/testdata/newdirectives/runnertest \
+	gen/stub/testdata/iterators/scannertest \
+	gen/builder/testdata/basic/basictest \
+	gen/builder/testdata/defaults/defaultstest \
+	gen/builder/testdata/fielddefaults/fielddefaultstest \
+	gen/builder/testdata/generics/genericstest \
+	gen/builder/testdata/nested/nestedtest \
+	gen/sentinel/testdata/basic \
+	gen/enum/testdata/basic
+
 # ─── Testing ─────────────────────────────────────────────────────
 
-test:
+test: test-generated
 	@echo "$(BLUE)Running tests...$(NC)"
 	@mkdir -p $(COVERAGE_DIR)
 	$(call foreach_module,$(GO) test -coverprofile=$(CURDIR)/$(COVERAGE_DIR)/$$(basename $$PWD).out -covermode=atomic -cpu=$(TEST_CPU) -count=$(TEST_COUNT) $(FLAGS) ./...)
 	@echo "$(GREEN)Tests passed$(NC)"
+
+test-generated:
+	@echo "$(BLUE)Running generated testdata tests...$(NC)"
+	@for pkg in $(GEN_TESTDATA); do \
+		relpath=$$(echo $$pkg | sed 's|^gen/||'); \
+		echo "$(BLUE)  $$relpath$(NC)"; \
+		(cd gen && GOWORK=off $(GO) test -count=1 ./$$relpath/) || exit 1; \
+	done
+	@echo "$(GREEN)Generated tests passed$(NC)"
 
 test-race:
 	@echo "$(BLUE)Running tests with race detector...$(NC)"

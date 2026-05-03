@@ -7,6 +7,7 @@
 package stub
 
 import (
+	"go/types"
 	"strconv"
 	"strings"
 
@@ -67,11 +68,12 @@ func (d *InterfaceData) HasOrderConstraint() bool {
 	return false
 }
 
-// HasErrorMethod reports whether any method in this interface returns error.
+// HasErrorMethod reports whether any method in this interface returns error
+// or yields errors via iter.Seq2[V, error].
 // Used by test templates to conditionally declare errTest.
 func (d *InterfaceData) HasErrorMethod() bool {
 	for _, m := range d.Methods {
-		if m.ReturnsError() {
+		if m.ReturnsError() || m.Iter.Seq2Error {
 			return true
 		}
 	}
@@ -101,6 +103,9 @@ type MethodData struct {
 	RetryN     int            // retry-succeeds-on-attempt: succeed on Nth call
 	Partition  *PartitionInfo // partition: per-field fault targeting
 	OrderAfter string         // order-after: must be called after this method
+
+	// Auto-detected — no directive needed.
+	Iter gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return type info
 }
 
 // PartitionInfo describes a partition field for per-key fault targeting.
@@ -787,6 +792,287 @@ func (m *MethodData) FaultForOtherPartitionsTestExpr() string {
 		b.WriteString(`, errTest, "must fault for non-matching partition key")`)
 	}
 
+	return strings.TrimSpace(b.String())
+}
+
+// IterYieldsFuncBody renders the function body assigned to s.fn for the
+// Yields helper. Produces a closure matching the method signature that
+// returns an iterator yielding the given items.
+func (m *MethodData) IterYieldsFuncBody() string {
+	if !m.Iter.IsSeq && !m.Iter.IsSeq2 {
+		return ""
+	}
+	var b strings.Builder
+	// Ignore all params.
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	b.WriteString("func(")
+	for i := range n {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("_ ")
+		b.WriteString(gen.TypeStr(params.At(i).Type(), m.tracker))
+	}
+	b.WriteString(") ")
+	// Return type.
+	results := m.Signature.Results()
+	iterIdx := -1
+	for i := range results.Len() {
+		info := gen.AnalyzeIterReturn(results.At(i).Type(), m.tracker)
+		if info.IsSeq || info.IsSeq2 {
+			iterIdx = i
+			break
+		}
+	}
+	retType := gen.TypeStr(results.At(iterIdx).Type(), m.tracker)
+	b.WriteString(retType)
+	b.WriteString(" {\n")
+
+	if m.Iter.IsSeq {
+		b.WriteString("\t\treturn func(yield func(")
+		b.WriteString(m.Iter.ElemType)
+		b.WriteString(") bool) {\n")
+		b.WriteString("\t\t\tfor _, v := range items {\n")
+		b.WriteString("\t\t\t\tif !yield(v) { return }\n")
+		b.WriteString("\t\t\t}\n")
+		b.WriteString("\t\t}\n")
+	} else if m.Iter.Seq2Error {
+		b.WriteString("\t\treturn func(yield func(")
+		b.WriteString(m.Iter.ElemType)
+		b.WriteString(", error) bool) {\n")
+		b.WriteString("\t\t\tfor _, v := range items {\n")
+		b.WriteString("\t\t\t\tif !yield(v, nil) { return }\n")
+		b.WriteString("\t\t\t}\n")
+		b.WriteString("\t\t}\n")
+	} else {
+		// General iter.Seq2[K, V] — not error-typed. Yields takes the full pair type.
+		b.WriteString("\t\treturn func(yield func(")
+		b.WriteString(m.Iter.ElemType)
+		b.WriteString(", ")
+		b.WriteString(m.Iter.ValType)
+		b.WriteString(") bool) {\n")
+		b.WriteString("\t\t\tfor _, v := range items {\n")
+		b.WriteString("\t\t\t\tif !yield(v.K, v.V) { return }\n")
+		b.WriteString("\t\t\t}\n")
+		b.WriteString("\t\t}\n")
+	}
+	b.WriteString("\t}")
+	return b.String()
+}
+
+// IterYieldsErrorFuncBody renders the function body for YieldsError —
+// yields items then a final error. Only for iter.Seq2[V, error].
+func (m *MethodData) IterYieldsErrorFuncBody() string {
+	if !m.Iter.Seq2Error {
+		return ""
+	}
+	var b strings.Builder
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	b.WriteString("func(")
+	for i := range n {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		b.WriteString("_ ")
+		b.WriteString(gen.TypeStr(params.At(i).Type(), m.tracker))
+	}
+	b.WriteString(") ")
+	for r := range m.Signature.Results().Variables() {
+		info := gen.AnalyzeIterReturn(r.Type(), m.tracker)
+		if info.IsSeq2 {
+			b.WriteString(gen.TypeStr(r.Type(), m.tracker))
+			break
+		}
+	}
+	b.WriteString(" {\n")
+	b.WriteString("\t\treturn func(yield func(")
+	b.WriteString(m.Iter.ElemType)
+	b.WriteString(", error) bool) {\n")
+	b.WriteString("\t\t\tfor _, v := range items {\n")
+	b.WriteString("\t\t\t\tif !yield(v, nil) { return }\n")
+	b.WriteString("\t\t\t}\n")
+	b.WriteString("\t\t\tvar zero ")
+	b.WriteString(m.Iter.ElemType)
+	b.WriteString("\n")
+	b.WriteString("\t\t\tyield(zero, err)\n")
+	b.WriteString("\t\t}\n")
+	b.WriteString("\t}")
+	return b.String()
+}
+
+// IterYieldsTestExpr renders a test that configures Yields with sample items,
+// iterates the returned sequence, and asserts the items match.
+func (m *MethodData) IterYieldsTestExpr() string {
+	if !m.Iter.IsSeq && !m.Iter.Seq2Error {
+		return ""
+	}
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	sample := gen.SampleValueOf(
+		m.Signature.Results().At(0).Type().(*types.Named).TypeArgs().At(0),
+		"Item", m.tracker,
+	)
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".Yields(")
+	b.WriteString(sample)
+	b.WriteString(")\n")
+
+	if m.Iter.IsSeq {
+		b.WriteString("\tvar got []")
+		b.WriteString(m.Iter.ElemType)
+		b.WriteString("\n")
+		b.WriteString("\tfor v := range s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(") {\n")
+		b.WriteString("\t\tgot = append(got, v)\n")
+		b.WriteString("\t}\n")
+		b.WriteString("\ttestkit.Len(t, got, 1, \"Yields must produce 1 item\")\n")
+		b.WriteString("\ttestkit.Equal(t, got[0], ")
+		b.WriteString(sample)
+		b.WriteString(`, "yielded item must match")`)
+	} else {
+		// iter.Seq2[V, error]
+		b.WriteString("\tvar got []")
+		b.WriteString(m.Iter.ElemType)
+		b.WriteString("\n")
+		b.WriteString("\tfor v, err := range s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(") {\n")
+		b.WriteString("\t\ttestkit.NoError(t, err, \"Yields must not error\")\n")
+		b.WriteString("\t\tgot = append(got, v)\n")
+		b.WriteString("\t}\n")
+		b.WriteString("\ttestkit.Len(t, got, 1, \"Yields must produce 1 item\")")
+	}
+	return strings.TrimSpace(b.String())
+}
+
+// IterYieldsBreakTestExpr renders a test that yields 2 items and breaks
+// after the first, exercising the early-return path in the iterator.
+func (m *MethodData) IterYieldsBreakTestExpr() string {
+	if !m.Iter.IsSeq && !m.Iter.Seq2Error {
+		return ""
+	}
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	elemType := m.Iter.ElemType
+	sample := gen.SampleValueOf(
+		m.Signature.Results().At(0).Type().(*types.Named).TypeArgs().At(0),
+		"Item", m.tracker,
+	)
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".Yields(")
+	b.WriteString(sample)
+	b.WriteString(", ")
+	b.WriteString(sample)
+	b.WriteString(")\n")
+	b.WriteString("\tvar got []")
+	b.WriteString(elemType)
+	b.WriteString("\n")
+
+	if m.Iter.IsSeq {
+		b.WriteString("\tfor v := range s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(") {\n")
+		b.WriteString("\t\tgot = append(got, v)\n")
+		b.WriteString("\t\tbreak\n")
+		b.WriteString("\t}\n")
+	} else {
+		b.WriteString("\tfor v, err := range s.")
+		b.WriteString(m.Name)
+		b.WriteString("(")
+		b.WriteString(callArgs)
+		b.WriteString(") {\n")
+		b.WriteString("\t\ttestkit.NoError(t, err, \"must not error before break\")\n")
+		b.WriteString("\t\tgot = append(got, v)\n")
+		b.WriteString("\t\tbreak\n")
+		b.WriteString("\t}\n")
+	}
+	b.WriteString("\ttestkit.Len(t, got, 1, \"break must stop iteration after 1 item\")")
+	return strings.TrimSpace(b.String())
+}
+
+// IterYieldsErrorTestExpr renders a test that configures YieldsError,
+// iterates, and asserts the error is yielded after the items.
+func (m *MethodData) IterYieldsErrorTestExpr() string {
+	if !m.Iter.Seq2Error {
+		return ""
+	}
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".YieldsError(nil, errTest)\n")
+	b.WriteString("\tvar sawErr error\n")
+	b.WriteString("\tfor _, err := range s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(callArgs)
+	b.WriteString(") {\n")
+	b.WriteString("\t\tif err != nil {\n")
+	b.WriteString("\t\t\tsawErr = err\n")
+	b.WriteString("\t\t}\n")
+	b.WriteString("\t}\n")
+	b.WriteString("\ttestkit.ErrorIs(t, sawErr, errTest, \"YieldsError must yield the error\")")
+	return strings.TrimSpace(b.String())
+}
+
+// IterYieldsErrorBreakTestExpr renders a test that configures YieldsError
+// with items and breaks before the error, exercising the early return.
+func (m *MethodData) IterYieldsErrorBreakTestExpr() string {
+	if !m.Iter.Seq2Error {
+		return ""
+	}
+	var b strings.Builder
+	paramZeros := m.buildZeroParamValues()
+	callArgs := strings.Join(paramZeros, ", ")
+
+	sample := gen.SampleValueOf(
+		m.Signature.Results().At(0).Type().(*types.Named).TypeArgs().At(0),
+		"Item", m.tracker,
+	)
+
+	b.WriteString("s.On")
+	b.WriteString(m.Name)
+	b.WriteString(".YieldsError([]")
+	b.WriteString(m.Iter.ElemType)
+	b.WriteString("{")
+	b.WriteString(sample)
+	b.WriteString("}, errTest)\n")
+	b.WriteString("\tcount := 0\n")
+	b.WriteString("\tfor _, err := range s.")
+	b.WriteString(m.Name)
+	b.WriteString("(")
+	b.WriteString(callArgs)
+	b.WriteString(") {\n")
+	b.WriteString("\t\ttestkit.NoError(t, err, \"item must not error\")\n")
+	b.WriteString("\t\tcount++\n")
+	b.WriteString("\t\tbreak\n")
+	b.WriteString("\t}\n")
+	b.WriteString("\ttestkit.Equal(t, count, 1, \"break must stop before error\")")
 	return strings.TrimSpace(b.String())
 }
 

@@ -63,20 +63,20 @@ func TestRunnerStub(t *testing.T) {
 		called := false
 		s.OnAppend.Func(func(context.Context, newdirectives.AppendRequest) (newdirectives.AppendResult, error) {
 			called = true
-			return newdirectives.AppendResult{}, nil
+			return newdirectives.AppendResult{Offset: 42}, nil
 		})
 		result, err := s.Append(t.Context(), newdirectives.AppendRequest{})
 		testkit.True(t, called, "Func must be called")
-		testkit.Equal(t, result, newdirectives.AppendResult{}, "Func must return set value")
+		testkit.Equal(t, result, newdirectives.AppendResult{Offset: 42}, "Func must return set value")
 		testkit.NoError(t, err, "Func must not error")
 	})
 
 	t.Run("Append Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
-		s.OnAppend.Returns(newdirectives.AppendResult{}, nil)
+		s.OnAppend.Returns(newdirectives.AppendResult{Offset: 42}, nil)
 		result, err := s.Append(t.Context(), newdirectives.AppendRequest{})
-		testkit.Equal(t, result, newdirectives.AppendResult{}, "Returns must return set value")
+		testkit.Equal(t, result, newdirectives.AppendResult{Offset: 42}, "Returns must return set value")
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
@@ -101,9 +101,9 @@ func TestRunnerStub(t *testing.T) {
 	t.Run("Append records call args", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
-		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{})
+		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{RunID: "test-runid"})
 		call := s.OnAppend.LastCall(t)
-		testkit.Equal(t, call.Req, newdirectives.AppendRequest{}, "Req must be recorded")
+		testkit.Equal(t, call.Req, newdirectives.AppendRequest{RunID: "test-runid"}, "Req must be recorded")
 	})
 
 	t.Run("Append OnRecord hook fires", func(t *testing.T) {
@@ -436,10 +436,10 @@ func TestRunnerStub(t *testing.T) {
 	t.Run("DelegateTo surfaces Append return values", func(t *testing.T) {
 		t.Parallel()
 		inner := runnertest.NewRunnerStub(t)
-		inner.OnAppend.Returns(newdirectives.AppendResult{}, nil)
+		inner.OnAppend.Returns(newdirectives.AppendResult{Offset: 42}, nil)
 		s := runnertest.NewRunnerStub(t, runnertest.RunnerStubDelegateTo(inner))
 		result, err := s.Append(t.Context(), newdirectives.AppendRequest{})
-		testkit.Equal(t, result, newdirectives.AppendResult{}, "Append must return configured value")
+		testkit.Equal(t, result, newdirectives.AppendResult{Offset: 42}, "Append must return configured value")
 		testkit.NoError(t, err, "Append must not error")
 	})
 
@@ -464,12 +464,12 @@ func TestRunnerStub(t *testing.T) {
 	t.Run("Reset preserves Append Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
-		s.OnAppend.Returns(newdirectives.AppendResult{}, nil)
+		s.OnAppend.Returns(newdirectives.AppendResult{Offset: 42}, nil)
 		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{})
 		s.Reset()
 		s.OnAppend.AssertNotCalled(t, "Reset must clear recordings")
 		result, err := s.Append(t.Context(), newdirectives.AppendRequest{})
-		testkit.Equal(t, result, newdirectives.AppendResult{}, "Append must return configured value")
+		testkit.Equal(t, result, newdirectives.AppendResult{Offset: 42}, "Append must return configured value")
 		testkit.NoError(t, err, "Append must not error")
 	})
 

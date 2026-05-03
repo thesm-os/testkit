@@ -64,22 +64,22 @@ func TestServiceStub(t *testing.T) {
 		called := false
 		s.OnCheckout.Func(func(context.Context, string) (multireturns.Item, multireturns.Lease, error) {
 			called = true
-			return multireturns.Item{}, multireturns.Lease{}, nil
+			return multireturns.Item{Key: "test-key"}, multireturns.Lease{ID: "test-id"}, nil
 		})
 		result0, result1, err := s.Checkout(t.Context(), "")
 		testkit.True(t, called, "Func must be called")
-		testkit.Equal(t, result0, multireturns.Item{}, "Func must return set value")
-		testkit.Equal(t, result1, multireturns.Lease{}, "Func must return set value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Func must return set value")
+		testkit.Equal(t, result1, multireturns.Lease{ID: "test-id"}, "Func must return set value")
 		testkit.NoError(t, err, "Func must not error")
 	})
 
 	t.Run("Checkout Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
-		s.OnCheckout.Returns(multireturns.Item{}, multireturns.Lease{}, nil)
+		s.OnCheckout.Returns(multireturns.Item{Key: "test-key"}, multireturns.Lease{ID: "test-id"}, nil)
 		result0, result1, err := s.Checkout(t.Context(), "")
-		testkit.Equal(t, result0, multireturns.Item{}, "Returns must return set value")
-		testkit.Equal(t, result1, multireturns.Lease{}, "Returns must return set value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Returns must return set value")
+		testkit.Equal(t, result1, multireturns.Lease{ID: "test-id"}, "Returns must return set value")
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
@@ -167,22 +167,22 @@ func TestServiceStub(t *testing.T) {
 		called := false
 		s.OnPeek.Func(func(context.Context) (multireturns.Item, multireturns.Item, error) {
 			called = true
-			return multireturns.Item{}, multireturns.Item{}, nil
+			return multireturns.Item{Key: "test-key"}, multireturns.Item{Key: "test-key"}, nil
 		})
 		result0, result1, err := s.Peek(t.Context())
 		testkit.True(t, called, "Func must be called")
-		testkit.Equal(t, result0, multireturns.Item{}, "Func must return set value")
-		testkit.Equal(t, result1, multireturns.Item{}, "Func must return set value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Func must return set value")
+		testkit.Equal(t, result1, multireturns.Item{Key: "test-key"}, "Func must return set value")
 		testkit.NoError(t, err, "Func must not error")
 	})
 
 	t.Run("Peek Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
-		s.OnPeek.Returns(multireturns.Item{}, multireturns.Item{}, nil)
+		s.OnPeek.Returns(multireturns.Item{Key: "test-key"}, multireturns.Item{Key: "test-key"}, nil)
 		result0, result1, err := s.Peek(t.Context())
-		testkit.Equal(t, result0, multireturns.Item{}, "Returns must return set value")
-		testkit.Equal(t, result1, multireturns.Item{}, "Returns must return set value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Returns must return set value")
+		testkit.Equal(t, result1, multireturns.Item{Key: "test-key"}, "Returns must return set value")
 		testkit.NoError(t, err, "Returns must not error")
 	})
 
@@ -402,22 +402,22 @@ func TestServiceStub(t *testing.T) {
 	t.Run("DelegateTo surfaces Checkout return values", func(t *testing.T) {
 		t.Parallel()
 		inner := servicetest.NewServiceStub(t)
-		inner.OnCheckout.Returns(multireturns.Item{}, multireturns.Lease{}, nil)
+		inner.OnCheckout.Returns(multireturns.Item{Key: "test-key"}, multireturns.Lease{ID: "test-id"}, nil)
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubDelegateTo(inner))
 		result0, result1, err := s.Checkout(t.Context(), "")
-		testkit.Equal(t, result0, multireturns.Item{}, "Checkout must return configured value")
-		testkit.Equal(t, result1, multireturns.Lease{}, "Checkout must return configured value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Checkout must return configured value")
+		testkit.Equal(t, result1, multireturns.Lease{ID: "test-id"}, "Checkout must return configured value")
 		testkit.NoError(t, err, "Checkout must not error")
 	})
 
 	t.Run("DelegateTo surfaces Peek return values", func(t *testing.T) {
 		t.Parallel()
 		inner := servicetest.NewServiceStub(t)
-		inner.OnPeek.Returns(multireturns.Item{}, multireturns.Item{}, nil)
+		inner.OnPeek.Returns(multireturns.Item{Key: "test-key"}, multireturns.Item{Key: "test-key"}, nil)
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubDelegateTo(inner))
 		result0, result1, err := s.Peek(t.Context())
-		testkit.Equal(t, result0, multireturns.Item{}, "Peek must return configured value")
-		testkit.Equal(t, result1, multireturns.Item{}, "Peek must return configured value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
+		testkit.Equal(t, result1, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
 		testkit.NoError(t, err, "Peek must not error")
 	})
 
@@ -436,26 +436,26 @@ func TestServiceStub(t *testing.T) {
 	t.Run("Reset preserves Checkout Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
-		s.OnCheckout.Returns(multireturns.Item{}, multireturns.Lease{}, nil)
+		s.OnCheckout.Returns(multireturns.Item{Key: "test-key"}, multireturns.Lease{ID: "test-id"}, nil)
 		_, _, _ = s.Checkout(t.Context(), "")
 		s.Reset()
 		s.OnCheckout.AssertNotCalled(t, "Reset must clear recordings")
 		result0, result1, err := s.Checkout(t.Context(), "")
-		testkit.Equal(t, result0, multireturns.Item{}, "Checkout must return configured value")
-		testkit.Equal(t, result1, multireturns.Lease{}, "Checkout must return configured value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Checkout must return configured value")
+		testkit.Equal(t, result1, multireturns.Lease{ID: "test-id"}, "Checkout must return configured value")
 		testkit.NoError(t, err, "Checkout must not error")
 	})
 
 	t.Run("Reset preserves Peek Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
-		s.OnPeek.Returns(multireturns.Item{}, multireturns.Item{}, nil)
+		s.OnPeek.Returns(multireturns.Item{Key: "test-key"}, multireturns.Item{Key: "test-key"}, nil)
 		_, _, _ = s.Peek(t.Context())
 		s.Reset()
 		s.OnPeek.AssertNotCalled(t, "Reset must clear recordings")
 		result0, result1, err := s.Peek(t.Context())
-		testkit.Equal(t, result0, multireturns.Item{}, "Peek must return configured value")
-		testkit.Equal(t, result1, multireturns.Item{}, "Peek must return configured value")
+		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
+		testkit.Equal(t, result1, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
 		testkit.NoError(t, err, "Peek must not error")
 	})
 

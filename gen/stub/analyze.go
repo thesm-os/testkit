@@ -9,6 +9,8 @@ import (
 	"go.thesmos.sh/testkit/gen"
 )
 
+const iterPkgPath = "iter"
+
 // Analyze builds a Data model from a loaded package and type args.
 // The returned data has all base fields populated but no directive
 // enrichment — that happens in a separate step.
@@ -55,6 +57,17 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 			}
 			// Attach directives from source AST.
 			md.Directives = pkg.EffectiveMethodDirectives(name, m.Name)
+
+			// Auto-detect iter.Seq / iter.Seq2 returns.
+			for r := range m.Signature.Results().Variables() {
+				info := gen.AnalyzeIterReturn(r.Type(), tracker)
+				if info.IsSeq || info.IsSeq2 {
+					md.Iter = info
+					tracker.AddPath(iterPkgPath)
+					break
+				}
+			}
+
 			methods = append(methods, md)
 		}
 		ifaceData.Methods = methods

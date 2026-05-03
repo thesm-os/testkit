@@ -26,7 +26,7 @@ func TestOrderBuilder(t *testing.T) {
 
 	t.Run("WithBilling sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Address{}
+		sample := nested.Address{Street: "test-street"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
 			WithBilling(sample).
 			Build()
@@ -35,7 +35,7 @@ func TestOrderBuilder(t *testing.T) {
 
 	t.Run("WithCustomer sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := &nested.Customer{}
+		sample := &nested.Customer{Name: "test-name"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
 			WithCustomer(sample).
 			Build()
@@ -53,7 +53,7 @@ func TestOrderBuilder(t *testing.T) {
 
 	t.Run("WithMetadata sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Metadata{}
+		sample := nested.Metadata{Source: "test-source"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
 			WithMetadata(sample).
 			Build()
@@ -71,7 +71,7 @@ func TestOrderBuilder(t *testing.T) {
 
 	t.Run("WithShipping sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Address{}
+		sample := nested.Address{Street: "test-street"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
 			WithShipping(sample).
 			Build()

@@ -81,9 +81,9 @@ func BuildResultFields(tuple *types.Tuple, tracker *ImportTracker) []FieldData {
 func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) string {
 	if named, ok := typ.(*types.Named); ok {
 		qualifiedName := types.TypeString(typ, tracker.Qualifier())
-		switch named.Underlying().(type) {
+		switch st := named.Underlying().(type) {
 		case *types.Struct:
-			return qualifiedName + zeroSuffix
+			return sampleStructLiteral(qualifiedName, st, tracker)
 		case *types.Basic:
 			innerSample := SampleValueOf(named.Underlying(), fieldName, tracker)
 			return qualifiedName + "(" + innerSample + ")"
@@ -108,19 +108,38 @@ func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) str
 		valSample := SampleValueOf(u.Elem(), fieldName, tracker)
 		return fmt.Sprintf("map[%s]%s{%s: %s}", keyStr, valStr, keySample, valSample)
 	case *types.Struct:
-		return types.TypeString(typ, tracker.Qualifier()) + zeroSuffix
+		return sampleStructLiteral(types.TypeString(typ, tracker.Qualifier()), u, tracker)
 	case *types.Pointer:
-		// Only produce &Type{} for struct/named types — basic types
+		// Only produce &Type{...} for struct/named types — basic types
 		// like *string can't use composite literal syntax.
-		if _, isStruct := u.Elem().Underlying().(*types.Struct); isStruct {
+		if st, isStruct := u.Elem().Underlying().(*types.Struct); isStruct {
 			elemStr := types.TypeString(u.Elem(), tracker.Qualifier())
-			return "&" + elemStr + zeroSuffix
+			return "&" + sampleStructLiteral(elemStr, st, tracker)
 		}
 		return zeroNil
 	case *types.Signature, *types.Chan, *types.Interface:
 		return zeroNil
 	}
 	return zeroNil
+}
+
+// sampleStructLiteral produces a non-zero struct literal by populating the
+// first exported basic-typed field with a sample value. If the struct has no
+// suitable exported fields, falls back to the zero literal.
+func sampleStructLiteral(qualifiedName string, st *types.Struct, tracker *ImportTracker) string {
+	for f := range st.Fields() {
+		if !f.Exported() {
+			continue
+		}
+		// Only populate basic-typed fields (string, int, bool, etc.)
+		// to avoid recursive struct nesting in sample literals.
+		if _, isBasic := f.Type().Underlying().(*types.Basic); !isBasic {
+			continue
+		}
+		sample := SampleValueOf(f.Type(), f.Name(), tracker)
+		return qualifiedName + "{" + f.Name() + ": " + sample + "}"
+	}
+	return qualifiedName + zeroSuffix
 }
 
 // SampleBasicValue returns a non-zero Go literal for a basic type.

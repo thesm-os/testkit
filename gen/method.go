@@ -13,6 +13,9 @@ const (
 	contextTypName  = "Context"
 	errorTypName    = "error"
 	errorMethodName = "Error"
+	iterPkgPath     = "iter"
+	iterSeqName     = "Seq"
+	iterSeq2Name    = "Seq2"
 
 	zeroNil     = "nil"
 	zeroFalse   = "false"
@@ -252,6 +255,11 @@ func ZeroValueOf(typ types.Type, t *ImportTracker) string {
 	return zeroNil
 }
 
+// TypeStr renders a Go type as source code using the tracker's qualifier.
+func TypeStr(typ types.Type, tracker *ImportTracker) string {
+	return types.TypeString(typ, tracker.Qualifier())
+}
+
 // IsContextType reports whether typ is context.Context.
 func IsContextType(typ types.Type) bool {
 	named, ok := typ.(*types.Named)
@@ -276,6 +284,57 @@ func IsErrorType(typ types.Type) bool {
 	}
 	m := iface.Method(0)
 	return m.Name() == errorMethodName && m.Type().(*types.Signature).Results().Len() == 1
+}
+
+// IterSeqInfo holds the result of inspecting a return type for iter.Seq
+// or iter.Seq2. Zero value means the type is not an iterator.
+type IterSeqInfo struct {
+	IsSeq     bool   // true if iter.Seq[V]
+	IsSeq2    bool   // true if iter.Seq2[K, V]
+	Seq2Error bool   // true if iter.Seq2[V, error] — the error-yielding pattern
+	ElemType  string // qualified type string for V (Seq) or K (Seq2)
+	ValType   string // qualified type string for V in Seq2 (empty for Seq)
+}
+
+// AnalyzeIterReturn inspects typ and returns [IterSeqInfo] if it is
+// iter.Seq[V] or iter.Seq2[K, V]. Returns zero value for non-iterator types.
+func AnalyzeIterReturn(typ types.Type, tracker *ImportTracker) IterSeqInfo {
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return IterSeqInfo{}
+	}
+	obj := named.Obj()
+	if obj.Pkg() == nil || obj.Pkg().Path() != iterPkgPath {
+		return IterSeqInfo{}
+	}
+	targs := named.TypeArgs()
+	if targs == nil {
+		return IterSeqInfo{}
+	}
+	switch obj.Name() {
+	case iterSeqName:
+		if targs.Len() != 1 {
+			return IterSeqInfo{}
+		}
+		return IterSeqInfo{
+			IsSeq:    true,
+			ElemType: types.TypeString(targs.At(0), tracker.Qualifier()),
+		}
+	case iterSeq2Name:
+		if targs.Len() != 2 {
+			return IterSeqInfo{}
+		}
+		info := IterSeqInfo{
+			IsSeq2:   true,
+			ElemType: types.TypeString(targs.At(0), tracker.Qualifier()),
+			ValType:  types.TypeString(targs.At(1), tracker.Qualifier()),
+		}
+		if IsErrorType(targs.At(1)) {
+			info.Seq2Error = true
+		}
+		return info
+	}
+	return IterSeqInfo{}
 }
 
 func typeParamDecl(params []TypeParamInfo, t *ImportTracker) string {
