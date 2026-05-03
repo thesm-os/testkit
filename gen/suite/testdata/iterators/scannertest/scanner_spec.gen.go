@@ -5,6 +5,7 @@ package scannertest
 
 import (
 	"context"
+	"iter"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -28,6 +29,14 @@ func AssertScannerContract(
 	runScannerCount(t, factory, &cfg)
 	runScannerKeys(t, factory, &cfg)
 	runScannerScan(t, factory, &cfg)
+
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[iterators.Scanner]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
 
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
@@ -123,12 +132,28 @@ func runScannerKeys(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 	})
 	if len(cfg.onKeys) > 0 {
 		t.Run("Keys", func(t *testing.T) {
-			for _, fn := range cfg.onKeys {
+			prePopFactory := func() iterators.Scanner {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			sctx := testkit.StreamContext[iterators.Scanner, string]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl iterators.Scanner) iter.Seq2[string, error] {
+					return func(yield func(string, error) bool) {
+						for v := range impl.Keys(t.Context()) {
+							if !yield(v, nil) {
+								return
+							}
+						}
+					}
+				},
+			}
+			for _, a := range cfg.onKeys {
+				a(sctx)
 			}
 		})
 	}
@@ -178,12 +203,22 @@ func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 	})
 	if len(cfg.onScan) > 0 {
 		t.Run("Scan", func(t *testing.T) {
-			for _, fn := range cfg.onScan {
+			prePopFactory := func() iterators.Scanner {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			sctx := testkit.StreamContext[iterators.Scanner, iterators.Item]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl iterators.Scanner) iter.Seq2[iterators.Item, error] {
+					return impl.Scan(t.Context(), "")
+				},
+			}
+			for _, a := range cfg.onScan {
+				a(sctx)
 			}
 		})
 	}
@@ -214,16 +249,23 @@ func OnCount(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
 }
 
 // OnKeys adds plug-in assertions for the Keys method.
-func OnKeys(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+func OnKeys(assertions ...testkit.StreamAssertion[iterators.Scanner, string]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onKeys = append(c.onKeys, assertions...)
 	}
 }
 
 // OnScan adds plug-in assertions for the Scan method.
-func OnScan(assertions ...func(*testing.T, iterators.Scanner)) ScannerOption {
+func OnScan(assertions ...testkit.StreamAssertion[iterators.Scanner, iterators.Item]) ScannerOption {
 	return func(c *scannerConfig) {
 		c.onScan = append(c.onScan, assertions...)
+	}
+}
+
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[iterators.Scanner]) ScannerOption {
+	return func(c *scannerConfig) {
+		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
@@ -235,9 +277,10 @@ type customSubtest struct {
 type scannerConfig struct {
 	prePopulate func(testing.TB, iterators.Scanner)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[iterators.Scanner]
 	onCount     []func(*testing.T, iterators.Scanner)
-	onKeys      []func(*testing.T, iterators.Scanner)
-	onScan      []func(*testing.T, iterators.Scanner)
+	onKeys      []testkit.StreamAssertion[iterators.Scanner, string]
+	onScan      []testkit.StreamAssertion[iterators.Scanner, iterators.Item]
 }
 
 func newScannerConfig(opts ...ScannerOption) scannerConfig {

@@ -21,12 +21,61 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				Call: func(impl {{.QualifiedType}}, ctx context.Context, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
 					return impl.{{.Name}}(ctx, k)
 				},
-				Known:   cfg.known,
-				Unknown: cfg.unknown,
-				Want:    cfg.want,
 			}
 			for _, a := range cfg.on{{.Name}} {
 				a(rctx)
+			}
+		})
+	}
+{{- else if .IsWriter}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				return impl
+			}
+			wctx := testkit.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl {{.QualifiedType}}, ctx context.Context, v {{.Shape.ValType}}) error {
+					return impl.{{.Name}}(ctx, v)
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(wctx)
+			}
+		})
+	}
+{{- else if .IsStreamReader}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t, impl)
+				}
+				return impl
+			}
+			sctx := testkit.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+{{- if .Shape.IterInfo.Seq2Error}}
+					return impl.{{.Name}}({{.ZeroCallArgs}})
+{{- else}}
+					return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
+						for v := range impl.{{.Name}}({{.ZeroCallArgs}}) {
+							if !yield(v, nil) { return }
+						}
+					}
+{{- end}}
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(sctx)
 			}
 		})
 	}

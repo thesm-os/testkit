@@ -28,6 +28,14 @@ func AssertCloserContract(
 	runCloserClose(t, factory, &cfg)
 	runCloserOpen(t, factory, &cfg)
 
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[erroronly.Closer]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
+
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
 			t.Parallel()
@@ -172,6 +180,13 @@ func OnOpen(assertions ...func(*testing.T, erroronly.Closer)) CloserOption {
 	}
 }
 
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[erroronly.Closer]) CloserOption {
+	return func(c *closerConfig) {
+		c.onAll = append(c.onAll, assertions...)
+	}
+}
+
 type customSubtest struct {
 	name string
 	fn   func(*testing.T, erroronly.Closer)
@@ -180,6 +195,7 @@ type customSubtest struct {
 type closerConfig struct {
 	prePopulate func(testing.TB, erroronly.Closer)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[erroronly.Closer]
 	onClose     []func(*testing.T, erroronly.Closer)
 	onOpen      []func(*testing.T, erroronly.Closer)
 }

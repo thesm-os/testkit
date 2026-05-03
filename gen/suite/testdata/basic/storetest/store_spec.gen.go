@@ -33,6 +33,14 @@ func AssertStoreContract(
 	runStorePing(t, factory, &cfg)
 	runStorePut(t, factory, &cfg)
 
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[basic.Store]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
+
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
 			t.Parallel()
@@ -104,12 +112,22 @@ func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) 
 	})
 	if len(cfg.onDelete) > 0 {
 		t.Run("Delete", func(t *testing.T) {
-			for _, fn := range cfg.onDelete {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			wctx := testkit.WriterContext[basic.Store, string]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl basic.Store, ctx context.Context, v string) error {
+					return impl.Delete(ctx, v)
+				},
+			}
+			for _, a := range cfg.onDelete {
+				a(wctx)
 			}
 		})
 	}
@@ -186,9 +204,6 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				Call: func(impl basic.Store, ctx context.Context, k string) (basic.Item, error) {
 					return impl.Get(ctx, k)
 				},
-				Known:   cfg.known,
-				Unknown: cfg.unknown,
-				Want:    cfg.want,
 			}
 			for _, a := range cfg.onGet {
 				a(rctx)
@@ -236,12 +251,22 @@ func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfi
 	})
 	if len(cfg.onLegacyPut) > 0 {
 		t.Run("LegacyPut", func(t *testing.T) {
-			for _, fn := range cfg.onLegacyPut {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			wctx := testkit.WriterContext[basic.Store, basic.Item]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl basic.Store, ctx context.Context, v basic.Item) error {
+					return impl.LegacyPut(ctx, v)
+				},
+			}
+			for _, a := range cfg.onLegacyPut {
+				a(wctx)
 			}
 		})
 	}
@@ -341,12 +366,22 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 	})
 	if len(cfg.onPut) > 0 {
 		t.Run("Put", func(t *testing.T) {
-			for _, fn := range cfg.onPut {
+			prePopFactory := func() basic.Store {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			wctx := testkit.WriterContext[basic.Store, basic.Item]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl basic.Store, ctx context.Context, v basic.Item) error {
+					return impl.Put(ctx, v)
+				},
+			}
+			for _, a := range cfg.onPut {
+				a(wctx)
 			}
 		})
 	}
@@ -377,7 +412,7 @@ func OnCount(assertions ...func(*testing.T, basic.Store)) StoreOption {
 }
 
 // OnDelete adds plug-in assertions for the Delete method.
-func OnDelete(assertions ...func(*testing.T, basic.Store)) StoreOption {
+func OnDelete(assertions ...testkit.WriterAssertion[basic.Store, string]) StoreOption {
 	return func(c *storeConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
@@ -391,7 +426,7 @@ func OnGet(assertions ...testkit.ReaderAssertion[basic.Store, string, basic.Item
 }
 
 // OnLegacyPut adds plug-in assertions for the LegacyPut method.
-func OnLegacyPut(assertions ...func(*testing.T, basic.Store)) StoreOption {
+func OnLegacyPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onLegacyPut = append(c.onLegacyPut, assertions...)
 	}
@@ -405,29 +440,16 @@ func OnPing(assertions ...func(*testing.T, basic.Store)) StoreOption {
 }
 
 // OnPut adds plug-in assertions for the Put method.
-func OnPut(assertions ...func(*testing.T, basic.Store)) StoreOption {
+func OnPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
-// Known adds a known key for Reader-shape primitives.
-func Known(keys ...string) StoreOption {
-	return func(c *storeConfig) { c.known = append(c.known, keys...) }
-}
-
-// Unknown adds an unknown key for Reader-shape primitives.
-func Unknown(keys ...string) StoreOption {
-	return func(c *storeConfig) { c.unknown = append(c.unknown, keys...) }
-}
-
-// Expect adds a (key, expected-value) pair for AssertReturnsForKey.
-func Expect(key string, value basic.Item) StoreOption {
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[basic.Store]) StoreOption {
 	return func(c *storeConfig) {
-		if c.want == nil {
-			c.want = make(map[string]basic.Item)
-		}
-		c.want[key] = value
+		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
@@ -439,15 +461,13 @@ type customSubtest struct {
 type storeConfig struct {
 	prePopulate func(testing.TB, basic.Store)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[basic.Store]
 	onCount     []func(*testing.T, basic.Store)
-	onDelete    []func(*testing.T, basic.Store)
+	onDelete    []testkit.WriterAssertion[basic.Store, string]
 	onGet       []testkit.ReaderAssertion[basic.Store, string, basic.Item]
-	onLegacyPut []func(*testing.T, basic.Store)
+	onLegacyPut []testkit.WriterAssertion[basic.Store, basic.Item]
 	onPing      []func(*testing.T, basic.Store)
-	onPut       []func(*testing.T, basic.Store)
-	known       []string
-	unknown     []string
-	want        map[string]basic.Item
+	onPut       []testkit.WriterAssertion[basic.Store, basic.Item]
 }
 
 func newStoreConfig(opts ...StoreOption) storeConfig {

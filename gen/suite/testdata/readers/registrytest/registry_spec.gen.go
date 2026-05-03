@@ -5,6 +5,7 @@ package registrytest
 
 import (
 	"context"
+	"iter"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -28,6 +29,14 @@ func AssertRegistryContract(
 	runRegistryCount(t, factory, &cfg)
 	runRegistryList(t, factory, &cfg)
 	runRegistryLookup(t, factory, &cfg)
+
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[readers.Registry]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
 
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
@@ -126,12 +135,22 @@ func runRegistryList(t *testing.T, factory func() readers.Registry, cfg *registr
 	})
 	if len(cfg.onList) > 0 {
 		t.Run("List", func(t *testing.T) {
-			for _, fn := range cfg.onList {
+			prePopFactory := func() readers.Registry {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			sctx := testkit.StreamContext[readers.Registry, readers.Handler]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl readers.Registry) iter.Seq2[readers.Handler, error] {
+					return impl.List(t.Context())
+				},
+			}
+			for _, a := range cfg.onList {
+				a(sctx)
 			}
 		})
 	}
@@ -192,9 +211,6 @@ func runRegistryLookup(t *testing.T, factory func() readers.Registry, cfg *regis
 				Call: func(impl readers.Registry, ctx context.Context, k string) (readers.Handler, error) {
 					return impl.Lookup(ctx, k)
 				},
-				Known:   cfg.known,
-				Unknown: cfg.unknown,
-				Want:    cfg.want,
 			}
 			for _, a := range cfg.onLookup {
 				a(rctx)
@@ -228,7 +244,7 @@ func OnCount(assertions ...func(*testing.T, readers.Registry)) RegistryOption {
 }
 
 // OnList adds plug-in assertions for the List method.
-func OnList(assertions ...func(*testing.T, readers.Registry)) RegistryOption {
+func OnList(assertions ...testkit.StreamAssertion[readers.Registry, readers.Handler]) RegistryOption {
 	return func(c *registryConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
@@ -241,23 +257,10 @@ func OnLookup(assertions ...testkit.ReaderAssertion[readers.Registry, string, re
 	}
 }
 
-// Known adds a known key for Reader-shape primitives.
-func Known(keys ...string) RegistryOption {
-	return func(c *registryConfig) { c.known = append(c.known, keys...) }
-}
-
-// Unknown adds an unknown key for Reader-shape primitives.
-func Unknown(keys ...string) RegistryOption {
-	return func(c *registryConfig) { c.unknown = append(c.unknown, keys...) }
-}
-
-// Expect adds a (key, expected-value) pair for AssertReturnsForKey.
-func Expect(key string, value readers.Handler) RegistryOption {
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[readers.Registry]) RegistryOption {
 	return func(c *registryConfig) {
-		if c.want == nil {
-			c.want = make(map[string]readers.Handler)
-		}
-		c.want[key] = value
+		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
@@ -269,12 +272,10 @@ type customSubtest struct {
 type registryConfig struct {
 	prePopulate func(testing.TB, readers.Registry)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[readers.Registry]
 	onCount     []func(*testing.T, readers.Registry)
-	onList      []func(*testing.T, readers.Registry)
+	onList      []testkit.StreamAssertion[readers.Registry, readers.Handler]
 	onLookup    []testkit.ReaderAssertion[readers.Registry, string, readers.Handler]
-	known       []string
-	unknown     []string
-	want        map[string]readers.Handler
 }
 
 func newRegistryConfig(opts ...RegistryOption) registryConfig {

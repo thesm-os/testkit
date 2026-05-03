@@ -23,8 +23,12 @@ func On{{$m.Name}}(assertions ...{{$m.OnMethodAssertionType}}) {{$.InterfaceName
 	}
 }
 {{end}}{{end}}
-
-{{template "typed_options" .}}
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
+	return func(c *{{.LowerInterfaceName}}Config) {
+		c.onAll = append(c.onAll, assertions...)
+	}
+}
 
 type customSubtest struct {
 	name string
@@ -34,10 +38,10 @@ type customSubtest struct {
 type {{.LowerInterfaceName}}Config struct {
 	prePopulate func(testing.TB, {{.QualifiedType}})
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[{{.QualifiedType}}]
 {{- range .Methods}}{{if not .Skip}}
 	on{{.Name}} []{{.OnMethodAssertionType}}
 {{- end}}{{end}}
-{{- template "typed_config_fields" .}}
 }
 
 func new{{.InterfaceName}}Config(opts ...{{.InterfaceName}}Option) {{.LowerInterfaceName}}Config {
@@ -49,52 +53,3 @@ func new{{.InterfaceName}}Config(opts ...{{.InterfaceName}}Option) {{.LowerInter
 }
 {{end}}
 
-{{define "typed_options"}}
-{{- /* Emit Known/Unknown/Expect based on Reader-shaped methods' key types. */}}
-{{- /* For Phase 1: single key type, no suffix. */}}
-{{- $hasReader := false}}
-{{- $keyType := ""}}
-{{- $valType := ""}}
-{{- range .Methods}}{{if .IsReader}}
-{{- $hasReader = true}}
-{{- $keyType = .Shape.KeyType}}
-{{- $valType = .Shape.ValType}}
-{{- end}}{{end}}
-{{- if $hasReader}}
-// Known adds a known key for Reader-shape primitives.
-func Known(keys ...{{$keyType}}) {{$.InterfaceName}}Option {
-	return func(c *{{$.LowerInterfaceName}}Config) { c.known = append(c.known, keys...) }
-}
-
-// Unknown adds an unknown key for Reader-shape primitives.
-func Unknown(keys ...{{$keyType}}) {{$.InterfaceName}}Option {
-	return func(c *{{$.LowerInterfaceName}}Config) { c.unknown = append(c.unknown, keys...) }
-}
-
-// Expect adds a (key, expected-value) pair for AssertReturnsForKey.
-func Expect(key {{$keyType}}, value {{$valType}}) {{$.InterfaceName}}Option {
-	return func(c *{{$.LowerInterfaceName}}Config) {
-		if c.want == nil {
-			c.want = make(map[{{$keyType}}]{{$valType}})
-		}
-		c.want[key] = value
-	}
-}
-{{- end}}
-{{end}}
-
-{{define "typed_config_fields"}}
-{{- $hasReader := false}}
-{{- $keyType := ""}}
-{{- $valType := ""}}
-{{- range .Methods}}{{if .IsReader}}
-{{- $hasReader = true}}
-{{- $keyType = .Shape.KeyType}}
-{{- $valType = .Shape.ValType}}
-{{- end}}{{end}}
-{{- if $hasReader}}
-	known   []{{$keyType}}
-	unknown []{{$keyType}}
-	want    map[{{$keyType}}]{{$valType}}
-{{- end}}
-{{end}}

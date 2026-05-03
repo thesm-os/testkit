@@ -28,6 +28,14 @@ func AssertCacheContract(
 	runCacheLen(t, factory, &cfg)
 	runCacheSet(t, factory, &cfg)
 
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[nocontext.Cache]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
+
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
 			t.Parallel()
@@ -167,6 +175,13 @@ func OnSet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
 	}
 }
 
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[nocontext.Cache]) CacheOption {
+	return func(c *cacheConfig) {
+		c.onAll = append(c.onAll, assertions...)
+	}
+}
+
 type customSubtest struct {
 	name string
 	fn   func(*testing.T, nocontext.Cache)
@@ -175,6 +190,7 @@ type customSubtest struct {
 type cacheConfig struct {
 	prePopulate func(testing.TB, nocontext.Cache)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[nocontext.Cache]
 	onGet       []func(*testing.T, nocontext.Cache)
 	onLen       []func(*testing.T, nocontext.Cache)
 	onSet       []func(*testing.T, nocontext.Cache)

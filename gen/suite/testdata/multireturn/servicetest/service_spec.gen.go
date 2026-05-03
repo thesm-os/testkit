@@ -28,6 +28,14 @@ func AssertServiceContract(
 	runServiceReset(t, factory, &cfg)
 	runServiceStatus(t, factory, &cfg)
 
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[multireturn.Service]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
+
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
 			t.Parallel()
@@ -180,6 +188,13 @@ func OnStatus(assertions ...func(*testing.T, multireturn.Service)) ServiceOption
 	}
 }
 
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[multireturn.Service]) ServiceOption {
+	return func(c *serviceConfig) {
+		c.onAll = append(c.onAll, assertions...)
+	}
+}
+
 type customSubtest struct {
 	name string
 	fn   func(*testing.T, multireturn.Service)
@@ -188,6 +203,7 @@ type customSubtest struct {
 type serviceConfig struct {
 	prePopulate func(testing.TB, multireturn.Service)
 	custom      []customSubtest
+	onAll       []testkit.CrossMethodAssertion[multireturn.Service]
 	onReset     []func(*testing.T, multireturn.Service)
 	onStatus    []func(*testing.T, multireturn.Service)
 }

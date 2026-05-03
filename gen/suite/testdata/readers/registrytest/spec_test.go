@@ -21,22 +21,17 @@ func TestInMemoryRegistryContract(t *testing.T) {
 	}
 
 	registrytest.AssertRegistryContract(t, factory,
-		registrytest.PrePopulate(func(_ testing.TB, _ readers.Registry) {
-			// Factory already populates — PrePopulate is a no-op here.
-		}),
-		registrytest.Known("handler-1"),
-		registrytest.Unknown("nonexistent"),
-		registrytest.Expect("handler-1", readers.Handler{Name: "handler-1", Version: 1}),
-
-		// Reader plug-in primitives on Lookup.
 		registrytest.OnLookup(
-			testkit.AssertReturnsForKey[readers.Registry, string, readers.Handler](),
-			testkit.AssertReturnsSentinel[readers.Registry, string, readers.Handler](readers.ErrNotRegistered),
-			testkit.AssertConsistentReads[readers.Registry, string, readers.Handler](5),
-			testkit.AssertReaderConcurrentSafe[readers.Registry, string, readers.Handler](4, 50),
+			testkit.AssertReturnsForKey[readers.Registry, string, readers.Handler](
+				"handler-1", readers.Handler{Name: "handler-1", Version: 1},
+			),
+			testkit.AssertReturnsSentinel[readers.Registry, string, readers.Handler](
+				"nonexistent", readers.ErrNotRegistered,
+			),
+			testkit.AssertConsistentReads[readers.Registry, string, readers.Handler]("handler-1", 5),
+			testkit.AssertReaderConcurrentSafe[readers.Registry, string, readers.Handler]("handler-1", 4, 50),
 		),
 
-		// Free-form custom subtest.
 		registrytest.AssertCustom("List returns all registered handlers", func(t *testing.T, r readers.Registry) {
 			count := 0
 			for _, err := range r.List(t.Context()) {

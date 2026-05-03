@@ -29,6 +29,14 @@ func AssertProcessorContract(
 	runProcessorLegacyProcess(t, factory, &cfg)
 	runProcessorProcess(t, factory, &cfg)
 
+	for _, a := range cfg.onAll {
+		cctx := testkit.CrossContext[mixed.Processor]{
+			T:       t,
+			Factory: factory,
+		}
+		a(cctx)
+	}
+
 	for _, custom := range cfg.custom {
 		t.Run(custom.name, func(t *testing.T) {
 			t.Parallel()
@@ -104,12 +112,22 @@ func runProcessorLegacyProcess(t *testing.T, factory func() mixed.Processor, cfg
 	})
 	if len(cfg.onLegacyProcess) > 0 {
 		t.Run("LegacyProcess", func(t *testing.T) {
-			for _, fn := range cfg.onLegacyProcess {
+			prePopFactory := func() mixed.Processor {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			wctx := testkit.WriterContext[mixed.Processor, []byte]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl mixed.Processor, ctx context.Context, v []byte) error {
+					return impl.LegacyProcess(ctx, v)
+				},
+			}
+			for _, a := range cfg.onLegacyProcess {
+				a(wctx)
 			}
 		})
 	}
@@ -171,12 +189,22 @@ func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *proc
 	})
 	if len(cfg.onProcess) > 0 {
 		t.Run("Process", func(t *testing.T) {
-			for _, fn := range cfg.onProcess {
+			prePopFactory := func() mixed.Processor {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t, impl)
 				}
-				fn(t, impl)
+				return impl
+			}
+			wctx := testkit.WriterContext[mixed.Processor, []byte]{
+				T:       t,
+				Factory: prePopFactory,
+				Call: func(impl mixed.Processor, ctx context.Context, v []byte) error {
+					return impl.Process(ctx, v)
+				},
+			}
+			for _, a := range cfg.onProcess {
+				a(wctx)
 			}
 		})
 	}
@@ -207,16 +235,23 @@ func OnDescribe(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption
 }
 
 // OnLegacyProcess adds plug-in assertions for the LegacyProcess method.
-func OnLegacyProcess(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+func OnLegacyProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onLegacyProcess = append(c.onLegacyProcess, assertions...)
 	}
 }
 
 // OnProcess adds plug-in assertions for the Process method.
-func OnProcess(assertions ...func(*testing.T, mixed.Processor)) ProcessorOption {
+func OnProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onProcess = append(c.onProcess, assertions...)
+	}
+}
+
+// OnAll adds cross-method assertions that span multiple methods.
+func OnAll(assertions ...testkit.CrossMethodAssertion[mixed.Processor]) ProcessorOption {
+	return func(c *processorConfig) {
+		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
@@ -228,9 +263,10 @@ type customSubtest struct {
 type processorConfig struct {
 	prePopulate     func(testing.TB, mixed.Processor)
 	custom          []customSubtest
+	onAll           []testkit.CrossMethodAssertion[mixed.Processor]
 	onDescribe      []func(*testing.T, mixed.Processor)
-	onLegacyProcess []func(*testing.T, mixed.Processor)
-	onProcess       []func(*testing.T, mixed.Processor)
+	onLegacyProcess []testkit.WriterAssertion[mixed.Processor, []byte]
+	onProcess       []testkit.WriterAssertion[mixed.Processor, []byte]
 }
 
 func newProcessorConfig(opts ...ProcessorOption) processorConfig {

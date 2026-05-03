@@ -117,6 +117,11 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 	switch m.Shape.Shape {
 	case ShapeReader:
 		return "testkit.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	case ShapeWriter:
+		return "testkit.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case ShapeStreamReader:
+		elemType := m.Shape.IterInfo.ElemType
+		return "testkit.StreamAssertion[" + m.QualifiedType + ", " + elemType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
 	}
