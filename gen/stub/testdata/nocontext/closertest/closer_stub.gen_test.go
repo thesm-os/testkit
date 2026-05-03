@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/nocontext/closertest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestCloserStub(t *testing.T) {
@@ -173,7 +175,7 @@ func TestCloserStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := closertest.NewCloserStub(t, closertest.CloserStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := closertest.NewCloserStub(t, closertest.CloserStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -286,7 +288,7 @@ func TestCloserStub(t *testing.T) {
 
 	t.Run("Close FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := closertest.NewCloserStub(t, closertest.CloserStubWithClock(clk))
 		s.OnClose.FaultsFor(5*time.Second, errTest)
 

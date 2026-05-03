@@ -254,21 +254,21 @@ func (m *SpecMethodData) IsPredicate() bool { return m.Shape.Shape == gen.ShapeP
 func (m *SpecMethodData) OnMethodAssertionType() string {
 	switch m.Shape.Shape {
 	case gen.ShapeReader:
-		return "testkit.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "suite.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeWriter:
-		return "testkit.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeDeleter:
-		return "testkit.DeleterAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
+		return "suite.DeleterAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
 	case gen.ShapeStreamReader:
-		return "testkit.StreamAssertion[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+		return "suite.StreamAssertion[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
 	case gen.ShapeAggregator:
-		return "testkit.AggregatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.AggregatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLifecycle:
-		return "testkit.LifecycleAssertion[" + m.QualifiedType + "]"
+		return "suite.LifecycleAssertion[" + m.QualifiedType + "]"
 	case gen.ShapePure:
-		return "testkit.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
-		return "testkit.PredicateAssertion[" + m.QualifiedType + "]"
+		return "suite.PredicateAssertion[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
 	}
@@ -280,21 +280,21 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 func (m *SpecMethodData) OnMethodBenchType() string {
 	switch m.Shape.Shape {
 	case gen.ShapeReader:
-		return "testkit.BenchReader[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "bench.Reader[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeWriter:
-		return "testkit.BenchWriter[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Writer[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeDeleter:
-		return "testkit.BenchDeleter[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
+		return "bench.Deleter[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
 	case gen.ShapeStreamReader:
-		return "testkit.BenchStream[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+		return "bench.Stream[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
 	case gen.ShapeAggregator:
-		return "testkit.BenchAggregator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Aggregator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLifecycle:
-		return "testkit.BenchLifecycle[" + m.QualifiedType + "]"
+		return "bench.Lifecycle[" + m.QualifiedType + "]"
 	case gen.ShapePure:
-		return "testkit.BenchPure[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Pure[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
-		return "testkit.BenchPredicate[" + m.QualifiedType + "]"
+		return "bench.Predicate[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.B, " + m.QualifiedType + ")"
 	}

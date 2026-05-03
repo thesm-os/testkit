@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/readers"
 	"go.thesmos.sh/testkit/gen/suite/testdata/readers/registrytest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryRegistryContract(t *testing.T) {
@@ -22,14 +23,14 @@ func TestInMemoryRegistryContract(t *testing.T) {
 
 	registrytest.AssertRegistryContract(t, factory,
 		registrytest.RegistryOnLookup(
-			testkit.AssertReturnsForKey[readers.Registry, string, readers.Handler](
+			suite.AssertReturnsForKey[readers.Registry, string, readers.Handler](
 				"handler-1", readers.Handler{Name: "handler-1", Version: 1},
 			),
-			testkit.AssertReturnsSentinel[readers.Registry, string, readers.Handler](
+			suite.AssertReturnsSentinel[readers.Registry, string, readers.Handler](
 				"nonexistent", readers.ErrNotRegistered,
 			),
-			testkit.AssertConsistentReads[readers.Registry, string, readers.Handler]("handler-1", 5),
-			testkit.AssertReaderConcurrentSafe[readers.Registry, string, readers.Handler]("handler-1", 4, 50),
+			suite.AssertConsistentReads[readers.Registry, string, readers.Handler]("handler-1", 5),
+			suite.AssertReaderConcurrentSafe[readers.Registry, string, readers.Handler]("handler-1", 4, 50),
 		),
 
 		registrytest.RegistryCustom("List returns all registered handlers", func(t *testing.T, r readers.Registry) {

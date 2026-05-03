@@ -15,9 +15,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			rctx := testkit.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+			rctx := suite.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				T: t,
-				ReaderBindings: testkit.ReaderBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				ReaderBindings: bindings.ReaderBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx, k)
@@ -39,9 +39,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			wctx := suite.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				WriterBindings: bindings.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
 						return impl.{{.Name}}(ctx, v)
@@ -63,9 +63,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			sctx := testkit.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+			sctx := suite.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
 				T: t,
-				StreamBindings: testkit.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+				StreamBindings: bindings.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
@@ -95,9 +95,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			dctx := testkit.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+			dctx := suite.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
 				T: t,
-				DeleterBindings: testkit.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+				DeleterBindings: bindings.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
 						return impl.{{.Name}}(ctx, k)
@@ -119,9 +119,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			actx := testkit.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			actx := suite.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
 				T: t,
-				AggregatorBindings: testkit.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				AggregatorBindings: bindings.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx)
@@ -143,9 +143,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[{{.QualifiedType}}]{
+			lctx := suite.LifecycleContext[{{.QualifiedType}}]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[{{.QualifiedType}}]{
+				LifecycleBindings: bindings.LifecycleBindings[{{.QualifiedType}}]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
 						return impl.{{.Name}}(ctx)
@@ -167,9 +167,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			pctx := suite.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
 				T: t,
-				PureBindings: testkit.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				PureBindings: bindings.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
 					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
 						return impl.{{.Name}}({{.PureCallArgs}})
@@ -191,9 +191,9 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 				}
 				return impl
 			}
-			pctx := testkit.PredicateContext[{{.QualifiedType}}]{
+			pctx := suite.PredicateContext[{{.QualifiedType}}]{
 				T: t,
-				PredicateBindings: testkit.PredicateBindings[{{.QualifiedType}}]{
+				PredicateBindings: bindings.PredicateBindings[{{.QualifiedType}}]{
 					Factory: prePopFactory,
 					Call: func(impl {{.QualifiedType}}) bool {
 						return impl.{{.Name}}({{.PureCallArgs}})

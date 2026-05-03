@@ -7,9 +7,9 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bench"
+	"go.thesmos.sh/testkit/gen/bench/testdata/allshapes"
 	"go.thesmos.sh/testkit/gen/bench/testdata/allshapes/servicetest"
-	"go.thesmos.sh/testkit/gen/suite/testdata/allshapes"
 )
 
 func BenchmarkAllShapesContract(b *testing.B) {
@@ -26,45 +26,45 @@ func BenchmarkAllShapesContract(b *testing.B) {
 
 		// Reader: Get
 		servicetest.ServiceBenchOnGet(
-			testkit.BenchReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
-			testkit.BenchReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
+			bench.ReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
+			bench.ReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
 		),
 
 		// Writer: Put
 		servicetest.ServiceBenchOnPut(
-			testkit.BenchWriterHotPath[allshapes.Service, allshapes.Item](
+			bench.WriterHotPath[allshapes.Service, allshapes.Item](
 				allshapes.Item{ID: "bench-w", Name: "bench"},
 			),
 		),
 
 		// Deleter: Delete
 		servicetest.ServiceBenchOnDelete(
-			testkit.BenchDeleterHotPath[allshapes.Service, string]("seed-1"),
+			bench.DeleterHotPath[allshapes.Service, string]("seed-1"),
 		),
 
 		// Aggregator: Count — default hot-path covers measurement; gate allocs.
 		servicetest.ServiceBenchOnCount(
-			testkit.BenchAggregatorAllocsWithin[allshapes.Service, int](0),
+			bench.AggregatorAllocsWithin[allshapes.Service, int](0),
 		),
 
 		// Lifecycle: Close — default hot-path covers measurement; gate allocs.
 		servicetest.ServiceBenchOnClose(
-			testkit.BenchLifecycleAllocsWithin[allshapes.Service](0),
+			bench.LifecycleAllocsWithin[allshapes.Service](0),
 		),
 
 		// Pure: Describe — default hot-path covers measurement; gate allocs.
 		servicetest.ServiceBenchOnDescribe(
-			testkit.BenchPureAllocsWithin[allshapes.Service, string](0),
+			bench.PureAllocsWithin[allshapes.Service, string](0),
 		),
 
 		// Predicate: IsEmpty — default hot-path covers measurement; gate allocs.
 		servicetest.ServiceBenchOnIsEmpty(
-			testkit.BenchPredicateAllocsWithin[allshapes.Service](0),
+			bench.PredicateAllocsWithin[allshapes.Service](0),
 		),
 
 		// Stream: List
 		servicetest.ServiceBenchOnList(
-			testkit.BenchStreamHotPath[allshapes.Service, allshapes.Item](),
+			bench.StreamHotPath[allshapes.Service, allshapes.Item](),
 		),
 	)
 }

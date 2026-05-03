@@ -8,8 +8,10 @@ import (
 	"iter"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/iterators"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -38,12 +40,12 @@ type ScannerScanCall struct {
 
 // ScannerKeysStub controls behavior and records calls for Keys.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ScannerKeysStub struct {
-	*testkit.MethodStub[ScannerKeysCall]
+	*stub.MethodStub[ScannerKeysCall]
 	fn       func(context.Context) iter.Seq[string]
 	fallback *scannerKeysReturn
 }
@@ -80,12 +82,12 @@ func (s *ScannerKeysStub) Yields(items ...string) *ScannerKeysStub {
 
 // ScannerScanStub controls behavior and records calls for Scan.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ScannerScanStub struct {
-	*testkit.MethodStub[ScannerScanCall]
+	*stub.MethodStub[ScannerScanCall]
 	fn       func(context.Context, string) iter.Seq2[iterators.Item, error]
 	fallback *scannerScanReturn
 }
@@ -155,20 +157,20 @@ func ScannerStubDelegateTo(impl iterators.Scanner) ScannerStubOption {
 	}
 }
 
-// ScannerStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// ScannerStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func ScannerStubWithClock(clk testkit.Clock) ScannerStubOption {
+func ScannerStubWithClock(clk clock.Clock) ScannerStubOption {
 	return func(s *ScannerStub) {
 		s.OnKeys.WithClock(clk)
 		s.OnScan.WithClock(clk)
 	}
 }
 
-// ScannerStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func ScannerStubWithRandSource(src testkit.RandSource) ScannerStubOption {
+// ScannerStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func ScannerStubWithRandSource(src rand.Source) ScannerStubOption {
 	return func(s *ScannerStub) {
 		s.OnKeys.WithRandSource(src)
 		s.OnScan.WithRandSource(src)
@@ -206,8 +208,8 @@ type ScannerStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewScannerStub(tb testing.TB, opts ...ScannerStubOption) *ScannerStub {
 	s := &ScannerStub{
-		OnKeys: &ScannerKeysStub{MethodStub: testkit.NewMethodStub[ScannerKeysCall](tb, "Scanner.Keys")},
-		OnScan: &ScannerScanStub{MethodStub: testkit.NewMethodStub[ScannerScanCall](tb, "Scanner.Scan")},
+		OnKeys: &ScannerKeysStub{MethodStub: stub.NewMethodStub[ScannerKeysCall](tb, "Scanner.Keys")},
+		OnScan: &ScannerScanStub{MethodStub: stub.NewMethodStub[ScannerScanCall](tb, "Scanner.Scan")},
 	}
 	for _, opt := range opts {
 		opt(s)

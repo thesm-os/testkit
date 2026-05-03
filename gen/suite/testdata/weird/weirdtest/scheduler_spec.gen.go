@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/weird"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertSchedulerContract runs conformance assertions against
@@ -36,9 +38,9 @@ func AssertSchedulerContract(
 	runSchedulerTasks(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[weird.Scheduler]{
+		cctx := suite.CrossContext[weird.Scheduler]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[weird.Scheduler]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[weird.Scheduler]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -100,9 +102,9 @@ func runSchedulerCancel(t *testing.T, factory func() weird.Scheduler, cfg *sched
 				}
 				return impl
 			}
-			dctx := testkit.DeleterContext[weird.Scheduler, string]{
+			dctx := suite.DeleterContext[weird.Scheduler, string]{
 				T: t,
-				DeleterBindings: testkit.DeleterBindings[weird.Scheduler, string]{
+				DeleterBindings: bindings.DeleterBindings[weird.Scheduler, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl weird.Scheduler, k string) error {
 						return impl.Cancel(ctx, k)
@@ -157,9 +159,9 @@ func runSchedulerFlush(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[weird.Scheduler]{
+			lctx := suite.LifecycleContext[weird.Scheduler]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[weird.Scheduler]{
+				LifecycleBindings: bindings.LifecycleBindings[weird.Scheduler]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl weird.Scheduler) error {
 						return impl.Flush(ctx)
@@ -190,9 +192,9 @@ func runSchedulerName(t *testing.T, factory func() weird.Scheduler, cfg *schedul
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[weird.Scheduler, string]{
+			pctx := suite.PureContext[weird.Scheduler, string]{
 				T: t,
-				PureBindings: testkit.PureBindings[weird.Scheduler, string]{
+				PureBindings: bindings.PureBindings[weird.Scheduler, string]{
 					Factory: prePopFactory,
 					Call: func(impl weird.Scheduler) string {
 						return impl.Name()
@@ -247,9 +249,9 @@ func runSchedulerRunning(t *testing.T, factory func() weird.Scheduler, cfg *sche
 				}
 				return impl
 			}
-			actx := testkit.AggregatorContext[weird.Scheduler, int]{
+			actx := suite.AggregatorContext[weird.Scheduler, int]{
 				T: t,
-				AggregatorBindings: testkit.AggregatorBindings[weird.Scheduler, int]{
+				AggregatorBindings: bindings.AggregatorBindings[weird.Scheduler, int]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl weird.Scheduler) (int, error) {
 						return impl.Running(ctx)
@@ -357,9 +359,9 @@ func runSchedulerStatus(t *testing.T, factory func() weird.Scheduler, cfg *sched
 				}
 				return impl
 			}
-			rctx := testkit.ReaderContext[weird.Scheduler, string, weird.TaskStatus]{
+			rctx := suite.ReaderContext[weird.Scheduler, string, weird.TaskStatus]{
 				T: t,
-				ReaderBindings: testkit.ReaderBindings[weird.Scheduler, string, weird.TaskStatus]{
+				ReaderBindings: bindings.ReaderBindings[weird.Scheduler, string, weird.TaskStatus]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl weird.Scheduler, k string) (weird.TaskStatus, error) {
 						return impl.Status(ctx, k)
@@ -424,9 +426,9 @@ func runSchedulerTasks(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 				}
 				return impl
 			}
-			sctx := testkit.StreamContext[weird.Scheduler, weird.TaskStatus]{
+			sctx := suite.StreamContext[weird.Scheduler, weird.TaskStatus]{
 				T: t,
-				StreamBindings: testkit.StreamBindings[weird.Scheduler, weird.TaskStatus]{
+				StreamBindings: bindings.StreamBindings[weird.Scheduler, weird.TaskStatus]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl weird.Scheduler) iter.Seq2[weird.TaskStatus, error] {
 						return impl.Tasks(ctx)
@@ -458,28 +460,28 @@ func SchedulerCustom(name string, fn func(*testing.T, weird.Scheduler)) Schedule
 }
 
 // SchedulerOnCancel adds plug-in assertions for the Cancel method.
-func SchedulerOnCancel(assertions ...testkit.DeleterAssertion[weird.Scheduler, string]) SchedulerOption {
+func SchedulerOnCancel(assertions ...suite.DeleterAssertion[weird.Scheduler, string]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onCancel = append(c.onCancel, assertions...)
 	}
 }
 
 // SchedulerOnFlush adds plug-in assertions for the Flush method.
-func SchedulerOnFlush(assertions ...testkit.LifecycleAssertion[weird.Scheduler]) SchedulerOption {
+func SchedulerOnFlush(assertions ...suite.LifecycleAssertion[weird.Scheduler]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onFlush = append(c.onFlush, assertions...)
 	}
 }
 
 // SchedulerOnName adds plug-in assertions for the Name method.
-func SchedulerOnName(assertions ...testkit.PureAssertion[weird.Scheduler, string]) SchedulerOption {
+func SchedulerOnName(assertions ...suite.PureAssertion[weird.Scheduler, string]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onName = append(c.onName, assertions...)
 	}
 }
 
 // SchedulerOnRunning adds plug-in assertions for the Running method.
-func SchedulerOnRunning(assertions ...testkit.AggregatorAssertion[weird.Scheduler, int]) SchedulerOption {
+func SchedulerOnRunning(assertions ...suite.AggregatorAssertion[weird.Scheduler, int]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onRunning = append(c.onRunning, assertions...)
 	}
@@ -493,21 +495,21 @@ func SchedulerOnSchedule(assertions ...func(*testing.T, weird.Scheduler)) Schedu
 }
 
 // SchedulerOnStatus adds plug-in assertions for the Status method.
-func SchedulerOnStatus(assertions ...testkit.ReaderAssertion[weird.Scheduler, string, weird.TaskStatus]) SchedulerOption {
+func SchedulerOnStatus(assertions ...suite.ReaderAssertion[weird.Scheduler, string, weird.TaskStatus]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onStatus = append(c.onStatus, assertions...)
 	}
 }
 
 // SchedulerOnTasks adds plug-in assertions for the Tasks method.
-func SchedulerOnTasks(assertions ...testkit.StreamAssertion[weird.Scheduler, weird.TaskStatus]) SchedulerOption {
+func SchedulerOnTasks(assertions ...suite.StreamAssertion[weird.Scheduler, weird.TaskStatus]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onTasks = append(c.onTasks, assertions...)
 	}
 }
 
 // SchedulerOnAll adds cross-method assertions that span multiple methods.
-func SchedulerOnAll(assertions ...testkit.CrossMethodAssertion[weird.Scheduler]) SchedulerOption {
+func SchedulerOnAll(assertions ...suite.CrossMethodAssertion[weird.Scheduler]) SchedulerOption {
 	return func(c *schedulerConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -521,14 +523,14 @@ type schedulerCustomSubtest struct {
 type schedulerConfig struct {
 	prePopulate func(context.Context, weird.Scheduler)
 	custom      []schedulerCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[weird.Scheduler]
-	onCancel    []testkit.DeleterAssertion[weird.Scheduler, string]
-	onFlush     []testkit.LifecycleAssertion[weird.Scheduler]
-	onName      []testkit.PureAssertion[weird.Scheduler, string]
-	onRunning   []testkit.AggregatorAssertion[weird.Scheduler, int]
+	onAll       []suite.CrossMethodAssertion[weird.Scheduler]
+	onCancel    []suite.DeleterAssertion[weird.Scheduler, string]
+	onFlush     []suite.LifecycleAssertion[weird.Scheduler]
+	onName      []suite.PureAssertion[weird.Scheduler, string]
+	onRunning   []suite.AggregatorAssertion[weird.Scheduler, int]
 	onSchedule  []func(*testing.T, weird.Scheduler)
-	onStatus    []testkit.ReaderAssertion[weird.Scheduler, string, weird.TaskStatus]
-	onTasks     []testkit.StreamAssertion[weird.Scheduler, weird.TaskStatus]
+	onStatus    []suite.ReaderAssertion[weird.Scheduler, string, weird.TaskStatus]
+	onTasks     []suite.StreamAssertion[weird.Scheduler, weird.TaskStatus]
 }
 
 func newSchedulerConfig(opts ...SchedulerOption) schedulerConfig {

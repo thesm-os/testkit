@@ -24,7 +24,7 @@ func {{$.InterfaceName}}On{{$m.Name}}(assertions ...{{$m.OnMethodAssertionType}}
 }
 {{end}}{{end}}
 // {{.InterfaceName}}OnAll adds cross-method assertions that span multiple methods.
-func {{.InterfaceName}}OnAll(assertions ...testkit.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
+func {{.InterfaceName}}OnAll(assertions ...suite.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
 	return func(c *{{.LowerInterfaceName}}Config) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -38,7 +38,7 @@ type {{.LowerInterfaceName}}CustomSubtest struct {
 type {{.LowerInterfaceName}}Config struct {
 	prePopulate func(context.Context, {{.QualifiedType}})
 	custom      []{{.LowerInterfaceName}}CustomSubtest
-	onAll       []testkit.CrossMethodAssertion[{{.QualifiedType}}]
+	onAll       []suite.CrossMethodAssertion[{{.QualifiedType}}]
 {{- range .Methods}}{{if not .Skip}}
 	on{{.Name}} []{{.OnMethodAssertionType}}
 {{- end}}{{end}}

@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/interfaces/processortest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestProcessorStub(t *testing.T) {
@@ -225,7 +227,7 @@ func TestProcessorStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := processortest.NewProcessorStub(t, processortest.ProcessorStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := processortest.NewProcessorStub(t, processortest.ProcessorStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -340,7 +342,7 @@ func TestProcessorStub(t *testing.T) {
 
 	t.Run("ReadFrom Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := processortest.NewProcessorStub(t, processortest.ProcessorStubWithClock(clk))
 		s.OnReadFrom.Latency(5 * time.Second)
 
@@ -360,7 +362,7 @@ func TestProcessorStub(t *testing.T) {
 
 	t.Run("ReadFrom Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := processortest.NewProcessorStub(t, processortest.ProcessorStubWithClock(clk))
 		s.OnReadFrom.Latency(5 * time.Second)
 
@@ -381,7 +383,7 @@ func TestProcessorStub(t *testing.T) {
 
 	t.Run("ReadFrom Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := processortest.NewProcessorStub(t)
 		inner.OnReadFrom.Returns(0, nil)
 		inner.OnWriteTo.Returns(nil)
@@ -406,7 +408,7 @@ func TestProcessorStub(t *testing.T) {
 
 	t.Run("ReadFrom FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := processortest.NewProcessorStub(t, processortest.ProcessorStubWithClock(clk))
 		s.OnReadFrom.FaultsFor(5*time.Second, errTest)
 

@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/nocontext"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertCacheContract runs conformance assertions against
@@ -31,9 +33,9 @@ func AssertCacheContract(
 	runCacheSet(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[nocontext.Cache]{
+		cctx := suite.CrossContext[nocontext.Cache]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[nocontext.Cache]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[nocontext.Cache]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -107,9 +109,9 @@ func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[nocontext.Cache, int]{
+			pctx := suite.PureContext[nocontext.Cache, int]{
 				T: t,
-				PureBindings: testkit.PureBindings[nocontext.Cache, int]{
+				PureBindings: bindings.PureBindings[nocontext.Cache, int]{
 					Factory: prePopFactory,
 					Call: func(impl nocontext.Cache) int {
 						return impl.Len()
@@ -176,7 +178,7 @@ func CacheOnGet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
 }
 
 // CacheOnLen adds plug-in assertions for the Len method.
-func CacheOnLen(assertions ...testkit.PureAssertion[nocontext.Cache, int]) CacheOption {
+func CacheOnLen(assertions ...suite.PureAssertion[nocontext.Cache, int]) CacheOption {
 	return func(c *cacheConfig) {
 		c.onLen = append(c.onLen, assertions...)
 	}
@@ -190,7 +192,7 @@ func CacheOnSet(assertions ...func(*testing.T, nocontext.Cache)) CacheOption {
 }
 
 // CacheOnAll adds cross-method assertions that span multiple methods.
-func CacheOnAll(assertions ...testkit.CrossMethodAssertion[nocontext.Cache]) CacheOption {
+func CacheOnAll(assertions ...suite.CrossMethodAssertion[nocontext.Cache]) CacheOption {
 	return func(c *cacheConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -204,9 +206,9 @@ type cacheCustomSubtest struct {
 type cacheConfig struct {
 	prePopulate func(context.Context, nocontext.Cache)
 	custom      []cacheCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[nocontext.Cache]
+	onAll       []suite.CrossMethodAssertion[nocontext.Cache]
 	onGet       []func(*testing.T, nocontext.Cache)
-	onLen       []testkit.PureAssertion[nocontext.Cache, int]
+	onLen       []suite.PureAssertion[nocontext.Cache, int]
 	onSet       []func(*testing.T, nocontext.Cache)
 }
 

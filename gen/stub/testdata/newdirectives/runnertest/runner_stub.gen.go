@@ -8,7 +8,10 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/newdirectives"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -48,12 +51,12 @@ type RunnerOpenCall struct {
 
 // RunnerAppendStub controls behavior and records calls for Append.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type RunnerAppendStub struct {
-	*testkit.MethodStub[RunnerAppendCall]
+	*stub.MethodStub[RunnerAppendCall]
 	fn       func(context.Context, newdirectives.AppendRequest) (newdirectives.AppendResult, error)
 	fallback *runnerAppendReturn
 }
@@ -109,12 +112,12 @@ func (s *RunnerAppendStub) FaultForOtherPartitions(key string, err error, n int)
 
 // RunnerCloseStub controls behavior and records calls for Close.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type RunnerCloseStub struct {
-	*testkit.MethodStub[RunnerCloseCall]
+	*stub.MethodStub[RunnerCloseCall]
 	fn       func(context.Context, string) error
 	fallback *runnerCloseReturn
 }
@@ -137,12 +140,12 @@ func (s *RunnerCloseStub) Func(fn func(context.Context, string) error) *RunnerCl
 
 // RunnerOpenStub controls behavior and records calls for Open.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type RunnerOpenStub struct {
-	*testkit.MethodStub[RunnerOpenCall]
+	*stub.MethodStub[RunnerOpenCall]
 	fn       func(context.Context, string) error
 	fallback *runnerOpenReturn
 }
@@ -183,10 +186,10 @@ func RunnerStubDelegateTo(impl newdirectives.Runner) RunnerStubOption {
 	}
 }
 
-// RunnerStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// RunnerStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func RunnerStubWithClock(clk testkit.Clock) RunnerStubOption {
+func RunnerStubWithClock(clk clock.Clock) RunnerStubOption {
 	return func(s *RunnerStub) {
 		s.OnAppend.WithClock(clk)
 		s.OnClose.WithClock(clk)
@@ -194,10 +197,10 @@ func RunnerStubWithClock(clk testkit.Clock) RunnerStubOption {
 	}
 }
 
-// RunnerStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func RunnerStubWithRandSource(src testkit.RandSource) RunnerStubOption {
+// RunnerStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func RunnerStubWithRandSource(src rand.Source) RunnerStubOption {
 	return func(s *RunnerStub) {
 		s.OnAppend.WithRandSource(src)
 		s.OnClose.WithRandSource(src)
@@ -236,7 +239,7 @@ type RunnerStub struct {
 	OnAppend *RunnerAppendStub
 	OnClose  *RunnerCloseStub
 	OnOpen   *RunnerOpenStub
-	order    *testkit.OrderTracker
+	order    *stub.OrderTracker
 	strict   bool
 }
 
@@ -244,9 +247,9 @@ type RunnerStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewRunnerStub(tb testing.TB, opts ...RunnerStubOption) *RunnerStub {
 	s := &RunnerStub{
-		OnAppend: &RunnerAppendStub{MethodStub: testkit.NewMethodStub[RunnerAppendCall](tb, "Runner.Append")},
-		OnClose:  &RunnerCloseStub{MethodStub: testkit.NewMethodStub[RunnerCloseCall](tb, "Runner.Close")},
-		OnOpen:   &RunnerOpenStub{MethodStub: testkit.NewMethodStub[RunnerOpenCall](tb, "Runner.Open")},
+		OnAppend: &RunnerAppendStub{MethodStub: stub.NewMethodStub[RunnerAppendCall](tb, "Runner.Append")},
+		OnClose:  &RunnerCloseStub{MethodStub: stub.NewMethodStub[RunnerCloseCall](tb, "Runner.Close")},
+		OnOpen:   &RunnerOpenStub{MethodStub: stub.NewMethodStub[RunnerOpenCall](tb, "Runner.Open")},
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -256,7 +259,7 @@ func NewRunnerStub(tb testing.TB, opts ...RunnerStubOption) *RunnerStub {
 		s.OnClose.Strict()
 		s.OnOpen.Strict()
 	}
-	s.order = testkit.NewOrderTracker(tb, s.strict)
+	s.order = stub.NewOrderTracker(tb, s.strict)
 	if tb != nil {
 		tb.Cleanup(func() {
 			s.OnAppend.Verify()

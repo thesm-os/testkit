@@ -26,6 +26,8 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 	tracker := gen.NewImportTracker(outputImportPath)
 	tracker.AddPath("testing")
 	tracker.AddPath("go.thesmos.sh/testkit")
+	tracker.AddPath("go.thesmos.sh/testkit/suite")
+	tracker.AddPath("go.thesmos.sh/testkit/bindings")
 
 	iface, err := pkg.Interface(typeName)
 	if err != nil {

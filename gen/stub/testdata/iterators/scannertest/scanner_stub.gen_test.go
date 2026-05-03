@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/iterators"
 	"go.thesmos.sh/testkit/gen/stub/testdata/iterators/scannertest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestScannerStub(t *testing.T) {
@@ -228,7 +230,7 @@ func TestScannerStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := scannertest.NewScannerStub(t, scannertest.ScannerStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := scannertest.NewScannerStub(t, scannertest.ScannerStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -341,7 +343,7 @@ func TestScannerStub(t *testing.T) {
 
 	t.Run("Keys Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := scannertest.NewScannerStub(t, scannertest.ScannerStubWithClock(clk))
 		s.OnKeys.Latency(5 * time.Second)
 
@@ -361,7 +363,7 @@ func TestScannerStub(t *testing.T) {
 
 	t.Run("Keys Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := scannertest.NewScannerStub(t, scannertest.ScannerStubWithClock(clk))
 		s.OnKeys.Latency(5 * time.Second)
 
@@ -382,7 +384,7 @@ func TestScannerStub(t *testing.T) {
 
 	t.Run("Keys Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := scannertest.NewScannerStub(t)
 		inner.OnKeys.Returns(nil)
 		inner.OnScan.Returns(nil)

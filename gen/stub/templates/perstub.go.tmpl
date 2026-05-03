@@ -3,12 +3,12 @@
 {{range $m := .Methods}}{{if not $m.Skip}}
 // {{$m.StubType}} controls behavior and records calls for {{$m.Name}}.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type {{$m.StubType}} struct {
-	*testkit.MethodStub[{{$m.CallType}}]
+	*stub.MethodStub[{{$m.CallType}}]
 	fn       {{$m.FuncTypeStr}}
 {{- if $m.HasResults}}
 	fallback *{{$m.ReturnType}}

@@ -8,8 +8,9 @@ import (
 	"iter"
 	"testing"
 
-	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/gen/suite/testdata/allshapes"
+	"go.thesmos.sh/testkit/bench"
+	"go.thesmos.sh/testkit/bindings"
+	"go.thesmos.sh/testkit/gen/bench/testdata/allshapes"
 )
 
 // BenchmarkServiceContract runs performance benchmarks against
@@ -64,9 +65,9 @@ func benchServiceClose(b *testing.B, factory func() allshapes.Service, cfg *serv
 				}
 				return impl
 			}
-			lctx := testkit.BenchLifecycleContext[allshapes.Service]{
+			lctx := bench.LifecycleContext[allshapes.Service]{
 				B: b,
-				LifecycleBindings: testkit.LifecycleBindings[allshapes.Service]{
+				LifecycleBindings: bindings.LifecycleBindings[allshapes.Service]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) error {
 						return impl.Close(ctx)
@@ -102,9 +103,9 @@ func benchServiceCount(b *testing.B, factory func() allshapes.Service, cfg *serv
 				}
 				return impl
 			}
-			actx := testkit.BenchAggregatorContext[allshapes.Service, int]{
+			actx := bench.AggregatorContext[allshapes.Service, int]{
 				B: b,
-				AggregatorBindings: testkit.AggregatorBindings[allshapes.Service, int]{
+				AggregatorBindings: bindings.AggregatorBindings[allshapes.Service, int]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) (int, error) {
 						return impl.Count(ctx)
@@ -140,9 +141,9 @@ func benchServiceDelete(b *testing.B, factory func() allshapes.Service, cfg *ser
 				}
 				return impl
 			}
-			dctx := testkit.BenchDeleterContext[allshapes.Service, string]{
+			dctx := bench.DeleterContext[allshapes.Service, string]{
 				B: b,
-				DeleterBindings: testkit.DeleterBindings[allshapes.Service, string]{
+				DeleterBindings: bindings.DeleterBindings[allshapes.Service, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, k string) error {
 						return impl.Delete(ctx, k)
@@ -178,9 +179,9 @@ func benchServiceDescribe(b *testing.B, factory func() allshapes.Service, cfg *s
 				}
 				return impl
 			}
-			pctx := testkit.BenchPureContext[allshapes.Service, string]{
+			pctx := bench.PureContext[allshapes.Service, string]{
 				B: b,
-				PureBindings: testkit.PureBindings[allshapes.Service, string]{
+				PureBindings: bindings.PureBindings[allshapes.Service, string]{
 					Factory: prePopFactory,
 					Call: func(impl allshapes.Service) string {
 						return impl.Describe()
@@ -216,9 +217,9 @@ func benchServiceGet(b *testing.B, factory func() allshapes.Service, cfg *servic
 				}
 				return impl
 			}
-			rctx := testkit.BenchReaderContext[allshapes.Service, string, allshapes.Item]{
+			rctx := bench.ReaderContext[allshapes.Service, string, allshapes.Item]{
 				B: b,
-				ReaderBindings: testkit.ReaderBindings[allshapes.Service, string, allshapes.Item]{
+				ReaderBindings: bindings.ReaderBindings[allshapes.Service, string, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, k string) (allshapes.Item, error) {
 						return impl.Get(ctx, k)
@@ -254,9 +255,9 @@ func benchServiceIsEmpty(b *testing.B, factory func() allshapes.Service, cfg *se
 				}
 				return impl
 			}
-			pctx := testkit.BenchPredicateContext[allshapes.Service]{
+			pctx := bench.PredicateContext[allshapes.Service]{
 				B: b,
-				PredicateBindings: testkit.PredicateBindings[allshapes.Service]{
+				PredicateBindings: bindings.PredicateBindings[allshapes.Service]{
 					Factory: prePopFactory,
 					Call: func(impl allshapes.Service) bool {
 						return impl.IsEmpty()
@@ -292,9 +293,9 @@ func benchServiceList(b *testing.B, factory func() allshapes.Service, cfg *servi
 				}
 				return impl
 			}
-			sctx := testkit.BenchStreamContext[allshapes.Service, allshapes.Item]{
+			sctx := bench.StreamContext[allshapes.Service, allshapes.Item]{
 				B: b,
-				StreamBindings: testkit.StreamBindings[allshapes.Service, allshapes.Item]{
+				StreamBindings: bindings.StreamBindings[allshapes.Service, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) iter.Seq2[allshapes.Item, error] {
 						return impl.List(ctx)
@@ -330,9 +331,9 @@ func benchServicePut(b *testing.B, factory func() allshapes.Service, cfg *servic
 				}
 				return impl
 			}
-			wctx := testkit.BenchWriterContext[allshapes.Service, allshapes.Item]{
+			wctx := bench.WriterContext[allshapes.Service, allshapes.Item]{
 				B: b,
-				WriterBindings: testkit.WriterBindings[allshapes.Service, allshapes.Item]{
+				WriterBindings: bindings.WriterBindings[allshapes.Service, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, v allshapes.Item) error {
 						return impl.Put(ctx, v)
@@ -362,56 +363,56 @@ func ServiceBenchCustom(name string, fn func(*testing.B, allshapes.Service)) Ser
 }
 
 // ServiceBenchOnClose adds plug-in bench primitives for the Close method.
-func ServiceBenchOnClose(assertions ...testkit.BenchLifecycle[allshapes.Service]) ServiceBenchOption {
+func ServiceBenchOnClose(assertions ...bench.Lifecycle[allshapes.Service]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onClose = append(c.onClose, assertions...)
 	}
 }
 
 // ServiceBenchOnCount adds plug-in bench primitives for the Count method.
-func ServiceBenchOnCount(assertions ...testkit.BenchAggregator[allshapes.Service, int]) ServiceBenchOption {
+func ServiceBenchOnCount(assertions ...bench.Aggregator[allshapes.Service, int]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onCount = append(c.onCount, assertions...)
 	}
 }
 
 // ServiceBenchOnDelete adds plug-in bench primitives for the Delete method.
-func ServiceBenchOnDelete(assertions ...testkit.BenchDeleter[allshapes.Service, string]) ServiceBenchOption {
+func ServiceBenchOnDelete(assertions ...bench.Deleter[allshapes.Service, string]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
 // ServiceBenchOnDescribe adds plug-in bench primitives for the Describe method.
-func ServiceBenchOnDescribe(assertions ...testkit.BenchPure[allshapes.Service, string]) ServiceBenchOption {
+func ServiceBenchOnDescribe(assertions ...bench.Pure[allshapes.Service, string]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onDescribe = append(c.onDescribe, assertions...)
 	}
 }
 
 // ServiceBenchOnGet adds plug-in bench primitives for the Get method.
-func ServiceBenchOnGet(assertions ...testkit.BenchReader[allshapes.Service, string, allshapes.Item]) ServiceBenchOption {
+func ServiceBenchOnGet(assertions ...bench.Reader[allshapes.Service, string, allshapes.Item]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
 // ServiceBenchOnIsEmpty adds plug-in bench primitives for the IsEmpty method.
-func ServiceBenchOnIsEmpty(assertions ...testkit.BenchPredicate[allshapes.Service]) ServiceBenchOption {
+func ServiceBenchOnIsEmpty(assertions ...bench.Predicate[allshapes.Service]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onIsEmpty = append(c.onIsEmpty, assertions...)
 	}
 }
 
 // ServiceBenchOnList adds plug-in bench primitives for the List method.
-func ServiceBenchOnList(assertions ...testkit.BenchStream[allshapes.Service, allshapes.Item]) ServiceBenchOption {
+func ServiceBenchOnList(assertions ...bench.Stream[allshapes.Service, allshapes.Item]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
 }
 
 // ServiceBenchOnPut adds plug-in bench primitives for the Put method.
-func ServiceBenchOnPut(assertions ...testkit.BenchWriter[allshapes.Service, allshapes.Item]) ServiceBenchOption {
+func ServiceBenchOnPut(assertions ...bench.Writer[allshapes.Service, allshapes.Item]) ServiceBenchOption {
 	return func(c *serviceBenchConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
@@ -425,14 +426,14 @@ type serviceBenchCustomSub struct {
 type serviceBenchConfig struct {
 	prePopulate func(context.Context, allshapes.Service)
 	custom      []serviceBenchCustomSub
-	onClose     []testkit.BenchLifecycle[allshapes.Service]
-	onCount     []testkit.BenchAggregator[allshapes.Service, int]
-	onDelete    []testkit.BenchDeleter[allshapes.Service, string]
-	onDescribe  []testkit.BenchPure[allshapes.Service, string]
-	onGet       []testkit.BenchReader[allshapes.Service, string, allshapes.Item]
-	onIsEmpty   []testkit.BenchPredicate[allshapes.Service]
-	onList      []testkit.BenchStream[allshapes.Service, allshapes.Item]
-	onPut       []testkit.BenchWriter[allshapes.Service, allshapes.Item]
+	onClose     []bench.Lifecycle[allshapes.Service]
+	onCount     []bench.Aggregator[allshapes.Service, int]
+	onDelete    []bench.Deleter[allshapes.Service, string]
+	onDescribe  []bench.Pure[allshapes.Service, string]
+	onGet       []bench.Reader[allshapes.Service, string, allshapes.Item]
+	onIsEmpty   []bench.Predicate[allshapes.Service]
+	onList      []bench.Stream[allshapes.Service, allshapes.Item]
+	onPut       []bench.Writer[allshapes.Service, allshapes.Item]
 }
 
 func newServiceBenchConfig(opts ...ServiceBenchOption) serviceBenchConfig {

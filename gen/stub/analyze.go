@@ -25,6 +25,9 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 	// Always needed imports.
 	tracker.AddPath("testing")
 	tracker.AddPath("go.thesmos.sh/testkit")
+	tracker.AddPath("go.thesmos.sh/testkit/stub")
+	tracker.AddPath("go.thesmos.sh/testkit/clock")
+	tracker.AddPath("go.thesmos.sh/testkit/rand")
 
 	var interfaces []InterfaceData
 

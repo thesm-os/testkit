@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/basic"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertStoreContract runs conformance assertions against
@@ -35,9 +37,9 @@ func AssertStoreContract(
 	runStorePut(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[basic.Store]{
+		cctx := suite.CrossContext[basic.Store]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[basic.Store]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[basic.Store]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -120,9 +122,9 @@ func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) 
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[basic.Store, string]{
+			wctx := suite.WriterContext[basic.Store, string]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[basic.Store, string]{
+				WriterBindings: bindings.WriterBindings[basic.Store, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v string) error {
 						return impl.Delete(ctx, v)
@@ -201,9 +203,9 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				}
 				return impl
 			}
-			rctx := testkit.ReaderContext[basic.Store, string, basic.Item]{
+			rctx := suite.ReaderContext[basic.Store, string, basic.Item]{
 				T: t,
-				ReaderBindings: testkit.ReaderBindings[basic.Store, string, basic.Item]{
+				ReaderBindings: bindings.ReaderBindings[basic.Store, string, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
 						return impl.Get(ctx, k)
@@ -263,9 +265,9 @@ func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfi
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[basic.Store, basic.Item]{
+			wctx := suite.WriterContext[basic.Store, basic.Item]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+				WriterBindings: bindings.WriterBindings[basic.Store, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 						return impl.LegacyPut(ctx, v)
@@ -328,9 +330,9 @@ func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[basic.Store]{
+			lctx := suite.LifecycleContext[basic.Store]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[basic.Store]{
+				LifecycleBindings: bindings.LifecycleBindings[basic.Store]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store) error {
 						return impl.Ping(ctx)
@@ -392,9 +394,9 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[basic.Store, basic.Item]{
+			wctx := suite.WriterContext[basic.Store, basic.Item]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+				WriterBindings: bindings.WriterBindings[basic.Store, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 						return impl.Put(ctx, v)
@@ -433,42 +435,42 @@ func StoreOnCount(assertions ...func(*testing.T, basic.Store)) StoreOption {
 }
 
 // StoreOnDelete adds plug-in assertions for the Delete method.
-func StoreOnDelete(assertions ...testkit.WriterAssertion[basic.Store, string]) StoreOption {
+func StoreOnDelete(assertions ...suite.WriterAssertion[basic.Store, string]) StoreOption {
 	return func(c *storeConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
 // StoreOnGet adds plug-in assertions for the Get method.
-func StoreOnGet(assertions ...testkit.ReaderAssertion[basic.Store, string, basic.Item]) StoreOption {
+func StoreOnGet(assertions ...suite.ReaderAssertion[basic.Store, string, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
 // StoreOnLegacyPut adds plug-in assertions for the LegacyPut method.
-func StoreOnLegacyPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
+func StoreOnLegacyPut(assertions ...suite.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onLegacyPut = append(c.onLegacyPut, assertions...)
 	}
 }
 
 // StoreOnPing adds plug-in assertions for the Ping method.
-func StoreOnPing(assertions ...testkit.LifecycleAssertion[basic.Store]) StoreOption {
+func StoreOnPing(assertions ...suite.LifecycleAssertion[basic.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPing = append(c.onPing, assertions...)
 	}
 }
 
 // StoreOnPut adds plug-in assertions for the Put method.
-func StoreOnPut(assertions ...testkit.WriterAssertion[basic.Store, basic.Item]) StoreOption {
+func StoreOnPut(assertions ...suite.WriterAssertion[basic.Store, basic.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
 // StoreOnAll adds cross-method assertions that span multiple methods.
-func StoreOnAll(assertions ...testkit.CrossMethodAssertion[basic.Store]) StoreOption {
+func StoreOnAll(assertions ...suite.CrossMethodAssertion[basic.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -482,13 +484,13 @@ type storeCustomSubtest struct {
 type storeConfig struct {
 	prePopulate func(context.Context, basic.Store)
 	custom      []storeCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[basic.Store]
+	onAll       []suite.CrossMethodAssertion[basic.Store]
 	onCount     []func(*testing.T, basic.Store)
-	onDelete    []testkit.WriterAssertion[basic.Store, string]
-	onGet       []testkit.ReaderAssertion[basic.Store, string, basic.Item]
-	onLegacyPut []testkit.WriterAssertion[basic.Store, basic.Item]
-	onPing      []testkit.LifecycleAssertion[basic.Store]
-	onPut       []testkit.WriterAssertion[basic.Store, basic.Item]
+	onDelete    []suite.WriterAssertion[basic.Store, string]
+	onGet       []suite.ReaderAssertion[basic.Store, string, basic.Item]
+	onLegacyPut []suite.WriterAssertion[basic.Store, basic.Item]
+	onPing      []suite.LifecycleAssertion[basic.Store]
+	onPut       []suite.WriterAssertion[basic.Store, basic.Item]
 }
 
 func newStoreConfig(opts ...StoreOption) storeConfig {

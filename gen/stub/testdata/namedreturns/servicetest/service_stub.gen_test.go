@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/namedreturns/servicetest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestServiceStub(t *testing.T) {
@@ -226,7 +228,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -347,7 +349,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Swap Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnSwap.Latency(5 * time.Second)
 
@@ -367,7 +369,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Swap Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnSwap.Latency(5 * time.Second)
 
@@ -388,7 +390,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Swap Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := servicetest.NewServiceStub(t)
 		inner.OnSwap.Returns("", "", nil)
 		inner.OnTimestamps.Returns(time.Time{}, time.Time{}, nil)
@@ -413,7 +415,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Swap FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnSwap.FaultsFor(5*time.Second, errTest)
 

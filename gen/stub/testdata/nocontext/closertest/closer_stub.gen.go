@@ -6,8 +6,10 @@ package closertest
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/nocontext"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -33,12 +35,12 @@ type CloserStringCall struct {
 
 // CloserCloseStub controls behavior and records calls for Close.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CloserCloseStub struct {
-	*testkit.MethodStub[CloserCloseCall]
+	*stub.MethodStub[CloserCloseCall]
 	fn       func() error
 	fallback *closerCloseReturn
 }
@@ -61,12 +63,12 @@ func (s *CloserCloseStub) Func(fn func() error) *CloserCloseStub {
 
 // CloserStringStub controls behavior and records calls for String.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CloserStringStub struct {
-	*testkit.MethodStub[CloserStringCall]
+	*stub.MethodStub[CloserStringCall]
 	fn       func() string
 	fallback *closerStringReturn
 }
@@ -106,20 +108,20 @@ func CloserStubDelegateTo(impl nocontext.Closer) CloserStubOption {
 	}
 }
 
-// CloserStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// CloserStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func CloserStubWithClock(clk testkit.Clock) CloserStubOption {
+func CloserStubWithClock(clk clock.Clock) CloserStubOption {
 	return func(s *CloserStub) {
 		s.OnClose.WithClock(clk)
 		s.OnString.WithClock(clk)
 	}
 }
 
-// CloserStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func CloserStubWithRandSource(src testkit.RandSource) CloserStubOption {
+// CloserStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func CloserStubWithRandSource(src rand.Source) CloserStubOption {
 	return func(s *CloserStub) {
 		s.OnClose.WithRandSource(src)
 		s.OnString.WithRandSource(src)
@@ -157,8 +159,8 @@ type CloserStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewCloserStub(tb testing.TB, opts ...CloserStubOption) *CloserStub {
 	s := &CloserStub{
-		OnClose:  &CloserCloseStub{MethodStub: testkit.NewMethodStub[CloserCloseCall](tb, "Closer.Close")},
-		OnString: &CloserStringStub{MethodStub: testkit.NewMethodStub[CloserStringCall](tb, "Closer.String")},
+		OnClose:  &CloserCloseStub{MethodStub: stub.NewMethodStub[CloserCloseCall](tb, "Closer.Close")},
+		OnString: &CloserStringStub{MethodStub: stub.NewMethodStub[CloserStringCall](tb, "Closer.String")},
 	}
 	for _, opt := range opts {
 		opt(s)

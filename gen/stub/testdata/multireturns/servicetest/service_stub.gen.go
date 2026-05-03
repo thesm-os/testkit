@@ -7,8 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/multireturns"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -52,12 +54,12 @@ type ServiceStatsCall struct {
 
 // ServiceCheckoutStub controls behavior and records calls for Checkout.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ServiceCheckoutStub struct {
-	*testkit.MethodStub[ServiceCheckoutCall]
+	*stub.MethodStub[ServiceCheckoutCall]
 	fn       func(context.Context, string) (multireturns.Item, multireturns.Lease, error)
 	fallback *serviceCheckoutReturn
 }
@@ -82,12 +84,12 @@ func (s *ServiceCheckoutStub) Func(fn func(context.Context, string) (multireturn
 
 // ServicePeekStub controls behavior and records calls for Peek.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ServicePeekStub struct {
-	*testkit.MethodStub[ServicePeekCall]
+	*stub.MethodStub[ServicePeekCall]
 	fn       func(context.Context) (multireturns.Item, multireturns.Item, error)
 	fallback *servicePeekReturn
 }
@@ -112,12 +114,12 @@ func (s *ServicePeekStub) Func(fn func(context.Context) (multireturns.Item, mult
 
 // ServiceStatsStub controls behavior and records calls for Stats.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ServiceStatsStub struct {
-	*testkit.MethodStub[ServiceStatsCall]
+	*stub.MethodStub[ServiceStatsCall]
 	fn       func(context.Context) (int, int, string, error)
 	fallback *serviceStatsReturn
 }
@@ -161,10 +163,10 @@ func ServiceStubDelegateTo(impl multireturns.Service) ServiceStubOption {
 	}
 }
 
-// ServiceStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// ServiceStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func ServiceStubWithClock(clk testkit.Clock) ServiceStubOption {
+func ServiceStubWithClock(clk clock.Clock) ServiceStubOption {
 	return func(s *ServiceStub) {
 		s.OnCheckout.WithClock(clk)
 		s.OnPeek.WithClock(clk)
@@ -172,10 +174,10 @@ func ServiceStubWithClock(clk testkit.Clock) ServiceStubOption {
 	}
 }
 
-// ServiceStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func ServiceStubWithRandSource(src testkit.RandSource) ServiceStubOption {
+// ServiceStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func ServiceStubWithRandSource(src rand.Source) ServiceStubOption {
 	return func(s *ServiceStub) {
 		s.OnCheckout.WithRandSource(src)
 		s.OnPeek.WithRandSource(src)
@@ -221,9 +223,9 @@ type ServiceStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewServiceStub(tb testing.TB, opts ...ServiceStubOption) *ServiceStub {
 	s := &ServiceStub{
-		OnCheckout: &ServiceCheckoutStub{MethodStub: testkit.NewMethodStub[ServiceCheckoutCall](tb, "Service.Checkout")},
-		OnPeek:     &ServicePeekStub{MethodStub: testkit.NewMethodStub[ServicePeekCall](tb, "Service.Peek")},
-		OnStats:    &ServiceStatsStub{MethodStub: testkit.NewMethodStub[ServiceStatsCall](tb, "Service.Stats")},
+		OnCheckout: &ServiceCheckoutStub{MethodStub: stub.NewMethodStub[ServiceCheckoutCall](tb, "Service.Checkout")},
+		OnPeek:     &ServicePeekStub{MethodStub: stub.NewMethodStub[ServicePeekCall](tb, "Service.Peek")},
+		OnStats:    &ServiceStatsStub{MethodStub: stub.NewMethodStub[ServiceStatsCall](tb, "Service.Stats")},
 	}
 	for _, opt := range opts {
 		opt(s)

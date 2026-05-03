@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/weird"
 	"go.thesmos.sh/testkit/gen/suite/testdata/weird/weirdtest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestJSONCodecContract(t *testing.T) {
@@ -21,12 +22,12 @@ func TestJSONCodecContract(t *testing.T) {
 	weirdtest.AssertCodecContract(t, factory,
 		// Pure: ContentType returns "application/json".
 		weirdtest.CodecOnContentType(
-			testkit.AssertDeterministic[weird.Codec, string](3),
+			suite.AssertDeterministic[weird.Codec, string](3),
 		),
 
 		// Predicate: Handles returns true for "application/json".
 		weirdtest.CodecOnHandles(
-			testkit.AssertPredicateConsistent[weird.Codec](3),
+			suite.AssertPredicateConsistent[weird.Codec](3),
 		),
 
 		// Unknown-shaped: Encode exercises io.Writer param.
@@ -81,41 +82,41 @@ func TestInMemorySchedulerContract(t *testing.T) {
 
 		// Deleter: Cancel removes a scheduled task.
 		weirdtest.SchedulerOnCancel(
-			testkit.AssertDeleteSucceeds[weird.Scheduler, string]("task-1"),
-			testkit.AssertDeleteReturnsNotFound[weird.Scheduler, string]("nonexistent", weird.ErrNotScheduled),
+			suite.AssertDeleteSucceeds[weird.Scheduler, string]("task-1"),
+			suite.AssertDeleteReturnsNotFound[weird.Scheduler, string]("nonexistent", weird.ErrNotScheduled),
 		),
 
 		// Reader: Status returns task info.
 		weirdtest.SchedulerOnStatus(
-			testkit.AssertReturnsForKey[weird.Scheduler, string, weird.TaskStatus](
+			suite.AssertReturnsForKey[weird.Scheduler, string, weird.TaskStatus](
 				"task-1", weird.TaskStatus{ID: "task-1", Running: true},
 			),
-			testkit.AssertReturnsSentinel[weird.Scheduler, string, weird.TaskStatus](
+			suite.AssertReturnsSentinel[weird.Scheduler, string, weird.TaskStatus](
 				"nonexistent", weird.ErrNotScheduled,
 			),
 		),
 
 		// Aggregator: Running returns task count.
 		weirdtest.SchedulerOnRunning(
-			testkit.AssertAggregatorBounded[weird.Scheduler, int](0, 1000),
-			testkit.AssertAggregatorConsistent[weird.Scheduler, int](3),
+			suite.AssertAggregatorBounded[weird.Scheduler, int](0, 1000),
+			suite.AssertAggregatorConsistent[weird.Scheduler, int](3),
 		),
 
 		// Lifecycle: Flush clears all tasks.
 		weirdtest.SchedulerOnFlush(
-			testkit.AssertLifecycleSucceeds[weird.Scheduler](),
+			suite.AssertLifecycleSucceeds[weird.Scheduler](),
 		),
 
 		// StreamReader: Tasks iterates scheduled tasks.
 		weirdtest.SchedulerOnTasks(
-			testkit.AssertStreamCompletes[weird.Scheduler, weird.TaskStatus](),
-			testkit.AssertStreamRespectsBreak[weird.Scheduler, weird.TaskStatus](),
-			testkit.AssertStreamReentrant[weird.Scheduler, weird.TaskStatus](),
+			suite.AssertStreamCompletes[weird.Scheduler, weird.TaskStatus](),
+			suite.AssertStreamRespectsBreak[weird.Scheduler, weird.TaskStatus](),
+			suite.AssertStreamReentrant[weird.Scheduler, weird.TaskStatus](),
 		),
 
 		// Pure: Name returns the scheduler name.
 		weirdtest.SchedulerOnName(
-			testkit.AssertDeterministic[weird.Scheduler, string](3),
+			suite.AssertDeterministic[weird.Scheduler, string](3),
 		),
 	)
 }

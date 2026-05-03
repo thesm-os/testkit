@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/erroronly"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertCloserContract runs conformance assertions against
@@ -30,9 +32,9 @@ func AssertCloserContract(
 	runCloserOpen(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[erroronly.Closer]{
+		cctx := suite.CrossContext[erroronly.Closer]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[erroronly.Closer]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[erroronly.Closer]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -94,9 +96,9 @@ func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerCo
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[erroronly.Closer]{
+			lctx := suite.LifecycleContext[erroronly.Closer]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[erroronly.Closer]{
+				LifecycleBindings: bindings.LifecycleBindings[erroronly.Closer]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl erroronly.Closer) error {
 						return impl.Close(ctx)
@@ -158,9 +160,9 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[erroronly.Closer]{
+			lctx := suite.LifecycleContext[erroronly.Closer]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[erroronly.Closer]{
+				LifecycleBindings: bindings.LifecycleBindings[erroronly.Closer]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl erroronly.Closer) error {
 						return impl.Open(ctx)
@@ -192,21 +194,21 @@ func CloserCustom(name string, fn func(*testing.T, erroronly.Closer)) CloserOpti
 }
 
 // CloserOnClose adds plug-in assertions for the Close method.
-func CloserOnClose(assertions ...testkit.LifecycleAssertion[erroronly.Closer]) CloserOption {
+func CloserOnClose(assertions ...suite.LifecycleAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onClose = append(c.onClose, assertions...)
 	}
 }
 
 // CloserOnOpen adds plug-in assertions for the Open method.
-func CloserOnOpen(assertions ...testkit.LifecycleAssertion[erroronly.Closer]) CloserOption {
+func CloserOnOpen(assertions ...suite.LifecycleAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onOpen = append(c.onOpen, assertions...)
 	}
 }
 
 // CloserOnAll adds cross-method assertions that span multiple methods.
-func CloserOnAll(assertions ...testkit.CrossMethodAssertion[erroronly.Closer]) CloserOption {
+func CloserOnAll(assertions ...suite.CrossMethodAssertion[erroronly.Closer]) CloserOption {
 	return func(c *closerConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -220,9 +222,9 @@ type closerCustomSubtest struct {
 type closerConfig struct {
 	prePopulate func(context.Context, erroronly.Closer)
 	custom      []closerCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[erroronly.Closer]
-	onClose     []testkit.LifecycleAssertion[erroronly.Closer]
-	onOpen      []testkit.LifecycleAssertion[erroronly.Closer]
+	onAll       []suite.CrossMethodAssertion[erroronly.Closer]
+	onClose     []suite.LifecycleAssertion[erroronly.Closer]
+	onOpen      []suite.LifecycleAssertion[erroronly.Closer]
 }
 
 func newCloserConfig(opts ...CloserOption) closerConfig {

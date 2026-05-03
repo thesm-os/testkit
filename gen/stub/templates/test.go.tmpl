@@ -149,7 +149,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithRandSource(testkit.FixedRandSource(0.5)))
+		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -255,7 +255,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 
 	t.Run("{{$m.Name}} Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
 		s.On{{$m.Name}}.Latency(5 * time.Second)
 
@@ -275,7 +275,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 
 	t.Run("{{$m.Name}} Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
 		s.On{{$m.Name}}.Latency(5 * time.Second)
 
@@ -296,7 +296,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 
 	t.Run("{{$m.Name}} Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 {{- range $iface.Methods}}{{if not .Skip}}{{if .HasResults}}
 		inner.On{{.Name}}.Returns({{.ZeroReturn}})
@@ -324,7 +324,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 
 	t.Run("{{$m.Name}} FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t, {{$.GenQualifier}}{{$iface.StubName}}WithClock(clk))
 		s.On{{$m.Name}}.FaultsFor(5*time.Second, errTest)
 

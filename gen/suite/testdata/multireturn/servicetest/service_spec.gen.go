@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/multireturn"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertServiceContract runs conformance assertions against
@@ -30,9 +32,9 @@ func AssertServiceContract(
 	runServiceStatus(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[multireturn.Service]{
+		cctx := suite.CrossContext[multireturn.Service]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[multireturn.Service]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[multireturn.Service]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -93,9 +95,9 @@ func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serv
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[multireturn.Service]{
+			lctx := suite.LifecycleContext[multireturn.Service]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[multireturn.Service]{
+				LifecycleBindings: bindings.LifecycleBindings[multireturn.Service]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl multireturn.Service) error {
 						return impl.Reset(ctx)
@@ -188,7 +190,7 @@ func ServiceCustom(name string, fn func(*testing.T, multireturn.Service)) Servic
 }
 
 // ServiceOnReset adds plug-in assertions for the Reset method.
-func ServiceOnReset(assertions ...testkit.LifecycleAssertion[multireturn.Service]) ServiceOption {
+func ServiceOnReset(assertions ...suite.LifecycleAssertion[multireturn.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onReset = append(c.onReset, assertions...)
 	}
@@ -202,7 +204,7 @@ func ServiceOnStatus(assertions ...func(*testing.T, multireturn.Service)) Servic
 }
 
 // ServiceOnAll adds cross-method assertions that span multiple methods.
-func ServiceOnAll(assertions ...testkit.CrossMethodAssertion[multireturn.Service]) ServiceOption {
+func ServiceOnAll(assertions ...suite.CrossMethodAssertion[multireturn.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -216,8 +218,8 @@ type serviceCustomSubtest struct {
 type serviceConfig struct {
 	prePopulate func(context.Context, multireturn.Service)
 	custom      []serviceCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[multireturn.Service]
-	onReset     []testkit.LifecycleAssertion[multireturn.Service]
+	onAll       []suite.CrossMethodAssertion[multireturn.Service]
+	onReset     []suite.LifecycleAssertion[multireturn.Service]
 	onStatus    []func(*testing.T, multireturn.Service)
 }
 

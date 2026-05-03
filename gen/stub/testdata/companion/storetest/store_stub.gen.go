@@ -7,8 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/companion"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -49,12 +51,12 @@ type StorePutCall struct {
 
 // StoreDeleteStub controls behavior and records calls for Delete.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type StoreDeleteStub struct {
-	*testkit.MethodStub[StoreDeleteCall]
+	*stub.MethodStub[StoreDeleteCall]
 	fn       func(context.Context, string) error
 	fallback *storeDeleteReturn
 }
@@ -77,12 +79,12 @@ func (s *StoreDeleteStub) Func(fn func(context.Context, string) error) *StoreDel
 
 // StoreGetStub controls behavior and records calls for Get.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type StoreGetStub struct {
-	*testkit.MethodStub[StoreGetCall]
+	*stub.MethodStub[StoreGetCall]
 	fn       func(context.Context, string) (string, error)
 	fallback *storeGetReturn
 }
@@ -106,12 +108,12 @@ func (s *StoreGetStub) Func(fn func(context.Context, string) (string, error)) *S
 
 // StorePutStub controls behavior and records calls for Put.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type StorePutStub struct {
-	*testkit.MethodStub[StorePutCall]
+	*stub.MethodStub[StorePutCall]
 	fn       func(context.Context, string, string) error
 	fallback *storePutReturn
 }
@@ -152,10 +154,10 @@ func StoreStubDelegateTo(impl companion.Store) StoreStubOption {
 	}
 }
 
-// StoreStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// StoreStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func StoreStubWithClock(clk testkit.Clock) StoreStubOption {
+func StoreStubWithClock(clk clock.Clock) StoreStubOption {
 	return func(s *StoreStub) {
 		s.OnDelete.WithClock(clk)
 		s.OnGet.WithClock(clk)
@@ -163,10 +165,10 @@ func StoreStubWithClock(clk testkit.Clock) StoreStubOption {
 	}
 }
 
-// StoreStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func StoreStubWithRandSource(src testkit.RandSource) StoreStubOption {
+// StoreStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func StoreStubWithRandSource(src rand.Source) StoreStubOption {
 	return func(s *StoreStub) {
 		s.OnDelete.WithRandSource(src)
 		s.OnGet.WithRandSource(src)
@@ -212,9 +214,9 @@ type StoreStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	s := &StoreStub{
-		OnDelete: &StoreDeleteStub{MethodStub: testkit.NewMethodStub[StoreDeleteCall](tb, "Store.Delete")},
-		OnGet:    &StoreGetStub{MethodStub: testkit.NewMethodStub[StoreGetCall](tb, "Store.Get")},
-		OnPut:    &StorePutStub{MethodStub: testkit.NewMethodStub[StorePutCall](tb, "Store.Put")},
+		OnDelete: &StoreDeleteStub{MethodStub: stub.NewMethodStub[StoreDeleteCall](tb, "Store.Delete")},
+		OnGet:    &StoreGetStub{MethodStub: stub.NewMethodStub[StoreGetCall](tb, "Store.Get")},
+		OnPut:    &StorePutStub{MethodStub: stub.NewMethodStub[StorePutCall](tb, "Store.Put")},
 	}
 	for _, opt := range opts {
 		opt(s)

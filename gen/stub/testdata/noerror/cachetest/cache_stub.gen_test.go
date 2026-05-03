@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/noerror/cachetest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestCacheStub(t *testing.T) {
@@ -253,7 +255,7 @@ func TestCacheStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := cachetest.NewCacheStub(t, cachetest.CacheStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := cachetest.NewCacheStub(t, cachetest.CacheStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -411,7 +413,7 @@ func TestCacheStub(t *testing.T) {
 
 	t.Run("Clear Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := cachetest.NewCacheStub(t, cachetest.CacheStubWithClock(clk))
 		s.OnClear.Latency(5 * time.Second)
 
@@ -431,7 +433,7 @@ func TestCacheStub(t *testing.T) {
 
 	t.Run("Clear Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := cachetest.NewCacheStub(t, cachetest.CacheStubWithClock(clk))
 		s.OnClear.Latency(5 * time.Second)
 
@@ -452,7 +454,7 @@ func TestCacheStub(t *testing.T) {
 
 	t.Run("Clear Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := cachetest.NewCacheStub(t)
 		inner.OnCount.Returns(0)
 		inner.OnKeys.Returns(nil)

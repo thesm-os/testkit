@@ -7,9 +7,9 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/writers"
 	"go.thesmos.sh/testkit/gen/suite/testdata/writers/storetest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryStoreContract(t *testing.T) {
@@ -23,32 +23,32 @@ func TestInMemoryStoreContract(t *testing.T) {
 
 		// Reader plug-ins on Get.
 		storetest.StoreOnGet(
-			testkit.AssertReturnsForKey[writers.Store, string, writers.Item](
+			suite.AssertReturnsForKey[writers.Store, string, writers.Item](
 				"known-1", writers.Item{ID: "known-1", Name: "test"},
 			),
-			testkit.AssertReturnsSentinel[writers.Store, string, writers.Item](
+			suite.AssertReturnsSentinel[writers.Store, string, writers.Item](
 				"nonexistent", writers.ErrNotFound,
 			),
-			testkit.AssertConsistentReads[writers.Store, string, writers.Item]("known-1", 3),
+			suite.AssertConsistentReads[writers.Store, string, writers.Item]("known-1", 3),
 		),
 
 		// Writer plug-ins on Put.
 		storetest.StoreOnPut(
-			testkit.AssertWriteSucceeds[writers.Store, writers.Item](
+			suite.AssertWriteSucceeds[writers.Store, writers.Item](
 				writers.Item{ID: "new-1", Name: "new"},
 			),
 		),
 
 		// Stream plug-ins on List.
 		storetest.StoreOnList(
-			testkit.AssertStreamCompletes[writers.Store, writers.Item](),
-			testkit.AssertStreamRespectsBreak[writers.Store, writers.Item](),
-			testkit.AssertStreamReentrant[writers.Store, writers.Item](),
+			suite.AssertStreamCompletes[writers.Store, writers.Item](),
+			suite.AssertStreamRespectsBreak[writers.Store, writers.Item](),
+			suite.AssertStreamReentrant[writers.Store, writers.Item](),
 		),
 
 		// Cross-method: read-after-write.
 		storetest.StoreOnAll(
-			testkit.AssertReadAfterWrite[writers.Store, string, writers.Item](
+			suite.AssertReadAfterWrite[writers.Store, string, writers.Item](
 				writers.Item{ID: "cross-1", Name: "cross"},
 				func(ctx context.Context, s writers.Store, item writers.Item) error {
 					return s.Put(ctx, item)
@@ -58,7 +58,7 @@ func TestInMemoryStoreContract(t *testing.T) {
 				},
 				func(item writers.Item) string { return item.ID },
 			),
-			testkit.AssertDeleteRemovesValue[writers.Store, string, writers.Item](
+			suite.AssertDeleteRemovesValue[writers.Store, string, writers.Item](
 				writers.Item{ID: "del-1", Name: "delete-me"},
 				func(ctx context.Context, s writers.Store, item writers.Item) error {
 					return s.Put(ctx, item)

@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"go.thesmos.sh/testkit/gen"
-	"go.thesmos.sh/testkit/gen/directive"
+	"go.thesmos.sh/testkit/gen/directiveparse"
 )
 
 // Generator produces stub test doubles for Go interfaces.
@@ -34,7 +34,7 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	}
 
 	// 3. Validate directives (strict-by-default: unknown = error).
-	reg := directive.DefaultRegistry()
+	reg := directiveparse.DefaultRegistry()
 	for i := range data.Interfaces {
 		methods := make([]gen.MethodInfo, len(data.Interfaces[i].Methods))
 		for j, m := range data.Interfaces[i].Methods {
@@ -54,9 +54,9 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	// 5. Validate composition.
 	for i := range data.Interfaces {
 		for _, m := range data.Interfaces[i].Methods {
-			issues := directive.ValidateComposition(m.Directives)
+			issues := directiveparse.ValidateComposition(m.Directives)
 			for _, issue := range issues {
-				if issue.Kind == directive.Conflict || issue.Kind == directive.MissingRequired {
+				if issue.Kind == directiveparse.Conflict || issue.Kind == directiveparse.MissingRequired {
 					return nil, gen.Errorf(m.Pos, "%s", issue.Message)
 				}
 			}

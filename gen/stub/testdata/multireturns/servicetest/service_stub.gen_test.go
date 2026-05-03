@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/multireturns"
 	"go.thesmos.sh/testkit/gen/stub/testdata/multireturns/servicetest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestServiceStub(t *testing.T) {
@@ -324,7 +326,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -484,7 +486,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Checkout Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnCheckout.Latency(5 * time.Second)
 
@@ -504,7 +506,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Checkout Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnCheckout.Latency(5 * time.Second)
 
@@ -525,7 +527,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Checkout Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := servicetest.NewServiceStub(t)
 		inner.OnCheckout.Returns(multireturns.Item{}, multireturns.Lease{}, nil)
 		inner.OnPeek.Returns(multireturns.Item{}, multireturns.Item{}, nil)
@@ -551,7 +553,7 @@ func TestServiceStub(t *testing.T) {
 
 	t.Run("Checkout FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := servicetest.NewServiceStub(t, servicetest.ServiceStubWithClock(clk))
 		s.OnCheckout.FaultsFor(5*time.Second, errTest)
 

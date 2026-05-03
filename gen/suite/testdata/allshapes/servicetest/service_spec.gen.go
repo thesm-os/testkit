@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/allshapes"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertServiceContract runs conformance assertions against
@@ -37,9 +39,9 @@ func AssertServiceContract(
 	runServicePut(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[allshapes.Service]{
+		cctx := suite.CrossContext[allshapes.Service]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[allshapes.Service]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[allshapes.Service]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -93,9 +95,9 @@ func runServiceClose(t *testing.T, factory func() allshapes.Service, cfg *servic
 				}
 				return impl
 			}
-			lctx := testkit.LifecycleContext[allshapes.Service]{
+			lctx := suite.LifecycleContext[allshapes.Service]{
 				T: t,
-				LifecycleBindings: testkit.LifecycleBindings[allshapes.Service]{
+				LifecycleBindings: bindings.LifecycleBindings[allshapes.Service]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) error {
 						return impl.Close(ctx)
@@ -150,9 +152,9 @@ func runServiceCount(t *testing.T, factory func() allshapes.Service, cfg *servic
 				}
 				return impl
 			}
-			actx := testkit.AggregatorContext[allshapes.Service, int]{
+			actx := suite.AggregatorContext[allshapes.Service, int]{
 				T: t,
-				AggregatorBindings: testkit.AggregatorBindings[allshapes.Service, int]{
+				AggregatorBindings: bindings.AggregatorBindings[allshapes.Service, int]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) (int, error) {
 						return impl.Count(ctx)
@@ -207,9 +209,9 @@ func runServiceDelete(t *testing.T, factory func() allshapes.Service, cfg *servi
 				}
 				return impl
 			}
-			dctx := testkit.DeleterContext[allshapes.Service, string]{
+			dctx := suite.DeleterContext[allshapes.Service, string]{
 				T: t,
-				DeleterBindings: testkit.DeleterBindings[allshapes.Service, string]{
+				DeleterBindings: bindings.DeleterBindings[allshapes.Service, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, k string) error {
 						return impl.Delete(ctx, k)
@@ -240,9 +242,9 @@ func runServiceDescribe(t *testing.T, factory func() allshapes.Service, cfg *ser
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[allshapes.Service, string]{
+			pctx := suite.PureContext[allshapes.Service, string]{
 				T: t,
-				PureBindings: testkit.PureBindings[allshapes.Service, string]{
+				PureBindings: bindings.PureBindings[allshapes.Service, string]{
 					Factory: prePopFactory,
 					Call: func(impl allshapes.Service) string {
 						return impl.Describe()
@@ -305,9 +307,9 @@ func runServiceGet(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 				}
 				return impl
 			}
-			rctx := testkit.ReaderContext[allshapes.Service, string, allshapes.Item]{
+			rctx := suite.ReaderContext[allshapes.Service, string, allshapes.Item]{
 				T: t,
-				ReaderBindings: testkit.ReaderBindings[allshapes.Service, string, allshapes.Item]{
+				ReaderBindings: bindings.ReaderBindings[allshapes.Service, string, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, k string) (allshapes.Item, error) {
 						return impl.Get(ctx, k)
@@ -338,9 +340,9 @@ func runServiceIsEmpty(t *testing.T, factory func() allshapes.Service, cfg *serv
 				}
 				return impl
 			}
-			pctx := testkit.PredicateContext[allshapes.Service]{
+			pctx := suite.PredicateContext[allshapes.Service]{
 				T: t,
-				PredicateBindings: testkit.PredicateBindings[allshapes.Service]{
+				PredicateBindings: bindings.PredicateBindings[allshapes.Service]{
 					Factory: prePopFactory,
 					Call: func(impl allshapes.Service) bool {
 						return impl.IsEmpty()
@@ -405,9 +407,9 @@ func runServiceList(t *testing.T, factory func() allshapes.Service, cfg *service
 				}
 				return impl
 			}
-			sctx := testkit.StreamContext[allshapes.Service, allshapes.Item]{
+			sctx := suite.StreamContext[allshapes.Service, allshapes.Item]{
 				T: t,
-				StreamBindings: testkit.StreamBindings[allshapes.Service, allshapes.Item]{
+				StreamBindings: bindings.StreamBindings[allshapes.Service, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service) iter.Seq2[allshapes.Item, error] {
 						return impl.List(ctx)
@@ -462,9 +464,9 @@ func runServicePut(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[allshapes.Service, allshapes.Item]{
+			wctx := suite.WriterContext[allshapes.Service, allshapes.Item]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[allshapes.Service, allshapes.Item]{
+				WriterBindings: bindings.WriterBindings[allshapes.Service, allshapes.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl allshapes.Service, v allshapes.Item) error {
 						return impl.Put(ctx, v)
@@ -496,63 +498,63 @@ func ServiceCustom(name string, fn func(*testing.T, allshapes.Service)) ServiceO
 }
 
 // ServiceOnClose adds plug-in assertions for the Close method.
-func ServiceOnClose(assertions ...testkit.LifecycleAssertion[allshapes.Service]) ServiceOption {
+func ServiceOnClose(assertions ...suite.LifecycleAssertion[allshapes.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onClose = append(c.onClose, assertions...)
 	}
 }
 
 // ServiceOnCount adds plug-in assertions for the Count method.
-func ServiceOnCount(assertions ...testkit.AggregatorAssertion[allshapes.Service, int]) ServiceOption {
+func ServiceOnCount(assertions ...suite.AggregatorAssertion[allshapes.Service, int]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onCount = append(c.onCount, assertions...)
 	}
 }
 
 // ServiceOnDelete adds plug-in assertions for the Delete method.
-func ServiceOnDelete(assertions ...testkit.DeleterAssertion[allshapes.Service, string]) ServiceOption {
+func ServiceOnDelete(assertions ...suite.DeleterAssertion[allshapes.Service, string]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
 // ServiceOnDescribe adds plug-in assertions for the Describe method.
-func ServiceOnDescribe(assertions ...testkit.PureAssertion[allshapes.Service, string]) ServiceOption {
+func ServiceOnDescribe(assertions ...suite.PureAssertion[allshapes.Service, string]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onDescribe = append(c.onDescribe, assertions...)
 	}
 }
 
 // ServiceOnGet adds plug-in assertions for the Get method.
-func ServiceOnGet(assertions ...testkit.ReaderAssertion[allshapes.Service, string, allshapes.Item]) ServiceOption {
+func ServiceOnGet(assertions ...suite.ReaderAssertion[allshapes.Service, string, allshapes.Item]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
 // ServiceOnIsEmpty adds plug-in assertions for the IsEmpty method.
-func ServiceOnIsEmpty(assertions ...testkit.PredicateAssertion[allshapes.Service]) ServiceOption {
+func ServiceOnIsEmpty(assertions ...suite.PredicateAssertion[allshapes.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onIsEmpty = append(c.onIsEmpty, assertions...)
 	}
 }
 
 // ServiceOnList adds plug-in assertions for the List method.
-func ServiceOnList(assertions ...testkit.StreamAssertion[allshapes.Service, allshapes.Item]) ServiceOption {
+func ServiceOnList(assertions ...suite.StreamAssertion[allshapes.Service, allshapes.Item]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
 }
 
 // ServiceOnPut adds plug-in assertions for the Put method.
-func ServiceOnPut(assertions ...testkit.WriterAssertion[allshapes.Service, allshapes.Item]) ServiceOption {
+func ServiceOnPut(assertions ...suite.WriterAssertion[allshapes.Service, allshapes.Item]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
 // ServiceOnAll adds cross-method assertions that span multiple methods.
-func ServiceOnAll(assertions ...testkit.CrossMethodAssertion[allshapes.Service]) ServiceOption {
+func ServiceOnAll(assertions ...suite.CrossMethodAssertion[allshapes.Service]) ServiceOption {
 	return func(c *serviceConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -566,15 +568,15 @@ type serviceCustomSubtest struct {
 type serviceConfig struct {
 	prePopulate func(context.Context, allshapes.Service)
 	custom      []serviceCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[allshapes.Service]
-	onClose     []testkit.LifecycleAssertion[allshapes.Service]
-	onCount     []testkit.AggregatorAssertion[allshapes.Service, int]
-	onDelete    []testkit.DeleterAssertion[allshapes.Service, string]
-	onDescribe  []testkit.PureAssertion[allshapes.Service, string]
-	onGet       []testkit.ReaderAssertion[allshapes.Service, string, allshapes.Item]
-	onIsEmpty   []testkit.PredicateAssertion[allshapes.Service]
-	onList      []testkit.StreamAssertion[allshapes.Service, allshapes.Item]
-	onPut       []testkit.WriterAssertion[allshapes.Service, allshapes.Item]
+	onAll       []suite.CrossMethodAssertion[allshapes.Service]
+	onClose     []suite.LifecycleAssertion[allshapes.Service]
+	onCount     []suite.AggregatorAssertion[allshapes.Service, int]
+	onDelete    []suite.DeleterAssertion[allshapes.Service, string]
+	onDescribe  []suite.PureAssertion[allshapes.Service, string]
+	onGet       []suite.ReaderAssertion[allshapes.Service, string, allshapes.Item]
+	onIsEmpty   []suite.PredicateAssertion[allshapes.Service]
+	onList      []suite.StreamAssertion[allshapes.Service, allshapes.Item]
+	onPut       []suite.WriterAssertion[allshapes.Service, allshapes.Item]
 }
 
 func newServiceConfig(opts ...ServiceOption) serviceConfig {

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestCountedFault(t *testing.T) {
@@ -73,7 +75,7 @@ func TestCountedFault(t *testing.T) {
 		// Different call values, nil clock — all fire the same.
 		fired1, _ := f.ShouldFire(42, nil)
 		fired2, _ := f.ShouldFire(0, nil)
-		fired3, _ := f.ShouldFire(-1, testkit.RealClock())
+		fired3, _ := f.ShouldFire(-1, clock.RealClock())
 		testkit.True(t, fired1, "must fire regardless of call value")
 		testkit.True(t, fired2, "must fire regardless of call value")
 		testkit.True(t, fired3, "must fire regardless of clock")
@@ -122,7 +124,7 @@ func TestProbabilityFault(t *testing.T) {
 
 	t.Run("fires when random below threshold", func(t *testing.T) {
 		t.Parallel()
-		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, testkit.FixedRandSource(0.3))
+		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, rand.FixedRandSource(0.3))
 		fired, err := f.ShouldFire("", nil)
 		testkit.True(t, fired, "must fire when random < p")
 		testkit.Error(t, err, "must return error")
@@ -130,28 +132,28 @@ func TestProbabilityFault(t *testing.T) {
 
 	t.Run("does not fire when random above threshold", func(t *testing.T) {
 		t.Parallel()
-		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, testkit.FixedRandSource(0.7))
+		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, rand.FixedRandSource(0.7))
 		fired, _ := f.ShouldFire("", nil)
 		testkit.False(t, fired, "must not fire when random >= p")
 	})
 
 	t.Run("p=1.0 always fires", func(t *testing.T) {
 		t.Parallel()
-		f := testkit.NewProbabilityFault[string](errors.New("boom"), 1.0, testkit.FixedRandSource(0.999))
+		f := testkit.NewProbabilityFault[string](errors.New("boom"), 1.0, rand.FixedRandSource(0.999))
 		fired, _ := f.ShouldFire("", nil)
 		testkit.True(t, fired, "p=1.0 must always fire")
 	})
 
 	t.Run("p=0.0 never fires", func(t *testing.T) {
 		t.Parallel()
-		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.0, testkit.FixedRandSource(0.0))
+		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.0, rand.FixedRandSource(0.0))
 		fired, _ := f.ShouldFire("", nil)
 		testkit.False(t, fired, "p=0.0 must never fire")
 	})
 
 	t.Run("Reset is a no-op", func(t *testing.T) {
 		t.Parallel()
-		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, testkit.FixedRandSource(0.3))
+		f := testkit.NewProbabilityFault[string](errors.New("boom"), 0.5, rand.FixedRandSource(0.3))
 		f.Reset() // should not panic or change behavior
 		fired, _ := f.ShouldFire("", nil)
 		testkit.True(t, fired, "must still fire after Reset")
@@ -165,7 +167,7 @@ func TestWindowedFault(t *testing.T) {
 
 	t.Run("fires before deadline", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(origin)
+		clk := clock.NewTestClock(origin)
 		deadline := origin.Add(5 * time.Second)
 		f := testkit.NewWindowedFault[string](errors.New("down"), deadline)
 
@@ -176,7 +178,7 @@ func TestWindowedFault(t *testing.T) {
 
 	t.Run("does not fire after deadline", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(origin)
+		clk := clock.NewTestClock(origin)
 		deadline := origin.Add(5 * time.Second)
 		f := testkit.NewWindowedFault[string](errors.New("down"), deadline)
 
@@ -204,7 +206,7 @@ func TestWindowedFault(t *testing.T) {
 
 	t.Run("Reset is a no-op", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(origin)
+		clk := clock.NewTestClock(origin)
 		deadline := origin.Add(5 * time.Second)
 		f := testkit.NewWindowedFault[string](errors.New("down"), deadline)
 		f.Reset() // should not change behavior
@@ -327,49 +329,5 @@ func TestOrFault(t *testing.T) {
 		composed.Reset()
 		f1, _ := composed.ShouldFire(call{}, nil)
 		testkit.False(t, f1, "call 1 after reset must not fire")
-	})
-}
-
-func TestMethodStub_SetFault(t *testing.T) {
-	t.Parallel()
-
-	t.Run("SetFault replaces fault strategy", func(t *testing.T) {
-		t.Parallel()
-		stub := testkit.NewMethodStub[sampleCall](nil, "Svc.Do")
-		err := errors.New("custom")
-		stub.SetFault(testkit.NewCountedFault[sampleCall](err, 1))
-
-		fired, got := stub.ShouldFaultFor(sampleCall{})
-		testkit.True(t, fired, "must fire with custom strategy")
-		testkit.ErrorIs(t, got, err, "must return custom error")
-	})
-
-	t.Run("SetFault overrides previous Faults call", func(t *testing.T) {
-		t.Parallel()
-		stub := testkit.NewMethodStub[sampleCall](nil, "Svc.Do")
-		stub.Faults(errors.New("old"), 1)
-
-		newErr := errors.New("new")
-		stub.SetFault(testkit.NewCountedFault[sampleCall](newErr, 2))
-
-		fired1, _ := stub.ShouldFaultFor(sampleCall{})   // call 1: no (every 2nd)
-		fired2, got := stub.ShouldFaultFor(sampleCall{}) // call 2: yes
-		testkit.False(t, fired1, "call 1 must not fire")
-		testkit.True(t, fired2, "call 2 must fire")
-		testkit.ErrorIs(t, got, newErr, "must return new error")
-	})
-
-	t.Run("Reset rewinds custom fault strategy", func(t *testing.T) {
-		t.Parallel()
-		stub := testkit.NewMethodStub[sampleCall](nil, "Svc.Do")
-		stub.SetFault(testkit.NewCountedFault[sampleCall](errors.New("x"), 2))
-		_, _ = stub.ShouldFaultFor(sampleCall{}) // call 1
-		stub.Record(sampleCall{})
-
-		stub.Reset()
-
-		testkit.Equal(t, stub.CallCount(), 0, "recordings must be cleared")
-		f1, _ := stub.ShouldFaultFor(sampleCall{}) // call 1 after reset: no
-		testkit.False(t, f1, "fault counter must be reset")
 	})
 }

@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/directives"
 	"go.thesmos.sh/testkit/gen/stub/testdata/directives/storetest"
+	"go.thesmos.sh/testkit/rand"
 )
 
 func TestStoreStub(t *testing.T) {
@@ -346,7 +348,7 @@ func TestStoreStub(t *testing.T) {
 
 	t.Run("WithRandSource propagates to all methods", func(t *testing.T) {
 		t.Parallel()
-		s := storetest.NewStoreStub(t, storetest.StoreStubWithRandSource(testkit.FixedRandSource(0.5)))
+		s := storetest.NewStoreStub(t, storetest.StoreStubWithRandSource(rand.FixedRandSource(0.5)))
 		_ = s // verify construction succeeds with RandSource
 	})
 
@@ -494,7 +496,7 @@ func TestStoreStub(t *testing.T) {
 
 	t.Run("Delete Latency honors virtual clock", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := storetest.NewStoreStub(t, storetest.StoreStubWithClock(clk))
 		s.OnDelete.Latency(5 * time.Second)
 
@@ -514,7 +516,7 @@ func TestStoreStub(t *testing.T) {
 
 	t.Run("Delete Latency happens before Record", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := storetest.NewStoreStub(t, storetest.StoreStubWithClock(clk))
 		s.OnDelete.Latency(5 * time.Second)
 
@@ -535,7 +537,7 @@ func TestStoreStub(t *testing.T) {
 
 	t.Run("Delete Latency applies on DelegateTo path", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		inner := storetest.NewStoreStub(t)
 		inner.OnDelete.Returns(nil)
 		inner.OnGet.Returns(directives.Item{}, nil)
@@ -561,7 +563,7 @@ func TestStoreStub(t *testing.T) {
 
 	t.Run("Delete FaultsFor window expires", func(t *testing.T) {
 		t.Parallel()
-		clk := testkit.NewTestClock(time.Unix(0, 0))
+		clk := clock.NewTestClock(time.Unix(0, 0))
 		s := storetest.NewStoreStub(t, storetest.StoreStubWithClock(clk))
 		s.OnDelete.FaultsFor(5*time.Second, errTest)
 

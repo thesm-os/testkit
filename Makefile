@@ -128,6 +128,12 @@ generate:
 	cd cmd && $(GO) install ./testkit/
 	@echo "$(BLUE)Running code generation...$(NC)"
 	$(call foreach_module,$(GO) generate ./...)
+	@echo "$(BLUE)Regenerating testdata golden files...$(NC)"
+	@for dir in gen/*/testdata/*/; do \
+		if [ -d "$$dir" ]; then \
+			(cd $$dir && GOWORK=off $(GO) generate ./... 2>/dev/null) || true; \
+		fi; \
+	done
 	@$(MAKE) fmt
 	@echo "$(GREEN)Done$(NC)"
 

@@ -9,7 +9,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/writers"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertStoreContract runs conformance assertions against
@@ -33,9 +35,9 @@ func AssertStoreContract(
 	runStorePut(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[writers.Store]{
+		cctx := suite.CrossContext[writers.Store]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[writers.Store]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[writers.Store]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -89,9 +91,9 @@ func runStoreDelete(t *testing.T, factory func() writers.Store, cfg *storeConfig
 				}
 				return impl
 			}
-			dctx := testkit.DeleterContext[writers.Store, string]{
+			dctx := suite.DeleterContext[writers.Store, string]{
 				T: t,
-				DeleterBindings: testkit.DeleterBindings[writers.Store, string]{
+				DeleterBindings: bindings.DeleterBindings[writers.Store, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl writers.Store, k string) error {
 						return impl.Delete(ctx, k)
@@ -154,9 +156,9 @@ func runStoreGet(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 				}
 				return impl
 			}
-			rctx := testkit.ReaderContext[writers.Store, string, writers.Item]{
+			rctx := suite.ReaderContext[writers.Store, string, writers.Item]{
 				T: t,
-				ReaderBindings: testkit.ReaderBindings[writers.Store, string, writers.Item]{
+				ReaderBindings: bindings.ReaderBindings[writers.Store, string, writers.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl writers.Store, k string) (writers.Item, error) {
 						return impl.Get(ctx, k)
@@ -221,9 +223,9 @@ func runStoreList(t *testing.T, factory func() writers.Store, cfg *storeConfig) 
 				}
 				return impl
 			}
-			sctx := testkit.StreamContext[writers.Store, writers.Item]{
+			sctx := suite.StreamContext[writers.Store, writers.Item]{
 				T: t,
-				StreamBindings: testkit.StreamBindings[writers.Store, writers.Item]{
+				StreamBindings: bindings.StreamBindings[writers.Store, writers.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl writers.Store) iter.Seq2[writers.Item, error] {
 						return impl.List(ctx)
@@ -278,9 +280,9 @@ func runStorePut(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[writers.Store, writers.Item]{
+			wctx := suite.WriterContext[writers.Store, writers.Item]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[writers.Store, writers.Item]{
+				WriterBindings: bindings.WriterBindings[writers.Store, writers.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl writers.Store, v writers.Item) error {
 						return impl.Put(ctx, v)
@@ -312,35 +314,35 @@ func StoreCustom(name string, fn func(*testing.T, writers.Store)) StoreOption {
 }
 
 // StoreOnDelete adds plug-in assertions for the Delete method.
-func StoreOnDelete(assertions ...testkit.DeleterAssertion[writers.Store, string]) StoreOption {
+func StoreOnDelete(assertions ...suite.DeleterAssertion[writers.Store, string]) StoreOption {
 	return func(c *storeConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
 // StoreOnGet adds plug-in assertions for the Get method.
-func StoreOnGet(assertions ...testkit.ReaderAssertion[writers.Store, string, writers.Item]) StoreOption {
+func StoreOnGet(assertions ...suite.ReaderAssertion[writers.Store, string, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
 // StoreOnList adds plug-in assertions for the List method.
-func StoreOnList(assertions ...testkit.StreamAssertion[writers.Store, writers.Item]) StoreOption {
+func StoreOnList(assertions ...suite.StreamAssertion[writers.Store, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onList = append(c.onList, assertions...)
 	}
 }
 
 // StoreOnPut adds plug-in assertions for the Put method.
-func StoreOnPut(assertions ...testkit.WriterAssertion[writers.Store, writers.Item]) StoreOption {
+func StoreOnPut(assertions ...suite.WriterAssertion[writers.Store, writers.Item]) StoreOption {
 	return func(c *storeConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
 }
 
 // StoreOnAll adds cross-method assertions that span multiple methods.
-func StoreOnAll(assertions ...testkit.CrossMethodAssertion[writers.Store]) StoreOption {
+func StoreOnAll(assertions ...suite.CrossMethodAssertion[writers.Store]) StoreOption {
 	return func(c *storeConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -354,11 +356,11 @@ type storeCustomSubtest struct {
 type storeConfig struct {
 	prePopulate func(context.Context, writers.Store)
 	custom      []storeCustomSubtest
-	onAll       []testkit.CrossMethodAssertion[writers.Store]
-	onDelete    []testkit.DeleterAssertion[writers.Store, string]
-	onGet       []testkit.ReaderAssertion[writers.Store, string, writers.Item]
-	onList      []testkit.StreamAssertion[writers.Store, writers.Item]
-	onPut       []testkit.WriterAssertion[writers.Store, writers.Item]
+	onAll       []suite.CrossMethodAssertion[writers.Store]
+	onDelete    []suite.DeleterAssertion[writers.Store, string]
+	onGet       []suite.ReaderAssertion[writers.Store, string, writers.Item]
+	onList      []suite.StreamAssertion[writers.Store, writers.Item]
+	onPut       []suite.WriterAssertion[writers.Store, writers.Item]
 }
 
 func newStoreConfig(opts ...StoreOption) storeConfig {

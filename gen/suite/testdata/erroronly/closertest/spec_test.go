@@ -7,9 +7,9 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/erroronly"
 	"go.thesmos.sh/testkit/gen/suite/testdata/erroronly/closertest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryCloserContract(t *testing.T) {
@@ -21,10 +21,10 @@ func TestInMemoryCloserContract(t *testing.T) {
 			_ = c.Open(ctx)
 		}),
 		closertest.CloserOnOpen(
-			testkit.AssertLifecycleSucceeds[erroronly.Closer](),
+			suite.AssertLifecycleSucceeds[erroronly.Closer](),
 		),
 		closertest.CloserOnClose(
-			testkit.AssertLifecycleSucceeds[erroronly.Closer](),
+			suite.AssertLifecycleSucceeds[erroronly.Closer](),
 		),
 	)
 }

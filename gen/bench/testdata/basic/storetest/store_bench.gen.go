@@ -7,8 +7,9 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/gen/suite/testdata/basic"
+	"go.thesmos.sh/testkit/bench"
+	"go.thesmos.sh/testkit/bindings"
+	"go.thesmos.sh/testkit/gen/bench/testdata/basic"
 )
 
 // BenchmarkStoreContract runs performance benchmarks against
@@ -87,9 +88,9 @@ func benchStoreDelete(b *testing.B, factory func() basic.Store, cfg *storeBenchC
 				}
 				return impl
 			}
-			wctx := testkit.BenchWriterContext[basic.Store, string]{
+			wctx := bench.WriterContext[basic.Store, string]{
 				B: b,
-				WriterBindings: testkit.WriterBindings[basic.Store, string]{
+				WriterBindings: bindings.WriterBindings[basic.Store, string]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v string) error {
 						return impl.Delete(ctx, v)
@@ -125,9 +126,9 @@ func benchStoreGet(b *testing.B, factory func() basic.Store, cfg *storeBenchConf
 				}
 				return impl
 			}
-			rctx := testkit.BenchReaderContext[basic.Store, string, basic.Item]{
+			rctx := bench.ReaderContext[basic.Store, string, basic.Item]{
 				B: b,
-				ReaderBindings: testkit.ReaderBindings[basic.Store, string, basic.Item]{
+				ReaderBindings: bindings.ReaderBindings[basic.Store, string, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
 						return impl.Get(ctx, k)
@@ -163,9 +164,9 @@ func benchStoreLegacyPut(b *testing.B, factory func() basic.Store, cfg *storeBen
 				}
 				return impl
 			}
-			wctx := testkit.BenchWriterContext[basic.Store, basic.Item]{
+			wctx := bench.WriterContext[basic.Store, basic.Item]{
 				B: b,
-				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+				WriterBindings: bindings.WriterBindings[basic.Store, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 						return impl.LegacyPut(ctx, v)
@@ -201,9 +202,9 @@ func benchStorePing(b *testing.B, factory func() basic.Store, cfg *storeBenchCon
 				}
 				return impl
 			}
-			lctx := testkit.BenchLifecycleContext[basic.Store]{
+			lctx := bench.LifecycleContext[basic.Store]{
 				B: b,
-				LifecycleBindings: testkit.LifecycleBindings[basic.Store]{
+				LifecycleBindings: bindings.LifecycleBindings[basic.Store]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store) error {
 						return impl.Ping(ctx)
@@ -239,9 +240,9 @@ func benchStorePut(b *testing.B, factory func() basic.Store, cfg *storeBenchConf
 				}
 				return impl
 			}
-			wctx := testkit.BenchWriterContext[basic.Store, basic.Item]{
+			wctx := bench.WriterContext[basic.Store, basic.Item]{
 				B: b,
-				WriterBindings: testkit.WriterBindings[basic.Store, basic.Item]{
+				WriterBindings: bindings.WriterBindings[basic.Store, basic.Item]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl basic.Store, v basic.Item) error {
 						return impl.Put(ctx, v)
@@ -278,35 +279,35 @@ func StoreBenchOnCount(assertions ...func(*testing.B, basic.Store)) StoreBenchOp
 }
 
 // StoreBenchOnDelete adds plug-in bench primitives for the Delete method.
-func StoreBenchOnDelete(assertions ...testkit.BenchWriter[basic.Store, string]) StoreBenchOption {
+func StoreBenchOnDelete(assertions ...bench.Writer[basic.Store, string]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onDelete = append(c.onDelete, assertions...)
 	}
 }
 
 // StoreBenchOnGet adds plug-in bench primitives for the Get method.
-func StoreBenchOnGet(assertions ...testkit.BenchReader[basic.Store, string, basic.Item]) StoreBenchOption {
+func StoreBenchOnGet(assertions ...bench.Reader[basic.Store, string, basic.Item]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onGet = append(c.onGet, assertions...)
 	}
 }
 
 // StoreBenchOnLegacyPut adds plug-in bench primitives for the LegacyPut method.
-func StoreBenchOnLegacyPut(assertions ...testkit.BenchWriter[basic.Store, basic.Item]) StoreBenchOption {
+func StoreBenchOnLegacyPut(assertions ...bench.Writer[basic.Store, basic.Item]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onLegacyPut = append(c.onLegacyPut, assertions...)
 	}
 }
 
 // StoreBenchOnPing adds plug-in bench primitives for the Ping method.
-func StoreBenchOnPing(assertions ...testkit.BenchLifecycle[basic.Store]) StoreBenchOption {
+func StoreBenchOnPing(assertions ...bench.Lifecycle[basic.Store]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onPing = append(c.onPing, assertions...)
 	}
 }
 
 // StoreBenchOnPut adds plug-in bench primitives for the Put method.
-func StoreBenchOnPut(assertions ...testkit.BenchWriter[basic.Store, basic.Item]) StoreBenchOption {
+func StoreBenchOnPut(assertions ...bench.Writer[basic.Store, basic.Item]) StoreBenchOption {
 	return func(c *storeBenchConfig) {
 		c.onPut = append(c.onPut, assertions...)
 	}
@@ -321,11 +322,11 @@ type storeBenchConfig struct {
 	prePopulate func(context.Context, basic.Store)
 	custom      []storeBenchCustomSub
 	onCount     []func(*testing.B, basic.Store)
-	onDelete    []testkit.BenchWriter[basic.Store, string]
-	onGet       []testkit.BenchReader[basic.Store, string, basic.Item]
-	onLegacyPut []testkit.BenchWriter[basic.Store, basic.Item]
-	onPing      []testkit.BenchLifecycle[basic.Store]
-	onPut       []testkit.BenchWriter[basic.Store, basic.Item]
+	onDelete    []bench.Writer[basic.Store, string]
+	onGet       []bench.Reader[basic.Store, string, basic.Item]
+	onLegacyPut []bench.Writer[basic.Store, basic.Item]
+	onPing      []bench.Lifecycle[basic.Store]
+	onPut       []bench.Writer[basic.Store, basic.Item]
 }
 
 func newStoreBenchConfig(opts ...StoreBenchOption) storeBenchConfig {

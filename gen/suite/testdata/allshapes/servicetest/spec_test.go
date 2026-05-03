@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/allshapes"
 	"go.thesmos.sh/testkit/gen/suite/testdata/allshapes/servicetest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestAllShapesContract(t *testing.T) {
@@ -29,15 +30,15 @@ func TestAllShapesContract(t *testing.T) {
 
 		// Reader: Get
 		servicetest.ServiceOnGet(
-			testkit.AssertReturnsForKey[allshapes.Service, string, allshapes.Item](
+			suite.AssertReturnsForKey[allshapes.Service, string, allshapes.Item](
 				"seed-1", allshapes.Item{ID: "seed-1", Name: "seed"},
 			),
-			testkit.AssertReturnsSentinel[allshapes.Service, string, allshapes.Item](
+			suite.AssertReturnsSentinel[allshapes.Service, string, allshapes.Item](
 				"nonexistent", allshapes.ErrNotFound,
 			),
-			testkit.AssertConsistentReads[allshapes.Service, string, allshapes.Item]("seed-1", 3),
-			testkit.AssertReaderConcurrentSafe[allshapes.Service, string, allshapes.Item]("seed-1", 4, 50),
-			testkit.AssertReadsAreNonMutating[allshapes.Service, string, allshapes.Item, int](
+			suite.AssertConsistentReads[allshapes.Service, string, allshapes.Item]("seed-1", 3),
+			suite.AssertReaderConcurrentSafe[allshapes.Service, string, allshapes.Item]("seed-1", 4, 50),
+			suite.AssertReadsAreNonMutating[allshapes.Service, string, allshapes.Item, int](
 				"seed-1",
 				func(_ context.Context, s allshapes.Service) int { n, _ := s.Count(context.Background()); return n },
 			),
@@ -45,10 +46,10 @@ func TestAllShapesContract(t *testing.T) {
 
 		// Writer: Put
 		servicetest.ServiceOnPut(
-			testkit.AssertWriteSucceeds[allshapes.Service, allshapes.Item](
+			suite.AssertWriteSucceeds[allshapes.Service, allshapes.Item](
 				allshapes.Item{ID: "new-1", Name: "new"},
 			),
-			testkit.AssertWriteIsObservable[allshapes.Service, allshapes.Item, string](
+			suite.AssertWriteIsObservable[allshapes.Service, allshapes.Item, string](
 				allshapes.Item{ID: "obs-1", Name: "observable"},
 				func(item allshapes.Item) string { return item.ID },
 				func(ctx context.Context, s allshapes.Service, id string) (allshapes.Item, error) {
@@ -59,46 +60,46 @@ func TestAllShapesContract(t *testing.T) {
 
 		// Deleter: Delete
 		servicetest.ServiceOnDelete(
-			testkit.AssertDeleteSucceeds[allshapes.Service, string]("seed-1"),
-			testkit.AssertDeleteReturnsNotFound[allshapes.Service, string]("nonexistent", allshapes.ErrNotFound),
+			suite.AssertDeleteSucceeds[allshapes.Service, string]("seed-1"),
+			suite.AssertDeleteReturnsNotFound[allshapes.Service, string]("nonexistent", allshapes.ErrNotFound),
 		),
 
 		// Aggregator: Count
 		servicetest.ServiceOnCount(
-			testkit.AssertAggregatorBounded[allshapes.Service, int](0, 1000),
-			testkit.AssertAggregatorConsistent[allshapes.Service, int](3),
+			suite.AssertAggregatorBounded[allshapes.Service, int](0, 1000),
+			suite.AssertAggregatorConsistent[allshapes.Service, int](3),
 		),
 
 		// Lifecycle: Close
 		servicetest.ServiceOnClose(
-			testkit.AssertLifecycleSucceeds[allshapes.Service](),
-			testkit.AssertLifecycleIdempotent[allshapes.Service](),
+			suite.AssertLifecycleSucceeds[allshapes.Service](),
+			suite.AssertLifecycleIdempotent[allshapes.Service](),
 		),
 
 		// Pure: Describe
 		servicetest.ServiceOnDescribe(
-			testkit.AssertDeterministic[allshapes.Service, string](3),
-			testkit.AssertNoSideEffects[allshapes.Service, string, int](
+			suite.AssertDeterministic[allshapes.Service, string](3),
+			suite.AssertNoSideEffects[allshapes.Service, string, int](
 				func(s allshapes.Service) int { n, _ := s.Count(context.Background()); return n },
 			),
 		),
 
 		// Predicate: IsEmpty
 		servicetest.ServiceOnIsEmpty(
-			testkit.AssertPredicateConsistent[allshapes.Service](3),
-			testkit.AssertPredicateReturns[allshapes.Service](false),
+			suite.AssertPredicateConsistent[allshapes.Service](3),
+			suite.AssertPredicateReturns[allshapes.Service](false),
 		),
 
 		// StreamReader: List
 		servicetest.ServiceOnList(
-			testkit.AssertStreamCompletes[allshapes.Service, allshapes.Item](),
-			testkit.AssertStreamRespectsBreak[allshapes.Service, allshapes.Item](),
-			testkit.AssertStreamReentrant[allshapes.Service, allshapes.Item](),
+			suite.AssertStreamCompletes[allshapes.Service, allshapes.Item](),
+			suite.AssertStreamRespectsBreak[allshapes.Service, allshapes.Item](),
+			suite.AssertStreamReentrant[allshapes.Service, allshapes.Item](),
 		),
 
 		// Cross-method
 		servicetest.ServiceOnAll(
-			testkit.AssertReadAfterWrite[allshapes.Service, string, allshapes.Item](
+			suite.AssertReadAfterWrite[allshapes.Service, string, allshapes.Item](
 				allshapes.Item{ID: "cross-1", Name: "cross"},
 				func(ctx context.Context, s allshapes.Service, item allshapes.Item) error { return s.Put(ctx, item) },
 				func(ctx context.Context, s allshapes.Service, id string) (allshapes.Item, error) {
@@ -106,7 +107,7 @@ func TestAllShapesContract(t *testing.T) {
 				},
 				func(item allshapes.Item) string { return item.ID },
 			),
-			testkit.AssertDeleteRemovesValue[allshapes.Service, string, allshapes.Item](
+			suite.AssertDeleteRemovesValue[allshapes.Service, string, allshapes.Item](
 				allshapes.Item{ID: "del-1", Name: "delete-me"},
 				func(ctx context.Context, s allshapes.Service, item allshapes.Item) error { return s.Put(ctx, item) },
 				func(ctx context.Context, s allshapes.Service, id string) error { return s.Delete(ctx, id) },

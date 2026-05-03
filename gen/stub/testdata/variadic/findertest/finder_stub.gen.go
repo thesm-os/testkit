@@ -7,8 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/variadic"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -40,12 +42,12 @@ type FinderMergeCall struct {
 
 // FinderFindStub controls behavior and records calls for Find.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type FinderFindStub struct {
-	*testkit.MethodStub[FinderFindCall]
+	*stub.MethodStub[FinderFindCall]
 	fn       func(context.Context, ...string) ([]string, error)
 	fallback *finderFindReturn
 }
@@ -69,12 +71,12 @@ func (s *FinderFindStub) Func(fn func(context.Context, ...string) ([]string, err
 
 // FinderMergeStub controls behavior and records calls for Merge.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type FinderMergeStub struct {
-	*testkit.MethodStub[FinderMergeCall]
+	*stub.MethodStub[FinderMergeCall]
 	fn       func(context.Context, ...int) (int, error)
 	fallback *finderMergeReturn
 }
@@ -115,20 +117,20 @@ func FinderStubDelegateTo(impl variadic.Finder) FinderStubOption {
 	}
 }
 
-// FinderStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// FinderStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func FinderStubWithClock(clk testkit.Clock) FinderStubOption {
+func FinderStubWithClock(clk clock.Clock) FinderStubOption {
 	return func(s *FinderStub) {
 		s.OnFind.WithClock(clk)
 		s.OnMerge.WithClock(clk)
 	}
 }
 
-// FinderStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func FinderStubWithRandSource(src testkit.RandSource) FinderStubOption {
+// FinderStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func FinderStubWithRandSource(src rand.Source) FinderStubOption {
 	return func(s *FinderStub) {
 		s.OnFind.WithRandSource(src)
 		s.OnMerge.WithRandSource(src)
@@ -166,8 +168,8 @@ type FinderStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewFinderStub(tb testing.TB, opts ...FinderStubOption) *FinderStub {
 	s := &FinderStub{
-		OnFind:  &FinderFindStub{MethodStub: testkit.NewMethodStub[FinderFindCall](tb, "Finder.Find")},
-		OnMerge: &FinderMergeStub{MethodStub: testkit.NewMethodStub[FinderMergeCall](tb, "Finder.Merge")},
+		OnFind:  &FinderFindStub{MethodStub: stub.NewMethodStub[FinderFindCall](tb, "Finder.Find")},
+		OnMerge: &FinderMergeStub{MethodStub: stub.NewMethodStub[FinderMergeCall](tb, "Finder.Merge")},
 	}
 	for _, opt := range opts {
 		opt(s)

@@ -7,9 +7,9 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bench"
+	"go.thesmos.sh/testkit/gen/bench/testdata/basic"
 	"go.thesmos.sh/testkit/gen/bench/testdata/basic/storetest"
-	"go.thesmos.sh/testkit/gen/suite/testdata/basic"
 )
 
 func BenchmarkInMemoryStoreContract(b *testing.B) {
@@ -23,21 +23,21 @@ func BenchmarkInMemoryStoreContract(b *testing.B) {
 
 		// Reader: typed plug-ins on Get.
 		storetest.StoreBenchOnGet(
-			testkit.BenchReaderHotPath[basic.Store, string, basic.Item]("known-1"),
-			testkit.BenchReaderAllocsWithin[basic.Store, string, basic.Item]("known-1", 0),
-			testkit.BenchReaderConcurrentThroughput[basic.Store, string, basic.Item]("known-1", 4),
+			bench.ReaderHotPath[basic.Store, string, basic.Item]("known-1"),
+			bench.ReaderAllocsWithin[basic.Store, string, basic.Item]("known-1", 0),
+			bench.ReaderConcurrentThroughput[basic.Store, string, basic.Item]("known-1", 4),
 		),
 
 		// Writer: typed plug-in on Put.
 		storetest.StoreBenchOnPut(
-			testkit.BenchWriterHotPath[basic.Store, basic.Item](
+			bench.WriterHotPath[basic.Store, basic.Item](
 				basic.Item{ID: "bench", Name: "bench"},
 			),
 		),
 
 		// Lifecycle: typed plug-in on Ping.
 		storetest.StoreBenchOnPing(
-			testkit.BenchLifecycleAllocsWithin[basic.Store](0),
+			bench.LifecycleAllocsWithin[basic.Store](0),
 		),
 
 		// Unknown: untyped plug-in on Count.

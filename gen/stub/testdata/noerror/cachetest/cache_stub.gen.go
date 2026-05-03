@@ -7,8 +7,10 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/noerror"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -52,12 +54,12 @@ type CacheLookupCall struct {
 
 // CacheClearStub controls behavior and records calls for Clear.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CacheClearStub struct {
-	*testkit.MethodStub[CacheClearCall]
+	*stub.MethodStub[CacheClearCall]
 	fn func(context.Context)
 }
 
@@ -69,12 +71,12 @@ func (s *CacheClearStub) Func(fn func(context.Context)) *CacheClearStub {
 
 // CacheCountStub controls behavior and records calls for Count.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CacheCountStub struct {
-	*testkit.MethodStub[CacheCountCall]
+	*stub.MethodStub[CacheCountCall]
 	fn       func(context.Context) int
 	fallback *cacheCountReturn
 }
@@ -97,12 +99,12 @@ func (s *CacheCountStub) Func(fn func(context.Context) int) *CacheCountStub {
 
 // CacheKeysStub controls behavior and records calls for Keys.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CacheKeysStub struct {
-	*testkit.MethodStub[CacheKeysCall]
+	*stub.MethodStub[CacheKeysCall]
 	fn       func(context.Context) []string
 	fallback *cacheKeysReturn
 }
@@ -125,12 +127,12 @@ func (s *CacheKeysStub) Func(fn func(context.Context) []string) *CacheKeysStub {
 
 // CacheLookupStub controls behavior and records calls for Lookup.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type CacheLookupStub struct {
-	*testkit.MethodStub[CacheLookupCall]
+	*stub.MethodStub[CacheLookupCall]
 	fn       func(context.Context, string) *string
 	fallback *cacheLookupReturn
 }
@@ -172,10 +174,10 @@ func CacheStubDelegateTo(impl noerror.Cache) CacheStubOption {
 	}
 }
 
-// CacheStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// CacheStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func CacheStubWithClock(clk testkit.Clock) CacheStubOption {
+func CacheStubWithClock(clk clock.Clock) CacheStubOption {
 	return func(s *CacheStub) {
 		s.OnClear.WithClock(clk)
 		s.OnCount.WithClock(clk)
@@ -184,10 +186,10 @@ func CacheStubWithClock(clk testkit.Clock) CacheStubOption {
 	}
 }
 
-// CacheStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func CacheStubWithRandSource(src testkit.RandSource) CacheStubOption {
+// CacheStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func CacheStubWithRandSource(src rand.Source) CacheStubOption {
 	return func(s *CacheStub) {
 		s.OnClear.WithRandSource(src)
 		s.OnCount.WithRandSource(src)
@@ -241,10 +243,10 @@ type CacheStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewCacheStub(tb testing.TB, opts ...CacheStubOption) *CacheStub {
 	s := &CacheStub{
-		OnClear:  &CacheClearStub{MethodStub: testkit.NewMethodStub[CacheClearCall](tb, "Cache.Clear")},
-		OnCount:  &CacheCountStub{MethodStub: testkit.NewMethodStub[CacheCountCall](tb, "Cache.Count")},
-		OnKeys:   &CacheKeysStub{MethodStub: testkit.NewMethodStub[CacheKeysCall](tb, "Cache.Keys")},
-		OnLookup: &CacheLookupStub{MethodStub: testkit.NewMethodStub[CacheLookupCall](tb, "Cache.Lookup")},
+		OnClear:  &CacheClearStub{MethodStub: stub.NewMethodStub[CacheClearCall](tb, "Cache.Clear")},
+		OnCount:  &CacheCountStub{MethodStub: stub.NewMethodStub[CacheCountCall](tb, "Cache.Count")},
+		OnKeys:   &CacheKeysStub{MethodStub: stub.NewMethodStub[CacheKeysCall](tb, "Cache.Keys")},
+		OnLookup: &CacheLookupStub{MethodStub: stub.NewMethodStub[CacheLookupCall](tb, "Cache.Lookup")},
 	}
 	for _, opt := range opts {
 		opt(s)

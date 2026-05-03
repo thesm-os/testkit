@@ -6,6 +6,9 @@ package testkit
 import (
 	"sync"
 	"time"
+
+	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/rand"
 )
 
 // Fault evaluates whether a fault should fire for a given call. Implementations
@@ -20,7 +23,7 @@ import (
 type Fault[C any] interface {
 	// ShouldFire reports whether the fault should fire for this call.
 	// Returns (true, faultErr) to fire, (false, nil) to pass through.
-	ShouldFire(call C, clock Clock) (bool, error)
+	ShouldFire(call C, clock clock.Clock) (bool, error)
 
 	// Reset rewinds internal counters without clearing configuration.
 	// Matches the MethodStub.Reset contract: config sticks, counters rewind.
@@ -44,7 +47,7 @@ func NewCountedFault[C any](err error, n int) *CountedFault[C] {
 // ShouldFire increments the internal counter and reports whether the fault
 // should fire. The call and clock parameters are ignored — counted faults
 // are context-free.
-func (f *CountedFault[C]) ShouldFire(_ C, _ Clock) (bool, error) {
+func (f *CountedFault[C]) ShouldFire(_ C, _ clock.Clock) (bool, error) {
 	if f.inner.shouldFire() {
 		return true, f.inner.faultErr
 	}
@@ -78,7 +81,7 @@ func NewRetryFault[C any](err error, n int) *RetryFault[C] {
 }
 
 // ShouldFire fails for calls 1 through n-1, succeeds from call n onward.
-func (f *RetryFault[C]) ShouldFire(_ C, _ Clock) (bool, error) {
+func (f *RetryFault[C]) ShouldFire(_ C, _ clock.Clock) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.count++
@@ -101,19 +104,19 @@ func (f *RetryFault[C]) Reset() {
 type ProbabilityFault[C any] struct {
 	err error
 	p   float64
-	src RandSource
+	src rand.Source
 }
 
 // NewProbabilityFault returns a [ProbabilityFault] that fires with probability p
 // (in [0.0, 1.0]) on each call. The [RandSource] determines the random number
 // generation — pass [DefaultRandSource] for stdlib or [FixedRandSource] for
 // deterministic testing.
-func NewProbabilityFault[C any](err error, p float64, src RandSource) *ProbabilityFault[C] {
+func NewProbabilityFault[C any](err error, p float64, src rand.Source) *ProbabilityFault[C] {
 	return &ProbabilityFault[C]{err: err, p: p, src: src}
 }
 
 // ShouldFire draws a random number and fires if it falls below p.
-func (f *ProbabilityFault[C]) ShouldFire(_ C, _ Clock) (bool, error) {
+func (f *ProbabilityFault[C]) ShouldFire(_ C, _ clock.Clock) (bool, error) {
 	if f.src.Float64() < f.p {
 		return true, f.err
 	}
@@ -140,8 +143,8 @@ func NewWindowedFault[C any](err error, deadline time.Time) *WindowedFault[C] {
 
 // ShouldFire fires if the clock's current time is before the deadline.
 // If clock is nil, uses real time.
-func (f *WindowedFault[C]) ShouldFire(_ C, clock Clock) (bool, error) {
-	now := clockNow(clock)
+func (f *WindowedFault[C]) ShouldFire(_ C, clock clock.Clock) (bool, error) {
+	now := ClockNow(clock)
 	if now.Before(f.deadline) {
 		return true, f.err
 	}
@@ -165,7 +168,7 @@ func NewPredicateFault[C any](err error, pred func(C) bool) *PredicateFault[C] {
 }
 
 // ShouldFire evaluates the predicate against the call value.
-func (f *PredicateFault[C]) ShouldFire(call C, _ Clock) (bool, error) {
+func (f *PredicateFault[C]) ShouldFire(call C, _ clock.Clock) (bool, error) {
 	if f.pred(call) {
 		return true, f.err
 	}
@@ -201,7 +204,7 @@ func And[C any](faults ...Fault[C]) *AndFault[C] {
 }
 
 // ShouldFire returns true only when every inner fault fires.
-func (f *AndFault[C]) ShouldFire(call C, clock Clock) (bool, error) {
+func (f *AndFault[C]) ShouldFire(call C, clock clock.Clock) (bool, error) {
 	var firstErr error
 	for _, inner := range f.inner {
 		fired, err := inner.ShouldFire(call, clock)
@@ -235,7 +238,7 @@ func Or[C any](faults ...Fault[C]) *OrFault[C] {
 }
 
 // ShouldFire returns true when any inner fault fires.
-func (f *OrFault[C]) ShouldFire(call C, clock Clock) (bool, error) {
+func (f *OrFault[C]) ShouldFire(call C, clock clock.Clock) (bool, error) {
 	for _, inner := range f.inner {
 		fired, err := inner.ShouldFire(call, clock)
 		if fired {
@@ -253,8 +256,8 @@ func (f *OrFault[C]) Reset() {
 	}
 }
 
-// clockNow returns clock.Now() if clock is non-nil, otherwise time.Now().
-func clockNow(clock Clock) time.Time {
+// ClockNow returns clock.Now() if clock is non-nil, otherwise time.Now().
+func ClockNow(clock clock.Clock) time.Time {
 	if clock != nil {
 		return clock.Now()
 	}

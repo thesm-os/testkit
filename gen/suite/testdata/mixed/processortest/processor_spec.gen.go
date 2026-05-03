@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/mixed"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertProcessorContract runs conformance assertions against
@@ -31,9 +33,9 @@ func AssertProcessorContract(
 	runProcessorProcess(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[mixed.Processor]{
+		cctx := suite.CrossContext[mixed.Processor]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[mixed.Processor]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[mixed.Processor]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -63,9 +65,9 @@ func runProcessorDescribe(t *testing.T, factory func() mixed.Processor, cfg *pro
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[mixed.Processor, string]{
+			pctx := suite.PureContext[mixed.Processor, string]{
 				T: t,
-				PureBindings: testkit.PureBindings[mixed.Processor, string]{
+				PureBindings: bindings.PureBindings[mixed.Processor, string]{
 					Factory: prePopFactory,
 					Call: func(impl mixed.Processor) string {
 						return impl.Describe()
@@ -132,9 +134,9 @@ func runProcessorLegacyProcess(t *testing.T, factory func() mixed.Processor, cfg
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[mixed.Processor, []byte]{
+			wctx := suite.WriterContext[mixed.Processor, []byte]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[mixed.Processor, []byte]{
+				WriterBindings: bindings.WriterBindings[mixed.Processor, []byte]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
 						return impl.LegacyProcess(ctx, v)
@@ -211,9 +213,9 @@ func runProcessorProcess(t *testing.T, factory func() mixed.Processor, cfg *proc
 				}
 				return impl
 			}
-			wctx := testkit.WriterContext[mixed.Processor, []byte]{
+			wctx := suite.WriterContext[mixed.Processor, []byte]{
 				T: t,
-				WriterBindings: testkit.WriterBindings[mixed.Processor, []byte]{
+				WriterBindings: bindings.WriterBindings[mixed.Processor, []byte]{
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl mixed.Processor, v []byte) error {
 						return impl.Process(ctx, v)
@@ -245,28 +247,28 @@ func ProcessorCustom(name string, fn func(*testing.T, mixed.Processor)) Processo
 }
 
 // ProcessorOnDescribe adds plug-in assertions for the Describe method.
-func ProcessorOnDescribe(assertions ...testkit.PureAssertion[mixed.Processor, string]) ProcessorOption {
+func ProcessorOnDescribe(assertions ...suite.PureAssertion[mixed.Processor, string]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onDescribe = append(c.onDescribe, assertions...)
 	}
 }
 
 // ProcessorOnLegacyProcess adds plug-in assertions for the LegacyProcess method.
-func ProcessorOnLegacyProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
+func ProcessorOnLegacyProcess(assertions ...suite.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onLegacyProcess = append(c.onLegacyProcess, assertions...)
 	}
 }
 
 // ProcessorOnProcess adds plug-in assertions for the Process method.
-func ProcessorOnProcess(assertions ...testkit.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
+func ProcessorOnProcess(assertions ...suite.WriterAssertion[mixed.Processor, []byte]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onProcess = append(c.onProcess, assertions...)
 	}
 }
 
 // ProcessorOnAll adds cross-method assertions that span multiple methods.
-func ProcessorOnAll(assertions ...testkit.CrossMethodAssertion[mixed.Processor]) ProcessorOption {
+func ProcessorOnAll(assertions ...suite.CrossMethodAssertion[mixed.Processor]) ProcessorOption {
 	return func(c *processorConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -280,10 +282,10 @@ type processorCustomSubtest struct {
 type processorConfig struct {
 	prePopulate     func(context.Context, mixed.Processor)
 	custom          []processorCustomSubtest
-	onAll           []testkit.CrossMethodAssertion[mixed.Processor]
-	onDescribe      []testkit.PureAssertion[mixed.Processor, string]
-	onLegacyProcess []testkit.WriterAssertion[mixed.Processor, []byte]
-	onProcess       []testkit.WriterAssertion[mixed.Processor, []byte]
+	onAll           []suite.CrossMethodAssertion[mixed.Processor]
+	onDescribe      []suite.PureAssertion[mixed.Processor, string]
+	onLegacyProcess []suite.WriterAssertion[mixed.Processor, []byte]
+	onProcess       []suite.WriterAssertion[mixed.Processor, []byte]
 }
 
 func newProcessorConfig(opts ...ProcessorOption) processorConfig {

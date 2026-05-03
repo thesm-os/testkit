@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/basic"
 	"go.thesmos.sh/testkit/gen/suite/testdata/basic/storetest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryStoreContract(t *testing.T) {
@@ -21,18 +22,18 @@ func TestInMemoryStoreContract(t *testing.T) {
 			_ = s.Put(ctx, basic.Item{ID: "known-1", Name: "test"})
 		}),
 		storetest.StoreOnGet(
-			testkit.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),
-			testkit.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
-			testkit.AssertConsistentReads[basic.Store, string, basic.Item]("known-1", 3),
+			suite.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),
+			suite.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
+			suite.AssertConsistentReads[basic.Store, string, basic.Item]("known-1", 3),
 		),
 		storetest.StoreOnPut(
-			testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1", Name: "new"}),
+			suite.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1", Name: "new"}),
 		),
 		storetest.StoreOnDelete(
-			testkit.AssertWriteSucceeds[basic.Store, string]("known-1"),
+			suite.AssertWriteSucceeds[basic.Store, string]("known-1"),
 		),
 		storetest.StoreOnPing(
-			testkit.AssertLifecycleSucceeds[basic.Store](),
+			suite.AssertLifecycleSucceeds[basic.Store](),
 		),
 		storetest.StoreOnCount(func(t *testing.T, s basic.Store) {
 			c1 := s.Count(t.Context())
@@ -40,10 +41,10 @@ func TestInMemoryStoreContract(t *testing.T) {
 			testkit.Equal(t, c1, c2, "Count must be deterministic")
 		}),
 		storetest.StoreOnLegacyPut(
-			testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "legacy", Name: "legacy"}),
+			suite.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "legacy", Name: "legacy"}),
 		),
 		storetest.StoreOnAll(
-			testkit.AssertReadAfterWrite[basic.Store, string, basic.Item](
+			suite.AssertReadAfterWrite[basic.Store, string, basic.Item](
 				basic.Item{ID: "cross-1", Name: "cross"},
 				func(ctx context.Context, s basic.Store, item basic.Item) error { return s.Put(ctx, item) },
 				func(ctx context.Context, s basic.Store, id string) (basic.Item, error) { return s.Get(ctx, id) },

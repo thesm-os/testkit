@@ -18,10 +18,10 @@ func {{.StubName}}DelegateTo(impl {{.QualifiedType}}) {{.StubName}}Option {
 {{- end}}{{end}}
 	}
 }
-// {{.StubName}}WithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// {{.StubName}}WithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func {{.StubName}}WithClock(clk testkit.Clock) {{.StubName}}Option {
+func {{.StubName}}WithClock(clk clock.Clock) {{.StubName}}Option {
 	return func(s *{{.StubName}}) {
 {{- range .Methods}}{{if not .Skip}}
 		s.On{{.Name}}.WithClock(clk)
@@ -29,10 +29,10 @@ func {{.StubName}}WithClock(clk testkit.Clock) {{.StubName}}Option {
 	}
 }
 
-// {{.StubName}}WithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func {{.StubName}}WithRandSource(src testkit.RandSource) {{.StubName}}Option {
+// {{.StubName}}WithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func {{.StubName}}WithRandSource(src rand.Source) {{.StubName}}Option {
 	return func(s *{{.StubName}}) {
 {{- range .Methods}}{{if not .Skip}}
 		s.On{{.Name}}.WithRandSource(src)
@@ -63,7 +63,7 @@ type {{.StubName}} struct {
 	On{{.Name}} *{{.StubType}}
 {{- end}}{{end}}
 {{- if .HasOrderConstraint}}
-	order *testkit.OrderTracker
+	order *stub.OrderTracker
 {{- end}}
 	strict bool
 }
@@ -73,7 +73,7 @@ type {{.StubName}} struct {
 func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}} {
 	s := &{{.StubName}}{
 {{- range .Methods}}{{if not .Skip}}
-		On{{.Name}}: &{{.StubType}}{MethodStub: testkit.NewMethodStub[{{.CallType}}](tb, "{{$.TypeName}}.{{.Name}}")},
+		On{{.Name}}: &{{.StubType}}{MethodStub: stub.NewMethodStub[{{.CallType}}](tb, "{{$.TypeName}}.{{.Name}}")},
 {{- end}}{{end}}
 	}
 	for _, opt := range opts {
@@ -85,7 +85,7 @@ func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}}
 {{- end}}{{end}}
 	}
 {{- if .HasOrderConstraint}}
-	s.order = testkit.NewOrderTracker(tb, s.strict)
+	s.order = stub.NewOrderTracker(tb, s.strict)
 {{- end}}
 	if tb != nil {
 		tb.Cleanup(func() {

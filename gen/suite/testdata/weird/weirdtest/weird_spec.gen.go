@@ -8,7 +8,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/bindings"
 	"go.thesmos.sh/testkit/gen/suite/testdata/weird"
+	"go.thesmos.sh/testkit/suite"
 )
 
 // AssertCodecContract runs conformance assertions against
@@ -33,9 +35,9 @@ func AssertCodecContract(
 	runCodecMarshalBinary(t, factory, &cfg)
 
 	for _, a := range cfg.onAll {
-		cctx := testkit.CrossContext[weird.Codec]{
+		cctx := suite.CrossContext[weird.Codec]{
 			T:             t,
-			CrossBindings: testkit.CrossBindings[weird.Codec]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[weird.Codec]{Factory: factory},
 		}
 		a(cctx)
 	}
@@ -65,9 +67,9 @@ func runCodecContentType(t *testing.T, factory func() weird.Codec, cfg *codecCon
 				}
 				return impl
 			}
-			pctx := testkit.PureContext[weird.Codec, string]{
+			pctx := suite.PureContext[weird.Codec, string]{
 				T: t,
-				PureBindings: testkit.PureBindings[weird.Codec, string]{
+				PureBindings: bindings.PureBindings[weird.Codec, string]{
 					Factory: prePopFactory,
 					Call: func(impl weird.Codec) string {
 						return impl.ContentType()
@@ -168,9 +170,9 @@ func runCodecHandles(t *testing.T, factory func() weird.Codec, cfg *codecConfig)
 				}
 				return impl
 			}
-			pctx := testkit.PredicateContext[weird.Codec]{
+			pctx := suite.PredicateContext[weird.Codec]{
 				T: t,
-				PredicateBindings: testkit.PredicateBindings[weird.Codec]{
+				PredicateBindings: bindings.PredicateBindings[weird.Codec]{
 					Factory: prePopFactory,
 					Call: func(impl weird.Codec) bool {
 						return impl.Handles("")
@@ -230,7 +232,7 @@ func CodecCustom(name string, fn func(*testing.T, weird.Codec)) CodecOption {
 }
 
 // CodecOnContentType adds plug-in assertions for the ContentType method.
-func CodecOnContentType(assertions ...testkit.PureAssertion[weird.Codec, string]) CodecOption {
+func CodecOnContentType(assertions ...suite.PureAssertion[weird.Codec, string]) CodecOption {
 	return func(c *codecConfig) {
 		c.onContentType = append(c.onContentType, assertions...)
 	}
@@ -251,7 +253,7 @@ func CodecOnEncode(assertions ...func(*testing.T, weird.Codec)) CodecOption {
 }
 
 // CodecOnHandles adds plug-in assertions for the Handles method.
-func CodecOnHandles(assertions ...testkit.PredicateAssertion[weird.Codec]) CodecOption {
+func CodecOnHandles(assertions ...suite.PredicateAssertion[weird.Codec]) CodecOption {
 	return func(c *codecConfig) {
 		c.onHandles = append(c.onHandles, assertions...)
 	}
@@ -265,7 +267,7 @@ func CodecOnMarshalBinary(assertions ...func(*testing.T, weird.Codec)) CodecOpti
 }
 
 // CodecOnAll adds cross-method assertions that span multiple methods.
-func CodecOnAll(assertions ...testkit.CrossMethodAssertion[weird.Codec]) CodecOption {
+func CodecOnAll(assertions ...suite.CrossMethodAssertion[weird.Codec]) CodecOption {
 	return func(c *codecConfig) {
 		c.onAll = append(c.onAll, assertions...)
 	}
@@ -279,11 +281,11 @@ type codecCustomSubtest struct {
 type codecConfig struct {
 	prePopulate     func(context.Context, weird.Codec)
 	custom          []codecCustomSubtest
-	onAll           []testkit.CrossMethodAssertion[weird.Codec]
-	onContentType   []testkit.PureAssertion[weird.Codec, string]
+	onAll           []suite.CrossMethodAssertion[weird.Codec]
+	onContentType   []suite.PureAssertion[weird.Codec, string]
 	onDecode        []func(*testing.T, weird.Codec)
 	onEncode        []func(*testing.T, weird.Codec)
-	onHandles       []testkit.PredicateAssertion[weird.Codec]
+	onHandles       []suite.PredicateAssertion[weird.Codec]
 	onMarshalBinary []func(*testing.T, weird.Codec)
 }
 

@@ -6,9 +6,9 @@ package cachetest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/nocontext"
 	"go.thesmos.sh/testkit/gen/suite/testdata/nocontext/cachetest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryCacheContract(t *testing.T) {
@@ -23,7 +23,7 @@ func TestInMemoryCacheContract(t *testing.T) {
 			_ = c.Set("k", "v")
 		}),
 		cachetest.CacheOnLen(
-			testkit.AssertDeterministic[nocontext.Cache, int](3),
+			suite.AssertDeterministic[nocontext.Cache, int](3),
 		),
 	)
 }

@@ -6,9 +6,9 @@ package scannertest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/iterators"
 	"go.thesmos.sh/testkit/gen/suite/testdata/iterators/scannertest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryScannerContract(t *testing.T) {
@@ -17,14 +17,14 @@ func TestInMemoryScannerContract(t *testing.T) {
 
 	scannertest.AssertScannerContract(t, factory,
 		scannertest.ScannerOnKeys(
-			testkit.AssertStreamCompletes[iterators.Scanner, string](),
+			suite.AssertStreamCompletes[iterators.Scanner, string](),
 		),
 		scannertest.ScannerOnScan(
-			testkit.AssertStreamCompletes[iterators.Scanner, iterators.Item](),
-			testkit.AssertStreamRespectsBreak[iterators.Scanner, iterators.Item](),
+			suite.AssertStreamCompletes[iterators.Scanner, iterators.Item](),
+			suite.AssertStreamRespectsBreak[iterators.Scanner, iterators.Item](),
 		),
 		scannertest.ScannerOnCount(
-			testkit.AssertAggregatorConsistent[iterators.Scanner, int](3),
+			suite.AssertAggregatorConsistent[iterators.Scanner, int](3),
 		),
 	)
 }

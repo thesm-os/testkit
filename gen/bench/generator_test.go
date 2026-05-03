@@ -14,20 +14,7 @@ import (
 	"go.thesmos.sh/testkit/gen/bench"
 )
 
-// suiteTestdataDir returns the path to suite's testdata, used as the
-// source interface packages for bench generation.
-func suiteTestdataDir(t *testing.T) string {
-	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("cannot determine test file location")
-	}
-	return filepath.Join(filepath.Dir(file), "..", "suite", "testdata")
-}
-
-// benchTestdataDir returns the path to bench's own testdata, where
-// generated golden files and bench tests live.
-func benchTestdataDir(t *testing.T) string {
+func testdataDir(t *testing.T) string {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
@@ -39,7 +26,7 @@ func benchTestdataDir(t *testing.T) string {
 func loadTestPackage(t *testing.T, subdir string) *gen.Package {
 	t.Helper()
 	loader := gen.NewLoader()
-	dir := filepath.Join(suiteTestdataDir(t), subdir)
+	dir := filepath.Join(testdataDir(t), subdir)
 	pkg, err := loader.Load(".", dir)
 	testkit.NoError(t, err, "must load package")
 	return pkg
@@ -77,7 +64,7 @@ func TestGenerate(t *testing.T) {
 		content := string(result.Files[0].Content)
 		testkit.Assert(t, content).Contains("BenchmarkStoreContract", "must have entry point")
 		testkit.Assert(t, content).Contains("benchStoreGet", "must have Reader-shaped method")
-		testkit.Assert(t, content).Contains("BenchReaderContext", "must use bench reader context for Get")
+		testkit.Assert(t, content).Contains("bench.ReaderContext", "must use bench reader context for Get")
 		testkit.Assert(t, content).Contains("hot-path", "must have default hot-path benchmark")
 		testkit.Assert(t, content).Contains("StoreBenchOption", "must have option type")
 		testkit.Assert(t, content).Contains("StoreBenchOnGet", "must have plug-in option for Get")
@@ -103,7 +90,7 @@ func TestGenerate(t *testing.T) {
 			})
 			testkit.NoError(t, err, "must generate "+fx.name)
 
-			goldenFile := filepath.Join(benchTestdataDir(t), fx.dir, filepath.Dir(fx.output), filepath.Base(fx.output))
+			goldenFile := filepath.Join(testdataDir(t), fx.dir, filepath.Dir(fx.output), filepath.Base(fx.output))
 			want, err := os.ReadFile(goldenFile)
 			testkit.NoError(t, err, "must read golden file for "+fx.name)
 			testkit.Equal(t, string(result.Files[0].Content), string(want), fx.name+" bench must match golden")

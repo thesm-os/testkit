@@ -8,8 +8,10 @@ import (
 	"io"
 	"testing"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/interfaces"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -40,12 +42,12 @@ type ProcessorWriteToCall struct {
 
 // ProcessorReadFromStub controls behavior and records calls for ReadFrom.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ProcessorReadFromStub struct {
-	*testkit.MethodStub[ProcessorReadFromCall]
+	*stub.MethodStub[ProcessorReadFromCall]
 	fn       func(context.Context, io.Reader) (int, error)
 	fallback *processorReadFromReturn
 }
@@ -69,12 +71,12 @@ func (s *ProcessorReadFromStub) Func(fn func(context.Context, io.Reader) (int, e
 
 // ProcessorWriteToStub controls behavior and records calls for WriteTo.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ProcessorWriteToStub struct {
-	*testkit.MethodStub[ProcessorWriteToCall]
+	*stub.MethodStub[ProcessorWriteToCall]
 	fn       func(context.Context, io.Writer) error
 	fallback *processorWriteToReturn
 }
@@ -114,20 +116,20 @@ func ProcessorStubDelegateTo(impl interfaces.Processor) ProcessorStubOption {
 	}
 }
 
-// ProcessorStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// ProcessorStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func ProcessorStubWithClock(clk testkit.Clock) ProcessorStubOption {
+func ProcessorStubWithClock(clk clock.Clock) ProcessorStubOption {
 	return func(s *ProcessorStub) {
 		s.OnReadFrom.WithClock(clk)
 		s.OnWriteTo.WithClock(clk)
 	}
 }
 
-// ProcessorStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func ProcessorStubWithRandSource(src testkit.RandSource) ProcessorStubOption {
+// ProcessorStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func ProcessorStubWithRandSource(src rand.Source) ProcessorStubOption {
 	return func(s *ProcessorStub) {
 		s.OnReadFrom.WithRandSource(src)
 		s.OnWriteTo.WithRandSource(src)
@@ -165,8 +167,8 @@ type ProcessorStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewProcessorStub(tb testing.TB, opts ...ProcessorStubOption) *ProcessorStub {
 	s := &ProcessorStub{
-		OnReadFrom: &ProcessorReadFromStub{MethodStub: testkit.NewMethodStub[ProcessorReadFromCall](tb, "Processor.ReadFrom")},
-		OnWriteTo:  &ProcessorWriteToStub{MethodStub: testkit.NewMethodStub[ProcessorWriteToCall](tb, "Processor.WriteTo")},
+		OnReadFrom: &ProcessorReadFromStub{MethodStub: stub.NewMethodStub[ProcessorReadFromCall](tb, "Processor.ReadFrom")},
+		OnWriteTo:  &ProcessorWriteToStub{MethodStub: stub.NewMethodStub[ProcessorWriteToCall](tb, "Processor.WriteTo")},
 	}
 	for _, opt := range opts {
 		opt(s)

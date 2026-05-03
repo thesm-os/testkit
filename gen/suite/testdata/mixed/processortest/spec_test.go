@@ -6,9 +6,9 @@ package processortest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/suite/testdata/mixed"
 	"go.thesmos.sh/testkit/gen/suite/testdata/mixed/processortest"
+	"go.thesmos.sh/testkit/suite"
 )
 
 func TestInMemoryProcessorContract(t *testing.T) {
@@ -17,13 +17,13 @@ func TestInMemoryProcessorContract(t *testing.T) {
 
 	processortest.AssertProcessorContract(t, factory,
 		processortest.ProcessorOnProcess(
-			testkit.AssertWriteSucceeds[mixed.Processor, []byte]([]byte("hello")),
+			suite.AssertWriteSucceeds[mixed.Processor, []byte]([]byte("hello")),
 		),
 		processortest.ProcessorOnLegacyProcess(
-			testkit.AssertWriteSucceeds[mixed.Processor, []byte]([]byte("legacy")),
+			suite.AssertWriteSucceeds[mixed.Processor, []byte]([]byte("legacy")),
 		),
 		processortest.ProcessorOnDescribe(
-			testkit.AssertDeterministic[mixed.Processor, string](3),
+			suite.AssertDeterministic[mixed.Processor, string](3),
 		),
 	)
 }

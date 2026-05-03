@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/stub/testdata/namedreturns"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
 )
 
 // Compile-time interface check.
@@ -43,12 +45,12 @@ type ServiceTimestampsCall struct {
 
 // ServiceSwapStub controls behavior and records calls for Swap.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ServiceSwapStub struct {
-	*testkit.MethodStub[ServiceSwapCall]
+	*stub.MethodStub[ServiceSwapCall]
 	fn       func(context.Context, string, string) (string, string, error)
 	fallback *serviceSwapReturn
 }
@@ -73,12 +75,12 @@ func (s *ServiceSwapStub) Func(fn func(context.Context, string, string) (string,
 
 // ServiceTimestampsStub controls behavior and records calls for Timestamps.
 //
-// Concurrent-test primitives inherited from [testkit.MethodStub]:
-//   - [testkit.Recorder.WaitForN] / [testkit.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
-//   - [testkit.Recorder.NewGate] / [testkit.Gate.Release] / [testkit.Gate.ReleaseOne] — deterministic race control
-//   - [testkit.Recorder.OnRecord] — streaming hook fired synchronously on every call
+// Concurrent-test primitives inherited from [stub.MethodStub]:
+//   - [stub.Recorder.WaitForN] / [stub.Recorder.WaitFor] — block until calls arrive (cond-variable, no polling)
+//   - [stub.Recorder.NewGate] / [stub.Gate.Release] / [stub.Gate.ReleaseOne] — deterministic race control
+//   - [stub.Recorder.OnRecord] — streaming hook fired synchronously on every call
 type ServiceTimestampsStub struct {
-	*testkit.MethodStub[ServiceTimestampsCall]
+	*stub.MethodStub[ServiceTimestampsCall]
 	fn       func(context.Context) (time.Time, time.Time, error)
 	fallback *serviceTimestampsReturn
 }
@@ -120,20 +122,20 @@ func ServiceStubDelegateTo(impl namedreturns.Service) ServiceStubOption {
 	}
 }
 
-// ServiceStubWithClock injects a [testkit.Clock] into all per-method stubs.
-// Use [testkit.NewTestClock] for deterministic virtual time or a consumer's
+// ServiceStubWithClock injects a [clock.Clock] into all per-method stubs.
+// Use [clock.NewTestClock] for deterministic virtual time or a consumer's
 // own clock implementation. Default is real wall-clock time.
-func ServiceStubWithClock(clk testkit.Clock) ServiceStubOption {
+func ServiceStubWithClock(clk clock.Clock) ServiceStubOption {
 	return func(s *ServiceStub) {
 		s.OnSwap.WithClock(clk)
 		s.OnTimestamps.WithClock(clk)
 	}
 }
 
-// ServiceStubWithRandSource injects a [testkit.RandSource] into all per-method
-// stubs. Use [testkit.FixedRandSource] for deterministic testing or a consumer's
-// own seeded RNG. Default is [testkit.DefaultRandSource] (math/rand/v2).
-func ServiceStubWithRandSource(src testkit.RandSource) ServiceStubOption {
+// ServiceStubWithRandSource injects a [rand.Source] into all per-method
+// stubs. Use [rand.FixedRandSource] for deterministic testing or a consumer's
+// own seeded RNG. Default is [rand.DefaultRandSource] (math/rand/v2).
+func ServiceStubWithRandSource(src rand.Source) ServiceStubOption {
 	return func(s *ServiceStub) {
 		s.OnSwap.WithRandSource(src)
 		s.OnTimestamps.WithRandSource(src)
@@ -171,8 +173,8 @@ type ServiceStub struct {
 // expectations at test cleanup. Pass nil for a pure stub.
 func NewServiceStub(tb testing.TB, opts ...ServiceStubOption) *ServiceStub {
 	s := &ServiceStub{
-		OnSwap:       &ServiceSwapStub{MethodStub: testkit.NewMethodStub[ServiceSwapCall](tb, "Service.Swap")},
-		OnTimestamps: &ServiceTimestampsStub{MethodStub: testkit.NewMethodStub[ServiceTimestampsCall](tb, "Service.Timestamps")},
+		OnSwap:       &ServiceSwapStub{MethodStub: stub.NewMethodStub[ServiceSwapCall](tb, "Service.Swap")},
+		OnTimestamps: &ServiceTimestampsStub{MethodStub: stub.NewMethodStub[ServiceTimestampsCall](tb, "Service.Timestamps")},
 	}
 	for _, opt := range opts {
 		opt(s)
