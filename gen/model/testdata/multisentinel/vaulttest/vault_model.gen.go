@@ -6,7 +6,6 @@ package vaulttest
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 
@@ -28,7 +27,7 @@ import (
 //	Skipped:       none
 //	Plug-in:       VaultModelReference, VaultModelActions, VaultModelLaw, VaultModelSkipLaw
 func AssertVaultModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() multisentinel.Vault,
 	opts ...VaultModelOption,
 ) {

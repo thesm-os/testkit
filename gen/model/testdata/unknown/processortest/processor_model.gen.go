@@ -6,7 +6,6 @@ package processortest
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 
@@ -27,7 +26,7 @@ import (
 //	Skipped:       Process(Unknown) — supply via ProcessorModelActions
 //	Plug-in:       ProcessorModelReference, ProcessorModelActions, ProcessorModelLaw, ProcessorModelSkipLaw
 func AssertProcessorModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() unknown.Processor,
 	opts ...ProcessorModelOption,
 ) {

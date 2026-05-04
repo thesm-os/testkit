@@ -4,8 +4,6 @@
 package model
 
 import (
-	"testing"
-
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/model/law"
@@ -47,7 +45,7 @@ type Config[T any] struct {
 // of actions, and checks all registered laws after every action.
 //
 // Use -rapid.checks=N to control iteration count (default 100).
-func Run[T any](t *testing.T, cfg Config[T]) {
+func Run[T any](t rapid.TB, cfg Config[T]) {
 	t.Helper()
 
 	if cfg.SUTFactory == nil {
@@ -159,7 +157,7 @@ func SkipLaw[T any](id string) Option[T] {
 }
 
 // Assert is the convenience entry point.
-func Assert[T any](t *testing.T, sutFactory func() T, opts ...Option[T]) {
+func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) {
 	t.Helper()
 	cfg := Config[T]{SUTFactory: sutFactory}
 	for _, opt := range opts {

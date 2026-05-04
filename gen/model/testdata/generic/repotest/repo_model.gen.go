@@ -6,7 +6,6 @@ package repotest
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 
@@ -28,7 +27,7 @@ import (
 //	Skipped:       none
 //	Plug-in:       ItemRepositoryModelReference, ItemRepositoryModelActions, ItemRepositoryModelLaw, ItemRepositoryModelSkipLaw
 func AssertItemRepositoryModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() generic.ItemRepository,
 	opts ...ItemRepositoryModelOption,
 ) {

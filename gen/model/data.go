@@ -47,6 +47,19 @@ type Data struct {
 	// SkippedMethods lists methods with Unknown shape that aren't
 	// covered by auto-derived actions.
 	SkippedMethods []string
+
+	// IsGeneric is true when the interface has uninstantiated type parameters.
+	// When true, the generator emits parameterized functions with type
+	// constraints threaded through.
+	IsGeneric bool
+
+	// TypeParamDecl is the Go type parameter declaration for generic
+	// interfaces, e.g., "[K comparable, V any]". Empty for non-generic.
+	TypeParamDecl string
+
+	// TypeParamNames is the instantiation-site type list, e.g., "[K, V]".
+	// Empty for non-generic.
+	TypeParamNames string
 }
 
 // IsCRUD reports whether Tier 0 reference synthesis is possible.
@@ -86,8 +99,15 @@ func (d *Data) HasCount() bool { return d.CountMethod != nil }
 // HasStream reports whether a StreamReader-shaped method was detected.
 func (d *Data) HasStream() bool { return d.StreamMethod != nil }
 
-func buildData(spec *suite.SpecData) *Data {
+func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 	md := &Data{SpecData: spec}
+
+	// Set up generic type parameter strings.
+	if len(typeParams) > 0 {
+		md.IsGeneric = true
+		md.TypeParamDecl = formatTypeParamDecl(typeParams)
+		md.TypeParamNames = formatTypeParamNames(typeParams)
+	}
 
 	// Detect shapes.
 	for _, m := range spec.Methods {
@@ -148,7 +168,9 @@ func buildData(spec *suite.SpecData) *Data {
 	}
 
 	// Find keyfield directive or heuristic.
-	if md.HasCRUD {
+	// For generic interfaces, keyfield resolution is deferred to the
+	// consumer (V is unknown at codegen time).
+	if md.HasCRUD && !md.IsGeneric {
 		md.KeyField = findKeyField(spec)
 	}
 
@@ -234,4 +256,30 @@ func isStructValType(m *suite.SpecMethodData) bool {
 		return ok
 	}
 	return false
+}
+
+// formatTypeParamDecl formats type parameters as a Go declaration:
+// "[K comparable, V any]".
+func formatTypeParamDecl(params []gen.TypeParamInfo) string {
+	if len(params) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, p := range params {
+		parts = append(parts, p.Name+" "+types.TypeString(p.Constraint, nil))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// formatTypeParamNames formats type parameters as an instantiation list:
+// "[K, V]".
+func formatTypeParamNames(params []gen.TypeParamInfo) string {
+	if len(params) == 0 {
+		return ""
+	}
+	var names []string
+	for _, p := range params {
+		names = append(names, p.Name)
+	}
+	return "[" + strings.Join(names, ", ") + "]"
 }

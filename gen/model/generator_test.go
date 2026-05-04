@@ -118,7 +118,7 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("return v.Key", "must extract Key in refmap")
 	})
 
-	t.Run("renders generic ItemRepository", func(t *testing.T) {
+	t.Run("renders generic ItemRepository (alias/monomorphic)", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "generic")
 		g := &model.Generator{}
@@ -132,6 +132,33 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("action.Deleter", "must pick up //testkit:deleter via origin")
 		testkit.Assert(t, content).Contains("generic.ErrNotFound", "must pick up sentinel via origin")
 		testkit.Assert(t, content).Contains("AUTO-DELETE-RETURNS-NOT-FOUND", "must derive delete law")
+	})
+
+	t.Run("renders generic Repository (parameterized)", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generic")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Repository"}, gen.DefaultConfig(), gen.Options{
+			Output: "repotest/repo_generic_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).
+			Contains("[K comparable, V any]", "must have type param decl")
+		testkit.Assert(t, content).
+			Contains("generic.Repository[K, V]", "must use parameterized type")
+		testkit.Assert(t, content).
+			Contains("rapid.Make[V]()", "must use rapid.Make for generic V")
+		testkit.Assert(t, content).
+			Contains("RepositoryModelKeyGen", "must have keyGen option")
+		testkit.Assert(t, content).
+			Contains("RepositoryModelKeyFunc", "must have keyFunc option")
+		testkit.Assert(t, content).
+			Contains("RepositoryModelSentinel", "must have sentinel option")
+		testkit.Assert(t, content).
+			NotContains("rapid.MakeCustom", "must not use MakeCustom for generic")
+		testkit.Assert(t, content).
+			NotContains("reflect.TypeOf", "must not use reflect for generic")
 	})
 
 	t.Run("renders richstruct Store", func(t *testing.T) {
@@ -282,7 +309,7 @@ func TestGenerate(t *testing.T) {
 		testkit.Equal(t, string(result.Files[0].Content), string(want), "richstruct model must match golden")
 	})
 
-	t.Run("golden/generic", func(t *testing.T) {
+	t.Run("golden/generic-alias", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "generic")
 		g := &model.Generator{}
@@ -294,6 +321,21 @@ func TestGenerate(t *testing.T) {
 		goldenFile := filepath.Join(testdataDir(t), "generic", "repotest", "repo_model.gen.go")
 		want, err := os.ReadFile(goldenFile)
 		testkit.NoError(t, err, "must read golden file")
-		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic model must match golden")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic alias model must match golden")
+	})
+
+	t.Run("golden/generic-parameterized", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "generic")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Repository"}, gen.DefaultConfig(), gen.Options{
+			Output: "repotest/repo_generic_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+
+		goldenFile := filepath.Join(testdataDir(t), "generic", "repotest", "repo_generic_model.gen.go")
+		want, err := os.ReadFile(goldenFile)
+		testkit.NoError(t, err, "must read golden file")
+		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic parameterized model must match golden")
 	})
 }

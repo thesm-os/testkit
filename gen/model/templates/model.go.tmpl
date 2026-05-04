@@ -13,7 +13,7 @@ package {{.PackageName}}
 //	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() {{.QualifiedType}},
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
@@ -209,7 +209,6 @@ func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 

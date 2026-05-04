@@ -6,7 +6,6 @@ package storetest
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 
@@ -28,7 +27,7 @@ import (
 //	Skipped:       none
 //	Plug-in:       StoreModelReference, StoreModelActions, StoreModelLaw, StoreModelSkipLaw
 func AssertStoreModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() basic.Store,
 	opts ...StoreModelOption,
 ) {

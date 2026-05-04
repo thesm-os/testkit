@@ -46,6 +46,24 @@ func TestFailableTB(t *testing.T) {
 		}
 	})
 
+	t.Run("FailNow marks failed", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.FailNow()
+		if !f.Failed() {
+			t.Fatal("should be failed after FailNow")
+		}
+	})
+
+	t.Run("Fail marks failed without terminating", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.Fail()
+		if !f.Failed() {
+			t.Fatal("should be failed after Fail")
+		}
+	})
+
 	t.Run("Errorf overwrites message each time", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
@@ -56,6 +74,18 @@ func TestFailableTB(t *testing.T) {
 		}
 		if !f.Failed() {
 			t.Fatal("should be failed after Errorf")
+		}
+	})
+
+	t.Run("Error marks failed", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.Error("oops")
+		if !f.Failed() {
+			t.Fatal("should be failed after Error")
+		}
+		if f.Msg() != "oops" {
+			t.Fatalf("expected oops, got: %q", f.Msg())
 		}
 	})
 
@@ -70,6 +100,16 @@ func TestFailableTB(t *testing.T) {
 		}
 		if logs[0] != "a: 1" || logs[1] != "b: 2" {
 			t.Fatalf("unexpected logs: %v", logs)
+		}
+	})
+
+	t.Run("Log appends messages", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.Log("hello")
+		logs := f.Logs()
+		if len(logs) != 1 || logs[0] != "hello" {
+			t.Fatalf("expected [hello], got: %v", logs)
 		}
 	})
 
@@ -148,6 +188,43 @@ func TestFailableTB(t *testing.T) {
 		f.Errorf("non-fatal")
 		if ctx.Err() != nil {
 			t.Fatal("context should not be cancelled after Errorf")
+		}
+	})
+
+	t.Run("WithGoexit terminates goroutine on Fatal", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.Fatal("boom")
+			// This line should NOT execute — Goexit terminates the goroutine.
+			f.Logf("unreachable")
+		}()
+		<-done
+		if !f.Failed() {
+			t.Fatal("should be failed after Fatal with Goexit")
+		}
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after Fatal with Goexit")
+		}
+	})
+
+	t.Run("WithGoexit terminates goroutine on FailNow", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.FailNow()
+			f.Logf("unreachable")
+		}()
+		<-done
+		if !f.Failed() {
+			t.Fatal("should be failed after FailNow with Goexit")
+		}
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after FailNow with Goexit")
 		}
 	})
 

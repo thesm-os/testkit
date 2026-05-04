@@ -39,3 +39,5 @@ type Item struct {
 //
 //go:generate testkit model -o repotest/repo_model.gen.go ItemRepository
 type ItemRepository = Repository[string, Item]
+
+//go:generate testkit model -o repotest/repo_generic_model.gen.go Repository

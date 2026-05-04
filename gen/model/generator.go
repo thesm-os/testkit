@@ -19,11 +19,13 @@ import (
 	"go.thesmos.sh/testkit/gen/suite"
 )
 
+const generatorName = "model"
+
 // Generator produces model-based test harnesses for Go interfaces.
 type Generator struct{}
 
 // Name returns "model".
-func (*Generator) Name() string { return "model" }
+func (*Generator) Name() string { return generatorName }
 
 // Generate produces a model file with AssertModel for the given interface.
 func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) (*gen.Result, error) {
@@ -59,8 +61,39 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		}
 	}
 
+	// Get type parameters for generic interface detection.
+	iface, _ := pkg.Interface(args[0])
+	var typeParams []gen.TypeParamInfo
+	if iface != nil {
+		typeParams = iface.TypeParams
+		// Only treat as generic if the interface has uninstantiated
+		// type parameters (not an alias with concrete type args).
+		if len(typeParams) > 0 {
+			// Check if this is an instantiation (alias) by seeing if
+			// the method signatures use concrete types rather than
+			// type parameter names. If KeyType/ValType are type param
+			// names (single uppercase letter or matching param name),
+			// it's uninstantiated.
+			for _, tp := range typeParams {
+				found := false
+				for _, m := range data.Methods {
+					if m.Shape.KeyType == tp.Name || m.Shape.ValType == tp.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					// This type param doesn't appear in any shape — it's
+					// been instantiated with a concrete type.
+					typeParams = nil
+					break
+				}
+			}
+		}
+	}
+
 	// Build model-specific data.
-	md := buildData(data)
+	md := buildData(data, typeParams)
 
 	tmplSet := gen.NewTemplateSet()
 	tmplSet.Funcs(md.templateFuncs())
@@ -87,12 +120,16 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	}
 
 	header := gen.Header{
-		Subcommand: "model",
-		Args:       "model " + strings.Join(args, " "),
+		Subcommand: generatorName,
+		Args:       generatorName + " " + strings.Join(args, " "),
 		SourceFile: sourceFile,
 	}
 
-	content, renderErr := gen.RenderTemplate(tmpl, "model", md, header)
+	templateName := generatorName
+	if md.IsGeneric {
+		templateName = "model_generic"
+	}
+	content, renderErr := gen.RenderTemplate(tmpl, templateName, md, header)
 	if renderErr != nil {
 		return nil, fmt.Errorf("render model: %w", renderErr)
 	}

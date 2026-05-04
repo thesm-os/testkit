@@ -6,7 +6,6 @@ package servicetest
 import (
 	"context"
 	"reflect"
-	"testing"
 
 	"pgregory.net/rapid"
 
@@ -27,7 +26,7 @@ import (
 //	Skipped:       none
 //	Plug-in:       ServiceModelReference, ServiceModelActions, ServiceModelLaw, ServiceModelSkipLaw
 func AssertServiceModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() allshapes.Service,
 	opts ...ServiceModelOption,
 ) {

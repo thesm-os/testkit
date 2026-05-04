@@ -5,7 +5,8 @@ package closertest
 
 import (
 	"context"
-	"testing"
+
+	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/noncrud"
 	"go.thesmos.sh/testkit/model"
@@ -24,7 +25,7 @@ import (
 //	Skipped:       none
 //	Plug-in:       CloserModelReference, CloserModelActions, CloserModelLaw, CloserModelSkipLaw
 func AssertCloserModel(
-	t *testing.T,
+	t rapid.TB,
 	sutFactory func() noncrud.Closer,
 	opts ...CloserModelOption,
 ) {

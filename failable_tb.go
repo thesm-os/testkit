@@ -6,6 +6,7 @@ package testkit
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"slices"
 	"sync"
 	"testing"
@@ -30,6 +31,7 @@ type FailableTB struct {
 	cleanups    []func()
 	helperCalls int
 	failed      bool
+	goexit      bool // when true, Fatal/FailNow call runtime.Goexit()
 }
 
 // NewFailableTB returns a new [FailableTB] ready for use. The returned
@@ -42,6 +44,19 @@ func NewFailableTB() *FailableTB {
 		ctx:    ctx,
 		cancel: cancel,
 	}
+}
+
+// WithGoexit configures Fatal, Fatalf, and FailNow to call
+// [runtime.Goexit] after recording the failure. This matches
+// [*testing.T] semantics and is required for libraries like
+// [pgregory.net/rapid] that expect Fatal to terminate the goroutine.
+// Must be called in a dedicated goroutine — Goexit terminates
+// only the calling goroutine.
+func (f *FailableTB) WithGoexit() *FailableTB {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.goexit = true
+	return f
 }
 
 // WithName sets the test name returned by [FailableTB.Name].
@@ -99,30 +114,56 @@ func (f *FailableTB) HelperCalls() int {
 	return f.helperCalls
 }
 
-// Fatalf records a failure and cancels the context. Subsequent calls are
-// ignored — the first failure wins.
+// Fatalf records a failure and cancels the context. When [WithGoexit]
+// is set, also terminates the goroutine via [runtime.Goexit].
+// Subsequent calls are ignored — the first failure wins.
 func (f *FailableTB) Fatalf(format string, args ...any) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.failed {
-		return
+	if !f.failed {
+		f.failed = true
+		f.msg = fmt.Sprintf(format, args...)
+		f.cancel()
 	}
-	f.failed = true
-	f.msg = fmt.Sprintf(format, args...)
-	f.cancel()
+	goexit := f.goexit
+	f.mu.Unlock()
+	if goexit {
+		runtime.Goexit()
+	}
 }
 
-// Fatal records a failure and cancels the context. Subsequent calls are
-// ignored — the first failure wins.
+// Fatal records a failure and cancels the context. When [WithGoexit]
+// is set, also terminates the goroutine via [runtime.Goexit].
 func (f *FailableTB) Fatal(args ...any) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.failed {
-		return
+	if !f.failed {
+		f.failed = true
+		f.msg = fmt.Sprint(args...)
+		f.cancel()
 	}
+	goexit := f.goexit
+	f.mu.Unlock()
+	if goexit {
+		runtime.Goexit()
+	}
+}
+
+// FailNow marks the test as failed. When [WithGoexit] is set, also
+// terminates the goroutine via [runtime.Goexit].
+func (f *FailableTB) FailNow() {
+	f.Fail()
+	f.mu.Lock()
+	goexit := f.goexit
+	f.mu.Unlock()
+	if goexit {
+		runtime.Goexit()
+	}
+}
+
+// Fail marks the test as failed without terminating the goroutine.
+func (f *FailableTB) Fail() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.failed = true
-	f.msg = fmt.Sprint(args...)
-	f.cancel()
 }
 
 // Errorf records a non-fatal error. Unlike [FailableTB.Fatal], it overwrites
@@ -132,6 +173,45 @@ func (f *FailableTB) Errorf(format string, args ...any) {
 	defer f.mu.Unlock()
 	f.failed = true
 	f.msg = fmt.Sprintf(format, args...)
+}
+
+// Error records a non-fatal error.
+func (f *FailableTB) Error(args ...any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failed = true
+	f.msg = fmt.Sprint(args...)
+}
+
+// Log appends a message to the log.
+func (f *FailableTB) Log(args ...any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.logs = append(f.logs, fmt.Sprint(args...))
+}
+
+// Skip is a no-op on FailableTB. When [WithGoexit] is set,
+// terminates the goroutine.
+func (f *FailableTB) Skip(...any) {
+	if f.goexit {
+		runtime.Goexit()
+	}
+}
+
+// Skipf is a no-op on FailableTB. When [WithGoexit] is set,
+// terminates the goroutine.
+func (f *FailableTB) Skipf(string, ...any) {
+	if f.goexit {
+		runtime.Goexit()
+	}
+}
+
+// SkipNow is a no-op on FailableTB. When [WithGoexit] is set,
+// terminates the goroutine.
+func (f *FailableTB) SkipNow() {
+	if f.goexit {
+		runtime.Goexit()
+	}
 }
 
 // Logf appends a formatted log message.
