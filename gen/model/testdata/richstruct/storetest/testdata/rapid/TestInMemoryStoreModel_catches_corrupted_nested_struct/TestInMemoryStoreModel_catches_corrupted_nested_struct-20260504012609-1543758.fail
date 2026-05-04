@@ -1,0 +1,86 @@
+# 2026/05/04 01:26:09.613233 [TestInMemoryStoreModel/catches_corrupted_nested_struct] [rapid] draw ReadAfterWrite_key: "a"
+# 2026/05/04 01:26:09.613236 [TestInMemoryStoreModel/catches_corrupted_nested_struct] [rapid] draw action: "Put"
+# 2026/05/04 01:26:09.613240 [TestInMemoryStoreModel/catches_corrupted_nested_struct] [rapid] draw Put_value: richstruct.Document{ID:"a", Title:"", Active:false, Views:0, Size:0, Rating:1, Priority:0, MainTag:"", Checksum:[]uint8{}, Tags:[]string{}, AllTags:[]richstruct.Tag{}, Attributes:map[string]string{}, Address:richstruct.Address{Street:"", City:"", ZipCode:"", Country:"A"}, Location:(*richstruct.GeoPoint)(nil), Meta:richstruct.Metadata{Labels:map[string]string{}, Score:1}, OptionalNote:(*string)(nil), SmallCount:0x0, Flags:0x0, TinyScore:1, Offset:0}
+# 2026/05/04 01:26:09.613252 [TestInMemoryStoreModel/catches_corrupted_nested_struct] [rapid] draw ReadAfterWrite_key: "a"
+# 2026/05/04 01:26:09.613282 [TestInMemoryStoreModel/catches_corrupted_nested_struct] [invariant] AUTO-READ-AFTER-WRITE at step 1: ReadAfterWrite: key a: SUT/ref disagree (-ref +sut):
+#   richstruct.Document{
+#   	... // 10 identical fields
+#   	AllTags:    {},
+#   	Attributes: {},
+#   	Address: richstruct.Address{
+#   		Street:  "",
+#   		City:    "",
+#   		ZipCode: "",
+# - 		Country: "A",
+# + 		Country: "",
+#   	},
+#   	Location: nil,
+#   	Meta:     {Labels: {}, Score: 1},
+#   	... // 5 identical fields
+#   }
+# 
+v0.4.8#3859487609521132040
+0x0
+0x0
+0x1084210842108
+0x38e38e38e38e4
+0x3
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x5555555555555
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

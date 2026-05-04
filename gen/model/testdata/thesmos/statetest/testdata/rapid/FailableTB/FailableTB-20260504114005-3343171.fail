@@ -1,0 +1,16 @@
+# 2026/05/04 11:40:05.210795 [FailableTB] [rapid] draw action: "Get"
+# 2026/05/04 11:40:05.210802 [FailableTB] [rapid] draw Get_key: "a"
+# 2026/05/04 11:40:05.210816 [FailableTB] Get(a): SUT/ref disagree:
+#   thesmos.StateEntry{
+#   	Value:  "a",
+# - 	TurnID: 1,
+# + 	TurnID: -999,
+#   	Region: "us",
+#   }
+# 
+v0.4.8#10308422654198220572
+0x1084210842108
+0x0
+0x0
+0x0
+0x0

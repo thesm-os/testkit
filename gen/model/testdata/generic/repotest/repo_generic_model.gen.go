@@ -5,6 +5,7 @@ package repotest
 
 import (
 	"context"
+	"testing"
 
 	"pgregory.net/rapid"
 
@@ -36,30 +37,47 @@ func AssertRepositoryModel[K comparable, V any](
 ) {
 	t.Helper()
 	cfg := newRepositoryModelConfig(opts...)
-
-	// Key generator — consumer must supply for generic interfaces.
-	keyGen := cfg.keyGen
-	if keyGen == nil {
+	if cfg.keyGen == nil {
 		t.Fatal("AssertRepositoryModel: keyGen required — supply via RepositoryModelKeyGen")
 	}
+	if cfg.refFactory == nil {
+		if cfg.keyFunc != nil && cfg.sentinel != nil {
+			cfg.refFactory = func() generic.Repository[K, V] {
+				return refmap.NewMapStore(cfg.keyFunc, cfg.sentinel)
+			}
+		}
+	}
+	if cfg.refFactory == nil {
+		t.Fatal("AssertRepositoryModel: no reference model — supply via " +
+			"RepositoryModelReference or RepositoryModelKeyFunc + RepositoryModelSentinel")
+	}
+	rapid.Check(t, repositoryModelProperty(sutFactory, cfg))
+}
 
-	// Value generator — consumer supplies or framework uses rapid.Make.
+// FuzzRepositoryModel[K comparable, V any] is a fuzz target for coverage-guided
+// testing via go test -fuzz. Same property as [AssertRepositoryModel].
+func FuzzRepositoryModel[K comparable, V any](
+	f *testing.F,
+	sutFactory func() generic.Repository[K, V],
+	opts ...RepositoryModelOption[K, V],
+) {
+	f.Helper()
+	cfg := newRepositoryModelConfig(opts...)
+	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
+	f.Fuzz(rapid.MakeFuzz(repositoryModelProperty(sutFactory, cfg)))
+}
+
+func repositoryModelProperty[K comparable, V any](
+	sutFactory func() generic.Repository[K, V],
+	cfg repositoryModelConfig[K, V],
+) func(*rapid.T) {
+	keyGen := cfg.keyGen
+
 	valGen := cfg.valGen
 	if valGen == nil {
 		valGen = rapid.Make[V]()
 	}
-
-	// Reference: consumer-supplied or synthesized from KeyFunc + sentinel.
 	refFactory := cfg.refFactory
-	if refFactory == nil && cfg.keyFunc != nil && cfg.sentinel != nil {
-		refFactory = func() generic.Repository[K, V] {
-			return refmap.NewMapStore(cfg.keyFunc, cfg.sentinel)
-		}
-	}
-	if refFactory == nil {
-		t.Fatal("AssertRepositoryModel: no reference model — supply via " +
-			"RepositoryModelReference or RepositoryModelKeyFunc + RepositoryModelSentinel")
-	}
 
 	// Actions: consumer-supplied or auto-derived.
 	actions := cfg.actions
@@ -120,7 +138,7 @@ func AssertRepositoryModel[K comparable, V any](
 		laws.SkipByID(id)
 	}
 
-	model.Assert(t, sutFactory,
+	return model.Property(sutFactory,
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),

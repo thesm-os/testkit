@@ -184,7 +184,11 @@ var knownDirectives = []Descriptor{
 	// Shape hints
 	{
 		Name: "deleter", Description: "marks method as delete-by-key shape",
-		Generators: []string{genStub, genSuite}, Phase: 1,
+		Generators: []string{genStub, genSuite, genModel}, Phase: 1,
+	},
+	{
+		Name: "mutator", Description: "marks method as state-mutating command with no return",
+		Generators: []string{genModel}, Phase: 1,
 	},
 	{
 		Name: "keyfield", Description: "key extraction field for reference synthesis",

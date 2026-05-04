@@ -1,0 +1,15 @@
+# 2026/05/04 11:41:25.776990 [FailableTB] [rapid] draw action: "Lookup"
+# 2026/05/04 11:41:25.776996 [FailableTB] [rapid] draw Lookup_key: 1
+# 2026/05/04 11:41:25.777016 [FailableTB] Lookup(1) R1: SUT/ref disagree:
+#   thesmos.KindSpec{
+# - 	Name:    "kind",
+# + 	Name:    "WRONG",
+#   	Version: 1,
+#   }
+# 
+v0.4.8#15752110687496409836
+0x1084210842108
+0x0
+0x1
+0x0
+0x0

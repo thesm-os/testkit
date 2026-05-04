@@ -1,0 +1,11 @@
+# 2026/05/04 02:06:58.993995 [FailableTB] [rapid] draw action: "A.Put"
+# 2026/05/04 02:06:58.993998 [FailableTB] [rapid] draw Put_value: composed.Item{ID:"a", Name:""}
+# 2026/05/04 02:06:58.994002 [FailableTB] [invariant] CROSS-LEDGER-COUNTS-WRITES at step 1: Ledger.Len: SUT=0, ref=1
+# 
+v0.4.8#10544717744768744436
+0x1084210842108
+0x38e38e38e38e4
+0x2
+0x0
+0x0
+0x0

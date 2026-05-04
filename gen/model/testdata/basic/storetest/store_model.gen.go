@@ -6,6 +6,7 @@ package storetest
 import (
 	"context"
 	"reflect"
+	"testing"
 
 	"pgregory.net/rapid"
 
@@ -32,11 +33,49 @@ func AssertStoreModel(
 	opts ...StoreModelOption,
 ) {
 	t.Helper()
+	rapid.Check(t, storeModelProperty(sutFactory, opts...))
+}
+
+// FuzzStoreModel is a fuzz target for coverage-guided testing
+// of [basic.Store] via go test -fuzz. Same property as
+// [AssertStoreModel] but driven by libFuzzer's corpus.
+//
+//	func FuzzStoreModel(f *testing.F) {
+//	    storetest.FuzzStoreModel(f, factory)
+//	}
+func FuzzStoreModel(
+	f *testing.F,
+	sutFactory func() basic.Store,
+	opts ...StoreModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(storeModelProperty(sutFactory, opts...)))
+}
+
+func storeModelProperty(
+	sutFactory func() basic.Store,
+	opts ...StoreModelOption,
+) func(*rapid.T) {
 	cfg := newStoreModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
 	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
 	valGen := rapid.MakeCustom[basic.Item](rapid.MakeConfig{
+		Kinds: map[reflect.Kind]*rapid.Generator[any]{
+			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    rapid.Int8().AsAny(),
+			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   rapid.Uint8().AsAny(),
+			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+		},
 		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
 			reflect.TypeOf(basic.Item{}): {
 				"ID": keyGen.AsAny(),
@@ -103,7 +142,7 @@ func AssertStoreModel(
 		laws.SkipByID(id)
 	}
 
-	model.Assert(t, sutFactory,
+	return model.Property(sutFactory,
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),

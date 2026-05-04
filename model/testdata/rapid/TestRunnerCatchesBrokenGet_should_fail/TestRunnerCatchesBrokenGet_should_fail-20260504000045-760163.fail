@@ -1,0 +1,29 @@
+# 2026/05/04 00:00:45.078375 [TestRunnerCatchesBrokenGet/should_fail] [rapid] draw action: "Put"
+# 2026/05/04 00:00:45.078378 [TestRunnerCatchesBrokenGet/should_fail] [rapid] draw id: "a"
+# 2026/05/04 00:00:45.078380 [TestRunnerCatchesBrokenGet/should_fail] [rapid] draw name: "aaa"
+# 2026/05/04 00:00:45.078392 [TestRunnerCatchesBrokenGet/should_fail] [invariant] at step 1: ReadAfterWrite: key a: SUT and reference disagree (-ref +sut):
+#   model_test.item{
+#   	ID:   "a",
+# - 	Name: "aaa",
+# + 	Name: "WRONG",
+#   }
+# 
+v0.4.8#12825182102835305321
+0x1084210842108
+0x0
+0x1
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

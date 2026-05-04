@@ -1,0 +1,20 @@
+# 2026/05/04 11:39:20.992820 [FailableTB] [rapid] draw action: "Fold"
+# 2026/05/04 11:39:20.992826 [FailableTB] [rapid] draw Fold_value: thesmos.Patch{Kind:0, Data:[]uint8{}}
+# 2026/05/04 11:39:20.992830 [FailableTB] [rapid] draw action: "ExpectedSeq"
+# 2026/05/04 11:39:20.992833 [FailableTB] ExpectedSeq: SUT/ref disagree:
+#   int(
+# - 	2,
+# + 	1,
+#   )
+# 
+v0.4.8#8784602401210012198
+0x1084210842108
+0x38e38e38e38e4
+0x2
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x1

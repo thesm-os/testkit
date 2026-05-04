@@ -77,6 +77,9 @@ func (d *Data) templateFuncs() template.FuncMap {
 			}
 			return ""
 		},
+		"keySamples": func() string {
+			return d.KeySamples()
+		},
 	}
 }
 
@@ -88,6 +91,35 @@ func (d *Data) WriterGenName(m *suite.SpecMethodData) string {
 		return "keyGen"
 	}
 	return "valGen"
+}
+
+// KeySamples returns sample literal values for the key generator,
+// appropriate for the key type. Defaults to string literals; emits
+// int literals for integer-underlying key types.
+func (d *Data) KeySamples() string {
+	if d.ReaderMethod == nil {
+		return `"a", "b", "c", "d", "e"`
+	}
+	// Check if the key type's underlying type is integer-based.
+	sig := d.ReaderMethod.Signature
+	for p := range sig.Params().Variables() {
+		if gen.IsContextType(p.Type()) {
+			continue
+		}
+		t := p.Type()
+		if named, ok := t.(*types.Named); ok {
+			t = named.Underlying()
+		}
+		if basic, ok := t.(*types.Basic); ok {
+			switch basic.Kind() { //nolint:exhaustive // only int kinds need special handling
+			case types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+				types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64:
+				return "1, 2, 3, 4, 5"
+			}
+		}
+		break
+	}
+	return `"a", "b", "c", "d", "e"`
 }
 
 // HasDeleter reports whether a Deleter-shaped method was detected.
@@ -140,6 +172,24 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 			if md.StreamMethod == nil {
 				md.StreamMethod = m
 			}
+		case gen.ShapeReaderWithBool:
+			// ReaderWithBool uses same key pool as Reader.
+			if md.ReaderMethod == nil {
+				md.ReaderMethod = m
+			}
+		case gen.ShapeLookup:
+			// Lookup uses same key pool as Reader.
+			if md.ReaderMethod == nil {
+				md.ReaderMethod = m
+			}
+		case gen.ShapeMutator:
+			// Mutator is a state-changing command; treat like Writer
+			// for CRUD detection (it modifies state).
+			if md.WriterMethod == nil {
+				md.WriterMethod = m
+			}
+		case gen.ShapePoisonAccessor:
+			// Handled by template; emits poison check in law loop.
 		case gen.ShapeLifecycle, gen.ShapePure, gen.ShapePredicate:
 			// Handled by template; no first-method tracking needed.
 		case gen.ShapeUnknown:

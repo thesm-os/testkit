@@ -45,9 +45,10 @@ func (d *SpecData) HasContent() bool {
 func (d *SpecData) ShapeSummary() string {
 	groups := make(map[gen.MethodShape][]string)
 	order := []gen.MethodShape{
-		gen.ShapeReader, gen.ShapeWriter, gen.ShapeDeleter,
-		gen.ShapeAggregator, gen.ShapeStreamReader, gen.ShapeLifecycle,
-		gen.ShapePure, gen.ShapePredicate, gen.ShapeUnknown,
+		gen.ShapeReader, gen.ShapeReaderWithBool, gen.ShapeLookup, gen.ShapeWriter,
+		gen.ShapeMutator, gen.ShapeDeleter, gen.ShapeAggregator,
+		gen.ShapeStreamReader, gen.ShapeLifecycle, gen.ShapePure,
+		gen.ShapePredicate, gen.ShapePoisonAccessor, gen.ShapeUnknown,
 	}
 	for _, m := range d.Methods {
 		if m.Skip {
@@ -197,8 +198,10 @@ type SpecMethodData struct {
 	Skip       bool           // integration-only: skip entirely
 
 	// Auto-detected from signature — no directive needed.
-	Iter  gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return info
-	Shape gen.ShapeInfo   // method shape (Reader/Writer/Stream/etc.)
+	HasCtx    bool            // true if the method takes context.Context
+	ParamOnly bool            // true if method has non-ctx params (used by model template to skip Pure/Predicate)
+	Iter      gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return info
+	Shape     gen.ShapeInfo   // method shape (Reader/Writer/Stream/etc.)
 }
 
 // hasDirectives reports whether this method has any spec-relevant directives.
@@ -247,6 +250,18 @@ func (m *SpecMethodData) IsDeleter() bool { return m.Shape.Shape == gen.ShapeDel
 
 // IsPredicate reports whether the method has Predicate shape.
 func (m *SpecMethodData) IsPredicate() bool { return m.Shape.Shape == gen.ShapePredicate }
+
+// IsReaderWithBool reports whether the method has ReaderWithBool shape.
+func (m *SpecMethodData) IsReaderWithBool() bool { return m.Shape.Shape == gen.ShapeReaderWithBool }
+
+// IsLookup reports whether the method has Lookup shape.
+func (m *SpecMethodData) IsLookup() bool { return m.Shape.Shape == gen.ShapeLookup }
+
+// IsMutator reports whether the method has Mutator shape.
+func (m *SpecMethodData) IsMutator() bool { return m.Shape.Shape == gen.ShapeMutator }
+
+// IsPoisonAccessor reports whether the method has PoisonAccessor shape.
+func (m *SpecMethodData) IsPoisonAccessor() bool { return m.Shape.Shape == gen.ShapePoisonAccessor }
 
 // OnMethodAssertionType renders the Go type expression for the On<Method>
 // assertion parameter. For Reader: testkit.ReaderAssertion[T, K, V].

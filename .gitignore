@@ -15,7 +15,10 @@ dist/
 *.test
 *.out
 fuzz/
-rapid/
+# Rapid failfiles under testdata/rapid/ are committed for auto-replay
+# regression. Only ignore rapid/ at the repo root (build artifacts).
+!/testdata/rapid/
+!**/testdata/rapid/
 coverage/
 coverage.txt
 coverage.html

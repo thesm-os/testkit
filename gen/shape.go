@@ -23,15 +23,19 @@ type MethodShape int
 
 // Method shape constants.
 const (
-	ShapeUnknown      MethodShape = iota
-	ShapeReader                   // func(ctx, K) (V, error)
-	ShapeWriter                   // func(ctx, V) error or func(ctx, V) (R, error)
-	ShapeDeleter                  // func(ctx, K) error — requires //testkit:deleter directive
-	ShapeAggregator               // func(ctx) (T, error)
-	ShapeStreamReader             // returns iter.Seq[V] or iter.Seq2[V, error]
-	ShapeLifecycle                // func(ctx) error
-	ShapePure                     // no error return
-	ShapePredicate                // returns bool only
+	ShapeUnknown        MethodShape = iota
+	ShapeReader                     // func(ctx, K) (V, error)
+	ShapeReaderWithBool             // func(ctx, K) (V, bool) or func(K) (V, bool)
+	ShapeLookup                     // func(K) (R1, R2, bool) or func(ctx, K) (R1, R2, bool)
+	ShapeWriter                     // func(ctx, V) error or func(ctx, V) (R, error)
+	ShapeMutator                    // func(ctx, V) — no return; requires //testkit:mutator directive
+	ShapeDeleter                    // func(ctx, K) error — requires //testkit:deleter directive
+	ShapeAggregator                 // func(ctx) (T, error)
+	ShapeStreamReader               // returns iter.Seq[V] or iter.Seq2[V, error]
+	ShapeLifecycle                  // func(ctx) error
+	ShapePure                       // no error return, no ctx
+	ShapePredicate                  // returns bool only, no ctx
+	ShapePoisonAccessor             // func() error — no ctx, no params, returns error only
 )
 
 // ShapeInfo holds the detected shape of a method plus the extracted
@@ -107,6 +111,33 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		}
 	}
 
+	// Rule 2.5: ReaderWithBool — func(K) (V, bool) or func(ctx, K) (V, bool).
+	// Must fire BEFORE Pure (rule 3) which would swallow (V, bool) as no-error.
+	if len(nonCtxParams) == 1 && resCount == 2 && !hasError {
+		if b, ok := results.At(1).Type().Underlying().(*types.Basic); ok && b.Kind() == types.Bool {
+			p := nonCtxParams[0]
+			return ShapeInfo{
+				Shape:   ShapeReaderWithBool,
+				KeyType: TypeStr(p.Type(), tracker),
+				ValType: TypeStr(results.At(0).Type(), tracker),
+			}
+		}
+	}
+
+	// Rule 2.6: Lookup — func(K) (R1, R2, bool) or func(ctx, K) (R1, R2, bool).
+	// Must fire BEFORE Pure (rule 3) which would swallow (R1, R2, bool) as no-error.
+	if len(nonCtxParams) == 1 && resCount == 3 && !hasError {
+		if b, ok := results.At(2).Type().Underlying().(*types.Basic); ok && b.Kind() == types.Bool {
+			p := nonCtxParams[0]
+			return ShapeInfo{
+				Shape:   ShapeLookup,
+				KeyType: TypeStr(p.Type(), tracker),
+				ValType: TypeStr(results.At(0).Type(), tracker),
+				RetType: TypeStr(results.At(1).Type(), tracker),
+			}
+		}
+	}
+
 	// Rule 3: no error return, no ctx → Pure.
 	if !hasCtx && !hasError {
 		info := ShapeInfo{Shape: ShapePure}
@@ -122,12 +153,20 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		nonErrResults--
 	}
 
-	// Check for //testkit:deleter directive.
+	// Rule 3.5: no ctx, no params, error-only return → PoisonAccessor.
+	if !hasCtx && len(nonCtxParams) == 0 && hasError && nonErrResults == 0 {
+		return ShapeInfo{Shape: ShapePoisonAccessor}
+	}
+
+	// Check for //testkit:deleter and //testkit:mutator directives.
 	isDeleter := false
+	isMutator := false
 	for _, d := range dirs {
-		if d.Name == directives.Deleter {
+		switch d.Name {
+		case directives.Deleter:
 			isDeleter = true
-			break
+		case directives.Mutator:
+			isMutator = true
 		}
 	}
 
@@ -147,6 +186,14 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 				Shape:   ShapeReader,
 				KeyType: keyType,
 				ValType: valType,
+			}
+		}
+
+		// Rule 4.5: no return at all + //testkit:mutator → Mutator.
+		if resCount == 0 && isMutator {
+			return ShapeInfo{
+				Shape:   ShapeMutator,
+				ValType: keyType,
 			}
 		}
 
@@ -176,6 +223,16 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 				ValType: keyType,
 				RetType: retType,
 			}
+		}
+	}
+
+	// Rule 6.5: ctx + one non-ctx param + no return + no directive → Unknown
+	// but we also check for Mutator without ctx:
+	// func(V) with no return + //testkit:mutator → Mutator.
+	if !hasCtx && len(nonCtxParams) == 1 && resCount == 0 && isMutator {
+		return ShapeInfo{
+			Shape:   ShapeMutator,
+			ValType: TypeStr(nonCtxParams[0].Type(), tracker),
 		}
 	}
 
@@ -209,8 +266,14 @@ func (s MethodShape) String() string {
 	switch s {
 	case ShapeReader:
 		return "Reader"
+	case ShapeReaderWithBool:
+		return "ReaderWithBool"
+	case ShapeLookup:
+		return "Lookup"
 	case ShapeWriter:
 		return "Writer"
+	case ShapeMutator:
+		return "Mutator"
 	case ShapeDeleter:
 		return "Deleter"
 	case ShapeAggregator:
@@ -223,6 +286,8 @@ func (s MethodShape) String() string {
 		return "Pure"
 	case ShapePredicate:
 		return "Predicate"
+	case ShapePoisonAccessor:
+		return "PoisonAccessor"
 	default:
 		return "Unknown"
 	}

@@ -286,6 +286,27 @@ func TypeStr(typ types.Type, tracker *ImportTracker) string {
 	return types.TypeString(typ, tracker.Qualifier())
 }
 
+// NonCtxParamCount returns the number of non-context.Context parameters.
+func NonCtxParamCount(sig *types.Signature) int {
+	count := 0
+	for p := range sig.Params().Variables() {
+		if !IsContextType(p.Type()) {
+			count++
+		}
+	}
+	return count
+}
+
+// HasContextParam reports whether the signature has a context.Context parameter.
+func HasContextParam(sig *types.Signature) bool {
+	for p := range sig.Params().Variables() {
+		if IsContextType(p.Type()) {
+			return true
+		}
+	}
+	return false
+}
+
 // IsContextType reports whether typ is context.Context.
 func IsContextType(typ types.Type) bool {
 	named, ok := typ.(*types.Named)

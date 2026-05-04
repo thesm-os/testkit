@@ -6,6 +6,7 @@ package processortest
 import (
 	"context"
 	"reflect"
+	"testing"
 
 	"pgregory.net/rapid"
 
@@ -31,11 +32,49 @@ func AssertProcessorModel(
 	opts ...ProcessorModelOption,
 ) {
 	t.Helper()
+	rapid.Check(t, processorModelProperty(sutFactory, opts...))
+}
+
+// FuzzProcessorModel is a fuzz target for coverage-guided testing
+// of [unknown.Processor] via go test -fuzz. Same property as
+// [AssertProcessorModel] but driven by libFuzzer's corpus.
+//
+//	func FuzzProcessorModel(f *testing.F) {
+//	    storetest.FuzzProcessorModel(f, factory)
+//	}
+func FuzzProcessorModel(
+	f *testing.F,
+	sutFactory func() unknown.Processor,
+	opts ...ProcessorModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(processorModelProperty(sutFactory, opts...)))
+}
+
+func processorModelProperty(
+	sutFactory func() unknown.Processor,
+	opts ...ProcessorModelOption,
+) func(*rapid.T) {
 	cfg := newProcessorModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
 	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
 	valGen := rapid.MakeCustom[unknown.Item](rapid.MakeConfig{
+		Kinds: map[reflect.Kind]*rapid.Generator[any]{
+			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    rapid.Int8().AsAny(),
+			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   rapid.Uint8().AsAny(),
+			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+		},
 		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
 			reflect.TypeOf(unknown.Item{}): {
 				"ID": keyGen.AsAny(),
@@ -45,9 +84,6 @@ func AssertProcessorModel(
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
-	if refFactory == nil {
-		t.Fatal("AssertProcessorModel: no reference model — supply via ProcessorModelReference")
-	}
 
 	// Actions: consumer-supplied or auto-derived.
 	actions := cfg.actions
@@ -82,7 +118,7 @@ func AssertProcessorModel(
 		laws.SkipByID(id)
 	}
 
-	model.Assert(t, sutFactory,
+	return model.Property(sutFactory,
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),

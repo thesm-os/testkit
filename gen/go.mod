@@ -14,8 +14,6 @@ require (
 
 require (
 	github.com/google/go-cmp v0.7.0 // indirect
-	go.thesmos.sh/testkit/model v0.0.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	pgregory.net/rapid v1.3.0 // indirect
 )

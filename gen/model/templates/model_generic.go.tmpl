@@ -25,36 +25,53 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 ) {
 	t.Helper()
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
-
-	// Key generator — consumer must supply for generic interfaces.
-	keyGen := cfg.keyGen
 {{- if .ReaderMethod}}
-	if keyGen == nil {
+	if cfg.keyGen == nil {
 		t.Fatal("Assert{{.InterfaceName}}Model: keyGen required — supply via {{.InterfaceName}}ModelKeyGen")
 	}
 {{- end}}
+	if cfg.refFactory == nil {
+{{- if .IsCRUD}}
+		if cfg.keyFunc != nil && cfg.sentinel != nil {
+			cfg.refFactory = func() {{$T}} {
+				return refmap.NewMapStore(cfg.keyFunc, cfg.sentinel)
+			}
+		}
+{{- end}}
+	}
+	if cfg.refFactory == nil {
+		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via " +
+			"{{.InterfaceName}}ModelReference or {{.InterfaceName}}ModelKeyFunc + {{.InterfaceName}}ModelSentinel")
+	}
+	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, cfg))
+}
 
-	// Value generator — consumer supplies or framework uses rapid.Make.
+// Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}} is a fuzz target for coverage-guided
+// testing via go test -fuzz. Same property as [Assert{{.InterfaceName}}Model].
+func Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}}(
+	f *testing.F,
+	sutFactory func() {{$T}},
+	opts ...{{.InterfaceName}}ModelOption{{.TypeParamNames}},
+) {
+	f.Helper()
+	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
+	f.Fuzz(rapid.MakeFuzz({{.InterfaceName | toLower}}ModelProperty(sutFactory, cfg)))
+}
+
+func {{.InterfaceName | toLower}}ModelProperty{{.TypeParamDecl}}(
+	sutFactory func() {{$T}},
+	cfg {{.InterfaceName | toLower}}ModelConfig{{.TypeParamNames}},
+) func(*rapid.T) {
+	keyGen := cfg.keyGen
+
 	valGen := cfg.valGen
 {{- if .WriterMethod}}
 	if valGen == nil {
 		valGen = rapid.Make[{{.WriterMethod.Shape.ValType}}]()
 	}
 {{- end}}
-
-	// Reference: consumer-supplied or synthesized from KeyFunc + sentinel.
 	refFactory := cfg.refFactory
-{{- if .IsCRUD}}
-	if refFactory == nil && cfg.keyFunc != nil && cfg.sentinel != nil {
-		refFactory = func() {{$T}} {
-			return refmap.NewMapStore(cfg.keyFunc, cfg.sentinel)
-		}
-	}
-{{- end}}
-	if refFactory == nil {
-		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via " +
-			"{{.InterfaceName}}ModelReference or {{.InterfaceName}}ModelKeyFunc + {{.InterfaceName}}ModelSentinel")
-	}
 
 	// Actions: consumer-supplied or auto-derived.
 	actions := cfg.actions
@@ -67,10 +84,28 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 					return impl.{{.Name}}(ctx, k)
 				},
 			),
+{{- else if .IsReaderWithBool}}
+			action.ReaderWithBool("{{.Name}}", keyGen,
+				func(ctx context.Context, impl {{$T}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
+					return impl.{{.Name}}(ctx, k)
+				},
+			),
+{{- else if .IsLookup}}
+			action.Lookup("{{.Name}}", keyGen,
+				func(impl {{$T}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
+					return impl.{{.Name}}(k)
+				},
+			),
 {{- else if .IsWriter}}
 			action.Writer("{{.Name}}", {{writerGen .}},
 				func(ctx context.Context, impl {{$T}}, v {{.Shape.ValType}}) error {
 					return impl.{{.Name}}(ctx, v)
+				},
+			),
+{{- else if .IsMutator}}
+			action.Mutator("{{.Name}}", valGen,
+				func(ctx context.Context, impl {{$T}}, v {{.Shape.ValType}}) {
+					impl.{{.Name}}(ctx, v)
 				},
 			),
 {{- else if .IsDeleter}}
@@ -91,15 +126,21 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 					return impl.{{.Name}}(ctx)
 				},
 			),
-{{- else if .IsPure}}
+{{- else if and .IsPure (not .ParamOnly)}}
 			action.Pure("{{.Name}}",
 				func(impl {{$T}}) {{.Shape.ValType}} {
 					return impl.{{.Name}}()
 				},
 			),
-{{- else if .IsPredicate}}
+{{- else if and .IsPredicate (not .ParamOnly)}}
 			action.Predicate("{{.Name}}",
 				func(impl {{$T}}) bool {
+					return impl.{{.Name}}()
+				},
+			),
+{{- else if .IsPoisonAccessor}}
+			action.PoisonCheck("{{.Name}}",
+				func(impl {{$T}}) error {
 					return impl.{{.Name}}()
 				},
 			),
@@ -159,7 +200,7 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 		laws.SkipByID(id)
 	}
 
-	model.Assert(t, sutFactory,
+	return model.Property(sutFactory,
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
@@ -243,6 +284,7 @@ func new{{.InterfaceName}}ModelConfig{{.TypeParamDecl}}(opts ...{{.InterfaceName
 {{define "model_generic_imports"}}
 import (
 	"context"
+	"testing"
 
 	"pgregory.net/rapid"
 

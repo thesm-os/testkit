@@ -5,6 +5,7 @@ package closertest
 
 import (
 	"context"
+	"testing"
 
 	"pgregory.net/rapid"
 
@@ -30,15 +31,35 @@ func AssertCloserModel(
 	opts ...CloserModelOption,
 ) {
 	t.Helper()
+	rapid.Check(t, closerModelProperty(sutFactory, opts...))
+}
+
+// FuzzCloserModel is a fuzz target for coverage-guided testing
+// of [noncrud.Closer] via go test -fuzz. Same property as
+// [AssertCloserModel] but driven by libFuzzer's corpus.
+//
+//	func FuzzCloserModel(f *testing.F) {
+//	    storetest.FuzzCloserModel(f, factory)
+//	}
+func FuzzCloserModel(
+	f *testing.F,
+	sutFactory func() noncrud.Closer,
+	opts ...CloserModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(closerModelProperty(sutFactory, opts...)))
+}
+
+func closerModelProperty(
+	sutFactory func() noncrud.Closer,
+	opts ...CloserModelOption,
+) func(*rapid.T) {
 	cfg := newCloserModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
-	if refFactory == nil {
-		t.Fatal("AssertCloserModel: no reference model — supply via CloserModelReference")
-	}
 
 	// Actions: consumer-supplied or auto-derived.
 	actions := cfg.actions
@@ -67,7 +88,7 @@ func AssertCloserModel(
 		laws.SkipByID(id)
 	}
 
-	model.Assert(t, sutFactory,
+	return model.Property(sutFactory,
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),

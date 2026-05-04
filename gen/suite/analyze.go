@@ -46,7 +46,9 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		}
 		md.Directives = pkg.EffectiveMethodDirectives(iface.OriginName, m.Name)
 
-		// Detect method shape and iter returns.
+		// Detect context, params, and method shape.
+		md.HasCtx = gen.HasContextParam(m.Signature)
+		md.ParamOnly = gen.NonCtxParamCount(m.Signature) > 0
 		md.Shape = gen.DetectShape(m, tracker, md.Directives)
 		if md.Shape.Shape == gen.ShapeStreamReader {
 			md.Iter = md.Shape.IterInfo

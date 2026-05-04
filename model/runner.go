@@ -47,21 +47,46 @@ type Config[T any] struct {
 // Use -rapid.checks=N to control iteration count (default 100).
 func Run[T any](t rapid.TB, cfg Config[T]) {
 	t.Helper()
+	opts := []Option[T]{
+		WithActions[T](cfg.Actions...),
+	}
+	if cfg.RefFactory != nil {
+		opts = append(opts, WithReference(cfg.RefFactory))
+	}
+	if cfg.Laws != nil {
+		opts = append(opts, WithLaws(cfg.Laws))
+	}
+	if cfg.Cleanup != nil {
+		opts = append(opts, WithCleanup(cfg.Cleanup))
+	}
+	rapid.Check(t, Property(cfg.SUTFactory, opts...))
+}
 
-	if cfg.SUTFactory == nil {
-		t.Fatal("model.Run: SUTFactory is required")
-	}
-	if cfg.RefFactory == nil {
-		t.Fatal("model.Run: RefFactory is required")
-	}
-	if len(cfg.Actions) == 0 {
-		t.Fatal("model.Run: at least one Action is required")
+// Property builds the rapid property function from a factory and options
+// without running it. Use this to obtain the property for [rapid.MakeFuzz]:
+//
+//	prop := model.Property(factory, model.WithReference(ref), ...)
+//	f.Fuzz(rapid.MakeFuzz(prop))
+func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
+	cfg := Config[T]{SUTFactory: sutFactory}
+	for _, opt := range opts {
+		opt(&cfg)
 	}
 	if cfg.Laws == nil {
 		cfg.Laws = NewRegistry[T]()
 	}
 
-	rapid.Check(t, func(rt *rapid.T) {
+	return func(rt *rapid.T) {
+		if cfg.SUTFactory == nil {
+			rt.Fatal("model.Property: SUTFactory is required")
+		}
+		if cfg.RefFactory == nil {
+			rt.Fatal("model.Property: RefFactory is required")
+		}
+		if len(cfg.Actions) == 0 {
+			rt.Fatal("model.Property: at least one Action is required")
+		}
+
 		sut := cfg.SUTFactory()
 		ref := cfg.RefFactory()
 		step := 0
@@ -99,7 +124,7 @@ func Run[T any](t rapid.TB, cfg Config[T]) {
 		}
 
 		rt.Repeat(actionMap)
-	})
+	}
 }
 
 // Option configures a model-based test run.
@@ -159,11 +184,7 @@ func SkipLaw[T any](id string) Option[T] {
 // Assert is the convenience entry point.
 func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) {
 	t.Helper()
-	cfg := Config[T]{SUTFactory: sutFactory}
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	Run(t, cfg)
+	rapid.Check(t, Property(sutFactory, opts...))
 }
 
 // taggedLaw wraps a law with a REQ ID override.

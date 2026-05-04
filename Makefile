@@ -211,6 +211,11 @@ GEN_TESTDATA := \
 	gen/model/testdata/multisentinel/vaulttest \
 	gen/model/testdata/richstruct/storetest \
 	gen/model/testdata/generic/repotest \
+	gen/model/testdata/newshapes/machinetest \
+	gen/model/testdata/thesmos/registrytest \
+	gen/model/testdata/thesmos/statetest \
+	gen/model/testdata/thesmos/machinetest \
+	gen/model/testdata/thesmos/schedulertest \
 	gen/model/testdata/composed/composedtest
 
 # ─── Testing ─────────────────────────────────────────────────────
