@@ -3,6 +3,8 @@
 
 package directiveparse
 
+const argFieldName = "FieldName"
+
 // Generator name constants for directive descriptors.
 const (
 	genStub  = "stub"
@@ -192,6 +194,36 @@ var knownDirectives = []Descriptor{
 	},
 	{
 		Name: "keyfield", Description: "key extraction field for reference synthesis",
-		Args: "FieldName", Generators: []string{genModel}, Phase: 1,
+		Args: argFieldName, Generators: []string{genModel}, Phase: 1,
+	},
+
+	// Chain directives (Pillar 4)
+	{
+		Name: "appends", Description: "marks method as chain append operation",
+		Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "verifies", Description: "marks method as chain integrity verifier",
+		Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "replays", Description: "marks method as chain replay/stream operation",
+		Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "partition-by", Description: "field on entry struct used as partition key",
+		Args: argFieldName, Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "entry-id", Description: "field on entry struct used as unique entry ID for causal ordering",
+		Args: argFieldName, Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "depends-on", Description: "field on entry struct listing dependency IDs for causal ordering",
+		Args: argFieldName, Generators: []string{genModel}, Phase: 1,
+	},
+	{
+		Name: "hash", Description: "qualified function name for custom chain hash",
+		Args: "PkgPath.FuncName", Generators: []string{genModel}, Phase: 1,
 	},
 }

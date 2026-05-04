@@ -10,6 +10,7 @@ package {{.PackageName}}
 //	Key field:     {{if .KeyField}}{{.KeyField}}{{else}}none{{end}}
 //	Ref:           {{if .CanSynthesizeRef}}auto (refmap.MapStore){{else if .RefBlockers}}supply via {{.InterfaceName}}ModelReference ({{join .RefBlockers ", "}} not in MapStore){{else}}supply via {{.InterfaceName}}ModelReference{{end}}
 //	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
+//	Chain:         {{if .HasChain}}appends{{if .ChainReplayMethod}}, replays ({{.ChainReplayMethod.Name}}){{end}}{{if .ChainVerifyMethod}}, verifies ({{.ChainVerifyMethod.Name}}){{end}}{{else}}none{{end}}
 //	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
 //	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
@@ -114,6 +115,18 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			)
 		}
 	}
+{{- else if .HasChain}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refchain.New[{{.ChainAppendMethod.Shape.ValType}}](nil)
+		}
+	}
+{{- end}}
+
+{{- if .HasChain}}
+	// Chain history — tracks attempted appends for dropped-write detection.
+	attemptedAppends := chainhistory.New[struct{}, {{.ChainAppendMethod.Shape.ValType}}]()
+	chainPartKeyOf := func(_ {{.ChainAppendMethod.Shape.ValType}}) struct{} { return struct{}{} }
 {{- end}}
 
 	// Actions: consumer-supplied or auto-derived.
@@ -137,6 +150,12 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			action.Lookup("{{.Name}}", keyGen,
 				func(impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
 					return impl.{{.Name}}({{if .HasCtx}}context.Background(), {{end}}k)
+				},
+			),
+{{- else if and .IsWriter (and $.HasChain (.HasDirective "appends"))}}
+			action.ChainAppendRecording("{{.Name}}", {{writerGen .}}, attemptedAppends, chainPartKeyOf,
+				func(ctx context.Context, impl {{$.QualifiedType}}, v {{.Shape.ValType}}) error {
+					return impl.{{.Name}}(ctx, v)
 				},
 			),
 {{- else if .IsWriter}}
@@ -163,6 +182,12 @@ func {{.InterfaceName | toLower}}ModelProperty(
 					return impl.{{.Name}}(ctx)
 				},
 			),
+{{- else if and .IsLifecycle (and $.HasChain (.HasDirective "verifies"))}}
+			action.ChainVerify("{{.Name}}",
+				func(ctx context.Context, impl {{$.QualifiedType}}) error {
+					return impl.{{.Name}}(ctx)
+				},
+			),
 {{- else if .IsLifecycle}}
 			action.Lifecycle("{{.Name}}",
 				func(ctx context.Context, impl {{$.QualifiedType}}) error {
@@ -185,6 +210,12 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			action.PoisonCheck("{{.Name}}",
 				func(impl {{$.QualifiedType}}) error {
 					return impl.{{.Name}}()
+				},
+			),
+{{- else if and .IsStreamReader (and $.HasChain (.HasDirective "replays"))}}
+			action.ChainReplay("{{.Name}}", attemptedAppends,
+				func(ctx context.Context, impl {{$.QualifiedType}}, _ struct{}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+					return impl.{{.Name}}(ctx)
 				},
 			),
 {{- else if .IsStreamReader}}
@@ -232,6 +263,29 @@ func {{.InterfaceName | toLower}}ModelProperty(
 		},
 	})
 {{- end}}
+{{- if .HasChain}}
+{{- if .ChainReplayMethod}}
+	chainReplayFn := func(rt *rapid.T, impl {{.QualifiedType}}, _ struct{}) iter.Seq2[{{.ChainReplayMethod.Shape.IterInfo.ElemType}}, error] {
+		return impl.{{.ChainReplayMethod.Name}}(rt.Context())
+	}
+	laws.Add(&law.AppendOnlyHistoryGrows[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
+	})
+	laws.Add(law.ReplayDeterminism[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
+	})
+	laws.Add(law.AppendOnlyNoDrops[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+		Replay: chainReplayFn, History: attemptedAppends,
+	})
+{{- end}}
+{{- if .ChainVerifyMethod}}
+	laws.Add(law.HashChainIntegrityViaVerify[{{.QualifiedType}}]{
+		Verify: func(rt *rapid.T, impl {{.QualifiedType}}) error {
+			return impl.{{.ChainVerifyMethod.Name}}(rt.Context())
+		},
+	})
+{{- end}}
+{{- end}}
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}
@@ -239,11 +293,15 @@ func {{.InterfaceName | toLower}}ModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[{{.QualifiedType}}]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+{{- if .HasChain}}
+	modelOpts = append(modelOpts, model.WithHistoryReset[{{.QualifiedType}}](attemptedAppends.Reset))
+{{- end}}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // {{.InterfaceName}}ModelOption configures [Assert{{.InterfaceName}}Model].
@@ -356,8 +414,10 @@ import (
 
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
+	chainhistory "go.thesmos.sh/testkit/model/history"
 	"go.thesmos.sh/testkit/model/law"
 	"go.thesmos.sh/testkit/model/linearize"
+	"go.thesmos.sh/testkit/model/refchain"
 	"go.thesmos.sh/testkit/model/refmap"
 {{- range .Imports}}
 {{- if ne .Path "testing"}}

@@ -263,6 +263,16 @@ func (m *SpecMethodData) IsMutator() bool { return m.Shape.Shape == gen.ShapeMut
 // IsPoisonAccessor reports whether the method has PoisonAccessor shape.
 func (m *SpecMethodData) IsPoisonAccessor() bool { return m.Shape.Shape == gen.ShapePoisonAccessor }
 
+// HasDirective reports whether this method has the named directive.
+func (m *SpecMethodData) HasDirective(name string) bool {
+	for _, d := range m.Directives {
+		if d.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 // OnMethodAssertionType renders the Go type expression for the On<Method>
 // assertion parameter. For Reader: testkit.ReaderAssertion[T, K, V].
 // For Unknown/untyped: func(*testing.T, T).

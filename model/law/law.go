@@ -44,6 +44,20 @@ type Law[T any] interface {
 	Check(rt *rapid.T, sut, ref T) error
 }
 
+// StatefulLaw extends [Law] with access to the current step count.
+// Use this for laws that need cross-action state tracking, such as
+// chain-growth monotonicity (AppendOnlyHistoryGrows) or
+// frozen-after-poison invariants. The runner detects StatefulLaw
+// via interface assertion and passes the step number.
+type StatefulLaw[T any] interface {
+	Law[T]
+
+	// CheckWithStep is called instead of Check when the law implements
+	// StatefulLaw. Step is the 0-based action count within the current
+	// rapid iteration.
+	CheckWithStep(rt *rapid.T, sut, ref T, step int) error
+}
+
 // ReadAfterWrite checks that every key in a sample pool is consistent
 // between SUT and reference. Observational — never writes.
 //

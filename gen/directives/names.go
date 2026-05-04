@@ -23,4 +23,11 @@ const (
 	Deleter           = "deleter"
 	Mutator           = "mutator"
 	KeyField          = "keyfield"
+	Appends           = "appends"
+	Verifies          = "verifies"
+	Replays           = "replays"
+	PartitionBy       = "partition-by"
+	EntryIDField      = "entry-id"
+	DependsOnField    = "depends-on"
+	HashFunc          = "hash"
 )

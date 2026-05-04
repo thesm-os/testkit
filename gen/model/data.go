@@ -48,6 +48,35 @@ type Data struct {
 	// covered by auto-derived actions.
 	SkippedMethods []string
 
+	// HasChain is true when at least //testkit:appends is detected.
+	HasChain bool
+
+	// ChainAppendMethod is the method with //testkit:appends directive.
+	ChainAppendMethod *suite.SpecMethodData
+
+	// ChainReplayMethod is the method with //testkit:replays directive.
+	ChainReplayMethod *suite.SpecMethodData
+
+	// ChainVerifyMethod is the method with //testkit:verifies directive.
+	// Nil when absent; framework uses PoisonAccessor Err() instead.
+	ChainVerifyMethod *suite.SpecMethodData
+
+	// ChainPartitionField is the Entry struct field for partition key extraction.
+	// Set from //testkit:partition-by=Field on the Replay method.
+	ChainPartitionField string
+
+	// ChainEntryIDField is the Entry struct field for unique entry ID.
+	// Set from //testkit:entry-id=Field on the Replay method.
+	ChainEntryIDField string
+
+	// ChainDependsOnField is the Entry struct field for dependency list.
+	// Set from //testkit:depends-on=Field on the Replay method.
+	ChainDependsOnField string
+
+	// ChainHashFunc is the qualified hash function override.
+	// Set from //testkit:hash=PkgPath.FuncName on the interface.
+	ChainHashFunc string
+
 	// CanLinearize is true when the interface has Reader + (Writer or Deleter)
 	// shapes — the only combination linearize.KV currently models.
 	//
@@ -136,6 +165,14 @@ func (d *Data) HasDeleter() bool { return d.DeleterMethod != nil }
 
 // HasCount reports whether an Aggregator-shaped method returning int was detected.
 func (d *Data) HasCount() bool { return d.CountMethod != nil }
+
+// IsChainPartitioned reports whether the chain is per-partition.
+func (d *Data) IsChainPartitioned() bool { return d.ChainPartitionField != "" }
+
+// HasCausalOrdering reports whether causal ordering directives are present.
+func (d *Data) HasCausalOrdering() bool {
+	return d.ChainEntryIDField != "" && d.ChainDependsOnField != ""
+}
 
 // HasStream reports whether a StreamReader-shaped method was detected.
 func (d *Data) HasStream() bool { return d.StreamMethod != nil }
@@ -259,6 +296,47 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 	}
 	if md.HasCount() {
 		md.AutoLaws = append(md.AutoLaws, "AUTO-COUNT-EQUALS-REFERENCE")
+	}
+
+	// Detect chain directives.
+	for _, m := range spec.Methods {
+		for _, d := range m.Directives {
+			switch d.Name {
+			case directives.Appends:
+				md.HasChain = true
+				md.ChainAppendMethod = m
+			case directives.Replays:
+				md.ChainReplayMethod = m
+			case directives.Verifies:
+				md.ChainVerifyMethod = m
+			case directives.PartitionBy:
+				if len(d.Args) > 0 {
+					md.ChainPartitionField = d.Args[0]
+				}
+			case directives.EntryIDField:
+				if len(d.Args) > 0 {
+					md.ChainEntryIDField = d.Args[0]
+				}
+			case directives.DependsOnField:
+				if len(d.Args) > 0 {
+					md.ChainDependsOnField = d.Args[0]
+				}
+			case directives.HashFunc:
+				if len(d.Args) > 0 {
+					md.ChainHashFunc = d.Args[0]
+				}
+			}
+		}
+	}
+	if md.HasChain {
+		md.AutoLaws = append(md.AutoLaws, "AUTO-APPEND-ONLY-GROWS", "AUTO-HASH-CHAIN-INTEGRITY")
+		if md.ChainReplayMethod != nil {
+			md.AutoLaws = append(md.AutoLaws,
+				"AUTO-APPEND-ONLY-NO-DROPS", "AUTO-REPLAY-DETERMINISTIC")
+		}
+		if md.HasCausalOrdering() {
+			md.AutoLaws = append(md.AutoLaws, "AUTO-REPLAY-CAUSAL-ORDERING")
+		}
 	}
 
 	return md

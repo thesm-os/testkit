@@ -23,6 +23,7 @@ import (
 //	Key field:     none
 //	Ref:           supply via MachineModelReference (Err, Fold, Lookup, State not in MapStore)
 //	Auto-laws:     none
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       MachineModelReference, MachineModelActions, MachineModelLaw, MachineModelSkipLaw
@@ -101,11 +102,12 @@ func machineModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[newshapes.Machine]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // MachineModelOption configures [AssertMachineModel].

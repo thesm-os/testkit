@@ -23,6 +23,7 @@ import (
 //	Key field:     none
 //	Ref:           supply via StateModelReference (Get, Has, Len not in MapStore)
 //	Auto-laws:     none
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       StateModelReference, StateModelActions, StateModelLaw, StateModelSkipLaw
@@ -90,11 +91,12 @@ func stateModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[thesmos.State]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // StateModelOption configures [AssertStateModel].

@@ -22,6 +22,7 @@ import (
 //	Key field:     none
 //	Ref:           supply via KindRegistryModelReference (Kinds, Lookup, Register not in MapStore)
 //	Auto-laws:     none
+//	Chain:         none
 //	Skipped:       Register(Unknown) — supply via KindRegistryModelActions
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       KindRegistryModelReference, KindRegistryModelActions, KindRegistryModelLaw, KindRegistryModelSkipLaw
@@ -89,11 +90,12 @@ func kindregistryModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[thesmos.KindRegistry]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // KindRegistryModelOption configures [AssertKindRegistryModel].

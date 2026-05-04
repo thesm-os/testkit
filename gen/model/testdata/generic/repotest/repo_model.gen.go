@@ -26,6 +26,7 @@ import (
 //	Key field:     ID
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    ItemRepositoryModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ItemRepositoryModelReference, ItemRepositoryModelActions, ItemRepositoryModelLaw, ItemRepositoryModelSkipLaw
@@ -175,11 +176,12 @@ func itemrepositoryModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[generic.ItemRepository]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // ItemRepositoryModelOption configures [AssertItemRepositoryModel].

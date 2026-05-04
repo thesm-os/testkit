@@ -93,6 +93,11 @@ type Config[T any] struct {
 	// goroutines, file handles).
 	Cleanup func(T)
 
+	// HistoryResetters are called at the start of each rapid iteration
+	// to reset per-iteration chain history traces. Wired by
+	// [WithHistoryReset].
+	HistoryResetters []func()
+
 	// Concurrent enables concurrent linearizability testing.
 	// When set, the runner spawns workers and validates via Porcupine
 	// instead of running the sequential property.
@@ -146,6 +151,11 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 			rt.Fatal("model.Property: at least one Action is required")
 		}
 
+		// Reset per-iteration history traces (chain laws).
+		for _, reset := range cfg.HistoryResetters {
+			reset()
+		}
+
 		sut := cfg.SUTFactory()
 		ref := cfg.RefFactory()
 		step := 0
@@ -167,7 +177,12 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		actionMap[""] = func(rt *rapid.T) {
 			for _, l := range cfg.Laws.laws {
 				cfg.Laws.ran[l.ID()]++
-				err := l.Check(rt, sut, ref)
+				var err error
+				if sl, ok := l.(law.StatefulLaw[T]); ok {
+					err = sl.CheckWithStep(rt, sut, ref, step)
+				} else {
+					err = l.Check(rt, sut, ref)
+				}
 				if err != nil {
 					f := &Failure{
 						Kind:    FailureInvariant,
@@ -234,6 +249,15 @@ func WithCleanup[T any](fn func(T)) Option[T] {
 // WithConcurrent enables concurrent linearizability testing.
 func WithConcurrent[T any](cfg ConcurrentConfig[T]) Option[T] {
 	return func(c *Config[T]) { c.Concurrent = &cfg }
+}
+
+// WithHistoryReset registers a reset function called at the start of
+// each rapid iteration. Used by chain action helpers to clear the
+// per-iteration append history.
+func WithHistoryReset[T any](reset func()) Option[T] {
+	return func(c *Config[T]) {
+		c.HistoryResetters = append(c.HistoryResetters, reset)
+	}
 }
 
 // SkipLaw removes an auto-derived law by ID.

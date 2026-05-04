@@ -25,6 +25,7 @@ import (
 //	Key field:     ID
 //	Ref:           supply via ServiceModelReference (Close, Describe, IsEmpty not in MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    ServiceModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ServiceModelReference, ServiceModelActions, ServiceModelLaw, ServiceModelSkipLaw
@@ -193,11 +194,12 @@ func serviceModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[allshapes.Service]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // ServiceModelOption configures [AssertServiceModel].

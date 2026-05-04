@@ -25,6 +25,7 @@ import (
 //	Key field:     ID
 //	Ref:           supply via ProcessorModelReference (Process not in MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE
+//	Chain:         none
 //	Skipped:       Process(Unknown) — supply via ProcessorModelActions
 //	Concurrent:    ProcessorModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ProcessorModelReference, ProcessorModelActions, ProcessorModelLaw, ProcessorModelSkipLaw
@@ -144,11 +145,12 @@ func processorModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[unknown.Processor]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // ProcessorModelOption configures [AssertProcessorModel].

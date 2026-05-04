@@ -26,6 +26,7 @@ import (
 //	Key field:     ID
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-COUNT-EQUALS-REFERENCE
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    StoreModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       StoreModelReference, StoreModelActions, StoreModelLaw, StoreModelSkipLaw
@@ -168,11 +169,12 @@ func storeModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[basic.Store]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // StoreModelOption configures [AssertStoreModel].

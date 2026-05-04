@@ -23,6 +23,7 @@ import (
 //	Key field:     none
 //	Ref:           supply via CloserModelReference (Close, Ping not in MapStore)
 //	Auto-laws:     none
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       CloserModelReference, CloserModelActions, CloserModelLaw, CloserModelSkipLaw
@@ -89,11 +90,12 @@ func closerModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[noncrud.Closer]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // CloserModelOption configures [AssertCloserModel].

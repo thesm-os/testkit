@@ -21,6 +21,7 @@ import (
 //	Key field:     none
 //	Ref:           supply via SchedulerModelReference (Ready not in MapStore)
 //	Auto-laws:     none
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       SchedulerModelReference, SchedulerModelActions, SchedulerModelLaw, SchedulerModelSkipLaw
@@ -76,11 +77,12 @@ func schedulerModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[thesmos.Scheduler]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // SchedulerModelOption configures [AssertSchedulerModel].

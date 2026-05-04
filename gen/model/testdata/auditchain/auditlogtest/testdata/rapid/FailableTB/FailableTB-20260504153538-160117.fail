@@ -1,0 +1,28 @@
+# 2026/05/04 15:35:38.487793 [FailableTB] [rapid] draw action: "Append"
+# 2026/05/04 15:35:38.487797 [FailableTB] [rapid] draw Append_entry: auditchain.Entry{ID:"", Data:""}
+# 2026/05/04 15:35:38.487804 [FailableTB] [rapid] draw action: "Append"
+# 2026/05/04 15:35:38.487805 [FailableTB] [rapid] draw Append_entry: auditchain.Entry{ID:"", Data:""}
+# 2026/05/04 15:35:38.487812 [FailableTB] [rapid] draw action: "Append"
+# 2026/05/04 15:35:38.487813 [FailableTB] [rapid] draw Append_entry: auditchain.Entry{ID:"", Data:"A"}
+# 2026/05/04 15:35:38.487818 [FailableTB] [invariant] AUTO-APPEND-ONLY-NO-DROPS at step 3: AppendOnlyNoDrops[{}]: attempted append { A} missing from replay
+# 
+v0.4.8#13850053597943739465
+0x1084210842108
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x0
+0x0
+0x5555555555555
+0x0
+0x0
+0x0
+0x0

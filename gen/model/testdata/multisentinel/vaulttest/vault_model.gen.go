@@ -26,6 +26,7 @@ import (
 //	Key field:     ID
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE
+//	Chain:         none
 //	Skipped:       none
 //	Concurrent:    VaultModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       VaultModelReference, VaultModelActions, VaultModelLaw, VaultModelSkipLaw
@@ -153,11 +154,12 @@ func vaultModelProperty(
 		laws.SkipByID(id)
 	}
 
-	return model.Property(sutFactory,
+	modelOpts := []model.Option[multisentinel.Vault]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),
 		model.WithLaws(laws),
-	)
+	}
+	return model.Property(sutFactory, modelOpts...)
 }
 
 // VaultModelOption configures [AssertVaultModel].

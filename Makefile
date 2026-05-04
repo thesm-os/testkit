@@ -216,6 +216,7 @@ GEN_TESTDATA := \
 	gen/model/testdata/thesmos/statetest \
 	gen/model/testdata/thesmos/machinetest \
 	gen/model/testdata/thesmos/schedulertest \
+	gen/model/testdata/auditchain/auditlogtest \
 	gen/model/testdata/composed/composedtest
 
 # ─── Testing ─────────────────────────────────────────────────────
