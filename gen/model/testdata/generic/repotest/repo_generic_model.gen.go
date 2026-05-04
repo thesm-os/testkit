@@ -29,6 +29,7 @@ import (
 //	Ref:           consumer-supplied (generic V — no codegen-time keyfield heuristic)
 //	Auto-laws:     derived at instantiation from consumer-supplied keyGen/keyFunc
 //	Skipped:       none
+//	Concurrent:    RepositoryModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       RepositoryModelReference, RepositoryModelKeyFunc, RepositoryModelActions, RepositoryModelLaw, RepositoryModelSkipLaw
 func AssertRepositoryModel[K comparable, V any](
 	t rapid.TB,

@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 	"go.thesmos.sh/testkit/model/refmap"
 )
 
@@ -26,6 +27,7 @@ import (
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE
 //	Skipped:       none
+//	Concurrent:    ItemRepositoryModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ItemRepositoryModelReference, ItemRepositoryModelActions, ItemRepositoryModelLaw, ItemRepositoryModelSkipLaw
 func AssertItemRepositoryModel(
 	t rapid.TB,
@@ -33,6 +35,11 @@ func AssertItemRepositoryModel(
 	opts ...ItemRepositoryModelOption,
 ) {
 	t.Helper()
+	cfg := newItemRepositoryModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
 	rapid.Check(t, itemrepositoryModelProperty(sutFactory, opts...))
 }
 
@@ -50,6 +57,25 @@ func FuzzItemRepositoryModel(
 ) {
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz(itemrepositoryModelProperty(sutFactory, opts...)))
+}
+
+// FuzzItemRepositoryModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [AssertItemRepositoryModel] with [ItemRepositoryModelConcurrent].
+func FuzzItemRepositoryModelConcurrent(
+	f *testing.F,
+	sutFactory func() generic.ItemRepository,
+	workers, opsPerWorker int,
+	opts ...ItemRepositoryModelOption,
+) {
+	f.Helper()
+	opts = append(opts, ItemRepositoryModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := newItemRepositoryModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
 }
 
 func itemrepositoryModelProperty(
@@ -187,12 +213,46 @@ func ItemRepositoryModelSkipLaw(id string) ItemRepositoryModelOption {
 	return func(c *itemrepositoryModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// ItemRepositoryModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func ItemRepositoryModelConcurrent(workers, opsPerWorker int) ItemRepositoryModelOption {
+	return func(c *itemrepositoryModelConfig) {
+		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := rapid.Make[generic.Item]()
+		c.concurrent = &model.ConcurrentConfig[generic.ItemRepository]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[string, generic.Item](generic.ErrNotFound),
+			Actions: []model.ConcurrentAction[generic.ItemRepository]{
+				linearize.ConcurrentDeleter("Delete", keyGen,
+					func(ctx context.Context, impl generic.ItemRepository, k string) error {
+						return impl.Delete(ctx, k)
+					},
+				),
+				linearize.ConcurrentReader("Get", keyGen,
+					func(ctx context.Context, impl generic.ItemRepository, k string) (generic.Item, error) {
+						return impl.Get(ctx, k)
+					},
+				),
+				linearize.ConcurrentWriter("Put", valGen,
+					func(ctx context.Context, impl generic.ItemRepository, v generic.Item) error {
+						return impl.Put(ctx, v)
+					},
+					func(v generic.Item) string { return v.ID },
+				),
+			},
+		}
+	}
+}
+
 type itemrepositoryModelConfig struct {
 	refFactory   func() generic.ItemRepository
 	actions      []model.Action[generic.ItemRepository]
 	extraActions []model.Action[generic.ItemRepository]
 	laws         []law.Law[generic.ItemRepository]
 	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[generic.ItemRepository]
 }
 
 func newItemRepositoryModelConfig(opts ...ItemRepositoryModelOption) itemrepositoryModelConfig {

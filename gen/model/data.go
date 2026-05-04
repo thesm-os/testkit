@@ -48,6 +48,15 @@ type Data struct {
 	// covered by auto-derived actions.
 	SkippedMethods []string
 
+	// CanLinearize is true when the interface has Reader + (Writer or Deleter)
+	// shapes — the only combination linearize.KV currently models.
+	//
+	// Non-CRUD interfaces (Mutator, ReaderWithBool, Lookup, etc.) do NOT
+	// get XxxModelConcurrent emitted. Concurrent stress for those shapes
+	// requires manual WithConcurrent wiring (StressActions only, no Porcupine).
+	// See model.md "Non-CRUD concurrent stress emission" deferral.
+	CanLinearize bool
+
 	// IsGeneric is true when the interface has uninstantiated type parameters.
 	// When true, the generator emits parameterized functions with type
 	// constraints threaded through.
@@ -75,7 +84,7 @@ func (d *Data) templateFuncs() template.FuncMap {
 			if len(m.Sentinels) > 0 {
 				return m.Sentinels[0].Qualified
 			}
-			return ""
+			return "nil"
 		},
 		"keySamples": func() string {
 			return d.KeySamples()
@@ -199,6 +208,23 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 	}
 
 	md.HasCRUD = md.ReaderMethod != nil && md.WriterMethod != nil
+	// CanLinearize requires Reader (not ReaderWithBool/Lookup) + Writer/Deleter.
+	// Extended shapes (Mutator, ReaderWithBool, Lookup) are stress-only
+	// under concurrent mode — no Porcupine linearizability check.
+	hasReader := false
+	hasWriterOrDeleter := false
+	for _, m := range spec.Methods {
+		if m.Skip {
+			continue
+		}
+		switch m.Shape.Shape { //nolint:exhaustive // only Reader/Writer/Deleter matter for linearizability
+		case gen.ShapeReader:
+			hasReader = true
+		case gen.ShapeWriter, gen.ShapeDeleter:
+			hasWriterOrDeleter = true
+		}
+	}
+	md.CanLinearize = hasReader && hasWriterOrDeleter
 
 	// CanSynthesizeRef: true only when every non-skipped method is a
 	// shape that refmap.MapStore implements.

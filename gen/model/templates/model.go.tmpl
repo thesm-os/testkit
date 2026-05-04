@@ -11,6 +11,7 @@ package {{.PackageName}}
 //	Ref:           {{if .CanSynthesizeRef}}auto (refmap.MapStore){{else if .RefBlockers}}supply via {{.InterfaceName}}ModelReference ({{join .RefBlockers ", "}} not in MapStore){{else}}supply via {{.InterfaceName}}ModelReference{{end}}
 //	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
 //	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
+//	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model(
 	t rapid.TB,
@@ -18,6 +19,13 @@ func Assert{{.InterfaceName}}Model(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	t.Helper()
+{{- if .CanLinearize}}
+	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
+{{- end}}
 	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
 }
 
@@ -36,6 +44,27 @@ func Fuzz{{.InterfaceName}}Model(
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz({{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...)))
 }
+{{- if .CanLinearize}}
+
+// Fuzz{{.InterfaceName}}ModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [Assert{{.InterfaceName}}Model] with [{{.InterfaceName}}ModelConcurrent].
+func Fuzz{{.InterfaceName}}ModelConcurrent(
+	f *testing.F,
+	sutFactory func() {{.QualifiedType}},
+	workers, opsPerWorker int,
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	f.Helper()
+	opts = append(opts, {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := new{{.InterfaceName}}ModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
+}
+{{- end}}
 
 func {{.InterfaceName | toLower}}ModelProperty(
 	sutFactory func() {{.QualifiedType}},
@@ -247,6 +276,55 @@ func {{.InterfaceName}}ModelLaw(l law.Law[{{.QualifiedType}}]) {{.InterfaceName}
 func {{.InterfaceName}}ModelSkipLaw(id string) {{.InterfaceName}}ModelOption {
 	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
+{{- if .CanLinearize}}
+
+// {{.InterfaceName}}ModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker int) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) {
+		keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
+{{- if and .WriterMethod .KeyField}}
+		valGen := rapid.Make[{{.WriterMethod.Shape.ValType}}]()
+{{- end}}
+		c.concurrent = &model.ConcurrentConfig[{{.QualifiedType}}]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[{{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]({{firstSentinel .ReaderMethod}}),
+			Actions: []model.ConcurrentAction[{{.QualifiedType}}]{
+{{- range .Methods}}{{if not .Skip}}
+{{- if .IsReader}}
+				linearize.ConcurrentReader("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- else if and .IsWriter (eq .Shape.ValType $.ReaderMethod.Shape.KeyType)}}
+				linearize.ConcurrentDeleter("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- else if .IsWriter}}
+				linearize.ConcurrentWriter("{{.Name}}", valGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, v {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, v)
+					},
+					func(v {{.Shape.ValType}}) {{$.ReaderMethod.Shape.KeyType}} { return v.{{$.KeyField}} },
+				),
+{{- else if .IsDeleter}}
+				linearize.ConcurrentDeleter("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- end}}
+{{- end}}{{end}}
+			},
+		}
+	}
+}
+{{- end}}
 
 type {{.InterfaceName | toLower}}ModelConfig struct {
 	refFactory   func() {{.QualifiedType}}
@@ -254,6 +332,9 @@ type {{.InterfaceName | toLower}}ModelConfig struct {
 	extraActions []model.Action[{{.QualifiedType}}]
 	laws         []law.Law[{{.QualifiedType}}]
 	skipLaws     []string
+{{- if .CanLinearize}}
+	concurrent   *model.ConcurrentConfig[{{.QualifiedType}}]
+{{- end}}
 }
 
 func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.InterfaceName | toLower}}ModelConfig {
@@ -276,6 +357,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 	"go.thesmos.sh/testkit/model/refmap"
 {{- range .Imports}}
 {{- if ne .Path "testing"}}

@@ -6,9 +6,11 @@ package storetest_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/model/testdata/basic"
 	"go.thesmos.sh/testkit/gen/model/testdata/basic/storetest"
 	"go.thesmos.sh/testkit/model/law"
@@ -45,6 +47,41 @@ func TestInMemoryStoreModel(t *testing.T) {
 		},
 			storetest.StoreModelSkipLaw("AUTO-COUNT-EQUALS-REFERENCE"),
 		)
+	})
+
+	t.Run("concurrent linearizability", func(t *testing.T) {
+		t.Parallel()
+		// Concurrent: 4 workers × 30 ops. Porcupine validates
+		// linearizability of Get/Put/Delete across interleaved histories.
+		storetest.AssertStoreModel(t, func() basic.Store {
+			return basic.NewInMemoryStore()
+		},
+			storetest.StoreModelConcurrent(4, 30),
+		)
+	})
+
+	t.Run("concurrent catches non-linearizable store", func(t *testing.T) {
+		t.Parallel()
+		// Negative: NonLinearizableStore is thread-safe but Get reads
+		// stale data. Porcupine must report Illegal via the generated API.
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			storetest.AssertStoreModel(ft, func() basic.Store {
+				return basic.NewNonLinearizableStore()
+			},
+				storetest.StoreModelConcurrent(4, 30),
+			)
+		}()
+		select {
+		case <-done:
+		case <-time.After(30 * time.Second):
+			t.Fatal("concurrent negative test timed out")
+		}
+		if !ft.Failed() {
+			t.Fatal("non-linearizable store should fail Porcupine check via generated API")
+		}
 	})
 }
 

@@ -17,6 +17,7 @@ package {{.PackageName}}
 //	Ref:           consumer-supplied (generic V — no codegen-time keyfield heuristic)
 //	Auto-laws:     derived at instantiation from consumer-supplied keyGen/keyFunc
 //	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
+//	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelKeyFunc, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 	t rapid.TB,

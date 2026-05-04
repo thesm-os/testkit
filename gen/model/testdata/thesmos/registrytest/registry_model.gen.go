@@ -23,6 +23,7 @@ import (
 //	Ref:           supply via KindRegistryModelReference (Kinds, Lookup, Register not in MapStore)
 //	Auto-laws:     none
 //	Skipped:       Register(Unknown) — supply via KindRegistryModelActions
+//	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       KindRegistryModelReference, KindRegistryModelActions, KindRegistryModelLaw, KindRegistryModelSkipLaw
 func AssertKindRegistryModel(
 	t rapid.TB,

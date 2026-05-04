@@ -24,6 +24,7 @@ import (
 //	Ref:           supply via CloserModelReference (Close, Ping not in MapStore)
 //	Auto-laws:     none
 //	Skipped:       none
+//	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       CloserModelReference, CloserModelActions, CloserModelLaw, CloserModelSkipLaw
 func AssertCloserModel(
 	t rapid.TB,

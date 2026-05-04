@@ -22,6 +22,7 @@ import (
 //	Ref:           supply via SchedulerModelReference (Ready not in MapStore)
 //	Auto-laws:     none
 //	Skipped:       none
+//	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       SchedulerModelReference, SchedulerModelActions, SchedulerModelLaw, SchedulerModelSkipLaw
 func AssertSchedulerModel(
 	t rapid.TB,

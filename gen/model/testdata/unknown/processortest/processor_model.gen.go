@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 )
 
 // AssertProcessorModel runs property-based state-machine tests against
@@ -25,6 +26,7 @@ import (
 //	Ref:           supply via ProcessorModelReference (Process not in MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE
 //	Skipped:       Process(Unknown) — supply via ProcessorModelActions
+//	Concurrent:    ProcessorModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ProcessorModelReference, ProcessorModelActions, ProcessorModelLaw, ProcessorModelSkipLaw
 func AssertProcessorModel(
 	t rapid.TB,
@@ -32,6 +34,11 @@ func AssertProcessorModel(
 	opts ...ProcessorModelOption,
 ) {
 	t.Helper()
+	cfg := newProcessorModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
 	rapid.Check(t, processorModelProperty(sutFactory, opts...))
 }
 
@@ -49,6 +56,25 @@ func FuzzProcessorModel(
 ) {
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz(processorModelProperty(sutFactory, opts...)))
+}
+
+// FuzzProcessorModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [AssertProcessorModel] with [ProcessorModelConcurrent].
+func FuzzProcessorModelConcurrent(
+	f *testing.F,
+	sutFactory func() unknown.Processor,
+	workers, opsPerWorker int,
+	opts ...ProcessorModelOption,
+) {
+	f.Helper()
+	opts = append(opts, ProcessorModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := newProcessorModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
 }
 
 func processorModelProperty(
@@ -156,12 +182,41 @@ func ProcessorModelSkipLaw(id string) ProcessorModelOption {
 	return func(c *processorModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// ProcessorModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func ProcessorModelConcurrent(workers, opsPerWorker int) ProcessorModelOption {
+	return func(c *processorModelConfig) {
+		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := rapid.Make[unknown.Item]()
+		c.concurrent = &model.ConcurrentConfig[unknown.Processor]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[string, unknown.Item](unknown.ErrNotFound),
+			Actions: []model.ConcurrentAction[unknown.Processor]{
+				linearize.ConcurrentReader("Get", keyGen,
+					func(ctx context.Context, impl unknown.Processor, k string) (unknown.Item, error) {
+						return impl.Get(ctx, k)
+					},
+				),
+				linearize.ConcurrentWriter("Put", valGen,
+					func(ctx context.Context, impl unknown.Processor, v unknown.Item) error {
+						return impl.Put(ctx, v)
+					},
+					func(v unknown.Item) string { return v.ID },
+				),
+			},
+		}
+	}
+}
+
 type processorModelConfig struct {
 	refFactory   func() unknown.Processor
 	actions      []model.Action[unknown.Processor]
 	extraActions []model.Action[unknown.Processor]
 	laws         []law.Law[unknown.Processor]
 	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[unknown.Processor]
 }
 
 func newProcessorModelConfig(opts ...ProcessorModelOption) processorModelConfig {

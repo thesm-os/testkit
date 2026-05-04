@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 	"go.thesmos.sh/testkit/model/refmap"
 )
 
@@ -26,6 +27,7 @@ import (
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-COUNT-EQUALS-REFERENCE
 //	Skipped:       none
+//	Concurrent:    StoreModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       StoreModelReference, StoreModelActions, StoreModelLaw, StoreModelSkipLaw
 func AssertStoreModel(
 	t rapid.TB,
@@ -33,6 +35,11 @@ func AssertStoreModel(
 	opts ...StoreModelOption,
 ) {
 	t.Helper()
+	cfg := newStoreModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
 	rapid.Check(t, storeModelProperty(sutFactory, opts...))
 }
 
@@ -50,6 +57,25 @@ func FuzzStoreModel(
 ) {
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz(storeModelProperty(sutFactory, opts...)))
+}
+
+// FuzzStoreModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [AssertStoreModel] with [StoreModelConcurrent].
+func FuzzStoreModelConcurrent(
+	f *testing.F,
+	sutFactory func() basic.Store,
+	workers, opsPerWorker int,
+	opts ...StoreModelOption,
+) {
+	f.Helper()
+	opts = append(opts, StoreModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := newStoreModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
 }
 
 func storeModelProperty(
@@ -180,12 +206,46 @@ func StoreModelSkipLaw(id string) StoreModelOption {
 	return func(c *storeModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// StoreModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
+	return func(c *storeModelConfig) {
+		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := rapid.Make[basic.Item]()
+		c.concurrent = &model.ConcurrentConfig[basic.Store]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[string, basic.Item](basic.ErrNotFound),
+			Actions: []model.ConcurrentAction[basic.Store]{
+				linearize.ConcurrentDeleter("Delete", keyGen,
+					func(ctx context.Context, impl basic.Store, k string) error {
+						return impl.Delete(ctx, k)
+					},
+				),
+				linearize.ConcurrentReader("Get", keyGen,
+					func(ctx context.Context, impl basic.Store, k string) (basic.Item, error) {
+						return impl.Get(ctx, k)
+					},
+				),
+				linearize.ConcurrentWriter("Put", valGen,
+					func(ctx context.Context, impl basic.Store, v basic.Item) error {
+						return impl.Put(ctx, v)
+					},
+					func(v basic.Item) string { return v.ID },
+				),
+			},
+		}
+	}
+}
+
 type storeModelConfig struct {
 	refFactory   func() basic.Store
 	actions      []model.Action[basic.Store]
 	extraActions []model.Action[basic.Store]
 	laws         []law.Law[basic.Store]
 	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[basic.Store]
 }
 
 func newStoreModelConfig(opts ...StoreModelOption) storeModelConfig {

@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 	"go.thesmos.sh/testkit/model/refmap"
 )
 
@@ -26,6 +27,7 @@ import (
 //	Ref:           auto (refmap.MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE
 //	Skipped:       none
+//	Concurrent:    VaultModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       VaultModelReference, VaultModelActions, VaultModelLaw, VaultModelSkipLaw
 func AssertVaultModel(
 	t rapid.TB,
@@ -33,6 +35,11 @@ func AssertVaultModel(
 	opts ...VaultModelOption,
 ) {
 	t.Helper()
+	cfg := newVaultModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
 	rapid.Check(t, vaultModelProperty(sutFactory, opts...))
 }
 
@@ -50,6 +57,25 @@ func FuzzVaultModel(
 ) {
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz(vaultModelProperty(sutFactory, opts...)))
+}
+
+// FuzzVaultModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [AssertVaultModel] with [VaultModelConcurrent].
+func FuzzVaultModelConcurrent(
+	f *testing.F,
+	sutFactory func() multisentinel.Vault,
+	workers, opsPerWorker int,
+	opts ...VaultModelOption,
+) {
+	f.Helper()
+	opts = append(opts, VaultModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := newVaultModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
 }
 
 func vaultModelProperty(
@@ -165,12 +191,41 @@ func VaultModelSkipLaw(id string) VaultModelOption {
 	return func(c *vaultModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// VaultModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func VaultModelConcurrent(workers, opsPerWorker int) VaultModelOption {
+	return func(c *vaultModelConfig) {
+		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := rapid.Make[multisentinel.Secret]()
+		c.concurrent = &model.ConcurrentConfig[multisentinel.Vault]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[string, multisentinel.Secret](multisentinel.ErrNotFound),
+			Actions: []model.ConcurrentAction[multisentinel.Vault]{
+				linearize.ConcurrentReader("Get", keyGen,
+					func(ctx context.Context, impl multisentinel.Vault, k string) (multisentinel.Secret, error) {
+						return impl.Get(ctx, k)
+					},
+				),
+				linearize.ConcurrentWriter("Put", valGen,
+					func(ctx context.Context, impl multisentinel.Vault, v multisentinel.Secret) error {
+						return impl.Put(ctx, v)
+					},
+					func(v multisentinel.Secret) string { return v.ID },
+				),
+			},
+		}
+	}
+}
+
 type vaultModelConfig struct {
 	refFactory   func() multisentinel.Vault
 	actions      []model.Action[multisentinel.Vault]
 	extraActions []model.Action[multisentinel.Vault]
 	laws         []law.Law[multisentinel.Vault]
 	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[multisentinel.Vault]
 }
 
 func newVaultModelConfig(opts ...VaultModelOption) vaultModelConfig {

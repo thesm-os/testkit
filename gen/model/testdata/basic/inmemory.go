@@ -65,3 +65,52 @@ func (s *InMemoryStore) Count(_ context.Context) (int, error) {
 	defer s.mu.Unlock()
 	return len(s.data), nil
 }
+
+// NonLinearizableStore is thread-safe (mutex-guarded) but not linearizable:
+// Get reads from a stale snapshot that is never updated by Put.
+// Used for negative concurrent testing.
+type NonLinearizableStore struct {
+	mu       sync.Mutex
+	data     map[string]Item
+	snapshot map[string]Item
+}
+
+// NewNonLinearizableStore returns a Store that is safe for concurrent
+// use but whose Get returns stale data.
+func NewNonLinearizableStore() *NonLinearizableStore {
+	return &NonLinearizableStore{
+		data:     make(map[string]Item),
+		snapshot: make(map[string]Item),
+	}
+}
+
+func (s *NonLinearizableStore) Get(_ context.Context, id string) (Item, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.snapshot[id]
+	if !ok {
+		return Item{}, ErrNotFound
+	}
+	return v, nil
+}
+
+func (s *NonLinearizableStore) Put(_ context.Context, item Item) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.data[item.ID] = item
+	// BUG: snapshot is never updated — Get always returns stale data
+	return nil
+}
+
+func (s *NonLinearizableStore) Delete(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.data, id)
+	return nil
+}
+
+func (s *NonLinearizableStore) Count(_ context.Context) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.data), nil
+}

@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
 )
 
 // AssertServiceModel runs property-based state-machine tests against
@@ -25,6 +26,7 @@ import (
 //	Ref:           supply via ServiceModelReference (Close, Describe, IsEmpty not in MapStore)
 //	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE
 //	Skipped:       none
+//	Concurrent:    ServiceModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ServiceModelReference, ServiceModelActions, ServiceModelLaw, ServiceModelSkipLaw
 func AssertServiceModel(
 	t rapid.TB,
@@ -32,6 +34,11 @@ func AssertServiceModel(
 	opts ...ServiceModelOption,
 ) {
 	t.Helper()
+	cfg := newServiceModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
 	rapid.Check(t, serviceModelProperty(sutFactory, opts...))
 }
 
@@ -49,6 +56,25 @@ func FuzzServiceModel(
 ) {
 	f.Helper()
 	f.Fuzz(rapid.MakeFuzz(serviceModelProperty(sutFactory, opts...)))
+}
+
+// FuzzServiceModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz. Same concurrent
+// property as [AssertServiceModel] with [ServiceModelConcurrent].
+func FuzzServiceModelConcurrent(
+	f *testing.F,
+	sutFactory func() allshapes.Service,
+	workers, opsPerWorker int,
+	opts ...ServiceModelOption,
+) {
+	f.Helper()
+	opts = append(opts, ServiceModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := newServiceModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
 }
 
 func serviceModelProperty(
@@ -205,12 +231,46 @@ func ServiceModelSkipLaw(id string) ServiceModelOption {
 	return func(c *serviceModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// ServiceModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func ServiceModelConcurrent(workers, opsPerWorker int) ServiceModelOption {
+	return func(c *serviceModelConfig) {
+		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := rapid.Make[allshapes.Item]()
+		c.concurrent = &model.ConcurrentConfig[allshapes.Service]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[string, allshapes.Item](allshapes.ErrNotFound),
+			Actions: []model.ConcurrentAction[allshapes.Service]{
+				linearize.ConcurrentDeleter("Delete", keyGen,
+					func(ctx context.Context, impl allshapes.Service, k string) error {
+						return impl.Delete(ctx, k)
+					},
+				),
+				linearize.ConcurrentReader("Get", keyGen,
+					func(ctx context.Context, impl allshapes.Service, k string) (allshapes.Item, error) {
+						return impl.Get(ctx, k)
+					},
+				),
+				linearize.ConcurrentWriter("Put", valGen,
+					func(ctx context.Context, impl allshapes.Service, v allshapes.Item) error {
+						return impl.Put(ctx, v)
+					},
+					func(v allshapes.Item) string { return v.ID },
+				),
+			},
+		}
+	}
+}
+
 type serviceModelConfig struct {
 	refFactory   func() allshapes.Service
 	actions      []model.Action[allshapes.Service]
 	extraActions []model.Action[allshapes.Service]
 	laws         []law.Law[allshapes.Service]
 	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[allshapes.Service]
 }
 
 func newServiceModelConfig(opts ...ServiceModelOption) serviceModelConfig {

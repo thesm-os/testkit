@@ -24,6 +24,7 @@ import (
 //	Ref:           supply via MachineModelReference (Err, Fold, Lookup, State not in MapStore)
 //	Auto-laws:     none
 //	Skipped:       none
+//	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       MachineModelReference, MachineModelActions, MachineModelLaw, MachineModelSkipLaw
 func AssertMachineModel(
 	t rapid.TB,
