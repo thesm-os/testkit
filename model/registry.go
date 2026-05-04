@@ -4,6 +4,7 @@
 package model
 
 import (
+	"maps"
 	"slices"
 
 	"pgregory.net/rapid"
@@ -52,7 +53,8 @@ func (r *Registry[T]) Laws() []law.Law[T] {
 func (r *Registry[T]) CheckAll(rt *rapid.T, sut, ref T) error {
 	for _, l := range r.laws {
 		r.ran[l.ID()]++
-		if err := l.Check(rt, sut, ref); err != nil {
+		err := l.Check(rt, sut, ref)
+		if err != nil {
 			r.fired[l.ID()]++
 			return err
 		}
@@ -66,12 +68,8 @@ func (r *Registry[T]) CheckAll(rt *rapid.T, sut, ref T) error {
 //   - Laws that always fired (possibly too strict or broken SUT).
 func (r *Registry[T]) Coverage() (ran, fired map[string]int) {
 	ranCp := make(map[string]int, len(r.ran))
-	for k, v := range r.ran {
-		ranCp[k] = v
-	}
+	maps.Copy(ranCp, r.ran)
 	firedCp := make(map[string]int, len(r.fired))
-	for k, v := range r.fired {
-		firedCp[k] = v
-	}
+	maps.Copy(firedCp, r.fired)
 	return ranCp, firedCp
 }

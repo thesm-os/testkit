@@ -18,7 +18,7 @@ FLAGS   ?=
 # ─── Module directories ─────────────────────────────────────────
 # Each directory containing a go.mod is a module. Go commands run
 # inside each module so multi-module workspaces work correctly.
-MODULES := . cmd gen container httptest oteltest clitest
+MODULES := . cmd gen model container httptest oteltest clitest
 
 # ─── Paths ───────────────────────────────────────────────────────
 BIN_DIR      := bin

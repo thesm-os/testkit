@@ -54,18 +54,24 @@ type ReadAfterWrite[T any, K comparable, V any] struct {
 	Keys *rapid.Generator[K]
 }
 
-func (l ReadAfterWrite[T, K, V]) ID() string    { return "AUTO-READ-AFTER-WRITE" }
-func (l ReadAfterWrite[T, K, V]) REQID() string { return "" }
+// ID returns the stable identifier for this law.
+func (ReadAfterWrite[T, K, V]) ID() string { return "AUTO-READ-AFTER-WRITE" }
 
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (ReadAfterWrite[T, K, V]) REQID() string { return "" }
+
+// Check verifies the law holds for the given SUT and reference.
 func (l ReadAfterWrite[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "ReadAfterWrite_key")
 	sutGot, sutErr := l.Read(rt, sut, k)
 	refGot, refErr := l.Read(rt, ref, k)
 	if (sutErr == nil) != (refErr == nil) {
-		return fmt.Errorf("ReadAfterWrite: key %v: SUT err=%v, ref err=%v", k, sutErr, refErr)
+		//nolint:errorlint // diagnostic message, not wrapping
+		return fmt.Errorf("ReadAfterWrite: key %v: SUT err=%v, ref err=%v",
+			k, sutErr, refErr)
 	}
 	if sutErr != nil {
-		return nil // both errored
+		return nil //nolint:nilerr // both errored — agreement, not a bug
 	}
 	if diff := cmp.Diff(refGot, sutGot); diff != "" {
 		return fmt.Errorf("ReadAfterWrite: key %v: SUT/ref disagree (-ref +sut):\n%s", k, diff)
@@ -81,9 +87,13 @@ type DeleteReturnsNotFound[T any, K comparable, V any] struct {
 	Sentinel error
 }
 
-func (l DeleteReturnsNotFound[T, K, V]) ID() string    { return "AUTO-DELETE-RETURNS-NOT-FOUND" }
-func (l DeleteReturnsNotFound[T, K, V]) REQID() string { return "" }
+// ID returns the stable identifier for this law.
+func (DeleteReturnsNotFound[T, K, V]) ID() string { return "AUTO-DELETE-RETURNS-NOT-FOUND" }
 
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (DeleteReturnsNotFound[T, K, V]) REQID() string { return "" }
+
+// Check verifies the law holds for the given SUT and reference.
 func (l DeleteReturnsNotFound[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "DeleteReturnsNotFound_key")
 	_, refErr := l.Read(rt, ref, k)
@@ -92,7 +102,9 @@ func (l DeleteReturnsNotFound[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	}
 	_, sutErr := l.Read(rt, sut, k)
 	if !errors.Is(sutErr, l.Sentinel) {
-		return fmt.Errorf("DeleteReturnsNotFound: key %v: ref returned sentinel %v but SUT returned %v",
+		//nolint:errorlint // diagnostic message, not wrapping
+		return fmt.Errorf(
+			"DeleteReturnsNotFound: key %v: ref returned sentinel %v but SUT returned %v",
 			k, l.Sentinel, sutErr)
 	}
 	return nil
@@ -104,14 +116,20 @@ type CountEqualsReference[T any, R comparable] struct {
 	Count func(*rapid.T, T) (R, error)
 }
 
-func (l CountEqualsReference[T, R]) ID() string    { return "AUTO-COUNT-EQUALS-REFERENCE" }
-func (l CountEqualsReference[T, R]) REQID() string { return "" }
+// ID returns the stable identifier for this law.
+func (CountEqualsReference[T, R]) ID() string { return "AUTO-COUNT-EQUALS-REFERENCE" }
 
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (CountEqualsReference[T, R]) REQID() string { return "" }
+
+// Check verifies the law holds for the given SUT and reference.
 func (l CountEqualsReference[T, R]) Check(rt *rapid.T, sut, ref T) error {
 	sutN, sutErr := l.Count(rt, sut)
 	refN, refErr := l.Count(rt, ref)
 	if sutErr != nil || refErr != nil {
-		return fmt.Errorf("CountEqualsReference: SUT err=%v, ref err=%v", sutErr, refErr)
+		//nolint:errorlint // diagnostic message, not wrapping
+		return fmt.Errorf("CountEqualsReference: SUT err=%v, ref err=%v",
+			sutErr, refErr)
 	}
 	if sutN != refN {
 		return fmt.Errorf("CountEqualsReference: SUT=%v, ref=%v", sutN, refN)

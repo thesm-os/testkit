@@ -86,11 +86,11 @@ func (s *brokenGetStore) Get(ctx context.Context, key string) (item, error) {
 
 type brokenDeleteStore struct{ store }
 
-func (s *brokenDeleteStore) Delete(_ context.Context, _ string) error { return nil }
+func (*brokenDeleteStore) Delete(_ context.Context, _ string) error { return nil }
 
 type brokenCountStore struct{ store }
 
-func (s *brokenCountStore) Count(_ context.Context) (int, error) { return 0, nil }
+func (*brokenCountStore) Count(_ context.Context) (int, error) { return 0, nil }
 
 // --- Generators + closures ---
 

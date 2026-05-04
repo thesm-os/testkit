@@ -90,6 +90,7 @@ linters:
             - $gostd
             - go.thesmos.sh/testkit
             - github.com/google/go-cmp
+            - github.com/anishathalye/porcupine
             - pgregory.net/rapid
         cmd:
           list-mode: strict

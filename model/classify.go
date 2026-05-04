@@ -40,7 +40,7 @@ func (k FailureKind) String() string {
 }
 
 // Failure is a classified model-test failure with optional REQ tag.
-type Failure struct {
+type Failure struct { //nolint:errname // Failure is the established name; renaming would break consumers
 	Kind    FailureKind
 	LawID   string // e.g., "AUTO-READ-AFTER-WRITE" or consumer-supplied
 	REQID   string // e.g., "REQ-PKG-FOO-001", empty if untagged
