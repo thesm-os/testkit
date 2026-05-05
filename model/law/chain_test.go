@@ -20,11 +20,20 @@ type entry struct {
 	Data string
 }
 
-type chainIface interface {
+type chainImpl interface {
 	Append(context.Context, entry) error
 	Replay(context.Context) iter.Seq2[entry, error]
 	Verify(context.Context) error
 }
+
+func replayFn(t *testing.T) func(*rapid.T, chainImpl, struct{}) iter.Seq2[entry, error] {
+	t.Helper()
+	return func(_ *rapid.T, impl chainImpl, _ struct{}) iter.Seq2[entry, error] {
+		return impl.Replay(t.Context())
+	}
+}
+
+// --- AppendOnlyHistoryGrows ---
 
 func TestAppendOnlyHistoryGrows(t *testing.T) {
 	t.Parallel()
@@ -36,11 +45,8 @@ func TestAppendOnlyHistoryGrows(t *testing.T) {
 		_ = chain.Append(t.Context(), entry{ID: "1", Data: "a"})
 		hist.Record(struct{}{}, entry{ID: "1", Data: "a"})
 
-		l := &law.AppendOnlyHistoryGrows[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
-			Partitions: hist.Partitions,
+		l := &law.AppendOnlyHistoryGrows[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), Partitions: hist.Partitions,
 		}
 
 		rapid.Check(t, func(rt *rapid.T) {
@@ -48,7 +54,6 @@ func TestAppendOnlyHistoryGrows(t *testing.T) {
 			if err != nil {
 				rt.Fatalf("should pass: %v", err)
 			}
-			// Append more, check again at step 1.
 			_ = chain.Append(t.Context(), entry{ID: "2", Data: "b"})
 			hist.Record(struct{}{}, entry{ID: "2", Data: "b"})
 			err = l.CheckWithStep(rt, chain, chain, 1)
@@ -58,39 +63,28 @@ func TestAppendOnlyHistoryGrows(t *testing.T) {
 		})
 	})
 
-	t.Run("detects shrinkage", func(t *testing.T) {
+	t.Run("equal size is not shrinkage", func(t *testing.T) {
 		t.Parallel()
-		// Use two different chains: ref grows, SUT doesn't.
-		ref := refchain.New[entry](nil)
-		sut := refchain.New[entry](nil)
+		chain := refchain.New[entry](nil)
 		hist := history.New[struct{}, entry]()
-		_ = ref.Append(t.Context(), entry{ID: "1"})
-		_ = sut.Append(t.Context(), entry{ID: "1"})
+		_ = chain.Append(t.Context(), entry{ID: "1"})
 		hist.Record(struct{}{}, entry{ID: "1"})
 
-		l := &law.AppendOnlyHistoryGrows[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
-			Partitions: hist.Partitions,
+		l := &law.AppendOnlyHistoryGrows[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), Partitions: hist.Partitions,
 		}
 
 		rapid.Check(t, func(rt *rapid.T) {
-			// Step 0: both have 1 entry.
-			_ = l.CheckWithStep(rt, sut, ref, 0)
-			// Now ref grows but we check SUT which stays at 1.
-			// The law should NOT detect shrinkage since it tracks SUT.
-			// To test shrinkage: manually clear SUT. But refchain is append-only.
-			// Instead, verify the law's prior tracking works across steps.
-			_ = ref.Append(t.Context(), entry{ID: "2"})
-			err := l.CheckWithStep(rt, sut, ref, 1)
-			// SUT still has 1 entry, prior was 1 → no shrinkage (equal is ok).
+			_ = l.CheckWithStep(rt, chain, chain, 0)
+			err := l.CheckWithStep(rt, chain, chain, 1)
 			if err != nil {
 				rt.Fatalf("equal size should not be shrinkage: %v", err)
 			}
 		})
 	})
 }
+
+// --- AppendOnlyNoDrops ---
 
 func TestAppendOnlyNoDrops(t *testing.T) {
 	t.Parallel()
@@ -103,11 +97,8 @@ func TestAppendOnlyNoDrops(t *testing.T) {
 		_ = chain.Append(t.Context(), e)
 		hist.Record(struct{}{}, e)
 
-		l := law.AppendOnlyNoDrops[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
-			History: hist,
+		l := law.AppendOnlyNoDrops[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), History: hist,
 		}
 
 		rapid.Check(t, func(rt *rapid.T) {
@@ -122,14 +113,10 @@ func TestAppendOnlyNoDrops(t *testing.T) {
 		t.Parallel()
 		chain := refchain.New[entry](nil)
 		hist := history.New[struct{}, entry]()
-		// Record in history but don't append to chain.
 		hist.Record(struct{}{}, entry{ID: "dropped"})
 
-		l := law.AppendOnlyNoDrops[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
-			History: hist,
+		l := law.AppendOnlyNoDrops[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), History: hist,
 		}
 
 		rapid.Check(t, func(rt *rapid.T) {
@@ -141,6 +128,8 @@ func TestAppendOnlyNoDrops(t *testing.T) {
 	})
 }
 
+// --- HashChainIntegrityViaVerify ---
+
 func TestHashChainIntegrityViaVerify(t *testing.T) {
 	t.Parallel()
 
@@ -149,8 +138,8 @@ func TestHashChainIntegrityViaVerify(t *testing.T) {
 		chain := refchain.New[entry](nil)
 		_ = chain.Append(t.Context(), entry{ID: "1"})
 
-		l := law.HashChainIntegrityViaVerify[chainIface]{
-			Verify: func(_ *rapid.T, impl chainIface) error {
+		l := law.HashChainIntegrityViaVerify[chainImpl]{
+			Verify: func(_ *rapid.T, impl chainImpl) error {
 				return impl.Verify(t.Context())
 			},
 		}
@@ -162,7 +151,28 @@ func TestHashChainIntegrityViaVerify(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("detects broken verify", func(t *testing.T) {
+		t.Parallel()
+		chain := refchain.New[entry](nil)
+		_ = chain.Append(t.Context(), entry{ID: "1"})
+
+		l := law.HashChainIntegrityViaVerify[chainImpl]{
+			Verify: func(_ *rapid.T, _ chainImpl) error {
+				return refchain.ErrChainIntegrity
+			},
+		}
+
+		rapid.Check(t, func(rt *rapid.T) {
+			err := l.Check(rt, chain, chain)
+			if err == nil {
+				rt.Fatal("should detect broken verify")
+			}
+		})
+	})
 }
+
+// --- ReplayDeterminism ---
 
 func TestReplayDeterminism(t *testing.T) {
 	t.Parallel()
@@ -176,11 +186,8 @@ func TestReplayDeterminism(t *testing.T) {
 		hist.Record(struct{}{}, entry{ID: "1"})
 		hist.Record(struct{}{}, entry{ID: "2"})
 
-		l := law.ReplayDeterminism[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
-			Partitions: hist.Partitions,
+		l := law.ReplayDeterminism[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), Partitions: hist.Partitions,
 		}
 
 		rapid.Check(t, func(rt *rapid.T) {
@@ -190,7 +197,39 @@ func TestReplayDeterminism(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("detects nondeterministic replay", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		hist.Record(struct{}{}, entry{ID: "1"})
+		callCount := 0
+
+		l := law.ReplayDeterminism[chainImpl, struct{}, entry]{
+			Replay: func(_ *rapid.T, _ chainImpl, _ struct{}) iter.Seq2[entry, error] {
+				callCount++
+				if callCount%2 == 0 {
+					return func(yield func(entry, error) bool) {
+						yield(entry{ID: "flipped"}, nil)
+					}
+				}
+				return func(yield func(entry, error) bool) {
+					yield(entry{ID: "1"}, nil)
+				}
+			},
+			Partitions: hist.Partitions,
+		}
+
+		chain := refchain.New[entry](nil)
+		rapid.Check(t, func(rt *rapid.T) {
+			err := l.Check(rt, chain, chain)
+			if err == nil {
+				rt.Fatal("should detect nondeterministic replay")
+			}
+		})
+	})
 }
+
+// --- ReplayRespectsCausality ---
 
 func TestReplayRespectsCausality(t *testing.T) {
 	t.Parallel()
@@ -199,16 +238,13 @@ func TestReplayRespectsCausality(t *testing.T) {
 		t.Parallel()
 		chain := refchain.New[entry](nil)
 		hist := history.New[struct{}, entry]()
-		// dep: "2" depends on "1"
 		_ = chain.Append(t.Context(), entry{ID: "1"})
 		_ = chain.Append(t.Context(), entry{ID: "2"})
 		hist.Record(struct{}{}, entry{ID: "1"})
 		hist.Record(struct{}{}, entry{ID: "2"})
 
-		l := law.ReplayRespectsCausality[chainIface, struct{}, entry]{
-			Replay: func(_ *rapid.T, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-				return impl.Replay(t.Context())
-			},
+		l := law.ReplayRespectsCausality[chainImpl, struct{}, entry]{
+			Replay:     replayFn(t),
 			Partitions: hist.Partitions,
 			EntryID:    func(e entry) string { return e.ID },
 			DependsOn: func(e entry) []string {
@@ -223,6 +259,36 @@ func TestReplayRespectsCausality(t *testing.T) {
 			err := l.Check(rt, chain, chain)
 			if err != nil {
 				rt.Fatalf("should pass: %v", err)
+			}
+		})
+	})
+
+	t.Run("detects missing dependency in replay", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		hist.Record(struct{}{}, entry{ID: "1"})
+
+		l := law.ReplayRespectsCausality[chainImpl, struct{}, entry]{
+			Replay: func(_ *rapid.T, _ chainImpl, _ struct{}) iter.Seq2[entry, error] {
+				return func(yield func(entry, error) bool) {
+					yield(entry{ID: "1"}, nil)
+				}
+			},
+			Partitions: hist.Partitions,
+			EntryID:    func(e entry) string { return e.ID },
+			DependsOn: func(e entry) []string {
+				if e.ID == "1" {
+					return []string{"0"}
+				}
+				return nil
+			},
+		}
+
+		chain := refchain.New[entry](nil)
+		rapid.Check(t, func(rt *rapid.T) {
+			err := l.Check(rt, chain, chain)
+			if err == nil {
+				rt.Fatal("should detect missing dependency")
 			}
 		})
 	})

@@ -19,11 +19,11 @@ func TestAppendOnlyBasic(t *testing.T) {
 	c := refchain.New[entry](nil)
 	ctx := t.Context()
 
-	t.Run("append and replay", func(t *testing.T) {
-		t.Parallel()
-		_ = c.Append(ctx, entry{ID: "1", Data: "a"})
-		_ = c.Append(ctx, entry{ID: "2", Data: "b"})
+	_ = c.Append(ctx, entry{ID: "1", Data: "a"})
+	_ = c.Append(ctx, entry{ID: "2", Data: "b"})
 
+	t.Run("replay returns entries in order", func(t *testing.T) {
+		t.Parallel()
 		var entries []entry
 		for e, err := range c.Replay(ctx) {
 			if err != nil {
@@ -51,7 +51,7 @@ func TestAppendOnlyBasic(t *testing.T) {
 		}
 	})
 
-	t.Run("err is nil when healthy", func(t *testing.T) {
+	t.Run("err is nil", func(t *testing.T) {
 		t.Parallel()
 		if c.Err() != nil {
 			t.Fatal("should be nil")
@@ -65,12 +65,13 @@ func TestPartitionedAppendOnly(t *testing.T) {
 	p := refchain.NewPartitioned(keyOf, nil)
 	ctx := t.Context()
 
-	t.Run("append to different partitions", func(t *testing.T) {
-		t.Parallel()
-		_ = p.Append(ctx, entry{ID: "a", Data: "1"})
-		_ = p.Append(ctx, entry{ID: "b", Data: "2"})
-		_ = p.Append(ctx, entry{ID: "a", Data: "3"})
+	// Sequential setup — subtests share mutable state.
+	_ = p.Append(ctx, entry{ID: "a", Data: "1"})
+	_ = p.Append(ctx, entry{ID: "b", Data: "2"})
+	_ = p.Append(ctx, entry{ID: "a", Data: "3"})
 
+	t.Run("partition isolation", func(t *testing.T) {
+		t.Parallel()
 		var aEntries []entry
 		for e, err := range p.Replay(ctx, "a") {
 			if err != nil {

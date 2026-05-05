@@ -101,7 +101,7 @@ func auditlogModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[auditchain.AuditLog]()
-	chainReplayFn := func(rt *rapid.T, impl auditchain.AuditLog, _ struct{}) iter.Seq2[auditchain.Entry, error] {
+	chainReplayFn := func(rt *rapid.T, impl auditchain.AuditLog, k struct{}) iter.Seq2[auditchain.Entry, error] {
 		return impl.Replay(rt.Context())
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[auditchain.AuditLog, struct{}, auditchain.Entry]{

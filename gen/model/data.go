@@ -437,3 +437,56 @@ func formatTypeParamNames(params []gen.TypeParamInfo) string {
 	}
 	return "[" + strings.Join(names, ", ") + "]"
 }
+
+// validateChainShape checks chain-specific constraints at codegen time.
+// Returns a positioned error with directive-specific guidance.
+func validateChainShape(d *Data, spec *suite.SpecData) error {
+	if !d.HasChain {
+		return nil
+	}
+
+	// Rule 1: Mutator + chain without poison surface.
+	if d.ChainAppendMethod != nil && d.ChainAppendMethod.IsMutator() {
+		hasPoisonOrVerify := d.ChainVerifyMethod != nil
+		for _, m := range spec.Methods {
+			if m.IsPoisonAccessor() {
+				hasPoisonOrVerify = true
+				break
+			}
+		}
+		if !hasPoisonOrVerify {
+			return gen.Errorf(d.ChainAppendMethod.Pos,
+				"//testkit:appends on Mutator-shaped method %s requires either "+
+					"//testkit:verifies on a Verify method or an Err() error method "+
+					"for hash chain integrity checking",
+				d.ChainAppendMethod.Name)
+		}
+	}
+
+	// Rule 2: depends-on without entry-id (or vice versa).
+	if (d.ChainEntryIDField == "") != (d.ChainDependsOnField == "") {
+		pos := d.ChainAppendMethod.Pos
+		if d.ChainReplayMethod != nil {
+			pos = d.ChainReplayMethod.Pos
+		}
+		return gen.Errorf(pos,
+			"//testkit:entry-id and //testkit:depends-on must both be present "+
+				"or both absent; found entry-id=%q depends-on=%q",
+			d.ChainEntryIDField, d.ChainDependsOnField)
+	}
+
+	// Rule 3: partition-by without replays directive.
+	if d.ChainPartitionField != "" && d.ChainReplayMethod == nil {
+		return gen.Errorf(d.ChainAppendMethod.Pos,
+			"//testkit:partition-by=%s requires a method with //testkit:replays",
+			d.ChainPartitionField)
+	}
+
+	// Rule 4: causal ordering without replays.
+	if d.HasCausalOrdering() && d.ChainReplayMethod == nil {
+		return gen.Errorf(d.ChainAppendMethod.Pos,
+			"//testkit:entry-id and //testkit:depends-on require a method with //testkit:replays")
+	}
+
+	return nil
+}

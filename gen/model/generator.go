@@ -95,6 +95,12 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	// Build model-specific data.
 	md := buildData(data, typeParams)
 
+	// Validate chain shape constraints.
+	chainErr := validateChainShape(md, data)
+	if chainErr != nil {
+		return nil, chainErr
+	}
+
 	tmplSet := gen.NewTemplateSet()
 	tmplSet.Funcs(md.templateFuncs())
 	tmpl, parseErr := tmplSet.ParseFS(templateFS, "templates/*.tmpl")

@@ -10,7 +10,7 @@ package {{.PackageName}}
 //	Key field:     {{if .KeyField}}{{.KeyField}}{{else}}none{{end}}
 //	Ref:           {{if .CanSynthesizeRef}}auto (refmap.MapStore){{else if .RefBlockers}}supply via {{.InterfaceName}}ModelReference ({{join .RefBlockers ", "}} not in MapStore){{else}}supply via {{.InterfaceName}}ModelReference{{end}}
 //	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
-//	Chain:         {{if .HasChain}}appends{{if .ChainReplayMethod}}, replays ({{.ChainReplayMethod.Name}}){{end}}{{if .ChainVerifyMethod}}, verifies ({{.ChainVerifyMethod.Name}}){{end}}{{else}}none{{end}}
+//	Chain:         {{if .HasChain}}appends{{if .ChainReplayMethod}}, replays ({{.ChainReplayMethod.Name}}){{end}}{{if .ChainVerifyMethod}}, verifies ({{.ChainVerifyMethod.Name}}){{end}}{{if .IsChainPartitioned}}, partitioned by {{.ChainPartitionField}}{{end}}{{if .HasCausalOrdering}}, causal ({{.ChainEntryIDField}} -> {{.ChainDependsOnField}}){{end}}{{if .ChainHashFunc}}, hash {{.ChainHashFunc}}{{end}}{{else}}none{{end}}
 //	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
 //	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
@@ -115,18 +115,29 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			)
 		}
 	}
+{{- else if and .HasChain .IsChainPartitioned}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refchain.NewPartitioned(chainPartKeyOf, {{if .ChainHashFunc}}{{.ChainHashFunc}}(){{else}}nil{{end}})
+		}
+	}
 {{- else if .HasChain}}
 	if refFactory == nil {
 		refFactory = func() {{.QualifiedType}} {
-			return refchain.New[{{.ChainAppendMethod.Shape.ValType}}](nil)
+			return refchain.New[{{.ChainAppendMethod.Shape.ValType}}]({{if .ChainHashFunc}}{{.ChainHashFunc}}(){{else}}nil{{end}})
 		}
 	}
 {{- end}}
 
 {{- if .HasChain}}
 	// Chain history — tracks attempted appends for dropped-write detection.
+{{- if .IsChainPartitioned}}
+	attemptedAppends := chainhistory.New[string, {{.ChainAppendMethod.Shape.ValType}}]()
+	chainPartKeyOf := func(e {{.ChainAppendMethod.Shape.ValType}}) string { return e.{{.ChainPartitionField}} }
+{{- else}}
 	attemptedAppends := chainhistory.New[struct{}, {{.ChainAppendMethod.Shape.ValType}}]()
 	chainPartKeyOf := func(_ {{.ChainAppendMethod.Shape.ValType}}) struct{} { return struct{}{} }
+{{- end}}
 {{- end}}
 
 	// Actions: consumer-supplied or auto-derived.
@@ -214,9 +225,15 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			),
 {{- else if and .IsStreamReader (and $.HasChain (.HasDirective "replays"))}}
 			action.ChainReplay("{{.Name}}", attemptedAppends,
+{{- if $.IsChainPartitioned}}
+				func(ctx context.Context, impl {{$.QualifiedType}}, k string) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+					return impl.{{.Name}}(ctx, k)
+				},
+{{- else}}
 				func(ctx context.Context, impl {{$.QualifiedType}}, _ struct{}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 					return impl.{{.Name}}(ctx)
 				},
+{{- end}}
 			),
 {{- else if .IsStreamReader}}
 			action.Stream("{{.Name}}",
@@ -265,18 +282,32 @@ func {{.InterfaceName | toLower}}ModelProperty(
 {{- end}}
 {{- if .HasChain}}
 {{- if .ChainReplayMethod}}
-	chainReplayFn := func(rt *rapid.T, impl {{.QualifiedType}}, _ struct{}) iter.Seq2[{{.ChainReplayMethod.Shape.IterInfo.ElemType}}, error] {
+{{- $partType := "struct{}"}}{{if .IsChainPartitioned}}{{$partType = "string"}}{{end}}
+{{- $entryType := .ChainReplayMethod.Shape.IterInfo.ElemType}}
+	chainReplayFn := func(rt *rapid.T, impl {{.QualifiedType}}, k {{$partType}}) iter.Seq2[{{$entryType}}, error] {
+{{- if .IsChainPartitioned}}
+		return impl.{{.ChainReplayMethod.Name}}(rt.Context(), k)
+{{- else}}
 		return impl.{{.ChainReplayMethod.Name}}(rt.Context())
+{{- end}}
 	}
-	laws.Add(&law.AppendOnlyHistoryGrows[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+	laws.Add(&law.AppendOnlyHistoryGrows[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
 		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
 	})
-	laws.Add(law.ReplayDeterminism[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+	laws.Add(law.ReplayDeterminism[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
 		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
 	})
-	laws.Add(law.AppendOnlyNoDrops[{{.QualifiedType}}, struct{}, {{.ChainReplayMethod.Shape.IterInfo.ElemType}}]{
+	laws.Add(law.AppendOnlyNoDrops[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
 		Replay: chainReplayFn, History: attemptedAppends,
 	})
+{{- if .HasCausalOrdering}}
+	laws.Add(law.ReplayRespectsCausality[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
+		Replay:     chainReplayFn,
+		Partitions: attemptedAppends.Partitions,
+		EntryID:    func(e {{$entryType}}) string { return e.{{.ChainEntryIDField}} },
+		DependsOn:  func(e {{$entryType}}) []string { return e.{{.ChainDependsOnField}} },
+	})
+{{- end}}
 {{- end}}
 {{- if .ChainVerifyMethod}}
 	laws.Add(law.HashChainIntegrityViaVerify[{{.QualifiedType}}]{
