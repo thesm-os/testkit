@@ -37,12 +37,7 @@ func AssertStateModel(
 }
 
 // FuzzStateModel is a fuzz target for coverage-guided testing
-// of [thesmos.State] via go test -fuzz. Same property as
-// [AssertStateModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzStateModel(f *testing.F) {
-//	    storetest.FuzzStateModel(f, factory)
-//	}
+// of [thesmos.State] via go test -fuzz.
 func FuzzStateModel(
 	f *testing.F,
 	sutFactory func() thesmos.State,
@@ -114,8 +109,6 @@ func StateModelActions(actions ...model.Action[thesmos.State]) StateModelOption 
 }
 
 // StateModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func StateModelExtraActions(actions ...model.Action[thesmos.State]) StateModelOption {
 	return func(c *stateModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

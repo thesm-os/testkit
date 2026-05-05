@@ -45,12 +45,7 @@ func AssertVaultModel(
 }
 
 // FuzzVaultModel is a fuzz target for coverage-guided testing
-// of [multisentinel.Vault] via go test -fuzz. Same property as
-// [AssertVaultModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzVaultModel(f *testing.F) {
-//	    storetest.FuzzVaultModel(f, factory)
-//	}
+// of [multisentinel.Vault] via go test -fuzz.
 func FuzzVaultModel(
 	f *testing.F,
 	sutFactory func() multisentinel.Vault,
@@ -61,8 +56,7 @@ func FuzzVaultModel(
 }
 
 // FuzzVaultModelConcurrent is a fuzz target for coverage-guided
-// concurrent linearizability testing via go test -fuzz. Same concurrent
-// property as [AssertVaultModel] with [VaultModelConcurrent].
+// concurrent linearizability testing via go test -fuzz.
 func FuzzVaultModelConcurrent(
 	f *testing.F,
 	sutFactory func() multisentinel.Vault,
@@ -177,8 +171,6 @@ func VaultModelActions(actions ...model.Action[multisentinel.Vault]) VaultModelO
 }
 
 // VaultModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func VaultModelExtraActions(actions ...model.Action[multisentinel.Vault]) VaultModelOption {
 	return func(c *vaultModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

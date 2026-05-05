@@ -37,12 +37,7 @@ func AssertMachineModel(
 }
 
 // FuzzMachineModel is a fuzz target for coverage-guided testing
-// of [newshapes.Machine] via go test -fuzz. Same property as
-// [AssertMachineModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzMachineModel(f *testing.F) {
-//	    storetest.FuzzMachineModel(f, factory)
-//	}
+// of [newshapes.Machine] via go test -fuzz.
 func FuzzMachineModel(
 	f *testing.F,
 	sutFactory func() newshapes.Machine,
@@ -125,8 +120,6 @@ func MachineModelActions(actions ...model.Action[newshapes.Machine]) MachineMode
 }
 
 // MachineModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func MachineModelExtraActions(actions ...model.Action[newshapes.Machine]) MachineModelOption {
 	return func(c *machineModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

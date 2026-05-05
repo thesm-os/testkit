@@ -37,12 +37,7 @@ func AssertCloserModel(
 }
 
 // FuzzCloserModel is a fuzz target for coverage-guided testing
-// of [noncrud.Closer] via go test -fuzz. Same property as
-// [AssertCloserModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzCloserModel(f *testing.F) {
-//	    storetest.FuzzCloserModel(f, factory)
-//	}
+// of [noncrud.Closer] via go test -fuzz.
 func FuzzCloserModel(
 	f *testing.F,
 	sutFactory func() noncrud.Closer,
@@ -113,8 +108,6 @@ func CloserModelActions(actions ...model.Action[noncrud.Closer]) CloserModelOpti
 }
 
 // CloserModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func CloserModelExtraActions(actions ...model.Action[noncrud.Closer]) CloserModelOption {
 	return func(c *closerModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

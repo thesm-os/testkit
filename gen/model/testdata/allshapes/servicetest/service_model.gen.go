@@ -44,12 +44,7 @@ func AssertServiceModel(
 }
 
 // FuzzServiceModel is a fuzz target for coverage-guided testing
-// of [allshapes.Service] via go test -fuzz. Same property as
-// [AssertServiceModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzServiceModel(f *testing.F) {
-//	    storetest.FuzzServiceModel(f, factory)
-//	}
+// of [allshapes.Service] via go test -fuzz.
 func FuzzServiceModel(
 	f *testing.F,
 	sutFactory func() allshapes.Service,
@@ -60,8 +55,7 @@ func FuzzServiceModel(
 }
 
 // FuzzServiceModelConcurrent is a fuzz target for coverage-guided
-// concurrent linearizability testing via go test -fuzz. Same concurrent
-// property as [AssertServiceModel] with [ServiceModelConcurrent].
+// concurrent linearizability testing via go test -fuzz.
 func FuzzServiceModelConcurrent(
 	f *testing.F,
 	sutFactory func() allshapes.Service,
@@ -217,8 +211,6 @@ func ServiceModelActions(actions ...model.Action[allshapes.Service]) ServiceMode
 }
 
 // ServiceModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func ServiceModelExtraActions(actions ...model.Action[allshapes.Service]) ServiceModelOption {
 	return func(c *serviceModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

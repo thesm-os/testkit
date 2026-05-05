@@ -1,0 +1,60 @@
+{{define "model_entry"}}
+// Assert{{.InterfaceName}}Model runs property-based state-machine tests against
+// implementations of [{{.QualifiedType}}] produced by sutFactory.
+//
+//	Shapes:        {{.ShapeSummary}}
+//	CRUD:          {{if .IsCRUD}}yes{{else}}no{{end}}
+//	Key field:     {{if .KeyField}}{{.KeyField}}{{else}}none{{end}}
+//	Ref:           {{if .CanSynthesizeRef}}auto (refmap.MapStore){{else if .RefBlockers}}supply via {{.InterfaceName}}ModelReference ({{join .RefBlockers ", "}} not in MapStore){{else}}supply via {{.InterfaceName}}ModelReference{{end}}
+//	Auto-laws:     {{if .AutoLaws}}{{join .AutoLaws ", "}}{{else}}none{{end}}
+//	Chain:         {{if .HasChain}}appends{{if .ChainReplayMethod}}, replays ({{.ChainReplayMethod.Name}}){{end}}{{if .ChainVerifyMethod}}, verifies ({{.ChainVerifyMethod.Name}}){{end}}{{if .IsChainPartitioned}}, partitioned by {{.ChainPartitionField}}{{end}}{{if .HasCausalOrdering}}, causal ({{.ChainEntryIDField}} -> {{.ChainDependsOnField}}){{end}}{{if .ChainHashFunc}}, hash {{.ChainHashFunc}}{{end}}{{else}}none{{end}}
+//	Skipped:       {{if .SkippedMethods}}{{join .SkippedMethods ", "}} — supply via {{.InterfaceName}}ModelActions{{else}}none{{end}}
+//	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
+//	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
+func Assert{{.InterfaceName}}Model(
+	t rapid.TB,
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	t.Helper()
+{{- if .CanLinearize}}
+	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+	if cfg.concurrent != nil {
+		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		return
+	}
+{{- end}}
+	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
+}
+
+// Fuzz{{.InterfaceName}}Model is a fuzz target for coverage-guided testing
+// of [{{.QualifiedType}}] via go test -fuzz.
+func Fuzz{{.InterfaceName}}Model(
+	f *testing.F,
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz({{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...)))
+}
+{{- if .CanLinearize}}
+
+// Fuzz{{.InterfaceName}}ModelConcurrent is a fuzz target for coverage-guided
+// concurrent linearizability testing via go test -fuzz.
+func Fuzz{{.InterfaceName}}ModelConcurrent(
+	f *testing.F,
+	sutFactory func() {{.QualifiedType}},
+	workers, opsPerWorker int,
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	f.Helper()
+	opts = append(opts, {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker))
+	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+		cfg := new{{.InterfaceName}}ModelConfig(opts...)
+		if cfg.concurrent != nil {
+			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		}
+	}))
+}
+{{- end}}
+{{end}}

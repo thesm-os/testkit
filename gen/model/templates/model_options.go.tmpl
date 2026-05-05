@@ -1,0 +1,83 @@
+{{define "model_options"}}
+// {{.InterfaceName}}ModelOption configures [Assert{{.InterfaceName}}Model].
+type {{.InterfaceName}}ModelOption func(*{{.InterfaceName | toLower}}ModelConfig)
+
+// {{.InterfaceName}}ModelReference overrides the auto-synthesized reference
+// with a consumer-supplied implementation.
+func {{.InterfaceName}}ModelReference(factory func() {{.QualifiedType}}) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.refFactory = factory }
+}
+
+// {{.InterfaceName}}ModelActions replaces all auto-derived actions.
+func {{.InterfaceName}}ModelActions(actions ...model.Action[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.actions = actions }
+}
+
+// {{.InterfaceName}}ModelExtraActions appends actions to the auto-derived set.
+func {{.InterfaceName}}ModelExtraActions(actions ...model.Action[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.extraActions = append(c.extraActions, actions...) }
+}
+
+// {{.InterfaceName}}ModelLaw adds a custom law to the registry.
+func {{.InterfaceName}}ModelLaw(l law.Law[{{.QualifiedType}}]) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.laws = append(c.laws, l) }
+}
+
+// {{.InterfaceName}}ModelSkipLaw skips an auto-derived law by ID.
+func {{.InterfaceName}}ModelSkipLaw(id string) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.skipLaws = append(c.skipLaws, id) }
+}
+{{- if .CanLinearize}}
+{{template "model_concurrent_option" .}}
+{{- end}}
+{{end}}
+
+{{define "model_concurrent_option"}}
+
+// {{.InterfaceName}}ModelConcurrent enables concurrent linearizability testing
+// with the given number of workers and operations per worker. Uses Porcupine
+// with per-key partitioning for Reader/Writer/Deleter shapes.
+func {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker int) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) {
+		keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
+{{- if and .WriterMethod .KeyField}}
+		valGen := rapid.Make[{{.WriterMethod.Shape.ValType}}]()
+{{- end}}
+		c.concurrent = &model.ConcurrentConfig[{{.QualifiedType}}]{
+			Workers:      workers,
+			OpsPerWorker: opsPerWorker,
+			Model:        linearize.KV[{{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]({{firstSentinel .ReaderMethod}}),
+			Actions: []model.ConcurrentAction[{{.QualifiedType}}]{
+{{- range .Methods}}{{if not .Skip}}
+{{- if .IsReader}}
+				linearize.ConcurrentReader("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- else if and .IsWriter (eq .Shape.ValType $.ReaderMethod.Shape.KeyType)}}
+				linearize.ConcurrentDeleter("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- else if .IsWriter}}
+				linearize.ConcurrentWriter("{{.Name}}", valGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, v {{.Shape.ValType}}) error {
+						return impl.{{.Name}}(ctx, v)
+					},
+					func(v {{.Shape.ValType}}) {{$.ReaderMethod.Shape.KeyType}} { return v.{{$.KeyField}} },
+				),
+{{- else if .IsDeleter}}
+				linearize.ConcurrentDeleter("{{.Name}}", keyGen,
+					func(ctx context.Context, impl {{$.QualifiedType}}, k {{.Shape.KeyType}}) error {
+						return impl.{{.Name}}(ctx, k)
+					},
+				),
+{{- end}}
+{{- end}}{{end}}
+			},
+		}
+	}
+}
+{{end}}

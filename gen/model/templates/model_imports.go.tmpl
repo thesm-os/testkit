@@ -1,0 +1,22 @@
+{{define "model_imports"}}
+import (
+	"context"
+	"reflect"
+	"testing"
+
+	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/model"
+	"go.thesmos.sh/testkit/model/action"
+	chainhistory "go.thesmos.sh/testkit/model/history"
+	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/linearize"
+	"go.thesmos.sh/testkit/model/refchain"
+	"go.thesmos.sh/testkit/model/refmap"
+{{- range .Imports}}
+{{- if ne .Path "testing"}}
+	{{if .Alias}}{{.Alias}} {{end}}"{{.Path}}"
+{{- end}}
+{{- end}}
+)
+{{end}}

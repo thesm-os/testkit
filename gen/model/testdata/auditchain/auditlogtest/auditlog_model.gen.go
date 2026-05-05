@@ -41,12 +41,7 @@ func AssertAuditLogModel(
 }
 
 // FuzzAuditLogModel is a fuzz target for coverage-guided testing
-// of [auditchain.AuditLog] via go test -fuzz. Same property as
-// [AssertAuditLogModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzAuditLogModel(f *testing.F) {
-//	    storetest.FuzzAuditLogModel(f, factory)
-//	}
+// of [auditchain.AuditLog] via go test -fuzz.
 func FuzzAuditLogModel(
 	f *testing.F,
 	sutFactory func() auditchain.AuditLog,
@@ -72,6 +67,7 @@ func auditlogModelProperty(
 			return refchain.New[auditchain.Entry](nil)
 		}
 	}
+
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[struct{}, auditchain.Entry]()
 	chainPartKeyOf := func(_ auditchain.Entry) struct{} { return struct{}{} }
@@ -118,6 +114,7 @@ func auditlogModelProperty(
 			return impl.Verify(rt.Context())
 		},
 	})
+
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}
@@ -149,8 +146,6 @@ func AuditLogModelActions(actions ...model.Action[auditchain.AuditLog]) AuditLog
 }
 
 // AuditLogModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func AuditLogModelExtraActions(actions ...model.Action[auditchain.AuditLog]) AuditLogModelOption {
 	return func(c *auditlogModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

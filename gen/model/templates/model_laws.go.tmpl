@@ -1,0 +1,75 @@
+{{define "model_laws"}}
+	// Laws: auto-derived + consumer-supplied.
+	laws := model.NewRegistry[{{.QualifiedType}}]()
+{{- if and .IsCRUD .KeyField .ReaderMethod}}
+	laws.Add(law.ReadAfterWrite[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
+		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
+		},
+		Keys: keyGen,
+	})
+{{- end}}
+{{- if and .HasDeleter .ReaderMethod}}
+	laws.Add(law.DeleteReturnsNotFound[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
+		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
+		},
+		Keys:     keyGen,
+		Sentinel: {{firstSentinel .ReaderMethod}},
+	})
+{{- end}}
+{{- if .HasCount}}
+	laws.Add(law.CountEqualsReference[{{.QualifiedType}}, {{.CountMethod.Shape.ValType}}]{
+		Count: func(rt *rapid.T, impl {{.QualifiedType}}) ({{.CountMethod.Shape.ValType}}, error) {
+			return impl.{{.CountMethod.Name}}(rt.Context())
+		},
+	})
+{{- end}}
+{{- if .HasChain}}
+{{- template "model_chain_laws" .}}
+{{- end}}
+	for _, l := range cfg.laws {
+		laws.Add(l)
+	}
+	for _, id := range cfg.skipLaws {
+		laws.SkipByID(id)
+	}
+{{end}}
+
+{{define "model_chain_laws"}}
+{{- if .ChainReplayMethod}}
+{{- $partType := "struct{}"}}{{if .IsChainPartitioned}}{{$partType = "string"}}{{end}}
+{{- $entryType := .ChainReplayMethod.Shape.IterInfo.ElemType}}
+	chainReplayFn := func(rt *rapid.T, impl {{.QualifiedType}}, k {{$partType}}) iter.Seq2[{{$entryType}}, error] {
+{{- if .IsChainPartitioned}}
+		return impl.{{.ChainReplayMethod.Name}}(rt.Context(), k)
+{{- else}}
+		return impl.{{.ChainReplayMethod.Name}}(rt.Context())
+{{- end}}
+	}
+	laws.Add(&law.AppendOnlyHistoryGrows[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
+		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
+	})
+	laws.Add(law.ReplayDeterminism[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
+		Replay: chainReplayFn, Partitions: attemptedAppends.Partitions,
+	})
+	laws.Add(law.AppendOnlyNoDrops[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
+		Replay: chainReplayFn, History: attemptedAppends,
+	})
+{{- if .HasCausalOrdering}}
+	laws.Add(law.ReplayRespectsCausality[{{.QualifiedType}}, {{$partType}}, {{$entryType}}]{
+		Replay:     chainReplayFn,
+		Partitions: attemptedAppends.Partitions,
+		EntryID:    func(e {{$entryType}}) string { return e.{{.ChainEntryIDField}} },
+		DependsOn:  func(e {{$entryType}}) []string { return e.{{.ChainDependsOnField}} },
+	})
+{{- end}}
+{{- end}}
+{{- if .ChainVerifyMethod}}
+	laws.Add(law.HashChainIntegrityViaVerify[{{.QualifiedType}}]{
+		Verify: func(rt *rapid.T, impl {{.QualifiedType}}) error {
+			return impl.{{.ChainVerifyMethod.Name}}(rt.Context())
+		},
+	})
+{{- end}}
+{{end}}

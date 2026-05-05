@@ -1,0 +1,97 @@
+{{define "model_property"}}
+func {{.InterfaceName | toLower}}ModelProperty(
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) func(*rapid.T) {
+	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+
+	{{template "model_generators" .}}
+	{{template "model_ref" .}}
+	{{template "model_chain_setup" .}}
+	{{template "model_actions" .}}
+	{{template "model_laws" .}}
+
+	modelOpts := []model.Option[{{.QualifiedType}}]{
+		model.WithReference(refFactory),
+		model.WithActions(actions...),
+		model.WithLaws(laws),
+	}
+{{- if .HasChain}}
+	modelOpts = append(modelOpts, model.WithHistoryReset[{{.QualifiedType}}](attemptedAppends.Reset))
+{{- end}}
+	return model.Property(sutFactory, modelOpts...)
+}
+{{end}}
+
+{{define "model_generators"}}
+	// Generators — local to this function, not package-level.
+{{- if .ReaderMethod}}
+	keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
+{{- end}}
+{{- if and .WriterMethod .KeyField}}
+	valGen := rapid.MakeCustom[{{.WriterMethod.Shape.ValType}}](rapid.MakeConfig{
+		Kinds: map[reflect.Kind]*rapid.Generator[any]{
+			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    rapid.Int8().AsAny(),
+			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   rapid.Uint8().AsAny(),
+			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+		},
+		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+			reflect.TypeOf({{.WriterMethod.Shape.ValType}}{}): {
+				"{{.KeyField}}": keyGen.AsAny(),
+			},
+		},
+	})
+{{- else if .WriterMethod}}
+	valGen := rapid.Make[{{.WriterMethod.Shape.ValType}}]()
+{{- end}}
+{{end}}
+
+{{define "model_ref"}}
+	// Reference: consumer-supplied or synthesized.
+	refFactory := cfg.refFactory
+{{- if and .CanSynthesizeRef .KeyField}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refmap.NewMapStore(
+				func(v {{.WriterMethod.Shape.ValType}}) {{.ReaderMethod.Shape.KeyType}} { return v.{{.KeyField}} },
+				{{firstSentinel .ReaderMethod}},
+			)
+		}
+	}
+{{- else if and .HasChain .IsChainPartitioned}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refchain.NewPartitioned(chainPartKeyOf, {{if .ChainHashFunc}}{{.ChainHashFunc}}(){{else}}nil{{end}})
+		}
+	}
+{{- else if .HasChain}}
+	if refFactory == nil {
+		refFactory = func() {{.QualifiedType}} {
+			return refchain.New[{{.ChainAppendMethod.Shape.ValType}}]({{if .ChainHashFunc}}{{.ChainHashFunc}}(){{else}}nil{{end}})
+		}
+	}
+{{- end}}
+{{end}}
+
+{{define "model_chain_setup"}}
+{{- if .HasChain}}
+	// Chain history — tracks attempted appends for dropped-write detection.
+{{- if .IsChainPartitioned}}
+	attemptedAppends := chainhistory.New[string, {{.ChainAppendMethod.Shape.ValType}}]()
+	chainPartKeyOf := func(e {{.ChainAppendMethod.Shape.ValType}}) string { return e.{{.ChainPartitionField}} }
+{{- else}}
+	attemptedAppends := chainhistory.New[struct{}, {{.ChainAppendMethod.Shape.ValType}}]()
+	chainPartKeyOf := func(_ {{.ChainAppendMethod.Shape.ValType}}) struct{} { return struct{}{} }
+{{- end}}
+{{- end}}
+{{end}}

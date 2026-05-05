@@ -45,12 +45,7 @@ func AssertStoreModel(
 }
 
 // FuzzStoreModel is a fuzz target for coverage-guided testing
-// of [keyfield.Store] via go test -fuzz. Same property as
-// [AssertStoreModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzStoreModel(f *testing.F) {
-//	    storetest.FuzzStoreModel(f, factory)
-//	}
+// of [keyfield.Store] via go test -fuzz.
 func FuzzStoreModel(
 	f *testing.F,
 	sutFactory func() keyfield.Store,
@@ -61,8 +56,7 @@ func FuzzStoreModel(
 }
 
 // FuzzStoreModelConcurrent is a fuzz target for coverage-guided
-// concurrent linearizability testing via go test -fuzz. Same concurrent
-// property as [AssertStoreModel] with [StoreModelConcurrent].
+// concurrent linearizability testing via go test -fuzz.
 func FuzzStoreModelConcurrent(
 	f *testing.F,
 	sutFactory func() keyfield.Store,
@@ -182,8 +176,6 @@ func StoreModelActions(actions ...model.Action[keyfield.Store]) StoreModelOption
 }
 
 // StoreModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func StoreModelExtraActions(actions ...model.Action[keyfield.Store]) StoreModelOption {
 	return func(c *storeModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

@@ -1,0 +1,20 @@
+{{define "model_config"}}
+type {{.InterfaceName | toLower}}ModelConfig struct {
+	refFactory   func() {{.QualifiedType}}
+	actions      []model.Action[{{.QualifiedType}}]
+	extraActions []model.Action[{{.QualifiedType}}]
+	laws         []law.Law[{{.QualifiedType}}]
+	skipLaws     []string
+{{- if .CanLinearize}}
+	concurrent   *model.ConcurrentConfig[{{.QualifiedType}}]
+{{- end}}
+}
+
+func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.InterfaceName | toLower}}ModelConfig {
+	var cfg {{.InterfaceName | toLower}}ModelConfig
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	return cfg
+}
+{{end}}

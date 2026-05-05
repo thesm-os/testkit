@@ -35,12 +35,7 @@ func AssertSchedulerModel(
 }
 
 // FuzzSchedulerModel is a fuzz target for coverage-guided testing
-// of [thesmos.Scheduler] via go test -fuzz. Same property as
-// [AssertSchedulerModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzSchedulerModel(f *testing.F) {
-//	    storetest.FuzzSchedulerModel(f, factory)
-//	}
+// of [thesmos.Scheduler] via go test -fuzz.
 func FuzzSchedulerModel(
 	f *testing.F,
 	sutFactory func() thesmos.Scheduler,
@@ -100,8 +95,6 @@ func SchedulerModelActions(actions ...model.Action[thesmos.Scheduler]) Scheduler
 }
 
 // SchedulerModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func SchedulerModelExtraActions(actions ...model.Action[thesmos.Scheduler]) SchedulerModelOption {
 	return func(c *schedulerModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

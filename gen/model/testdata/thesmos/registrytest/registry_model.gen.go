@@ -36,12 +36,7 @@ func AssertKindRegistryModel(
 }
 
 // FuzzKindRegistryModel is a fuzz target for coverage-guided testing
-// of [thesmos.KindRegistry] via go test -fuzz. Same property as
-// [AssertKindRegistryModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzKindRegistryModel(f *testing.F) {
-//	    storetest.FuzzKindRegistryModel(f, factory)
-//	}
+// of [thesmos.KindRegistry] via go test -fuzz.
 func FuzzKindRegistryModel(
 	f *testing.F,
 	sutFactory func() thesmos.KindRegistry,
@@ -113,8 +108,6 @@ func KindRegistryModelActions(actions ...model.Action[thesmos.KindRegistry]) Kin
 }
 
 // KindRegistryModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func KindRegistryModelExtraActions(actions ...model.Action[thesmos.KindRegistry]) KindRegistryModelOption {
 	return func(c *kindregistryModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

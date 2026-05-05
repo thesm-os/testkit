@@ -44,12 +44,7 @@ func AssertProcessorModel(
 }
 
 // FuzzProcessorModel is a fuzz target for coverage-guided testing
-// of [unknown.Processor] via go test -fuzz. Same property as
-// [AssertProcessorModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzProcessorModel(f *testing.F) {
-//	    storetest.FuzzProcessorModel(f, factory)
-//	}
+// of [unknown.Processor] via go test -fuzz.
 func FuzzProcessorModel(
 	f *testing.F,
 	sutFactory func() unknown.Processor,
@@ -60,8 +55,7 @@ func FuzzProcessorModel(
 }
 
 // FuzzProcessorModelConcurrent is a fuzz target for coverage-guided
-// concurrent linearizability testing via go test -fuzz. Same concurrent
-// property as [AssertProcessorModel] with [ProcessorModelConcurrent].
+// concurrent linearizability testing via go test -fuzz.
 func FuzzProcessorModelConcurrent(
 	f *testing.F,
 	sutFactory func() unknown.Processor,
@@ -168,8 +162,6 @@ func ProcessorModelActions(actions ...model.Action[unknown.Processor]) Processor
 }
 
 // ProcessorModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func ProcessorModelExtraActions(actions ...model.Action[unknown.Processor]) ProcessorModelOption {
 	return func(c *processorModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }

@@ -45,12 +45,7 @@ func AssertItemRepositoryModel(
 }
 
 // FuzzItemRepositoryModel is a fuzz target for coverage-guided testing
-// of [generic.ItemRepository] via go test -fuzz. Same property as
-// [AssertItemRepositoryModel] but driven by libFuzzer's corpus.
-//
-//	func FuzzItemRepositoryModel(f *testing.F) {
-//	    storetest.FuzzItemRepositoryModel(f, factory)
-//	}
+// of [generic.ItemRepository] via go test -fuzz.
 func FuzzItemRepositoryModel(
 	f *testing.F,
 	sutFactory func() generic.ItemRepository,
@@ -61,8 +56,7 @@ func FuzzItemRepositoryModel(
 }
 
 // FuzzItemRepositoryModelConcurrent is a fuzz target for coverage-guided
-// concurrent linearizability testing via go test -fuzz. Same concurrent
-// property as [AssertItemRepositoryModel] with [ItemRepositoryModelConcurrent].
+// concurrent linearizability testing via go test -fuzz.
 func FuzzItemRepositoryModelConcurrent(
 	f *testing.F,
 	sutFactory func() generic.ItemRepository,
@@ -199,8 +193,6 @@ func ItemRepositoryModelActions(actions ...model.Action[generic.ItemRepository])
 }
 
 // ItemRepositoryModelExtraActions appends actions to the auto-derived set.
-// Use this to add coverage for Unknown-shaped methods without replacing
-// the auto-derived Reader/Writer/Deleter/etc. actions.
 func ItemRepositoryModelExtraActions(actions ...model.Action[generic.ItemRepository]) ItemRepositoryModelOption {
 	return func(c *itemrepositoryModelConfig) { c.extraActions = append(c.extraActions, actions...) }
 }
