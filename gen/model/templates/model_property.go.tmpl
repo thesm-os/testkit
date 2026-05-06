@@ -49,9 +49,6 @@ func {{.InterfaceName | toLower}}ModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[{{.QualifiedType}}]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[{{.QualifiedType}}]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[{{.QualifiedType}}](cfg.artifactDir))
 	}
@@ -64,7 +61,7 @@ func {{.InterfaceName | toLower}}ModelProperty(
 {{- if .ReaderMethod}}
 	keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
 {{- end}}
-{{- if and .WriterMethod .KeyField}}
+{{- if and .WriterMethod .KeyField .NeedsValGen}}
 	valGen := rapid.MakeCustom[{{.WriterMethod.Shape.ValType}}](rapid.MakeConfig{
 		Kinds: map[reflect.Kind]*rapid.Generator[any]{
 			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
@@ -87,7 +84,7 @@ func {{.InterfaceName | toLower}}ModelProperty(
 			},
 		},
 	})
-{{- else if .WriterMethod}}
+{{- else if and .WriterMethod .NeedsValGen}}
 	valGen := rapid.Make[{{.WriterMethod.Shape.ValType}}]()
 {{- end}}
 {{end}}

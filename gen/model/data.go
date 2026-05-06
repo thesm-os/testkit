@@ -135,6 +135,16 @@ func (d *Data) templateFuncs() template.FuncMap {
 	}
 }
 
+// NeedsValGen reports whether any Writer-shaped method uses valGen
+// (as opposed to keyGen). If all Writers match the Reader's key type,
+// valGen is unused and should not be emitted.
+func (d *Data) NeedsValGen() bool {
+	if d.WriterMethod == nil {
+		return false
+	}
+	return d.WriterGenName(d.WriterMethod) == "valGen"
+}
+
 // WriterGenName returns the generator variable name for a Writer-shaped
 // method. If the method's V type matches the Reader's K type, returns
 // the key generator; otherwise returns the value generator.

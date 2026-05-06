@@ -122,9 +122,6 @@ func machineModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.Machine]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.Machine]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.Machine](cfg.artifactDir))
 	}
@@ -165,11 +162,6 @@ func MachineModelWithoutTrace() MachineModelOption {
 	return func(c *machineModelConfig) { c.disableTrace = true }
 }
 
-// MachineModelSkipFinalLaws disables iteration-end law checks.
-func MachineModelSkipFinalLaws() MachineModelOption {
-	return func(c *machineModelConfig) { c.skipFinalLaws = true }
-}
-
 // MachineModelArtifactDir overrides the directory for failure artifacts.
 func MachineModelArtifactDir(dir string) MachineModelOption {
 	return func(c *machineModelConfig) { c.artifactDir = dir }
@@ -182,15 +174,14 @@ func MachineModelGoroutineLeakCheck() MachineModelOption {
 }
 
 type machineModelConfig struct {
-	refFactory    func() thesmos.Machine
-	actions       []model.Action[thesmos.Machine]
-	extraActions  []model.Action[thesmos.Machine]
-	laws          []law.Law[thesmos.Machine]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() thesmos.Machine
+	actions      []model.Action[thesmos.Machine]
+	extraActions []model.Action[thesmos.Machine]
+	laws         []law.Law[thesmos.Machine]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newMachineModelConfig(opts ...MachineModelOption) machineModelConfig {

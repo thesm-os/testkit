@@ -45,4 +45,5 @@ func TestStoreModel(t *testing.T) {
 			t.Fatal("should have caught goroutine leak from LeakyStore")
 		}
 	})
+
 }

@@ -38,7 +38,11 @@ func AssertStoreModel(
 	t.Helper()
 	cfg := newStoreModelConfig(opts...)
 	if cfg.concurrent != nil {
-		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		copts := []model.Option[basic.Store]{model.WithConcurrent(*cfg.concurrent)}
+		if cfg.artifactDir != "" {
+			copts = append(copts, model.WithArtifactDir[basic.Store](cfg.artifactDir))
+		}
+		model.Assert(t, sutFactory, copts...)
 		return
 	}
 	if cfg.leakCheck {
@@ -178,9 +182,6 @@ func storeModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[basic.Store]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[basic.Store]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[basic.Store](cfg.artifactDir))
 	}
@@ -257,11 +258,6 @@ func StoreModelWithoutTrace() StoreModelOption {
 	return func(c *storeModelConfig) { c.disableTrace = true }
 }
 
-// StoreModelSkipFinalLaws disables iteration-end law checks.
-func StoreModelSkipFinalLaws() StoreModelOption {
-	return func(c *storeModelConfig) { c.skipFinalLaws = true }
-}
-
 // StoreModelArtifactDir overrides the directory for failure artifacts.
 func StoreModelArtifactDir(dir string) StoreModelOption {
 	return func(c *storeModelConfig) { c.artifactDir = dir }
@@ -274,16 +270,15 @@ func StoreModelGoroutineLeakCheck() StoreModelOption {
 }
 
 type storeModelConfig struct {
-	refFactory    func() basic.Store
-	actions       []model.Action[basic.Store]
-	extraActions  []model.Action[basic.Store]
-	laws          []law.Law[basic.Store]
-	skipLaws      []string
-	concurrent    *model.ConcurrentConfig[basic.Store]
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() basic.Store
+	actions      []model.Action[basic.Store]
+	extraActions []model.Action[basic.Store]
+	laws         []law.Law[basic.Store]
+	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[basic.Store]
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newStoreModelConfig(opts ...StoreModelOption) storeModelConfig {

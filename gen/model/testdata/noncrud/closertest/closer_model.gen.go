@@ -101,9 +101,6 @@ func closerModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[noncrud.Closer]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[noncrud.Closer]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[noncrud.Closer](cfg.artifactDir))
 	}
@@ -144,11 +141,6 @@ func CloserModelWithoutTrace() CloserModelOption {
 	return func(c *closerModelConfig) { c.disableTrace = true }
 }
 
-// CloserModelSkipFinalLaws disables iteration-end law checks.
-func CloserModelSkipFinalLaws() CloserModelOption {
-	return func(c *closerModelConfig) { c.skipFinalLaws = true }
-}
-
 // CloserModelArtifactDir overrides the directory for failure artifacts.
 func CloserModelArtifactDir(dir string) CloserModelOption {
 	return func(c *closerModelConfig) { c.artifactDir = dir }
@@ -161,15 +153,14 @@ func CloserModelGoroutineLeakCheck() CloserModelOption {
 }
 
 type closerModelConfig struct {
-	refFactory    func() noncrud.Closer
-	actions       []model.Action[noncrud.Closer]
-	extraActions  []model.Action[noncrud.Closer]
-	laws          []law.Law[noncrud.Closer]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() noncrud.Closer
+	actions      []model.Action[noncrud.Closer]
+	extraActions []model.Action[noncrud.Closer]
+	laws         []law.Law[noncrud.Closer]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newCloserModelConfig(opts ...CloserModelOption) closerModelConfig {

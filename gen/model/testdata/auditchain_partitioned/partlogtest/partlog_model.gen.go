@@ -139,9 +139,6 @@ func partitionedlogModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[auditchain_partitioned.PartitionedLog]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain_partitioned.PartitionedLog]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain_partitioned.PartitionedLog](cfg.artifactDir))
 	}
@@ -182,11 +179,6 @@ func PartitionedLogModelWithoutTrace() PartitionedLogModelOption {
 	return func(c *partitionedlogModelConfig) { c.disableTrace = true }
 }
 
-// PartitionedLogModelSkipFinalLaws disables iteration-end law checks.
-func PartitionedLogModelSkipFinalLaws() PartitionedLogModelOption {
-	return func(c *partitionedlogModelConfig) { c.skipFinalLaws = true }
-}
-
 // PartitionedLogModelArtifactDir overrides the directory for failure artifacts.
 func PartitionedLogModelArtifactDir(dir string) PartitionedLogModelOption {
 	return func(c *partitionedlogModelConfig) { c.artifactDir = dir }
@@ -199,15 +191,14 @@ func PartitionedLogModelGoroutineLeakCheck() PartitionedLogModelOption {
 }
 
 type partitionedlogModelConfig struct {
-	refFactory    func() auditchain_partitioned.PartitionedLog
-	actions       []model.Action[auditchain_partitioned.PartitionedLog]
-	extraActions  []model.Action[auditchain_partitioned.PartitionedLog]
-	laws          []law.Law[auditchain_partitioned.PartitionedLog]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() auditchain_partitioned.PartitionedLog
+	actions      []model.Action[auditchain_partitioned.PartitionedLog]
+	extraActions []model.Action[auditchain_partitioned.PartitionedLog]
+	laws         []law.Law[auditchain_partitioned.PartitionedLog]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newPartitionedLogModelConfig(opts ...PartitionedLogModelOption) partitionedlogModelConfig {

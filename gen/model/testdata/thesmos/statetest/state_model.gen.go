@@ -107,9 +107,6 @@ func stateModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.State]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.State]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.State](cfg.artifactDir))
 	}
@@ -150,11 +147,6 @@ func StateModelWithoutTrace() StateModelOption {
 	return func(c *stateModelConfig) { c.disableTrace = true }
 }
 
-// StateModelSkipFinalLaws disables iteration-end law checks.
-func StateModelSkipFinalLaws() StateModelOption {
-	return func(c *stateModelConfig) { c.skipFinalLaws = true }
-}
-
 // StateModelArtifactDir overrides the directory for failure artifacts.
 func StateModelArtifactDir(dir string) StateModelOption {
 	return func(c *stateModelConfig) { c.artifactDir = dir }
@@ -167,15 +159,14 @@ func StateModelGoroutineLeakCheck() StateModelOption {
 }
 
 type stateModelConfig struct {
-	refFactory    func() thesmos.State
-	actions       []model.Action[thesmos.State]
-	extraActions  []model.Action[thesmos.State]
-	laws          []law.Law[thesmos.State]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() thesmos.State
+	actions      []model.Action[thesmos.State]
+	extraActions []model.Action[thesmos.State]
+	laws         []law.Law[thesmos.State]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newStateModelConfig(opts ...StateModelOption) stateModelConfig {

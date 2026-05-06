@@ -139,9 +139,6 @@ func hashlogModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[auditchain_hash.HashLog]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain_hash.HashLog]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain_hash.HashLog](cfg.artifactDir))
 	}
@@ -182,11 +179,6 @@ func HashLogModelWithoutTrace() HashLogModelOption {
 	return func(c *hashlogModelConfig) { c.disableTrace = true }
 }
 
-// HashLogModelSkipFinalLaws disables iteration-end law checks.
-func HashLogModelSkipFinalLaws() HashLogModelOption {
-	return func(c *hashlogModelConfig) { c.skipFinalLaws = true }
-}
-
 // HashLogModelArtifactDir overrides the directory for failure artifacts.
 func HashLogModelArtifactDir(dir string) HashLogModelOption {
 	return func(c *hashlogModelConfig) { c.artifactDir = dir }
@@ -199,15 +191,14 @@ func HashLogModelGoroutineLeakCheck() HashLogModelOption {
 }
 
 type hashlogModelConfig struct {
-	refFactory    func() auditchain_hash.HashLog
-	actions       []model.Action[auditchain_hash.HashLog]
-	extraActions  []model.Action[auditchain_hash.HashLog]
-	laws          []law.Law[auditchain_hash.HashLog]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() auditchain_hash.HashLog
+	actions      []model.Action[auditchain_hash.HashLog]
+	extraActions []model.Action[auditchain_hash.HashLog]
+	laws         []law.Law[auditchain_hash.HashLog]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newHashLogModelConfig(opts ...HashLogModelOption) hashlogModelConfig {

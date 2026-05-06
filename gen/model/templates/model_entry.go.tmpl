@@ -20,7 +20,11 @@ func Assert{{.InterfaceName}}Model(
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
 {{- if .CanLinearize}}
 	if cfg.concurrent != nil {
-		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		copts := []model.Option[{{.QualifiedType}}]{model.WithConcurrent(*cfg.concurrent)}
+		if cfg.artifactDir != "" {
+			copts = append(copts, model.WithArtifactDir[{{.QualifiedType}}](cfg.artifactDir))
+		}
+		model.Assert(t, sutFactory, copts...)
 		return
 	}
 {{- end}}

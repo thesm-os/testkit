@@ -5,6 +5,8 @@ package storetest_test
 
 import (
 	"fmt"
+	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -104,3 +106,54 @@ func (countNonNegative) Check(rt *rapid.T, sut, ref basic.Store) error {
 
 // Compile-time check that countNonNegative satisfies Law[basic.Store].
 var _ law.Law[basic.Store] = countNonNegative{}
+
+func TestWithoutTrace(t *testing.T) {
+	t.Parallel()
+	// Verifies that WithoutTrace doesn't crash and still catches bugs.
+	storetest.AssertStoreModel(t, func() basic.Store {
+		return basic.NewInMemoryStore()
+	},
+		storetest.StoreModelWithoutTrace(),
+	)
+}
+
+func TestArtifactDir(t *testing.T) {
+	t.Parallel()
+	// Verifies that WithArtifactDir + concurrent negative test writes
+	// the Porcupine HTML artifact to the specified directory.
+	artifactDir := t.TempDir()
+	ft := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		storetest.AssertStoreModel(ft, func() basic.Store {
+			return basic.NewNonLinearizableStore()
+		},
+			storetest.StoreModelConcurrent(4, 30),
+			storetest.StoreModelArtifactDir(artifactDir),
+		)
+	}()
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("artifact test timed out")
+	}
+	if !ft.Failed() {
+		t.Fatal("non-linearizable store should fail")
+	}
+	// Verify artifact was written.
+	entries, err := os.ReadDir(artifactDir)
+	if err != nil {
+		t.Fatalf("reading artifact dir: %v", err)
+	}
+	found := false
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), "-linearizability.html") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected linearizability HTML artifact in %s, got: %v", artifactDir, entries)
+	}
+}

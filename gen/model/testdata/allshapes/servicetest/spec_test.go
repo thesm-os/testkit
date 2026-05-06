@@ -90,3 +90,62 @@ func (describeStable) Check(_ *rapid.T, sut, _ allshapes.Service) error {
 }
 
 var _ law.Law[allshapes.Service] = describeStable{}
+
+// countNeverNegative uses the Never trace combinator — asserts that
+// a hypothetical "Reset" action never appears in the trace.
+// Since InMemoryService has no Reset, this always passes.
+type neverReset struct {
+	law.Never[allshapes.Service]
+}
+
+func TestTraceCombinatorsEndToEnd(t *testing.T) {
+	t.Parallel()
+
+	factory := func() allshapes.Service { return allshapes.NewInMemoryService() }
+
+	t.Run("AfterEvery Put count increases", func(t *testing.T) {
+		t.Parallel()
+		servicetest.AssertServiceModel(t, factory,
+			servicetest.ServiceModelReference(factory),
+			servicetest.ServiceModelLaw(&law.AfterEvery[allshapes.Service]{
+				ActionName: "Put",
+				Predicate: func(_ *rapid.T, sut, ref allshapes.Service) error {
+					sutN, _ := sut.Count(t.Context())
+					refN, _ := ref.Count(t.Context())
+					if sutN != refN {
+						return fmt.Errorf("count diverged after Put: sut=%d ref=%d", sutN, refN)
+					}
+					return nil
+				},
+			}),
+		)
+	})
+
+t.Run("Never sees forbidden action", func(t *testing.T) {
+		t.Parallel()
+		// "Reset" action doesn't exist — Never should always pass.
+		servicetest.AssertServiceModel(t, factory,
+			servicetest.ServiceModelReference(factory),
+			servicetest.ServiceModelLaw(&law.Never[allshapes.Service]{
+				ActionName: "Reset",
+			}),
+		)
+	})
+}
+
+func TestConcurrentWithStressActions(t *testing.T) {
+	t.Parallel()
+
+	factory := func() allshapes.Service { return allshapes.NewInMemoryService() }
+
+	t.Run("concurrent linearizability with stress actions", func(t *testing.T) {
+		t.Parallel()
+		// Exercises the concurrent path with all StressActions
+		// (Close, Count, Describe, IsEmpty, List) running alongside
+		// Porcupine-checked Reader/Writer/Deleter.
+		servicetest.AssertServiceModel(t, factory,
+			servicetest.ServiceModelReference(factory),
+			servicetest.ServiceModelConcurrent(4, 30),
+		)
+	})
+}

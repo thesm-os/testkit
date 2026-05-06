@@ -131,10 +131,6 @@ type Config[T any] struct {
 	// 2. .testkit.yml artifacts.dir
 	// 3. Fallback: .testkit/artifacts/
 	ArtifactDir string
-
-	// SkipFinalLaws disables FinalLaw execution at iteration end.
-	// Set via [WithSkipFinalLaws] for negative tests.
-	SkipFinalLaws bool
 }
 
 // Run executes a model-based test. For each rapid iteration, it
@@ -193,12 +189,10 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		var iterTrace trace.Trace
 		iterTrace.Reset()
 
-		// Notify FinalLaws that need per-iteration setup (e.g., goroutine snapshot).
-		if !cfg.SkipFinalLaws {
-			for _, fl := range cfg.Laws.finalLaws {
-				if starter, ok := fl.(interface{ StartIteration() }); ok {
-					starter.StartIteration()
-				}
+		// Bind trace to laws that implement TraceBinder (trace combinators).
+		for _, l := range cfg.Laws.laws {
+			if binder, ok := l.(law.TraceBinder); ok {
+				binder.BindTrace(&iterTrace)
 			}
 		}
 
@@ -279,23 +273,6 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		}
 
 		rt.Repeat(actionMap)
-
-		// FinalLaw phase: iteration-end checks (e.g., goroutine leaks).
-		if !cfg.SkipFinalLaws {
-			for _, fl := range cfg.Laws.finalLaws {
-				if err := fl.CheckFinal(rt, sut, ref); err != nil {
-					f := &Failure{
-						Kind:         FailureLiveness,
-						LawID:        fl.ID(),
-						REQID:        fl.REQID(),
-						StepRan:      StepID{WorkerID: -1, Index: step},
-						StepReported: StepID{WorkerID: -1, Index: step},
-						Err:          err,
-					}
-					rt.Fatalf("%s", formatFailure(f))
-				}
-			}
-		}
 	}
 }
 
@@ -380,12 +357,6 @@ func WithArtifactDir[T any](dir string) Option[T] {
 	return func(c *Config[T]) { c.ArtifactDir = dir }
 }
 
-// WithSkipFinalLaws disables FinalLaw execution at iteration end.
-// Use for negative tests where liveness checks would fire before
-// the actual bug being tested.
-func WithSkipFinalLaws[T any]() Option[T] {
-	return func(c *Config[T]) { c.SkipFinalLaws = true }
-}
 
 // shouldAttachTrace returns true if the Kind policy says trace
 // should be attached to a failure.

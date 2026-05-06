@@ -145,9 +145,6 @@ func causallogModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[auditchain_causal.CausalLog]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain_causal.CausalLog]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain_causal.CausalLog](cfg.artifactDir))
 	}
@@ -188,11 +185,6 @@ func CausalLogModelWithoutTrace() CausalLogModelOption {
 	return func(c *causallogModelConfig) { c.disableTrace = true }
 }
 
-// CausalLogModelSkipFinalLaws disables iteration-end law checks.
-func CausalLogModelSkipFinalLaws() CausalLogModelOption {
-	return func(c *causallogModelConfig) { c.skipFinalLaws = true }
-}
-
 // CausalLogModelArtifactDir overrides the directory for failure artifacts.
 func CausalLogModelArtifactDir(dir string) CausalLogModelOption {
 	return func(c *causallogModelConfig) { c.artifactDir = dir }
@@ -205,15 +197,14 @@ func CausalLogModelGoroutineLeakCheck() CausalLogModelOption {
 }
 
 type causallogModelConfig struct {
-	refFactory    func() auditchain_causal.CausalLog
-	actions       []model.Action[auditchain_causal.CausalLog]
-	extraActions  []model.Action[auditchain_causal.CausalLog]
-	laws          []law.Law[auditchain_causal.CausalLog]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() auditchain_causal.CausalLog
+	actions      []model.Action[auditchain_causal.CausalLog]
+	extraActions []model.Action[auditchain_causal.CausalLog]
+	laws         []law.Law[auditchain_causal.CausalLog]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newCausalLogModelConfig(opts ...CausalLogModelOption) causallogModelConfig {

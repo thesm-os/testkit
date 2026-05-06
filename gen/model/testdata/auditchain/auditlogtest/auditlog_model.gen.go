@@ -139,9 +139,6 @@ func auditlogModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[auditchain.AuditLog]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain.AuditLog]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain.AuditLog](cfg.artifactDir))
 	}
@@ -182,11 +179,6 @@ func AuditLogModelWithoutTrace() AuditLogModelOption {
 	return func(c *auditlogModelConfig) { c.disableTrace = true }
 }
 
-// AuditLogModelSkipFinalLaws disables iteration-end law checks.
-func AuditLogModelSkipFinalLaws() AuditLogModelOption {
-	return func(c *auditlogModelConfig) { c.skipFinalLaws = true }
-}
-
 // AuditLogModelArtifactDir overrides the directory for failure artifacts.
 func AuditLogModelArtifactDir(dir string) AuditLogModelOption {
 	return func(c *auditlogModelConfig) { c.artifactDir = dir }
@@ -199,15 +191,14 @@ func AuditLogModelGoroutineLeakCheck() AuditLogModelOption {
 }
 
 type auditlogModelConfig struct {
-	refFactory    func() auditchain.AuditLog
-	actions       []model.Action[auditchain.AuditLog]
-	extraActions  []model.Action[auditchain.AuditLog]
-	laws          []law.Law[auditchain.AuditLog]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() auditchain.AuditLog
+	actions      []model.Action[auditchain.AuditLog]
+	extraActions []model.Action[auditchain.AuditLog]
+	laws         []law.Law[auditchain.AuditLog]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newAuditLogModelConfig(opts ...AuditLogModelOption) auditlogModelConfig {

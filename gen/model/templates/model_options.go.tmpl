@@ -51,10 +51,6 @@ func {{.InterfaceName}}ModelWithoutTrace() {{.InterfaceName}}ModelOption {
 	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.disableTrace = true }
 }
 
-// {{.InterfaceName}}ModelSkipFinalLaws disables iteration-end law checks.
-func {{.InterfaceName}}ModelSkipFinalLaws() {{.InterfaceName}}ModelOption {
-	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.skipFinalLaws = true }
-}
 
 // {{.InterfaceName}}ModelArtifactDir overrides the directory for failure artifacts.
 func {{.InterfaceName}}ModelArtifactDir(dir string) {{.InterfaceName}}ModelOption {

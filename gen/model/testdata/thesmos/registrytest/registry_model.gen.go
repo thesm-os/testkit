@@ -106,9 +106,6 @@ func kindregistryModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.KindRegistry]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.KindRegistry]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.KindRegistry](cfg.artifactDir))
 	}
@@ -149,11 +146,6 @@ func KindRegistryModelWithoutTrace() KindRegistryModelOption {
 	return func(c *kindregistryModelConfig) { c.disableTrace = true }
 }
 
-// KindRegistryModelSkipFinalLaws disables iteration-end law checks.
-func KindRegistryModelSkipFinalLaws() KindRegistryModelOption {
-	return func(c *kindregistryModelConfig) { c.skipFinalLaws = true }
-}
-
 // KindRegistryModelArtifactDir overrides the directory for failure artifacts.
 func KindRegistryModelArtifactDir(dir string) KindRegistryModelOption {
 	return func(c *kindregistryModelConfig) { c.artifactDir = dir }
@@ -166,15 +158,14 @@ func KindRegistryModelGoroutineLeakCheck() KindRegistryModelOption {
 }
 
 type kindregistryModelConfig struct {
-	refFactory    func() thesmos.KindRegistry
-	actions       []model.Action[thesmos.KindRegistry]
-	extraActions  []model.Action[thesmos.KindRegistry]
-	laws          []law.Law[thesmos.KindRegistry]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() thesmos.KindRegistry
+	actions      []model.Action[thesmos.KindRegistry]
+	extraActions []model.Action[thesmos.KindRegistry]
+	laws         []law.Law[thesmos.KindRegistry]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newKindRegistryModelConfig(opts ...KindRegistryModelOption) kindregistryModelConfig {

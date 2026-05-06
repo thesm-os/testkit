@@ -222,6 +222,7 @@ GEN_TESTDATA := \
 	gen/model/testdata/auditchain_hash/hashlogtest \
 	gen/model/testdata/timeaware/storetest \
 	gen/model/testdata/leakcheck/storetest \
+	gen/model/testdata/eventually/buffertest \
 	gen/model/testdata/thesmos/ledgertest \
 	gen/model/testdata/composed/composedtest
 

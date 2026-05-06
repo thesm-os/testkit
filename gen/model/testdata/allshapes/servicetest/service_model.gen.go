@@ -37,7 +37,11 @@ func AssertServiceModel(
 	t.Helper()
 	cfg := newServiceModelConfig(opts...)
 	if cfg.concurrent != nil {
-		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
+		copts := []model.Option[allshapes.Service]{model.WithConcurrent(*cfg.concurrent)}
+		if cfg.artifactDir != "" {
+			copts = append(copts, model.WithArtifactDir[allshapes.Service](cfg.artifactDir))
+		}
+		model.Assert(t, sutFactory, copts...)
 		return
 	}
 	if cfg.leakCheck {
@@ -225,9 +229,6 @@ func serviceModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[allshapes.Service]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[allshapes.Service]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[allshapes.Service](cfg.artifactDir))
 	}
@@ -311,11 +312,6 @@ func ServiceModelWithoutTrace() ServiceModelOption {
 	return func(c *serviceModelConfig) { c.disableTrace = true }
 }
 
-// ServiceModelSkipFinalLaws disables iteration-end law checks.
-func ServiceModelSkipFinalLaws() ServiceModelOption {
-	return func(c *serviceModelConfig) { c.skipFinalLaws = true }
-}
-
 // ServiceModelArtifactDir overrides the directory for failure artifacts.
 func ServiceModelArtifactDir(dir string) ServiceModelOption {
 	return func(c *serviceModelConfig) { c.artifactDir = dir }
@@ -328,16 +324,15 @@ func ServiceModelGoroutineLeakCheck() ServiceModelOption {
 }
 
 type serviceModelConfig struct {
-	refFactory    func() allshapes.Service
-	actions       []model.Action[allshapes.Service]
-	extraActions  []model.Action[allshapes.Service]
-	laws          []law.Law[allshapes.Service]
-	skipLaws      []string
-	concurrent    *model.ConcurrentConfig[allshapes.Service]
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() allshapes.Service
+	actions      []model.Action[allshapes.Service]
+	extraActions []model.Action[allshapes.Service]
+	laws         []law.Law[allshapes.Service]
+	skipLaws     []string
+	concurrent   *model.ConcurrentConfig[allshapes.Service]
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newServiceModelConfig(opts ...ServiceModelOption) serviceModelConfig {

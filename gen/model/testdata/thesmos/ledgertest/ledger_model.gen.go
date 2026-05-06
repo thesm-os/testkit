@@ -144,9 +144,6 @@ func ledgerModelProperty(
 	if cfg.disableTrace {
 		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.Ledger]())
 	}
-	if cfg.skipFinalLaws {
-		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.Ledger]())
-	}
 	if cfg.artifactDir != "" {
 		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.Ledger](cfg.artifactDir))
 	}
@@ -187,11 +184,6 @@ func LedgerModelWithoutTrace() LedgerModelOption {
 	return func(c *ledgerModelConfig) { c.disableTrace = true }
 }
 
-// LedgerModelSkipFinalLaws disables iteration-end law checks.
-func LedgerModelSkipFinalLaws() LedgerModelOption {
-	return func(c *ledgerModelConfig) { c.skipFinalLaws = true }
-}
-
 // LedgerModelArtifactDir overrides the directory for failure artifacts.
 func LedgerModelArtifactDir(dir string) LedgerModelOption {
 	return func(c *ledgerModelConfig) { c.artifactDir = dir }
@@ -204,15 +196,14 @@ func LedgerModelGoroutineLeakCheck() LedgerModelOption {
 }
 
 type ledgerModelConfig struct {
-	refFactory    func() thesmos.Ledger
-	actions       []model.Action[thesmos.Ledger]
-	extraActions  []model.Action[thesmos.Ledger]
-	laws          []law.Law[thesmos.Ledger]
-	skipLaws      []string
-	disableTrace  bool
-	skipFinalLaws bool
-	artifactDir   string
-	leakCheck     bool
+	refFactory   func() thesmos.Ledger
+	actions      []model.Action[thesmos.Ledger]
+	extraActions []model.Action[thesmos.Ledger]
+	laws         []law.Law[thesmos.Ledger]
+	skipLaws     []string
+	disableTrace bool
+	artifactDir  string
+	leakCheck    bool
 }
 
 func newLedgerModelConfig(opts ...LedgerModelOption) ledgerModelConfig {
