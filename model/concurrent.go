@@ -111,6 +111,8 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 		}
 
 		// Stress workers — run in parallel, NOT recorded.
+		// Purpose: race detection under -race. StressActions should use
+		// action.Stress which only calls the SUT without comparison.
 		for _, sa := range cc.StressActions {
 			wg.Go(func() {
 				for range cc.OpsPerWorker {

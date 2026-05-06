@@ -26,7 +26,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via LedgerModelReference (Err, Verify not in MapStore)
-//	Auto-laws:     AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC
+//	Auto-laws:     AUTO-STREAM-REENTRANT, AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC
 //	Chain:         appends, replays (Replay), verifies (Verify), partitioned by RunID
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)

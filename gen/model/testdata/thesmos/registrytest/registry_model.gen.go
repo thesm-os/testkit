@@ -21,7 +21,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via KindRegistryModelReference (Kinds, Lookup, Register not in MapStore)
-//	Auto-laws:     none
+//	Auto-laws:     AUTO-PURE-DETERMINISTIC
 //	Chain:         none
 //	Skipped:       Register(Unknown) — supply via KindRegistryModelActions
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -78,6 +78,11 @@ func kindregistryModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.KindRegistry]()
+	laws.Add(law.PureDeterminism[thesmos.KindRegistry, []thesmos.Kind]{
+		Call: func(rt *rapid.T, impl thesmos.KindRegistry) []thesmos.Kind {
+			return impl.Kinds()
+		},
+	})
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}

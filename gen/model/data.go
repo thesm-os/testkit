@@ -41,6 +41,15 @@ type Data struct {
 	CountMethod   *suite.SpecMethodData // Aggregator returning int
 	StreamMethod  *suite.SpecMethodData
 
+	// PureMethods lists all Pure-shaped methods (for law emission).
+	PureMethods []*suite.SpecMethodData
+
+	// PredicateMethods lists all Predicate-shaped methods (for law emission).
+	PredicateMethods []*suite.SpecMethodData
+
+	// StreamMethods lists all StreamReader-shaped methods (for law emission).
+	StreamMethods []*suite.SpecMethodData
+
 	// AutoLaws lists the auto-derived law names that will be emitted.
 	AutoLaws []string
 
@@ -76,6 +85,11 @@ type Data struct {
 	// ChainHashFunc is the qualified hash function override.
 	// Set from //testkit:hash=PkgPath.FuncName on the interface.
 	ChainHashFunc string
+
+	// IsTimeAware is true when //testkit:time-aware directive is present.
+	// When true, the generator emits clock factory option, dual TestClock
+	// setup, and AdvanceClock action.
+	IsTimeAware bool
 
 	// CanLinearize is true when the interface has Reader + (Writer or Deleter)
 	// shapes — the only combination linearize.KV currently models.
@@ -174,6 +188,12 @@ func (d *Data) HasCausalOrdering() bool {
 	return d.ChainEntryIDField != "" && d.ChainDependsOnField != ""
 }
 
+// HasPure reports whether any Pure-shaped methods were detected.
+func (d *Data) HasPure() bool { return len(d.PureMethods) > 0 }
+
+// HasPredicate reports whether any Predicate-shaped methods were detected.
+func (d *Data) HasPredicate() bool { return len(d.PredicateMethods) > 0 }
+
 // HasStream reports whether a StreamReader-shaped method was detected.
 func (d *Data) HasStream() bool { return d.StreamMethod != nil }
 
@@ -218,6 +238,7 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 			if md.StreamMethod == nil {
 				md.StreamMethod = m
 			}
+			md.StreamMethods = append(md.StreamMethods, m)
 		case gen.ShapeReaderWithBool:
 			// ReaderWithBool uses same key pool as Reader.
 			if md.ReaderMethod == nil {
@@ -236,7 +257,11 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 			}
 		case gen.ShapePoisonAccessor:
 			// Handled by template; emits poison check in law loop.
-		case gen.ShapeLifecycle, gen.ShapePure, gen.ShapePredicate:
+		case gen.ShapePure:
+			md.PureMethods = append(md.PureMethods, m)
+		case gen.ShapePredicate:
+			md.PredicateMethods = append(md.PredicateMethods, m)
+		case gen.ShapeLifecycle:
 			// Handled by template; no first-method tracking needed.
 		case gen.ShapeUnknown:
 			md.SkippedMethods = append(md.SkippedMethods,
@@ -297,6 +322,15 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 	if md.HasCount() {
 		md.AutoLaws = append(md.AutoLaws, "AUTO-COUNT-EQUALS-REFERENCE")
 	}
+	if md.HasPure() {
+		md.AutoLaws = append(md.AutoLaws, "AUTO-PURE-DETERMINISTIC")
+	}
+	if md.HasPredicate() {
+		md.AutoLaws = append(md.AutoLaws, "AUTO-PREDICATE-CONSISTENT")
+	}
+	if md.HasStream() {
+		md.AutoLaws = append(md.AutoLaws, "AUTO-STREAM-REENTRANT")
+	}
 
 	// Detect chain directives.
 	for _, m := range spec.Methods {
@@ -325,6 +359,8 @@ func buildData(spec *suite.SpecData, typeParams []gen.TypeParamInfo) *Data {
 				if len(d.Args) > 0 {
 					md.ChainHashFunc = d.Args[0]
 				}
+			case directives.TimeAware:
+				md.IsTimeAware = true
 			}
 		}
 	}
@@ -488,5 +524,31 @@ func validateChainShape(d *Data, spec *suite.SpecData) error {
 			"//testkit:entry-id and //testkit:depends-on require a method with //testkit:replays")
 	}
 
+	return nil
+}
+
+// validateTimeAware checks time-aware constraints at codegen time.
+func validateTimeAware(d *Data, spec *suite.SpecData) error {
+	if !d.IsTimeAware {
+		return nil
+	}
+
+	// Rule: time-aware without a Reader-shaped method. TTL expiry is
+	// only detectable via Read returning the sentinel error. Without
+	// a Reader, clock advancement has no observable effect through the
+	// generated property.
+	if d.ReaderMethod == nil {
+		// Find the position of the time-aware directive for the error.
+		for _, m := range spec.Methods {
+			for _, dir := range m.Directives {
+				if dir.Name == directives.TimeAware {
+					return gen.Errorf(m.Pos,
+						"//testkit:time-aware requires at least one Reader-shaped method "+
+							"so clock advancement has observable effect (TTL expiry, "+
+							"deadline-driven reads)")
+				}
+			}
+		}
+	}
 	return nil
 }

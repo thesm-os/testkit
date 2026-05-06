@@ -8,6 +8,10 @@ type {{.InterfaceName | toLower}}ModelConfig struct {
 {{- if .CanLinearize}}
 	concurrent   *model.ConcurrentConfig[{{.QualifiedType}}]
 {{- end}}
+{{- if .IsTimeAware}}
+	clockFactory func(clock.Clock) {{.QualifiedType}}
+	maxAdvance   time.Duration
+{{- end}}
 }
 
 func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.InterfaceName | toLower}}ModelConfig {

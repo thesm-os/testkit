@@ -22,7 +22,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via MachineModelReference (Err, ExpectedSeq, Fold, State not in MapStore)
-//	Auto-laws:     none
+//	Auto-laws:     AUTO-PURE-DETERMINISTIC
 //	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -89,6 +89,16 @@ func machineModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.Machine]()
+	laws.Add(law.PureDeterminism[thesmos.Machine, int]{
+		Call: func(rt *rapid.T, impl thesmos.Machine) int {
+			return impl.ExpectedSeq()
+		},
+	})
+	laws.Add(law.PureDeterminism[thesmos.Machine, thesmos.MachineState]{
+		Call: func(rt *rapid.T, impl thesmos.Machine) thesmos.MachineState {
+			return impl.State()
+		},
+	})
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}

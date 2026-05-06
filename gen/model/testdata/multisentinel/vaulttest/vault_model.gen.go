@@ -209,6 +209,7 @@ func VaultModelConcurrent(workers, opsPerWorker int) VaultModelOption {
 					func(v multisentinel.Secret) string { return v.ID },
 				),
 			},
+			StressActions: []model.Action[multisentinel.Vault]{},
 		}
 	}
 }

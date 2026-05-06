@@ -22,7 +22,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via StateModelReference (Get, Has, Len not in MapStore)
-//	Auto-laws:     none
+//	Auto-laws:     AUTO-PURE-DETERMINISTIC, AUTO-PREDICATE-CONSISTENT
 //	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -79,6 +79,11 @@ func stateModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.State]()
+	laws.Add(law.PureDeterminism[thesmos.State, int]{
+		Call: func(rt *rapid.T, impl thesmos.State) int {
+			return impl.Len()
+		},
+	})
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}

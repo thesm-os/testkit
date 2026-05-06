@@ -22,7 +22,7 @@ import (
 //	CRUD:          yes
 //	Key field:     none
 //	Ref:           supply via MachineModelReference (Err, Fold, Lookup, State not in MapStore)
-//	Auto-laws:     none
+//	Auto-laws:     AUTO-PURE-DETERMINISTIC
 //	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -90,6 +90,11 @@ func machineModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[newshapes.Machine]()
+	laws.Add(law.PureDeterminism[newshapes.Machine, newshapes.State]{
+		Call: func(rt *rapid.T, impl newshapes.Machine) newshapes.State {
+			return impl.State()
+		},
+	})
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}

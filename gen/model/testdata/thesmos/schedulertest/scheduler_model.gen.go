@@ -20,7 +20,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via SchedulerModelReference (Ready not in MapStore)
-//	Auto-laws:     none
+//	Auto-laws:     AUTO-PURE-DETERMINISTIC
 //	Chain:         none
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)

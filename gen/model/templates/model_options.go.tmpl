@@ -30,6 +30,21 @@ func {{.InterfaceName}}ModelSkipLaw(id string) {{.InterfaceName}}ModelOption {
 {{- if .CanLinearize}}
 {{template "model_concurrent_option" .}}
 {{- end}}
+{{- if .IsTimeAware}}
+
+// {{.InterfaceName}}ModelClockFactory sets the factory that receives a [clock.Clock].
+// When set, the SUT and ref are each created with a separate [clock.TestClock].
+// AdvanceClock actions advance both clocks in sync.
+func {{.InterfaceName}}ModelClockFactory(f func(clock.Clock) {{.QualifiedType}}) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.clockFactory = f }
+}
+
+// {{.InterfaceName}}ModelMaxAdvance sets the maximum clock advance per action.
+// Defaults to 1 hour.
+func {{.InterfaceName}}ModelMaxAdvance(d time.Duration) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.maxAdvance = d }
+}
+{{- end}}
 {{end}}
 
 {{define "model_concurrent_option"}}
@@ -74,6 +89,26 @@ func {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker int) {{.InterfaceNa
 						return impl.{{.Name}}(ctx, k)
 					},
 				),
+{{- end}}
+{{- end}}{{end}}
+			},
+			StressActions: []model.Action[{{.QualifiedType}}]{
+{{- range .Methods}}{{if not .Skip}}
+{{- if and .IsPure (not .ParamOnly)}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}() }),
+{{- else if and .IsPredicate (not .ParamOnly)}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}() }),
+{{- else if .IsLifecycle}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}(context.Background()) }),
+{{- else if .IsAggregator}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}(context.Background()) }),
+{{- else if and .IsStreamReader (not (.HasDirective "replays"))}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) {
+					for range impl.{{.Name}}(context.Background()) {
+					}
+				}),
+{{- else if .IsPoisonAccessor}}
+				action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}() }),
 {{- end}}
 {{- end}}{{end}}
 			},

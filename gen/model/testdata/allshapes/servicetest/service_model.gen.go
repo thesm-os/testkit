@@ -24,7 +24,7 @@ import (
 //	CRUD:          yes
 //	Key field:     ID
 //	Ref:           supply via ServiceModelReference (Close, Describe, IsEmpty not in MapStore)
-//	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE
+//	Auto-laws:     AUTO-READ-AFTER-WRITE, AUTO-DELETE-RETURNS-NOT-FOUND, AUTO-COUNT-EQUALS-REFERENCE, AUTO-PURE-DETERMINISTIC, AUTO-PREDICATE-CONSISTENT, AUTO-STREAM-REENTRANT
 //	Chain:         none
 //	Skipped:       none
 //	Concurrent:    ServiceModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
@@ -181,6 +181,28 @@ func serviceModelProperty(
 			return impl.Count(rt.Context())
 		},
 	})
+	laws.Add(law.PureDeterminism[allshapes.Service, string]{
+		Call: func(rt *rapid.T, impl allshapes.Service) string {
+			return impl.Describe()
+		},
+	})
+	laws.Add(law.PredicateConsistency[allshapes.Service]{
+		Call: func(rt *rapid.T, impl allshapes.Service) bool {
+			return impl.IsEmpty()
+		},
+	})
+	laws.Add(law.StreamReentrancy[allshapes.Service, allshapes.Item]{
+		Collect: func(rt *rapid.T, impl allshapes.Service) ([]allshapes.Item, error) {
+			var items []allshapes.Item
+			for v, err := range impl.List(rt.Context()) {
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, v)
+			}
+			return items, nil
+		},
+	})
 	for _, l := range cfg.laws {
 		laws.Add(l)
 	}
@@ -253,6 +275,16 @@ func ServiceModelConcurrent(workers, opsPerWorker int) ServiceModelOption {
 					},
 					func(v allshapes.Item) string { return v.ID },
 				),
+			},
+			StressActions: []model.Action[allshapes.Service]{
+				action.Stress("Close", func(impl allshapes.Service) { impl.Close(context.Background()) }),
+				action.Stress("Count", func(impl allshapes.Service) { impl.Count(context.Background()) }),
+				action.Stress("Describe", func(impl allshapes.Service) { impl.Describe() }),
+				action.Stress("IsEmpty", func(impl allshapes.Service) { impl.IsEmpty() }),
+				action.Stress("List", func(impl allshapes.Service) {
+					for range impl.List(context.Background()) {
+					}
+				}),
 			},
 		}
 	}

@@ -229,6 +229,9 @@ func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
 					func(v basic.Item) string { return v.ID },
 				),
 			},
+			StressActions: []model.Action[basic.Store]{
+				action.Stress("Count", func(impl basic.Store) { impl.Count(context.Background()) }),
+			},
 		}
 	}
 }

@@ -297,6 +297,22 @@ func sortByString[V any](s []V) {
 	})
 }
 
+// Stress creates an action that calls the SUT without comparing
+// against the reference. Used for concurrent StressActions where
+// only race detection matters — the SUT is mutated by concurrent
+// linearizability workers, so comparison is meaningless.
+func Stress[T any](
+	name string,
+	call func(T),
+) model.Action[T] {
+	return model.Action[T]{
+		Name: name,
+		Run: func(_ *rapid.T, sut, _ T) {
+			call(sut)
+		},
+	}
+}
+
 // Unknown creates an action for an Unknown-shaped method.
 // Consumer provides the full comparison logic.
 func Unknown[T any](

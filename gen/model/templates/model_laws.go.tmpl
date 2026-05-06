@@ -25,6 +25,40 @@
 		},
 	})
 {{- end}}
+{{- range .PureMethods}}
+{{- if not .ParamOnly}}
+	laws.Add(law.PureDeterminism[{{$.QualifiedType}}, {{.Shape.ValType}}]{
+		Call: func(rt *rapid.T, impl {{$.QualifiedType}}) {{.Shape.ValType}} {
+			return impl.{{.Name}}()
+		},
+	})
+{{- end}}
+{{- end}}
+{{- range .PredicateMethods}}
+{{- if not .ParamOnly}}
+	laws.Add(law.PredicateConsistency[{{$.QualifiedType}}]{
+		Call: func(rt *rapid.T, impl {{$.QualifiedType}}) bool {
+			return impl.{{.Name}}()
+		},
+	})
+{{- end}}
+{{- end}}
+{{- range .StreamMethods}}
+{{- if not (.HasDirective "replays")}}
+	laws.Add(law.StreamReentrancy[{{$.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+		Collect: func(rt *rapid.T, impl {{$.QualifiedType}}) ([]{{.Shape.IterInfo.ElemType}}, error) {
+			var items []{{.Shape.IterInfo.ElemType}}
+			for v, err := range impl.{{.Name}}(rt.Context()) {
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, v)
+			}
+			return items, nil
+		},
+	})
+{{- end}}
+{{- end}}
 {{- if .HasChain}}
 {{- template "model_chain_laws" .}}
 {{- end}}

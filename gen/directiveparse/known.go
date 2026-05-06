@@ -226,4 +226,8 @@ var knownDirectives = []Descriptor{
 		Name: "hash", Description: "qualified function name for custom chain hash",
 		Args: "PkgPath.FuncName", Generators: []string{genModel}, Phase: 1,
 	},
+	{
+		Name: "time-aware", Description: "inject TestClock pair for deterministic time testing",
+		Generators: []string{genModel}, Phase: 1,
+	},
 }

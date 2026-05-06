@@ -229,6 +229,9 @@ func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
 					func(v richstruct.Document) string { return v.ID },
 				),
 			},
+			StressActions: []model.Action[richstruct.Store]{
+				action.Stress("Count", func(impl richstruct.Store) { impl.Count(context.Background()) }),
+			},
 		}
 	}
 }

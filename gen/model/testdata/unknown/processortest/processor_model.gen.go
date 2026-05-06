@@ -200,6 +200,7 @@ func ProcessorModelConcurrent(workers, opsPerWorker int) ProcessorModelOption {
 					func(v unknown.Item) string { return v.ID },
 				),
 			},
+			StressActions: []model.Action[unknown.Processor]{},
 		}
 	}
 }

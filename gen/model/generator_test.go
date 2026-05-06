@@ -74,6 +74,10 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).Contains("action.Deleter", "must emit Deleter action")
 		testkit.Assert(t, content).Contains("ServiceModelReference", "must require reference (non-refmap)")
 		testkit.Assert(t, content).NotContains("refmap.NewMapStore", "must not synthesize refmap for non-pure-CRUD")
+		testkit.Assert(t, content).Contains("PureDeterminism", "must emit PureDeterminism law")
+		testkit.Assert(t, content).Contains("PredicateConsistency", "must emit PredicateConsistency law")
+		testkit.Assert(t, content).Contains("StreamReentrancy", "must emit StreamReentrancy law")
+		testkit.Assert(t, content).Contains("StressActions", "concurrent option must include StressActions")
 	})
 
 	t.Run("renders noncrud Closer", func(t *testing.T) {
@@ -322,6 +326,33 @@ func TestGenerate(t *testing.T) {
 		want, err := os.ReadFile(goldenFile)
 		testkit.NoError(t, err, "must read golden file")
 		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic alias model must match golden")
+	})
+
+	t.Run("renders timeaware Store", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "timeaware")
+		g := &model.Generator{}
+		result, err := g.Generate(pkg, []string{"Store"}, gen.DefaultConfig(), gen.Options{
+			Output: "storetest/store_model.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Assert(t, content).Contains("StoreModelClockFactory", "must emit clock factory option")
+		testkit.Assert(t, content).Contains("StoreModelMaxAdvance", "must emit max advance option")
+		testkit.Assert(t, content).Contains("AdvanceClock", "must emit AdvanceClock action")
+		testkit.Assert(t, content).Contains("clock.NewTestClock", "must create test clocks")
+		testkit.Assert(t, content).Contains("clockFactory", "must have clock factory field")
+	})
+
+	t.Run("rejects time-aware without reader", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "timevalidation")
+		g := &model.Generator{}
+		_, err := g.Generate(pkg, []string{"TimeAwareNoReader"}, gen.DefaultConfig(), gen.Options{
+			Output: "out/time_no_reader.gen.go",
+		})
+		testkit.Assert(t, err).IsNotNil("must reject time-aware without reader")
+		testkit.Assert(t, err.Error()).Contains("requires at least one Reader-shaped method", "must explain missing Reader")
 	})
 
 	t.Run("rejects mutator chain without poison or verify", func(t *testing.T) {

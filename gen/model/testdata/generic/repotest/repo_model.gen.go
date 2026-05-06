@@ -236,6 +236,9 @@ func ItemRepositoryModelConcurrent(workers, opsPerWorker int) ItemRepositoryMode
 					func(v generic.Item) string { return v.ID },
 				),
 			},
+			StressActions: []model.Action[generic.ItemRepository]{
+				action.Stress("Count", func(impl generic.ItemRepository) { impl.Count(context.Background()) }),
+			},
 		}
 	}
 }

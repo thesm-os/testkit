@@ -220,6 +220,7 @@ GEN_TESTDATA := \
 	gen/model/testdata/auditchain_partitioned/partlogtest \
 	gen/model/testdata/auditchain_causal/causallogtest \
 	gen/model/testdata/auditchain_hash/hashlogtest \
+	gen/model/testdata/timeaware/storetest \
 	gen/model/testdata/thesmos/ledgertest \
 	gen/model/testdata/composed/composedtest
 

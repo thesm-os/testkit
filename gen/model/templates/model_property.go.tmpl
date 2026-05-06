@@ -11,6 +11,33 @@ func {{.InterfaceName | toLower}}ModelProperty(
 	{{template "model_actions" .}}
 	{{template "model_laws" .}}
 
+{{- if .IsTimeAware}}
+	// Clock: dual TestClock for time-aware testing.
+	var sutClock, refClock *clock.TestClock
+	if cfg.clockFactory != nil {
+		origSut := sutFactory
+		_ = origSut
+		sutFactory = func() {{.QualifiedType}} {
+			sutClock = clock.NewTestClock(time.Unix(0, 0))
+			return cfg.clockFactory(sutClock)
+		}
+		if refFactory == nil {
+			refFactory = func() {{.QualifiedType}} {
+				refClock = clock.NewTestClock(time.Unix(0, 0))
+				return cfg.clockFactory(refClock)
+			}
+		}
+		maxAdv := cfg.maxAdvance
+		if maxAdv == 0 {
+			maxAdv = time.Hour
+		}
+		actions = append(actions, action.AdvanceClock[{{.QualifiedType}}]("AdvanceClock",
+			func() (*clock.TestClock, *clock.TestClock) { return sutClock, refClock },
+			maxAdv,
+		))
+	}
+{{- end}}
+
 	modelOpts := []model.Option[{{.QualifiedType}}]{
 		model.WithReference(refFactory),
 		model.WithActions(actions...),

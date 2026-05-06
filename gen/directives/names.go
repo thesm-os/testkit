@@ -30,4 +30,5 @@ const (
 	EntryIDField      = "entry-id"
 	DependsOnField    = "depends-on"
 	HashFunc          = "hash"
+	TimeAware         = "time-aware"
 )

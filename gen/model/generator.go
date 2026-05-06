@@ -101,6 +101,12 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 		return nil, chainErr
 	}
 
+	// Validate time-aware constraints.
+	timeErr := validateTimeAware(md, data)
+	if timeErr != nil {
+		return nil, timeErr
+	}
+
 	tmplSet := gen.NewTemplateSet()
 	tmplSet.Funcs(md.templateFuncs())
 	tmpl, parseErr := tmplSet.ParseFS(templateFS, "templates/*.tmpl")
