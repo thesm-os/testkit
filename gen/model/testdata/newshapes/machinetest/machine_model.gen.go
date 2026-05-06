@@ -33,6 +33,14 @@ func AssertMachineModel(
 	opts ...MachineModelOption,
 ) {
 	t.Helper()
+	cfg := newMachineModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, machineModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, machineModelProperty(sutFactory, opts...))
 }
 
@@ -107,6 +115,15 @@ func machineModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[newshapes.Machine]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[newshapes.Machine]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[newshapes.Machine](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -139,12 +156,37 @@ func MachineModelSkipLaw(id string) MachineModelOption {
 	return func(c *machineModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// MachineModelWithoutTrace disables per-action trace recording.
+func MachineModelWithoutTrace() MachineModelOption {
+	return func(c *machineModelConfig) { c.disableTrace = true }
+}
+
+// MachineModelSkipFinalLaws disables iteration-end law checks.
+func MachineModelSkipFinalLaws() MachineModelOption {
+	return func(c *machineModelConfig) { c.skipFinalLaws = true }
+}
+
+// MachineModelArtifactDir overrides the directory for failure artifacts.
+func MachineModelArtifactDir(dir string) MachineModelOption {
+	return func(c *machineModelConfig) { c.artifactDir = dir }
+}
+
+// MachineModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func MachineModelGoroutineLeakCheck() MachineModelOption {
+	return func(c *machineModelConfig) { c.leakCheck = true }
+}
+
 type machineModelConfig struct {
-	refFactory   func() newshapes.Machine
-	actions      []model.Action[newshapes.Machine]
-	extraActions []model.Action[newshapes.Machine]
-	laws         []law.Law[newshapes.Machine]
-	skipLaws     []string
+	refFactory    func() newshapes.Machine
+	actions       []model.Action[newshapes.Machine]
+	extraActions  []model.Action[newshapes.Machine]
+	laws          []law.Law[newshapes.Machine]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newMachineModelConfig(opts ...MachineModelOption) machineModelConfig {

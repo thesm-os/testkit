@@ -45,6 +45,27 @@ func {{.InterfaceName}}ModelMaxAdvance(d time.Duration) {{.InterfaceName}}ModelO
 	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.maxAdvance = d }
 }
 {{- end}}
+
+// {{.InterfaceName}}ModelWithoutTrace disables per-action trace recording.
+func {{.InterfaceName}}ModelWithoutTrace() {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.disableTrace = true }
+}
+
+// {{.InterfaceName}}ModelSkipFinalLaws disables iteration-end law checks.
+func {{.InterfaceName}}ModelSkipFinalLaws() {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.skipFinalLaws = true }
+}
+
+// {{.InterfaceName}}ModelArtifactDir overrides the directory for failure artifacts.
+func {{.InterfaceName}}ModelArtifactDir(dir string) {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.artifactDir = dir }
+}
+
+// {{.InterfaceName}}ModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func {{.InterfaceName}}ModelGoroutineLeakCheck() {{.InterfaceName}}ModelOption {
+	return func(c *{{.InterfaceName | toLower}}ModelConfig) { c.leakCheck = true }
+}
 {{end}}
 
 {{define "model_concurrent_option"}}

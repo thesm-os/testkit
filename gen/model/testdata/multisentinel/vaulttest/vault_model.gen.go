@@ -41,6 +41,13 @@ func AssertVaultModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, vaultModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, vaultModelProperty(sutFactory, opts...))
 }
 
@@ -153,6 +160,15 @@ func vaultModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[multisentinel.Vault]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[multisentinel.Vault]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[multisentinel.Vault](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -214,13 +230,38 @@ func VaultModelConcurrent(workers, opsPerWorker int) VaultModelOption {
 	}
 }
 
+// VaultModelWithoutTrace disables per-action trace recording.
+func VaultModelWithoutTrace() VaultModelOption {
+	return func(c *vaultModelConfig) { c.disableTrace = true }
+}
+
+// VaultModelSkipFinalLaws disables iteration-end law checks.
+func VaultModelSkipFinalLaws() VaultModelOption {
+	return func(c *vaultModelConfig) { c.skipFinalLaws = true }
+}
+
+// VaultModelArtifactDir overrides the directory for failure artifacts.
+func VaultModelArtifactDir(dir string) VaultModelOption {
+	return func(c *vaultModelConfig) { c.artifactDir = dir }
+}
+
+// VaultModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func VaultModelGoroutineLeakCheck() VaultModelOption {
+	return func(c *vaultModelConfig) { c.leakCheck = true }
+}
+
 type vaultModelConfig struct {
-	refFactory   func() multisentinel.Vault
-	actions      []model.Action[multisentinel.Vault]
-	extraActions []model.Action[multisentinel.Vault]
-	laws         []law.Law[multisentinel.Vault]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[multisentinel.Vault]
+	refFactory    func() multisentinel.Vault
+	actions       []model.Action[multisentinel.Vault]
+	extraActions  []model.Action[multisentinel.Vault]
+	laws          []law.Law[multisentinel.Vault]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[multisentinel.Vault]
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newVaultModelConfig(opts ...VaultModelOption) vaultModelConfig {

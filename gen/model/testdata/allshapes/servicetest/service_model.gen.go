@@ -40,6 +40,13 @@ func AssertServiceModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, serviceModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, serviceModelProperty(sutFactory, opts...))
 }
 
@@ -215,6 +222,15 @@ func serviceModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[allshapes.Service]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[allshapes.Service]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[allshapes.Service](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -290,13 +306,38 @@ func ServiceModelConcurrent(workers, opsPerWorker int) ServiceModelOption {
 	}
 }
 
+// ServiceModelWithoutTrace disables per-action trace recording.
+func ServiceModelWithoutTrace() ServiceModelOption {
+	return func(c *serviceModelConfig) { c.disableTrace = true }
+}
+
+// ServiceModelSkipFinalLaws disables iteration-end law checks.
+func ServiceModelSkipFinalLaws() ServiceModelOption {
+	return func(c *serviceModelConfig) { c.skipFinalLaws = true }
+}
+
+// ServiceModelArtifactDir overrides the directory for failure artifacts.
+func ServiceModelArtifactDir(dir string) ServiceModelOption {
+	return func(c *serviceModelConfig) { c.artifactDir = dir }
+}
+
+// ServiceModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func ServiceModelGoroutineLeakCheck() ServiceModelOption {
+	return func(c *serviceModelConfig) { c.leakCheck = true }
+}
+
 type serviceModelConfig struct {
-	refFactory   func() allshapes.Service
-	actions      []model.Action[allshapes.Service]
-	extraActions []model.Action[allshapes.Service]
-	laws         []law.Law[allshapes.Service]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[allshapes.Service]
+	refFactory    func() allshapes.Service
+	actions       []model.Action[allshapes.Service]
+	extraActions  []model.Action[allshapes.Service]
+	laws          []law.Law[allshapes.Service]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[allshapes.Service]
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newServiceModelConfig(opts ...ServiceModelOption) serviceModelConfig {

@@ -41,6 +41,13 @@ func AssertStoreModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, storeModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, storeModelProperty(sutFactory, opts...))
 }
 
@@ -168,6 +175,15 @@ func storeModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[basic.Store]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[basic.Store]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[basic.Store](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -236,13 +252,38 @@ func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
 	}
 }
 
+// StoreModelWithoutTrace disables per-action trace recording.
+func StoreModelWithoutTrace() StoreModelOption {
+	return func(c *storeModelConfig) { c.disableTrace = true }
+}
+
+// StoreModelSkipFinalLaws disables iteration-end law checks.
+func StoreModelSkipFinalLaws() StoreModelOption {
+	return func(c *storeModelConfig) { c.skipFinalLaws = true }
+}
+
+// StoreModelArtifactDir overrides the directory for failure artifacts.
+func StoreModelArtifactDir(dir string) StoreModelOption {
+	return func(c *storeModelConfig) { c.artifactDir = dir }
+}
+
+// StoreModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func StoreModelGoroutineLeakCheck() StoreModelOption {
+	return func(c *storeModelConfig) { c.leakCheck = true }
+}
+
 type storeModelConfig struct {
-	refFactory   func() basic.Store
-	actions      []model.Action[basic.Store]
-	extraActions []model.Action[basic.Store]
-	laws         []law.Law[basic.Store]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[basic.Store]
+	refFactory    func() basic.Store
+	actions       []model.Action[basic.Store]
+	extraActions  []model.Action[basic.Store]
+	laws          []law.Law[basic.Store]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[basic.Store]
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newStoreModelConfig(opts ...StoreModelOption) storeModelConfig {

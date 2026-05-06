@@ -11,6 +11,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/trace"
 )
 
 // OpInput is recorded as porcupine.Operation.Input for concurrent
@@ -35,7 +36,24 @@ type Action[T any] struct {
 	Name string
 
 	// Run executes the action against both SUT and reference.
-	Run func(rt *rapid.T, sut, ref T)
+	// Returns an ActionResult with the comparison outcome and
+	// structured I/O for trace recording.
+	Run func(rt *rapid.T, sut, ref T) ActionResult
+
+	// Kind classifies the failure type when this action's Run
+	// returns a non-nil Err. Set explicitly by every framework
+	// helper; defaults to FailureUnclassified for consumer actions.
+	Kind FailureKind
+}
+
+// ActionResult is the return value from Action[T].Run.
+type ActionResult struct {
+	// Err is non-nil when the action detected a divergence.
+	Err error
+	// Input is the drawn value(s) for this action.
+	Input any
+	// Output is the SUT's result.
+	Output any
 }
 
 // ConcurrentAction is an action that records structured I/O for
@@ -102,6 +120,21 @@ type Config[T any] struct {
 	// When set, the runner spawns workers and validates via Porcupine
 	// instead of running the sequential property.
 	Concurrent *ConcurrentConfig[T]
+
+	// DisableTrace skips per-action trace recording when true.
+	// Set via [WithoutTrace]. Default false (trace enabled).
+	DisableTrace bool
+
+	// ArtifactDir overrides the directory for failure artifacts
+	// (Porcupine HTML, goroutine stacks). Resolved via:
+	// 1. This field (WithArtifactDir option)
+	// 2. .testkit.yml artifacts.dir
+	// 3. Fallback: .testkit/artifacts/
+	ArtifactDir string
+
+	// SkipFinalLaws disables FinalLaw execution at iteration end.
+	// Set via [WithSkipFinalLaws] for negative tests.
+	SkipFinalLaws bool
 }
 
 // Run executes a model-based test. For each rapid iteration, it
@@ -156,6 +189,19 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 			reset()
 		}
 
+		// Per-iteration trace buffer.
+		var iterTrace trace.Trace
+		iterTrace.Reset()
+
+		// Notify FinalLaws that need per-iteration setup (e.g., goroutine snapshot).
+		if !cfg.SkipFinalLaws {
+			for _, fl := range cfg.Laws.finalLaws {
+				if starter, ok := fl.(interface{ StartIteration() }); ok {
+					starter.StartIteration()
+				}
+			}
+		}
+
 		sut := cfg.SUTFactory()
 		ref := cfg.RefFactory()
 		step := 0
@@ -168,7 +214,39 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		actionMap := make(map[string]func(*rapid.T), len(cfg.Actions)+1)
 		for _, a := range cfg.Actions {
 			actionMap[a.Name] = func(rt *rapid.T) {
-				a.Run(rt, sut, ref)
+				startNs := time.Now().UnixNano()
+				result := a.Run(rt, sut, ref)
+				endNs := time.Now().UnixNano()
+
+				if !cfg.DisableTrace {
+					var inputs []any
+					if result.Input != nil {
+						inputs = []any{result.Input}
+					}
+					iterTrace.Record(trace.Event{
+						StartNs:  startNs,
+						EndNs:    endNs,
+						OpName:   a.Name,
+						ClientID: -1, // sequential
+						Inputs:   inputs,
+						Output:   result.Output,
+						Err:      result.Err,
+					})
+				}
+
+				if result.Err != nil {
+					f := &Failure{
+						Kind:         a.Kind,
+						StepRan:      StepID{WorkerID: -1, Index: step},
+						StepReported: StepID{WorkerID: -1, Index: step},
+						Err:          result.Err,
+					}
+					// Attach trace per Kind policy.
+					if shouldAttachTrace(a.Kind) {
+						f.Trace = iterTrace.Snapshot()
+					}
+					rt.Fatalf("%s", formatFailure(f))
+				}
 				step++
 			}
 		}
@@ -185,19 +263,39 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 				}
 				if err != nil {
 					f := &Failure{
-						Kind:    FailureInvariant,
-						LawID:   l.ID(),
-						REQID:   l.REQID(),
-						Step:    step,
-						Message: err.Error(),
-						Err:     err,
+						Kind:         FailureInvariant,
+						LawID:        l.ID(),
+						REQID:        l.REQID(),
+						StepRan:      StepID{WorkerID: -1, Index: step},
+						StepReported: StepID{WorkerID: -1, Index: step},
+						Err:          err,
 					}
-					rt.Fatalf("%v", f)
+					if shouldAttachTrace(FailureInvariant) && !cfg.DisableTrace {
+						f.Trace = iterTrace.Snapshot()
+					}
+					rt.Fatalf("%s", formatFailure(f))
 				}
 			}
 		}
 
 		rt.Repeat(actionMap)
+
+		// FinalLaw phase: iteration-end checks (e.g., goroutine leaks).
+		if !cfg.SkipFinalLaws {
+			for _, fl := range cfg.Laws.finalLaws {
+				if err := fl.CheckFinal(rt, sut, ref); err != nil {
+					f := &Failure{
+						Kind:         FailureLiveness,
+						LawID:        fl.ID(),
+						REQID:        fl.REQID(),
+						StepRan:      StepID{WorkerID: -1, Index: step},
+						StepReported: StepID{WorkerID: -1, Index: step},
+						Err:          err,
+					}
+					rt.Fatalf("%s", formatFailure(f))
+				}
+			}
+		}
 	}
 }
 
@@ -266,6 +364,39 @@ func SkipLaw[T any](id string) Option[T] {
 		if c.Laws != nil {
 			c.Laws.SkipByID(id)
 		}
+	}
+}
+
+// WithoutTrace disables per-action trace recording. When set,
+// failures will not include operation history context. Use for
+// performance-sensitive property tests where trace overhead matters.
+func WithoutTrace[T any]() Option[T] {
+	return func(c *Config[T]) { c.DisableTrace = true }
+}
+
+// WithArtifactDir sets the directory for failure artifacts. Overrides
+// the .testkit.yml artifacts.dir setting and the default .testkit/artifacts/.
+func WithArtifactDir[T any](dir string) Option[T] {
+	return func(c *Config[T]) { c.ArtifactDir = dir }
+}
+
+// WithSkipFinalLaws disables FinalLaw execution at iteration end.
+// Use for negative tests where liveness checks would fire before
+// the actual bug being tested.
+func WithSkipFinalLaws[T any]() Option[T] {
+	return func(c *Config[T]) { c.SkipFinalLaws = true }
+}
+
+// shouldAttachTrace returns true if the Kind policy says trace
+// should be attached to a failure.
+func shouldAttachTrace(k FailureKind) bool {
+	switch k {
+	case FailureUnclassified, FailureStructural, FailureInvariant:
+		return true
+	case FailureSemantic, FailureLiveness:
+		return false
+	default:
+		return true
 	}
 }
 

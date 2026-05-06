@@ -37,6 +37,14 @@ func AssertLedgerModel(
 	opts ...LedgerModelOption,
 ) {
 	t.Helper()
+	cfg := newLedgerModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, ledgerModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, ledgerModelProperty(sutFactory, opts...))
 }
 
@@ -133,6 +141,15 @@ func ledgerModelProperty(
 		model.WithLaws(laws),
 	}
 	modelOpts = append(modelOpts, model.WithHistoryReset[thesmos.Ledger](attemptedAppends.Reset))
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.Ledger]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.Ledger]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.Ledger](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -165,12 +182,37 @@ func LedgerModelSkipLaw(id string) LedgerModelOption {
 	return func(c *ledgerModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// LedgerModelWithoutTrace disables per-action trace recording.
+func LedgerModelWithoutTrace() LedgerModelOption {
+	return func(c *ledgerModelConfig) { c.disableTrace = true }
+}
+
+// LedgerModelSkipFinalLaws disables iteration-end law checks.
+func LedgerModelSkipFinalLaws() LedgerModelOption {
+	return func(c *ledgerModelConfig) { c.skipFinalLaws = true }
+}
+
+// LedgerModelArtifactDir overrides the directory for failure artifacts.
+func LedgerModelArtifactDir(dir string) LedgerModelOption {
+	return func(c *ledgerModelConfig) { c.artifactDir = dir }
+}
+
+// LedgerModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func LedgerModelGoroutineLeakCheck() LedgerModelOption {
+	return func(c *ledgerModelConfig) { c.leakCheck = true }
+}
+
 type ledgerModelConfig struct {
-	refFactory   func() thesmos.Ledger
-	actions      []model.Action[thesmos.Ledger]
-	extraActions []model.Action[thesmos.Ledger]
-	laws         []law.Law[thesmos.Ledger]
-	skipLaws     []string
+	refFactory    func() thesmos.Ledger
+	actions       []model.Action[thesmos.Ledger]
+	extraActions  []model.Action[thesmos.Ledger]
+	laws          []law.Law[thesmos.Ledger]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newLedgerModelConfig(opts ...LedgerModelOption) ledgerModelConfig {

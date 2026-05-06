@@ -58,6 +58,26 @@ type StatefulLaw[T any] interface {
 	CheckWithStep(rt *rapid.T, sut, ref T, step int) error
 }
 
+// FinalLaw is checked once at iteration end (after all actions and
+// cleanup), not after every action. Use for liveness invariants that
+// only make sense at the iteration boundary — e.g., goroutine leak
+// detection. The runner classifies FinalLaw failures as
+// FailureLiveness.
+//
+// A type can implement Law, FinalLaw, or both. The registry
+// type-asserts at Add time and routes appropriately.
+type FinalLaw[T any] interface {
+	// ID returns a stable identifier for this law.
+	ID() string
+
+	// REQID returns a requirement tag. Empty for auto-derived laws.
+	REQID() string
+
+	// CheckFinal is called once at iteration end. Must not mutate
+	// sut or ref.
+	CheckFinal(rt *rapid.T, sut, ref T) error
+}
+
 // ReadAfterWrite checks that every key in a sample pool is consistent
 // between SUT and reference. Observational — never writes.
 //

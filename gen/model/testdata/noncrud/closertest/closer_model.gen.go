@@ -33,6 +33,14 @@ func AssertCloserModel(
 	opts ...CloserModelOption,
 ) {
 	t.Helper()
+	cfg := newCloserModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, closerModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, closerModelProperty(sutFactory, opts...))
 }
 
@@ -90,6 +98,15 @@ func closerModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[noncrud.Closer]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[noncrud.Closer]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[noncrud.Closer](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -122,12 +139,37 @@ func CloserModelSkipLaw(id string) CloserModelOption {
 	return func(c *closerModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// CloserModelWithoutTrace disables per-action trace recording.
+func CloserModelWithoutTrace() CloserModelOption {
+	return func(c *closerModelConfig) { c.disableTrace = true }
+}
+
+// CloserModelSkipFinalLaws disables iteration-end law checks.
+func CloserModelSkipFinalLaws() CloserModelOption {
+	return func(c *closerModelConfig) { c.skipFinalLaws = true }
+}
+
+// CloserModelArtifactDir overrides the directory for failure artifacts.
+func CloserModelArtifactDir(dir string) CloserModelOption {
+	return func(c *closerModelConfig) { c.artifactDir = dir }
+}
+
+// CloserModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func CloserModelGoroutineLeakCheck() CloserModelOption {
+	return func(c *closerModelConfig) { c.leakCheck = true }
+}
+
 type closerModelConfig struct {
-	refFactory   func() noncrud.Closer
-	actions      []model.Action[noncrud.Closer]
-	extraActions []model.Action[noncrud.Closer]
-	laws         []law.Law[noncrud.Closer]
-	skipLaws     []string
+	refFactory    func() noncrud.Closer
+	actions       []model.Action[noncrud.Closer]
+	extraActions  []model.Action[noncrud.Closer]
+	laws          []law.Law[noncrud.Closer]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newCloserModelConfig(opts ...CloserModelOption) closerModelConfig {

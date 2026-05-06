@@ -4,6 +4,7 @@
 package schedulertest_test
 
 import (
+	"fmt"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -11,6 +12,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos"
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos/schedulertest"
+	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 )
 
@@ -41,19 +43,20 @@ var readyRequestGen = rapid.Custom(func(rt *rapid.T) thesmos.ReadyRequest {
 // Ready method. The framework can't auto-derive this because the
 // method takes a complex request parameter.
 var readyAction = action.Unknown[thesmos.Scheduler]("Ready",
-	func(rt *rapid.T, sut, ref thesmos.Scheduler) {
+	func(rt *rapid.T, sut, ref thesmos.Scheduler) model.ActionResult {
 		req := readyRequestGen.Draw(rt, "req")
 		sutResult := sut.Ready(req)
 		refResult := ref.Ready(req)
 		if len(sutResult.Ready) != len(refResult.Ready) {
-			rt.Fatalf("Ready: SUT has %d ready, ref has %d",
-				len(sutResult.Ready), len(refResult.Ready))
+			return model.ActionResult{Err: fmt.Errorf("Ready: SUT has %d ready, ref has %d",
+				len(sutResult.Ready), len(refResult.Ready))}
 		}
 		for i, v := range sutResult.Ready {
 			if v != refResult.Ready[i] {
-				rt.Fatalf("Ready[%d]: SUT=%s, ref=%s", i, v, refResult.Ready[i])
+				return model.ActionResult{Err: fmt.Errorf("Ready[%d]: SUT=%s, ref=%s", i, v, refResult.Ready[i])}
 			}
 		}
+		return model.ActionResult{}
 	},
 )
 

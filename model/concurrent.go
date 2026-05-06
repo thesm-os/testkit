@@ -13,6 +13,8 @@ import (
 
 	"github.com/anishathalye/porcupine"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/model/trace"
 )
 
 // runConcurrent executes concurrent linearizability testing.
@@ -133,9 +135,33 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 		case porcupine.Ok:
 			// Linearizable — pass.
 		case porcupine.Illegal:
-			vizPath := writeVisualization(cc.Model, info)
-			rt.Fatalf("history is not linearizable (%d ops, %d workers)\n  visualization: %s",
-				len(history), cc.Workers, vizPath)
+			artifactDir := resolveArtifactDir(cfg.ArtifactDir)
+			vizPath := writeVisualization(rt, cc.Model, info, artifactDir)
+			// Convert Porcupine history to trace events for the formatter.
+			traceEvents := make([]trace.Event, len(history))
+			for i, op := range history {
+				input := op.Input.(OpInput)
+				traceEvents[i] = trace.Event{
+					StartNs:  op.Call,
+					EndNs:    op.Return,
+					OpName:   input.Name,
+					ClientID: op.ClientId,
+					Inputs:   []any{input.Args},
+					Output:   op.Output.(OpOutput).Result,
+				}
+			}
+			f := &Failure{
+				Kind:         FailureStructural,
+				StepRan:      StepID{WorkerID: -1, Index: 0},
+				StepReported: StepID{WorkerID: -1, Index: 0},
+				Err: fmt.Errorf("history is not linearizable (%d ops, %d workers)",
+					len(history), cc.Workers),
+				Trace: traceEvents,
+			}
+			if vizPath != "" {
+				f.ArtifactPaths = []string{"viz: " + vizPath}
+			}
+			rt.Fatalf("%s", formatFailure(f))
 		case porcupine.Unknown:
 			rt.Logf("linearizability check timed out (%v) — treating as warning",
 				cc.Timeout)
@@ -143,14 +169,20 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 	})
 }
 
-// writeVisualization writes a Porcupine visualization HTML file and
-// returns the path. Unique per invocation to avoid collisions.
-func writeVisualization(model porcupine.Model, info porcupine.LinearizationInfo) string {
-	path := filepath.Join(os.TempDir(),
-		fmt.Sprintf("linearizability-%d.html", time.Now().UnixNano()))
-	err := porcupine.VisualizePath(model, info, path)
-	if err != nil {
-		return "(failed: " + err.Error() + ")"
+// writeVisualization writes a Porcupine visualization HTML file to
+// the configured artifact directory. Returns the path, or empty
+// string on write failure (logged via rt.Logf).
+func writeVisualization(rt rapid.TB, m porcupine.Model, info porcupine.LinearizationInfo, artifactDir string) string {
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		rt.Logf("failed to create artifact dir: %v", err)
+		return ""
 	}
+	filename := sanitizeForFilename(rt.Name()) + "-linearizability.html"
+	path := filepath.Join(artifactDir, filename)
+	if err := porcupine.VisualizePath(m, info, path); err != nil {
+		rt.Logf("failed to write artifact: %v", err)
+		return ""
+	}
+	rt.Errorf("linearizability viz: %s", path)
 	return path
 }

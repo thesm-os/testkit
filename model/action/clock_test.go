@@ -31,11 +31,9 @@ func TestAdvanceClock(t *testing.T) {
 			a.Run(rt, "sut", "ref")
 		})
 
-		// After 100 rapid iterations, both clocks should be identical.
 		if sutClk.Now() != refClk.Now() {
 			t.Fatalf("clocks diverged: sut=%v ref=%v", sutClk.Now(), refClk.Now())
 		}
-		// Must have advanced past origin.
 		if !sutClk.Now().After(origin) {
 			t.Fatal("clock should have advanced past origin")
 		}
@@ -52,7 +50,6 @@ func TestAdvanceClock(t *testing.T) {
 			time.Minute,
 		)
 
-		// Run 10 iterations manually (via rapid.Check for valid T).
 		rapid.Check(t, func(rt *rapid.T) {
 			for range 10 {
 				a.Run(rt, "sut", "ref")

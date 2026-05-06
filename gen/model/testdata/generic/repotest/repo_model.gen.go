@@ -41,6 +41,13 @@ func AssertItemRepositoryModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, itemrepositoryModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, itemrepositoryModelProperty(sutFactory, opts...))
 }
 
@@ -175,6 +182,15 @@ func itemrepositoryModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[generic.ItemRepository]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[generic.ItemRepository]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[generic.ItemRepository](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -243,13 +259,38 @@ func ItemRepositoryModelConcurrent(workers, opsPerWorker int) ItemRepositoryMode
 	}
 }
 
+// ItemRepositoryModelWithoutTrace disables per-action trace recording.
+func ItemRepositoryModelWithoutTrace() ItemRepositoryModelOption {
+	return func(c *itemrepositoryModelConfig) { c.disableTrace = true }
+}
+
+// ItemRepositoryModelSkipFinalLaws disables iteration-end law checks.
+func ItemRepositoryModelSkipFinalLaws() ItemRepositoryModelOption {
+	return func(c *itemrepositoryModelConfig) { c.skipFinalLaws = true }
+}
+
+// ItemRepositoryModelArtifactDir overrides the directory for failure artifacts.
+func ItemRepositoryModelArtifactDir(dir string) ItemRepositoryModelOption {
+	return func(c *itemrepositoryModelConfig) { c.artifactDir = dir }
+}
+
+// ItemRepositoryModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func ItemRepositoryModelGoroutineLeakCheck() ItemRepositoryModelOption {
+	return func(c *itemrepositoryModelConfig) { c.leakCheck = true }
+}
+
 type itemrepositoryModelConfig struct {
-	refFactory   func() generic.ItemRepository
-	actions      []model.Action[generic.ItemRepository]
-	extraActions []model.Action[generic.ItemRepository]
-	laws         []law.Law[generic.ItemRepository]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[generic.ItemRepository]
+	refFactory    func() generic.ItemRepository
+	actions       []model.Action[generic.ItemRepository]
+	extraActions  []model.Action[generic.ItemRepository]
+	laws          []law.Law[generic.ItemRepository]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[generic.ItemRepository]
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newItemRepositoryModelConfig(opts ...ItemRepositoryModelOption) itemrepositoryModelConfig {

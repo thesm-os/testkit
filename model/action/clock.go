@@ -27,14 +27,16 @@ func AdvanceClock[T any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, _, _ T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, _, _ T) model.ActionResult {
 			sutClk, refClk := clocks()
 			if sutClk == nil || refClk == nil {
-				return // no clock factory configured
+				return model.ActionResult{}
 			}
 			d := time.Duration(rapid.Int64Range(0, int64(maxAdvance)).Draw(rt, name+"_duration"))
 			sutClk.Advance(d)
 			refClk.Advance(d)
+			return model.ActionResult{}
 		},
 	}
 }

@@ -33,6 +33,14 @@ func AssertStateModel(
 	opts ...StateModelOption,
 ) {
 	t.Helper()
+	cfg := newStateModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, stateModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, stateModelProperty(sutFactory, opts...))
 }
 
@@ -96,6 +104,15 @@ func stateModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.State]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.State]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.State](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -128,12 +145,37 @@ func StateModelSkipLaw(id string) StateModelOption {
 	return func(c *stateModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// StateModelWithoutTrace disables per-action trace recording.
+func StateModelWithoutTrace() StateModelOption {
+	return func(c *stateModelConfig) { c.disableTrace = true }
+}
+
+// StateModelSkipFinalLaws disables iteration-end law checks.
+func StateModelSkipFinalLaws() StateModelOption {
+	return func(c *stateModelConfig) { c.skipFinalLaws = true }
+}
+
+// StateModelArtifactDir overrides the directory for failure artifacts.
+func StateModelArtifactDir(dir string) StateModelOption {
+	return func(c *stateModelConfig) { c.artifactDir = dir }
+}
+
+// StateModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func StateModelGoroutineLeakCheck() StateModelOption {
+	return func(c *stateModelConfig) { c.leakCheck = true }
+}
+
 type stateModelConfig struct {
-	refFactory   func() thesmos.State
-	actions      []model.Action[thesmos.State]
-	extraActions []model.Action[thesmos.State]
-	laws         []law.Law[thesmos.State]
-	skipLaws     []string
+	refFactory    func() thesmos.State
+	actions       []model.Action[thesmos.State]
+	extraActions  []model.Action[thesmos.State]
+	laws          []law.Law[thesmos.State]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newStateModelConfig(opts ...StateModelOption) stateModelConfig {

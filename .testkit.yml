@@ -9,6 +9,9 @@ output:
   generated_suffix: .gen.go
   test_package_style: external
 
+artifacts:
+  dir: .testkit/artifacts
+
 validators:
   error_prefix:
     enabled: true

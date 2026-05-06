@@ -43,6 +43,13 @@ func AssertStoreModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, storeModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, storeModelProperty(sutFactory, opts...))
 }
 
@@ -202,6 +209,15 @@ func storeModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[timeaware.Store]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[timeaware.Store]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[timeaware.Store](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -283,15 +299,40 @@ func StoreModelMaxAdvance(d time.Duration) StoreModelOption {
 	return func(c *storeModelConfig) { c.maxAdvance = d }
 }
 
+// StoreModelWithoutTrace disables per-action trace recording.
+func StoreModelWithoutTrace() StoreModelOption {
+	return func(c *storeModelConfig) { c.disableTrace = true }
+}
+
+// StoreModelSkipFinalLaws disables iteration-end law checks.
+func StoreModelSkipFinalLaws() StoreModelOption {
+	return func(c *storeModelConfig) { c.skipFinalLaws = true }
+}
+
+// StoreModelArtifactDir overrides the directory for failure artifacts.
+func StoreModelArtifactDir(dir string) StoreModelOption {
+	return func(c *storeModelConfig) { c.artifactDir = dir }
+}
+
+// StoreModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func StoreModelGoroutineLeakCheck() StoreModelOption {
+	return func(c *storeModelConfig) { c.leakCheck = true }
+}
+
 type storeModelConfig struct {
-	refFactory   func() timeaware.Store
-	actions      []model.Action[timeaware.Store]
-	extraActions []model.Action[timeaware.Store]
-	laws         []law.Law[timeaware.Store]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[timeaware.Store]
-	clockFactory func(clock.Clock) timeaware.Store
-	maxAdvance   time.Duration
+	refFactory    func() timeaware.Store
+	actions       []model.Action[timeaware.Store]
+	extraActions  []model.Action[timeaware.Store]
+	laws          []law.Law[timeaware.Store]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[timeaware.Store]
+	clockFactory  func(clock.Clock) timeaware.Store
+	maxAdvance    time.Duration
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newStoreModelConfig(opts ...StoreModelOption) storeModelConfig {

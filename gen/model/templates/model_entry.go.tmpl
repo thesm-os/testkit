@@ -17,13 +17,20 @@ func Assert{{.InterfaceName}}Model(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	t.Helper()
-{{- if .CanLinearize}}
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
+{{- if .CanLinearize}}
 	if cfg.concurrent != nil {
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
 {{- end}}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
 }
 

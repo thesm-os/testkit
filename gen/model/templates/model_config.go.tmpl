@@ -12,6 +12,10 @@ type {{.InterfaceName | toLower}}ModelConfig struct {
 	clockFactory func(clock.Clock) {{.QualifiedType}}
 	maxAdvance   time.Duration
 {{- end}}
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func new{{.InterfaceName}}ModelConfig(opts ...{{.InterfaceName}}ModelOption) {{.InterfaceName | toLower}}ModelConfig {

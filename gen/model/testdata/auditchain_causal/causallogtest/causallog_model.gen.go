@@ -26,7 +26,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via CausalLogModelReference (Verify not in MapStore)
-//	Auto-laws:     AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC, AUTO-REPLAY-CAUSAL-ORDERING
+//	Auto-laws:     AUTO-STREAM-REENTRANT, AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC, AUTO-REPLAY-CAUSAL-ORDERING
 //	Chain:         appends, replays (Replay), verifies (Verify), causal (ID -> DependsOn)
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -37,6 +37,14 @@ func AssertCausalLogModel(
 	opts ...CausalLogModelOption,
 ) {
 	t.Helper()
+	cfg := newCausalLogModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, causallogModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, causallogModelProperty(sutFactory, opts...))
 }
 
@@ -134,6 +142,15 @@ func causallogModelProperty(
 		model.WithLaws(laws),
 	}
 	modelOpts = append(modelOpts, model.WithHistoryReset[auditchain_causal.CausalLog](attemptedAppends.Reset))
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[auditchain_causal.CausalLog]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain_causal.CausalLog]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain_causal.CausalLog](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -166,12 +183,37 @@ func CausalLogModelSkipLaw(id string) CausalLogModelOption {
 	return func(c *causallogModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// CausalLogModelWithoutTrace disables per-action trace recording.
+func CausalLogModelWithoutTrace() CausalLogModelOption {
+	return func(c *causallogModelConfig) { c.disableTrace = true }
+}
+
+// CausalLogModelSkipFinalLaws disables iteration-end law checks.
+func CausalLogModelSkipFinalLaws() CausalLogModelOption {
+	return func(c *causallogModelConfig) { c.skipFinalLaws = true }
+}
+
+// CausalLogModelArtifactDir overrides the directory for failure artifacts.
+func CausalLogModelArtifactDir(dir string) CausalLogModelOption {
+	return func(c *causallogModelConfig) { c.artifactDir = dir }
+}
+
+// CausalLogModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func CausalLogModelGoroutineLeakCheck() CausalLogModelOption {
+	return func(c *causallogModelConfig) { c.leakCheck = true }
+}
+
 type causallogModelConfig struct {
-	refFactory   func() auditchain_causal.CausalLog
-	actions      []model.Action[auditchain_causal.CausalLog]
-	extraActions []model.Action[auditchain_causal.CausalLog]
-	laws         []law.Law[auditchain_causal.CausalLog]
-	skipLaws     []string
+	refFactory    func() auditchain_causal.CausalLog
+	actions       []model.Action[auditchain_causal.CausalLog]
+	extraActions  []model.Action[auditchain_causal.CausalLog]
+	laws          []law.Law[auditchain_causal.CausalLog]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newCausalLogModelConfig(opts ...CausalLogModelOption) causallogModelConfig {

@@ -28,18 +28,28 @@ func Reader[T any, K comparable, V any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			k := keys.Draw(rt, name+"_key")
 			sutGot, sutErr := read(rt.Context(), sut, k)
 			refGot, refErr := read(rt.Context(), ref, k)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr),
+					Input:  k,
+					Output: sutGot,
+				}
 			}
 			if sutErr == nil {
 				if diff := cmp.Diff(refGot, sutGot); diff != "" {
-					rt.Fatalf("%s(%v): SUT/ref disagree:\n%s", name, k, diff)
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s(%v): SUT/ref disagree:\n%s", name, k, diff),
+						Input:  k,
+						Output: sutGot,
+					}
 				}
 			}
+			return model.ActionResult{Input: k, Output: sutGot}
 		},
 	}
 }
@@ -54,28 +64,33 @@ func ReaderWithBool[T any, K comparable, V any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			k := keys.Draw(rt, name+"_key")
 			sutGot, sutOK := read(rt.Context(), sut, k)
 			refGot, refOK := read(rt.Context(), ref, k)
+			out := ReaderWithBoolOutput{V: sutGot, OK: sutOK}
 			if sutOK != refOK {
-				rt.Fatalf("%s(%v): SUT ok=%v, ref ok=%v", name, k, sutOK, refOK)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT ok=%v, ref ok=%v", name, k, sutOK, refOK),
+					Input:  k,
+					Output: out,
+				}
 			}
 			if sutOK {
 				if diff := cmp.Diff(refGot, sutGot); diff != "" {
-					rt.Fatalf("%s(%v): SUT/ref disagree:\n%s", name, k, diff)
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s(%v): SUT/ref disagree:\n%s", name, k, diff),
+						Input:  k,
+						Output: out,
+					}
 				}
 			}
+			return model.ActionResult{Input: k, Output: out}
 		},
 	}
 }
 
-// Lookup creates an action for a Lookup-shaped method:
-// func(T, K) (R1, R2, bool). Draws a key, calls both SUT and ref,
-// compares ok flag and both return values when present.
-// The lookup closure should NOT take context — Lookup methods are
-// typically pure reads. If the method takes ctx, the generated
-// closure wraps it to pass context.Background().
 // Lookup creates an action for a Lookup-shaped method:
 // func(T, K) (R1, R2, bool). Draws a key, calls both SUT and ref,
 // compares ok flag and R1 when present. R2 is compared via
@@ -89,23 +104,38 @@ func Lookup[T any, K comparable, R1, R2 any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			k := keys.Draw(rt, name+"_key")
 			sutR1, sutR2, sutOK := lookup(sut, k)
 			refR1, refR2, refOK := lookup(ref, k)
+			out := LookupOutput{R1: sutR1, R2: sutR2, OK: sutOK}
 			if sutOK != refOK {
-				rt.Fatalf("%s(%v): SUT ok=%v, ref ok=%v", name, k, sutOK, refOK)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT ok=%v, ref ok=%v", name, k, sutOK, refOK),
+					Input:  k,
+					Output: out,
+				}
 			}
 			if sutOK {
 				if diff := cmp.Diff(refR1, sutR1); diff != "" {
-					rt.Fatalf("%s(%v) R1: SUT/ref disagree:\n%s", name, k, diff)
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s(%v) R1: SUT/ref disagree:\n%s", name, k, diff),
+						Input:  k,
+						Output: out,
+					}
 				}
 				if len(cmpOpts) > 0 {
 					if diff := cmp.Diff(refR2, sutR2, cmpOpts...); diff != "" {
-						rt.Fatalf("%s(%v) R2: SUT/ref disagree:\n%s", name, k, diff)
+						return model.ActionResult{
+							Err:    fmt.Errorf("%s(%v) R2: SUT/ref disagree:\n%s", name, k, diff),
+							Input:  k,
+							Output: out,
+						}
 					}
 				}
 			}
+			return model.ActionResult{Input: k, Output: out}
 		},
 	}
 }
@@ -120,29 +150,35 @@ func Mutator[T, V any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			v := values.Draw(rt, name+"_value")
 			mutate(rt.Context(), sut, v)
 			mutate(rt.Context(), ref, v)
+			return model.ActionResult{Input: v}
 		},
 	}
 }
 
 // PoisonCheck creates an action for a PoisonAccessor-shaped method:
-// func() error. Calls both SUT and ref, compares error states. If the
-// reference is poisoned, the SUT must also be poisoned (and vice versa).
+// func() error. Calls both SUT and ref, compares error states.
 func PoisonCheck[T any](
 	name string,
 	check func(T) error,
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutErr := check(sut)
 			refErr := check(ref)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Output: sutErr,
+				}
 			}
+			return model.ActionResult{Output: sutErr}
 		},
 	}
 }
@@ -156,13 +192,18 @@ func Writer[T, V any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			v := values.Draw(rt, name+"_value")
 			sutErr := write(rt.Context(), sut, v)
 			refErr := write(rt.Context(), ref, v)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s(%v): SUT err=%v, ref err=%v", name, v, sutErr, refErr)
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, v, sutErr, refErr),
+					Input: v,
+				}
 			}
+			return model.ActionResult{Input: v}
 		},
 	}
 }
@@ -176,13 +217,18 @@ func Deleter[T any, K comparable](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			k := keys.Draw(rt, name+"_key")
 			sutErr := del(rt.Context(), sut, k)
 			refErr := del(rt.Context(), ref, k)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr)
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr),
+					Input: k,
+				}
 			}
+			return model.ActionResult{Input: k}
 		},
 	}
 }
@@ -195,15 +241,23 @@ func Aggregator[T any, R comparable](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutGot, sutErr := agg(rt.Context(), sut)
 			refGot, refErr := agg(rt.Context(), ref)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Output: sutGot,
+				}
 			}
 			if sutErr == nil && sutGot != refGot {
-				rt.Fatalf("%s: SUT=%v, ref=%v", name, sutGot, refGot)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT=%v, ref=%v", name, sutGot, refGot),
+					Output: sutGot,
+				}
 			}
+			return model.ActionResult{Output: sutGot}
 		},
 	}
 }
@@ -216,12 +270,16 @@ func Lifecycle[T any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutErr := call(rt.Context(), sut)
 			refErr := call(rt.Context(), ref)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err: fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+				}
 			}
+			return model.ActionResult{}
 		},
 	}
 }
@@ -234,12 +292,17 @@ func Pure[T, R any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutGot := call(sut)
 			refGot := call(ref)
 			if diff := cmp.Diff(refGot, sutGot); diff != "" {
-				rt.Fatalf("%s: SUT/ref disagree:\n%s", name, diff)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT/ref disagree:\n%s", name, diff),
+					Output: sutGot,
+				}
 			}
+			return model.ActionResult{Output: sutGot}
 		},
 	}
 }
@@ -252,12 +315,17 @@ func Predicate[T any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutGot := call(sut)
 			refGot := call(ref)
 			if sutGot != refGot {
-				rt.Fatalf("%s: SUT=%v, ref=%v", name, sutGot, refGot)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT=%v, ref=%v", name, sutGot, refGot),
+					Output: sutGot,
+				}
 			}
+			return model.ActionResult{Output: sutGot}
 		},
 	}
 }
@@ -273,42 +341,44 @@ func Stream[T, V any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutItems, sutErr := collect(rt.Context(), sut)
 			refItems, refErr := collect(rt.Context(), ref)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Output: sutItems,
+				}
 			}
 			if sutErr == nil {
 				sortByString(sutItems)
 				sortByString(refItems)
 				if diff := cmp.Diff(refItems, sutItems); diff != "" {
-					rt.Fatalf("%s: SUT/ref disagree:\n%s", name, diff)
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s: SUT/ref disagree:\n%s", name, diff),
+						Output: sutItems,
+					}
 				}
 			}
+			return model.ActionResult{Output: sutItems}
 		},
 	}
 }
 
-// sortByString sorts a slice by the Sprint representation of each element.
-func sortByString[V any](s []V) {
-	sort.Slice(s, func(i, j int) bool {
-		return fmt.Sprint(s[i]) < fmt.Sprint(s[j])
-	})
-}
-
 // Stress creates an action that calls the SUT without comparing
 // against the reference. Used for concurrent StressActions where
-// only race detection matters — the SUT is mutated by concurrent
-// linearizability workers, so comparison is meaningless.
+// only race detection matters.
 func Stress[T any](
 	name string,
 	call func(T),
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(_ *rapid.T, sut, _ T) {
+		Kind: model.FailureSemantic,
+		Run: func(_ *rapid.T, sut, _ T) model.ActionResult {
 			call(sut)
+			return model.ActionResult{}
 		},
 	}
 }
@@ -317,12 +387,17 @@ func Stress[T any](
 // Consumer provides the full comparison logic.
 func Unknown[T any](
 	name string,
-	run func(rt *rapid.T, sut, ref T),
+	run func(rt *rapid.T, sut, ref T) model.ActionResult,
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
-			run(rt, sut, ref)
-		},
+		Run:  run,
 	}
+}
+
+// sortByString sorts a slice by the Sprint representation of each element.
+func sortByString[V any](s []V) {
+	sort.Slice(s, func(i, j int) bool {
+		return fmt.Sprint(s[i]) < fmt.Sprint(s[j])
+	})
 }

@@ -5,6 +5,7 @@ package action
 
 import (
 	"context"
+	"fmt"
 	"iter"
 
 	"github.com/google/go-cmp/cmp"
@@ -23,13 +24,18 @@ func ChainAppend[T, Entry any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureStructural,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			e := entries.Draw(rt, name+"_entry")
 			sutErr := appendFn(rt.Context(), sut, e)
 			refErr := appendFn(rt.Context(), ref, e)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Input: e,
+				}
 			}
+			return model.ActionResult{Input: e}
 		},
 	}
 }
@@ -46,16 +52,21 @@ func ChainAppendRecording[T any, K comparable, Entry any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureStructural,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			e := entries.Draw(rt, name+"_entry")
 			sutErr := appendFn(rt.Context(), sut, e)
 			refErr := appendFn(rt.Context(), ref, e)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Input: e,
+				}
 			}
 			if sutErr == nil {
 				hist.Record(partKeyOf(e), e)
 			}
+			return model.ActionResult{Input: e}
 		},
 	}
 }
@@ -67,12 +78,16 @@ func ChainVerify[T any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureStructural,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			sutErr := verify(rt.Context(), sut)
 			refErr := verify(rt.Context(), ref)
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr)
+				return model.ActionResult{
+					Err: fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+				}
 			}
+			return model.ActionResult{}
 		},
 	}
 }
@@ -87,25 +102,35 @@ func ChainReplay[T any, K comparable, Entry any](
 ) model.Action[T] {
 	return model.Action[T]{
 		Name: name,
-		Run: func(rt *rapid.T, sut, ref T) {
+		Kind: model.FailureStructural,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
 			parts := hist.Partitions()
 			if len(parts) == 0 {
-				return // nothing appended yet
+				return model.ActionResult{} // nothing appended yet
 			}
 			partKey := rapid.SampledFrom(parts).Draw(rt, name+"_partition")
 
 			sutEntries, sutErr := drainSeq2(replay(rt.Context(), sut, partKey))
 			refEntries, refErr := drainSeq2(replay(rt.Context(), ref, partKey))
 			if (sutErr == nil) != (refErr == nil) {
-				rt.Fatalf("%s[%v]: SUT err=%v, ref err=%v", name, partKey, sutErr, refErr)
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s[%v]: SUT err=%v, ref err=%v", name, partKey, sutErr, refErr),
+					Input:  partKey,
+					Output: sutEntries,
+				}
 			}
 			if sutErr == nil {
 				sortByString(sutEntries)
 				sortByString(refEntries)
 				if diff := cmp.Diff(refEntries, sutEntries); diff != "" {
-					rt.Fatalf("%s[%v]: SUT/ref disagree:\n%s", name, partKey, diff)
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s[%v]: SUT/ref disagree:\n%s", name, partKey, diff),
+						Input:  partKey,
+						Output: sutEntries,
+					}
 				}
 			}
+			return model.ActionResult{Input: partKey, Output: sutEntries}
 		},
 	}
 }

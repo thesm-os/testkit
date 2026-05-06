@@ -32,6 +32,14 @@ func AssertKindRegistryModel(
 	opts ...KindRegistryModelOption,
 ) {
 	t.Helper()
+	cfg := newKindRegistryModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, kindregistryModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, kindregistryModelProperty(sutFactory, opts...))
 }
 
@@ -95,6 +103,15 @@ func kindregistryModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[thesmos.KindRegistry]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[thesmos.KindRegistry]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[thesmos.KindRegistry](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -127,12 +144,37 @@ func KindRegistryModelSkipLaw(id string) KindRegistryModelOption {
 	return func(c *kindregistryModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// KindRegistryModelWithoutTrace disables per-action trace recording.
+func KindRegistryModelWithoutTrace() KindRegistryModelOption {
+	return func(c *kindregistryModelConfig) { c.disableTrace = true }
+}
+
+// KindRegistryModelSkipFinalLaws disables iteration-end law checks.
+func KindRegistryModelSkipFinalLaws() KindRegistryModelOption {
+	return func(c *kindregistryModelConfig) { c.skipFinalLaws = true }
+}
+
+// KindRegistryModelArtifactDir overrides the directory for failure artifacts.
+func KindRegistryModelArtifactDir(dir string) KindRegistryModelOption {
+	return func(c *kindregistryModelConfig) { c.artifactDir = dir }
+}
+
+// KindRegistryModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func KindRegistryModelGoroutineLeakCheck() KindRegistryModelOption {
+	return func(c *kindregistryModelConfig) { c.leakCheck = true }
+}
+
 type kindregistryModelConfig struct {
-	refFactory   func() thesmos.KindRegistry
-	actions      []model.Action[thesmos.KindRegistry]
-	extraActions []model.Action[thesmos.KindRegistry]
-	laws         []law.Law[thesmos.KindRegistry]
-	skipLaws     []string
+	refFactory    func() thesmos.KindRegistry
+	actions       []model.Action[thesmos.KindRegistry]
+	extraActions  []model.Action[thesmos.KindRegistry]
+	laws          []law.Law[thesmos.KindRegistry]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newKindRegistryModelConfig(opts ...KindRegistryModelOption) kindregistryModelConfig {

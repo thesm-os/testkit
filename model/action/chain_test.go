@@ -8,11 +8,9 @@ import (
 	"errors"
 	"iter"
 	"testing"
-	"time"
 
 	"pgregory.net/rapid"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/history"
 	"go.thesmos.sh/testkit/model/refchain"
@@ -66,7 +64,10 @@ func TestChainAppendRecording(t *testing.T) {
 		ref := refchain.New[entry](nil)
 
 		rapid.Check(t, func(rt *rapid.T) {
-			a.Run(rt, sut, ref)
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
 		})
 
 		if hist.TotalLen() == 0 {
@@ -87,26 +88,15 @@ func TestChainAppendRecording(t *testing.T) {
 			},
 		)
 
-		// SUT errors on Append, ref succeeds → mismatch.
 		sut := &brokenChain{inner: refchain.New[entry](nil)}
 		ref := refchain.New[entry](nil)
 
-		ft := testkit.NewFailableTB().WithGoexit()
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			rapid.Check(ft, func(rt *rapid.T) {
-				a.Run(rt, sut, ref)
-			})
-		}()
-		select {
-		case <-done:
-		case <-time.After(10 * time.Second):
-			t.Fatal("timed out")
-		}
-		if !ft.Failed() {
-			t.Fatal("should have caught SUT/ref error mismatch on Append")
-		}
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught SUT/ref error mismatch on Append")
+			}
+		})
 	})
 }
 
@@ -127,7 +117,10 @@ func TestChainVerify(t *testing.T) {
 		_ = ref.Append(t.Context(), entry{ID: "1"})
 
 		rapid.Check(t, func(rt *rapid.T) {
-			a.Run(rt, sut, ref)
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
 		})
 	})
 
@@ -139,26 +132,15 @@ func TestChainVerify(t *testing.T) {
 			},
 		)
 
-		// SUT errors on Verify, ref succeeds → mismatch.
 		sut := &brokenChain{inner: refchain.New[entry](nil)}
 		ref := refchain.New[entry](nil)
 
-		ft := testkit.NewFailableTB().WithGoexit()
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			rapid.Check(ft, func(rt *rapid.T) {
-				a.Run(rt, sut, ref)
-			})
-		}()
-		select {
-		case <-done:
-		case <-time.After(10 * time.Second):
-			t.Fatal("timed out")
-		}
-		if !ft.Failed() {
-			t.Fatal("should have caught SUT/ref error mismatch on Verify")
-		}
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught SUT/ref error mismatch on Verify")
+			}
+		})
 	})
 }
 
@@ -182,7 +164,10 @@ func TestChainReplay(t *testing.T) {
 		_ = ref.Append(t.Context(), entry{ID: "1"})
 
 		rapid.Check(t, func(rt *rapid.T) {
-			a.Run(rt, sut, ref)
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
 		})
 	})
 
@@ -197,26 +182,16 @@ func TestChainReplay(t *testing.T) {
 			},
 		)
 
-		// Ref has an entry, SUT doesn't → content mismatch.
+		// Ref has an entry, SUT doesn't -> content mismatch.
 		sut := refchain.New[entry](nil)
 		ref := refchain.New[entry](nil)
 		_ = ref.Append(t.Context(), entry{ID: "1"})
 
-		ft := testkit.NewFailableTB().WithGoexit()
-		done := make(chan struct{})
-		go func() {
-			defer close(done)
-			rapid.Check(ft, func(rt *rapid.T) {
-				a.Run(rt, sut, ref)
-			})
-		}()
-		select {
-		case <-done:
-		case <-time.After(10 * time.Second):
-			t.Fatal("timed out")
-		}
-		if !ft.Failed() {
-			t.Fatal("should have caught SUT/ref replay content mismatch")
-		}
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught SUT/ref replay content mismatch")
+			}
+		})
 	})
 }

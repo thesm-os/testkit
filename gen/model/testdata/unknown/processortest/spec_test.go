@@ -4,12 +4,14 @@
 package processortest_test
 
 import (
+	"fmt"
 	"testing"
 
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/unknown"
 	"go.thesmos.sh/testkit/gen/model/testdata/unknown/processortest"
+	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 )
 
@@ -36,7 +38,7 @@ func TestInMemoryProcessorModel(t *testing.T) {
 			processortest.ProcessorModelReference(factory),
 			processortest.ProcessorModelExtraActions(
 				action.Unknown("Process",
-					func(rt *rapid.T, sut, ref unknown.Processor) {
+					func(rt *rapid.T, sut, ref unknown.Processor) model.ActionResult {
 						input := rapid.StringMatching(`[a-z]{1,5}`).Draw(rt, "input")
 						count := rapid.IntRange(0, 10).Draw(rt, "count")
 
@@ -44,11 +46,12 @@ func TestInMemoryProcessorModel(t *testing.T) {
 						refOut, refOK, refErr := ref.Process(rt.Context(), input, count)
 
 						if sutErr != refErr {
-							rt.Fatalf("Process: SUT err=%v, ref err=%v", sutErr, refErr)
+							return model.ActionResult{Err: fmt.Errorf("Process: SUT err=%v, ref err=%v", sutErr, refErr)}
 						}
 						if sutOut != refOut || sutOK != refOK {
-							rt.Fatalf("Process: SUT=(%q,%v), ref=(%q,%v)", sutOut, sutOK, refOut, refOK)
+							return model.ActionResult{Err: fmt.Errorf("Process: SUT=(%q,%v), ref=(%q,%v)", sutOut, sutOK, refOut, refOK)}
 						}
+						return model.ActionResult{}
 					},
 				),
 			),

@@ -7,11 +7,10 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"pgregory.net/rapid"
 
-	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 )
 
@@ -31,25 +30,6 @@ type simpleStore struct {
 
 var errBroken = errors.New("broken")
 
-// mustFail runs fn inside rapid.Check with a FailableTB and asserts it fails.
-func mustFail(t *testing.T, fn func(ft rapid.TB)) {
-	t.Helper()
-	ft := testkit.NewFailableTB().WithGoexit()
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		fn(ft)
-	}()
-	select {
-	case <-done:
-	case <-time.After(10 * time.Second):
-		t.Fatal("timed out")
-	}
-	if !ft.Failed() {
-		t.Fatal("expected failure but test passed")
-	}
-}
-
 func TestReader(t *testing.T) {
 	t.Parallel()
 
@@ -62,7 +42,12 @@ func TestReader(t *testing.T) {
 		)
 		sut := &simpleStore{getF: func(_ string) (string, error) { return "v", nil }}
 		ref := &simpleStore{getF: func(_ string) (string, error) { return "v", nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches value mismatch", func(t *testing.T) {
@@ -74,8 +59,11 @@ func TestReader(t *testing.T) {
 		)
 		sut := &simpleStore{getF: func(_ string) (string, error) { return "wrong", nil }}
 		ref := &simpleStore{getF: func(_ string) (string, error) { return "right", nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught value mismatch")
+			}
 		})
 	})
 
@@ -88,8 +76,11 @@ func TestReader(t *testing.T) {
 		)
 		sut := &simpleStore{getF: func(_ string) (string, error) { return "", errBroken }}
 		ref := &simpleStore{getF: func(_ string) (string, error) { return "v", nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -104,7 +95,12 @@ func TestWriter(t *testing.T) {
 		)
 		sut := &simpleStore{putF: func(_ string) error { return nil }}
 		ref := &simpleStore{putF: func(_ string) error { return nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches error mismatch", func(t *testing.T) {
@@ -114,8 +110,11 @@ func TestWriter(t *testing.T) {
 		)
 		sut := &simpleStore{putF: func(_ string) error { return errBroken }}
 		ref := &simpleStore{putF: func(_ string) error { return nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -130,7 +129,12 @@ func TestDeleter(t *testing.T) {
 		)
 		sut := &simpleStore{delF: func(_ string) error { return nil }}
 		ref := &simpleStore{delF: func(_ string) error { return nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches error mismatch", func(t *testing.T) {
@@ -140,8 +144,11 @@ func TestDeleter(t *testing.T) {
 		)
 		sut := &simpleStore{delF: func(_ string) error { return errBroken }}
 		ref := &simpleStore{delF: func(_ string) error { return nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -156,7 +163,12 @@ func TestAggregator(t *testing.T) {
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 5, nil }}
 		ref := &simpleStore{countF: func() (int, error) { return 5, nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches value mismatch", func(t *testing.T) {
@@ -166,8 +178,11 @@ func TestAggregator(t *testing.T) {
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 3, nil }}
 		ref := &simpleStore{countF: func() (int, error) { return 5, nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught value mismatch")
+			}
 		})
 	})
 
@@ -178,8 +193,11 @@ func TestAggregator(t *testing.T) {
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 0, errBroken }}
 		ref := &simpleStore{countF: func() (int, error) { return 0, nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -194,7 +212,12 @@ func TestLifecycle(t *testing.T) {
 		)
 		sut := &simpleStore{closeF: func() error { return nil }}
 		ref := &simpleStore{closeF: func() error { return nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches error mismatch", func(t *testing.T) {
@@ -204,8 +227,11 @@ func TestLifecycle(t *testing.T) {
 		)
 		sut := &simpleStore{closeF: func() error { return errBroken }}
 		ref := &simpleStore{closeF: func() error { return nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -218,7 +244,12 @@ func TestPure(t *testing.T) {
 		a := action.Pure("Describe", func(s *simpleStore) string { return s.descF() })
 		sut := &simpleStore{descF: func() string { return "hello" }}
 		ref := &simpleStore{descF: func() string { return "hello" }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches result mismatch", func(t *testing.T) {
@@ -226,8 +257,11 @@ func TestPure(t *testing.T) {
 		a := action.Pure("Describe", func(s *simpleStore) string { return s.descF() })
 		sut := &simpleStore{descF: func() string { return "wrong" }}
 		ref := &simpleStore{descF: func() string { return "right" }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught result mismatch")
+			}
 		})
 	})
 }
@@ -240,7 +274,12 @@ func TestPredicate(t *testing.T) {
 		a := action.Predicate("IsEmpty", func(s *simpleStore) bool { return s.emptyF() })
 		sut := &simpleStore{emptyF: func() bool { return true }}
 		ref := &simpleStore{emptyF: func() bool { return true }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches bool mismatch", func(t *testing.T) {
@@ -248,8 +287,11 @@ func TestPredicate(t *testing.T) {
 		a := action.Predicate("IsEmpty", func(s *simpleStore) bool { return s.emptyF() })
 		sut := &simpleStore{emptyF: func() bool { return false }}
 		ref := &simpleStore{emptyF: func() bool { return true }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught bool mismatch")
+			}
 		})
 	})
 }
@@ -264,7 +306,12 @@ func TestStream(t *testing.T) {
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"a", "b"}, nil }}
 		ref := &simpleStore{listF: func() ([]string, error) { return []string{"a", "b"}, nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("order insensitive", func(t *testing.T) {
@@ -274,7 +321,12 @@ func TestStream(t *testing.T) {
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"b", "a"}, nil }}
 		ref := &simpleStore{listF: func() ([]string, error) { return []string{"a", "b"}, nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches item mismatch", func(t *testing.T) {
@@ -284,8 +336,11 @@ func TestStream(t *testing.T) {
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"x"}, nil }}
 		ref := &simpleStore{listF: func() ([]string, error) { return []string{"y"}, nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught item mismatch")
+			}
 		})
 	})
 
@@ -296,8 +351,11 @@ func TestStream(t *testing.T) {
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return nil, errBroken }}
 		ref := &simpleStore{listF: func() ([]string, error) { return []string{"a"}, nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -310,7 +368,12 @@ func TestPoisonCheck(t *testing.T) {
 		a := action.PoisonCheck("Err", func(s *simpleStore) error { return s.errF() })
 		sut := &simpleStore{errF: func() error { return nil }}
 		ref := &simpleStore{errF: func() error { return nil }}
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches error mismatch", func(t *testing.T) {
@@ -318,8 +381,11 @@ func TestPoisonCheck(t *testing.T) {
 		a := action.PoisonCheck("Err", func(s *simpleStore) error { return s.errF() })
 		sut := &simpleStore{errF: func() error { return errBroken }}
 		ref := &simpleStore{errF: func() error { return nil }}
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, sut, ref) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught error mismatch")
+			}
 		})
 	})
 }
@@ -367,13 +433,16 @@ func TestReaderWithBool(t *testing.T) {
 		a := action.ReaderWithBool("Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, bool) { return "v", true },
 		)
-		rapid.Check(t, func(rt *rapid.T) { a.Run(rt, &simpleStore{}, &simpleStore{}) })
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, &simpleStore{}, &simpleStore{})
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
 	})
 
 	t.Run("catches ok flag mismatch", func(t *testing.T) {
 		t.Parallel()
-		aSut := &simpleStore{emptyF: func() bool { return true }} // use as marker
-		aRef := &simpleStore{}
 		a := action.ReaderWithBool("Get", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) (string, bool) {
 				if s.emptyF != nil {
@@ -382,8 +451,37 @@ func TestReaderWithBool(t *testing.T) {
 				return "v", true // ref returns found
 			},
 		)
-		mustFail(t, func(ft rapid.TB) {
-			rapid.Check(ft, func(rt *rapid.T) { a.Run(rt, aSut, aRef) })
+		sut := &simpleStore{emptyF: func() bool { return true }} // marker
+		ref := &simpleStore{}
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should have caught ok flag mismatch")
+			}
 		})
+	})
+}
+
+func TestActionKind(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Reader sets FailureSemantic", func(t *testing.T) {
+		t.Parallel()
+		a := action.Reader("Get", rapid.Just("k"),
+			func(_ context.Context, _ *simpleStore, _ string) (string, error) { return "", nil },
+		)
+		if a.Kind != model.FailureSemantic {
+			t.Fatalf("expected FailureSemantic, got %v", a.Kind)
+		}
+	})
+
+	t.Run("ChainAppend sets FailureStructural", func(t *testing.T) {
+		t.Parallel()
+		a := action.ChainAppend("Append", rapid.Just("entry"),
+			func(_ context.Context, _ *simpleStore, _ string) error { return nil },
+		)
+		if a.Kind != model.FailureStructural {
+			t.Fatalf("expected FailureStructural, got %v", a.Kind)
+		}
 	})
 }

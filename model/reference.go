@@ -40,8 +40,9 @@ type Triple[A, B, C any] struct {
 func LiftA[A, B any](a Action[A]) Action[Pair[A, B]] {
 	return Action[Pair[A, B]]{
 		Name: "A." + a.Name,
-		Run: func(rt *rapid.T, sut, ref Pair[A, B]) {
-			a.Run(rt, sut.A, ref.A)
+		Kind: a.Kind,
+		Run: func(rt *rapid.T, sut, ref Pair[A, B]) ActionResult {
+			return a.Run(rt, sut.A, ref.A)
 		},
 	}
 }
@@ -51,8 +52,9 @@ func LiftA[A, B any](a Action[A]) Action[Pair[A, B]] {
 func LiftB[A, B any](b Action[B]) Action[Pair[A, B]] {
 	return Action[Pair[A, B]]{
 		Name: "B." + b.Name,
-		Run: func(rt *rapid.T, sut, ref Pair[A, B]) {
-			b.Run(rt, sut.B, ref.B)
+		Kind: b.Kind,
+		Run: func(rt *rapid.T, sut, ref Pair[A, B]) ActionResult {
+			return b.Run(rt, sut.B, ref.B)
 		},
 	}
 }
@@ -61,8 +63,9 @@ func LiftB[A, B any](b Action[B]) Action[Pair[A, B]] {
 func LiftTripleA[A, B, C any](a Action[A]) Action[Triple[A, B, C]] {
 	return Action[Triple[A, B, C]]{
 		Name: "A." + a.Name,
-		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) {
-			a.Run(rt, sut.A, ref.A)
+		Kind: a.Kind,
+		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) ActionResult {
+			return a.Run(rt, sut.A, ref.A)
 		},
 	}
 }
@@ -71,8 +74,9 @@ func LiftTripleA[A, B, C any](a Action[A]) Action[Triple[A, B, C]] {
 func LiftTripleB[A, B, C any](b Action[B]) Action[Triple[A, B, C]] {
 	return Action[Triple[A, B, C]]{
 		Name: "B." + b.Name,
-		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) {
-			b.Run(rt, sut.B, ref.B)
+		Kind: b.Kind,
+		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) ActionResult {
+			return b.Run(rt, sut.B, ref.B)
 		},
 	}
 }
@@ -81,8 +85,9 @@ func LiftTripleB[A, B, C any](b Action[B]) Action[Triple[A, B, C]] {
 func LiftTripleC[A, B, C any](c Action[C]) Action[Triple[A, B, C]] {
 	return Action[Triple[A, B, C]]{
 		Name: "C." + c.Name,
-		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) {
-			c.Run(rt, sut.C, ref.C)
+		Kind: c.Kind,
+		Run: func(rt *rapid.T, sut, ref Triple[A, B, C]) ActionResult {
+			return c.Run(rt, sut.C, ref.C)
 		},
 	}
 }

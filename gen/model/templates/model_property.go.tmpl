@@ -46,6 +46,15 @@ func {{.InterfaceName | toLower}}ModelProperty(
 {{- if .HasChain}}
 	modelOpts = append(modelOpts, model.WithHistoryReset[{{.QualifiedType}}](attemptedAppends.Reset))
 {{- end}}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[{{.QualifiedType}}]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[{{.QualifiedType}}]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[{{.QualifiedType}}](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 {{end}}

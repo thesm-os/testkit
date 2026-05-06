@@ -4,6 +4,7 @@
 package model
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
@@ -12,13 +13,14 @@ import (
 	"go.thesmos.sh/testkit/model/law"
 )
 
-// Registry holds a set of [law.Law] instances for an interface T.
-// The generator populates it with auto-derived laws; consumers add
-// custom laws and skip auto-derived ones by ID.
+// Registry holds a set of [law.Law] and [law.FinalLaw] instances for
+// an interface T. The generator populates it with auto-derived laws;
+// consumers add custom laws and skip auto-derived ones by ID.
 type Registry[T any] struct {
-	laws  []law.Law[T]
-	ran   map[string]int // ID → times Check ran
-	fired map[string]int // ID → times Check returned non-nil (violations)
+	laws      []law.Law[T]
+	finalLaws []law.FinalLaw[T]
+	ran       map[string]int // ID → times Check ran
+	fired     map[string]int // ID → times Check returned non-nil (violations)
 }
 
 // NewRegistry creates an empty [Registry].
@@ -29,24 +31,45 @@ func NewRegistry[T any]() *Registry[T] {
 	}
 }
 
-// Add appends a law to the registry.
-func (r *Registry[T]) Add(l law.Law[T]) {
-	r.laws = append(r.laws, l)
+// Add appends a law to the registry. The argument must implement
+// [law.Law], [law.FinalLaw], or both. Panics if it satisfies neither.
+func (r *Registry[T]) Add(l any) {
+	matched := false
+	if regular, ok := l.(law.Law[T]); ok {
+		r.laws = append(r.laws, regular)
+		matched = true
+	}
+	if final, ok := l.(law.FinalLaw[T]); ok {
+		r.finalLaws = append(r.finalLaws, final)
+		matched = true
+	}
+	if !matched {
+		panic(fmt.Sprintf("model.Registry.Add: argument %T does not implement law.Law or law.FinalLaw", l))
+	}
 }
 
-// SkipByID removes the law with the given ID. Returns true if a law
-// was removed, false if no law matched (indicating a likely typo).
+// SkipByID removes the law with the given ID from both regular and
+// final law lists. Returns true if a law was removed.
 func (r *Registry[T]) SkipByID(id string) bool {
-	before := len(r.laws)
+	beforeReg := len(r.laws)
 	r.laws = slices.DeleteFunc(r.laws, func(l law.Law[T]) bool {
 		return l.ID() == id
 	})
-	return len(r.laws) < before
+	beforeFinal := len(r.finalLaws)
+	r.finalLaws = slices.DeleteFunc(r.finalLaws, func(l law.FinalLaw[T]) bool {
+		return l.ID() == id
+	})
+	return len(r.laws) < beforeReg || len(r.finalLaws) < beforeFinal
 }
 
 // Laws returns a defensive copy of all registered laws.
 func (r *Registry[T]) Laws() []law.Law[T] {
 	return slices.Clone(r.laws)
+}
+
+// FinalLaws returns a defensive copy of all registered final laws.
+func (r *Registry[T]) FinalLaws() []law.FinalLaw[T] {
+	return slices.Clone(r.finalLaws)
 }
 
 // CheckAll runs every registered law. Returns the first error.

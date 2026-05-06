@@ -11,6 +11,7 @@ import (
 
 	"go.thesmos.sh/testkit/gen/model/testdata/allshapes"
 	"go.thesmos.sh/testkit/gen/model/testdata/allshapes/servicetest"
+	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
 )
@@ -38,12 +39,13 @@ func TestInMemoryServiceModel(t *testing.T) {
 			servicetest.ServiceModelReference(factory),
 			servicetest.ServiceModelExtraActions(
 				action.Unknown("GetAndCheck",
-					func(rt *rapid.T, sut, ref allshapes.Service) {
+					func(rt *rapid.T, sut, ref allshapes.Service) model.ActionResult {
 						key := rapid.SampledFrom([]string{"a", "b", "c"}).Draw(rt, "key")
 						_, err := sut.Get(rt.Context(), key)
 						if err != nil && err != allshapes.ErrNotFound {
-							rt.Fatalf("unexpected error: %v", err)
+							return model.ActionResult{Err: fmt.Errorf("unexpected error: %v", err)}
 						}
+						return model.ActionResult{}
 					},
 				),
 			),

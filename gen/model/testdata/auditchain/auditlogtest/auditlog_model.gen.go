@@ -26,7 +26,7 @@ import (
 //	CRUD:          no
 //	Key field:     none
 //	Ref:           supply via AuditLogModelReference (Verify not in MapStore)
-//	Auto-laws:     AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC
+//	Auto-laws:     AUTO-STREAM-REENTRANT, AUTO-APPEND-ONLY-GROWS, AUTO-HASH-CHAIN-INTEGRITY, AUTO-APPEND-ONLY-NO-DROPS, AUTO-REPLAY-DETERMINISTIC
 //	Chain:         appends, replays (Replay), verifies (Verify)
 //	Skipped:       none
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
@@ -37,6 +37,14 @@ func AssertAuditLogModel(
 	opts ...AuditLogModelOption,
 ) {
 	t.Helper()
+	cfg := newAuditLogModelConfig(opts...)
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, auditlogModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, auditlogModelProperty(sutFactory, opts...))
 }
 
@@ -128,6 +136,15 @@ func auditlogModelProperty(
 		model.WithLaws(laws),
 	}
 	modelOpts = append(modelOpts, model.WithHistoryReset[auditchain.AuditLog](attemptedAppends.Reset))
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[auditchain.AuditLog]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[auditchain.AuditLog]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[auditchain.AuditLog](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -160,12 +177,37 @@ func AuditLogModelSkipLaw(id string) AuditLogModelOption {
 	return func(c *auditlogModelConfig) { c.skipLaws = append(c.skipLaws, id) }
 }
 
+// AuditLogModelWithoutTrace disables per-action trace recording.
+func AuditLogModelWithoutTrace() AuditLogModelOption {
+	return func(c *auditlogModelConfig) { c.disableTrace = true }
+}
+
+// AuditLogModelSkipFinalLaws disables iteration-end law checks.
+func AuditLogModelSkipFinalLaws() AuditLogModelOption {
+	return func(c *auditlogModelConfig) { c.skipFinalLaws = true }
+}
+
+// AuditLogModelArtifactDir overrides the directory for failure artifacts.
+func AuditLogModelArtifactDir(dir string) AuditLogModelOption {
+	return func(c *auditlogModelConfig) { c.artifactDir = dir }
+}
+
+// AuditLogModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func AuditLogModelGoroutineLeakCheck() AuditLogModelOption {
+	return func(c *auditlogModelConfig) { c.leakCheck = true }
+}
+
 type auditlogModelConfig struct {
-	refFactory   func() auditchain.AuditLog
-	actions      []model.Action[auditchain.AuditLog]
-	extraActions []model.Action[auditchain.AuditLog]
-	laws         []law.Law[auditchain.AuditLog]
-	skipLaws     []string
+	refFactory    func() auditchain.AuditLog
+	actions       []model.Action[auditchain.AuditLog]
+	extraActions  []model.Action[auditchain.AuditLog]
+	laws          []law.Law[auditchain.AuditLog]
+	skipLaws      []string
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newAuditLogModelConfig(opts ...AuditLogModelOption) auditlogModelConfig {

@@ -40,6 +40,13 @@ func AssertProcessorModel(
 		model.Assert(t, sutFactory, model.WithConcurrent(*cfg.concurrent))
 		return
 	}
+	if cfg.leakCheck {
+		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
+		model.CheckGoroutineLeaks(t, artifactDir, func() {
+			rapid.Check(t, processorModelProperty(sutFactory, opts...))
+		})
+		return
+	}
 	rapid.Check(t, processorModelProperty(sutFactory, opts...))
 }
 
@@ -144,6 +151,15 @@ func processorModelProperty(
 		model.WithActions(actions...),
 		model.WithLaws(laws),
 	}
+	if cfg.disableTrace {
+		modelOpts = append(modelOpts, model.WithoutTrace[unknown.Processor]())
+	}
+	if cfg.skipFinalLaws {
+		modelOpts = append(modelOpts, model.WithSkipFinalLaws[unknown.Processor]())
+	}
+	if cfg.artifactDir != "" {
+		modelOpts = append(modelOpts, model.WithArtifactDir[unknown.Processor](cfg.artifactDir))
+	}
 	return model.Property(sutFactory, modelOpts...)
 }
 
@@ -205,13 +221,38 @@ func ProcessorModelConcurrent(workers, opsPerWorker int) ProcessorModelOption {
 	}
 }
 
+// ProcessorModelWithoutTrace disables per-action trace recording.
+func ProcessorModelWithoutTrace() ProcessorModelOption {
+	return func(c *processorModelConfig) { c.disableTrace = true }
+}
+
+// ProcessorModelSkipFinalLaws disables iteration-end law checks.
+func ProcessorModelSkipFinalLaws() ProcessorModelOption {
+	return func(c *processorModelConfig) { c.skipFinalLaws = true }
+}
+
+// ProcessorModelArtifactDir overrides the directory for failure artifacts.
+func ProcessorModelArtifactDir(dir string) ProcessorModelOption {
+	return func(c *processorModelConfig) { c.artifactDir = dir }
+}
+
+// ProcessorModelGoroutineLeakCheck enables goroutine leak detection
+// at iteration end via stack-based ID diffing.
+func ProcessorModelGoroutineLeakCheck() ProcessorModelOption {
+	return func(c *processorModelConfig) { c.leakCheck = true }
+}
+
 type processorModelConfig struct {
-	refFactory   func() unknown.Processor
-	actions      []model.Action[unknown.Processor]
-	extraActions []model.Action[unknown.Processor]
-	laws         []law.Law[unknown.Processor]
-	skipLaws     []string
-	concurrent   *model.ConcurrentConfig[unknown.Processor]
+	refFactory    func() unknown.Processor
+	actions       []model.Action[unknown.Processor]
+	extraActions  []model.Action[unknown.Processor]
+	laws          []law.Law[unknown.Processor]
+	skipLaws      []string
+	concurrent    *model.ConcurrentConfig[unknown.Processor]
+	disableTrace  bool
+	skipFinalLaws bool
+	artifactDir   string
+	leakCheck     bool
 }
 
 func newProcessorModelConfig(opts ...ProcessorModelOption) processorModelConfig {
