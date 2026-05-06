@@ -5,11 +5,14 @@ package action_test
 
 import (
 	"context"
+	"errors"
 	"iter"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/history"
 	"go.thesmos.sh/testkit/model/refchain"
@@ -26,69 +29,194 @@ type chainIface interface {
 	Verify(context.Context) error
 }
 
+// brokenChain always errors on Append and Verify.
+type brokenChain struct {
+	inner *refchain.AppendOnly[entry]
+}
+
+func (b *brokenChain) Append(_ context.Context, _ entry) error {
+	return errors.New("injected error")
+}
+
+func (b *brokenChain) Replay(ctx context.Context) iter.Seq2[entry, error] {
+	return b.inner.Replay(ctx)
+}
+
+func (b *brokenChain) Verify(_ context.Context) error {
+	return errors.New("injected verify error")
+}
+
 func TestChainAppendRecording(t *testing.T) {
 	t.Parallel()
-	hist := history.New[struct{}, entry]()
-	entryGen := rapid.Just(entry{ID: "test", Data: "data"})
 
-	a := action.ChainAppendRecording(
-		"Append", entryGen, hist,
-		func(_ entry) struct{} { return struct{}{} },
-		func(ctx context.Context, impl chainIface, e entry) error {
-			return impl.Append(ctx, e)
-		},
-	)
+	t.Run("records successful appends to history", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		entryGen := rapid.Just(entry{ID: "test", Data: "data"})
 
-	sut := refchain.New[entry](nil)
-	ref := refchain.New[entry](nil)
+		a := action.ChainAppendRecording(
+			"Append", entryGen, hist,
+			func(_ entry) struct{} { return struct{}{} },
+			func(ctx context.Context, impl chainIface, e entry) error {
+				return impl.Append(ctx, e)
+			},
+		)
 
-	rapid.Check(t, func(rt *rapid.T) {
-		a.Run(rt, sut, ref)
+		sut := refchain.New[entry](nil)
+		ref := refchain.New[entry](nil)
+
+		rapid.Check(t, func(rt *rapid.T) {
+			a.Run(rt, sut, ref)
+		})
+
+		if hist.TotalLen() == 0 {
+			t.Fatal("history should have recorded appends")
+		}
 	})
 
-	if hist.TotalLen() == 0 {
-		t.Fatal("history should have recorded appends")
-	}
+	t.Run("catches SUT/ref error mismatch", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		entryGen := rapid.Just(entry{ID: "mismatch", Data: "data"})
+
+		a := action.ChainAppendRecording(
+			"Append", entryGen, hist,
+			func(_ entry) struct{} { return struct{}{} },
+			func(ctx context.Context, impl chainIface, e entry) error {
+				return impl.Append(ctx, e)
+			},
+		)
+
+		// SUT errors on Append, ref succeeds → mismatch.
+		sut := &brokenChain{inner: refchain.New[entry](nil)}
+		ref := refchain.New[entry](nil)
+
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			rapid.Check(ft, func(rt *rapid.T) {
+				a.Run(rt, sut, ref)
+			})
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out")
+		}
+		if !ft.Failed() {
+			t.Fatal("should have caught SUT/ref error mismatch on Append")
+		}
+	})
 }
 
 func TestChainVerify(t *testing.T) {
 	t.Parallel()
 
-	a := action.ChainVerify("Verify",
-		func(ctx context.Context, impl chainIface) error {
-			return impl.Verify(ctx)
-		},
-	)
+	t.Run("both valid chains pass", func(t *testing.T) {
+		t.Parallel()
+		a := action.ChainVerify("Verify",
+			func(ctx context.Context, impl chainIface) error {
+				return impl.Verify(ctx)
+			},
+		)
 
-	sut := refchain.New[entry](nil)
-	ref := refchain.New[entry](nil)
-	_ = sut.Append(t.Context(), entry{ID: "1"})
-	_ = ref.Append(t.Context(), entry{ID: "1"})
+		sut := refchain.New[entry](nil)
+		ref := refchain.New[entry](nil)
+		_ = sut.Append(t.Context(), entry{ID: "1"})
+		_ = ref.Append(t.Context(), entry{ID: "1"})
 
-	rapid.Check(t, func(rt *rapid.T) {
-		a.Run(rt, sut, ref)
-		// Should not fatal — both chains are valid.
+		rapid.Check(t, func(rt *rapid.T) {
+			a.Run(rt, sut, ref)
+		})
+	})
+
+	t.Run("catches SUT/ref error mismatch", func(t *testing.T) {
+		t.Parallel()
+		a := action.ChainVerify("Verify",
+			func(ctx context.Context, impl chainIface) error {
+				return impl.Verify(ctx)
+			},
+		)
+
+		// SUT errors on Verify, ref succeeds → mismatch.
+		sut := &brokenChain{inner: refchain.New[entry](nil)}
+		ref := refchain.New[entry](nil)
+
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			rapid.Check(ft, func(rt *rapid.T) {
+				a.Run(rt, sut, ref)
+			})
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out")
+		}
+		if !ft.Failed() {
+			t.Fatal("should have caught SUT/ref error mismatch on Verify")
+		}
 	})
 }
 
 func TestChainReplay(t *testing.T) {
 	t.Parallel()
-	hist := history.New[struct{}, entry]()
-	hist.Record(struct{}{}, entry{ID: "1"})
 
-	a := action.ChainReplay("Replay", hist,
-		func(ctx context.Context, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
-			return impl.Replay(ctx)
-		},
-	)
+	t.Run("identical chains replay identically", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		hist.Record(struct{}{}, entry{ID: "1"})
 
-	sut := refchain.New[entry](nil)
-	ref := refchain.New[entry](nil)
-	_ = sut.Append(t.Context(), entry{ID: "1"})
-	_ = ref.Append(t.Context(), entry{ID: "1"})
+		a := action.ChainReplay("Replay", hist,
+			func(ctx context.Context, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
+				return impl.Replay(ctx)
+			},
+		)
 
-	rapid.Check(t, func(rt *rapid.T) {
-		a.Run(rt, sut, ref)
-		// Should not fatal — both chains replay identically.
+		sut := refchain.New[entry](nil)
+		ref := refchain.New[entry](nil)
+		_ = sut.Append(t.Context(), entry{ID: "1"})
+		_ = ref.Append(t.Context(), entry{ID: "1"})
+
+		rapid.Check(t, func(rt *rapid.T) {
+			a.Run(rt, sut, ref)
+		})
+	})
+
+	t.Run("catches SUT/ref replay content mismatch", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[struct{}, entry]()
+		hist.Record(struct{}{}, entry{ID: "1"})
+
+		a := action.ChainReplay("Replay", hist,
+			func(ctx context.Context, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
+				return impl.Replay(ctx)
+			},
+		)
+
+		// Ref has an entry, SUT doesn't → content mismatch.
+		sut := refchain.New[entry](nil)
+		ref := refchain.New[entry](nil)
+		_ = ref.Append(t.Context(), entry{ID: "1"})
+
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			rapid.Check(ft, func(rt *rapid.T) {
+				a.Run(rt, sut, ref)
+			})
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			t.Fatal("timed out")
+		}
+		if !ft.Failed() {
+			t.Fatal("should have caught SUT/ref replay content mismatch")
+		}
 	})
 }

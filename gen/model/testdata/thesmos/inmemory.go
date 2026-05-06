@@ -6,8 +6,11 @@ package thesmos
 import (
 	"context"
 	"errors"
+	"iter"
 	"sort"
 	"sync"
+
+	"go.thesmos.sh/testkit/model/refchain"
 )
 
 // ErrAlreadyRegistered is returned when registering a duplicate kind.
@@ -96,6 +99,39 @@ func (s *InMemoryState) Has(key StateKey) bool {
 	defer s.mu.Unlock()
 	_, ok := s.data[key]
 	return ok
+}
+
+// --- Ledger ---
+
+// InMemoryLedger implements [Ledger] backed by refchain.PartitionedAppendOnly.
+type InMemoryLedger struct {
+	chain *refchain.PartitionedAppendOnly[string, LedgerEntry]
+}
+
+// NewInMemoryLedger returns a ready-to-use Ledger.
+func NewInMemoryLedger() *InMemoryLedger {
+	return &InMemoryLedger{
+		chain: refchain.NewPartitioned(
+			func(e LedgerEntry) string { return e.RunID },
+			nil,
+		),
+	}
+}
+
+func (l *InMemoryLedger) Append(ctx context.Context, entry LedgerEntry) error {
+	return l.chain.Append(ctx, entry)
+}
+
+func (l *InMemoryLedger) Verify(ctx context.Context) error {
+	return l.chain.Verify(ctx)
+}
+
+func (l *InMemoryLedger) Replay(ctx context.Context, runID string) iter.Seq2[LedgerEntry, error] {
+	return l.chain.Replay(ctx, runID)
+}
+
+func (l *InMemoryLedger) Err() error {
+	return l.chain.Err()
 }
 
 // --- Scheduler ---

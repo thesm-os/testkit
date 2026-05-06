@@ -30,7 +30,7 @@ func drain[Entry any](seq iter.Seq2[Entry, error]) ([]Entry, error) {
 // of the prior replay per partition. No entries may be deleted or modified.
 //
 // Implements [StatefulLaw] — tracks prior snapshots across actions.
-type AppendOnlyHistoryGrows[T any, K comparable, Entry comparable] struct {
+type AppendOnlyHistoryGrows[T any, K comparable, Entry any] struct {
 	Replay     func(rt *rapid.T, impl T, partKey K) iter.Seq2[Entry, error]
 	Partitions func() []K
 	prior      map[K][]Entry
@@ -79,7 +79,7 @@ func (l *AppendOnlyHistoryGrows[T, K, Entry]) CheckWithStep(rt *rapid.T, sut, _ 
 // Catches silent drops that pure replay comparison cannot detect
 // (SUT owns the read surface). Chains with idempotent retry / dedup
 // semantics will not false-positive — presence is checked, not count.
-type AppendOnlyNoDrops[T any, K comparable, Entry comparable] struct {
+type AppendOnlyNoDrops[T any, K comparable, Entry any] struct {
 	Replay  func(rt *rapid.T, impl T, partKey K) iter.Seq2[Entry, error]
 	History *history.History[K, Entry]
 }
@@ -172,7 +172,7 @@ func (l HashChainIntegrityViaErr[T]) Check(_ *rapid.T, sut, ref T) error {
 
 // ReplayDeterminism checks that two consecutive Replay calls on the
 // same chain state return identical sequences per partition.
-type ReplayDeterminism[T any, K comparable, Entry comparable] struct {
+type ReplayDeterminism[T any, K comparable, Entry any] struct {
 	Replay     func(rt *rapid.T, impl T, partKey K) iter.Seq2[Entry, error]
 	Partitions func() []K
 }

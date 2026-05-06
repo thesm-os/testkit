@@ -6,8 +6,8 @@ func {{.InterfaceName | toLower}}ModelProperty(
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
 
 	{{template "model_generators" .}}
-	{{template "model_ref" .}}
 	{{template "model_chain_setup" .}}
+	{{template "model_ref" .}}
 	{{template "model_actions" .}}
 	{{template "model_laws" .}}
 

@@ -18,7 +18,10 @@
 // returns, and request-struct mutators are not yet covered.
 package thesmos
 
-import "context"
+import (
+	"context"
+	"iter"
+)
 
 // --- KindRegistry ---
 
@@ -59,9 +62,9 @@ type StateKey string
 
 // StateEntry holds a value with metadata.
 type StateEntry struct {
-	Value    []byte
-	TurnID   int
-	Region   string
+	Value  []byte
+	TurnID int
+	Region string
 }
 
 // State mirrors thesmos's state.State.
@@ -88,7 +91,7 @@ type VertexID string
 type VertexState int
 
 const (
-	VertexPending  VertexState = iota
+	VertexPending VertexState = iota
 	VertexReady
 	VertexComplete
 )
@@ -115,6 +118,37 @@ type Scheduler interface {
 	Ready(req ReadyRequest) ReadySet
 }
 
+// --- Ledger ---
+
+//go:generate testkit model -o ledgertest/ledger_model.gen.go Ledger
+
+// LedgerEntry is a per-RunID partitioned log entry.
+type LedgerEntry struct {
+	RunID string
+	Seq   int
+	Kind  string
+	Data  []byte
+}
+
+// Ledger is a production-shaped per-RunID partitioned chain.
+// Simplified from the real thesmos Ledger — omits FenceToken,
+// batch AppendRequest, Head/Count/DeleteRange. Exercises the
+// core chain shape: partitioned append + replay + verify + poison.
+type Ledger interface {
+	//testkit:appends
+	Append(ctx context.Context, entry LedgerEntry) error
+
+	//testkit:verifies
+	Verify(ctx context.Context) error
+
+	//testkit:replays
+	//testkit:partition-by RunID
+	Replay(ctx context.Context, runID string) iter.Seq2[LedgerEntry, error]
+
+	// Err is PoisonAccessor — chain integrity also checked via Verify.
+	Err() error
+}
+
 // --- Machine ---
 
 //go:generate testkit model -o machinetest/machine_model.gen.go Machine
@@ -127,7 +161,7 @@ type Patch struct {
 
 // MachineState is a read-only snapshot.
 type MachineState struct {
-	Seq       int
+	Seq        int
 	PatchCount int
 }
 

@@ -60,6 +60,10 @@ func auditlogModelProperty(
 	// Generators — local to this function, not package-level.
 	valGen := rapid.Make[auditchain.Entry]()
 
+	// Chain history — tracks attempted appends for dropped-write detection.
+	attemptedAppends := chainhistory.New[struct{}, auditchain.Entry]()
+	chainPartKeyOf := func(_ auditchain.Entry) struct{} { return struct{}{} }
+
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
 	if refFactory == nil {
@@ -67,10 +71,6 @@ func auditlogModelProperty(
 			return refchain.New[auditchain.Entry](nil)
 		}
 	}
-
-	// Chain history — tracks attempted appends for dropped-write detection.
-	attemptedAppends := chainhistory.New[struct{}, auditchain.Entry]()
-	chainPartKeyOf := func(_ auditchain.Entry) struct{} { return struct{}{} }
 
 	// Actions: consumer-supplied or auto-derived.
 	actions := cfg.actions

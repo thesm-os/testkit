@@ -7,6 +7,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"sync/atomic"
 )
 
 // --- Broken KindRegistry: Lookup returns wrong spec ---
@@ -47,6 +48,26 @@ func (s *BrokenGetState) Get(key StateKey) (StateEntry, bool) {
 		entry.TurnID = -999
 	}
 	return entry, ok
+}
+
+// --- Broken Ledger: silently drops every 3rd entry ---
+
+type BrokenLedger struct {
+	InMemoryLedger
+	count atomic.Int64
+}
+
+func NewBrokenLedger() *BrokenLedger {
+	return &BrokenLedger{InMemoryLedger: *NewInMemoryLedger()}
+}
+
+func (l *BrokenLedger) Append(ctx context.Context, entry LedgerEntry) error {
+	n := l.count.Add(1)
+	if n%3 == 0 {
+		// BUG: silently drops every 3rd entry
+		return nil
+	}
+	return l.InMemoryLedger.Append(ctx, entry)
 }
 
 // --- Broken Scheduler: ignores one dependency ---

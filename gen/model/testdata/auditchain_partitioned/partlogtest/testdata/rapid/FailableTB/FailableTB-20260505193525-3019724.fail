@@ -1,0 +1,13 @@
+# 2026/05/05 19:35:25.569964 [FailableTB] [rapid] draw action: "Append"
+# 2026/05/05 19:35:25.569972 [FailableTB] [rapid] draw Append_entry: auditchain_partitioned.Entry{Tenant:"", Seq:0, Data:""}
+# 2026/05/05 19:35:25.570003 [FailableTB] [invariant] AUTO-APPEND-ONLY-NO-DROPS at step 1: AppendOnlyNoDrops[]: attempted append { 0 } missing from replay
+# 
+v0.4.8#306334331832178140
+0x1084210842108
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

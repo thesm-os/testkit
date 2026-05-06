@@ -324,6 +324,50 @@ func TestGenerate(t *testing.T) {
 		testkit.Equal(t, string(result.Files[0].Content), string(want), "generic alias model must match golden")
 	})
 
+	t.Run("rejects mutator chain without poison or verify", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "chainvalidation")
+		g := &model.Generator{}
+		_, err := g.Generate(pkg, []string{"MutatorChainNoPoison"}, gen.DefaultConfig(), gen.Options{
+			Output: "out/mutator_chain.gen.go",
+		})
+		testkit.Assert(t, err).IsNotNil("must reject mutator chain without poison surface")
+		testkit.Assert(t, err.Error()).Contains("requires either", "must explain missing Verify/Err")
+	})
+
+	t.Run("rejects depends-on without entry-id", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "chainvalidation")
+		g := &model.Generator{}
+		_, err := g.Generate(pkg, []string{"DepsWithoutEntryID"}, gen.DefaultConfig(), gen.Options{
+			Output: "out/deps_no_id.gen.go",
+		})
+		testkit.Assert(t, err).IsNotNil("must reject depends-on without entry-id")
+		testkit.Assert(t, err.Error()).Contains("must both be present", "must explain entry-id/depends-on pairing")
+	})
+
+	t.Run("rejects partition-by without replays", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "chainvalidation")
+		g := &model.Generator{}
+		_, err := g.Generate(pkg, []string{"PartitionWithoutReplay"}, gen.DefaultConfig(), gen.Options{
+			Output: "out/partition_no_replay.gen.go",
+		})
+		testkit.Assert(t, err).IsNotNil("must reject partition-by without replays")
+		testkit.Assert(t, err.Error()).Contains("requires a method with //testkit:replays", "must explain missing replays")
+	})
+
+	t.Run("rejects causal ordering without replays", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "chainvalidation")
+		g := &model.Generator{}
+		_, err := g.Generate(pkg, []string{"CausalWithoutReplay"}, gen.DefaultConfig(), gen.Options{
+			Output: "out/causal_no_replay.gen.go",
+		})
+		testkit.Assert(t, err).IsNotNil("must reject causal ordering without replays")
+		testkit.Assert(t, err.Error()).Contains("require a method with //testkit:replays", "must explain missing replays")
+	})
+
 	t.Run("golden/generic-parameterized", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadTestPackage(t, "generic")
