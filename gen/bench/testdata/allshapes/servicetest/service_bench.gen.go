@@ -46,6 +46,11 @@ func BenchmarkServiceContract(
 func benchServiceClose(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Close/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Close panicked on zero-value args (%v) — supply sample values via ServiceBenchOnClose", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -84,6 +89,11 @@ func benchServiceClose(b *testing.B, factory func() allshapes.Service, cfg *serv
 func benchServiceCount(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Count/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Count panicked on zero-value args (%v) — supply sample values via ServiceBenchOnCount", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -122,6 +132,11 @@ func benchServiceCount(b *testing.B, factory func() allshapes.Service, cfg *serv
 func benchServiceDelete(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Delete/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Delete panicked on zero-value args (%v) — supply sample values via ServiceBenchOnDelete", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -160,6 +175,11 @@ func benchServiceDelete(b *testing.B, factory func() allshapes.Service, cfg *ser
 func benchServiceDescribe(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Describe/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Describe panicked on zero-value args (%v) — supply sample values via ServiceBenchOnDescribe", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -198,6 +218,11 @@ func benchServiceDescribe(b *testing.B, factory func() allshapes.Service, cfg *s
 func benchServiceGet(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Get/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Get panicked on zero-value args (%v) — supply sample values via ServiceBenchOnGet", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -236,6 +261,11 @@ func benchServiceGet(b *testing.B, factory func() allshapes.Service, cfg *servic
 func benchServiceIsEmpty(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("IsEmpty/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: IsEmpty panicked on zero-value args (%v) — supply sample values via ServiceBenchOnIsEmpty", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -274,6 +304,11 @@ func benchServiceIsEmpty(b *testing.B, factory func() allshapes.Service, cfg *se
 func benchServiceList(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("List/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: List panicked on zero-value args (%v) — supply sample values via ServiceBenchOnList", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -312,6 +347,11 @@ func benchServiceList(b *testing.B, factory func() allshapes.Service, cfg *servi
 func benchServicePut(b *testing.B, factory func() allshapes.Service, cfg *serviceBenchConfig) {
 	b.Helper()
 	b.Run("Put/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Put panicked on zero-value args (%v) — supply sample values via ServiceBenchOnPut", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)

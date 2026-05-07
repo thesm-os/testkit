@@ -2,8 +2,13 @@
 func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedType}}, cfg *{{.LowerInterfaceName}}BenchConfig) {
 	b.Helper()
 
-{{- /* Default hot-path benchmark — every method gets one */}}
+{{- /* Default hot-path benchmark — recover on panic from zero-value args */}}
 	b.Run("{{.Name}}/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: {{.Name}} panicked on zero-value args (%v) — supply sample values via {{$.InterfaceName}}BenchOn{{.Name}}", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)

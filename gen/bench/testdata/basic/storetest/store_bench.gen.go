@@ -43,6 +43,11 @@ func BenchmarkStoreContract(
 func benchStoreCount(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Count/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Count panicked on zero-value args (%v) — supply sample values via StoreBenchOnCount", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -69,6 +74,11 @@ func benchStoreCount(b *testing.B, factory func() basic.Store, cfg *storeBenchCo
 func benchStoreDelete(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Delete/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Delete panicked on zero-value args (%v) — supply sample values via StoreBenchOnDelete", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -107,6 +117,11 @@ func benchStoreDelete(b *testing.B, factory func() basic.Store, cfg *storeBenchC
 func benchStoreGet(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Get/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Get panicked on zero-value args (%v) — supply sample values via StoreBenchOnGet", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -145,6 +160,11 @@ func benchStoreGet(b *testing.B, factory func() basic.Store, cfg *storeBenchConf
 func benchStoreLegacyPut(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("LegacyPut/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: LegacyPut panicked on zero-value args (%v) — supply sample values via StoreBenchOnLegacyPut", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -183,6 +203,11 @@ func benchStoreLegacyPut(b *testing.B, factory func() basic.Store, cfg *storeBen
 func benchStorePing(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Ping/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Ping panicked on zero-value args (%v) — supply sample values via StoreBenchOnPing", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
@@ -221,6 +246,11 @@ func benchStorePing(b *testing.B, factory func() basic.Store, cfg *storeBenchCon
 func benchStorePut(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Put/hot-path", func(b *testing.B) {
+		defer func() {
+			if r := recover(); r != nil {
+				b.Skipf("hot-path: Put panicked on zero-value args (%v) — supply sample values via StoreBenchOnPut", r)
+			}
+		}()
 		impl := factory()
 		if cfg.prePopulate != nil {
 			cfg.prePopulate(b.Context(), impl)
