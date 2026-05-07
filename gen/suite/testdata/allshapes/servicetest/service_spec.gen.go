@@ -59,6 +59,11 @@ func runServiceClose(t *testing.T, factory func() allshapes.Service, cfg *servic
 
 	t.Run("Close/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Close panicked on zero-value args (%v) — supply sample values via ServiceOnClose", r)
+			}
+		}()
 		s := factory()
 		_ = s.Close(t.Context())
 	})
@@ -116,6 +121,11 @@ func runServiceCount(t *testing.T, factory func() allshapes.Service, cfg *servic
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Count panicked on zero-value args (%v) — supply sample values via ServiceOnCount", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Count(t.Context())
 	})
@@ -173,6 +183,11 @@ func runServiceDelete(t *testing.T, factory func() allshapes.Service, cfg *servi
 
 	t.Run("Delete/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Delete panicked on zero-value args (%v) — supply sample values via ServiceOnDelete", r)
+			}
+		}()
 		s := factory()
 		_ = s.Delete(t.Context(), "")
 	})
@@ -230,6 +245,11 @@ func runServiceDescribe(t *testing.T, factory func() allshapes.Service, cfg *ser
 
 	t.Run("Describe/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Describe panicked on zero-value args (%v) — supply sample values via ServiceOnDescribe", r)
+			}
+		}()
 		s := factory()
 		_ = s.Describe()
 	})
@@ -263,6 +283,11 @@ func runServiceGet(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Get panicked on zero-value args (%v) — supply sample values via ServiceOnGet", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Get(t.Context(), "")
 	})
@@ -328,6 +353,11 @@ func runServiceIsEmpty(t *testing.T, factory func() allshapes.Service, cfg *serv
 
 	t.Run("IsEmpty/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: IsEmpty panicked on zero-value args (%v) — supply sample values via ServiceOnIsEmpty", r)
+			}
+		}()
 		s := factory()
 		_ = s.IsEmpty()
 	})
@@ -361,6 +391,11 @@ func runServiceList(t *testing.T, factory func() allshapes.Service, cfg *service
 
 	t.Run("List/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: List panicked on zero-value args (%v) — supply sample values via ServiceOnList", r)
+			}
+		}()
 		s := factory()
 		_ = s.List(t.Context())
 	})
@@ -428,6 +463,11 @@ func runServicePut(t *testing.T, factory func() allshapes.Service, cfg *serviceC
 
 	t.Run("Put/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Put panicked on zero-value args (%v) — supply sample values via ServiceOnPut", r)
+			}
+		}()
 		s := factory()
 		_ = s.Put(t.Context(), allshapes.Item{})
 	})

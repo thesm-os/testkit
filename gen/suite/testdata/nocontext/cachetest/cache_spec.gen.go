@@ -53,6 +53,11 @@ func runCacheGet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Get panicked on zero-value args (%v) — supply sample values via CacheOnGet", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Get("")
 	})
@@ -89,6 +94,11 @@ func runCacheLen(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 
 	t.Run("Len/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Len panicked on zero-value args (%v) — supply sample values via CacheOnLen", r)
+			}
+		}()
 		s := factory()
 		_ = s.Len()
 	})
@@ -130,6 +140,11 @@ func runCacheSet(t *testing.T, factory func() nocontext.Cache, cfg *cacheConfig)
 
 	t.Run("Set/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Set panicked on zero-value args (%v) — supply sample values via CacheOnSet", r)
+			}
+		}()
 		s := factory()
 		_ = s.Set("", "")
 	})

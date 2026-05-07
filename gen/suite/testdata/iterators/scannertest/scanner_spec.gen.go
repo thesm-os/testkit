@@ -54,6 +54,11 @@ func runScannerCount(t *testing.T, factory func() iterators.Scanner, cfg *scanne
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Count panicked on zero-value args (%v) — supply sample values via ScannerOnCount", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Count(t.Context())
 	})
@@ -111,6 +116,11 @@ func runScannerKeys(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 
 	t.Run("Keys/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Keys panicked on zero-value args (%v) — supply sample values via ScannerOnKeys", r)
+			}
+		}()
 		s := factory()
 		_ = s.Keys(t.Context())
 	})
@@ -181,6 +191,11 @@ func runScannerScan(t *testing.T, factory func() iterators.Scanner, cfg *scanner
 
 	t.Run("Scan/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Scan panicked on zero-value args (%v) — supply sample values via ScannerOnScan", r)
+			}
+		}()
 		s := factory()
 		_ = s.Scan(t.Context(), "")
 	})

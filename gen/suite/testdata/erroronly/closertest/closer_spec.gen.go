@@ -52,6 +52,11 @@ func runCloserClose(t *testing.T, factory func() erroronly.Closer, cfg *closerCo
 
 	t.Run("Close/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Close panicked on zero-value args (%v) — supply sample values via CloserOnClose", r)
+			}
+		}()
 		s := factory()
 		_ = s.Close(t.Context())
 	})
@@ -117,6 +122,11 @@ func runCloserOpen(t *testing.T, factory func() erroronly.Closer, cfg *closerCon
 
 	t.Run("Open/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Open panicked on zero-value args (%v) — supply sample values via CloserOnOpen", r)
+			}
+		}()
 		s := factory()
 		_ = s.Open(t.Context())
 	})

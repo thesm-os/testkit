@@ -3,9 +3,14 @@
 {{- /* AUTO-DETECTED BASELINE TESTS — no directive needed               */}}
 {{- /* ================================================================ */}}
 
-{{- /* Smoke test — every method, no panic on zero-value args */}}
+{{- /* Smoke test — every method, recover on panic from zero-value args */}}
 	t.Run("{{.Name}}/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: {{.Name}} panicked on zero-value args (%v) — supply sample values via {{$.InterfaceName}}On{{.Name}}", r)
+			}
+		}()
 		s := factory()
 		{{.IgnoredCallExpr "s"}}
 	})

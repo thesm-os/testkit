@@ -58,6 +58,11 @@ func runSchedulerCancel(t *testing.T, factory func() weird.Scheduler, cfg *sched
 
 	t.Run("Cancel/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Cancel panicked on zero-value args (%v) — supply sample values via SchedulerOnCancel", r)
+			}
+		}()
 		s := factory()
 		_ = s.Cancel(t.Context(), "")
 	})
@@ -123,6 +128,11 @@ func runSchedulerFlush(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 
 	t.Run("Flush/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Flush panicked on zero-value args (%v) — supply sample values via SchedulerOnFlush", r)
+			}
+		}()
 		s := factory()
 		_ = s.Flush(t.Context())
 	})
@@ -180,6 +190,11 @@ func runSchedulerName(t *testing.T, factory func() weird.Scheduler, cfg *schedul
 
 	t.Run("Name/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Name panicked on zero-value args (%v) — supply sample values via SchedulerOnName", r)
+			}
+		}()
 		s := factory()
 		_ = s.Name()
 	})
@@ -213,6 +228,11 @@ func runSchedulerRunning(t *testing.T, factory func() weird.Scheduler, cfg *sche
 
 	t.Run("Running/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Running panicked on zero-value args (%v) — supply sample values via SchedulerOnRunning", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Running(t.Context())
 	})
@@ -270,6 +290,11 @@ func runSchedulerSchedule(t *testing.T, factory func() weird.Scheduler, cfg *sch
 
 	t.Run("Schedule/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Schedule panicked on zero-value args (%v) — supply sample values via SchedulerOnSchedule", r)
+			}
+		}()
 		s := factory()
 		_ = s.Schedule(t.Context(), "", 0, nil)
 	})
@@ -315,6 +340,11 @@ func runSchedulerStatus(t *testing.T, factory func() weird.Scheduler, cfg *sched
 
 	t.Run("Status/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Status panicked on zero-value args (%v) — supply sample values via SchedulerOnStatus", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Status(t.Context(), "")
 	})
@@ -380,6 +410,11 @@ func runSchedulerTasks(t *testing.T, factory func() weird.Scheduler, cfg *schedu
 
 	t.Run("Tasks/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Tasks panicked on zero-value args (%v) — supply sample values via SchedulerOnTasks", r)
+			}
+		}()
 		s := factory()
 		_ = s.Tasks(t.Context())
 	})

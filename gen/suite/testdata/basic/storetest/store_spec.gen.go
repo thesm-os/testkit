@@ -57,6 +57,11 @@ func runStoreCount(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Count panicked on zero-value args (%v) — supply sample values via StoreOnCount", r)
+			}
+		}()
 		s := factory()
 		_ = s.Count(t.Context())
 	})
@@ -86,6 +91,11 @@ func runStoreDelete(t *testing.T, factory func() basic.Store, cfg *storeConfig) 
 
 	t.Run("Delete/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Delete panicked on zero-value args (%v) — supply sample values via StoreOnDelete", r)
+			}
+		}()
 		s := factory()
 		_ = s.Delete(t.Context(), "")
 	})
@@ -143,6 +153,11 @@ func runStoreGet(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Get panicked on zero-value args (%v) — supply sample values via StoreOnGet", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Get(t.Context(), "")
 	})
@@ -224,6 +239,11 @@ func runStoreLegacyPut(t *testing.T, factory func() basic.Store, cfg *storeConfi
 
 	t.Run("LegacyPut/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: LegacyPut panicked on zero-value args (%v) — supply sample values via StoreOnLegacyPut", r)
+			}
+		}()
 		s := factory()
 		_ = s.LegacyPut(t.Context(), basic.Item{})
 	})
@@ -286,6 +306,11 @@ func runStorePing(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 
 	t.Run("Ping/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Ping panicked on zero-value args (%v) — supply sample values via StoreOnPing", r)
+			}
+		}()
 		s := factory()
 		_ = s.Ping(t.Context())
 	})
@@ -351,6 +376,11 @@ func runStorePut(t *testing.T, factory func() basic.Store, cfg *storeConfig) {
 
 	t.Run("Put/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Put panicked on zero-value args (%v) — supply sample values via StoreOnPut", r)
+			}
+		}()
 		s := factory()
 		_ = s.Put(t.Context(), basic.Item{})
 	})

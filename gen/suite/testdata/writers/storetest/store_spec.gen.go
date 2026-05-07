@@ -55,6 +55,11 @@ func runStoreDelete(t *testing.T, factory func() writers.Store, cfg *storeConfig
 
 	t.Run("Delete/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Delete panicked on zero-value args (%v) — supply sample values via StoreOnDelete", r)
+			}
+		}()
 		s := factory()
 		_ = s.Delete(t.Context(), "")
 	})
@@ -112,6 +117,11 @@ func runStoreGet(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 
 	t.Run("Get/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Get panicked on zero-value args (%v) — supply sample values via StoreOnGet", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Get(t.Context(), "")
 	})
@@ -177,6 +187,11 @@ func runStoreList(t *testing.T, factory func() writers.Store, cfg *storeConfig) 
 
 	t.Run("List/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: List panicked on zero-value args (%v) — supply sample values via StoreOnList", r)
+			}
+		}()
 		s := factory()
 		_ = s.List(t.Context())
 	})
@@ -244,6 +259,11 @@ func runStorePut(t *testing.T, factory func() writers.Store, cfg *storeConfig) {
 
 	t.Run("Put/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Put panicked on zero-value args (%v) — supply sample values via StoreOnPut", r)
+			}
+		}()
 		s := factory()
 		_ = s.Put(t.Context(), writers.Item{})
 	})

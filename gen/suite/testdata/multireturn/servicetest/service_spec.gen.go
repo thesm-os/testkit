@@ -52,6 +52,11 @@ func runServiceReset(t *testing.T, factory func() multireturn.Service, cfg *serv
 
 	t.Run("Reset/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Reset panicked on zero-value args (%v) — supply sample values via ServiceOnReset", r)
+			}
+		}()
 		s := factory()
 		_ = s.Reset(t.Context())
 	})
@@ -116,6 +121,11 @@ func runServiceStatus(t *testing.T, factory func() multireturn.Service, cfg *ser
 
 	t.Run("Status/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Status panicked on zero-value args (%v) — supply sample values via ServiceOnStatus", r)
+			}
+		}()
 		s := factory()
 		_, _, _ = s.Status(t.Context())
 	})

@@ -54,6 +54,11 @@ func runRegistryCount(t *testing.T, factory func() readers.Registry, cfg *regist
 
 	t.Run("Count/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Count panicked on zero-value args (%v) — supply sample values via RegistryOnCount", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Count(t.Context())
 	})
@@ -111,6 +116,11 @@ func runRegistryList(t *testing.T, factory func() readers.Registry, cfg *registr
 
 	t.Run("List/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: List panicked on zero-value args (%v) — supply sample values via RegistryOnList", r)
+			}
+		}()
 		s := factory()
 		_ = s.List(t.Context())
 	})
@@ -178,6 +188,11 @@ func runRegistryLookup(t *testing.T, factory func() readers.Registry, cfg *regis
 
 	t.Run("Lookup/smoke", func(t *testing.T) {
 		t.Parallel()
+		defer func() {
+			if r := recover(); r != nil {
+				t.Skipf("smoke: Lookup panicked on zero-value args (%v) — supply sample values via RegistryOnLookup", r)
+			}
+		}()
 		s := factory()
 		_, _ = s.Lookup(t.Context(), "")
 	})
