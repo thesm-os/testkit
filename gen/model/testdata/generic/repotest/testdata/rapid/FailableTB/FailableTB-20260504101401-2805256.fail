@@ -5,7 +5,7 @@
 # 2026/05/04 10:14:01.216601 [FailableTB] [rapid] draw ReadAfterWrite_key: "a"
 # 2026/05/04 10:14:01.216602 [FailableTB] [rapid] draw DeleteReturnsNotFound_key: "a"
 # 2026/05/04 10:14:01.216603 [FailableTB] [invariant] AUTO-COUNT-EQUALS-REFERENCE at step 1: CountEqualsReference: SUT=0, ref=1
-# 
+#
 v0.4.8#14963097062937515037
 0x0
 0x0

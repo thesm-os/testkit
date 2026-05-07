@@ -238,7 +238,7 @@
 # 2026/05/05 19:19:57.406289 [FailableTB] [rapid] draw Put_value: basic.Item{ID:"", Name:"a#a#1𑶥^²˲\\A~𞥃£𞥋ཹ⃝\u008a⃝\x02A"}
 # 2026/05/05 19:19:57.406291 [FailableTB] [rapid] draw action_idx: 2
 # 2026/05/05 19:19:57.406293 [FailableTB] [rapid] draw Put_value: basic.Item{ID:"ਾ҂ᵚ[Ǎ~꙲", Name:","}
-# 
+#
 v0.4.8#3513116141947043773
 0x7fa4405feeabd
 0x854a9c08937fd

@@ -4,7 +4,7 @@
 # 2026/05/06 07:02:17.516114 [FailableTB] [rapid] draw Put_value: timeaware.Item{ID:"b", Name:""}
 # 2026/05/06 07:02:17.516116 [FailableTB] [rapid] draw ReadAfterWrite_key: "b"
 # 2026/05/06 07:02:17.516118 [FailableTB] [invariant] AUTO-READ-AFTER-WRITE at step 1: ReadAfterWrite: key b: SUT err=not found, ref err=<nil>
-# 
+#
 v0.4.8#15832439951040414945
 0x0
 0x0

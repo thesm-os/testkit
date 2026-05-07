@@ -240,7 +240,7 @@
 # 2026/05/04 13:44:24.506238 [FailableTB] [rapid] draw Put_value: basic.Item{ID:"ǅ$a֑҅\t&a؈$!🭾`aʵ.A𗘿`༁\U000e0024", Name:""}
 # 2026/05/04 13:44:24.506946 [FailableTB] history is not linearizable (120 ops, 4 workers)
 #   visualization: /tmp/linearizability-1777895064506608723.html
-# 
+#
 v0.4.8#9928081612174554200
 0x101799c18c270d
 0xc117747aab5c

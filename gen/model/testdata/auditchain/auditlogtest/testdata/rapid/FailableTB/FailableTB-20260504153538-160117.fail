@@ -5,7 +5,7 @@
 # 2026/05/04 15:35:38.487812 [FailableTB] [rapid] draw action: "Append"
 # 2026/05/04 15:35:38.487813 [FailableTB] [rapid] draw Append_entry: auditchain.Entry{ID:"", Data:"A"}
 # 2026/05/04 15:35:38.487818 [FailableTB] [invariant] AUTO-APPEND-ONLY-NO-DROPS at step 3: AppendOnlyNoDrops[{}]: attempted append { A} missing from replay
-# 
+#
 v0.4.8#13850053597943739465
 0x1084210842108
 0x0

@@ -240,7 +240,7 @@
 # 2026/05/04 12:58:23.271783 [FailableTB] [rapid] draw Delete_key: "b"
 # 2026/05/04 12:58:23.272382 [FailableTB] history is not linearizable (120 ops, 4 workers)
 #   visualization: /tmp/linearizability-1777892303272067422.html
-# 
+#
 v0.4.8#7852695717911061501
 0x47e5173206b78
 0x3c42aa0226bcc

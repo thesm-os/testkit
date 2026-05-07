@@ -5,7 +5,7 @@
 # 2026/05/05 19:43:03.461651 [FailableTB] [rapid] draw action: "Append"
 # 2026/05/05 19:43:03.461652 [FailableTB] [rapid] draw Append_entry: thesmos.LedgerEntry{RunID:"", Seq:0, Kind:"", Data:[]uint8{}}
 # 2026/05/05 19:43:03.461658 [FailableTB] [invariant] AUTO-APPEND-ONLY-NO-DROPS at step 3: AppendOnlyNoDrops[]: attempted append { 0  []} missing from replay
-# 
+#
 v0.4.8#9468738257939212081
 0x1084210842108
 0x0

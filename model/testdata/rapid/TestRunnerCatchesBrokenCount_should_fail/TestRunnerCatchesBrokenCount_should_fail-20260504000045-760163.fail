@@ -2,7 +2,7 @@
 # 2026/05/04 00:00:45.076755 [TestRunnerCatchesBrokenCount/should_fail] [rapid] draw id: "a"
 # 2026/05/04 00:00:45.076858 [TestRunnerCatchesBrokenCount/should_fail] [rapid] draw name: "aaa"
 # 2026/05/04 00:00:45.076872 [TestRunnerCatchesBrokenCount/should_fail] [invariant] at step 1: CountEqualsReference: SUT=0, ref=1
-# 
+#
 v0.4.8#2914469758274003220
 0x1084210842108
 0x0
