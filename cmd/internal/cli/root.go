@@ -30,9 +30,11 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	rootCmd.PersistentFlags().String("config", "", "path to .testkit.yml (default: auto-discover)")
+	rootCmd.PersistentFlags().StringP("package", "p", ".", "source package to load types from (import path or relative path)")
 	rootCmd.PersistentFlags().Bool("check", false, "dry-run mode — compare output, error if different")
 	rootCmd.PersistentFlags().Bool("verbose", false, "verbose output")
 
+	_ = viper.BindPFlag("package", rootCmd.PersistentFlags().Lookup("package"))
 	_ = viper.BindPFlag("check", rootCmd.PersistentFlags().Lookup("check"))
 	_ = viper.BindPFlag("verbose", rootCmd.PersistentFlags().Lookup("verbose"))
 }

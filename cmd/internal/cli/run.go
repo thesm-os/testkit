@@ -42,8 +42,13 @@ func runGenerator(g gen.Generator, outputKey string, args []string) error {
 		SourceFile: os.Getenv("GOFILE"),
 	}
 
+	pattern := viper.GetString("package")
+	if pattern == "" {
+		pattern = "."
+	}
+
 	loader := gen.NewLoader()
-	pkg, err := loader.Load(".", workDir)
+	pkg, err := loader.Load(pattern, workDir)
 	if err != nil {
 		return fmt.Errorf("load package: %w", err)
 	}
