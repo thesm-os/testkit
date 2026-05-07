@@ -138,13 +138,13 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		}
 	}
 
-	// Rule 3: no error return, no ctx → Pure.
-	if !hasCtx && !hasError {
-		info := ShapeInfo{Shape: ShapePure}
-		if resCount > 0 {
-			info.ValType = TypeStr(results.At(0).Type(), tracker)
+	// Rule 3: no error return, no ctx, with return value → Pure.
+	// Void methods (no return) fall through to Unknown.
+	if !hasCtx && !hasError && resCount > 0 {
+		return ShapeInfo{
+			Shape:   ShapePure,
+			ValType: TypeStr(results.At(0).Type(), tracker),
 		}
-		return info
 	}
 
 	// From here, method returns error.

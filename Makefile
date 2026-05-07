@@ -199,6 +199,7 @@ GEN_TESTDATA := \
 	gen/suite/testdata/writers/storetest \
 	gen/suite/testdata/allshapes/servicetest \
 	gen/suite/testdata/weird/weirdtest \
+	gen/suite/testdata/voidpure/streamtest \
 	gen/bench/testdata/basic/storetest \
 	gen/bench/testdata/allshapes/servicetest \
 	gen/model/testdata/basic/storetest \
