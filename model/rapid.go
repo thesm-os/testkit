@@ -56,60 +56,60 @@ func MakeCustom[V any](cfg MakeConfig) *Generator[V] {
 	return rapid.MakeCustom[V](cfg)
 }
 
-// IntRange creates a generator for int values in [min, max].
-func IntRange(min, max int) *Generator[int] {
-	return rapid.IntRange(min, max)
+// IntRange creates a generator for int values in [lo, hi].
+func IntRange(lo, hi int) *Generator[int] {
+	return rapid.IntRange(lo, hi)
 }
 
 // Int8 creates a generator for all int8 values.
 func Int8() *Generator[int8] { return rapid.Int8() }
 
-// Int16Range creates a generator for int16 values in [min, max].
-func Int16Range(min, max int16) *Generator[int16] {
-	return rapid.Int16Range(min, max)
+// Int16Range creates a generator for int16 values in [lo, hi].
+func Int16Range(lo, hi int16) *Generator[int16] {
+	return rapid.Int16Range(lo, hi)
 }
 
-// Int32Range creates a generator for int32 values in [min, max].
-func Int32Range(min, max int32) *Generator[int32] {
-	return rapid.Int32Range(min, max)
+// Int32Range creates a generator for int32 values in [lo, hi].
+func Int32Range(lo, hi int32) *Generator[int32] {
+	return rapid.Int32Range(lo, hi)
 }
 
-// Int64Range creates a generator for int64 values in [min, max].
-func Int64Range(min, max int64) *Generator[int64] {
-	return rapid.Int64Range(min, max)
+// Int64Range creates a generator for int64 values in [lo, hi].
+func Int64Range(lo, hi int64) *Generator[int64] {
+	return rapid.Int64Range(lo, hi)
 }
 
-// UintRange creates a generator for uint values in [min, max].
-func UintRange(min, max uint) *Generator[uint] {
-	return rapid.UintRange(min, max)
+// UintRange creates a generator for uint values in [lo, hi].
+func UintRange(lo, hi uint) *Generator[uint] {
+	return rapid.UintRange(lo, hi)
 }
 
 // Uint8 creates a generator for all uint8 values.
 func Uint8() *Generator[uint8] { return rapid.Uint8() }
 
-// Uint16Range creates a generator for uint16 values in [min, max].
-func Uint16Range(min, max uint16) *Generator[uint16] {
-	return rapid.Uint16Range(min, max)
+// Uint16Range creates a generator for uint16 values in [lo, hi].
+func Uint16Range(lo, hi uint16) *Generator[uint16] {
+	return rapid.Uint16Range(lo, hi)
 }
 
-// Uint32Range creates a generator for uint32 values in [min, max].
-func Uint32Range(min, max uint32) *Generator[uint32] {
-	return rapid.Uint32Range(min, max)
+// Uint32Range creates a generator for uint32 values in [lo, hi].
+func Uint32Range(lo, hi uint32) *Generator[uint32] {
+	return rapid.Uint32Range(lo, hi)
 }
 
-// Uint64Range creates a generator for uint64 values in [min, max].
-func Uint64Range(min, max uint64) *Generator[uint64] {
-	return rapid.Uint64Range(min, max)
+// Uint64Range creates a generator for uint64 values in [lo, hi].
+func Uint64Range(lo, hi uint64) *Generator[uint64] {
+	return rapid.Uint64Range(lo, hi)
 }
 
-// Float32Range creates a generator for float32 values in [min, max].
-func Float32Range(min, max float32) *Generator[float32] {
-	return rapid.Float32Range(min, max)
+// Float32Range creates a generator for float32 values in [lo, hi].
+func Float32Range(lo, hi float32) *Generator[float32] {
+	return rapid.Float32Range(lo, hi)
 }
 
-// Float64Range creates a generator for float64 values in [min, max].
-func Float64Range(min, max float64) *Generator[float64] {
-	return rapid.Float64Range(min, max)
+// Float64Range creates a generator for float64 values in [lo, hi].
+func Float64Range(lo, hi float64) *Generator[float64] {
+	return rapid.Float64Range(lo, hi)
 }
 
 // StringMatching creates a generator for strings matching a regex.
