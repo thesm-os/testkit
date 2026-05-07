@@ -352,7 +352,8 @@ func TestGenerate(t *testing.T) {
 			Output: "out/time_no_reader.gen.go",
 		})
 		testkit.Assert(t, err).IsNotNil("must reject time-aware without reader")
-		testkit.Assert(t, err.Error()).Contains("requires at least one Reader-shaped method", "must explain missing Reader")
+		testkit.Assert(t, err.Error()).Contains(
+			"requires at least one Reader-shaped method", "must explain missing Reader")
 	})
 
 	t.Run("rejects mutator chain without poison or verify", func(t *testing.T) {
@@ -385,7 +386,8 @@ func TestGenerate(t *testing.T) {
 			Output: "out/partition_no_replay.gen.go",
 		})
 		testkit.Assert(t, err).IsNotNil("must reject partition-by without replays")
-		testkit.Assert(t, err.Error()).Contains("requires a method with //testkit:replays", "must explain missing replays")
+		testkit.Assert(t, err.Error()).Contains(
+			"requires a method with //testkit:replays", "must explain missing replays")
 	})
 
 	t.Run("rejects causal ordering without replays", func(t *testing.T) {
@@ -396,7 +398,8 @@ func TestGenerate(t *testing.T) {
 			Output: "out/causal_no_replay.gen.go",
 		})
 		testkit.Assert(t, err).IsNotNil("must reject causal ordering without replays")
-		testkit.Assert(t, err.Error()).Contains("require a method with //testkit:replays", "must explain missing replays")
+		testkit.Assert(t, err.Error()).Contains(
+			"require a method with //testkit:replays", "must explain missing replays")
 	})
 
 	t.Run("golden/generic-parameterized", func(t *testing.T) {

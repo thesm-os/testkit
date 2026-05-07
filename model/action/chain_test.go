@@ -32,7 +32,7 @@ type brokenChain struct {
 	inner *refchain.AppendOnly[entry]
 }
 
-func (b *brokenChain) Append(_ context.Context, _ entry) error {
+func (*brokenChain) Append(_ context.Context, _ entry) error {
 	return errors.New("injected error")
 }
 
@@ -40,7 +40,7 @@ func (b *brokenChain) Replay(ctx context.Context) iter.Seq2[entry, error] {
 	return b.inner.Replay(ctx)
 }
 
-func (b *brokenChain) Verify(_ context.Context) error {
+func (*brokenChain) Verify(_ context.Context) error {
 	return errors.New("injected verify error")
 }
 

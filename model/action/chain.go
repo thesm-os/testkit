@@ -31,7 +31,7 @@ func ChainAppend[T, Entry any](
 			refErr := appendFn(rt.Context(), ref, e)
 			if (sutErr == nil) != (refErr == nil) {
 				return model.ActionResult{
-					Err:   fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Err:   fmt.Errorf("%s: SUT err=%w, ref err=%w", name, sutErr, refErr),
 					Input: e,
 				}
 			}
@@ -59,7 +59,7 @@ func ChainAppendRecording[T any, K comparable, Entry any](
 			refErr := appendFn(rt.Context(), ref, e)
 			if (sutErr == nil) != (refErr == nil) {
 				return model.ActionResult{
-					Err:   fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Err:   fmt.Errorf("%s: SUT err=%w, ref err=%w", name, sutErr, refErr),
 					Input: e,
 				}
 			}
@@ -84,7 +84,7 @@ func ChainVerify[T any](
 			refErr := verify(rt.Context(), ref)
 			if (sutErr == nil) != (refErr == nil) {
 				return model.ActionResult{
-					Err: fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
+					Err: fmt.Errorf("%s: SUT err=%w, ref err=%w", name, sutErr, refErr),
 				}
 			}
 			return model.ActionResult{}
@@ -114,7 +114,7 @@ func ChainReplay[T any, K comparable, Entry any](
 			refEntries, refErr := drainSeq2(replay(rt.Context(), ref, partKey))
 			if (sutErr == nil) != (refErr == nil) {
 				return model.ActionResult{
-					Err:    fmt.Errorf("%s[%v]: SUT err=%v, ref err=%v", name, partKey, sutErr, refErr),
+					Err:    fmt.Errorf("%s[%v]: SUT err=%w, ref err=%w", name, partKey, sutErr, refErr),
 					Input:  partKey,
 					Output: sutEntries,
 				}

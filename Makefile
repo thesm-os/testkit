@@ -318,13 +318,7 @@ release:
 ifndef VERSION
 	$(error VERSION is required. Usage: make release VERSION=v0.7.0)
 endif
-	@echo "$(BLUE)Tagging $(VERSION) across all modules...$(NC)"
-	@git tag -s $(VERSION) -m "$(VERSION)"
-	@for mod in $(SUBMODULES); do \
-		tag="$$mod/$(VERSION)"; \
-		echo "  $(GREEN)$$tag$(NC)"; \
-		git tag "$$tag"; \
-	done
+	@./scripts/release.sh $(VERSION)
 	@echo "$(GREEN)Tagged $(VERSION) + $(words $(SUBMODULES)) submodule tags$(NC)"
 	@printf "$(YELLOW)Push with: git push origin $(VERSION)"; \
 	for mod in $(SUBMODULES); do printf " $$mod/$(VERSION)"; done; \

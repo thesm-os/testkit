@@ -5,6 +5,7 @@ package law
 
 import (
 	"fmt"
+	"slices"
 
 	"pgregory.net/rapid"
 
@@ -45,7 +46,7 @@ func (l *AfterEvery[T]) ID() string {
 }
 
 // REQID returns empty (consumer-supplied law).
-func (l *AfterEvery[T]) REQID() string { return "" }
+func (*AfterEvery[T]) REQID() string { return "" }
 
 // Check is called after every action. It inspects the last trace
 // event to determine if the target action just ran.
@@ -58,7 +59,8 @@ func (l *AfterEvery[T]) Check(rt *rapid.T, sut, ref T) error {
 	if last.OpName != l.ActionName {
 		return nil
 	}
-	if err := l.Predicate(rt, sut, ref); err != nil {
+	err := l.Predicate(rt, sut, ref)
+	if err != nil {
 		return fmt.Errorf("AfterEvery(%s): %w", l.ActionName, err)
 	}
 	return nil
@@ -98,7 +100,7 @@ func (l *EventuallyAfter[T]) ID() string {
 }
 
 // REQID returns empty (consumer-supplied law).
-func (l *EventuallyAfter[T]) REQID() string { return "" }
+func (*EventuallyAfter[T]) REQID() string { return "" }
 
 // Check is called after every action. It scans the trace for
 // unsatisfied trigger→response pairs.
@@ -107,12 +109,12 @@ func (l *EventuallyAfter[T]) Check(_ *rapid.T, _, _ T) error {
 	// Walk backwards from the end looking for the most recent trigger
 	// that hasn't been followed by a response within WithinSteps.
 	lastTriggerIdx := -1
-	for i := len(events) - 1; i >= 0; i-- {
-		if events[i].OpName == l.Trigger {
+	for i, v := range slices.Backward(events) {
+		if v.OpName == l.Trigger {
 			lastTriggerIdx = i
 			break
 		}
-		if events[i].OpName == l.Response {
+		if v.OpName == l.Response {
 			// Response found before trigger — satisfied.
 			return nil
 		}
@@ -154,7 +156,7 @@ func (l *Never[T]) ID() string {
 }
 
 // REQID returns empty (consumer-supplied law).
-func (l *Never[T]) REQID() string { return "" }
+func (*Never[T]) REQID() string { return "" }
 
 // Check is called after every action. If the forbidden action appears
 // in the trace, it fires.
@@ -162,7 +164,7 @@ func (l *Never[T]) Check(_ *rapid.T, _, _ T) error {
 	events := l.Trace.Snapshot()
 	for i, ev := range events {
 		if ev.OpName == l.ActionName {
-			return fmt.Errorf("Never(%s): forbidden action appeared at step %d", l.ActionName, i)
+			return fmt.Errorf("never(%s): forbidden action appeared at step %d", l.ActionName, i)
 		}
 	}
 	return nil

@@ -26,7 +26,7 @@ func captureGoroutineIDs() map[int]struct{} {
 // parseGoroutineIDs extracts goroutine IDs from runtime.Stack output.
 func parseGoroutineIDs(stack []byte) map[int]struct{} {
 	ids := make(map[int]struct{})
-	for _, line := range strings.Split(string(stack), "\n") {
+	for line := range strings.SplitSeq(string(stack), "\n") {
 		if m := goroutineIDPattern.FindStringSubmatch(line); m != nil {
 			id, err := strconv.Atoi(m[1])
 			if err == nil {
@@ -115,19 +115,26 @@ func CheckGoroutineLeaks(t interface {
 	// Write artifact.
 	var artifactPath string
 	if artifactDir != "" {
-		if err := os.MkdirAll(artifactDir, 0o755); err == nil {
+		err := os.MkdirAll(artifactDir, 0o750) //nolint:gosec // test artifacts
+		if err == nil {
 			name := sanitizeForFilename(t.Name()) + "-goroutines.txt"
 			path := filepath.Join(artifactDir, name)
 			content := extractStacksForIDs(fullStacks, leaked)
-			if err := os.WriteFile(path, []byte(content), 0o644); err == nil {
+			err := os.WriteFile(path, []byte(content), 0o600) //nolint:gosec // test artifacts
+			if err == nil {
 				artifactPath = path
 				t.Logf("goroutine stacks: %s", path)
 			}
 		}
 	}
 	if artifactPath != "" {
-		t.Errorf("[liveness] AUTO-NO-GOROUTINE-LEAKS: %d goroutine(s) leaked (before: %d, after: %d)\n  goroutine stacks: %s",
-			len(leaked), len(startIDs), len(endIDs), artifactPath)
+		t.Errorf(
+			"[liveness] AUTO-NO-GOROUTINE-LEAKS: %d goroutine(s) leaked (before: %d, after: %d)\n  goroutine stacks: %s",
+			len(leaked),
+			len(startIDs),
+			len(endIDs),
+			artifactPath,
+		)
 	} else {
 		t.Errorf("[liveness] AUTO-NO-GOROUTINE-LEAKS: %d goroutine(s) leaked (before: %d, after: %d)",
 			len(leaked), len(startIDs), len(endIDs))
@@ -152,7 +159,7 @@ func filterFrameworkGoroutines(stacks []byte, ids map[int]struct{}) map[int]stru
 // isFrameworkOnlyStack returns true if all function frames in the
 // stack belong to framework/runtime packages.
 func isFrameworkOnlyStack(stack string) bool {
-	for _, line := range strings.Split(stack, "\n") {
+	for line := range strings.SplitSeq(stack, "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "goroutine ") {
 			continue

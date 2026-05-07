@@ -4,6 +4,7 @@
 package model
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -28,7 +29,7 @@ func formatFailure(f *Failure) string {
 
 	// Artifact paths.
 	for _, p := range f.ArtifactPaths {
-		fmt.Fprintf(&b, "  %s\n", p)
+		fmt.Fprintf(&b, "  %s\n", p) //nolint:forbidigo // strings.Builder
 	}
 
 	return b.String()
@@ -47,14 +48,14 @@ func writeHeader(b *strings.Builder, f *Failure) {
 		stepStr = fmt.Sprintf("w%d op%d", f.StepRan.WorkerID, f.StepRan.Index)
 	}
 
-	msg := "<nil>"
+	msg := nilStr
 	if f.Err != nil {
 		msg = f.Err.Error()
 	}
 	if f.LawID != "" {
-		fmt.Fprintf(b, "[%s] %s at %s: %s\n", prefix, f.LawID, stepStr, msg)
+		fmt.Fprintf(b, "[%s] %s at %s: %s\n", prefix, f.LawID, stepStr, msg) //nolint:forbidigo // strings.Builder
 	} else {
-		fmt.Fprintf(b, "[%s] at %s: %s\n", prefix, stepStr, msg)
+		fmt.Fprintf(b, "[%s] at %s: %s\n", prefix, stepStr, msg) //nolint:forbidigo // strings.Builder
 	}
 }
 
@@ -87,7 +88,7 @@ func writeTrace(b *strings.Builder, events []trace.Event, failingStep int) {
 		if i == failingStep {
 			line += "   <-- FAILED"
 		}
-		fmt.Fprintln(b, line)
+		fmt.Fprintln(b, line) //nolint:forbidigo // strings.Builder
 	}
 }
 
@@ -107,7 +108,7 @@ func truncateValue(v any) string {
 		if len(val) > 64 {
 			return fmt.Sprintf("[%d bytes] %x...", len(val), val[:64])
 		}
-		return fmt.Sprintf("%x", val)
+		return hex.EncodeToString(val)
 	case error:
 		s := val.Error()
 		if len(s) > 32 {
@@ -136,6 +137,20 @@ func truncateValue(v any) string {
 	}
 }
 
+func walkUpFor(dir, filename string) string {
+	for d := dir; ; {
+		_, statErr := os.Stat(filepath.Join(d, filename))
+		if statErr == nil {
+			return d
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			return ""
+		}
+		d = parent
+	}
+}
+
 // sanitizeForFilename replaces characters outside [a-zA-Z0-9._-] with _
 // and truncates to 200 chars.
 func sanitizeForFilename(s string) string {
@@ -150,7 +165,7 @@ func sanitizeForFilename(s string) string {
 // defaultArtifactDir is the fallback when no config or option is set.
 const defaultArtifactDir = ".testkit/artifacts"
 
-// resolveArtifactDir returns the artifact directory based on priority:
+// ResolveArtifactDir returns the artifact directory based on priority:
 // 1. Explicit override (from WithArtifactDir option) — used as-is
 // 2. Fallback: <module-root>/.testkit/artifacts/
 //
@@ -184,25 +199,9 @@ func findModuleRoot() string {
 		return ""
 	}
 	// First pass: look for .testkit.yml (project root).
-	for d := dir; ; {
-		if _, err := os.Stat(filepath.Join(d, ".testkit.yml")); err == nil {
-			return d
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			break
-		}
-		d = parent
+	if found := walkUpFor(dir, ".testkit.yml"); found != "" {
+		return found
 	}
 	// Fallback: look for go.mod (for projects without .testkit.yml).
-	for d := dir; ; {
-		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
-			return d
-		}
-		parent := filepath.Dir(d)
-		if parent == d {
-			return ""
-		}
-		d = parent
-	}
+	return walkUpFor(dir, "go.mod")
 }

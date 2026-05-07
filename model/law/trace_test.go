@@ -4,7 +4,7 @@
 package law_test
 
 import (
-	"fmt"
+	"errors"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -39,7 +39,7 @@ func TestAfterEvery(t *testing.T) {
 		tr := trace.New()
 		l := &law.AfterEvery[int]{
 			ActionName: "Put",
-			Predicate:  func(_ *rapid.T, _, _ int) error { return fmt.Errorf("count wrong") },
+			Predicate:  func(_ *rapid.T, _, _ int) error { return errors.New("count wrong") },
 		}
 		l.BindTrace(tr)
 
@@ -57,7 +57,7 @@ func TestAfterEvery(t *testing.T) {
 		tr := trace.New()
 		l := &law.AfterEvery[int]{
 			ActionName: "Put",
-			Predicate:  func(_ *rapid.T, _, _ int) error { return fmt.Errorf("should not fire") },
+			Predicate:  func(_ *rapid.T, _, _ int) error { return errors.New("should not fire") },
 		}
 		l.BindTrace(tr)
 

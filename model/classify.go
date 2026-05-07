@@ -12,6 +12,8 @@ import (
 // FailureKind classifies a model-test failure for structured reporting.
 type FailureKind int
 
+const nilStr = "<nil>"
+
 const (
 	// FailureUnclassified is the zero value — indicates the action did not
 	// set a Kind. The formatter renders as [unclassified].
@@ -74,7 +76,7 @@ func (f *Failure) Error() string {
 		prefix = f.REQID + " " + prefix
 	}
 	step := f.StepRan.Index
-	msg := "<nil>"
+	msg := nilStr
 	if f.Err != nil {
 		msg = f.Err.Error()
 	}

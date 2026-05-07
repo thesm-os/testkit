@@ -5,6 +5,8 @@
 // testing. Each helper eliminates the per-method boilerplate of
 // drawing a sample, calling both SUT and reference, and comparing
 // results. The generator emits one call per detected method.
+//
+//nolint:errorlint // Action errors are diagnostic (SUT vs ref comparison), not wrapped.
 package action
 
 import (

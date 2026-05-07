@@ -4,6 +4,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -20,11 +21,13 @@ import (
 // Unlike loader.Load, this doesn't type-check — it works even when
 // the package has compilation errors (e.g., broken generated files).
 func execGoList(dir string) (string, error) {
-	cmd := exec.Command("go", "list", ".")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*1e9)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "list", ".")
 	cmd.Dir = dir
 	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("go list in %s: %w", dir, err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

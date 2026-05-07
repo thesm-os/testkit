@@ -4,7 +4,7 @@
 package law_test
 
 import (
-	"fmt"
+	"errors"
 	"sync/atomic"
 	"testing"
 
@@ -74,7 +74,7 @@ func TestStreamReentrancy(t *testing.T) {
 			Collect: func(_ *rapid.T, counter *atomic.Int64) ([]string, error) {
 				n := counter.Add(1)
 				if n > 1 {
-					return nil, fmt.Errorf("second iteration fails")
+					return nil, errors.New("second iteration fails")
 				}
 				return []string{"item"}, nil
 			},

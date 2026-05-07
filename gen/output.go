@@ -20,11 +20,11 @@ const (
 
 // Options holds per-invocation settings for a generator.
 type Options struct {
-	Output     string // -o flag value, empty for convention default
-	Check      bool   // dry-run mode — compare but don't write
-	Verbose    bool
-	BuildTag   string // e.g. "integration" for //go:build tag
-	WorkDir    string // directory //go:generate runs in
+	Output           string // -o flag value, empty for convention default
+	Check            bool   // dry-run mode — compare but don't write
+	Verbose          bool
+	BuildTag         string // e.g. "integration" for //go:build tag
+	WorkDir          string // directory //go:generate runs in
 	SourceFile       string // $GOFILE — the file containing the //go:generate directive
 	OutputPackage    string // override output package name (set when -p loads a remote package)
 	OutputImportBase string // import path of the CWD (set when -p loads a remote package)

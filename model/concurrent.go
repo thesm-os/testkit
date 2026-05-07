@@ -173,13 +173,15 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 // the configured artifact directory. Returns the path, or empty
 // string on write failure (logged via rt.Logf).
 func writeVisualization(rt rapid.TB, m porcupine.Model, info porcupine.LinearizationInfo, artifactDir string) string {
-	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+	err := os.MkdirAll(artifactDir, 0o750) //nolint:gosec // test artifacts
+	if err != nil {
 		rt.Logf("failed to create artifact dir: %v", err)
 		return ""
 	}
 	filename := sanitizeForFilename(rt.Name()) + "-linearizability.html"
 	path := filepath.Join(artifactDir, filename)
-	if err := porcupine.VisualizePath(m, info, path); err != nil {
+	err = porcupine.VisualizePath(m, info, path)
+	if err != nil {
 		rt.Logf("failed to write artifact: %v", err)
 		return ""
 	}
