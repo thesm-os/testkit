@@ -236,11 +236,13 @@ func NewServiceStub(tb testing.TB, opts ...ServiceStubOption) *ServiceStub {
 		s.OnStats.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnCheckout.Verify()
-			s.OnPeek.Verify()
-			s.OnStats.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnCheckout.Verify()
+				s.OnPeek.Verify()
+				s.OnStats.Verify()
+			})
+		}
 	}
 	return s
 }

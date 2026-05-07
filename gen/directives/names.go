@@ -32,4 +32,5 @@ const (
 	HashFunc          = "hash"
 	TimeAware         = "time-aware"
 	Nondeterministic  = "nondeterministic"
+	Sample            = "sample"
 )

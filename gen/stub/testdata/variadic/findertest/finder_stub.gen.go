@@ -179,10 +179,12 @@ func NewFinderStub(tb testing.TB, opts ...FinderStubOption) *FinderStub {
 		s.OnMerge.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnFind.Verify()
-			s.OnMerge.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnFind.Verify()
+				s.OnMerge.Verify()
+			})
+		}
 	}
 	return s
 }

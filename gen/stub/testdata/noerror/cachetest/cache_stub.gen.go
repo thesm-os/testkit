@@ -258,12 +258,14 @@ func NewCacheStub(tb testing.TB, opts ...CacheStubOption) *CacheStub {
 		s.OnLookup.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnClear.Verify()
-			s.OnCount.Verify()
-			s.OnKeys.Verify()
-			s.OnLookup.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnClear.Verify()
+				s.OnCount.Verify()
+				s.OnKeys.Verify()
+				s.OnLookup.Verify()
+			})
+		}
 	}
 	return s
 }

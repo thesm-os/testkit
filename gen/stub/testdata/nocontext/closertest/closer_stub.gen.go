@@ -170,10 +170,12 @@ func NewCloserStub(tb testing.TB, opts ...CloserStubOption) *CloserStub {
 		s.OnString.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnClose.Verify()
-			s.OnString.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnClose.Verify()
+				s.OnString.Verify()
+			})
+		}
 	}
 	return s
 }

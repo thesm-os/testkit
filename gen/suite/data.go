@@ -196,6 +196,7 @@ type SpecMethodData struct {
 	BoundedMax string         // bounded: max value
 	Deprecated string         // deprecated: skip with warning
 	Skip       bool           // integration-only: skip entirely
+	Samples    []string       // sample: qualified builder function names per non-ctx param (called with SUT)
 
 	// Auto-detected from signature — no directive needed.
 	HasCtx    bool            // true if the method takes context.Context
@@ -331,35 +332,74 @@ func (m *SpecMethodData) ZeroCallArgs() string {
 	return gen.ZeroCallArgs(m.Signature, m.tracker)
 }
 
-// PureCallArgs renders zero-value arguments for Pure-shaped methods.
-// Pure methods have no context, so all params get zero values.
-func (m *SpecMethodData) PureCallArgs() string {
+// PureCallArgs renders arguments for Pure-shaped methods.
+// Pure methods have no context, so all params get zero values unless
+// sample builders are configured via //testkit:sample.
+// recv is the receiver variable name used as the sample builder argument.
+func (m *SpecMethodData) PureCallArgs(recv string) string {
 	params := m.Signature.Params()
 	n := params.Len()
 	if m.Signature.Variadic() {
 		n--
 	}
 	parts := make([]string, n)
+	sampleIdx := 0
 	for i := range n {
-		parts[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		if len(m.Samples) > 0 {
+			parts[i] = m.Samples[sampleIdx] + "(" + recv + ")"
+			sampleIdx++
+		} else {
+			parts[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		}
 	}
 	return strings.Join(parts, ", ")
 }
 
 // StreamCallArgs renders arguments for calling this method inside a stream
 // dispatch closure where context.Context is available as "ctx".
-func (m *SpecMethodData) StreamCallArgs() string {
+// Non-context params use sample builders if configured via //testkit:sample.
+// recv is the receiver variable name used as the sample builder argument.
+func (m *SpecMethodData) StreamCallArgs(recv string) string {
 	params := m.Signature.Params()
 	n := params.Len()
 	if m.Signature.Variadic() {
 		n--
 	}
 	parts := make([]string, n)
+	sampleIdx := 0
 	for i := range n {
 		if gen.IsContextType(params.At(i).Type()) {
 			parts[i] = "ctx"
+		} else if len(m.Samples) > 0 {
+			parts[i] = m.Samples[sampleIdx] + "(" + recv + ")"
+			sampleIdx++
 		} else {
 			parts[i] = gen.ZeroValueOf(params.At(i).Type(), m.tracker)
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// callArgsWithCtx renders call arguments using ctxExpr for context params
+// and sample builders (if configured) for non-context params. Sample
+// builders are called with recv as their argument: SampleFunc(recv).
+func (m *SpecMethodData) callArgsWithCtx(ctxExpr, recv string) string {
+	if len(m.Samples) == 0 {
+		return gen.ZeroCallArgsWithCtx(m.Signature, m.tracker, ctxExpr)
+	}
+	params := m.Signature.Params()
+	n := params.Len()
+	if m.Signature.Variadic() {
+		n--
+	}
+	parts := make([]string, n)
+	sampleIdx := 0
+	for i := range n {
+		if gen.IsContextType(params.At(i).Type()) {
+			parts[i] = ctxExpr
+		} else {
+			parts[i] = m.Samples[sampleIdx] + "(" + recv + ")"
+			sampleIdx++
 		}
 	}
 	return strings.Join(parts, ", ")
@@ -369,7 +409,7 @@ func (m *SpecMethodData) StreamCallArgs() string {
 
 // IterCallExpr renders a call on recv that returns the iterator result.
 func (m *SpecMethodData) IterCallExpr(recv string) string {
-	return recv + "." + m.Name + "(" + gen.ZeroCallArgs(m.Signature, m.tracker) + ")"
+	return recv + "." + m.Name + "(" + m.callArgsWithCtx("t.Context()", recv) + ")"
 }
 
 // NilCtxCallExpr renders a call with nil context, capturing the error result.
@@ -591,7 +631,7 @@ func (m *SpecMethodData) BenchIgnoredCallExpr(recv string) string {
 	b.WriteString(".")
 	b.WriteString(m.Name)
 	b.WriteString("(")
-	b.WriteString(gen.ZeroCallArgsWithCtx(m.Signature, m.tracker, "b.Context()"))
+	b.WriteString(m.callArgsWithCtx("b.Context()", recv))
 	b.WriteString(")")
 	return b.String()
 }
@@ -612,7 +652,7 @@ func (m *SpecMethodData) IgnoredCallExpr(recv string) string {
 	b.WriteString(".")
 	b.WriteString(m.Name)
 	b.WriteString("(")
-	b.WriteString(gen.ZeroCallArgs(m.Signature, m.tracker))
+	b.WriteString(m.callArgsWithCtx("t.Context()", recv))
 	b.WriteString(")")
 	return b.String()
 }

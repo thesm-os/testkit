@@ -234,4 +234,8 @@ var knownDirectives = []Descriptor{
 		Name: "nondeterministic", Description: "suppress determinism auto-laws for this method",
 		Generators: []string{genModel}, Phase: 1,
 	},
+	{
+		Name: "sample", Description: "sample builder functions for non-context parameters",
+		Args: "FuncName [FuncName...]", Generators: []string{genSuite, genBench}, Phase: 1,
+	},
 }

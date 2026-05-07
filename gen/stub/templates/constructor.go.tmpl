@@ -88,11 +88,13 @@ func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}}
 	s.order = stub.NewOrderTracker(tb, s.strict)
 {{- end}}
 	if tb != nil {
-		tb.Cleanup(func() {
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
 {{- range .Methods}}{{if not .Skip}}
-			s.On{{.Name}}.Verify()
+				s.On{{.Name}}.Verify()
 {{- end}}{{end}}
-		})
+			})
+		}
 	}
 	return s
 }

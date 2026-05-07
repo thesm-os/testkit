@@ -219,10 +219,12 @@ func NewScannerStub(tb testing.TB, opts ...ScannerStubOption) *ScannerStub {
 		s.OnScan.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnKeys.Verify()
-			s.OnScan.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnKeys.Verify()
+				s.OnScan.Verify()
+			})
+		}
 	}
 	return s
 }

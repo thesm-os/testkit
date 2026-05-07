@@ -178,10 +178,12 @@ func NewProcessorStub(tb testing.TB, opts ...ProcessorStubOption) *ProcessorStub
 		s.OnWriteTo.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnReadFrom.Verify()
-			s.OnWriteTo.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnReadFrom.Verify()
+				s.OnWriteTo.Verify()
+			})
+		}
 	}
 	return s
 }

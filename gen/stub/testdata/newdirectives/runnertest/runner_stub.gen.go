@@ -261,11 +261,13 @@ func NewRunnerStub(tb testing.TB, opts ...RunnerStubOption) *RunnerStub {
 	}
 	s.order = stub.NewOrderTracker(tb, s.strict)
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnAppend.Verify()
-			s.OnClose.Verify()
-			s.OnOpen.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnAppend.Verify()
+				s.OnClose.Verify()
+				s.OnOpen.Verify()
+			})
+		}
 	}
 	return s
 }

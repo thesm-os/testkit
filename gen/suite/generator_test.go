@@ -77,7 +77,24 @@ func TestGenerate(t *testing.T) {
 		{"allshapes", "allshapes", "Service", ""},
 		{"weird/codec", "weird", "Codec", "weirdtest/weird_spec.gen.go"},
 		{"weird/scheduler", "weird", "Scheduler", "weirdtest/scheduler_spec.gen.go"},
+		{"voidpure", "voidpure", "Stream", ""},
+		{"samples", "samples", "Hasher", ""},
 	}
+
+	t.Run("samples uses sample builders in generated output", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadTestPackage(t, "samples")
+		g := &suite.Generator{}
+		result, err := g.Generate(pkg, []string{"Hasher"}, gen.DefaultConfig(), gen.Options{
+			Output: "hashertest/hasher_spec.gen.go",
+		})
+		testkit.NoError(t, err, "must generate")
+		content := string(result.Files[0].Content)
+		testkit.Contains(t, content, "samples.SampleDigest(impl)", "source-package sample qualified in Call closure")
+		testkit.Contains(t, content, "samples.SampleDigest(s)", "source-package sample qualified in smoke test")
+		testkit.Contains(t, content, "TestSampleDigest(impl)", "output-package sample unqualified in Call closure")
+		testkit.Contains(t, content, "TestSampleDigest(s)", "output-package sample unqualified in smoke test")
+	})
 
 	for _, fx := range fixtures {
 		t.Run("golden/"+fx.name, func(t *testing.T) {

@@ -244,11 +244,13 @@ func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 		s.OnPut.Strict()
 	}
 	if tb != nil {
-		tb.Cleanup(func() {
-			s.OnDelete.Verify()
-			s.OnGet.Verify()
-			s.OnPut.Verify()
-		})
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+				s.OnDelete.Verify()
+				s.OnGet.Verify()
+				s.OnPut.Verify()
+			})
+		}
 	}
 	return s
 }

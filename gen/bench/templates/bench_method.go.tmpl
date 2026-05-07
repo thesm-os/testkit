@@ -157,10 +157,10 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 					Factory: prePopFactory,
 					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
-						return impl.{{.Name}}({{.StreamCallArgs}})
+						return impl.{{.Name}}({{.StreamCallArgs "impl"}})
 {{- else}}
 						return func(yield func({{.Shape.IterInfo.ElemType}}, error) bool) {
-							for v := range impl.{{.Name}}({{.StreamCallArgs}}) {
+							for v := range impl.{{.Name}}({{.StreamCallArgs "impl"}}) {
 								if !yield(v, nil) { return }
 							}
 						}
@@ -188,7 +188,7 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 				PureBindings: bindings.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
 					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
-						return impl.{{.Name}}({{.PureCallArgs}})
+						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
 			}
@@ -212,7 +212,7 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 				PredicateBindings: bindings.PredicateBindings[{{.QualifiedType}}]{
 					Factory: prePopFactory,
 					Call: func(impl {{.QualifiedType}}) bool {
-						return impl.{{.Name}}({{.PureCallArgs}})
+						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
 			}

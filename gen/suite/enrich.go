@@ -23,6 +23,7 @@ var enrichers = map[string]func(*SpecMethodData, gen.Directive, *gen.Package) er
 	"bounded":          enrichBounded,
 	"deprecated":       enrichDeprecated,
 	"integration-only": enrichIntegrationOnly,
+	"sample":           enrichSample,
 }
 
 // Enrich runs directive enrichers on all methods in the data model.
@@ -130,6 +131,39 @@ func enrichDeprecated(m *SpecMethodData, d gen.Directive, _ *gen.Package) error 
 //nolint:unparam // enricher interface requires error return
 func enrichIntegrationOnly(m *SpecMethodData, _ gen.Directive, _ *gen.Package) error {
 	m.Skip = true
+	return nil
+}
+
+func enrichSample(m *SpecMethodData, d gen.Directive, pkg *gen.Package) error {
+	want := gen.NonCtxParamCount(m.Signature)
+	if m.Signature.Variadic() {
+		want--
+	}
+	if len(d.Args) != want {
+		return fmt.Errorf(
+			"sample directive requires %d function name(s) (one per non-context parameter), got %d",
+			want, len(d.Args),
+		)
+	}
+	// Extract source package qualifier from QualifiedType ("pkg.Type" → "pkg").
+	srcQualifier := ""
+	if dot := strings.LastIndex(m.QualifiedType, "."); dot >= 0 {
+		srcQualifier = m.QualifiedType[:dot]
+	}
+	samples := make([]string, len(d.Args))
+	for i, name := range d.Args {
+		if strings.Contains(name, ".") {
+			// Already qualified (e.g., "crypto.SampleDigest").
+			samples[i] = name
+		} else if pkg.Pkg.Scope().Lookup(name) != nil {
+			// Found in source package — qualify with source qualifier.
+			samples[i] = qualifiedName(srcQualifier, name)
+		} else {
+			// Not in source package — assume output package (unqualified).
+			samples[i] = name
+		}
+	}
+	m.Samples = samples
 	return nil
 }
 
