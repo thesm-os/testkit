@@ -58,7 +58,6 @@ type StatefulLaw[T any] interface {
 	CheckWithStep(rt *rapid.T, sut, ref T, step int) error
 }
 
-
 // ReadAfterWrite checks that every key in a sample pool is consistent
 // between SUT and reference. Observational — never writes.
 //

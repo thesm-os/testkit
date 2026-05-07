@@ -25,7 +25,9 @@ type Options struct {
 	Verbose    bool
 	BuildTag   string // e.g. "integration" for //go:build tag
 	WorkDir    string // directory //go:generate runs in
-	SourceFile string // $GOFILE — the file containing the //go:generate directive
+	SourceFile       string // $GOFILE — the file containing the //go:generate directive
+	OutputPackage    string // override output package name (set when -p loads a remote package)
+	OutputImportBase string // import path of the CWD (set when -p loads a remote package)
 }
 
 // Result holds the output files from a single generator invocation.
@@ -47,7 +49,13 @@ type OutputFile struct {
 //   - Output in <pkg><suffix>/ dir → <pkg><suffix>.
 //   - Output ending in _test.go → source package name + "_test".
 //   - TestPackageStyle "internal" → always source package name.
-func DerivePackageName(outputPath, sourcePkgName string, cfg Config) string {
+func DerivePackageName(outputPath, sourcePkgName string, cfg Config, opts Options) string {
+	// When generating from a remote package (-p flag), use the
+	// output package override instead of the source package name.
+	if opts.OutputPackage != "" {
+		sourcePkgName = opts.OutputPackage
+	}
+
 	dir := filepath.Dir(outputPath)
 	base := filepath.Base(outputPath)
 
@@ -71,8 +79,19 @@ func DerivePackageName(outputPath, sourcePkgName string, cfg Config) string {
 // OutputImportPath computes the Go import path for a generated file
 // given its output path relative to the source package and the
 // source package's module and import path.
-func OutputImportPath(outputPath string, pkg *Package) (string, error) {
+func OutputImportPath(outputPath string, pkg *Package, opts Options) (string, error) {
 	dir := filepath.Dir(outputPath)
+
+	// When generating from a remote package (-p), the output lands
+	// in the CWD's module, not the source package's module.
+	if opts.OutputImportBase != "" {
+		base := opts.OutputImportBase
+		if dir == currentDir {
+			return base, nil
+		}
+		return base + "/" + filepath.ToSlash(dir), nil
+	}
+
 	if dir == currentDir {
 		return pkg.Pkg.Path(), nil
 	}

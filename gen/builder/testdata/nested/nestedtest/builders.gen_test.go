@@ -26,56 +26,50 @@ func TestOrderBuilder(t *testing.T) {
 
 	t.Run("WithBilling sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Address{Street: "test-street"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithBilling(sample).
+			WithBilling(nested.Address{Street: "test-street"}).
 			Build()
-		testkit.Equal(t, got.Billing, sample, "must set Billing")
+		testkit.Equal(t, got.Billing, nested.Address{Street: "test-street"}, "must set Billing")
 	})
 
 	t.Run("WithCustomer sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := &nested.Customer{Name: "test-name"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithCustomer(sample).
+			WithCustomer(&nested.Customer{Name: "test-name"}).
 			Build()
-		testkit.Equal(t, got.Customer, sample, "must set Customer")
+		testkit.Equal(t, got.Customer, &nested.Customer{Name: "test-name"}, "must set Customer")
 	})
 
 	t.Run("WithID sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-id"
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithID(sample).
+			WithID("test-id").
 			Build()
-		testkit.Equal(t, got.ID, sample, "must set ID")
+		testkit.Equal(t, got.ID, "test-id", "must set ID")
 	})
 
 	t.Run("WithMetadata sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Metadata{Source: "test-source"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithMetadata(sample).
+			WithMetadata(nested.Metadata{Source: "test-source"}).
 			Build()
-		testkit.Equal(t, got.Metadata, sample, "must set Metadata")
+		testkit.Equal(t, got.Metadata, nested.Metadata{Source: "test-source"}, "must set Metadata")
 	})
 
 	t.Run("WithPriority sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithPriority(sample).
+			WithPriority(42).
 			Build()
-		testkit.Equal(t, got.Priority, sample, "must set Priority")
+		testkit.Equal(t, got.Priority, 42, "must set Priority")
 	})
 
 	t.Run("WithShipping sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := nested.Address{Street: "test-street"}
 		got := nestedtest.NewOrderFrom(nested.Order{}).
-			WithShipping(sample).
+			WithShipping(nested.Address{Street: "test-street"}).
 			Build()
-		testkit.Equal(t, got.Shipping, sample, "must set Shipping")
+		testkit.Equal(t, got.Shipping, nested.Address{Street: "test-street"}, "must set Shipping")
 	})
 
 	t.Run("Clone forks independent scalar", func(t *testing.T) {

@@ -71,7 +71,6 @@ func TestAfterEvery(t *testing.T) {
 	})
 }
 
-
 func TestEventuallyAfter(t *testing.T) {
 	t.Parallel()
 

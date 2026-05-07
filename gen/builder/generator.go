@@ -53,7 +53,7 @@ func (*Generator) Generate(
 	}
 
 	// 5. Render test file.
-	builderImportPath, pathErr := gen.OutputImportPath(opts.Output, pkg)
+	builderImportPath, pathErr := gen.OutputImportPath(opts.Output, pkg, opts)
 	if pathErr != nil {
 		return nil, fmt.Errorf("compute builder import path: %w", pathErr)
 	}

@@ -357,7 +357,6 @@ func WithArtifactDir[T any](dir string) Option[T] {
 	return func(c *Config[T]) { c.ArtifactDir = dir }
 }
 
-
 // shouldAttachTrace returns true if the Kind policy says trace
 // should be attached to a failure.
 func shouldAttachTrace(k FailureKind) bool {

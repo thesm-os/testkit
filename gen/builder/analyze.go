@@ -19,7 +19,7 @@ func Analyze(
 	cfg gen.Config,
 	opts gen.Options,
 ) (*Data, error) {
-	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg)
+	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +142,7 @@ func Analyze(
 		structs = append(structs, sd)
 	}
 
-	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg)
+	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg, opts)
 
 	return &Data{
 		PackageName: pkgName,

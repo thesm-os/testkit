@@ -7,11 +7,27 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 
 	"github.com/spf13/viper"
 
 	"go.thesmos.sh/testkit/gen"
 )
+
+// execGoList runs `go list .` in dir and returns the import path.
+// Unlike loader.Load, this doesn't type-check — it works even when
+// the package has compilation errors (e.g., broken generated files).
+func execGoList(dir string) (string, error) {
+	cmd := exec.Command("go", "list", ".")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
 
 // runGenerator executes a generator with the standard CLI pipeline:
 // resolve output path, build config + options from Viper, load the
@@ -34,6 +50,11 @@ func runGenerator(g gen.Generator, outputKey string, args []string) error {
 		},
 	}
 
+	pattern := viper.GetString("package")
+	if pattern == "" {
+		pattern = "."
+	}
+
 	opts := gen.Options{
 		Output:     output,
 		Check:      viper.GetBool("check"),
@@ -42,12 +63,20 @@ func runGenerator(g gen.Generator, outputKey string, args []string) error {
 		SourceFile: os.Getenv("GOFILE"),
 	}
 
-	pattern := viper.GetString("package")
-	if pattern == "" {
-		pattern = "."
-	}
-
 	loader := gen.NewLoader()
+
+	// When loading from a remote package (-p), resolve the CWD's
+	// import path so the output gets the right package name and
+	// import qualifiers. We use `go list` instead of full package
+	// loading because the CWD may contain broken generated files
+	// from a previous run (chicken-and-egg on first generation).
+	if pattern != "." {
+		opts.OutputPackage = filepath.Base(workDir)
+		out, err := execGoList(workDir)
+		if err == nil && out != "" {
+			opts.OutputImportBase = out
+		}
+	}
 	pkg, err := loader.Load(pattern, workDir)
 	if err != nil {
 		return fmt.Errorf("load package: %w", err)

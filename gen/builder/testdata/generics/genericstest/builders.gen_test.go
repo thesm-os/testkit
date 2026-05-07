@@ -38,12 +38,11 @@ func TestContainerBuilder(t *testing.T) {
 
 	t.Run("Mutate modifies value", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-label"
 		got := genericstest.NewContainer[string]().
 			Mutate(func(v *generics.Container[string]) {
-				v.Label = sample
+				v.Label = "test-label"
 			}).Build()
-		testkit.Equal(t, got.Label, sample, "Mutate must modify")
+		testkit.Equal(t, got.Label, "test-label", "Mutate must modify")
 	})
 
 	t.Run("WithItems replaces existing slice", func(t *testing.T) {
@@ -84,18 +83,16 @@ func TestContainerBuilder(t *testing.T) {
 
 	t.Run("WithLabel sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-label"
 		got := genericstest.NewContainer[string]().
-			WithLabel(sample).Build()
-		testkit.Equal(t, got.Label, sample, "must set Label")
+			WithLabel("test-label").Build()
+		testkit.Equal(t, got.Label, "test-label", "must set Label")
 	})
 
 	t.Run("WithLimit sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := genericstest.NewContainer[string]().
-			WithLimit(sample).Build()
-		testkit.Equal(t, got.Limit, sample, "must set Limit")
+			WithLimit(42).Build()
+		testkit.Equal(t, got.Limit, 42, "must set Limit")
 	})
 
 }
@@ -127,28 +124,25 @@ func TestPairBuilder(t *testing.T) {
 
 	t.Run("Mutate modifies value", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-first"
 		got := genericstest.NewPair[string, int]().
 			Mutate(func(v *generics.Pair[string, int]) {
-				v.First = sample
+				v.First = "test-first"
 			}).Build()
-		testkit.Equal(t, got.First, sample, "Mutate must modify")
+		testkit.Equal(t, got.First, "test-first", "Mutate must modify")
 	})
 
 	t.Run("WithFirst sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-first"
 		got := genericstest.NewPair[string, int]().
-			WithFirst(sample).Build()
-		testkit.Equal(t, got.First, sample, "must set First")
+			WithFirst("test-first").Build()
+		testkit.Equal(t, got.First, "test-first", "must set First")
 	})
 
 	t.Run("WithSecond sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := genericstest.NewPair[string, int]().
-			WithSecond(sample).Build()
-		testkit.Equal(t, got.Second, sample, "must set Second")
+			WithSecond(42).Build()
+		testkit.Equal(t, got.Second, 42, "must set Second")
 	})
 
 }

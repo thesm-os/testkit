@@ -34,12 +34,11 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 
 	t.Run("Mutate modifies value", func(t *testing.T) {
 		t.Parallel()
-		sample := {{.TestSample}}
 		got := {{$.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
 			Mutate(func(v *{{$s.TestQualifiedType}}) {
-				v.{{.Name}} = sample
+				v.{{.Name}} = {{.TestSample}}
 			}).Build()
-		testkit.Equal(t, got.{{.Name}}, sample, "Mutate must modify")
+		testkit.Equal(t, got.{{.Name}}, {{.TestSample}}, "Mutate must modify")
 	})
 {{- end}}
 {{range $f := $s.Fields}}
@@ -82,10 +81,9 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 {{else}}
 	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := {{$f.TestSample}}
 		got := {{$.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
-			With{{$f.Name}}(sample).Build()
-		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+			With{{$f.Name}}({{$f.EffectiveSample}}).Build()
+		testkit.Equal(t, got.{{$f.Name}}, {{$f.EffectiveSample}}, "must set {{$f.Name}}")
 	})
 {{end}}
 {{- end}}
@@ -185,11 +183,10 @@ func Test{{$s.BuilderName}}(t *testing.T) {
 {{else}}
 	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := {{$f.SampleValue}}
 		got := {{$.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
-			With{{$f.Name}}(sample).
+			With{{$f.Name}}({{$f.SampleValue}}).
 			Build()
-		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+		testkit.Equal(t, got.{{$f.Name}}, {{$f.SampleValue}}, "must set {{$f.Name}}")
 	})
 {{end}}
 {{- end}}

@@ -20,20 +20,18 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("WithActive sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := true
 		got := basictest.NewItemFrom(basic.Item{}).
-			WithActive(sample).
+			WithActive(true).
 			Build()
-		testkit.Equal(t, got.Active, sample, "must set Active")
+		testkit.Equal(t, got.Active, true, "must set Active")
 	})
 
 	t.Run("WithCount sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := basictest.NewItemFrom(basic.Item{}).
-			WithCount(sample).
+			WithCount(42).
 			Build()
-		testkit.Equal(t, got.Count, sample, "must set Count")
+		testkit.Equal(t, got.Count, 42, "must set Count")
 	})
 
 	t.Run("WithData sets field", func(t *testing.T) {
@@ -56,11 +54,10 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("WithID sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-id"
 		got := basictest.NewItemFrom(basic.Item{}).
-			WithID(sample).
+			WithID("test-id").
 			Build()
-		testkit.Equal(t, got.ID, sample, "must set ID")
+		testkit.Equal(t, got.ID, "test-id", "must set ID")
 	})
 
 	t.Run("WithMetadata replaces map", func(t *testing.T) {
@@ -84,11 +81,10 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("WithName sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-name"
 		got := basictest.NewItemFrom(basic.Item{}).
-			WithName(sample).
+			WithName("test-name").
 			Build()
-		testkit.Equal(t, got.Name, sample, "must set Name")
+		testkit.Equal(t, got.Name, "test-name", "must set Name")
 	})
 
 	t.Run("WithTags replaces existing slice", func(t *testing.T) {

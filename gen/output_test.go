@@ -16,13 +16,13 @@ func TestDerivePackageName(t *testing.T) {
 
 	t.Run("same directory uses source package", func(t *testing.T) {
 		t.Parallel()
-		got := gen.DerivePackageName("store.gen.go", "store", cfg)
+		got := gen.DerivePackageName("store.gen.go", "store", cfg, gen.Options{})
 		testkit.Equal(t, got, "store", "must use source package name")
 	})
 
 	t.Run("test file in same dir uses external style", func(t *testing.T) {
 		t.Parallel()
-		got := gen.DerivePackageName("store.gen_test.go", "store", cfg)
+		got := gen.DerivePackageName("store.gen_test.go", "store", cfg, gen.Options{})
 		testkit.Equal(t, got, "store_test", "must append _test")
 	})
 
@@ -30,13 +30,13 @@ func TestDerivePackageName(t *testing.T) {
 		t.Parallel()
 		internal := cfg
 		internal.TestPackageStyle = gen.TestPackageStyleInternal
-		got := gen.DerivePackageName("store.gen_test.go", "store", internal)
+		got := gen.DerivePackageName("store.gen_test.go", "store", internal, gen.Options{})
 		testkit.Equal(t, got, "store", "internal style uses source name")
 	})
 
 	t.Run("subdirectory uses directory name", func(t *testing.T) {
 		t.Parallel()
-		got := gen.DerivePackageName("storetest/in_memory_store.gen.go", "store", cfg)
+		got := gen.DerivePackageName("storetest/in_memory_store.gen.go", "store", cfg, gen.Options{})
 		testkit.Equal(t, got, "storetest", "must use directory name")
 	})
 }
@@ -63,14 +63,14 @@ func TestOutputImportPath(t *testing.T) {
 
 	t.Run("same directory returns package path", func(t *testing.T) {
 		t.Parallel()
-		got, err := gen.OutputImportPath("store.gen.go", pkg)
+		got, err := gen.OutputImportPath("store.gen.go", pkg, gen.Options{})
 		testkit.NoError(t, err, "must succeed")
 		testkit.Equal(t, got, pkg.Pkg.Path(), "must return package import path")
 	})
 
 	t.Run("subdirectory appends to package path", func(t *testing.T) {
 		t.Parallel()
-		got, err := gen.OutputImportPath("storetest/foo.gen.go", pkg)
+		got, err := gen.OutputImportPath("storetest/foo.gen.go", pkg, gen.Options{})
 		testkit.NoError(t, err, "must succeed")
 		testkit.Assert(t, got).Contains("storetest", "must include subdirectory")
 	})

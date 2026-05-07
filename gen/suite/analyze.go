@@ -18,7 +18,7 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 	}
 	typeName := args[0]
 
-	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg)
+	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +58,7 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		methods = append(methods, md)
 	}
 
-	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg)
+	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg, opts)
 
 	return &SpecData{
 		PackageName:   pkgName,

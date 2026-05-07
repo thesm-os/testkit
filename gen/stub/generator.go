@@ -104,7 +104,7 @@ func (*Generator) Generate(pkg *gen.Package, args []string, cfg gen.Config, opts
 	}
 
 	// 8. Build test data and render test file.
-	stubImportPath, pathErr := gen.OutputImportPath(opts.Output, pkg)
+	stubImportPath, pathErr := gen.OutputImportPath(opts.Output, pkg, opts)
 	if pathErr != nil {
 		return nil, fmt.Errorf("compute stub import path: %w", pathErr)
 	}

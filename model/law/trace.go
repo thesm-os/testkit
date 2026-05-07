@@ -64,7 +64,6 @@ func (l *AfterEvery[T]) Check(rt *rapid.T, sut, ref T) error {
 	return nil
 }
 
-
 // EventuallyAfter checks that after the trigger action fires, the
 // response action must appear within N steps. Useful for interfaces
 // with causal ordering requirements (e.g., "after Write, Flush must

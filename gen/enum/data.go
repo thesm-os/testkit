@@ -74,10 +74,10 @@ func Analyze(
 	cfg gen.Config,
 	opts gen.Options,
 ) (*Data, error) {
-	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg)
+	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg, opts)
 
 	var importPath, qualifier string
-	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg)
+	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg, opts)
 	if err != nil {
 		return nil, err
 	}

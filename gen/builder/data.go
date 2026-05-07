@@ -52,6 +52,16 @@ type FieldData struct {
 	TestSample    string // sample value using concrete type (`"test-name"` for string)
 }
 
+// EffectiveSample returns TestSample when set (generic types with
+// concrete instantiation), otherwise SampleValue. Use in templates
+// where the sample must match the concrete type.
+func (f FieldData) EffectiveSample() string {
+	if f.TestSample != "" {
+		return f.TestSample
+	}
+	return f.SampleValue
+}
+
 // FirstComparableField returns the first field that supports !=
 // comparison and has a non-zero sample value (basic types: string,
 // int, bool). Falls back to the first field if none qualify.

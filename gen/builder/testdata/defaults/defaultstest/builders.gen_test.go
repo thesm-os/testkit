@@ -51,20 +51,18 @@ func TestRequestBuilder(t *testing.T) {
 
 	t.Run("WithRunID sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-runid"
 		got := defaultstest.NewRequestFrom(defaults.Request{}).
-			WithRunID(sample).
+			WithRunID("test-runid").
 			Build()
-		testkit.Equal(t, got.RunID, sample, "must set RunID")
+		testkit.Equal(t, got.RunID, "test-runid", "must set RunID")
 	})
 
 	t.Run("WithToken sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := defaultstest.NewRequestFrom(defaults.Request{}).
-			WithToken(sample).
+			WithToken(42).
 			Build()
-		testkit.Equal(t, got.Token, sample, "must set Token")
+		testkit.Equal(t, got.Token, 42, "must set Token")
 	})
 
 	t.Run("Clone forks independent scalar", func(t *testing.T) {

@@ -121,7 +121,7 @@ func TestTraceCombinatorsEndToEnd(t *testing.T) {
 		)
 	})
 
-t.Run("Never sees forbidden action", func(t *testing.T) {
+	t.Run("Never sees forbidden action", func(t *testing.T) {
 		t.Parallel()
 		// "Reset" action doesn't exist — Never should always pass.
 		servicetest.AssertServiceModel(t, factory,

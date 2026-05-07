@@ -149,12 +149,10 @@ func SampleBasicValue(b *types.Basic, fieldName string) string {
 		return fmt.Sprintf(`"test-%s"`, strings.ToLower(fieldName))
 	case b.Info()&types.IsBoolean != 0:
 		return "true"
-	case b.Info()&types.IsInteger != 0:
-		return "42"
 	case b.Info()&types.IsFloat != 0:
 		return "3.14"
-	case b.Info()&types.IsUnsigned != 0:
-		return "7"
+	case b.Info()&types.IsInteger != 0:
+		return "42"
 	default:
 		return "0"
 	}

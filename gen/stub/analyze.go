@@ -15,7 +15,7 @@ const iterPkgPath = "iter"
 // The returned data has all base fields populated but no directive
 // enrichment — that happens in a separate step.
 func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) (*Data, error) {
-	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg)
+	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		interfaces = append(interfaces, ifaceData)
 	}
 
-	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg)
+	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg, opts)
 
 	return &Data{
 		PackageName: pkgName,

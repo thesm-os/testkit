@@ -48,7 +48,6 @@ func diffGoroutineIDs(start, end map[int]struct{}) map[int]struct{} {
 	return diff
 }
 
-
 // splitGoroutineStacks splits runtime.Stack output into per-goroutine
 // sections keyed by goroutine ID.
 func splitGoroutineStacks(stack []byte) map[int]string {
@@ -97,7 +96,8 @@ func CheckGoroutineLeaks(t interface {
 	Errorf(format string, args ...any)
 	Logf(format string, args ...any)
 	Name() string
-}, artifactDir string, fn func()) {
+}, artifactDir string, fn func(),
+) {
 	t.Helper()
 	startIDs := captureGoroutineIDs()
 	fn()

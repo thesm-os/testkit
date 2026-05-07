@@ -68,14 +68,14 @@ func Analyze(pkg *gen.Package, cfg gen.Config, opts gen.Options) (*Data, error) 
 		}
 	}
 
-	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg)
+	pkgName := gen.DerivePackageName(opts.Output, pkg.Pkg.Name(), cfg, opts)
 	testName := gen.CamelCase(pkg.Pkg.Name()) + "SentinelErrors"
 
 	// Compute import path and qualifier. The source package must be
 	// imported when the output is in a different package — either a
 	// subdirectory or a same-directory _test package.
 	var importPath, qualifier string
-	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg)
+	outputImportPath, err := gen.OutputImportPath(opts.Output, pkg, opts)
 	if err != nil {
 		return nil, err
 	}

@@ -2,7 +2,7 @@
         test test-generated test-race test-bench test-coverage \
         tidy check-tidy \
         check check-coverage check-vuln \
-        build clean
+        build clean release
 
 # ─── Colors ──────────────────────────────────────────────────────
 BLUE   := $(shell printf "\033[0;36m")
@@ -305,6 +305,30 @@ check-tidy: tidy
 		git diff --stat -- '*/go.mod' '*/go.sum' go.mod go.sum go.work.sum; \
 		exit 1; \
 	fi
+
+# ─── Release ─────────────────────────────────────────────────────
+# Tags all submodules with the same version. Usage:
+#   make release VERSION=v0.6.1
+#
+# Each submodule gets a prefixed tag (e.g., cmd/v0.6.1, gen/v0.6.1).
+# The root module gets the bare tag (v0.6.1).
+SUBMODULES := clitest cmd container gen httptest model oteltest
+
+release:
+ifndef VERSION
+	$(error VERSION is required. Usage: make release VERSION=v0.7.0)
+endif
+	@echo "$(BLUE)Tagging $(VERSION) across all modules...$(NC)"
+	@git tag -s $(VERSION) -m "$(VERSION)"
+	@for mod in $(SUBMODULES); do \
+		tag="$$mod/$(VERSION)"; \
+		echo "  $(GREEN)$$tag$(NC)"; \
+		git tag "$$tag"; \
+	done
+	@echo "$(GREEN)Tagged $(VERSION) + $(words $(SUBMODULES)) submodule tags$(NC)"
+	@printf "$(YELLOW)Push with: git push origin $(VERSION)"; \
+	for mod in $(SUBMODULES); do printf " $$mod/$(VERSION)"; done; \
+	printf "$(NC)\n"
 
 # ─── CI gate ─────────────────────────────────────────────────────
 

@@ -147,7 +147,6 @@ func sanitizeForFilename(s string) string {
 	return sanitized
 }
 
-
 // defaultArtifactDir is the fallback when no config or option is set.
 const defaultArtifactDir = ".testkit/artifacts"
 

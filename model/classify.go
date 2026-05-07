@@ -57,13 +57,13 @@ type StepID struct {
 
 // Failure is a classified model-test failure with structured context.
 type Failure struct { //nolint:errname // Failure is the established name; renaming would break consumers
-	Kind         FailureKind
-	LawID        string // e.g., "AUTO-READ-AFTER-WRITE"; empty for action failures
-	REQID        string // e.g., "REQ-PKG-FOO-001"; empty for actions and untagged laws
-	StepRan      StepID // index of the action that failed
-	StepReported StepID // same as StepRan for sequential; may differ for concurrent
-	Err          error  // canonical structured error
-	Trace        []trace.Event
+	Kind          FailureKind
+	LawID         string // e.g., "AUTO-READ-AFTER-WRITE"; empty for action failures
+	REQID         string // e.g., "REQ-PKG-FOO-001"; empty for actions and untagged laws
+	StepRan       StepID // index of the action that failed
+	StepReported  StepID // same as StepRan for sequential; may differ for concurrent
+	Err           error  // canonical structured error
+	Trace         []trace.Event
 	ArtifactPaths []string
 }
 

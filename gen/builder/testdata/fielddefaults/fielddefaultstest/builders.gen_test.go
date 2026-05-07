@@ -37,38 +37,34 @@ func TestConfigBuilder(t *testing.T) {
 
 	t.Run("WithHost sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-host"
 		got := fielddefaultstest.NewConfigFrom(fielddefaults.Config{}).
-			WithHost(sample).
+			WithHost("test-host").
 			Build()
-		testkit.Equal(t, got.Host, sample, "must set Host")
+		testkit.Equal(t, got.Host, "test-host", "must set Host")
 	})
 
 	t.Run("WithName sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := "test-name"
 		got := fielddefaultstest.NewConfigFrom(fielddefaults.Config{}).
-			WithName(sample).
+			WithName("test-name").
 			Build()
-		testkit.Equal(t, got.Name, sample, "must set Name")
+		testkit.Equal(t, got.Name, "test-name", "must set Name")
 	})
 
 	t.Run("WithPort sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := 42
 		got := fielddefaultstest.NewConfigFrom(fielddefaults.Config{}).
-			WithPort(sample).
+			WithPort(42).
 			Build()
-		testkit.Equal(t, got.Port, sample, "must set Port")
+		testkit.Equal(t, got.Port, 42, "must set Port")
 	})
 
 	t.Run("WithVerbose sets field", func(t *testing.T) {
 		t.Parallel()
-		sample := true
 		got := fielddefaultstest.NewConfigFrom(fielddefaults.Config{}).
-			WithVerbose(sample).
+			WithVerbose(true).
 			Build()
-		testkit.Equal(t, got.Verbose, sample, "must set Verbose")
+		testkit.Equal(t, got.Verbose, true, "must set Verbose")
 	})
 
 	t.Run("Clone forks independent scalar", func(t *testing.T) {
