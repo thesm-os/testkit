@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/generic"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    RepositoryModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       RepositoryModelReference, RepositoryModelKeyFunc, RepositoryModelActions, RepositoryModelLaw, RepositoryModelSkipLaw
 func AssertRepositoryModel[K comparable, V any](
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() generic.Repository[K, V],
 	opts ...RepositoryModelOption[K, V],
 ) {
@@ -52,7 +50,7 @@ func AssertRepositoryModel[K comparable, V any](
 		t.Fatal("AssertRepositoryModel: no reference model — supply via " +
 			"RepositoryModelReference or RepositoryModelKeyFunc + RepositoryModelSentinel")
 	}
-	rapid.Check(t, RepositoryModelProperty(sutFactory, cfg))
+	model.Check(t, RepositoryModelProperty(sutFactory, cfg))
 }
 
 // FuzzRepositoryModel[K comparable, V any] is a fuzz target for coverage-guided
@@ -65,18 +63,18 @@ func FuzzRepositoryModel[K comparable, V any](
 	f.Helper()
 	cfg := newRepositoryModelConfig(opts...)
 	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
-	f.Fuzz(rapid.MakeFuzz(RepositoryModelProperty(sutFactory, cfg)))
+	f.Fuzz(model.MakeFuzz(RepositoryModelProperty(sutFactory, cfg)))
 }
 
 func RepositoryModelProperty[K comparable, V any](
 	sutFactory func() generic.Repository[K, V],
 	cfg repositoryModelConfig[K, V],
-) func(*rapid.T) {
+) func(*model.T) {
 	keyGen := cfg.keyGen
 
 	valGen := cfg.valGen
 	if valGen == nil {
-		valGen = rapid.Make[V]()
+		valGen = model.Make[V]()
 	}
 	refFactory := cfg.refFactory
 
@@ -112,7 +110,7 @@ func RepositoryModelProperty[K comparable, V any](
 	laws := model.NewRegistry[generic.Repository[K, V]]()
 	if keyGen != nil {
 		laws.Add(law.ReadAfterWrite[generic.Repository[K, V], K, V]{
-			Read: func(rt *rapid.T, impl generic.Repository[K, V], k K) (V, error) {
+			Read: func(rt *model.T, impl generic.Repository[K, V], k K) (V, error) {
 				return impl.Get(rt.Context(), k)
 			},
 			Keys: keyGen,
@@ -120,7 +118,7 @@ func RepositoryModelProperty[K comparable, V any](
 	}
 	if keyGen != nil && cfg.sentinel != nil {
 		laws.Add(law.DeleteReturnsNotFound[generic.Repository[K, V], K, V]{
-			Read: func(rt *rapid.T, impl generic.Repository[K, V], k K) (V, error) {
+			Read: func(rt *model.T, impl generic.Repository[K, V], k K) (V, error) {
 				return impl.Get(rt.Context(), k)
 			},
 			Keys:     keyGen,
@@ -128,7 +126,7 @@ func RepositoryModelProperty[K comparable, V any](
 		})
 	}
 	laws.Add(law.CountEqualsReference[generic.Repository[K, V], int]{
-		Count: func(rt *rapid.T, impl generic.Repository[K, V]) (int, error) {
+		Count: func(rt *model.T, impl generic.Repository[K, V]) (int, error) {
 			return impl.Count(rt.Context())
 		},
 	})
@@ -156,13 +154,13 @@ func RepositoryModelReference[K comparable, V any](factory func() generic.Reposi
 
 // RepositoryModelKeyGen sets the key generator used by Reader/Deleter
 // actions and auto-derived laws. Required for generic interfaces.
-func RepositoryModelKeyGen[K comparable, V any](g *rapid.Generator[K]) RepositoryModelOption[K, V] {
+func RepositoryModelKeyGen[K comparable, V any](g *model.Generator[K]) RepositoryModelOption[K, V] {
 	return func(c *repositoryModelConfig[K, V]) { c.keyGen = g }
 }
 
 // RepositoryModelValGen overrides the value generator. Default uses
-// rapid.Make[V]() which generates all fields via reflection.
-func RepositoryModelValGen[K comparable, V any](g *rapid.Generator[V]) RepositoryModelOption[K, V] {
+// model.Make[V]() which generates all fields via reflection.
+func RepositoryModelValGen[K comparable, V any](g *model.Generator[V]) RepositoryModelOption[K, V] {
 	return func(c *repositoryModelConfig[K, V]) { c.valGen = g }
 }
 
@@ -201,8 +199,8 @@ func RepositoryModelSkipLaw[K comparable, V any](id string) RepositoryModelOptio
 
 type repositoryModelConfig[K comparable, V any] struct {
 	refFactory   func() generic.Repository[K, V]
-	keyGen       *rapid.Generator[K]
-	valGen       *rapid.Generator[V]
+	keyGen       *model.Generator[K]
+	valGen       *model.Generator[V]
 	keyFunc      func(V) K
 	sentinel     error
 	actions      []model.Action[generic.Repository[K, V]]

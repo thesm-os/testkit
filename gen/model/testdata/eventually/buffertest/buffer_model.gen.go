@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/eventually"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -29,7 +27,7 @@ import (
 //	Concurrent:    BufferModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       BufferModelReference, BufferModelActions, BufferModelLaw, BufferModelSkipLaw
 func AssertBufferModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() eventually.Buffer,
 	opts ...BufferModelOption,
 ) {
@@ -46,11 +44,11 @@ func AssertBufferModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, BufferModelProperty(sutFactory, opts...))
+			model.Check(t, BufferModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, BufferModelProperty(sutFactory, opts...))
+	model.Check(t, BufferModelProperty(sutFactory, opts...))
 }
 
 // TestBufferModel runs the model property as a standalone test.
@@ -67,7 +65,7 @@ func BufferModelTest(
 	opts ...BufferModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, BufferModelProperty(sutFactory, opts...))
+	model.Check(t, BufferModelProperty(sutFactory, opts...))
 }
 
 // BufferModelFuzz is the fuzz counterpart of [BufferModelTest].
@@ -78,7 +76,7 @@ func BufferModelFuzz(
 	opts ...BufferModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
 }
 
 // FuzzBufferModel is a fuzz target for coverage-guided testing
@@ -89,7 +87,7 @@ func FuzzBufferModel(
 	opts ...BufferModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
 }
 
 // FuzzBufferModelConcurrent is a fuzz target for coverage-guided
@@ -102,7 +100,7 @@ func FuzzBufferModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, BufferModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newBufferModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -111,19 +109,19 @@ func FuzzBufferModelConcurrent(
 }
 
 // BufferModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := BufferModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func BufferModelProperty(
 	sutFactory func() eventually.Buffer,
 	opts ...BufferModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newBufferModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
@@ -203,7 +201,7 @@ func BufferModelSkipLaw(id string) BufferModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func BufferModelConcurrent(workers, opsPerWorker int) BufferModelOption {
 	return func(c *bufferModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
 		c.concurrent = &model.ConcurrentConfig[eventually.Buffer]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,

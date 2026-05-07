@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"iter"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/auditchain"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       AuditLogModelReference, AuditLogModelActions, AuditLogModelLaw, AuditLogModelSkipLaw
 func AssertAuditLogModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() auditchain.AuditLog,
 	opts ...AuditLogModelOption,
 ) {
@@ -41,11 +39,11 @@ func AssertAuditLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
+			model.Check(t, AuditLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
+	model.Check(t, AuditLogModelProperty(sutFactory, opts...))
 }
 
 // TestAuditLogModel runs the model property as a standalone test.
@@ -62,7 +60,7 @@ func AuditLogModelTest(
 	opts ...AuditLogModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
+	model.Check(t, AuditLogModelProperty(sutFactory, opts...))
 }
 
 // AuditLogModelFuzz is the fuzz counterpart of [AuditLogModelTest].
@@ -73,7 +71,7 @@ func AuditLogModelFuzz(
 	opts ...AuditLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzAuditLogModel is a fuzz target for coverage-guided testing
@@ -84,23 +82,23 @@ func FuzzAuditLogModel(
 	opts ...AuditLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
 }
 
 // AuditLogModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := AuditLogModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func AuditLogModelProperty(
 	sutFactory func() auditchain.AuditLog,
 	opts ...AuditLogModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newAuditLogModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	valGen := rapid.Make[auditchain.Entry]()
+	valGen := model.Make[auditchain.Entry]()
 
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[struct{}, auditchain.Entry]()
@@ -139,7 +137,7 @@ func AuditLogModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[auditchain.AuditLog]()
-	chainReplayFn := func(rt *rapid.T, impl auditchain.AuditLog, k struct{}) iter.Seq2[auditchain.Entry, error] {
+	chainReplayFn := func(rt *model.T, impl auditchain.AuditLog, k struct{}) iter.Seq2[auditchain.Entry, error] {
 		return impl.Replay(rt.Context())
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[auditchain.AuditLog, struct{}, auditchain.Entry]{
@@ -152,7 +150,7 @@ func AuditLogModelProperty(
 		Replay: chainReplayFn, History: attemptedAppends,
 	})
 	laws.Add(law.HashChainIntegrityViaVerify[auditchain.AuditLog]{
-		Verify: func(rt *rapid.T, impl auditchain.AuditLog) error {
+		Verify: func(rt *model.T, impl auditchain.AuditLog) error {
 			return impl.Verify(rt.Context())
 		},
 	})

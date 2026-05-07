@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/allshapes"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -30,7 +28,7 @@ import (
 //	Concurrent:    ServiceModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ServiceModelReference, ServiceModelActions, ServiceModelLaw, ServiceModelSkipLaw
 func AssertServiceModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() allshapes.Service,
 	opts ...ServiceModelOption,
 ) {
@@ -47,11 +45,11 @@ func AssertServiceModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
+			model.Check(t, ServiceModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
+	model.Check(t, ServiceModelProperty(sutFactory, opts...))
 }
 
 // TestServiceModel runs the model property as a standalone test.
@@ -68,7 +66,7 @@ func ServiceModelTest(
 	opts ...ServiceModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
+	model.Check(t, ServiceModelProperty(sutFactory, opts...))
 }
 
 // ServiceModelFuzz is the fuzz counterpart of [ServiceModelTest].
@@ -79,7 +77,7 @@ func ServiceModelFuzz(
 	opts ...ServiceModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
 }
 
 // FuzzServiceModel is a fuzz target for coverage-guided testing
@@ -90,7 +88,7 @@ func FuzzServiceModel(
 	opts ...ServiceModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
 }
 
 // FuzzServiceModelConcurrent is a fuzz target for coverage-guided
@@ -103,7 +101,7 @@ func FuzzServiceModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, ServiceModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newServiceModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -112,36 +110,36 @@ func FuzzServiceModelConcurrent(
 }
 
 // ServiceModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := ServiceModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func ServiceModelProperty(
 	sutFactory func() allshapes.Service,
 	opts ...ServiceModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newServiceModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.MakeCustom[allshapes.Item](rapid.MakeConfig{
-		Kinds: map[reflect.Kind]*rapid.Generator[any]{
-			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
-			reflect.Int8:    rapid.Int8().AsAny(),
-			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
-			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
-			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
-			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
-			reflect.Uint8:   rapid.Uint8().AsAny(),
-			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
-			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
-			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
-			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
-			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
-			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.MakeCustom[allshapes.Item](model.MakeConfig{
+		Kinds: map[reflect.Kind]*model.Generator[any]{
+			reflect.Int:     model.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    model.Int8().AsAny(),
+			reflect.Int16:   model.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   model.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   model.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    model.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   model.Uint8().AsAny(),
+			reflect.Uint16:  model.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  model.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  model.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: model.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: model.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  model.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
 		},
-		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+		Fields: map[reflect.Type]map[string]*model.Generator[any]{
 			reflect.TypeOf(allshapes.Item{}): {
 				"ID": keyGen.AsAny(),
 			},
@@ -209,35 +207,35 @@ func ServiceModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[allshapes.Service]()
 	laws.Add(law.ReadAfterWrite[allshapes.Service, string, allshapes.Item]{
-		Read: func(rt *rapid.T, impl allshapes.Service, k string) (allshapes.Item, error) {
+		Read: func(rt *model.T, impl allshapes.Service, k string) (allshapes.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys: keyGen,
 	})
 	laws.Add(law.DeleteReturnsNotFound[allshapes.Service, string, allshapes.Item]{
-		Read: func(rt *rapid.T, impl allshapes.Service, k string) (allshapes.Item, error) {
+		Read: func(rt *model.T, impl allshapes.Service, k string) (allshapes.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys:     keyGen,
 		Sentinel: allshapes.ErrNotFound,
 	})
 	laws.Add(law.CountEqualsReference[allshapes.Service, int]{
-		Count: func(rt *rapid.T, impl allshapes.Service) (int, error) {
+		Count: func(rt *model.T, impl allshapes.Service) (int, error) {
 			return impl.Count(rt.Context())
 		},
 	})
 	laws.Add(law.PureDeterminism[allshapes.Service, string]{
-		Call: func(rt *rapid.T, impl allshapes.Service) string {
+		Call: func(rt *model.T, impl allshapes.Service) string {
 			return impl.Describe()
 		},
 	})
 	laws.Add(law.PredicateConsistency[allshapes.Service]{
-		Call: func(rt *rapid.T, impl allshapes.Service) bool {
+		Call: func(rt *model.T, impl allshapes.Service) bool {
 			return impl.IsEmpty()
 		},
 	})
 	laws.Add(law.StreamReentrancy[allshapes.Service, allshapes.Item]{
-		Collect: func(rt *rapid.T, impl allshapes.Service) ([]allshapes.Item, error) {
+		Collect: func(rt *model.T, impl allshapes.Service) ([]allshapes.Item, error) {
 			var items []allshapes.Item
 			for v, err := range impl.List(rt.Context()) {
 				if err != nil {
@@ -303,8 +301,8 @@ func ServiceModelSkipLaw(id string) ServiceModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func ServiceModelConcurrent(workers, opsPerWorker int) ServiceModelOption {
 	return func(c *serviceModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-		valGen := rapid.Make[allshapes.Item]()
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := model.Make[allshapes.Item]()
 		c.concurrent = &model.ConcurrentConfig[allshapes.Service]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,

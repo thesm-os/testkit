@@ -71,9 +71,9 @@ func {{.InterfaceName}}ModelGoroutineLeakCheck() {{.InterfaceName}}ModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker int) {{.InterfaceName}}ModelOption {
 	return func(c *{{.InterfaceName | toLower}}ModelConfig) {
-		keyGen := rapid.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
+		keyGen := model.SampledFrom([]{{.ReaderMethod.Shape.KeyType}}{ {{keySamples}} })
 {{- if and .WriterMethod .KeyField}}
-		valGen := rapid.Make[{{.WriterMethod.Shape.ValType}}]()
+		valGen := model.Make[{{.WriterMethod.Shape.ValType}}]()
 {{- end}}
 		c.concurrent = &model.ConcurrentConfig[{{.QualifiedType}}]{
 			Workers:      workers,

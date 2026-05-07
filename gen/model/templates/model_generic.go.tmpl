@@ -20,7 +20,7 @@ package {{.PackageName}}
 //	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelKeyFunc, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() {{$T}},
 	opts ...{{.InterfaceName}}ModelOption{{.TypeParamNames}},
 ) {
@@ -44,7 +44,7 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via " +
 			"{{.InterfaceName}}ModelReference or {{.InterfaceName}}ModelKeyFunc + {{.InterfaceName}}ModelSentinel")
 	}
-	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, cfg))
+	model.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, cfg))
 }
 
 // Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}} is a fuzz target for coverage-guided
@@ -57,19 +57,19 @@ func Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}}(
 	f.Helper()
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
 	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
-	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, cfg)))
+	f.Fuzz(model.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, cfg)))
 }
 
 func {{.InterfaceName}}ModelProperty{{.TypeParamDecl}}(
 	sutFactory func() {{$T}},
 	cfg {{.InterfaceName | toLower}}ModelConfig{{.TypeParamNames}},
-) func(*rapid.T) {
+) func(*model.T) {
 	keyGen := cfg.keyGen
 
 	valGen := cfg.valGen
 {{- if .WriterMethod}}
 	if valGen == nil {
-		valGen = rapid.Make[{{.WriterMethod.Shape.ValType}}]()
+		valGen = model.Make[{{.WriterMethod.Shape.ValType}}]()
 	}
 {{- end}}
 	refFactory := cfg.refFactory
@@ -169,7 +169,7 @@ func {{.InterfaceName}}ModelProperty{{.TypeParamDecl}}(
 {{- if and .IsCRUD .ReaderMethod}}
 	if keyGen != nil {
 		laws.Add(law.ReadAfterWrite[{{$T}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
-			Read: func(rt *rapid.T, impl {{$T}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			Read: func(rt *model.T, impl {{$T}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
 				return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
 			},
 			Keys: keyGen,
@@ -179,7 +179,7 @@ func {{.InterfaceName}}ModelProperty{{.TypeParamDecl}}(
 {{- if and .HasDeleter .ReaderMethod}}
 	if keyGen != nil && cfg.sentinel != nil {
 		laws.Add(law.DeleteReturnsNotFound[{{$T}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
-			Read: func(rt *rapid.T, impl {{$T}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+			Read: func(rt *model.T, impl {{$T}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
 				return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
 			},
 			Keys:     keyGen,
@@ -189,7 +189,7 @@ func {{.InterfaceName}}ModelProperty{{.TypeParamDecl}}(
 {{- end}}
 {{- if .HasCount}}
 	laws.Add(law.CountEqualsReference[{{$T}}, {{.CountMethod.Shape.ValType}}]{
-		Count: func(rt *rapid.T, impl {{$T}}) ({{.CountMethod.Shape.ValType}}, error) {
+		Count: func(rt *model.T, impl {{$T}}) ({{.CountMethod.Shape.ValType}}, error) {
 			return impl.{{.CountMethod.Name}}(rt.Context())
 		},
 	})
@@ -218,13 +218,13 @@ func {{.InterfaceName}}ModelReference{{.TypeParamDecl}}(factory func() {{$T}}) {
 
 // {{.InterfaceName}}ModelKeyGen sets the key generator used by Reader/Deleter
 // actions and auto-derived laws. Required for generic interfaces.
-func {{.InterfaceName}}ModelKeyGen{{.TypeParamDecl}}(g *rapid.Generator[{{.ReaderMethod.Shape.KeyType}}]) {{.InterfaceName}}ModelOption{{.TypeParamNames}} {
+func {{.InterfaceName}}ModelKeyGen{{.TypeParamDecl}}(g *model.Generator[{{.ReaderMethod.Shape.KeyType}}]) {{.InterfaceName}}ModelOption{{.TypeParamNames}} {
 	return func(c *{{.InterfaceName | toLower}}ModelConfig{{.TypeParamNames}}) { c.keyGen = g }
 }
 
 // {{.InterfaceName}}ModelValGen overrides the value generator. Default uses
-// rapid.Make[V]() which generates all fields via reflection.
-func {{.InterfaceName}}ModelValGen{{.TypeParamDecl}}(g *rapid.Generator[{{.WriterMethod.Shape.ValType}}]) {{.InterfaceName}}ModelOption{{.TypeParamNames}} {
+// model.Make[V]() which generates all fields via reflection.
+func {{.InterfaceName}}ModelValGen{{.TypeParamDecl}}(g *model.Generator[{{.WriterMethod.Shape.ValType}}]) {{.InterfaceName}}ModelOption{{.TypeParamNames}} {
 	return func(c *{{.InterfaceName | toLower}}ModelConfig{{.TypeParamNames}}) { c.valGen = g }
 }
 
@@ -263,8 +263,8 @@ func {{.InterfaceName}}ModelSkipLaw{{.TypeParamDecl}}(id string) {{.InterfaceNam
 
 type {{.InterfaceName | toLower}}ModelConfig{{.TypeParamDecl}} struct {
 	refFactory   func() {{$T}}
-	keyGen       *rapid.Generator[{{.ReaderMethod.Shape.KeyType}}]
-	valGen       *rapid.Generator[{{.WriterMethod.Shape.ValType}}]
+	keyGen       *model.Generator[{{.ReaderMethod.Shape.KeyType}}]
+	valGen       *model.Generator[{{.WriterMethod.Shape.ValType}}]
 	keyFunc      func({{.WriterMethod.Shape.ValType}}) {{.ReaderMethod.Shape.KeyType}}
 	sentinel     error
 	actions      []model.Action[{{$T}}]

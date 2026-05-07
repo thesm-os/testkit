@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -28,7 +26,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       StateModelReference, StateModelActions, StateModelLaw, StateModelSkipLaw
 func AssertStateModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() thesmos.State,
 	opts ...StateModelOption,
 ) {
@@ -37,11 +35,11 @@ func AssertStateModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, StateModelProperty(sutFactory, opts...))
+			model.Check(t, StateModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, StateModelProperty(sutFactory, opts...))
+	model.Check(t, StateModelProperty(sutFactory, opts...))
 }
 
 // TestStateModel runs the model property as a standalone test.
@@ -58,7 +56,7 @@ func StateModelTest(
 	opts ...StateModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, StateModelProperty(sutFactory, opts...))
+	model.Check(t, StateModelProperty(sutFactory, opts...))
 }
 
 // StateModelFuzz is the fuzz counterpart of [StateModelTest].
@@ -69,7 +67,7 @@ func StateModelFuzz(
 	opts ...StateModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StateModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StateModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStateModel is a fuzz target for coverage-guided testing
@@ -80,23 +78,23 @@ func FuzzStateModel(
 	opts ...StateModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StateModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StateModelProperty(sutFactory, opts...)))
 }
 
 // StateModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := StateModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func StateModelProperty(
 	sutFactory func() thesmos.State,
 	opts ...StateModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newStateModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]thesmos.StateKey{"a", "b", "c", "d", "e"})
+	keyGen := model.SampledFrom([]thesmos.StateKey{"a", "b", "c", "d", "e"})
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
@@ -122,7 +120,7 @@ func StateModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.State]()
 	laws.Add(law.PureDeterminism[thesmos.State, int]{
-		Call: func(rt *rapid.T, impl thesmos.State) int {
+		Call: func(rt *model.T, impl thesmos.State) int {
 			return impl.Len()
 		},
 	})

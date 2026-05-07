@@ -6,8 +6,6 @@ package registrytest
 import (
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -27,7 +25,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       KindRegistryModelReference, KindRegistryModelActions, KindRegistryModelLaw, KindRegistryModelSkipLaw
 func AssertKindRegistryModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() thesmos.KindRegistry,
 	opts ...KindRegistryModelOption,
 ) {
@@ -36,11 +34,11 @@ func AssertKindRegistryModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
+			model.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
+	model.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 }
 
 // TestKindRegistryModel runs the model property as a standalone test.
@@ -57,7 +55,7 @@ func KindRegistryModelTest(
 	opts ...KindRegistryModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
+	model.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 }
 
 // KindRegistryModelFuzz is the fuzz counterpart of [KindRegistryModelTest].
@@ -68,7 +66,7 @@ func KindRegistryModelFuzz(
 	opts ...KindRegistryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
 }
 
 // FuzzKindRegistryModel is a fuzz target for coverage-guided testing
@@ -79,23 +77,23 @@ func FuzzKindRegistryModel(
 	opts ...KindRegistryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
 }
 
 // KindRegistryModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := KindRegistryModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func KindRegistryModelProperty(
 	sutFactory func() thesmos.KindRegistry,
 	opts ...KindRegistryModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newKindRegistryModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]thesmos.Kind{1, 2, 3, 4, 5})
+	keyGen := model.SampledFrom([]thesmos.Kind{1, 2, 3, 4, 5})
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
@@ -121,7 +119,7 @@ func KindRegistryModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.KindRegistry]()
 	laws.Add(law.PureDeterminism[thesmos.KindRegistry, []thesmos.Kind]{
-		Call: func(rt *rapid.T, impl thesmos.KindRegistry) []thesmos.Kind {
+		Call: func(rt *model.T, impl thesmos.KindRegistry) []thesmos.Kind {
 			return impl.Kinds()
 		},
 	})

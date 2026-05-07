@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"iter"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/auditchain_partitioned"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       PartitionedLogModelReference, PartitionedLogModelActions, PartitionedLogModelLaw, PartitionedLogModelSkipLaw
 func AssertPartitionedLogModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() auditchain_partitioned.PartitionedLog,
 	opts ...PartitionedLogModelOption,
 ) {
@@ -41,11 +39,11 @@ func AssertPartitionedLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
+			model.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
+	model.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
 }
 
 // TestPartitionedLogModel runs the model property as a standalone test.
@@ -62,7 +60,7 @@ func PartitionedLogModelTest(
 	opts ...PartitionedLogModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
+	model.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
 }
 
 // PartitionedLogModelFuzz is the fuzz counterpart of [PartitionedLogModelTest].
@@ -73,7 +71,7 @@ func PartitionedLogModelFuzz(
 	opts ...PartitionedLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzPartitionedLogModel is a fuzz target for coverage-guided testing
@@ -84,23 +82,23 @@ func FuzzPartitionedLogModel(
 	opts ...PartitionedLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
 }
 
 // PartitionedLogModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := PartitionedLogModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func PartitionedLogModelProperty(
 	sutFactory func() auditchain_partitioned.PartitionedLog,
 	opts ...PartitionedLogModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newPartitionedLogModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	valGen := rapid.Make[auditchain_partitioned.Entry]()
+	valGen := model.Make[auditchain_partitioned.Entry]()
 
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[string, auditchain_partitioned.Entry]()
@@ -139,7 +137,7 @@ func PartitionedLogModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[auditchain_partitioned.PartitionedLog]()
-	chainReplayFn := func(rt *rapid.T, impl auditchain_partitioned.PartitionedLog, k string) iter.Seq2[auditchain_partitioned.Entry, error] {
+	chainReplayFn := func(rt *model.T, impl auditchain_partitioned.PartitionedLog, k string) iter.Seq2[auditchain_partitioned.Entry, error] {
 		return impl.Replay(rt.Context(), k)
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[auditchain_partitioned.PartitionedLog, string, auditchain_partitioned.Entry]{
@@ -152,7 +150,7 @@ func PartitionedLogModelProperty(
 		Replay: chainReplayFn, History: attemptedAppends,
 	})
 	laws.Add(law.HashChainIntegrityViaVerify[auditchain_partitioned.PartitionedLog]{
-		Verify: func(rt *rapid.T, impl auditchain_partitioned.PartitionedLog) error {
+		Verify: func(rt *model.T, impl auditchain_partitioned.PartitionedLog) error {
 			return impl.Verify(rt.Context())
 		},
 	})

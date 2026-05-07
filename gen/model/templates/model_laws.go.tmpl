@@ -3,7 +3,7 @@
 	laws := model.NewRegistry[{{.QualifiedType}}]()
 {{- if and .IsCRUD .KeyField .ReaderMethod}}
 	laws.Add(law.ReadAfterWrite[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
-		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+		Read: func(rt *model.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
 			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
 		},
 		Keys: keyGen,
@@ -11,7 +11,7 @@
 {{- end}}
 {{- if and .HasDeleter .ReaderMethod}}
 	laws.Add(law.DeleteReturnsNotFound[{{.QualifiedType}}, {{.ReaderMethod.Shape.KeyType}}, {{.ReaderMethod.Shape.ValType}}]{
-		Read: func(rt *rapid.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
+		Read: func(rt *model.T, impl {{.QualifiedType}}, k {{.ReaderMethod.Shape.KeyType}}) ({{.ReaderMethod.Shape.ValType}}, error) {
 			return impl.{{.ReaderMethod.Name}}(rt.Context(), k)
 		},
 		Keys:     keyGen,
@@ -20,7 +20,7 @@
 {{- end}}
 {{- if .HasCount}}
 	laws.Add(law.CountEqualsReference[{{.QualifiedType}}, {{.CountMethod.Shape.ValType}}]{
-		Count: func(rt *rapid.T, impl {{.QualifiedType}}) ({{.CountMethod.Shape.ValType}}, error) {
+		Count: func(rt *model.T, impl {{.QualifiedType}}) ({{.CountMethod.Shape.ValType}}, error) {
 			return impl.{{.CountMethod.Name}}(rt.Context())
 		},
 	})
@@ -28,7 +28,7 @@
 {{- range .PureMethods}}
 {{- if and (not .ParamOnly) (not (.HasDirective "nondeterministic"))}}
 	laws.Add(law.PureDeterminism[{{$.QualifiedType}}, {{.Shape.ValType}}]{
-		Call: func(rt *rapid.T, impl {{$.QualifiedType}}) {{.Shape.ValType}} {
+		Call: func(rt *model.T, impl {{$.QualifiedType}}) {{.Shape.ValType}} {
 			return impl.{{.Name}}()
 		},
 	})
@@ -37,7 +37,7 @@
 {{- range .PredicateMethods}}
 {{- if and (not .ParamOnly) (not (.HasDirective "nondeterministic"))}}
 	laws.Add(law.PredicateConsistency[{{$.QualifiedType}}]{
-		Call: func(rt *rapid.T, impl {{$.QualifiedType}}) bool {
+		Call: func(rt *model.T, impl {{$.QualifiedType}}) bool {
 			return impl.{{.Name}}()
 		},
 	})
@@ -46,7 +46,7 @@
 {{- range .StreamMethods}}
 {{- if not (.HasDirective "replays")}}
 	laws.Add(law.StreamReentrancy[{{$.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
-		Collect: func(rt *rapid.T, impl {{$.QualifiedType}}) ([]{{.Shape.IterInfo.ElemType}}, error) {
+		Collect: func(rt *model.T, impl {{$.QualifiedType}}) ([]{{.Shape.IterInfo.ElemType}}, error) {
 			var items []{{.Shape.IterInfo.ElemType}}
 			for v, err := range impl.{{.Name}}(rt.Context()) {
 				if err != nil {
@@ -74,7 +74,7 @@
 {{- if .ChainReplayMethod}}
 {{- $partType := "struct{}"}}{{if .IsChainPartitioned}}{{$partType = "string"}}{{end}}
 {{- $entryType := .ChainReplayMethod.Shape.IterInfo.ElemType}}
-	chainReplayFn := func(rt *rapid.T, impl {{.QualifiedType}}, k {{$partType}}) iter.Seq2[{{$entryType}}, error] {
+	chainReplayFn := func(rt *model.T, impl {{.QualifiedType}}, k {{$partType}}) iter.Seq2[{{$entryType}}, error] {
 {{- if .IsChainPartitioned}}
 		return impl.{{.ChainReplayMethod.Name}}(rt.Context(), k)
 {{- else}}
@@ -101,7 +101,7 @@
 {{- end}}
 {{- if .ChainVerifyMethod}}
 	laws.Add(law.HashChainIntegrityViaVerify[{{.QualifiedType}}]{
-		Verify: func(rt *rapid.T, impl {{.QualifiedType}}) error {
+		Verify: func(rt *model.T, impl {{.QualifiedType}}) error {
 			return impl.{{.ChainVerifyMethod.Name}}(rt.Context())
 		},
 	})

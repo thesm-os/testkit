@@ -6,8 +6,6 @@ package schedulertest
 import (
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/law"
@@ -26,7 +24,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       SchedulerModelReference, SchedulerModelActions, SchedulerModelLaw, SchedulerModelSkipLaw
 func AssertSchedulerModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() thesmos.Scheduler,
 	opts ...SchedulerModelOption,
 ) {
@@ -35,11 +33,11 @@ func AssertSchedulerModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, SchedulerModelProperty(sutFactory, opts...))
+			model.Check(t, SchedulerModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, SchedulerModelProperty(sutFactory, opts...))
+	model.Check(t, SchedulerModelProperty(sutFactory, opts...))
 }
 
 // TestSchedulerModel runs the model property as a standalone test.
@@ -56,7 +54,7 @@ func SchedulerModelTest(
 	opts ...SchedulerModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, SchedulerModelProperty(sutFactory, opts...))
+	model.Check(t, SchedulerModelProperty(sutFactory, opts...))
 }
 
 // SchedulerModelFuzz is the fuzz counterpart of [SchedulerModelTest].
@@ -67,7 +65,7 @@ func SchedulerModelFuzz(
 	opts ...SchedulerModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(SchedulerModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(SchedulerModelProperty(sutFactory, opts...)))
 }
 
 // FuzzSchedulerModel is a fuzz target for coverage-guided testing
@@ -78,19 +76,19 @@ func FuzzSchedulerModel(
 	opts ...SchedulerModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(SchedulerModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(SchedulerModelProperty(sutFactory, opts...)))
 }
 
 // SchedulerModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := SchedulerModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func SchedulerModelProperty(
 	sutFactory func() thesmos.Scheduler,
 	opts ...SchedulerModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newSchedulerModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.

@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/noncrud"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -28,7 +26,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       CloserModelReference, CloserModelActions, CloserModelLaw, CloserModelSkipLaw
 func AssertCloserModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() noncrud.Closer,
 	opts ...CloserModelOption,
 ) {
@@ -37,11 +35,11 @@ func AssertCloserModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, CloserModelProperty(sutFactory, opts...))
+			model.Check(t, CloserModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, CloserModelProperty(sutFactory, opts...))
+	model.Check(t, CloserModelProperty(sutFactory, opts...))
 }
 
 // TestCloserModel runs the model property as a standalone test.
@@ -58,7 +56,7 @@ func CloserModelTest(
 	opts ...CloserModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, CloserModelProperty(sutFactory, opts...))
+	model.Check(t, CloserModelProperty(sutFactory, opts...))
 }
 
 // CloserModelFuzz is the fuzz counterpart of [CloserModelTest].
@@ -69,7 +67,7 @@ func CloserModelFuzz(
 	opts ...CloserModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
 }
 
 // FuzzCloserModel is a fuzz target for coverage-guided testing
@@ -80,19 +78,19 @@ func FuzzCloserModel(
 	opts ...CloserModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
 }
 
 // CloserModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := CloserModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func CloserModelProperty(
 	sutFactory func() noncrud.Closer,
 	opts ...CloserModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newCloserModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.

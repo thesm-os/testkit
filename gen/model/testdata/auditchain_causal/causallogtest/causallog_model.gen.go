@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"iter"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/auditchain_causal"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       CausalLogModelReference, CausalLogModelActions, CausalLogModelLaw, CausalLogModelSkipLaw
 func AssertCausalLogModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() auditchain_causal.CausalLog,
 	opts ...CausalLogModelOption,
 ) {
@@ -41,11 +39,11 @@ func AssertCausalLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
+			model.Check(t, CausalLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
+	model.Check(t, CausalLogModelProperty(sutFactory, opts...))
 }
 
 // TestCausalLogModel runs the model property as a standalone test.
@@ -62,7 +60,7 @@ func CausalLogModelTest(
 	opts ...CausalLogModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
+	model.Check(t, CausalLogModelProperty(sutFactory, opts...))
 }
 
 // CausalLogModelFuzz is the fuzz counterpart of [CausalLogModelTest].
@@ -73,7 +71,7 @@ func CausalLogModelFuzz(
 	opts ...CausalLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzCausalLogModel is a fuzz target for coverage-guided testing
@@ -84,23 +82,23 @@ func FuzzCausalLogModel(
 	opts ...CausalLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
 }
 
 // CausalLogModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := CausalLogModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func CausalLogModelProperty(
 	sutFactory func() auditchain_causal.CausalLog,
 	opts ...CausalLogModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newCausalLogModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	valGen := rapid.Make[auditchain_causal.Entry]()
+	valGen := model.Make[auditchain_causal.Entry]()
 
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[struct{}, auditchain_causal.Entry]()
@@ -139,7 +137,7 @@ func CausalLogModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[auditchain_causal.CausalLog]()
-	chainReplayFn := func(rt *rapid.T, impl auditchain_causal.CausalLog, k struct{}) iter.Seq2[auditchain_causal.Entry, error] {
+	chainReplayFn := func(rt *model.T, impl auditchain_causal.CausalLog, k struct{}) iter.Seq2[auditchain_causal.Entry, error] {
 		return impl.Replay(rt.Context())
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[auditchain_causal.CausalLog, struct{}, auditchain_causal.Entry]{
@@ -158,7 +156,7 @@ func CausalLogModelProperty(
 		DependsOn:  func(e auditchain_causal.Entry) []string { return e.DependsOn },
 	})
 	laws.Add(law.HashChainIntegrityViaVerify[auditchain_causal.CausalLog]{
-		Verify: func(rt *rapid.T, impl auditchain_causal.CausalLog) error {
+		Verify: func(rt *model.T, impl auditchain_causal.CausalLog) error {
 			return impl.Verify(rt.Context())
 		},
 	})

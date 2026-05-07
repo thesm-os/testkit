@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/generic"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -31,7 +29,7 @@ import (
 //	Concurrent:    ItemRepositoryModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ItemRepositoryModelReference, ItemRepositoryModelActions, ItemRepositoryModelLaw, ItemRepositoryModelSkipLaw
 func AssertItemRepositoryModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() generic.ItemRepository,
 	opts ...ItemRepositoryModelOption,
 ) {
@@ -48,11 +46,11 @@ func AssertItemRepositoryModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
+			model.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
+	model.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 }
 
 // TestItemRepositoryModel runs the model property as a standalone test.
@@ -69,7 +67,7 @@ func ItemRepositoryModelTest(
 	opts ...ItemRepositoryModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
+	model.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 }
 
 // ItemRepositoryModelFuzz is the fuzz counterpart of [ItemRepositoryModelTest].
@@ -80,7 +78,7 @@ func ItemRepositoryModelFuzz(
 	opts ...ItemRepositoryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
 }
 
 // FuzzItemRepositoryModel is a fuzz target for coverage-guided testing
@@ -91,7 +89,7 @@ func FuzzItemRepositoryModel(
 	opts ...ItemRepositoryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
 }
 
 // FuzzItemRepositoryModelConcurrent is a fuzz target for coverage-guided
@@ -104,7 +102,7 @@ func FuzzItemRepositoryModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, ItemRepositoryModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newItemRepositoryModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -113,36 +111,36 @@ func FuzzItemRepositoryModelConcurrent(
 }
 
 // ItemRepositoryModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := ItemRepositoryModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func ItemRepositoryModelProperty(
 	sutFactory func() generic.ItemRepository,
 	opts ...ItemRepositoryModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newItemRepositoryModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.MakeCustom[generic.Item](rapid.MakeConfig{
-		Kinds: map[reflect.Kind]*rapid.Generator[any]{
-			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
-			reflect.Int8:    rapid.Int8().AsAny(),
-			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
-			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
-			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
-			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
-			reflect.Uint8:   rapid.Uint8().AsAny(),
-			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
-			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
-			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
-			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
-			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
-			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.MakeCustom[generic.Item](model.MakeConfig{
+		Kinds: map[reflect.Kind]*model.Generator[any]{
+			reflect.Int:     model.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    model.Int8().AsAny(),
+			reflect.Int16:   model.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   model.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   model.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    model.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   model.Uint8().AsAny(),
+			reflect.Uint16:  model.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  model.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  model.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: model.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: model.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  model.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
 		},
-		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+		Fields: map[reflect.Type]map[string]*model.Generator[any]{
 			reflect.TypeOf(generic.Item{}): {
 				"ID": keyGen.AsAny(),
 			},
@@ -191,20 +189,20 @@ func ItemRepositoryModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[generic.ItemRepository]()
 	laws.Add(law.ReadAfterWrite[generic.ItemRepository, string, generic.Item]{
-		Read: func(rt *rapid.T, impl generic.ItemRepository, k string) (generic.Item, error) {
+		Read: func(rt *model.T, impl generic.ItemRepository, k string) (generic.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys: keyGen,
 	})
 	laws.Add(law.DeleteReturnsNotFound[generic.ItemRepository, string, generic.Item]{
-		Read: func(rt *rapid.T, impl generic.ItemRepository, k string) (generic.Item, error) {
+		Read: func(rt *model.T, impl generic.ItemRepository, k string) (generic.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys:     keyGen,
 		Sentinel: generic.ErrNotFound,
 	})
 	laws.Add(law.CountEqualsReference[generic.ItemRepository, int]{
-		Count: func(rt *rapid.T, impl generic.ItemRepository) (int, error) {
+		Count: func(rt *model.T, impl generic.ItemRepository) (int, error) {
 			return impl.Count(rt.Context())
 		},
 	})
@@ -263,8 +261,8 @@ func ItemRepositoryModelSkipLaw(id string) ItemRepositoryModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func ItemRepositoryModelConcurrent(workers, opsPerWorker int) ItemRepositoryModelOption {
 	return func(c *itemrepositoryModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-		valGen := rapid.Make[generic.Item]()
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := model.Make[generic.Item]()
 		c.concurrent = &model.ConcurrentConfig[generic.ItemRepository]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,

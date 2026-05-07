@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"iter"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/auditchain_hash"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       HashLogModelReference, HashLogModelActions, HashLogModelLaw, HashLogModelSkipLaw
 func AssertHashLogModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() auditchain_hash.HashLog,
 	opts ...HashLogModelOption,
 ) {
@@ -41,11 +39,11 @@ func AssertHashLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
+			model.Check(t, HashLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
+	model.Check(t, HashLogModelProperty(sutFactory, opts...))
 }
 
 // TestHashLogModel runs the model property as a standalone test.
@@ -62,7 +60,7 @@ func HashLogModelTest(
 	opts ...HashLogModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
+	model.Check(t, HashLogModelProperty(sutFactory, opts...))
 }
 
 // HashLogModelFuzz is the fuzz counterpart of [HashLogModelTest].
@@ -73,7 +71,7 @@ func HashLogModelFuzz(
 	opts ...HashLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzHashLogModel is a fuzz target for coverage-guided testing
@@ -84,23 +82,23 @@ func FuzzHashLogModel(
 	opts ...HashLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
 }
 
 // HashLogModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := HashLogModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func HashLogModelProperty(
 	sutFactory func() auditchain_hash.HashLog,
 	opts ...HashLogModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newHashLogModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	valGen := rapid.Make[auditchain_hash.Entry]()
+	valGen := model.Make[auditchain_hash.Entry]()
 
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[struct{}, auditchain_hash.Entry]()
@@ -139,7 +137,7 @@ func HashLogModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[auditchain_hash.HashLog]()
-	chainReplayFn := func(rt *rapid.T, impl auditchain_hash.HashLog, k struct{}) iter.Seq2[auditchain_hash.Entry, error] {
+	chainReplayFn := func(rt *model.T, impl auditchain_hash.HashLog, k struct{}) iter.Seq2[auditchain_hash.Entry, error] {
 		return impl.Replay(rt.Context())
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[auditchain_hash.HashLog, struct{}, auditchain_hash.Entry]{
@@ -152,7 +150,7 @@ func HashLogModelProperty(
 		Replay: chainReplayFn, History: attemptedAppends,
 	})
 	laws.Add(law.HashChainIntegrityViaVerify[auditchain_hash.HashLog]{
-		Verify: func(rt *rapid.T, impl auditchain_hash.HashLog) error {
+		Verify: func(rt *model.T, impl auditchain_hash.HashLog) error {
 			return impl.Verify(rt.Context())
 		},
 	})

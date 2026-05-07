@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/unknown"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -30,7 +28,7 @@ import (
 //	Concurrent:    ProcessorModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       ProcessorModelReference, ProcessorModelActions, ProcessorModelLaw, ProcessorModelSkipLaw
 func AssertProcessorModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() unknown.Processor,
 	opts ...ProcessorModelOption,
 ) {
@@ -47,11 +45,11 @@ func AssertProcessorModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
+			model.Check(t, ProcessorModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
+	model.Check(t, ProcessorModelProperty(sutFactory, opts...))
 }
 
 // TestProcessorModel runs the model property as a standalone test.
@@ -68,7 +66,7 @@ func ProcessorModelTest(
 	opts ...ProcessorModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
+	model.Check(t, ProcessorModelProperty(sutFactory, opts...))
 }
 
 // ProcessorModelFuzz is the fuzz counterpart of [ProcessorModelTest].
@@ -79,7 +77,7 @@ func ProcessorModelFuzz(
 	opts ...ProcessorModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
 }
 
 // FuzzProcessorModel is a fuzz target for coverage-guided testing
@@ -90,7 +88,7 @@ func FuzzProcessorModel(
 	opts ...ProcessorModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
 }
 
 // FuzzProcessorModelConcurrent is a fuzz target for coverage-guided
@@ -103,7 +101,7 @@ func FuzzProcessorModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, ProcessorModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newProcessorModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -112,36 +110,36 @@ func FuzzProcessorModelConcurrent(
 }
 
 // ProcessorModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := ProcessorModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func ProcessorModelProperty(
 	sutFactory func() unknown.Processor,
 	opts ...ProcessorModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newProcessorModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.MakeCustom[unknown.Item](rapid.MakeConfig{
-		Kinds: map[reflect.Kind]*rapid.Generator[any]{
-			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
-			reflect.Int8:    rapid.Int8().AsAny(),
-			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
-			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
-			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
-			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
-			reflect.Uint8:   rapid.Uint8().AsAny(),
-			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
-			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
-			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
-			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
-			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
-			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.MakeCustom[unknown.Item](model.MakeConfig{
+		Kinds: map[reflect.Kind]*model.Generator[any]{
+			reflect.Int:     model.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    model.Int8().AsAny(),
+			reflect.Int16:   model.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   model.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   model.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    model.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   model.Uint8().AsAny(),
+			reflect.Uint16:  model.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  model.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  model.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: model.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: model.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  model.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
 		},
-		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+		Fields: map[reflect.Type]map[string]*model.Generator[any]{
 			reflect.TypeOf(unknown.Item{}): {
 				"ID": keyGen.AsAny(),
 			},
@@ -172,7 +170,7 @@ func ProcessorModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[unknown.Processor]()
 	laws.Add(law.ReadAfterWrite[unknown.Processor, string, unknown.Item]{
-		Read: func(rt *rapid.T, impl unknown.Processor, k string) (unknown.Item, error) {
+		Read: func(rt *model.T, impl unknown.Processor, k string) (unknown.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys: keyGen,
@@ -232,8 +230,8 @@ func ProcessorModelSkipLaw(id string) ProcessorModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func ProcessorModelConcurrent(workers, opsPerWorker int) ProcessorModelOption {
 	return func(c *processorModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-		valGen := rapid.Make[unknown.Item]()
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := model.Make[unknown.Item]()
 		c.concurrent = &model.ConcurrentConfig[unknown.Processor]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,

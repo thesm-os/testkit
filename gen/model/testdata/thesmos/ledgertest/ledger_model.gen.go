@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"iter"
 
 	"go.thesmos.sh/testkit/gen/model/testdata/thesmos"
@@ -32,7 +30,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       LedgerModelReference, LedgerModelActions, LedgerModelLaw, LedgerModelSkipLaw
 func AssertLedgerModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() thesmos.Ledger,
 	opts ...LedgerModelOption,
 ) {
@@ -41,11 +39,11 @@ func AssertLedgerModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
+			model.Check(t, LedgerModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
+	model.Check(t, LedgerModelProperty(sutFactory, opts...))
 }
 
 // TestLedgerModel runs the model property as a standalone test.
@@ -62,7 +60,7 @@ func LedgerModelTest(
 	opts ...LedgerModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
+	model.Check(t, LedgerModelProperty(sutFactory, opts...))
 }
 
 // LedgerModelFuzz is the fuzz counterpart of [LedgerModelTest].
@@ -73,7 +71,7 @@ func LedgerModelFuzz(
 	opts ...LedgerModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
 }
 
 // FuzzLedgerModel is a fuzz target for coverage-guided testing
@@ -84,23 +82,23 @@ func FuzzLedgerModel(
 	opts ...LedgerModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
 }
 
 // LedgerModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := LedgerModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func LedgerModelProperty(
 	sutFactory func() thesmos.Ledger,
 	opts ...LedgerModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newLedgerModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	valGen := rapid.Make[thesmos.LedgerEntry]()
+	valGen := model.Make[thesmos.LedgerEntry]()
 
 	// Chain history — tracks attempted appends for dropped-write detection.
 	attemptedAppends := chainhistory.New[string, thesmos.LedgerEntry]()
@@ -144,7 +142,7 @@ func LedgerModelProperty(
 
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[thesmos.Ledger]()
-	chainReplayFn := func(rt *rapid.T, impl thesmos.Ledger, k string) iter.Seq2[thesmos.LedgerEntry, error] {
+	chainReplayFn := func(rt *model.T, impl thesmos.Ledger, k string) iter.Seq2[thesmos.LedgerEntry, error] {
 		return impl.Replay(rt.Context(), k)
 	}
 	laws.Add(&law.AppendOnlyHistoryGrows[thesmos.Ledger, string, thesmos.LedgerEntry]{
@@ -157,7 +155,7 @@ func LedgerModelProperty(
 		Replay: chainReplayFn, History: attemptedAppends,
 	})
 	laws.Add(law.HashChainIntegrityViaVerify[thesmos.Ledger]{
-		Verify: func(rt *rapid.T, impl thesmos.Ledger) error {
+		Verify: func(rt *model.T, impl thesmos.Ledger) error {
 			return impl.Verify(rt.Context())
 		},
 	})

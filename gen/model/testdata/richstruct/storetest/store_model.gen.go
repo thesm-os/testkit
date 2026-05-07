@@ -8,8 +8,6 @@ import (
 	"reflect"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/richstruct"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -31,7 +29,7 @@ import (
 //	Concurrent:    StoreModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       StoreModelReference, StoreModelActions, StoreModelLaw, StoreModelSkipLaw
 func AssertStoreModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() richstruct.Store,
 	opts ...StoreModelOption,
 ) {
@@ -48,11 +46,11 @@ func AssertStoreModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+			model.Check(t, StoreModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+	model.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
 // TestStoreModel runs the model property as a standalone test.
@@ -69,7 +67,7 @@ func StoreModelTest(
 	opts ...StoreModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+	model.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
 // StoreModelFuzz is the fuzz counterpart of [StoreModelTest].
@@ -80,7 +78,7 @@ func StoreModelFuzz(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModel is a fuzz target for coverage-guided testing
@@ -91,7 +89,7 @@ func FuzzStoreModel(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModelConcurrent is a fuzz target for coverage-guided
@@ -104,7 +102,7 @@ func FuzzStoreModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, StoreModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newStoreModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -113,36 +111,36 @@ func FuzzStoreModelConcurrent(
 }
 
 // StoreModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := StoreModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func StoreModelProperty(
 	sutFactory func() richstruct.Store,
 	opts ...StoreModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newStoreModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.MakeCustom[richstruct.Document](rapid.MakeConfig{
-		Kinds: map[reflect.Kind]*rapid.Generator[any]{
-			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
-			reflect.Int8:    rapid.Int8().AsAny(),
-			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
-			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
-			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
-			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
-			reflect.Uint8:   rapid.Uint8().AsAny(),
-			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
-			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
-			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
-			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
-			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
-			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.MakeCustom[richstruct.Document](model.MakeConfig{
+		Kinds: map[reflect.Kind]*model.Generator[any]{
+			reflect.Int:     model.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    model.Int8().AsAny(),
+			reflect.Int16:   model.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   model.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   model.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    model.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   model.Uint8().AsAny(),
+			reflect.Uint16:  model.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  model.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  model.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: model.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: model.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  model.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
 		},
-		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+		Fields: map[reflect.Type]map[string]*model.Generator[any]{
 			reflect.TypeOf(richstruct.Document{}): {
 				"ID": keyGen.AsAny(),
 			},
@@ -191,13 +189,13 @@ func StoreModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[richstruct.Store]()
 	laws.Add(law.ReadAfterWrite[richstruct.Store, string, richstruct.Document]{
-		Read: func(rt *rapid.T, impl richstruct.Store, k string) (richstruct.Document, error) {
+		Read: func(rt *model.T, impl richstruct.Store, k string) (richstruct.Document, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys: keyGen,
 	})
 	laws.Add(law.CountEqualsReference[richstruct.Store, int]{
-		Count: func(rt *rapid.T, impl richstruct.Store) (int, error) {
+		Count: func(rt *model.T, impl richstruct.Store) (int, error) {
 			return impl.Count(rt.Context())
 		},
 	})
@@ -256,8 +254,8 @@ func StoreModelSkipLaw(id string) StoreModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
 	return func(c *storeModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-		valGen := rapid.Make[richstruct.Document]()
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := model.Make[richstruct.Document]()
 		c.concurrent = &model.ConcurrentConfig[richstruct.Store]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,

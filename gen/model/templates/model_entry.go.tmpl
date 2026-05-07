@@ -12,7 +12,7 @@
 //	Concurrent:    {{if .CanLinearize}}{{.InterfaceName}}ModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter){{else}}not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions){{end}}
 //	Plug-in:       {{.InterfaceName}}ModelReference, {{.InterfaceName}}ModelActions, {{.InterfaceName}}ModelLaw, {{.InterfaceName}}ModelSkipLaw
 func Assert{{.InterfaceName}}Model(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() {{.QualifiedType}},
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
@@ -31,11 +31,11 @@ func Assert{{.InterfaceName}}Model(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
+			model.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
+	model.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
 }
 
 // Test{{.InterfaceName}}Model runs the model property as a standalone test.
@@ -52,7 +52,7 @@ func {{.InterfaceName}}ModelTest(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
+	model.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
 }
 
 // {{.InterfaceName}}ModelFuzz is the fuzz counterpart of [{{.InterfaceName}}ModelTest].
@@ -63,7 +63,7 @@ func {{.InterfaceName}}ModelFuzz(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
 }
 
 // Fuzz{{.InterfaceName}}Model is a fuzz target for coverage-guided testing
@@ -74,7 +74,7 @@ func Fuzz{{.InterfaceName}}Model(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
 }
 {{- if .CanLinearize}}
 
@@ -88,7 +88,7 @@ func Fuzz{{.InterfaceName}}ModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, {{.InterfaceName}}ModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := new{{.InterfaceName}}ModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))

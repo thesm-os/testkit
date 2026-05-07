@@ -7,8 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/gen/model/testdata/newshapes"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
@@ -28,7 +26,7 @@ import (
 //	Concurrent:    not emitted (interface lacks Reader+Writer/Deleter for Porcupine; use manual model.WithConcurrent + StressActions)
 //	Plug-in:       MachineModelReference, MachineModelActions, MachineModelLaw, MachineModelSkipLaw
 func AssertMachineModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() newshapes.Machine,
 	opts ...MachineModelOption,
 ) {
@@ -37,11 +35,11 @@ func AssertMachineModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, MachineModelProperty(sutFactory, opts...))
+			model.Check(t, MachineModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, MachineModelProperty(sutFactory, opts...))
+	model.Check(t, MachineModelProperty(sutFactory, opts...))
 }
 
 // TestMachineModel runs the model property as a standalone test.
@@ -58,7 +56,7 @@ func MachineModelTest(
 	opts ...MachineModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, MachineModelProperty(sutFactory, opts...))
+	model.Check(t, MachineModelProperty(sutFactory, opts...))
 }
 
 // MachineModelFuzz is the fuzz counterpart of [MachineModelTest].
@@ -69,7 +67,7 @@ func MachineModelFuzz(
 	opts ...MachineModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
 }
 
 // FuzzMachineModel is a fuzz target for coverage-guided testing
@@ -80,24 +78,24 @@ func FuzzMachineModel(
 	opts ...MachineModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
 }
 
 // MachineModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := MachineModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func MachineModelProperty(
 	sutFactory func() newshapes.Machine,
 	opts ...MachineModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newMachineModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.Make[newshapes.Command]()
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.Make[newshapes.Command]()
 
 	// Reference: consumer-supplied or synthesized.
 	refFactory := cfg.refFactory
@@ -133,7 +131,7 @@ func MachineModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[newshapes.Machine]()
 	laws.Add(law.PureDeterminism[newshapes.Machine, newshapes.State]{
-		Call: func(rt *rapid.T, impl newshapes.Machine) newshapes.State {
+		Call: func(rt *model.T, impl newshapes.Machine) newshapes.State {
 			return impl.State()
 		},
 	})

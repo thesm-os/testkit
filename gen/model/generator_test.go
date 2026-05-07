@@ -152,7 +152,7 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).
 			Contains("generic.Repository[K, V]", "must use parameterized type")
 		testkit.Assert(t, content).
-			Contains("rapid.Make[V]()", "must use rapid.Make for generic V")
+			Contains("model.Make[V]()", "must use model.Make for generic V")
 		testkit.Assert(t, content).
 			Contains("RepositoryModelKeyGen", "must have keyGen option")
 		testkit.Assert(t, content).
@@ -160,7 +160,7 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, content).
 			Contains("RepositoryModelSentinel", "must have sentinel option")
 		testkit.Assert(t, content).
-			NotContains("rapid.MakeCustom", "must not use MakeCustom for generic")
+			NotContains("model.MakeCustom", "must not use MakeCustom for generic")
 		testkit.Assert(t, content).
 			NotContains("reflect.TypeOf", "must not use reflect for generic")
 	})
@@ -174,7 +174,7 @@ func TestGenerate(t *testing.T) {
 		})
 		testkit.NoError(t, err, "must generate")
 		content := string(result.Files[0].Content)
-		testkit.Assert(t, content).Contains("rapid.MakeCustom", "must use MakeCustom")
+		testkit.Assert(t, content).Contains("model.MakeCustom", "must use MakeCustom")
 		testkit.Assert(t, content).Contains(`"ID": keyGen.AsAny()`, "must override keyfield")
 		testkit.Assert(t, content).Contains("refmap.NewMapStore", "must synthesize refmap (pure CRUD)")
 	})

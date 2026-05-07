@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"pgregory.net/rapid"
-
 	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/gen/model/testdata/timeaware"
 	"go.thesmos.sh/testkit/model"
@@ -33,7 +31,7 @@ import (
 //	Concurrent:    StoreModelConcurrent (Porcupine linearizability for Reader/Writer/Deleter)
 //	Plug-in:       StoreModelReference, StoreModelActions, StoreModelLaw, StoreModelSkipLaw
 func AssertStoreModel(
-	t rapid.TB,
+	t model.TB,
 	sutFactory func() timeaware.Store,
 	opts ...StoreModelOption,
 ) {
@@ -50,11 +48,11 @@ func AssertStoreModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+			model.Check(t, StoreModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+	model.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
 // TestStoreModel runs the model property as a standalone test.
@@ -71,7 +69,7 @@ func StoreModelTest(
 	opts ...StoreModelOption,
 ) {
 	t.Helper()
-	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+	model.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
 // StoreModelFuzz is the fuzz counterpart of [StoreModelTest].
@@ -82,7 +80,7 @@ func StoreModelFuzz(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModel is a fuzz target for coverage-guided testing
@@ -93,7 +91,7 @@ func FuzzStoreModel(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
+	f.Fuzz(model.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModelConcurrent is a fuzz target for coverage-guided
@@ -106,7 +104,7 @@ func FuzzStoreModelConcurrent(
 ) {
 	f.Helper()
 	opts = append(opts, StoreModelConcurrent(workers, opsPerWorker))
-	f.Fuzz(rapid.MakeFuzz(func(rt *rapid.T) {
+	f.Fuzz(model.MakeFuzz(func(rt *model.T) {
 		cfg := newStoreModelConfig(opts...)
 		if cfg.concurrent != nil {
 			model.Assert(rt, sutFactory, model.WithConcurrent(*cfg.concurrent))
@@ -115,36 +113,36 @@ func FuzzStoreModelConcurrent(
 }
 
 // StoreModelProperty builds the rapid property function.
-// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+// Use directly for shared model.Check / model.MakeFuzz targets:
 //
 //	prop := StoreModelProperty(factory, opts...)
-//	rapid.Check(t, prop)                    // test
-//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+//	model.Check(t, prop)                    // test
+//	f.Fuzz(model.MakeFuzz(prop))            // fuzz
 func StoreModelProperty(
 	sutFactory func() timeaware.Store,
 	opts ...StoreModelOption,
-) func(*rapid.T) {
+) func(*model.T) {
 	cfg := newStoreModelConfig(opts...)
 
 	// Generators — local to this function, not package-level.
-	keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-	valGen := rapid.MakeCustom[timeaware.Item](rapid.MakeConfig{
-		Kinds: map[reflect.Kind]*rapid.Generator[any]{
-			reflect.Int:     rapid.IntRange(-1000, 1000).AsAny(),
-			reflect.Int8:    rapid.Int8().AsAny(),
-			reflect.Int16:   rapid.Int16Range(-1000, 1000).AsAny(),
-			reflect.Int32:   rapid.Int32Range(-1000, 1000).AsAny(),
-			reflect.Int64:   rapid.Int64Range(-1000, 1000).AsAny(),
-			reflect.Uint:    rapid.UintRange(0, 1000).AsAny(),
-			reflect.Uint8:   rapid.Uint8().AsAny(),
-			reflect.Uint16:  rapid.Uint16Range(0, 1000).AsAny(),
-			reflect.Uint32:  rapid.Uint32Range(0, 1000).AsAny(),
-			reflect.Uint64:  rapid.Uint64Range(0, 1000).AsAny(),
-			reflect.Float32: rapid.Float32Range(-1000, 1000).AsAny(),
-			reflect.Float64: rapid.Float64Range(-1000, 1000).AsAny(),
-			reflect.String:  rapid.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
+	keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+	valGen := model.MakeCustom[timeaware.Item](model.MakeConfig{
+		Kinds: map[reflect.Kind]*model.Generator[any]{
+			reflect.Int:     model.IntRange(-1000, 1000).AsAny(),
+			reflect.Int8:    model.Int8().AsAny(),
+			reflect.Int16:   model.Int16Range(-1000, 1000).AsAny(),
+			reflect.Int32:   model.Int32Range(-1000, 1000).AsAny(),
+			reflect.Int64:   model.Int64Range(-1000, 1000).AsAny(),
+			reflect.Uint:    model.UintRange(0, 1000).AsAny(),
+			reflect.Uint8:   model.Uint8().AsAny(),
+			reflect.Uint16:  model.Uint16Range(0, 1000).AsAny(),
+			reflect.Uint32:  model.Uint32Range(0, 1000).AsAny(),
+			reflect.Uint64:  model.Uint64Range(0, 1000).AsAny(),
+			reflect.Float32: model.Float32Range(-1000, 1000).AsAny(),
+			reflect.Float64: model.Float64Range(-1000, 1000).AsAny(),
+			reflect.String:  model.StringMatching(`[a-zA-Z0-9]{0,20}`).AsAny(),
 		},
-		Fields: map[reflect.Type]map[string]*rapid.Generator[any]{
+		Fields: map[reflect.Type]map[string]*model.Generator[any]{
 			reflect.TypeOf(timeaware.Item{}): {
 				"ID": keyGen.AsAny(),
 			},
@@ -193,20 +191,20 @@ func StoreModelProperty(
 	// Laws: auto-derived + consumer-supplied.
 	laws := model.NewRegistry[timeaware.Store]()
 	laws.Add(law.ReadAfterWrite[timeaware.Store, string, timeaware.Item]{
-		Read: func(rt *rapid.T, impl timeaware.Store, k string) (timeaware.Item, error) {
+		Read: func(rt *model.T, impl timeaware.Store, k string) (timeaware.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys: keyGen,
 	})
 	laws.Add(law.DeleteReturnsNotFound[timeaware.Store, string, timeaware.Item]{
-		Read: func(rt *rapid.T, impl timeaware.Store, k string) (timeaware.Item, error) {
+		Read: func(rt *model.T, impl timeaware.Store, k string) (timeaware.Item, error) {
 			return impl.Get(rt.Context(), k)
 		},
 		Keys:     keyGen,
 		Sentinel: timeaware.ErrNotFound,
 	})
 	laws.Add(law.CountEqualsReference[timeaware.Store, int]{
-		Count: func(rt *rapid.T, impl timeaware.Store) (int, error) {
+		Count: func(rt *model.T, impl timeaware.Store) (int, error) {
 			return impl.Count(rt.Context())
 		},
 	})
@@ -290,8 +288,8 @@ func StoreModelSkipLaw(id string) StoreModelOption {
 // with per-key partitioning for Reader/Writer/Deleter shapes.
 func StoreModelConcurrent(workers, opsPerWorker int) StoreModelOption {
 	return func(c *storeModelConfig) {
-		keyGen := rapid.SampledFrom([]string{"a", "b", "c", "d", "e"})
-		valGen := rapid.Make[timeaware.Item]()
+		keyGen := model.SampledFrom([]string{"a", "b", "c", "d", "e"})
+		valGen := model.Make[timeaware.Item]()
 		c.concurrent = &model.ConcurrentConfig[timeaware.Store]{
 			Workers:      workers,
 			OpsPerWorker: opsPerWorker,
