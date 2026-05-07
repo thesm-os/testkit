@@ -31,4 +31,5 @@ const (
 	DependsOnField    = "depends-on"
 	HashFunc          = "hash"
 	TimeAware         = "time-aware"
+	Nondeterministic  = "nondeterministic"
 )

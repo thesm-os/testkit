@@ -187,9 +187,9 @@ func NewFinderStub(tb testing.TB, opts ...FinderStubOption) *FinderStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *FinderStub) Reset() {
+func (s *FinderStub) ResetCalls() {
 	s.OnFind.Reset()
 	s.OnMerge.Reset()
 }

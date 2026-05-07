@@ -270,9 +270,9 @@ func NewRunnerStub(tb testing.TB, opts ...RunnerStubOption) *RunnerStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *RunnerStub) Reset() {
+func (s *RunnerStub) ResetCalls() {
 	s.OnAppend.Reset()
 	s.OnClose.Reset()
 	s.OnOpen.Reset()

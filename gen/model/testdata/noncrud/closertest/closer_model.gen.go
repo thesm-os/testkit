@@ -37,11 +37,11 @@ func AssertCloserModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, closerModelProperty(sutFactory, opts...))
+			rapid.Check(t, CloserModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, closerModelProperty(sutFactory, opts...))
+	rapid.Check(t, CloserModelProperty(sutFactory, opts...))
 }
 
 // FuzzCloserModel is a fuzz target for coverage-guided testing
@@ -52,10 +52,16 @@ func FuzzCloserModel(
 	opts ...CloserModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(closerModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
 }
 
-func closerModelProperty(
+// CloserModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := CloserModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func CloserModelProperty(
 	sutFactory func() noncrud.Closer,
 	opts ...CloserModelOption,
 ) func(*rapid.T) {

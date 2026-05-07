@@ -251,14 +251,14 @@ func TestProcessorStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := processortest.NewProcessorStub(t)
 		_, _ = s.ReadFrom(t.Context(), nil)
 		_ = s.WriteTo(t.Context(), nil)
-		s.Reset()
-		s.OnReadFrom.AssertNotCalled(t, "ReadFrom must be cleared after Reset")
-		s.OnWriteTo.AssertNotCalled(t, "WriteTo must be cleared after Reset")
+		s.ResetCalls()
+		s.OnReadFrom.AssertNotCalled(t, "ReadFrom must be cleared after ResetCalls")
+		s.OnWriteTo.AssertNotCalled(t, "WriteTo must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured ReadFrom", func(t *testing.T) {
@@ -308,36 +308,36 @@ func TestProcessorStub(t *testing.T) {
 		testkit.NoError(t, err, "WriteTo must not error")
 	})
 
-	t.Run("Reset preserves ReadFrom Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves ReadFrom Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := processortest.NewProcessorStub(t)
 		s.OnReadFrom.Returns(42, nil)
 		_, _ = s.ReadFrom(t.Context(), nil)
-		s.Reset()
-		s.OnReadFrom.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnReadFrom.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result, err := s.ReadFrom(t.Context(), nil)
 		testkit.Equal(t, result, 42, "ReadFrom must return configured value")
 		testkit.NoError(t, err, "ReadFrom must not error")
 	})
 
-	t.Run("Reset preserves WriteTo Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves WriteTo Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := processortest.NewProcessorStub(t)
 		s.OnWriteTo.Returns(nil)
 		_ = s.WriteTo(t.Context(), nil)
-		s.Reset()
-		s.OnWriteTo.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnWriteTo.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.WriteTo(t.Context(), nil)
 		testkit.NoError(t, err, "WriteTo must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := processortest.NewProcessorStub(t)
 		_, _ = s.ReadFrom(t.Context(), nil)
 		testkit.Len(t, s.OnReadFrom.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnReadFrom.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnReadFrom.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("ReadFrom Latency honors virtual clock", func(t *testing.T) {
@@ -416,7 +416,7 @@ func TestProcessorStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		_, err = s.ReadFrom(t.Context(), nil)
 		testkit.NoError(t, err, "ReadFrom must succeed after window expires")
 	})

@@ -37,11 +37,11 @@ func AssertStateModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, stateModelProperty(sutFactory, opts...))
+			rapid.Check(t, StateModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, stateModelProperty(sutFactory, opts...))
+	rapid.Check(t, StateModelProperty(sutFactory, opts...))
 }
 
 // FuzzStateModel is a fuzz target for coverage-guided testing
@@ -52,10 +52,16 @@ func FuzzStateModel(
 	opts ...StateModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(stateModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(StateModelProperty(sutFactory, opts...)))
 }
 
-func stateModelProperty(
+// StateModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := StateModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func StateModelProperty(
 	sutFactory func() thesmos.State,
 	opts ...StateModelOption,
 ) func(*rapid.T) {

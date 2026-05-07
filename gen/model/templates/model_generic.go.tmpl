@@ -44,7 +44,7 @@ func Assert{{.InterfaceName}}Model{{.TypeParamDecl}}(
 		t.Fatal("Assert{{.InterfaceName}}Model: no reference model — supply via " +
 			"{{.InterfaceName}}ModelReference or {{.InterfaceName}}ModelKeyFunc + {{.InterfaceName}}ModelSentinel")
 	}
-	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, cfg))
+	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, cfg))
 }
 
 // Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}} is a fuzz target for coverage-guided
@@ -57,10 +57,10 @@ func Fuzz{{.InterfaceName}}Model{{.TypeParamDecl}}(
 	f.Helper()
 	cfg := new{{.InterfaceName}}ModelConfig(opts...)
 	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
-	f.Fuzz(rapid.MakeFuzz({{.InterfaceName | toLower}}ModelProperty(sutFactory, cfg)))
+	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, cfg)))
 }
 
-func {{.InterfaceName | toLower}}ModelProperty{{.TypeParamDecl}}(
+func {{.InterfaceName}}ModelProperty{{.TypeParamDecl}}(
 	sutFactory func() {{$T}},
 	cfg {{.InterfaceName | toLower}}ModelConfig{{.TypeParamNames}},
 ) func(*rapid.T) {

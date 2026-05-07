@@ -52,7 +52,7 @@ func AssertRepositoryModel[K comparable, V any](
 		t.Fatal("AssertRepositoryModel: no reference model — supply via " +
 			"RepositoryModelReference or RepositoryModelKeyFunc + RepositoryModelSentinel")
 	}
-	rapid.Check(t, repositoryModelProperty(sutFactory, cfg))
+	rapid.Check(t, RepositoryModelProperty(sutFactory, cfg))
 }
 
 // FuzzRepositoryModel[K comparable, V any] is a fuzz target for coverage-guided
@@ -65,10 +65,10 @@ func FuzzRepositoryModel[K comparable, V any](
 	f.Helper()
 	cfg := newRepositoryModelConfig(opts...)
 	// Fuzz mode: validation deferred ��� rapid catches missing config as test failure.
-	f.Fuzz(rapid.MakeFuzz(repositoryModelProperty(sutFactory, cfg)))
+	f.Fuzz(rapid.MakeFuzz(RepositoryModelProperty(sutFactory, cfg)))
 }
 
-func repositoryModelProperty[K comparable, V any](
+func RepositoryModelProperty[K comparable, V any](
 	sutFactory func() generic.Repository[K, V],
 	cfg repositoryModelConfig[K, V],
 ) func(*rapid.T) {

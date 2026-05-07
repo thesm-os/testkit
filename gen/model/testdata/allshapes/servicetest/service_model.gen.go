@@ -47,11 +47,11 @@ func AssertServiceModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, serviceModelProperty(sutFactory, opts...))
+			rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, serviceModelProperty(sutFactory, opts...))
+	rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
 }
 
 // FuzzServiceModel is a fuzz target for coverage-guided testing
@@ -62,7 +62,7 @@ func FuzzServiceModel(
 	opts ...ServiceModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(serviceModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
 }
 
 // FuzzServiceModelConcurrent is a fuzz target for coverage-guided
@@ -83,7 +83,13 @@ func FuzzServiceModelConcurrent(
 	}))
 }
 
-func serviceModelProperty(
+// ServiceModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := ServiceModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func ServiceModelProperty(
 	sutFactory func() allshapes.Service,
 	opts ...ServiceModelOption,
 ) func(*rapid.T) {

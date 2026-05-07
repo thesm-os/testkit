@@ -47,11 +47,11 @@ func AssertProcessorModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, processorModelProperty(sutFactory, opts...))
+			rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, processorModelProperty(sutFactory, opts...))
+	rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
 }
 
 // FuzzProcessorModel is a fuzz target for coverage-guided testing
@@ -62,7 +62,7 @@ func FuzzProcessorModel(
 	opts ...ProcessorModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(processorModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
 }
 
 // FuzzProcessorModelConcurrent is a fuzz target for coverage-guided
@@ -83,7 +83,13 @@ func FuzzProcessorModelConcurrent(
 	}))
 }
 
-func processorModelProperty(
+// ProcessorModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := ProcessorModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func ProcessorModelProperty(
 	sutFactory func() unknown.Processor,
 	opts ...ProcessorModelOption,
 ) func(*rapid.T) {

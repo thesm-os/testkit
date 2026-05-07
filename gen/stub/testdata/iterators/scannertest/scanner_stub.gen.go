@@ -227,9 +227,9 @@ func NewScannerStub(tb testing.TB, opts ...ScannerStubOption) *ScannerStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *ScannerStub) Reset() {
+func (s *ScannerStub) ResetCalls() {
 	s.OnKeys.Reset()
 	s.OnScan.Reset()
 }

@@ -36,11 +36,11 @@ func AssertKindRegistryModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, kindregistryModelProperty(sutFactory, opts...))
+			rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, kindregistryModelProperty(sutFactory, opts...))
+	rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 }
 
 // FuzzKindRegistryModel is a fuzz target for coverage-guided testing
@@ -51,10 +51,16 @@ func FuzzKindRegistryModel(
 	opts ...KindRegistryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(kindregistryModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
 }
 
-func kindregistryModelProperty(
+// KindRegistryModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := KindRegistryModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func KindRegistryModelProperty(
 	sutFactory func() thesmos.KindRegistry,
 	opts ...KindRegistryModelOption,
 ) func(*rapid.T) {

@@ -48,11 +48,11 @@ func AssertVaultModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, vaultModelProperty(sutFactory, opts...))
+			rapid.Check(t, VaultModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, vaultModelProperty(sutFactory, opts...))
+	rapid.Check(t, VaultModelProperty(sutFactory, opts...))
 }
 
 // FuzzVaultModel is a fuzz target for coverage-guided testing
@@ -63,7 +63,7 @@ func FuzzVaultModel(
 	opts ...VaultModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(vaultModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(VaultModelProperty(sutFactory, opts...)))
 }
 
 // FuzzVaultModelConcurrent is a fuzz target for coverage-guided
@@ -84,7 +84,13 @@ func FuzzVaultModelConcurrent(
 	}))
 }
 
-func vaultModelProperty(
+// VaultModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := VaultModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func VaultModelProperty(
 	sutFactory func() multisentinel.Vault,
 	opts ...VaultModelOption,
 ) func(*rapid.T) {

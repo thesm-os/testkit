@@ -350,16 +350,16 @@ func TestServiceStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		_, _, _ = s.Checkout(t.Context(), "")
 		_, _, _ = s.Peek(t.Context())
 		_, _, _, _ = s.Stats(t.Context())
-		s.Reset()
-		s.OnCheckout.AssertNotCalled(t, "Checkout must be cleared after Reset")
-		s.OnPeek.AssertNotCalled(t, "Peek must be cleared after Reset")
-		s.OnStats.AssertNotCalled(t, "Stats must be cleared after Reset")
+		s.ResetCalls()
+		s.OnCheckout.AssertNotCalled(t, "Checkout must be cleared after ResetCalls")
+		s.OnPeek.AssertNotCalled(t, "Peek must be cleared after ResetCalls")
+		s.OnStats.AssertNotCalled(t, "Stats must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Checkout", func(t *testing.T) {
@@ -435,39 +435,39 @@ func TestServiceStub(t *testing.T) {
 		testkit.NoError(t, err, "Stats must not error")
 	})
 
-	t.Run("Reset preserves Checkout Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Checkout Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		s.OnCheckout.Returns(multireturns.Item{Key: "test-key"}, multireturns.Lease{ID: "test-id"}, nil)
 		_, _, _ = s.Checkout(t.Context(), "")
-		s.Reset()
-		s.OnCheckout.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnCheckout.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result0, result1, err := s.Checkout(t.Context(), "")
 		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Checkout must return configured value")
 		testkit.Equal(t, result1, multireturns.Lease{ID: "test-id"}, "Checkout must return configured value")
 		testkit.NoError(t, err, "Checkout must not error")
 	})
 
-	t.Run("Reset preserves Peek Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Peek Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		s.OnPeek.Returns(multireturns.Item{Key: "test-key"}, multireturns.Item{Key: "test-key"}, nil)
 		_, _, _ = s.Peek(t.Context())
-		s.Reset()
-		s.OnPeek.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnPeek.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result0, result1, err := s.Peek(t.Context())
 		testkit.Equal(t, result0, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
 		testkit.Equal(t, result1, multireturns.Item{Key: "test-key"}, "Peek must return configured value")
 		testkit.NoError(t, err, "Peek must not error")
 	})
 
-	t.Run("Reset preserves Stats Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Stats Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		s.OnStats.Returns(42, 42, "test-result2", nil)
 		_, _, _, _ = s.Stats(t.Context())
-		s.Reset()
-		s.OnStats.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnStats.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result0, result1, result2, err := s.Stats(t.Context())
 		testkit.Equal(t, result0, 42, "Stats must return configured value")
 		testkit.Equal(t, result1, 42, "Stats must return configured value")
@@ -475,13 +475,13 @@ func TestServiceStub(t *testing.T) {
 		testkit.NoError(t, err, "Stats must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		_, _, _ = s.Checkout(t.Context(), "")
 		testkit.Len(t, s.OnCheckout.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnCheckout.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnCheckout.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Checkout Latency honors virtual clock", func(t *testing.T) {
@@ -561,7 +561,7 @@ func TestServiceStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		_, _, err = s.Checkout(t.Context(), "")
 		testkit.NoError(t, err, "Checkout must succeed after window expires")
 	})

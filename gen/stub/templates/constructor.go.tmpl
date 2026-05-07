@@ -97,9 +97,9 @@ func New{{.StubName}}(tb testing.TB, opts ...{{.StubName}}Option) *{{.StubName}}
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *{{.StubName}}) Reset() {
+func (s *{{.StubName}}) ResetCalls() {
 {{- range .Methods}}{{if not .Skip}}
 	s.On{{.Name}}.Reset()
 {{- end}}{{end}}

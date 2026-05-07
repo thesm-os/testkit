@@ -48,11 +48,11 @@ func AssertStoreModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, storeModelProperty(sutFactory, opts...))
+			rapid.Check(t, StoreModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, storeModelProperty(sutFactory, opts...))
+	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
 // FuzzStoreModel is a fuzz target for coverage-guided testing
@@ -63,7 +63,7 @@ func FuzzStoreModel(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(storeModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModelConcurrent is a fuzz target for coverage-guided
@@ -84,7 +84,13 @@ func FuzzStoreModelConcurrent(
 	}))
 }
 
-func storeModelProperty(
+// StoreModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := StoreModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func StoreModelProperty(
 	sutFactory func() richstruct.Store,
 	opts ...StoreModelOption,
 ) func(*rapid.T) {

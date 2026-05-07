@@ -1,5 +1,11 @@
 {{define "model_property"}}
-func {{.InterfaceName | toLower}}ModelProperty(
+// {{.InterfaceName}}ModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := {{.InterfaceName}}ModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func {{.InterfaceName}}ModelProperty(
 	sutFactory func() {{.QualifiedType}},
 	opts ...{{.InterfaceName}}ModelOption,
 ) func(*rapid.T) {

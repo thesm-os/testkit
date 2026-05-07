@@ -348,16 +348,16 @@ func TestStoreStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		_ = s.Delete(t.Context(), "")
 		_, _ = s.Get(t.Context(), "")
 		_ = s.Put(t.Context(), "", "")
-		s.Reset()
-		s.OnDelete.AssertNotCalled(t, "Delete must be cleared after Reset")
-		s.OnGet.AssertNotCalled(t, "Get must be cleared after Reset")
-		s.OnPut.AssertNotCalled(t, "Put must be cleared after Reset")
+		s.ResetCalls()
+		s.OnDelete.AssertNotCalled(t, "Delete must be cleared after ResetCalls")
+		s.OnGet.AssertNotCalled(t, "Get must be cleared after ResetCalls")
+		s.OnPut.AssertNotCalled(t, "Put must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Delete", func(t *testing.T) {
@@ -427,47 +427,47 @@ func TestStoreStub(t *testing.T) {
 		testkit.NoError(t, err, "Put must not error")
 	})
 
-	t.Run("Reset preserves Delete Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Delete Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnDelete.Returns(nil)
 		_ = s.Delete(t.Context(), "")
-		s.Reset()
-		s.OnDelete.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnDelete.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.Delete(t.Context(), "")
 		testkit.NoError(t, err, "Delete must not error")
 	})
 
-	t.Run("Reset preserves Get Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Get Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnGet.Returns("test-result", nil)
 		_, _ = s.Get(t.Context(), "")
-		s.Reset()
-		s.OnGet.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnGet.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result, err := s.Get(t.Context(), "")
 		testkit.Equal(t, result, "test-result", "Get must return configured value")
 		testkit.NoError(t, err, "Get must not error")
 	})
 
-	t.Run("Reset preserves Put Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Put Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		s.OnPut.Returns(nil)
 		_ = s.Put(t.Context(), "", "")
-		s.Reset()
-		s.OnPut.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnPut.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.Put(t.Context(), "", "")
 		testkit.NoError(t, err, "Put must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := storetest.NewStoreStub(t)
 		_ = s.Delete(t.Context(), "")
 		testkit.Len(t, s.OnDelete.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnDelete.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnDelete.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Delete Latency honors virtual clock", func(t *testing.T) {
@@ -547,7 +547,7 @@ func TestStoreStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		err = s.Delete(t.Context(), "")
 		testkit.NoError(t, err, "Delete must succeed after window expires")
 	})

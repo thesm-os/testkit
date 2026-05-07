@@ -254,14 +254,14 @@ func TestScannerStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := scannertest.NewScannerStub(t)
 		_ = s.Keys(t.Context())
 		_ = s.Scan(t.Context(), "")
-		s.Reset()
-		s.OnKeys.AssertNotCalled(t, "Keys must be cleared after Reset")
-		s.OnScan.AssertNotCalled(t, "Scan must be cleared after Reset")
+		s.ResetCalls()
+		s.OnKeys.AssertNotCalled(t, "Keys must be cleared after ResetCalls")
+		s.OnScan.AssertNotCalled(t, "Scan must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Keys", func(t *testing.T) {
@@ -310,35 +310,35 @@ func TestScannerStub(t *testing.T) {
 		testkit.Equal(t, result, nil, "Scan must return configured value")
 	})
 
-	t.Run("Reset preserves Keys Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Keys Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := scannertest.NewScannerStub(t)
 		s.OnKeys.Returns(nil)
 		_ = s.Keys(t.Context())
-		s.Reset()
-		s.OnKeys.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnKeys.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.Keys(t.Context())
 		testkit.Equal(t, result, nil, "Keys must return configured value")
 	})
 
-	t.Run("Reset preserves Scan Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Scan Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := scannertest.NewScannerStub(t)
 		s.OnScan.Returns(nil)
 		_ = s.Scan(t.Context(), "")
-		s.Reset()
-		s.OnScan.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnScan.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.Scan(t.Context(), "")
 		testkit.Equal(t, result, nil, "Scan must return configured value")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := scannertest.NewScannerStub(t)
 		_ = s.Keys(t.Context())
 		testkit.Len(t, s.OnKeys.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnKeys.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnKeys.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Keys Latency honors virtual clock", func(t *testing.T) {

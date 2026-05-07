@@ -37,11 +37,11 @@ func AssertMachineModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, machineModelProperty(sutFactory, opts...))
+			rapid.Check(t, MachineModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, machineModelProperty(sutFactory, opts...))
+	rapid.Check(t, MachineModelProperty(sutFactory, opts...))
 }
 
 // FuzzMachineModel is a fuzz target for coverage-guided testing
@@ -52,10 +52,16 @@ func FuzzMachineModel(
 	opts ...MachineModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(machineModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
 }
 
-func machineModelProperty(
+// MachineModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := MachineModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func MachineModelProperty(
 	sutFactory func() newshapes.Machine,
 	opts ...MachineModelOption,
 ) func(*rapid.T) {

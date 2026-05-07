@@ -71,17 +71,25 @@
 				},
 			),
 {{- else if and .IsPure (not .ParamOnly)}}
+{{- if .HasDirective "nondeterministic"}}
+			action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}() }),
+{{- else}}
 			action.Pure("{{.Name}}",
 				func(impl {{$.QualifiedType}}) {{.Shape.ValType}} {
 					return impl.{{.Name}}()
 				},
 			),
+{{- end}}
 {{- else if and .IsPredicate (not .ParamOnly)}}
+{{- if .HasDirective "nondeterministic"}}
+			action.Stress("{{.Name}}", func(impl {{$.QualifiedType}}) { impl.{{.Name}}() }),
+{{- else}}
 			action.Predicate("{{.Name}}",
 				func(impl {{$.QualifiedType}}) bool {
 					return impl.{{.Name}}()
 				},
 			),
+{{- end}}
 {{- else if .IsPoisonAccessor}}
 			action.PoisonCheck("{{.Name}}",
 				func(impl {{$.QualifiedType}}) error {

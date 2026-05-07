@@ -253,9 +253,9 @@ func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *StoreStub) Reset() {
+func (s *StoreStub) ResetCalls() {
 	s.OnDelete.Reset()
 	s.OnGet.Reset()
 	s.OnPut.Reset()

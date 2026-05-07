@@ -376,16 +376,16 @@ func TestRunnerStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
 		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{})
 		_ = s.Close(t.Context(), "")
 		_ = s.Open(t.Context(), "")
-		s.Reset()
-		s.OnAppend.AssertNotCalled(t, "Append must be cleared after Reset")
-		s.OnClose.AssertNotCalled(t, "Close must be cleared after Reset")
-		s.OnOpen.AssertNotCalled(t, "Open must be cleared after Reset")
+		s.ResetCalls()
+		s.OnAppend.AssertNotCalled(t, "Append must be cleared after ResetCalls")
+		s.OnClose.AssertNotCalled(t, "Close must be cleared after ResetCalls")
+		s.OnOpen.AssertNotCalled(t, "Open must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Append", func(t *testing.T) {
@@ -463,47 +463,47 @@ func TestRunnerStub(t *testing.T) {
 		testkit.NoError(t, err, "Open must not error")
 	})
 
-	t.Run("Reset preserves Append Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Append Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
 		s.OnAppend.Returns(newdirectives.AppendResult{Offset: 42}, nil)
 		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{})
-		s.Reset()
-		s.OnAppend.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnAppend.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result, err := s.Append(t.Context(), newdirectives.AppendRequest{})
 		testkit.Equal(t, result, newdirectives.AppendResult{Offset: 42}, "Append must return configured value")
 		testkit.NoError(t, err, "Append must not error")
 	})
 
-	t.Run("Reset preserves Close Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Close Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
 		s.OnClose.Returns(nil)
 		_ = s.Close(t.Context(), "")
-		s.Reset()
-		s.OnClose.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnClose.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.Close(t.Context(), "")
 		testkit.NoError(t, err, "Close must not error")
 	})
 
-	t.Run("Reset preserves Open Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Open Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
 		s.OnOpen.Returns(nil)
 		_ = s.Open(t.Context(), "")
-		s.Reset()
-		s.OnOpen.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnOpen.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.Open(t.Context(), "")
 		testkit.NoError(t, err, "Open must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := runnertest.NewRunnerStub(t)
 		_, _ = s.Append(t.Context(), newdirectives.AppendRequest{})
 		testkit.Len(t, s.OnAppend.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnAppend.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnAppend.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Append Latency honors virtual clock", func(t *testing.T) {
@@ -583,7 +583,7 @@ func TestRunnerStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		_, err = s.Append(t.Context(), newdirectives.AppendRequest{})
 		testkit.NoError(t, err, "Append must succeed after window expires")
 	})

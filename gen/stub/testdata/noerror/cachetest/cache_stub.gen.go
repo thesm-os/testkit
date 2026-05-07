@@ -268,9 +268,9 @@ func NewCacheStub(tb testing.TB, opts ...CacheStubOption) *CacheStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *CacheStub) Reset() {
+func (s *CacheStub) ResetCalls() {
 	s.OnClear.Reset()
 	s.OnCount.Reset()
 	s.OnKeys.Reset()

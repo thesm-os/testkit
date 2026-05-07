@@ -48,11 +48,39 @@ func AssertStoreModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, storeModelProperty(sutFactory, opts...))
+			rapid.Check(t, StoreModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, storeModelProperty(sutFactory, opts...))
+	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+}
+
+// TestStoreModel runs the model property as a standalone test.
+// Equivalent to AssertStoreModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []StoreModelOption{...}
+//	func TestFoo(t *testing.T)  { StoreModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { StoreModelFuzz(f, factory, opts...) }
+func StoreModelTest(
+	t *testing.T,
+	sutFactory func() basic.Store,
+	opts ...StoreModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+}
+
+// StoreModelFuzz is the fuzz counterpart of [StoreModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func StoreModelFuzz(
+	f *testing.F,
+	sutFactory func() basic.Store,
+	opts ...StoreModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModel is a fuzz target for coverage-guided testing
@@ -63,7 +91,7 @@ func FuzzStoreModel(
 	opts ...StoreModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(storeModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
 }
 
 // FuzzStoreModelConcurrent is a fuzz target for coverage-guided
@@ -84,7 +112,13 @@ func FuzzStoreModelConcurrent(
 	}))
 }
 
-func storeModelProperty(
+// StoreModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := StoreModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func StoreModelProperty(
 	sutFactory func() basic.Store,
 	opts ...StoreModelOption,
 ) func(*rapid.T) {

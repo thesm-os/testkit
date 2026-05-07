@@ -173,9 +173,6 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		if cfg.SUTFactory == nil {
 			rt.Fatal("model.Property: SUTFactory is required")
 		}
-		if cfg.RefFactory == nil {
-			rt.Fatal("model.Property: RefFactory is required")
-		}
 		if len(cfg.Actions) == 0 {
 			rt.Fatal("model.Property: at least one Action is required")
 		}
@@ -197,12 +194,17 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 		}
 
 		sut := cfg.SUTFactory()
-		ref := cfg.RefFactory()
+		var ref T
+		if cfg.RefFactory != nil {
+			ref = cfg.RefFactory()
+		}
 		step := 0
 
 		if cfg.Cleanup != nil {
 			defer cfg.Cleanup(sut)
-			defer cfg.Cleanup(ref)
+			if cfg.RefFactory != nil {
+				defer cfg.Cleanup(ref)
+			}
 		}
 
 		actionMap := make(map[string]func(*rapid.T), len(cfg.Actions)+1)

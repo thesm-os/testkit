@@ -192,9 +192,9 @@ func NewServiceStub(tb testing.TB, opts ...ServiceStubOption) *ServiceStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *ServiceStub) Reset() {
+func (s *ServiceStub) ResetCalls() {
 	s.OnSwap.Reset()
 	s.OnTimestamps.Reset()
 }

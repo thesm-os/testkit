@@ -16,7 +16,7 @@ func TestDefaultRegistry(t *testing.T) {
 	t.Run("contains all known directives", func(t *testing.T) {
 		t.Parallel()
 		r := directiveparse.DefaultRegistry()
-		testkit.Len(t, r.Names(), 42, "must have 42 known directives")
+		testkit.Len(t, r.Names(), 43, "must have 43 known directives")
 	})
 
 	t.Run("errors is known", func(t *testing.T) {

@@ -41,11 +41,11 @@ func AssertLedgerModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, ledgerModelProperty(sutFactory, opts...))
+			rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, ledgerModelProperty(sutFactory, opts...))
+	rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
 }
 
 // FuzzLedgerModel is a fuzz target for coverage-guided testing
@@ -56,10 +56,16 @@ func FuzzLedgerModel(
 	opts ...LedgerModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(ledgerModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
 }
 
-func ledgerModelProperty(
+// LedgerModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := LedgerModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func LedgerModelProperty(
 	sutFactory func() thesmos.Ledger,
 	opts ...LedgerModelOption,
 ) func(*rapid.T) {

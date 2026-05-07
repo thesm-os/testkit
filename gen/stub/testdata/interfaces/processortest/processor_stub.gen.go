@@ -186,9 +186,9 @@ func NewProcessorStub(tb testing.TB, opts ...ProcessorStubOption) *ProcessorStub
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *ProcessorStub) Reset() {
+func (s *ProcessorStub) ResetCalls() {
 	s.OnReadFrom.Reset()
 	s.OnWriteTo.Reset()
 }

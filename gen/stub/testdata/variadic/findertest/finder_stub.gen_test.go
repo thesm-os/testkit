@@ -237,14 +237,14 @@ func TestFinderStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := findertest.NewFinderStub(t)
 		_, _ = s.Find(t.Context())
 		_, _ = s.Merge(t.Context())
-		s.Reset()
-		s.OnFind.AssertNotCalled(t, "Find must be cleared after Reset")
-		s.OnMerge.AssertNotCalled(t, "Merge must be cleared after Reset")
+		s.ResetCalls()
+		s.OnFind.AssertNotCalled(t, "Find must be cleared after ResetCalls")
+		s.OnMerge.AssertNotCalled(t, "Merge must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Find", func(t *testing.T) {
@@ -295,37 +295,37 @@ func TestFinderStub(t *testing.T) {
 		testkit.NoError(t, err, "Merge must not error")
 	})
 
-	t.Run("Reset preserves Find Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Find Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := findertest.NewFinderStub(t)
 		s.OnFind.Returns([]string{"test-result"}, nil)
 		_, _ = s.Find(t.Context())
-		s.Reset()
-		s.OnFind.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnFind.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result, err := s.Find(t.Context())
 		testkit.Equal(t, result, []string{"test-result"}, "Find must return configured value")
 		testkit.NoError(t, err, "Find must not error")
 	})
 
-	t.Run("Reset preserves Merge Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Merge Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := findertest.NewFinderStub(t)
 		s.OnMerge.Returns(42, nil)
 		_, _ = s.Merge(t.Context())
-		s.Reset()
-		s.OnMerge.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnMerge.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result, err := s.Merge(t.Context())
 		testkit.Equal(t, result, 42, "Merge must return configured value")
 		testkit.NoError(t, err, "Merge must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := findertest.NewFinderStub(t)
 		_, _ = s.Find(t.Context())
 		testkit.Len(t, s.OnFind.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnFind.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnFind.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Find Latency honors virtual clock", func(t *testing.T) {
@@ -404,7 +404,7 @@ func TestFinderStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		_, err = s.Find(t.Context())
 		testkit.NoError(t, err, "Find must succeed after window expires")
 	})

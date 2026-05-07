@@ -46,11 +46,11 @@ func AssertBufferModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, bufferModelProperty(sutFactory, opts...))
+			rapid.Check(t, BufferModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, bufferModelProperty(sutFactory, opts...))
+	rapid.Check(t, BufferModelProperty(sutFactory, opts...))
 }
 
 // FuzzBufferModel is a fuzz target for coverage-guided testing
@@ -61,7 +61,7 @@ func FuzzBufferModel(
 	opts ...BufferModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(bufferModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
 }
 
 // FuzzBufferModelConcurrent is a fuzz target for coverage-guided
@@ -82,7 +82,13 @@ func FuzzBufferModelConcurrent(
 	}))
 }
 
-func bufferModelProperty(
+// BufferModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := BufferModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func BufferModelProperty(
 	sutFactory func() eventually.Buffer,
 	opts ...BufferModelOption,
 ) func(*rapid.T) {

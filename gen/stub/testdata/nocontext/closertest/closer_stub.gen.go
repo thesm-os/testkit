@@ -178,9 +178,9 @@ func NewCloserStub(tb testing.TB, opts ...CloserStubOption) *CloserStub {
 	return s
 }
 
-// Reset clears recorded calls, fault counters, and call-count expectations.
+// ResetCalls clears recorded calls, fault counters, and call-count expectations.
 // Func, Returns, and Faults configuration is preserved.
-func (s *CloserStub) Reset() {
+func (s *CloserStub) ResetCalls() {
 	s.OnClose.Reset()
 	s.OnString.Reset()
 }

@@ -279,18 +279,18 @@ func TestCacheStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := cachetest.NewCacheStub(t)
 		s.Clear(t.Context())
 		_ = s.Count(t.Context())
 		_ = s.Keys(t.Context())
 		_ = s.Lookup(t.Context(), "")
-		s.Reset()
-		s.OnClear.AssertNotCalled(t, "Clear must be cleared after Reset")
-		s.OnCount.AssertNotCalled(t, "Count must be cleared after Reset")
-		s.OnKeys.AssertNotCalled(t, "Keys must be cleared after Reset")
-		s.OnLookup.AssertNotCalled(t, "Lookup must be cleared after Reset")
+		s.ResetCalls()
+		s.OnClear.AssertNotCalled(t, "Clear must be cleared after ResetCalls")
+		s.OnCount.AssertNotCalled(t, "Count must be cleared after ResetCalls")
+		s.OnKeys.AssertNotCalled(t, "Keys must be cleared after ResetCalls")
+		s.OnLookup.AssertNotCalled(t, "Lookup must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Clear", func(t *testing.T) {
@@ -369,46 +369,46 @@ func TestCacheStub(t *testing.T) {
 		testkit.Equal(t, result, nil, "Lookup must return configured value")
 	})
 
-	t.Run("Reset preserves Count Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Count Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := cachetest.NewCacheStub(t)
 		s.OnCount.Returns(42)
 		_ = s.Count(t.Context())
-		s.Reset()
-		s.OnCount.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnCount.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.Count(t.Context())
 		testkit.Equal(t, result, 42, "Count must return configured value")
 	})
 
-	t.Run("Reset preserves Keys Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Keys Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := cachetest.NewCacheStub(t)
 		s.OnKeys.Returns([]string{"test-result"})
 		_ = s.Keys(t.Context())
-		s.Reset()
-		s.OnKeys.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnKeys.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.Keys(t.Context())
 		testkit.Equal(t, result, []string{"test-result"}, "Keys must return configured value")
 	})
 
-	t.Run("Reset preserves Lookup Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Lookup Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := cachetest.NewCacheStub(t)
 		s.OnLookup.Returns(nil)
 		_ = s.Lookup(t.Context(), "")
-		s.Reset()
-		s.OnLookup.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnLookup.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.Lookup(t.Context(), "")
 		testkit.Equal(t, result, nil, "Lookup must return configured value")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := cachetest.NewCacheStub(t)
 		s.Clear(t.Context())
 		testkit.Len(t, s.OnClear.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnClear.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnClear.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Clear Latency honors virtual clock", func(t *testing.T) {

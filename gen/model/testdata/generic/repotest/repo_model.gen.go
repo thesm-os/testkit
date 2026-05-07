@@ -48,11 +48,11 @@ func AssertItemRepositoryModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, itemrepositoryModelProperty(sutFactory, opts...))
+			rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, itemrepositoryModelProperty(sutFactory, opts...))
+	rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 }
 
 // FuzzItemRepositoryModel is a fuzz target for coverage-guided testing
@@ -63,7 +63,7 @@ func FuzzItemRepositoryModel(
 	opts ...ItemRepositoryModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(itemrepositoryModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
 }
 
 // FuzzItemRepositoryModelConcurrent is a fuzz target for coverage-guided
@@ -84,7 +84,13 @@ func FuzzItemRepositoryModelConcurrent(
 	}))
 }
 
-func itemrepositoryModelProperty(
+// ItemRepositoryModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := ItemRepositoryModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func ItemRepositoryModelProperty(
 	sutFactory func() generic.ItemRepository,
 	opts ...ItemRepositoryModelOption,
 ) func(*rapid.T) {

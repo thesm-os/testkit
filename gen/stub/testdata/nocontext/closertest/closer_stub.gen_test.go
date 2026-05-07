@@ -199,14 +199,14 @@ func TestCloserStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := closertest.NewCloserStub(t)
 		_ = s.Close()
 		_ = s.String()
-		s.Reset()
-		s.OnClose.AssertNotCalled(t, "Close must be cleared after Reset")
-		s.OnString.AssertNotCalled(t, "String must be cleared after Reset")
+		s.ResetCalls()
+		s.OnClose.AssertNotCalled(t, "Close must be cleared after ResetCalls")
+		s.OnString.AssertNotCalled(t, "String must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Close", func(t *testing.T) {
@@ -255,35 +255,35 @@ func TestCloserStub(t *testing.T) {
 		testkit.Equal(t, result, "test-result", "String must return configured value")
 	})
 
-	t.Run("Reset preserves Close Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Close Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := closertest.NewCloserStub(t)
 		s.OnClose.Returns(nil)
 		_ = s.Close()
-		s.Reset()
-		s.OnClose.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnClose.AssertNotCalled(t, "ResetCalls must clear recordings")
 		err := s.Close()
 		testkit.NoError(t, err, "Close must not error")
 	})
 
-	t.Run("Reset preserves String Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves String Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := closertest.NewCloserStub(t)
 		s.OnString.Returns("test-result")
 		_ = s.String()
-		s.Reset()
-		s.OnString.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnString.AssertNotCalled(t, "ResetCalls must clear recordings")
 		result := s.String()
 		testkit.Equal(t, result, "test-result", "String must return configured value")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := closertest.NewCloserStub(t)
 		_ = s.Close()
 		testkit.Len(t, s.OnClose.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnClose.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnClose.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Close FaultsFor window expires", func(t *testing.T) {
@@ -296,7 +296,7 @@ func TestCloserStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		err = s.Close()
 		testkit.NoError(t, err, "Close must succeed after window expires")
 	})

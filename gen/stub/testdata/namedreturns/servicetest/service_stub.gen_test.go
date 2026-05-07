@@ -252,14 +252,14 @@ func TestServiceStub(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		_, _, _ = s.Swap(t.Context(), "", "")
 		_, _, _ = s.Timestamps(t.Context())
-		s.Reset()
-		s.OnSwap.AssertNotCalled(t, "Swap must be cleared after Reset")
-		s.OnTimestamps.AssertNotCalled(t, "Timestamps must be cleared after Reset")
+		s.ResetCalls()
+		s.OnSwap.AssertNotCalled(t, "Swap must be cleared after ResetCalls")
+		s.OnTimestamps.AssertNotCalled(t, "Timestamps must be cleared after ResetCalls")
 	})
 
 	t.Run("Strict mode fails on unconfigured Swap", func(t *testing.T) {
@@ -312,39 +312,39 @@ func TestServiceStub(t *testing.T) {
 		testkit.NoError(t, err, "Timestamps must not error")
 	})
 
-	t.Run("Reset preserves Swap Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Swap Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		s.OnSwap.Returns("test-old", "test-new", nil)
 		_, _, _ = s.Swap(t.Context(), "", "")
-		s.Reset()
-		s.OnSwap.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnSwap.AssertNotCalled(t, "ResetCalls must clear recordings")
 		old, new, err := s.Swap(t.Context(), "", "")
 		testkit.Equal(t, old, "test-old", "Swap must return configured value")
 		testkit.Equal(t, new, "test-new", "Swap must return configured value")
 		testkit.NoError(t, err, "Swap must not error")
 	})
 
-	t.Run("Reset preserves Timestamps Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves Timestamps Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		s.OnTimestamps.Returns(time.Time{}, time.Time{}, nil)
 		_, _, _ = s.Timestamps(t.Context())
-		s.Reset()
-		s.OnTimestamps.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.OnTimestamps.AssertNotCalled(t, "ResetCalls must clear recordings")
 		created, updated, err := s.Timestamps(t.Context())
 		testkit.Equal(t, created, time.Time{}, "Timestamps must return configured value")
 		testkit.Equal(t, updated, time.Time{}, "Timestamps must return configured value")
 		testkit.NoError(t, err, "Timestamps must not error")
 	})
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := servicetest.NewServiceStub(t)
 		_, _, _ = s.Swap(t.Context(), "", "")
 		testkit.Len(t, s.OnSwap.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.OnSwap.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.OnSwap.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 
 	t.Run("Swap Latency honors virtual clock", func(t *testing.T) {
@@ -423,7 +423,7 @@ func TestServiceStub(t *testing.T) {
 		testkit.ErrorIs(t, err, errTest, "must return injected fault")
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		_, _, err = s.Swap(t.Context(), "", "")
 		testkit.NoError(t, err, "Swap must succeed after window expires")
 	})

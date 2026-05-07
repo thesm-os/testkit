@@ -173,15 +173,15 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		testkit.True(t, f.Failed(), "TimesAtLeast mismatch must fail")
 	})
 
-	t.Run("Reset clears all recordings", func(t *testing.T) {
+	t.Run("ResetCalls clears all recordings", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 {{- range $iface.Methods}}{{if not .Skip}}
 		{{.IgnoredCallExpr}}
 {{- end}}{{end}}
-		s.Reset()
+		s.ResetCalls()
 {{- range $iface.Methods}}{{if not .Skip}}
-		s.On{{.Name}}.AssertNotCalled(t, "{{.Name}} must be cleared after Reset")
+		s.On{{.Name}}.AssertNotCalled(t, "{{.Name}} must be cleared after ResetCalls")
 {{- end}}{{end}}
 	})
 
@@ -228,24 +228,24 @@ func Test{{$iface.StubName}}(t *testing.T) {
 	})
 {{end}}{{end}}{{end}}
 {{range $m := $iface.Methods}}{{if not $m.Skip}}{{if $m.HasResults}}
-	t.Run("Reset preserves {{$m.Name}} Returns config", func(t *testing.T) {
+	t.Run("ResetCalls preserves {{$m.Name}} Returns config", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 		s.On{{$m.Name}}.Returns({{$m.SampleReturnNoError}})
 		{{$m.IgnoredCallExpr}}
-		s.Reset()
-		s.On{{$m.Name}}.AssertNotCalled(t, "Reset must clear recordings")
+		s.ResetCalls()
+		s.On{{$m.Name}}.AssertNotCalled(t, "ResetCalls must clear recordings")
 		{{$m.CallAndAssertSampleExpr}}
 	})
 {{end}}{{end}}{{end}}
 
-	t.Run("Reset clears timestamps", func(t *testing.T) {
+	t.Run("ResetCalls clears timestamps", func(t *testing.T) {
 		t.Parallel()
 		s := {{$.GenQualifier}}New{{$iface.StubName}}(t)
 		{{(index $iface.Methods 0).IgnoredCallExpr}}
 		testkit.Len(t, s.On{{(index $iface.Methods 0).Name}}.Timestamped(), 1, "must record")
-		s.Reset()
-		testkit.Len(t, s.On{{(index $iface.Methods 0).Name}}.Timestamped(), 0, "Reset must clear timestamps")
+		s.ResetCalls()
+		testkit.Len(t, s.On{{(index $iface.Methods 0).Name}}.Timestamped(), 0, "ResetCalls must clear timestamps")
 	})
 {{- with $m := $iface.FirstContextMethod}}
 {{- /* Latency tests are per-interface (one method). Latency is a property of the
@@ -331,7 +331,7 @@ func Test{{$iface.StubName}}(t *testing.T) {
 		{{$m.FaultTestCallExpr}}
 
 		clk.Advance(6 * time.Second)
-		s.Reset()
+		s.ResetCalls()
 		{{$m.FaultsForExpiredCallExpr}}
 	})
 {{- end}}

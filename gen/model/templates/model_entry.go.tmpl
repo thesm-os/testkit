@@ -31,11 +31,39 @@ func Assert{{.InterfaceName}}Model(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
+			rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, {{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...))
+	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
+}
+
+// Test{{.InterfaceName}}Model runs the model property as a standalone test.
+// Equivalent to Assert{{.InterfaceName}}Model but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []{{.InterfaceName}}ModelOption{...}
+//	func TestFoo(t *testing.T)  { {{.InterfaceName}}ModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { {{.InterfaceName}}ModelFuzz(f, factory, opts...) }
+func {{.InterfaceName}}ModelTest(
+	t *testing.T,
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, {{.InterfaceName}}ModelProperty(sutFactory, opts...))
+}
+
+// {{.InterfaceName}}ModelFuzz is the fuzz counterpart of [{{.InterfaceName}}ModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func {{.InterfaceName}}ModelFuzz(
+	f *testing.F,
+	sutFactory func() {{.QualifiedType}},
+	opts ...{{.InterfaceName}}ModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
 }
 
 // Fuzz{{.InterfaceName}}Model is a fuzz target for coverage-guided testing
@@ -46,7 +74,7 @@ func Fuzz{{.InterfaceName}}Model(
 	opts ...{{.InterfaceName}}ModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz({{.InterfaceName | toLower}}ModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz({{.InterfaceName}}ModelProperty(sutFactory, opts...)))
 }
 {{- if .CanLinearize}}
 

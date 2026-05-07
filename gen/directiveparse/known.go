@@ -230,4 +230,8 @@ var knownDirectives = []Descriptor{
 		Name: "time-aware", Description: "inject TestClock pair for deterministic time testing",
 		Generators: []string{genModel}, Phase: 1,
 	},
+	{
+		Name: "nondeterministic", Description: "suppress determinism auto-laws for this method",
+		Generators: []string{genModel}, Phase: 1,
+	},
 }
