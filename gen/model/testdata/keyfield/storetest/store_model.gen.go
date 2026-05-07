@@ -55,6 +55,34 @@ func AssertStoreModel(
 	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
 }
 
+// TestStoreModel runs the model property as a standalone test.
+// Equivalent to AssertStoreModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []StoreModelOption{...}
+//	func TestFoo(t *testing.T)  { StoreModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { StoreModelFuzz(f, factory, opts...) }
+func StoreModelTest(
+	t *testing.T,
+	sutFactory func() keyfield.Store,
+	opts ...StoreModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, StoreModelProperty(sutFactory, opts...))
+}
+
+// StoreModelFuzz is the fuzz counterpart of [StoreModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func StoreModelFuzz(
+	f *testing.F,
+	sutFactory func() keyfield.Store,
+	opts ...StoreModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(StoreModelProperty(sutFactory, opts...)))
+}
+
 // FuzzStoreModel is a fuzz target for coverage-guided testing
 // of [keyfield.Store] via go test -fuzz.
 func FuzzStoreModel(

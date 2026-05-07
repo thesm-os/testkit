@@ -16,9 +16,7 @@ GO      := go
 FLAGS   ?=
 
 # ─── Module directories ─────────────────────────────────────────
-# Each directory containing a go.mod is a module. Go commands run
-# inside each module so multi-module workspaces work correctly.
-MODULES := . cmd gen model container httptest oteltest clitest
+MODULES := . clitest
 
 # ─── Paths ───────────────────────────────────────────────────────
 BIN_DIR      := bin
@@ -312,11 +310,9 @@ check-tidy: tidy
 #
 # Each submodule gets a prefixed tag (e.g., cmd/v0.6.1, gen/v0.6.1).
 # The root module gets the bare tag (v0.6.1).
-SUBMODULES := clitest cmd container gen httptest model oteltest
-
 release:
 ifndef VERSION
-	$(error VERSION is required. Usage: make release VERSION=v0.7.0)
+	$(error VERSION is required. Usage: make release VERSION=v0.8.0)
 endif
 	@./scripts/release.sh $(VERSION)
 	@echo "$(GREEN)Tagged $(VERSION) + $(words $(SUBMODULES)) submodule tags$(NC)"

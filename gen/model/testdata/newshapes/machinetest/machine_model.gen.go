@@ -44,6 +44,34 @@ func AssertMachineModel(
 	rapid.Check(t, MachineModelProperty(sutFactory, opts...))
 }
 
+// TestMachineModel runs the model property as a standalone test.
+// Equivalent to AssertMachineModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []MachineModelOption{...}
+//	func TestFoo(t *testing.T)  { MachineModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { MachineModelFuzz(f, factory, opts...) }
+func MachineModelTest(
+	t *testing.T,
+	sutFactory func() newshapes.Machine,
+	opts ...MachineModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, MachineModelProperty(sutFactory, opts...))
+}
+
+// MachineModelFuzz is the fuzz counterpart of [MachineModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func MachineModelFuzz(
+	f *testing.F,
+	sutFactory func() newshapes.Machine,
+	opts ...MachineModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(MachineModelProperty(sutFactory, opts...)))
+}
+
 // FuzzMachineModel is a fuzz target for coverage-guided testing
 // of [newshapes.Machine] via go test -fuzz.
 func FuzzMachineModel(

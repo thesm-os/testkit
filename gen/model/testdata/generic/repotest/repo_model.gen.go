@@ -55,6 +55,34 @@ func AssertItemRepositoryModel(
 	rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
 }
 
+// TestItemRepositoryModel runs the model property as a standalone test.
+// Equivalent to AssertItemRepositoryModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []ItemRepositoryModelOption{...}
+//	func TestFoo(t *testing.T)  { ItemRepositoryModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { ItemRepositoryModelFuzz(f, factory, opts...) }
+func ItemRepositoryModelTest(
+	t *testing.T,
+	sutFactory func() generic.ItemRepository,
+	opts ...ItemRepositoryModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, ItemRepositoryModelProperty(sutFactory, opts...))
+}
+
+// ItemRepositoryModelFuzz is the fuzz counterpart of [ItemRepositoryModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func ItemRepositoryModelFuzz(
+	f *testing.F,
+	sutFactory func() generic.ItemRepository,
+	opts ...ItemRepositoryModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(ItemRepositoryModelProperty(sutFactory, opts...)))
+}
+
 // FuzzItemRepositoryModel is a fuzz target for coverage-guided testing
 // of [generic.ItemRepository] via go test -fuzz.
 func FuzzItemRepositoryModel(

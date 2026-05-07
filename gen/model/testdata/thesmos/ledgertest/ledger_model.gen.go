@@ -48,6 +48,34 @@ func AssertLedgerModel(
 	rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
 }
 
+// TestLedgerModel runs the model property as a standalone test.
+// Equivalent to AssertLedgerModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []LedgerModelOption{...}
+//	func TestFoo(t *testing.T)  { LedgerModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { LedgerModelFuzz(f, factory, opts...) }
+func LedgerModelTest(
+	t *testing.T,
+	sutFactory func() thesmos.Ledger,
+	opts ...LedgerModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, LedgerModelProperty(sutFactory, opts...))
+}
+
+// LedgerModelFuzz is the fuzz counterpart of [LedgerModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func LedgerModelFuzz(
+	f *testing.F,
+	sutFactory func() thesmos.Ledger,
+	opts ...LedgerModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(LedgerModelProperty(sutFactory, opts...)))
+}
+
 // FuzzLedgerModel is a fuzz target for coverage-guided testing
 // of [thesmos.Ledger] via go test -fuzz.
 func FuzzLedgerModel(

@@ -41,11 +41,39 @@ func AssertAuditLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, auditlogModelProperty(sutFactory, opts...))
+			rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, auditlogModelProperty(sutFactory, opts...))
+	rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
+}
+
+// TestAuditLogModel runs the model property as a standalone test.
+// Equivalent to AssertAuditLogModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []AuditLogModelOption{...}
+//	func TestFoo(t *testing.T)  { AuditLogModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { AuditLogModelFuzz(f, factory, opts...) }
+func AuditLogModelTest(
+	t *testing.T,
+	sutFactory func() auditchain.AuditLog,
+	opts ...AuditLogModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, AuditLogModelProperty(sutFactory, opts...))
+}
+
+// AuditLogModelFuzz is the fuzz counterpart of [AuditLogModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func AuditLogModelFuzz(
+	f *testing.F,
+	sutFactory func() auditchain.AuditLog,
+	opts ...AuditLogModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzAuditLogModel is a fuzz target for coverage-guided testing
@@ -56,10 +84,16 @@ func FuzzAuditLogModel(
 	opts ...AuditLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(auditlogModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(AuditLogModelProperty(sutFactory, opts...)))
 }
 
-func auditlogModelProperty(
+// AuditLogModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := AuditLogModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func AuditLogModelProperty(
 	sutFactory func() auditchain.AuditLog,
 	opts ...AuditLogModelOption,
 ) func(*rapid.T) {

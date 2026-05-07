@@ -44,6 +44,34 @@ func AssertStateModel(
 	rapid.Check(t, StateModelProperty(sutFactory, opts...))
 }
 
+// TestStateModel runs the model property as a standalone test.
+// Equivalent to AssertStateModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []StateModelOption{...}
+//	func TestFoo(t *testing.T)  { StateModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { StateModelFuzz(f, factory, opts...) }
+func StateModelTest(
+	t *testing.T,
+	sutFactory func() thesmos.State,
+	opts ...StateModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, StateModelProperty(sutFactory, opts...))
+}
+
+// StateModelFuzz is the fuzz counterpart of [StateModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func StateModelFuzz(
+	f *testing.F,
+	sutFactory func() thesmos.State,
+	opts ...StateModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(StateModelProperty(sutFactory, opts...)))
+}
+
 // FuzzStateModel is a fuzz target for coverage-guided testing
 // of [thesmos.State] via go test -fuzz.
 func FuzzStateModel(

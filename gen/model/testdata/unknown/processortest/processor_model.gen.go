@@ -54,6 +54,34 @@ func AssertProcessorModel(
 	rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
 }
 
+// TestProcessorModel runs the model property as a standalone test.
+// Equivalent to AssertProcessorModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []ProcessorModelOption{...}
+//	func TestFoo(t *testing.T)  { ProcessorModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { ProcessorModelFuzz(f, factory, opts...) }
+func ProcessorModelTest(
+	t *testing.T,
+	sutFactory func() unknown.Processor,
+	opts ...ProcessorModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, ProcessorModelProperty(sutFactory, opts...))
+}
+
+// ProcessorModelFuzz is the fuzz counterpart of [ProcessorModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func ProcessorModelFuzz(
+	f *testing.F,
+	sutFactory func() unknown.Processor,
+	opts ...ProcessorModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(ProcessorModelProperty(sutFactory, opts...)))
+}
+
 // FuzzProcessorModel is a fuzz target for coverage-guided testing
 // of [unknown.Processor] via go test -fuzz.
 func FuzzProcessorModel(

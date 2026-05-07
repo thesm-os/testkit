@@ -41,11 +41,39 @@ func AssertHashLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, hashlogModelProperty(sutFactory, opts...))
+			rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, hashlogModelProperty(sutFactory, opts...))
+	rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
+}
+
+// TestHashLogModel runs the model property as a standalone test.
+// Equivalent to AssertHashLogModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []HashLogModelOption{...}
+//	func TestFoo(t *testing.T)  { HashLogModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { HashLogModelFuzz(f, factory, opts...) }
+func HashLogModelTest(
+	t *testing.T,
+	sutFactory func() auditchain_hash.HashLog,
+	opts ...HashLogModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, HashLogModelProperty(sutFactory, opts...))
+}
+
+// HashLogModelFuzz is the fuzz counterpart of [HashLogModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func HashLogModelFuzz(
+	f *testing.F,
+	sutFactory func() auditchain_hash.HashLog,
+	opts ...HashLogModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzHashLogModel is a fuzz target for coverage-guided testing
@@ -56,10 +84,16 @@ func FuzzHashLogModel(
 	opts ...HashLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(hashlogModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(HashLogModelProperty(sutFactory, opts...)))
 }
 
-func hashlogModelProperty(
+// HashLogModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := HashLogModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func HashLogModelProperty(
 	sutFactory func() auditchain_hash.HashLog,
 	opts ...HashLogModelOption,
 ) func(*rapid.T) {

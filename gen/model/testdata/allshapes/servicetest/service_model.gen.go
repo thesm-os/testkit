@@ -54,6 +54,34 @@ func AssertServiceModel(
 	rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
 }
 
+// TestServiceModel runs the model property as a standalone test.
+// Equivalent to AssertServiceModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []ServiceModelOption{...}
+//	func TestFoo(t *testing.T)  { ServiceModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { ServiceModelFuzz(f, factory, opts...) }
+func ServiceModelTest(
+	t *testing.T,
+	sutFactory func() allshapes.Service,
+	opts ...ServiceModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, ServiceModelProperty(sutFactory, opts...))
+}
+
+// ServiceModelFuzz is the fuzz counterpart of [ServiceModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func ServiceModelFuzz(
+	f *testing.F,
+	sutFactory func() allshapes.Service,
+	opts ...ServiceModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(ServiceModelProperty(sutFactory, opts...)))
+}
+
 // FuzzServiceModel is a fuzz target for coverage-guided testing
 // of [allshapes.Service] via go test -fuzz.
 func FuzzServiceModel(

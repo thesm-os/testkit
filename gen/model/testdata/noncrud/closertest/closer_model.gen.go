@@ -44,6 +44,34 @@ func AssertCloserModel(
 	rapid.Check(t, CloserModelProperty(sutFactory, opts...))
 }
 
+// TestCloserModel runs the model property as a standalone test.
+// Equivalent to AssertCloserModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []CloserModelOption{...}
+//	func TestFoo(t *testing.T)  { CloserModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { CloserModelFuzz(f, factory, opts...) }
+func CloserModelTest(
+	t *testing.T,
+	sutFactory func() noncrud.Closer,
+	opts ...CloserModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, CloserModelProperty(sutFactory, opts...))
+}
+
+// CloserModelFuzz is the fuzz counterpart of [CloserModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func CloserModelFuzz(
+	f *testing.F,
+	sutFactory func() noncrud.Closer,
+	opts ...CloserModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(CloserModelProperty(sutFactory, opts...)))
+}
+
 // FuzzCloserModel is a fuzz target for coverage-guided testing
 // of [noncrud.Closer] via go test -fuzz.
 func FuzzCloserModel(

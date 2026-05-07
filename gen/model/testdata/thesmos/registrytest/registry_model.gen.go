@@ -43,6 +43,34 @@ func AssertKindRegistryModel(
 	rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
 }
 
+// TestKindRegistryModel runs the model property as a standalone test.
+// Equivalent to AssertKindRegistryModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []KindRegistryModelOption{...}
+//	func TestFoo(t *testing.T)  { KindRegistryModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { KindRegistryModelFuzz(f, factory, opts...) }
+func KindRegistryModelTest(
+	t *testing.T,
+	sutFactory func() thesmos.KindRegistry,
+	opts ...KindRegistryModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, KindRegistryModelProperty(sutFactory, opts...))
+}
+
+// KindRegistryModelFuzz is the fuzz counterpart of [KindRegistryModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func KindRegistryModelFuzz(
+	f *testing.F,
+	sutFactory func() thesmos.KindRegistry,
+	opts ...KindRegistryModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(KindRegistryModelProperty(sutFactory, opts...)))
+}
+
 // FuzzKindRegistryModel is a fuzz target for coverage-guided testing
 // of [thesmos.KindRegistry] via go test -fuzz.
 func FuzzKindRegistryModel(

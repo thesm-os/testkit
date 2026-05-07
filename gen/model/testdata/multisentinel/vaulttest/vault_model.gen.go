@@ -55,6 +55,34 @@ func AssertVaultModel(
 	rapid.Check(t, VaultModelProperty(sutFactory, opts...))
 }
 
+// TestVaultModel runs the model property as a standalone test.
+// Equivalent to AssertVaultModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []VaultModelOption{...}
+//	func TestFoo(t *testing.T)  { VaultModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { VaultModelFuzz(f, factory, opts...) }
+func VaultModelTest(
+	t *testing.T,
+	sutFactory func() multisentinel.Vault,
+	opts ...VaultModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, VaultModelProperty(sutFactory, opts...))
+}
+
+// VaultModelFuzz is the fuzz counterpart of [VaultModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func VaultModelFuzz(
+	f *testing.F,
+	sutFactory func() multisentinel.Vault,
+	opts ...VaultModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(VaultModelProperty(sutFactory, opts...)))
+}
+
 // FuzzVaultModel is a fuzz target for coverage-guided testing
 // of [multisentinel.Vault] via go test -fuzz.
 func FuzzVaultModel(

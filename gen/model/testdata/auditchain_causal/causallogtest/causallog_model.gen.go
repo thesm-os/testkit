@@ -41,11 +41,39 @@ func AssertCausalLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, causallogModelProperty(sutFactory, opts...))
+			rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, causallogModelProperty(sutFactory, opts...))
+	rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
+}
+
+// TestCausalLogModel runs the model property as a standalone test.
+// Equivalent to AssertCausalLogModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []CausalLogModelOption{...}
+//	func TestFoo(t *testing.T)  { CausalLogModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { CausalLogModelFuzz(f, factory, opts...) }
+func CausalLogModelTest(
+	t *testing.T,
+	sutFactory func() auditchain_causal.CausalLog,
+	opts ...CausalLogModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, CausalLogModelProperty(sutFactory, opts...))
+}
+
+// CausalLogModelFuzz is the fuzz counterpart of [CausalLogModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func CausalLogModelFuzz(
+	f *testing.F,
+	sutFactory func() auditchain_causal.CausalLog,
+	opts ...CausalLogModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzCausalLogModel is a fuzz target for coverage-guided testing
@@ -56,10 +84,16 @@ func FuzzCausalLogModel(
 	opts ...CausalLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(causallogModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(CausalLogModelProperty(sutFactory, opts...)))
 }
 
-func causallogModelProperty(
+// CausalLogModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := CausalLogModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func CausalLogModelProperty(
 	sutFactory func() auditchain_causal.CausalLog,
 	opts ...CausalLogModelOption,
 ) func(*rapid.T) {

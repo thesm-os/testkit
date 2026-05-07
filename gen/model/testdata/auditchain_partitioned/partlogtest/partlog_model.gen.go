@@ -41,11 +41,39 @@ func AssertPartitionedLogModel(
 	if cfg.leakCheck {
 		artifactDir := model.ResolveArtifactDir(cfg.artifactDir)
 		model.CheckGoroutineLeaks(t, artifactDir, func() {
-			rapid.Check(t, partitionedlogModelProperty(sutFactory, opts...))
+			rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
 		})
 		return
 	}
-	rapid.Check(t, partitionedlogModelProperty(sutFactory, opts...))
+	rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
+}
+
+// TestPartitionedLogModel runs the model property as a standalone test.
+// Equivalent to AssertPartitionedLogModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []PartitionedLogModelOption{...}
+//	func TestFoo(t *testing.T)  { PartitionedLogModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { PartitionedLogModelFuzz(f, factory, opts...) }
+func PartitionedLogModelTest(
+	t *testing.T,
+	sutFactory func() auditchain_partitioned.PartitionedLog,
+	opts ...PartitionedLogModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, PartitionedLogModelProperty(sutFactory, opts...))
+}
+
+// PartitionedLogModelFuzz is the fuzz counterpart of [PartitionedLogModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func PartitionedLogModelFuzz(
+	f *testing.F,
+	sutFactory func() auditchain_partitioned.PartitionedLog,
+	opts ...PartitionedLogModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
 }
 
 // FuzzPartitionedLogModel is a fuzz target for coverage-guided testing
@@ -56,10 +84,16 @@ func FuzzPartitionedLogModel(
 	opts ...PartitionedLogModelOption,
 ) {
 	f.Helper()
-	f.Fuzz(rapid.MakeFuzz(partitionedlogModelProperty(sutFactory, opts...)))
+	f.Fuzz(rapid.MakeFuzz(PartitionedLogModelProperty(sutFactory, opts...)))
 }
 
-func partitionedlogModelProperty(
+// PartitionedLogModelProperty builds the rapid property function.
+// Use directly for shared rapid.Check / rapid.MakeFuzz targets:
+//
+//	prop := PartitionedLogModelProperty(factory, opts...)
+//	rapid.Check(t, prop)                    // test
+//	f.Fuzz(rapid.MakeFuzz(prop))            // fuzz
+func PartitionedLogModelProperty(
 	sutFactory func() auditchain_partitioned.PartitionedLog,
 	opts ...PartitionedLogModelOption,
 ) func(*rapid.T) {

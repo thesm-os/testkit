@@ -53,6 +53,34 @@ func AssertBufferModel(
 	rapid.Check(t, BufferModelProperty(sutFactory, opts...))
 }
 
+// TestBufferModel runs the model property as a standalone test.
+// Equivalent to AssertBufferModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []BufferModelOption{...}
+//	func TestFoo(t *testing.T)  { BufferModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { BufferModelFuzz(f, factory, opts...) }
+func BufferModelTest(
+	t *testing.T,
+	sutFactory func() eventually.Buffer,
+	opts ...BufferModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, BufferModelProperty(sutFactory, opts...))
+}
+
+// BufferModelFuzz is the fuzz counterpart of [BufferModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func BufferModelFuzz(
+	f *testing.F,
+	sutFactory func() eventually.Buffer,
+	opts ...BufferModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(BufferModelProperty(sutFactory, opts...)))
+}
+
 // FuzzBufferModel is a fuzz target for coverage-guided testing
 // of [eventually.Buffer] via go test -fuzz.
 func FuzzBufferModel(

@@ -42,6 +42,34 @@ func AssertSchedulerModel(
 	rapid.Check(t, SchedulerModelProperty(sutFactory, opts...))
 }
 
+// TestSchedulerModel runs the model property as a standalone test.
+// Equivalent to AssertSchedulerModel but takes *testing.T directly
+// and skips leak checking and concurrent dispatch. Use when you need
+// the property function for both Test and Fuzz targets with shared options:
+//
+//	opts := []SchedulerModelOption{...}
+//	func TestFoo(t *testing.T)  { SchedulerModelTest(t, factory, opts...) }
+//	func FuzzFoo(f *testing.F)  { SchedulerModelFuzz(f, factory, opts...) }
+func SchedulerModelTest(
+	t *testing.T,
+	sutFactory func() thesmos.Scheduler,
+	opts ...SchedulerModelOption,
+) {
+	t.Helper()
+	rapid.Check(t, SchedulerModelProperty(sutFactory, opts...))
+}
+
+// SchedulerModelFuzz is the fuzz counterpart of [SchedulerModelTest].
+// Same property, coverage-guided via go test -fuzz.
+func SchedulerModelFuzz(
+	f *testing.F,
+	sutFactory func() thesmos.Scheduler,
+	opts ...SchedulerModelOption,
+) {
+	f.Helper()
+	f.Fuzz(rapid.MakeFuzz(SchedulerModelProperty(sutFactory, opts...)))
+}
+
 // FuzzSchedulerModel is a fuzz target for coverage-guided testing
 // of [thesmos.Scheduler] via go test -fuzz.
 func FuzzSchedulerModel(
