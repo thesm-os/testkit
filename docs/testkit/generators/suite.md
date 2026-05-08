@@ -142,6 +142,58 @@ These run without any directive.
 
 The fact that every ctx-taking method gets cancellation, deadline, and nil-context coverage by default is load-bearing — these are the cheapest tests with the highest payoff for catching context-related bugs.
 
+### Smoke test recovery
+
+Every `<Method>/smoke` subtest wraps the call in `defer func() { if r := recover(); r != nil { t.Skipf(...) } }()`. If a method panics on zero-value inputs (common for methods with parameter preconditions like `Combine(a, b Digest)` where `Digest{}` is invalid), the smoke test skips with a diagnostic message instead of failing:
+
+```
+--- SKIP: TestHasherContract/Combine/smoke (0.00s)
+    smoke: Combine panicked on zero-value args (Combine: zero-value Digest)
+      — supply sample values via HasherOnCombine
+```
+
+To eliminate the skip, annotate the method with `//testkit:sample` (see below) so the smoke test calls with valid values.
+
+## Sample directive
+
+Methods whose parameters have preconditions that make zero-value args panic need sample builder functions. The `//testkit:sample` directive provides one builder per non-context parameter:
+
+```go
+type Hasher interface {
+    //testkit:sample SampleDigest SampleDigest
+    Combine(left, right Digest) Digest
+}
+```
+
+Every builder is `func(I) T` — takes the SUT as its sole argument, returns a value of the parameter type:
+
+```go
+// In the source package (qualified in generated code):
+func SampleDigest(h Hasher) Digest {
+    return h.Hash([]byte{})  // impl-aware: correct size for any Hasher
+}
+
+// Or in the output test package (emitted unqualified):
+func TestSampleDigest(_ crypto.Hasher) Digest {
+    var d Digest; d[0] = 0x42; return d
+}
+```
+
+The generator resolves unqualified names by scope: if the name exists in the source package, it's emitted with the source qualifier (`crypto.SampleDigest(impl)`). If not found in the source package, it's emitted unqualified (assumes the output test package). Fully qualified names (`crypto.SampleDigest`) are emitted as-is.
+
+The sample expressions replace zero values in:
+
+- **Smoke tests**: `s.Combine(crypto.SampleDigest(s), crypto.SampleDigest(s))`
+- **Plug-in Call closures**: `impl.Combine(crypto.SampleDigest(impl), crypto.SampleDigest(impl))`
+- **Bench hot-path**: same substitution with `impl` as receiver
+
+Context parameters are not affected — they always get `t.Context()` or `b.Context()`.
+
+### Where to put sample functions
+
+- **Source package** — when the builder uses SUT methods to construct impl-aware values (e.g., `SampleDigest(h Hasher) Digest { return h.Hash(nil) }`). This is the recommended default.
+- **Output test package** — when the builder is test-only infrastructure that doesn't belong in the public API. Define it in a hand-written file alongside `spec_test.go` (e.g., `hashertest/sample_helpers.go`).
+
 ## Directive-driven subtests
 
 Added when the directive is present on the method:
@@ -154,6 +206,7 @@ Added when the directive is present on the method:
 | `bounded N M` | `<Method>/bounded N M` | `testkit.AssertBounded(t, N, M, fn)`. |
 | `timeout D` | `<Method>/timeout D` | `testkit.AssertTimeout(t, D, fn)`. |
 | `deprecated <Replacement>` | `<Method>/deprecated` | `t.Logf("<Method> is deprecated, use <Replacement> instead")` + `t.Skip("deprecated method")`. |
+| `sample Fn [Fn...]` | *(no extra subtest)* | Replaces zero-value arguments with `Fn(impl)` calls in smoke tests, hot-path benchmarks, and plug-in dispatch `Call` closures. See [Sample directive](#sample-directive) below. |
 
 The `ctx` directive doesn't add a subtest — the auto-detected `ctx cancellation`/`ctx deadline`/`nil context` subtests already cover its semantics. Marking a method with `//testkit:ctx` is a documentation hint that the consumer expects context handling, not a new test.
 
@@ -165,13 +218,13 @@ Each method gets a `<Iface>On<Method>` option whose argument type is determined 
 
 ```go
 storetest.StoreOnGet(
-    testkit.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{...}),
-    testkit.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
-    testkit.AssertConsistentReads[basic.Store, string, basic.Item]("known-1", 3),
+    suite.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{...}),
+    suite.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
+    suite.AssertConsistentReads[basic.Store, string, basic.Item]("known-1", 3),
 )
 ```
 
-`StoreOnGet` accepts `...testkit.ReaderAssertion[basic.Store, string, basic.Item]`. The shipped reader-assertion library:
+`StoreOnGet` accepts `...suite.ReaderAssertion[basic.Store, string, basic.Item]`. The shipped reader-assertion library:
 
 - `AssertReturnsForKey(key, want)`
 - `AssertReturnsSentinel(unknown, sentinel)`
@@ -183,11 +236,11 @@ storetest.StoreOnGet(
 
 ```go
 storetest.StoreOnPut(
-    testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1"}),
+    suite.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1"}),
 )
 ```
 
-`...testkit.WriterAssertion[basic.Store, basic.Item]`. Library:
+`...suite.WriterAssertion[basic.Store, basic.Item]`. Library:
 
 - `AssertWriteSucceeds(sample)`
 - `AssertWriteIsObservable(sample, observe)`
@@ -227,7 +280,7 @@ Adding a custom assertion is just writing a function that matches the shape's `A
 
 ```go
 storetest.StoreOnAll(
-    testkit.AssertReadAfterWrite[basic.Store, string, basic.Item](
+    suite.AssertReadAfterWrite[basic.Store, string, basic.Item](
         basic.Item{ID: "cross-1", Name: "cross"},
         func(ctx context.Context, s basic.Store, item basic.Item) error { return s.Put(ctx, item) },
         func(ctx context.Context, s basic.Store, id string) (basic.Item, error) { return s.Get(ctx, id) },
@@ -281,17 +334,17 @@ func TestInMemoryStoreContract(t *testing.T) {
             _ = s.Put(ctx, basic.Item{ID: "known-1", Name: "test"})
         }),
         storetest.StoreOnGet(
-            testkit.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),
-            testkit.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
+            suite.AssertReturnsForKey[basic.Store, string, basic.Item]("known-1", basic.Item{ID: "known-1", Name: "test"}),
+            suite.AssertReturnsSentinel[basic.Store, string, basic.Item]("nonexistent", basic.ErrNotFound),
         ),
         storetest.StoreOnPut(
-            testkit.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1"}),
+            suite.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "new-1"}),
         ),
         storetest.StoreOnDelete(
-            testkit.AssertWriteSucceeds[basic.Store, string]("known-1"),
+            suite.AssertWriteSucceeds[basic.Store, string]("known-1"),
         ),
         storetest.StoreOnAll(
-            testkit.AssertReadAfterWrite[basic.Store, string, basic.Item](...),
+            suite.AssertReadAfterWrite[basic.Store, string, basic.Item](...),
         ),
     )
 }
@@ -303,8 +356,38 @@ A second implementation (production, integration-tested against a real backend, 
 
 Every option is prefixed with the interface name (`StoreOption`, `StorePrePopulate`, `StoreOnGet`, `StoreCustom`, etc.) so multiple interfaces can generate into the same `*test` package without symbol collisions. The internal accumulator type is unexported (`storeConfig`).
 
+## Layout conventions
+
+A typical interface generates into a `<pkg>test/` sub-package. The layout after generation:
+
+```
+crypto/
+  hasher.go              # interface + //go:generate directives + sample functions
+  inmemory.go            # production implementation
+  cryptotest/
+    hasher_spec.gen.go   # generated suite (DO NOT EDIT)
+    hasher_bench.gen.go  # generated bench (DO NOT EDIT)
+    hasher_stub.gen.go   # generated stub (DO NOT EDIT)
+    hasher_stub.go       # hand-written stub companion (DelegateTo wiring)
+    sample_helpers.go    # hand-written sample builders (if in test package)
+    spec_test.go         # hand-written: TestHasherContract, BenchmarkHasherContract
+```
+
+**What goes where:**
+
+| File | Owner | Contents |
+|------|-------|----------|
+| `*.gen.go` | Generator | Never edit. Regenerated by `go generate`. |
+| `*_stub.go` | Developer | Stub companion: `NewStdlibHasherStub` wrapping `DelegateTo`. Optional. |
+| `sample_helpers.go` | Developer | `func TestSampleDigest(_ Hasher) Digest` — sample builders that don't belong in the source package. |
+| `spec_test.go` | Developer | Test functions wiring `AssertHasherContract` and `BenchmarkHasherContract` with factory + options. |
+
+**Naming the test file.** Use `spec_test.go` for the suite+bench wiring. If the interface has a model harness too, add `model_test.go` for the model wiring. One test file per harness keeps diffs clean.
+
+**Multiple interfaces in one package.** When a package has several interfaces (e.g., `crypto.Hasher`, `crypto.Signer`, `crypto.MAC`), all generators write into the same `cryptotest/` directory. Symbol collisions are avoided by the interface-name prefix on every generated symbol.
+
 ## See also
 
 - [Primitives / directive-assertions](../primitives/directive-assertions.md) — the runtime helpers suite calls (`AssertNilSafe`, `AssertCtxCancellation`, `AssertCtxDeadline`, `AssertNilCtx`, `AssertTimeout`, `AssertPure`, `AssertBounded`)
-- Shape-specific assertion files in `testkit/`: `reader_assert.go`, `writer_assert.go`, `deleter_assert.go`, `lifecycle_assert.go`, `aggregator_assert.go`, `predicate_assert.go`, `pure_assert.go`, `stream_assert.go`, `cross_assert.go`
+- Shape-specific assertion files in `suite/`: `reader.go`, `writer.go`, `deleter.go`, `lifecycle.go`, `aggregator.go`, `predicate.go`, `pure.go`, `stream.go`, `cross.go`
 - [Generators / model](model.md) — Tier 2-3 follow-up that pairs with suite for stateful interfaces

@@ -4,7 +4,7 @@ A CLI tool that reads Go type definitions and proto descriptors and emits the te
 
 All generators use `go/types` for Go source analysis and `protodesc` for proto schema. Generators are invoked via `//go:generate` directives in the source package — no central type registry. Project-wide conventions (suffix, test package style, directive composition) live in `.testkit.yml`; see [Configuration](../configuration.md).
 
-**Status.** Six generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`, `bench`. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
+**Status.** Seven generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`, `model`, `bench`. The remaining generators (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
 
 ## CLI
 
@@ -81,8 +81,8 @@ Conformance generators are driven by `//testkit:` directives on interface method
 The generators that consume directives:
 
 - **`stub`** — `errors`, `deprecated`, `integration-only`, `retry-succeeds-on-attempt`, `partition`, `order-after`
-- **`suite`** — most behavioral directives (`nilsafe`, `ctx`, `timeout`, `pure`, `validates`, `bounded`, `errors`, `deprecated`, `req`, `integration-only`)
-- **`model`** — property directives (`idempotent`, `cacheable`, `monotonic`, `concurrent`, `atomic`, `invariant`, `consistency`, `lease`, `pagination`, `eventually`, `sideeffect`, `partition`, `order-after`, `errors`, `req`)
+- **`suite`** — most behavioral directives (`nilsafe`, `ctx`, `timeout`, `pure`, `validates`, `bounded`, `errors`, `deprecated`, `sample`, `req`, `integration-only`)
+- **`model`** — property directives (`errors`, `nondeterministic`, `time-aware`, `deleter`, `mutator`, `keyfield`, `appends`, `verifies`, `replays`, `partition-by`, `entry-id`, `depends-on`, `hash`, `req`, `integration-only`)
 - **`bench`** — `allocs`, `latency`, `complexity`, `concurrent`, `timeout`, `req`
 - **`sim`** — directives that influence simulation behavior (most of the matrix)
 - **`chaos`** / **`differential-rollout`** / **`replay`** — directives that map onto each tier-5 lens (fault scheduling, equivalence relations, replay ordering)
@@ -101,7 +101,7 @@ The generators that consume directives:
 | [`enum`](enum.md) | static | ready | Exhaustiveness, stringer round-trip, out-of-range, optional Marshal/Parse |
 | [`codec`](codec.md) | wire | planned | `codectest.Spec[T]`, round-trip suite + bench + fuzz seeds + `testdata/wire/*.bin` fixtures |
 | [`suite`](suite.md) | 1 | ready | `Assert<Iface>Contract(t, factory, opts...)` with shape-detected subtests + typed plug-in points |
-| [`model`](model.md) | 2-3 | planned | rapid state-machine: `RunStateMachine` + `RunDifferential` + `RunWorkload` |
+| [`model`](model.md) | 2-3 | ready | rapid property-based state-machine with differential SUT/ref testing, shape-specific laws, concurrent stress, trace combinators |
 | [`bench`](bench.md) | 4 | ready | `Benchmark<Iface>Contract(b, factory, opts...)` with shape-detected hot-path benchmarks + typed bench plug-ins |
 | [`sim`](sim.md) | 5 | planned | Subsystem simulation harness — engine clock + rand + capture-on-failure + workloads + invariants |
 | [`chaos`](chaos.md) | 5 | planned | Continuous fault simulation: random schedules, partitions, skew, restarts |

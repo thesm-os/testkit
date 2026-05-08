@@ -42,7 +42,7 @@ Each generator emits both the artifact and the tests that exercise it. testkit s
 | `enum`                     | static      | Exhaustiveness, all-values-distinct, stringer round-trip, out-of-range fallback, optional `ParseX` round-trip, optional `MarshalText` / `UnmarshalText` round-trip. | None. |
 | `codec`                    | wire        | `codectest.Spec[T]` round-trip suite + benchmark + fuzz seeds + binary wire fixtures (`testdata/wire/*.bin`) regenerated when codec semantics change. Single source of truth across spec and wire. Modes: spec emission, `-update-wire` regeneration. | Sample value overrides via `<Type>Sample()` convention. |
 | `suite`                    | 1           | `AssertContract(t, factory, opts...)` with one subtest per (method × directive). Single-call assertions, skip-with-diagnostic for missing options. Single output file. | `Factory func() Iface` closure plus domain-input options (`UnknownID`, `KnownID`, `SampleItem`, `Setup`). |
-| `model`                    | 2-3         | rapid state-machine harness with three modes: `RunStateMachine` (oracle-based parity), `RunDifferential` (N-impl comparison), `RunWorkload` (random dispatch for sim drivers). Property-based input exploration, cross-method invariants, sequence assertions, atomicity rollback, partition isolation. | `Oracle` interface implementation; optional command generators, custom invariants, weights. |
+| `model`                    | 2-3         | rapid property-based state-machine: differential SUT vs reference testing, auto-derived shape-specific laws (ReadAfterWrite, DeleteReturnsNotFound, PureDeterminism, PredicateConsistency, StreamReentrancy), concurrent stress with Porcupine linearizability checking, trace combinators (AfterEvery, EventuallyAfter, Never), goroutine leak detection, `TestClock` integration for time-aware interfaces, fuzz target generation. | `Factory func() T`, optional `RefFactory func() T` for differential mode; per-method action helpers auto-emitted by shape; extension via `ExtraActions`, `ExtraLaws`, `WithConcurrent`. |
 | `bench`                    | 4           | `BenchmarkContract(b, factory, opts...)` with `AllocsMax(N)` / `LatencyMax(X)` gates per directive. Performance-shape benchmarks (`O(1)`, `O(log n)`, `O(n)`) via varying input size. Auto-enables stub `BenchMode`. | `Factory func() Iface` closure. |
 | `sim`                      | 5           | Subsystem-shaped deterministic simulation harness (`sim.NewDispatcherSim(t, seed, cfg)`) wrapping the full production stack: stubs auto-wrapped with recording-stamped `OnRecord` hooks emitting into the engine trace; `Clock` / `RandSource` plumbed from engine seeds; completion-event sinks; capture-on-failure with minimal-reproducer seed extraction; `Workload[T]` and `Invariant[T]` registration verbs; cooperative-quiescence `AssertAll`. Per-subsystem composition (one Sim per top-level interface). Replaces hand-rolled per-package sim packages. | Top-level interface; `Workload[T]` and `Invariant[T]` registrations; optional seed and dispatcher config. |
 | `chaos`                    | 5           | Continuous deterministic simulation harness driving randomized fault schedules, network partitions, clock skew, and process restarts across operation sequences. Seeded reproducible runs; on failure emits trace + minimal-reproducer seed. Integrates with `sim` via `OnRecord` hooks for trace correlation. | `Faults` configuration, `RunFault` / `PartitionSpec` declarations, soak-budget hints. |
@@ -91,6 +91,12 @@ The matrix below shows which generator consumes which directive and what it prod
 | `clock-skew`               | —             | —               | —                 | —              | ✓ skew            | —                   | ✓ drift         | ✓ trace-skew       | —                   |
 | `exit-code`                | —             | —               | —                 | —              | —                 | —                   | —               | —                  | ✓ assert            |
 | `golden-output`            | —             | —               | —                 | —              | —                 | —                   | —               | —                  | ✓ stdout/stderr     |
+| `sample`                   | —             | ✓ call-args     | —                 | ✓ call-args    | —                 | —                   | —               | —                  | —                   |
+| `nondeterministic`         | —             | —               | ✓ suppress-law    | —              | —                 | —                   | —               | —                  | —                   |
+| `time-aware`               | —             | —               | ✓ clock-inject    | —              | —                 | —                   | —               | —                  | —                   |
+| `deleter`                  | ✓ shape       | ✓ shape         | ✓ shape           | ✓ shape        | —                 | —                   | —               | —                  | —                   |
+| `mutator`                  | —             | —               | ✓ shape           | —              | —                 | —                   | —               | —                  | —                   |
+| `keyfield`                 | —             | —               | ✓ ref-synthesis   | —              | —                 | —                   | —               | —                  | —                   |
 | `req`                      | —             | ✓ name          | ✓ name            | ✓ name         | ✓ name            | ✓ name              | ✓ name          | ✓ name             | ✓ name              |
 
 Composition is enforced: `pure` and `sideeffect` together is a codegen error; `retry-succeeds-on-attempt` requires `retryable`; `cacheable` redundantly implies `pure`.
@@ -208,7 +214,7 @@ check-compliance:
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine (`gen/`) are stable. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining eight are designed and documented but not yet implemented. Generator vocabulary and directive semantics may change in minor versions until the V1 cut. Consumers should pin and regenerate on upgrade.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine (`gen/`) are stable. Seven generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`model`**, **`bench`**. The remaining seven are designed and documented but not yet implemented. Generator vocabulary and directive semantics may change in minor versions until the V1 cut. Consumers should pin and regenerate on upgrade.
 
 V1 commits to:
 
@@ -239,6 +245,8 @@ Optional sub-packages with isolated dependencies:
 - [Generators](docs/testkit/generators/README.md) — per-generator semantics, output, injection points.
 - [Validators](docs/testkit/validators/README.md) — 18 CI checks.
 - [Configuration](docs/testkit/configuration.md) — `.testkit.yml` reference.
+- [Layout](docs/testkit/layout.md) — test package directory structure and file roles.
+- [Linter config](docs/testkit/golangci.md) — copy-pasteable `.golangci.yml` for testkit consumers.
 - [Adoption](docs/testkit/adoption.md) — incremental adoption guide.
 
 ## License

@@ -111,6 +111,8 @@ b.Run("Get/hot-path", func(b *testing.B) {
 
 The hot-path body calls the method with zero-value inputs in a tight `b.Loop()`. `ResetTimer` excludes setup; `ReportAllocs` enables alloc accounting. The result of any return value is discarded so the benchmark measures call overhead, not the consumer's downstream work.
 
+The hot-path wraps the call in `defer func() { if r := recover(); r != nil { b.Skipf(...) } }()`. If a method panics on zero-value inputs, the benchmark skips with a diagnostic instead of failing. Annotate the method with `//testkit:sample` (see [suite — sample directive](suite.md#sample-directive)) to replace zero values with valid samples.
+
 Hot-path is a measurement, not a gate — no allocation or latency ceiling is asserted. Gates come from the plug-in primitives below.
 
 ## Plug-in extension points (typed by shape)
@@ -121,41 +123,41 @@ Each method gets a `<Iface>BenchOn<Method>` option whose argument type depends o
 
 ```go
 servicetest.ServiceBenchOnGet(
-    testkit.BenchReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
-    testkit.BenchReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
-    testkit.BenchReaderConcurrentThroughput[allshapes.Service, string, allshapes.Item]("seed-1", 4),
+    bench.ReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
+    bench.ReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
+    bench.ReaderConcurrentThroughput[allshapes.Service, string, allshapes.Item]("seed-1", 4),
 )
 ```
 
-`...testkit.BenchReader[T, K, V]`. Library:
+`...bench.Reader[T, K, V]`. Library:
 
-- `BenchReaderHotPath(key)` — single-thread measurement against a known key (replaces the auto-detected zero-key hot-path with a realistic one).
-- `BenchReaderAllocsWithin(key, maxAllocs)` — gate: fail if allocs/op exceeds `maxAllocs`.
-- `BenchReaderConcurrentThroughput(key, parallelism)` — `b.RunParallel`-style stress at the given parallelism.
+- `bench.ReaderHotPath(key)` — single-thread measurement against a known key (replaces the auto-detected zero-key hot-path with a realistic one).
+- `bench.ReaderAllocsWithin(key, maxAllocs)` — gate: fail if allocs/op exceeds `maxAllocs`.
+- `bench.ReaderConcurrentThroughput(key, parallelism)` — `b.RunParallel`-style stress at the given parallelism.
 
 ### Writer / Deleter / Lifecycle / Aggregator / Pure / Predicate / Stream
 
 | Method shape | `BenchOn<Method>` accepts |
 |--------------|---------------------------|
-| Reader | `BenchReader[T, K, V]` |
-| Writer | `BenchWriter[T, V]` |
-| Deleter | `BenchDeleter[T, K]` |
-| Lifecycle | `BenchLifecycle[T]` |
-| Aggregator | `BenchAggregator[T, R]` |
-| Predicate | `BenchPredicate[T]` |
-| Pure | `BenchPure[T, R]` |
-| StreamReader | `BenchStream[T, V]` |
+| Reader | `bench.Reader[T, K, V]` |
+| Writer | `bench.Writer[T, V]` |
+| Deleter | `bench.Deleter[T, K]` |
+| Lifecycle | `bench.Lifecycle[T]` |
+| Aggregator | `bench.Aggregator[T, R]` |
+| Predicate | `bench.Predicate[T]` |
+| Pure | `bench.Pure[T, R]` |
+| StreamReader | `bench.Stream[T, V]` |
 | Unknown | `func(*testing.B, T)` (free-form) |
 
-Bench-library inventories per shape (in `testkit/bench_<shape>.go`):
+Bench-library inventories per shape (in `bench/`):
 
-- **Writer** — `BenchWriterHotPath(sample)`, `BenchWriterAllocsWithin(sample, maxAllocs)`
-- **Deleter** — `BenchDeleterHotPath(key)`, `BenchDeleterAllocsWithin(key, maxAllocs)`
-- **Lifecycle** — `BenchLifecycleAllocsWithin(maxAllocs)`
-- **Aggregator** — `BenchAggregatorAllocsWithin(maxAllocs)`
-- **Predicate** — `BenchPredicateAllocsWithin(maxAllocs)`
-- **Pure** — `BenchPureAllocsWithin(maxAllocs)`
-- **Stream** — `BenchStreamHotPath()`, `BenchStreamAllocsWithin(maxAllocs)`
+- **Writer** — `WriterHotPath(sample)`, `WriterAllocsWithin(sample, maxAllocs)`
+- **Deleter** — `DeleterHotPath(key)`, `DeleterAllocsWithin(key, maxAllocs)`
+- **Lifecycle** — `LifecycleAllocsWithin(maxAllocs)`
+- **Aggregator** — `AggregatorAllocsWithin(maxAllocs)`
+- **Predicate** — `PredicateAllocsWithin(maxAllocs)`
+- **Pure** — `PureAllocsWithin(maxAllocs)`, `PureConcurrentThroughput(parallelism)`
+- **Stream** — `StreamHotPath()`, `StreamAllocsWithin(maxAllocs)`
 
 Each shape ships at least an `AllocsWithin` gate; Reader/Writer/Deleter/Stream additionally ship hot-path measurements that target a specific key/sample (the auto-detected hot-path uses zero-value inputs, which may not be representative for a backing store with real data). Adding a custom bench primitive is a closure over the shape's typed `Context`.
 
@@ -206,45 +208,45 @@ func BenchmarkAllShapesContract(b *testing.B) {
 
         // Reader: Get
         servicetest.ServiceBenchOnGet(
-            testkit.BenchReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
-            testkit.BenchReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
+            bench.ReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
+            bench.ReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
         ),
 
         // Writer: Put
         servicetest.ServiceBenchOnPut(
-            testkit.BenchWriterHotPath[allshapes.Service, allshapes.Item](
+            bench.WriterHotPath[allshapes.Service, allshapes.Item](
                 allshapes.Item{ID: "bench-w", Name: "bench"},
             ),
         ),
 
         // Deleter: Delete (declared with //testkit:deleter)
         servicetest.ServiceBenchOnDelete(
-            testkit.BenchDeleterHotPath[allshapes.Service, string]("seed-1"),
+            bench.DeleterHotPath[allshapes.Service, string]("seed-1"),
         ),
 
         // Aggregator: Count — gate allocs.
         servicetest.ServiceBenchOnCount(
-            testkit.BenchAggregatorAllocsWithin[allshapes.Service, int](0),
+            bench.AggregatorAllocsWithin[allshapes.Service, int](0),
         ),
 
         // Lifecycle: Close — gate allocs.
         servicetest.ServiceBenchOnClose(
-            testkit.BenchLifecycleAllocsWithin[allshapes.Service](0),
+            bench.LifecycleAllocsWithin[allshapes.Service](0),
         ),
 
         // Pure: Describe — gate allocs.
         servicetest.ServiceBenchOnDescribe(
-            testkit.BenchPureAllocsWithin[allshapes.Service, string](0),
+            bench.PureAllocsWithin[allshapes.Service, string](0),
         ),
 
         // Predicate: IsEmpty — gate allocs.
         servicetest.ServiceBenchOnIsEmpty(
-            testkit.BenchPredicateAllocsWithin[allshapes.Service](0),
+            bench.PredicateAllocsWithin[allshapes.Service](0),
         ),
 
         // Stream: List
         servicetest.ServiceBenchOnList(
-            testkit.BenchStreamHotPath[allshapes.Service, allshapes.Item](),
+            bench.StreamHotPath[allshapes.Service, allshapes.Item](),
         ),
     )
 }
@@ -264,6 +266,6 @@ Every option is prefixed with the interface name and `Bench` (`ServiceBenchOptio
 
 - [Primitives / Contract](../primitives/benchmarking.md) — `StartContract` is the runtime gate primitive bench primitives layer on top of
 - [Generators / suite](suite.md) — Tier 1 conformance with the same shape detection
-- Shape-specific bench files: `bench_reader.go`, `bench_writer.go`, `bench_deleter.go`, `bench_lifecycle.go`, `bench_aggregator.go`, `bench_predicate.go`, `bench_pure.go`, `bench_stream.go`
+- Shape-specific bench files in `bench/`: `reader.go`, `writer.go`, `deleter.go`, `lifecycle.go`, `aggregator.go`, `predicate.go`, `pure.go`, `stream.go`
 - [Validators / benchmarks](../validators/benchmarks.md) — enforces every benchmark uses `StartContract`
 - [Validators / bench-regression](../validators/bench-regression.md) — compares benchmark output against pinned baseline
