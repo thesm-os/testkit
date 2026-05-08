@@ -133,7 +133,7 @@ generate:
 	$(call foreach_module,$(GO) generate ./...)
 	@echo "$(BLUE)Regenerating testdata golden files...$(NC)"
 	@dirs=$$(grep -rl '//go:generate' --include='*.go' \
-		$$(find . -type d -path '*/testdata/*' -not -path './.git/*' -not -path './vendor/*' 2>/dev/null) 2>/dev/null \
+		$$(find . -type d -path '*/testdata/*' -not -path './.git/*' -not -path './vendor/*' -not -path './gen/*' 2>/dev/null) 2>/dev/null \
 		| xargs -n1 dirname 2>/dev/null | sort -u); \
 	for dir in $$dirs; do \
 		echo "$(BLUE)  $$dir$(NC)"; \
@@ -179,7 +179,7 @@ lint-md:
 # behaves). Discovered automatically: every directory under any
 # `testdata/` with a `*_test.go` file gets tested explicitly.
 GEN_TESTDATA := $(shell find . -path '*/testdata/*' -name '*_test.go' \
-	-not -path './.git/*' -not -path './vendor/*' \
+	-not -path './.git/*' -not -path './vendor/*' -not -path './gen/*' \
 	-exec dirname {} \; 2>/dev/null | sort -u)
 
 # ─── Testing ─────────────────────────────────────────────────────

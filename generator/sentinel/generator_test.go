@@ -22,7 +22,7 @@ func TestGenerator(t *testing.T) {
 
 	t.Run("Generate produces a single output file against the basic fixture", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadBasic(t)
+		pkg := loadFixture(t, "basic")
 		g := &sentinel.Generator{}
 		res, err := g.Generate(pkg, nil, generator.DefaultConfig(), generator.Options{
 			Output: "errors.gen_test.go",
@@ -34,7 +34,7 @@ func TestGenerator(t *testing.T) {
 
 	t.Run("output contains expected test functions and assertions", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadBasic(t)
+		pkg := loadFixture(t, "basic")
 		g := &sentinel.Generator{}
 		res, err := g.Generate(pkg, nil, generator.DefaultConfig(), generator.Options{
 			Output: "errors.gen_test.go",
@@ -61,7 +61,7 @@ func TestGenerator(t *testing.T) {
 
 	t.Run("source file filter limits Err* vars", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadBasic(t)
+		pkg := loadFixture(t, "basic")
 		g := &sentinel.Generator{}
 		res, err := g.Generate(pkg, nil, generator.DefaultConfig(), generator.Options{
 			Output:     "errors.gen_test.go",
@@ -77,7 +77,7 @@ func TestGenerator(t *testing.T) {
 
 	t.Run("output documents what each test asserts and which directives drove it", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadBasic(t)
+		pkg := loadFixture(t, "basic")
 		g := &sentinel.Generator{}
 		res, err := g.Generate(pkg, nil, generator.DefaultConfig(), generator.Options{
 			Output: "errors.gen_test.go",
@@ -99,7 +99,7 @@ func TestGenerator(t *testing.T) {
 
 	t.Run("output is gofmt-clean", func(t *testing.T) {
 		t.Parallel()
-		pkg := loadBasic(t)
+		pkg := loadFixture(t, "basic")
 		g := &sentinel.Generator{}
 		res, err := g.Generate(pkg, nil, generator.DefaultConfig(), generator.Options{
 			Output: "errors.gen_test.go",

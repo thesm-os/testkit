@@ -85,6 +85,14 @@ type Pipeline[D any] struct {
 	// Order is preserved: a stub's primary file is rendered before its
 	// test file.
 	Renderers []Renderer[D]
+
+	// PostRender runs after the Renderers produce their output and
+	// returns additional output files to append to the [Result].
+	// Optional — generators that emit only template output leave this
+	// nil. Useful for auxiliary artifacts (e.g. enum's per-type wire
+	// JSON goldens) whose count and content depend on data shape and
+	// thus can't be expressed as a fixed [Renderer] slice.
+	PostRender func(data D, opts Options) ([]OutputFile, error)
 }
 
 // Renderer is one (template, output-path) pairing. The Path function
@@ -220,6 +228,16 @@ func (p *Pipeline[D]) Run(pkg *Package, args []string, cfg Config, opts Options)
 			Path:    r.Path(opts),
 			Content: content,
 		})
+	}
+
+	// 9. PostRender — append auxiliary artifacts (e.g. enum's wire
+	//    goldens) computed from the data model.
+	if p.PostRender != nil {
+		extra, err := p.PostRender(data, opts)
+		if err != nil {
+			return nil, fmt.Errorf("post-render %s: %w", p.Name, err)
+		}
+		files = append(files, extra...)
 	}
 	return &Result{Files: files}, nil
 }

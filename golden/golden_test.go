@@ -100,6 +100,221 @@ func TestAssertGolden(t *testing.T) { //nolint:paralleltest // golden file tests
 	})
 }
 
+func TestAssertGoldenAt(t *testing.T) { //nolint:paralleltest // golden file tests mutate working directory
+	t.Run("path argument is taken verbatim (no testdata/golden prefix)", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		// Update mode writes to the literal path given.
+		golden.AssertGoldenAt(f, "fixtures/sub/file.txt", []byte("hello"), true)
+		testkit.False(t, f.Failed(), "update must not fail")
+
+		data, err := os.ReadFile(filepath.Join("fixtures", "sub", "file.txt"))
+		testkit.NoError(t, err, "file at literal path")
+		testkit.Equal(t, string(data), "hello", "content")
+	})
+
+	t.Run("missing file without update fails and cites path", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f, "custom/path.json", []byte("data"), false)
+		testkit.True(t, f.Failed(), "missing file must fail")
+		testkit.True(t, strings.Contains(f.Msg(), "custom/path.json"), "must cite the literal path")
+		testkit.True(t, strings.Contains(f.Msg(), "-update"), "must cite -update flag")
+	})
+
+	t.Run("matching content passes", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		dir := filepath.Join("any", "where")
+		err := os.MkdirAll(dir, 0o750)
+		if err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+		err = os.WriteFile(filepath.Join(dir, "g.txt"), []byte("ok"), 0o644) //nolint:gosec
+		if err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f, filepath.Join(dir, "g.txt"), []byte("ok"), false)
+		testkit.False(t, f.Failed(), "matching content")
+	})
+
+	t.Run("AssertGolden delegates to AssertGoldenAt under testdata/golden", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGolden(f, "delegated.txt", []byte("body"), true)
+		testkit.False(t, f.Failed(), "delegate update")
+
+		data, err := os.ReadFile(filepath.Join("testdata", "golden", "delegated.txt"))
+		testkit.NoError(t, err, "convention path")
+		testkit.Equal(t, string(data), "body", "content")
+	})
+}
+
+func TestAssertGoldenJSONField(t *testing.T) { //nolint:paralleltest // mutates working directory
+	t.Run("update creates a new file with one field", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		got := []byte(`{"A": 1, "B": 2}`)
+		golden.AssertGoldenJSONField(f, "wire.json", "Status", got, true)
+		testkit.False(t, f.Failed(), "update must not fail")
+
+		body, err := os.ReadFile("wire.json")
+		testkit.NoError(t, err, "file written")
+		testkit.True(t, strings.Contains(string(body), `"Status"`), "field present")
+		testkit.True(t, strings.Contains(string(body), `"A": 1`), "value present")
+	})
+
+	t.Run("update preserves sibling fields", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		// Seed with two fields.
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"StatusA": 1}`), true)
+		golden.AssertGoldenJSONField(f, "wire.json", "Priority",
+			[]byte(`{"PriorityX": 10}`), true)
+		testkit.False(t, f.Failed(), "two updates")
+
+		// Update only Status; Priority must remain.
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"StatusA": 1, "StatusB": 2}`), true)
+		testkit.False(t, f.Failed(), "third update")
+
+		body, _ := os.ReadFile("wire.json")
+		testkit.True(t, strings.Contains(string(body), `"Status"`), "Status present")
+		testkit.True(t, strings.Contains(string(body), `"StatusB": 2`), "new value present")
+		testkit.True(t, strings.Contains(string(body), `"Priority"`), "Priority preserved")
+		testkit.True(t, strings.Contains(string(body), `"PriorityX": 10`), "Priority value preserved")
+	})
+
+	t.Run("missing file without update fails", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "missing.json", "Foo",
+			[]byte(`{"x": 1}`), false)
+		testkit.True(t, f.Failed(), "missing file must fail")
+		testkit.True(t, strings.Contains(f.Msg(), "-update"), "cites flag")
+	})
+
+	t.Run("missing field fails with field name in diagnostic", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		err := os.WriteFile("wire.json", []byte(`{"OtherType": {}}`), 0o644) //nolint:gosec
+		testkit.NoError(t, err, "seed file")
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Missing",
+			[]byte(`{"x": 1}`), false)
+		testkit.True(t, f.Failed(), "missing field fails")
+		testkit.True(t, strings.Contains(f.Msg(), `"Missing"`), "names the field")
+	})
+
+	t.Run("matching field passes", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A": 1}`), true)
+		testkit.False(t, f.Failed(), "seed")
+
+		// Same content compared.
+		f2 := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f2, "wire.json", "Status",
+			[]byte(`{"A": 1}`), false)
+		testkit.False(t, f2.Failed(), "matching content")
+	})
+
+	t.Run("differing field fails with cmp.Diff scoped to the slice", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A": 1}`), true)
+		testkit.False(t, f.Failed(), "seed")
+
+		f2 := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f2, "wire.json", "Status",
+			[]byte(`{"A": 2}`), false)
+		testkit.True(t, f2.Failed(), "differing content fails")
+		testkit.True(t, strings.Contains(f2.Msg(), `"Status"`), "names the field")
+		testkit.True(t, strings.Contains(f2.Msg(), "-want +got"), "cmp.Diff markers")
+	})
+
+	t.Run("structural comparison ignores whitespace differences", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		// Seed with verbose formatting.
+		err := os.WriteFile("wire.json", []byte(`{"Status": {  "A":  1  }}`), 0o644) //nolint:gosec
+		testkit.NoError(t, err, "seed")
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A":1}`), false)
+		testkit.False(t, f.Failed(), "compact got matches verbose stored")
+	})
+
+	t.Run("invalid got JSON fails fast", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`not json`), true)
+		testkit.True(t, f.Failed(), "invalid got rejected up front")
+	})
+
+	t.Run("non-object file body fails with diagnostic", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		// File exists but is a JSON array — can't extract a field.
+		err := os.WriteFile("wire.json", []byte(`[1, 2, 3]`), 0o644) //nolint:gosec
+		testkit.NoError(t, err, "seed array file")
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A": 1}`), false)
+		testkit.True(t, f.Failed(), "non-object file fails")
+		testkit.True(t, strings.Contains(f.Msg(), "JSON object"),
+			"diagnostic explains the shape constraint")
+	})
+
+	t.Run("update of non-object file body fails", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		err := os.WriteFile("wire.json", []byte(`[1, 2, 3]`), 0o644) //nolint:gosec
+		testkit.NoError(t, err, "seed array file")
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A": 1}`), true)
+		testkit.True(t, f.Failed(), "update on non-object body fails")
+	})
+}
+
+func TestCompare(t *testing.T) {
+	t.Parallel()
+
+	t.Run("equal content returns empty diff", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, golden.Compare([]byte("a"), []byte("a")), "",
+			"matching content has no diff")
+	})
+
+	t.Run("different content returns cmp.Diff with markers", func(t *testing.T) {
+		t.Parallel()
+		diff := golden.Compare([]byte("want"), []byte("got"))
+		testkit.True(t, diff != "", "differing content yields a diff")
+		testkit.True(t, strings.Contains(diff, "-"), "diff has - marker for want")
+		testkit.True(t, strings.Contains(diff, "+"), "diff has + marker for got")
+	})
+
+	t.Run("scrubbers run on got before comparison", func(t *testing.T) {
+		t.Parallel()
+		// Without scrubber, content differs.
+		testkit.True(t,
+			golden.Compare([]byte("id=SCRUBBED_RUN"), []byte("id=run_abcdef0123456789")) != "",
+			"unscrubbed differs")
+		// With scrubber, content matches.
+		testkit.Equal(t,
+			golden.Compare([]byte("id=SCRUBBED_RUN"), []byte("id=run_abcdef0123456789"),
+				golden.ScrubRunIDs()),
+			"",
+			"scrubber reconciles got with want")
+	})
+}
+
 func TestShouldUpdate(t *testing.T) {
 	t.Parallel()
 

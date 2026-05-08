@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package sentinel_test
+package enum_test
 
 import (
 	"testing"

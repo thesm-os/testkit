@@ -4,6 +4,7 @@
 package golden
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -29,6 +30,7 @@ type Scrubber func([]byte) []byte
 
 // AssertGolden compares got against the golden file at
 // testdata/golden/<file> relative to the test's package directory.
+// Use [AssertGoldenAt] when the golden lives anywhere else.
 //
 // Pass [ShouldUpdate]() for the update parameter to enable flag-driven
 // golden file creation/update via `go test -update`.
@@ -45,11 +47,22 @@ type Scrubber func([]byte) []byte
 //	golden.AssertGolden(t, "response.json", body, golden.ShouldUpdate(), golden.ScrubTimestamps())
 func AssertGolden(tb testing.TB, file string, got []byte, update bool, scrubbers ...Scrubber) {
 	tb.Helper()
+	AssertGoldenAt(tb, filepath.Join("testdata", "golden", file), got, update, scrubbers...)
+}
+
+// AssertGoldenAt is the path-explicit form of [AssertGolden]. The path
+// argument is taken verbatim relative to the test's working directory —
+// no testdata/golden/ prefix is prepended. Use this when the golden
+// file lives outside the canonical convention, e.g. fixture-style
+// goldens that need to sit next to the source they describe.
+//
+// Behavior, scrubber semantics, and the -update flag handling match
+// [AssertGolden].
+func AssertGoldenAt(tb testing.TB, path string, got []byte, update bool, scrubbers ...Scrubber) {
+	tb.Helper()
 	for _, s := range scrubbers {
 		got = s(got)
 	}
-
-	path := filepath.Join("testdata", "golden", file)
 
 	if update {
 		dir := filepath.Dir(path)
@@ -75,8 +88,129 @@ func AssertGolden(tb testing.TB, file string, got []byte, update bool, scrubbers
 		return
 	}
 
-	if diff := cmp.Diff(string(want), string(got)); diff != "" {
-		tb.Fatalf("AssertGolden: %s (-want +got)\n%s", file, diff)
+	if diff := Compare(want, got); diff != "" {
+		tb.Fatalf("AssertGolden: %s (-want +got)\n%s", path, diff)
+	}
+}
+
+// Compare returns the [cmp.Diff] between want and got after running
+// got through scrubbers (left-to-right). Returns the empty string when
+// content matches.
+//
+// Useful in non-test contexts (e.g. a generator's --check mode, a
+// post-build verifier) that want the comparison logic without
+// [testing.TB] integration.
+func Compare(want, got []byte, scrubbers ...Scrubber) string {
+	for _, s := range scrubbers {
+		got = s(got)
+	}
+	return cmp.Diff(string(want), string(got))
+}
+
+// AssertGoldenJSONField asserts that the JSON file at path, when
+// parsed as a top-level object and keyed by field, matches got.
+// Use this when one golden file holds multiple independent slices
+// (e.g. one entry per type) so that per-slice tests can compare
+// only their own data without the others' contents in the diff.
+//
+// The path argument is taken verbatim relative to the test's
+// working directory — same convention as [AssertGoldenAt].
+//
+// Behavior:
+//   - File missing + update=false: fail (cite -update flag)
+//   - File missing + update=true: write `{"<field>": <got>}`
+//   - Field missing + update=false: fail with diagnostic naming the field
+//   - Field missing + update=true: add the field, preserving siblings
+//   - Field present + matches got: pass
+//   - Field present + differs + update=false: fail with [cmp.Diff] over the field's slice
+//   - Field present + differs + update=true: replace just the field; siblings preserved
+//
+// Comparison is structural (both sides re-marshaled with the same
+// indent) so whitespace differences don't false-fail. got must be
+// valid JSON. Scrubbers run on got before comparison and on the
+// re-marshaled file slice before diffing.
+func AssertGoldenJSONField(tb testing.TB, path, field string, got []byte, update bool, scrubbers ...Scrubber) {
+	tb.Helper()
+	for _, s := range scrubbers {
+		got = s(got)
+	}
+
+	// Parse got into a generic value so we can both write it back
+	// (update path) and re-marshal it canonically (compare path).
+	var gotValue any
+	if err := json.Unmarshal(got, &gotValue); err != nil {
+		tb.Fatalf("AssertGoldenJSONField: got is not valid JSON: %v", err)
+		return
+	}
+
+	if update {
+		writeJSONField(tb, path, field, gotValue)
+		return
+	}
+
+	want, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			tb.Fatalf("AssertGoldenJSONField: %s does not exist — run with -update to create it", path)
+			return
+		}
+		tb.Fatalf("AssertGoldenJSONField: read %s: %v", path, err)
+		return
+	}
+
+	doc := make(map[string]any)
+	if uErr := json.Unmarshal(want, &doc); uErr != nil {
+		tb.Fatalf("AssertGoldenJSONField: %s is not a JSON object: %v", path, uErr)
+		return
+	}
+	wantValue, ok := doc[field]
+	if !ok {
+		tb.Fatalf("AssertGoldenJSONField: %s has no field %q — run with -update to add it", path, field)
+		return
+	}
+
+	wantBytes, err := json.MarshalIndent(wantValue, "", "  ")
+	if err != nil {
+		tb.Fatalf("AssertGoldenJSONField: re-marshal want: %v", err)
+		return
+	}
+	gotBytes, err := json.MarshalIndent(gotValue, "", "  ")
+	if err != nil {
+		tb.Fatalf("AssertGoldenJSONField: re-marshal got: %v", err)
+		return
+	}
+	if diff := cmp.Diff(string(wantBytes), string(gotBytes)); diff != "" {
+		tb.Fatalf("AssertGoldenJSONField: %s field %q (-want +got)\n%s", path, field, diff)
+	}
+}
+
+// writeJSONField loads path (or starts with an empty object), sets
+// doc[field] = value, and writes the result back canonically. Used
+// by the -update path of [AssertGoldenJSONField] so siblings are
+// preserved across regenerations.
+func writeJSONField(tb testing.TB, path, field string, value any) {
+	tb.Helper()
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		tb.Fatalf("AssertGoldenJSONField: mkdir %s: %v", dir, err)
+		return
+	}
+	doc := make(map[string]any)
+	if existing, err := os.ReadFile(path); err == nil {
+		if uErr := json.Unmarshal(existing, &doc); uErr != nil {
+			tb.Fatalf("AssertGoldenJSONField: %s is not a JSON object: %v", path, uErr)
+			return
+		}
+	}
+	doc[field] = value
+	body, err := json.MarshalIndent(doc, "", "  ")
+	if err != nil {
+		tb.Fatalf("AssertGoldenJSONField: marshal: %v", err)
+		return
+	}
+	body = append(body, '\n')
+	if err := os.WriteFile(path, body, 0o644); err != nil { //nolint:gosec // golden file permissions
+		tb.Fatalf("AssertGoldenJSONField: write %s: %v", path, err)
 	}
 }
 

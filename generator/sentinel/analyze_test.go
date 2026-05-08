@@ -17,7 +17,7 @@ import (
 // share this setup.
 func runAnalyze(t *testing.T, opts generator.Options) *sentinel.Data {
 	t.Helper()
-	pkg := loadBasic(t)
+	pkg := loadFixture(t, "basic")
 	cfg := generator.DefaultConfig()
 	if opts.Output == "" {
 		opts.Output = "errors.gen_test.go"

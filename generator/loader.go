@@ -239,12 +239,44 @@ func (p *Package) Const(name string) (*ConstInfo, error) {
 		return nil, Errorf(p.position(obj), "%q is not a constant", name)
 	}
 	return &ConstInfo{
-		Name:  c.Name(),
-		Type:  c.Type(),
-		Value: c.Val(),
-		Doc:   p.docFor(name),
-		Pos:   p.position(c),
+		Name:    c.Name(),
+		Type:    c.Type(),
+		Value:   c.Val(),
+		Doc:     p.docFor(name),
+		Comment: p.constInlineCommentFor(name),
+		Pos:     p.position(c),
 	}, nil
+}
+
+// constInlineCommentFor returns the inline comment trailing a
+// package-level const or var declaration (e.g. the "Pending" in
+// `StatusPending Status = iota // Pending`). Returns the empty
+// string when no inline comment is present.
+//
+// The enum generator uses this to derive each constant's expected
+// stringer output without forcing every fixture to declare a
+// String() switch — the inline comment is the canonical source.
+func (p *Package) constInlineCommentFor(name string) string {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok || vs.Comment == nil {
+					continue
+				}
+				for _, n := range vs.Names {
+					if n.Name == name {
+						return strings.TrimSpace(vs.Comment.Text())
+					}
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // Interfaces returns all named interfaces in the package, sorted by name.

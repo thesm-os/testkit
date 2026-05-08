@@ -81,6 +81,46 @@ func ScanStructsImplementing(pkg *Package, iface *types.Interface) []*StructInfo
 	return out
 }
 
+// ScanConstsOfType returns every exported package-level constant
+// whose declared type is the named type, sorted by source position.
+// The returned [*ConstInfo] carries the const's value, doc comment,
+// and inline comment — enough for the enum generator to derive
+// expected stringer output and wire-compat mappings.
+//
+// Sort order is source position rather than name so the wire-compat
+// golden reflects the user's iota ordering. A reorder shows up as a
+// reordered JSON document in the diff.
+func ScanConstsOfType(pkg *Package, typeName string) []*ConstInfo {
+	scope := pkg.Pkg.Scope()
+	var out []*ConstInfo
+	for _, name := range scope.Names() {
+		obj := scope.Lookup(name)
+		if !obj.Exported() {
+			continue
+		}
+		c, ok := obj.(*types.Const)
+		if !ok {
+			continue
+		}
+		named, ok := c.Type().(*types.Named)
+		if !ok || named.Obj().Name() != typeName {
+			continue
+		}
+		ci, err := pkg.Const(c.Name())
+		if err != nil {
+			continue
+		}
+		out = append(out, ci)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Pos.Filename != out[j].Pos.Filename {
+			return out[i].Pos.Filename < out[j].Pos.Filename
+		}
+		return out[i].Pos.Offset < out[j].Pos.Offset
+	})
+	return out
+}
+
 // HasMethod reports whether the named type has a pointer-receiver
 // method with the given name whose signature satisfies sigCheck.
 // Returns false for missing types, non-named types, or no matching
@@ -113,6 +153,29 @@ func HasMethod(pkg *Package, typeName, methodName string, sigCheck func(*types.S
 	return false
 }
 
+// HasFunc reports whether the package declares a top-level function
+// with the given name whose signature satisfies sigCheck. Returns
+// false when the lookup misses, the symbol isn't a function, or the
+// signature doesn't match.
+//
+// Use this for free-function predicates like ParseEnum where the
+// detection target is a package-level helper rather than a method.
+func HasFunc(pkg *Package, name string, sigCheck func(*types.Signature) bool) bool {
+	obj := pkg.Pkg.Scope().Lookup(name)
+	if obj == nil {
+		return false
+	}
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return false
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return false
+	}
+	return sigCheck(sig)
+}
+
 // IsErrorBoolSig matches `(error) bool` — the canonical signature
 // of a stdlib `Is` method on custom error types.
 func IsErrorBoolSig(sig *types.Signature) bool {
@@ -132,6 +195,111 @@ func UnwrapSig(sig *types.Signature) bool {
 	return sig.Params().Len() == 0 &&
 		sig.Results().Len() == 1 &&
 		IsErrorType(sig.Results().At(0).Type())
+}
+
+// StringerSig matches `() string` — the canonical [fmt.Stringer]
+// signature. Used by enum (and any future stub-side stringer
+// detection) without dragging fmt into the dependency graph.
+func StringerSig(sig *types.Signature) bool {
+	if sig.Params().Len() != 0 || sig.Results().Len() != 1 {
+		return false
+	}
+	res, ok := sig.Results().At(0).Type().Underlying().(*types.Basic)
+	return ok && res.Kind() == types.String
+}
+
+// ParseSig returns a predicate matching `(string) (<typeName>, error)` —
+// the canonical Parse<Type> signature for enum-style parse helpers.
+// The returned predicate closes over typeName so callers don't need
+// to reimplement the named-result-type check.
+func ParseSig(typeName string) func(*types.Signature) bool {
+	return func(sig *types.Signature) bool {
+		if sig.Params().Len() != 1 || sig.Results().Len() != 2 {
+			return false
+		}
+		b, ok := sig.Params().At(0).Type().(*types.Basic)
+		if !ok || b.Kind() != types.String {
+			return false
+		}
+		named, ok := sig.Results().At(0).Type().(*types.Named)
+		if !ok || named.Obj().Name() != typeName {
+			return false
+		}
+		return IsErrorType(sig.Results().At(1).Type())
+	}
+}
+
+// MarshalTextSig matches `() ([]byte, error)` — the canonical
+// [encoding.TextMarshaler] signature.
+func MarshalTextSig(sig *types.Signature) bool {
+	return marshalBytesErrSig(sig, 0)
+}
+
+// UnmarshalTextSig matches `([]byte) error` — the canonical
+// [encoding.TextUnmarshaler] signature. Pointer receivers are
+// required for unmarshal so the helper is used with [HasMethod].
+func UnmarshalTextSig(sig *types.Signature) bool {
+	return unmarshalBytesErrSig(sig)
+}
+
+// MarshalJSONSig matches `() ([]byte, error)` — the canonical
+// [encoding/json.Marshaler] signature. Identical wire shape to
+// [MarshalTextSig]; kept distinct so callers express intent.
+func MarshalJSONSig(sig *types.Signature) bool {
+	return marshalBytesErrSig(sig, 0)
+}
+
+// UnmarshalJSONSig matches `([]byte) error` — the canonical
+// [encoding/json.Unmarshaler] signature.
+func UnmarshalJSONSig(sig *types.Signature) bool {
+	return unmarshalBytesErrSig(sig)
+}
+
+// MarshalBinarySig matches `() ([]byte, error)` — the canonical
+// [encoding.BinaryMarshaler] signature. Identical wire shape to
+// the text/JSON variants; kept distinct so callers express intent.
+func MarshalBinarySig(sig *types.Signature) bool {
+	return marshalBytesErrSig(sig, 0)
+}
+
+// UnmarshalBinarySig matches `([]byte) error` — the canonical
+// [encoding.BinaryUnmarshaler] signature.
+func UnmarshalBinarySig(sig *types.Signature) bool {
+	return unmarshalBytesErrSig(sig)
+}
+
+// marshalBytesErrSig reports whether sig has paramCount params, a
+// []byte first result, and an error second result.
+func marshalBytesErrSig(sig *types.Signature, paramCount int) bool {
+	if sig.Params().Len() != paramCount || sig.Results().Len() != 2 {
+		return false
+	}
+	if !isByteSlice(sig.Results().At(0).Type()) {
+		return false
+	}
+	return IsErrorType(sig.Results().At(1).Type())
+}
+
+// unmarshalBytesErrSig reports whether sig has a single []byte
+// param and a single error result.
+func unmarshalBytesErrSig(sig *types.Signature) bool {
+	if sig.Params().Len() != 1 || sig.Results().Len() != 1 {
+		return false
+	}
+	if !isByteSlice(sig.Params().At(0).Type()) {
+		return false
+	}
+	return IsErrorType(sig.Results().At(0).Type())
+}
+
+// isByteSlice reports whether t is `[]byte` (slice of basic byte).
+func isByteSlice(t types.Type) bool {
+	s, ok := t.Underlying().(*types.Slice)
+	if !ok {
+		return false
+	}
+	b, ok := s.Elem().Underlying().(*types.Basic)
+	return ok && b.Kind() == types.Byte
 }
 
 // ErrorInterface returns the builtin `error` interface as a

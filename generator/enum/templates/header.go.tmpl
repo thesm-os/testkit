@@ -1,0 +1,65 @@
+{{- /*
+The "header" partial emits the file's package decl, file-level doc
+comment summarizing what's verified, and the import block. Imports
+are conditional so the generated file only pulls in what it uses:
+
+  - encoding/json   when at least one type implements json.Marshaler
+  - fmt             when at least one type implements fmt.Stringer
+                    (boundary subtest uses fmt.Sprintf for fallback)
+  - bytes           when at least one type implements
+                    encoding.BinaryMarshaler (round-trip uses bytes.Equal)
+  - <source pkg>    when output lands outside the source package
+
+Data input: the full enum.Data.
+*/ -}}
+{{define "header"}}
+// This file verifies the package's enum-style integer types satisfy a
+// battery of contracts:
+//
+//   - exhaustive:     every declared constant of the type is in the test set
+//   - distinct:       no two constants share an integer value
+//   - zero value:     the type's zero value matches the iota[0] declaration
+//   - wire compat:    constant→int mapping matches a committed JSON golden
+//                     (regenerate explicitly with `go test -update` after
+//                     a deliberate reorder)
+{{- if .HasStringer}}
+//   - stringer:       String() returns the canonical name for every value
+//   - boundary:       out-of-range values use the fallback fmt format
+//   - parse:          Parse<Type> round-trips through String (when defined)
+{{- end}}
+{{- if .HasText}}
+//   - marshal text:   MarshalText/UnmarshalText round-trip per value
+{{- end}}
+{{- if .HasJSON}}
+//   - marshal json:   MarshalJSON/UnmarshalJSON round-trip per value
+{{- end}}
+{{- if .HasBinary}}
+//   - marshal binary: MarshalBinary/UnmarshalBinary round-trip per value
+{{- end}}
+{{- if .Directives}}
+//
+// Directives consumed:
+{{- range .Directives}}
+//   {{.}}
+{{- end}}
+{{- end}}
+package {{.PackageName}}
+
+import (
+{{- if .HasBinary}}
+	"bytes"
+{{- end}}
+	"encoding/json"
+{{- if .HasStringer}}
+	"fmt"
+{{- end}}
+	"testing"
+{{- if .ImportPath}}
+
+	"{{.ImportPath}}"
+{{- end}}
+
+	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/golden"
+)
+{{end}}

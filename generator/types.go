@@ -107,8 +107,18 @@ type ConstInfo struct {
 	Name  string
 	Type  types.Type
 	Value constant.Value
-	Doc   string
-	Pos   token.Position
+
+	// Doc is the doc comment attached to the const declaration
+	// (the "// Foo is the X" line above the const, when present).
+	Doc string
+
+	// Comment is the inline comment trailing the const declaration
+	// (the "// Pending" suffix on `StatusPending Status = iota // Pending`),
+	// trimmed of the leading "// ". Empty when no inline comment.
+	// Used by the enum generator to derive expected stringer output.
+	Comment string
+
+	Pos token.Position
 }
 
 // FieldData is the rendered form of one struct field or function
