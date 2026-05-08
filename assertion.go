@@ -42,7 +42,7 @@ func Assert[T any](tb testing.TB, got T) *Assertion[T] {
 // structural diff if they differ.
 func (a *Assertion[T]) Equals(want T, msg string) *Assertion[T] {
 	a.tb.Helper()
-	if diff := cmp.Diff(want, a.got); diff != "" {
+	if diff := cmp.Diff(want, a.got, defaultCmpOpts...); diff != "" {
 		a.tb.Fatalf("%s: (-want +got)\n%s", msg, diff)
 	}
 	return a
@@ -52,7 +52,7 @@ func (a *Assertion[T]) Equals(want T, msg string) *Assertion[T] {
 // to [cmp.Equal].
 func (a *Assertion[T]) NotEquals(want T, msg string) *Assertion[T] {
 	a.tb.Helper()
-	if cmp.Equal(a.got, want) {
+	if cmp.Equal(a.got, want, defaultCmpOpts...) {
 		a.tb.Fatalf("%s: values are equal, want different\n got: %+v", msg, a.got)
 	}
 	return a
@@ -291,7 +291,7 @@ func contains(haystack, needle any) (bool, bool) {
 	switch v.Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := range v.Len() {
-			if cmp.Equal(v.Index(i).Interface(), needle) {
+			if cmp.Equal(v.Index(i).Interface(), needle, defaultCmpOpts...) {
 				return true, true
 			}
 		}

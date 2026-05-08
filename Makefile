@@ -171,6 +171,23 @@ lint-md:
 # contain generated code with tests that verify the generators
 # produce correct, compilable, 100%-covered output.
 GEN_TESTDATA := \
+	gen/testdata/basic/storetest \
+	gen/testdata/allshapes/servicetest \
+	gen/testdata/generics/cachetest \
+	gen/testdata/iterators/scannertest \
+	gen/testdata/nocontext/cachetest \
+	gen/testdata/erroronly/closertest \
+	gen/testdata/variadic/findertest \
+	gen/testdata/multireturns/servicetest \
+	gen/testdata/namedreturns/servicetest \
+	gen/testdata/noerror/cachetest \
+	gen/testdata/interfaces/processortest \
+	gen/testdata/voidctx/countertest \
+	gen/testdata/voidpure/streamtest \
+	gen/testdata/samples/hashertest \
+	gen/testdata/weird/weirdtest \
+	gen/testdata/companion/storetest \
+	gen/testdata/stubdirectives/runnertest \
 	gen/stub/testdata/basic/storetest \
 	gen/stub/testdata/directives/storetest \
 	gen/stub/testdata/noerror/cachetest \

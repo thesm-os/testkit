@@ -176,7 +176,7 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		keyType := TypeStr(p.Type(), tracker)
 
 		// Rule 4: (V, error) with V != error → Reader.
-		if nonErrResults == 1 {
+		if hasError && nonErrResults == 1 {
 			valIdx := 0
 			if errIdx == 0 {
 				valIdx = 1
@@ -212,7 +212,7 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		}
 
 		// Rule 6: (R, error) with R != error → Writer with result.
-		if nonErrResults == 1 {
+		if hasError && nonErrResults == 1 {
 			retIdx := 0
 			if errIdx == 0 {
 				retIdx = 1

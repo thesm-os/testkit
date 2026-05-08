@@ -42,13 +42,15 @@ func TestPackage(t *testing.T) {
 		iface, err := pkg.Interface("Store")
 		testkit.NoError(t, err, "must find Store")
 		testkit.Equal(t, iface.Name, "Store", "name must match")
-		testkit.Len(t, iface.Methods, 4, "must have 4 methods")
+		testkit.Len(t, iface.Methods, 7, "must have 7 methods")
 
 		names := make([]string, len(iface.Methods))
 		for i, m := range iface.Methods {
 			names[i] = m.Name
 		}
-		testkit.Equal(t, names, []string{"Delete", "Find", "Get", "Put"}, "must be sorted")
+		testkit.Equal(t, names,
+			[]string{"Count", "Delete", "Find", "Get", "LegacyPut", "Ping", "Put"},
+			"must be sorted")
 	})
 
 	t.Run("Interface extracts method doc comments", func(t *testing.T) {
@@ -95,7 +97,7 @@ func TestPackage(t *testing.T) {
 		s, err := pkg.Struct("Item")
 		testkit.NoError(t, err, "must find Item")
 		testkit.Equal(t, s.Name, "Item", "name must match")
-		testkit.Len(t, s.Fields, 4, "must have 4 fields including unexported")
+		testkit.Len(t, s.Fields, 12, "must have 12 fields including unexported")
 
 		var exported, unexported int
 		for _, f := range s.Fields {
@@ -105,7 +107,7 @@ func TestPackage(t *testing.T) {
 				unexported++
 			}
 		}
-		testkit.Equal(t, exported, 3, "3 exported fields")
+		testkit.Equal(t, exported, 11, "11 exported fields")
 		testkit.Equal(t, unexported, 1, "1 unexported field")
 	})
 
@@ -222,7 +224,7 @@ func TestPackage(t *testing.T) {
 		for i, s := range structs {
 			names[i] = s.Name
 		}
-		want := []string{"Item", "NotFoundError", "ValidationError", "WrappedError"}
+		want := []string{"Address", "InMemoryStore", "Item", "NotFoundError", "ValidationError", "WrappedError"}
 		testkit.Equal(t, names, want, "must return all exported structs")
 	})
 

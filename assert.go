@@ -9,7 +9,18 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
+
+// defaultCmpOpts are applied to all cmp.Diff/cmp.Equal calls in
+// testkit assertions. Exporter(true) allows comparing unexported
+// fields — prevents panics on types like time.Time or any struct
+// with private fields. EquateEmpty treats nil and empty slices/maps
+// as equal (a common source of false negatives in test assertions).
+var defaultCmpOpts = cmp.Options{
+	cmp.Exporter(func(reflect.Type) bool { return true }),
+	cmpopts.EquateEmpty(),
+}
 
 // Equal compares got and want using [cmp.Diff] and calls tb.Fatalf with a
 // structural diff if they differ. The msg argument describes the contract
@@ -18,7 +29,7 @@ import (
 //	testkit.Equal(t, store.Get(ctx, id), item, "Get must return the stored item")
 func Equal[T any](tb testing.TB, got, want T, msg string) {
 	tb.Helper()
-	if diff := cmp.Diff(want, got); diff != "" {
+	if diff := cmp.Diff(want, got, defaultCmpOpts...); diff != "" {
 		tb.Fatalf("%s: (-want +got)\n%s", msg, diff)
 	}
 }
@@ -30,7 +41,7 @@ func Equal[T any](tb testing.TB, got, want T, msg string) {
 //	testkit.NotEqual(t, token, previousToken, "Refresh must issue a new token")
 func NotEqual[T any](tb testing.TB, got, want T, msg string) {
 	tb.Helper()
-	if cmp.Equal(got, want) {
+	if cmp.Equal(got, want, defaultCmpOpts...) {
 		tb.Fatalf("%s: values are equal, want different\n got: %+v", msg, got)
 	}
 }
