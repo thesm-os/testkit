@@ -52,6 +52,31 @@ func TestMustUnmarshal(t *testing.T) {
 	})
 }
 
+func TestMustDecodeHex(t *testing.T) {
+	t.Parallel()
+
+	t.Run("decodes valid hex", func(t *testing.T) {
+		t.Parallel()
+		b := testkit.MustDecodeHex(t, "deadbeef")
+		testkit.Equal(t, b, []byte{0xde, 0xad, 0xbe, 0xef}, "must decode hex")
+	})
+
+	t.Run("fatals on invalid hex", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.MustDecodeHex(f, "not-hex!")
+		if !f.Failed() {
+			t.Fatal("should fail on invalid hex")
+		}
+	})
+
+	t.Run("empty string returns empty slice", func(t *testing.T) {
+		t.Parallel()
+		b := testkit.MustDecodeHex(t, "")
+		testkit.Len(t, b, 0, "empty hex must return empty slice")
+	})
+}
+
 func TestFailingReader(t *testing.T) {
 	t.Parallel()
 

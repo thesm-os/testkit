@@ -4,6 +4,7 @@
 package testkit
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,6 +37,19 @@ func MustUnmarshal(tb testing.TB, data []byte, v any) {
 	if err != nil {
 		tb.Fatalf("MustUnmarshal: %v", err)
 	}
+}
+
+// MustDecodeHex decodes a hex-encoded string and calls tb.Fatalf if
+// decoding fails. Use this for crypto, codec, and wire-format fixtures.
+//
+//	digest := testkit.MustDecodeHex(t, "deadbeef01020304")
+func MustDecodeHex(tb testing.TB, s string) []byte {
+	tb.Helper()
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		tb.Fatalf("MustDecodeHex: %v", err)
+	}
+	return b
 }
 
 // FailingReader is an [io.Reader] that succeeds for the first BeforeFail
