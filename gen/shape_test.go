@@ -187,6 +187,36 @@ func TestDetectShape(t *testing.T) {
 		}
 	})
 
+	t.Run("voidctx.Counter", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadSuiteTestPackage(t, "voidctx")
+		iface, err := pkg.Interface("Counter")
+		testkit.NoError(t, err, "must load Counter")
+		tracker := gen.NewImportTracker("example.com/test")
+
+		for _, tc := range []struct {
+			method    string
+			wantShape gen.MethodShape
+		}{
+			{"Add", gen.ShapeUnknown},
+			{"Name", gen.ShapePure},
+		} {
+			t.Run(tc.method, func(t *testing.T) {
+				t.Parallel()
+				var m gen.MethodInfo
+				for _, method := range iface.Methods {
+					if method.Name == tc.method {
+						m = method
+						break
+					}
+				}
+				info := gen.DetectShape(m, tracker, nil)
+				testkit.Equal(t, info.Shape, tc.wantShape,
+					tc.method+" must be "+tc.wantShape.String())
+			})
+		}
+	})
+
 	t.Run("erroronly.Closer", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadSuiteTestPackage(t, "erroronly")

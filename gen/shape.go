@@ -198,7 +198,7 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		}
 
 		// Rule 5: error-only return → Writer (or Deleter with directive).
-		if nonErrResults == 0 {
+		if hasError && nonErrResults == 0 {
 			if isDeleter {
 				return ShapeInfo{
 					Shape:   ShapeDeleter,
@@ -252,7 +252,7 @@ func DetectShape(m MethodInfo, tracker *ImportTracker, dirs []Directive) ShapeIn
 		}
 
 		// Rule 8: error only (no non-error results) → Lifecycle.
-		if nonErrResults == 0 {
+		if hasError && nonErrResults == 0 {
 			return ShapeInfo{Shape: ShapeLifecycle}
 		}
 	}
