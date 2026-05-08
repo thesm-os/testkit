@@ -3,20 +3,20 @@ package {{.PackageName}}
 {{template "bench_imports" .}}
 
 // Benchmark{{.InterfaceName}}Contract runs performance benchmarks against
-// implementations of [{{.QualifiedType}}] produced by factory.
+// implementations of [{{.InstantiatedType}}] produced by factory.
 //
 //	Default benchmarks: {{.ActiveMethodCount}} hot-path measurements across {{.ActiveMethodCount}} methods
 //	Shapes benchmarked: {{.ShapeSummary}}
 //	Plug-in points:     {{.BenchPluginPoints}}
-func Benchmark{{.InterfaceName}}Contract(
+func Benchmark{{.InterfaceName}}Contract{{.TypeParamDecl}}(
 	b *testing.B,
-	factory func() {{.QualifiedType}},
-	opts ...{{.InterfaceName}}BenchOption,
+	factory func() {{.InstantiatedType}},
+	opts ...{{.InterfaceName}}BenchOption{{.TypeParamArgs}},
 ) {
 	b.Helper()
-	cfg := new{{.InterfaceName}}BenchConfig(opts...)
+	cfg := new{{.InterfaceName}}BenchConfig{{.TypeParamArgs}}(opts...)
 {{range $m := .Methods}}{{if not $m.Skip}}
-	bench{{$.InterfaceName}}{{$m.Name}}(b, factory, &cfg)
+	bench{{$.InterfaceName}}{{$m.Name}}{{$.TypeParamArgs}}(b, factory, &cfg)
 {{- end}}{{end}}
 
 	for _, custom := range cfg.custom {

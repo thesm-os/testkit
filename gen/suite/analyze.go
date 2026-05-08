@@ -34,6 +34,8 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		return nil, err
 	}
 
+	typeParamDecl := iface.TypeParamDecl(tracker)
+	typeParamArgs := iface.TypeParamArgs()
 	qualifiedType := gen.QualifyType(tracker.AddPath(pkg.Pkg.Path()), typeName)
 
 	var methods []*SpecMethodData
@@ -42,6 +44,8 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 			MethodInfo:    m,
 			InterfaceName: typeName,
 			QualifiedType: qualifiedType,
+			TypeParamDecl: typeParamDecl,
+			TypeParamArgs: typeParamArgs,
 			tracker:       tracker,
 		}
 		md.Directives = pkg.EffectiveMethodDirectives(iface.OriginName, m.Name)
@@ -65,6 +69,8 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 		Imports:       tracker.Imports(),
 		InterfaceName: typeName,
 		QualifiedType: qualifiedType,
+		TypeParamDecl: typeParamDecl,
+		TypeParamArgs: typeParamArgs,
 		Methods:       methods,
 	}, nil
 }

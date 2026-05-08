@@ -63,13 +63,17 @@ Each method is classified into a shape and gets an auto-generated action helper.
 | Shape | Action behavior | Example methods |
 |-------|----------------|-----------------|
 | Reader | `action.Reader` — compare `(V, error)` from SUT and ref | `Get(ctx, K) (V, error)` |
+| ReaderWithBool | `action.ReaderWithBool` — compare `(V, bool)` | `Load(ctx, K) (V, bool)` |
+| Lookup | `action.Stress` — call SUT only | `Inspect(K) (V, R, bool)` |
 | Writer | `action.Writer` — compare `error` from SUT and ref | `Put(ctx, V) error` |
+| Mutator | `action.Mutator` — call both SUT and ref | `Add(ctx, int64)` |
 | Deleter | `action.Deleter` — compare `error` from SUT and ref | `Delete(ctx, K) error` |
 | Aggregator | `action.Aggregator` — compare `(V, error)` | `Count(ctx) (int, error)` |
 | Lifecycle | `action.Lifecycle` — compare `error` | `Close(ctx) error` |
 | Pure | `action.Pure` — compare return values | `Describe() string` |
 | Predicate | `action.Predicate` — compare `bool` | `IsEmpty() bool` |
 | StreamReader | `action.Stream` — collect and compare elements | `List(ctx) iter.Seq2[V, error]` |
+| PoisonAccessor | `action.PoisonCheck` — compare `error` | `Err() error` |
 | Unknown | `action.Stress` — call SUT only, no comparison | Anything else |
 
 Methods annotated with `//testkit:nondeterministic` emit `action.Stress` instead of comparison actions, even for shapes that would normally compare.

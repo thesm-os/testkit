@@ -227,6 +227,11 @@ func tupleString(tuple *types.Tuple, t *ImportTracker, variadic bool) string {
 
 // ZeroValueOf returns the Go zero-value literal for a type.
 func ZeroValueOf(typ types.Type, t *ImportTracker) string {
+	// Type parameters: *new(K) dereferences a zero-value pointer.
+	// Must check before Underlying() which returns the constraint interface.
+	if _, ok := typ.(*types.TypeParam); ok {
+		return "*new(" + types.TypeString(typ, t.Qualifier()) + ")"
+	}
 	switch u := typ.Underlying().(type) {
 	case *types.Basic:
 		switch {

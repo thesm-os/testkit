@@ -1,5 +1,5 @@
 {{define "bench_method"}}
-func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedType}}, cfg *{{.LowerInterfaceName}}BenchConfig) {
+func bench{{.InterfaceName}}{{.Name}}{{.TypeParamDecl}}(b *testing.B, factory func() {{.InstantiatedType}}, cfg *{{.LowerInterfaceName}}BenchConfig{{.TypeParamArgs}}) {
 	b.Helper()
 
 {{- /* Default hot-path benchmark — recover on panic from zero-value args */}}
@@ -24,18 +24,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- if .IsReader}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			rctx := bench.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+			rctx := bench.ReaderContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				B: b,
-				ReaderBindings: bindings.ReaderBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				ReaderBindings: bindings.ReaderBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx, k)
 					},
 				},
@@ -48,18 +48,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsWriter}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			wctx := bench.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			wctx := bench.WriterContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				B: b,
-				WriterBindings: bindings.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				WriterBindings: bindings.WriterBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, v {{.Shape.ValType}}) error {
 						return impl.{{.Name}}(ctx, v)
 					},
 				},
@@ -72,18 +72,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsDeleter}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			dctx := bench.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+			dctx := bench.DeleterContext[{{.InstantiatedType}}, {{.Shape.KeyType}}]{
 				B: b,
-				DeleterBindings: bindings.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+				DeleterBindings: bindings.DeleterBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) error {
 						return impl.{{.Name}}(ctx, k)
 					},
 				},
@@ -96,18 +96,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsAggregator}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			actx := bench.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			actx := bench.AggregatorContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				B: b,
-				AggregatorBindings: bindings.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				AggregatorBindings: bindings.AggregatorBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx)
 					},
 				},
@@ -120,18 +120,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsLifecycle}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			lctx := bench.LifecycleContext[{{.QualifiedType}}]{
+			lctx := bench.LifecycleContext[{{.InstantiatedType}}]{
 				B: b,
-				LifecycleBindings: bindings.LifecycleBindings[{{.QualifiedType}}]{
+				LifecycleBindings: bindings.LifecycleBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) error {
 						return impl.{{.Name}}(ctx)
 					},
 				},
@@ -144,18 +144,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsStreamReader}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			sctx := bench.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+			sctx := bench.StreamContext[{{.InstantiatedType}}, {{.Shape.IterInfo.ElemType}}]{
 				B: b,
-				StreamBindings: bindings.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+				StreamBindings: bindings.StreamBindings[{{.InstantiatedType}}, {{.Shape.IterInfo.ElemType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
 						return impl.{{.Name}}({{.StreamCallArgs "impl"}})
 {{- else}}
@@ -176,18 +176,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsPure}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			pctx := bench.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			pctx := bench.PureContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				B: b,
-				PureBindings: bindings.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				PureBindings: bindings.PureBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
+					Call: func(impl {{.InstantiatedType}}) {{.Shape.ValType}} {
 						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
@@ -200,18 +200,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsPredicate}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			pctx := bench.PredicateContext[{{.QualifiedType}}]{
+			pctx := bench.PredicateContext[{{.InstantiatedType}}]{
 				B: b,
-				PredicateBindings: bindings.PredicateBindings[{{.QualifiedType}}]{
+				PredicateBindings: bindings.PredicateBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) bool {
+					Call: func(impl {{.InstantiatedType}}) bool {
 						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
@@ -224,18 +224,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsMutator}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			mctx := bench.MutatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			mctx := bench.MutatorContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				B: b,
-				MutatorBindings: bindings.MutatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				MutatorBindings: bindings.MutatorBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, v {{.Shape.ValType}}) {
 						impl.{{.Name}}(ctx, v)
 					},
 				},
@@ -248,18 +248,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsReaderWithBool}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			rctx := bench.ReaderWithBoolContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+			rctx := bench.ReaderWithBoolContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				B: b,
-				ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
 {{- if .HasCtx}}
 						return impl.{{.Name}}(ctx, k)
 {{- else}}
@@ -276,18 +276,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsLookup}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			lctx := bench.LookupContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+			lctx := bench.LookupContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
 				B: b,
-				LookupBindings: bindings.LookupBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+				LookupBindings: bindings.LookupBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
 {{- if .HasCtx}}
 						return impl.{{.Name}}(ctx, k)
 {{- else}}
@@ -304,18 +304,18 @@ func bench{{.InterfaceName}}{{.Name}}(b *testing.B, factory func() {{.QualifiedT
 {{- else if .IsPoisonAccessor}}
 	if len(cfg.on{{.Name}}) > 0 {
 		b.Run("{{.Name}}", func(b *testing.B) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(b.Context(), impl)
 				}
 				return impl
 			}
-			pctx := bench.PoisonAccessorContext[{{.QualifiedType}}]{
+			pctx := bench.PoisonAccessorContext[{{.InstantiatedType}}]{
 				B: b,
-				PoisonAccessorBindings: bindings.PoisonAccessorBindings[{{.QualifiedType}}]{
+				PoisonAccessorBindings: bindings.PoisonAccessorBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) error {
+					Call: func(impl {{.InstantiatedType}}) error {
 						return impl.{{.Name}}()
 					},
 				},

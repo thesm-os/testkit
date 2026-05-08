@@ -80,6 +80,7 @@ func TestGenerate(t *testing.T) {
 		{"voidpure", "voidpure", "Stream", ""},
 		{"voidctx", "voidctx", "Counter", ""},
 		{"newshapes", "newshapes", "Device", ""},
+		{"generics", "generics", "Cache", ""},
 		{"samples", "samples", "Hasher", ""},
 	}
 

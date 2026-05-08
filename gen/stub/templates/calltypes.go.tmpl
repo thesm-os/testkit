@@ -4,7 +4,7 @@
 // {{.CallType}} records one invocation of {{$.QualifiedType}}.{{.Name}}.
 // Result fields use the return-value names from the source interface when
 // available; unnamed returns produce positional names (Result0, Result1, ...).
-type {{.CallType}} struct {
+type {{.CallType}}{{$.TypeParamDecl}} struct {
 {{- range .Params}}
 	{{.FieldName}} {{.TypeStr}}
 {{- end}}

@@ -1,5 +1,5 @@
 {{define "method"}}
-func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedType}}, cfg *{{.LowerInterfaceName}}Config) {
+func run{{.InterfaceName}}{{.Name}}{{.TypeParamDecl}}(t *testing.T, factory func() {{.InstantiatedType}}, cfg *{{.LowerInterfaceName}}Config{{.TypeParamArgs}}) {
 	t.Helper()
 
 {{template "subtests" .}}
@@ -8,18 +8,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- if .IsReader}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			rctx := suite.ReaderContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+			rctx := suite.ReaderContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				T: t,
-				ReaderBindings: bindings.ReaderBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				ReaderBindings: bindings.ReaderBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx, k)
 					},
 				},
@@ -32,18 +32,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsWriter}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			wctx := suite.WriterContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			wctx := suite.WriterContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				T: t,
-				WriterBindings: bindings.WriterBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				WriterBindings: bindings.WriterBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, v {{.Shape.ValType}}) error {
 						return impl.{{.Name}}(ctx, v)
 					},
 				},
@@ -56,18 +56,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsStreamReader}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			sctx := suite.StreamContext[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+			sctx := suite.StreamContext[{{.InstantiatedType}}, {{.Shape.IterInfo.ElemType}}]{
 				T: t,
-				StreamBindings: bindings.StreamBindings[{{.QualifiedType}}, {{.Shape.IterInfo.ElemType}}]{
+				StreamBindings: bindings.StreamBindings[{{.InstantiatedType}}, {{.Shape.IterInfo.ElemType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) iter.Seq2[{{.Shape.IterInfo.ElemType}}, error] {
 {{- if .Shape.IterInfo.Seq2Error}}
 						return impl.{{.Name}}({{.StreamCallArgs "impl"}})
 {{- else}}
@@ -88,18 +88,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsDeleter}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			dctx := suite.DeleterContext[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+			dctx := suite.DeleterContext[{{.InstantiatedType}}, {{.Shape.KeyType}}]{
 				T: t,
-				DeleterBindings: bindings.DeleterBindings[{{.QualifiedType}}, {{.Shape.KeyType}}]{
+				DeleterBindings: bindings.DeleterBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) error {
 						return impl.{{.Name}}(ctx, k)
 					},
 				},
@@ -112,18 +112,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsAggregator}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			actx := suite.AggregatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			actx := suite.AggregatorContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				T: t,
-				AggregatorBindings: bindings.AggregatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				AggregatorBindings: bindings.AggregatorBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) ({{.Shape.ValType}}, error) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) ({{.Shape.ValType}}, error) {
 						return impl.{{.Name}}(ctx)
 					},
 				},
@@ -136,18 +136,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsLifecycle}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			lctx := suite.LifecycleContext[{{.QualifiedType}}]{
+			lctx := suite.LifecycleContext[{{.InstantiatedType}}]{
 				T: t,
-				LifecycleBindings: bindings.LifecycleBindings[{{.QualifiedType}}]{
+				LifecycleBindings: bindings.LifecycleBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}) error {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}) error {
 						return impl.{{.Name}}(ctx)
 					},
 				},
@@ -160,18 +160,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsPure}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			pctx := suite.PureContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			pctx := suite.PureContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				T: t,
-				PureBindings: bindings.PureBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				PureBindings: bindings.PureBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) {{.Shape.ValType}} {
+					Call: func(impl {{.InstantiatedType}}) {{.Shape.ValType}} {
 						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
@@ -184,18 +184,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsPredicate}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			pctx := suite.PredicateContext[{{.QualifiedType}}]{
+			pctx := suite.PredicateContext[{{.InstantiatedType}}]{
 				T: t,
-				PredicateBindings: bindings.PredicateBindings[{{.QualifiedType}}]{
+				PredicateBindings: bindings.PredicateBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) bool {
+					Call: func(impl {{.InstantiatedType}}) bool {
 						return impl.{{.Name}}({{.PureCallArgs "impl"}})
 					},
 				},
@@ -208,18 +208,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsMutator}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			mctx := suite.MutatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+			mctx := suite.MutatorContext[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 				T: t,
-				MutatorBindings: bindings.MutatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				MutatorBindings: bindings.MutatorBindings[{{.InstantiatedType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, v {{.Shape.ValType}}) {
 						impl.{{.Name}}(ctx, v)
 					},
 				},
@@ -232,18 +232,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsReaderWithBool}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			rctx := suite.ReaderWithBoolContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+			rctx := suite.ReaderWithBoolContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 				T: t,
-				ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
 {{- if .HasCtx}}
 						return impl.{{.Name}}(ctx, k)
 {{- else}}
@@ -260,18 +260,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsLookup}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			lctx := suite.LookupContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+			lctx := suite.LookupContext[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
 				T: t,
-				LookupBindings: bindings.LookupBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+				LookupBindings: bindings.LookupBindings[{{.InstantiatedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
 					Factory: prePopFactory,
-					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
+					Call: func(ctx context.Context, impl {{.InstantiatedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
 {{- if .HasCtx}}
 						return impl.{{.Name}}(ctx, k)
 {{- else}}
@@ -288,18 +288,18 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 {{- else if .IsPoisonAccessor}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {
-			prePopFactory := func() {{.QualifiedType}} {
+			prePopFactory := func() {{.InstantiatedType}} {
 				impl := factory()
 				if cfg.prePopulate != nil {
 					cfg.prePopulate(t.Context(), impl)
 				}
 				return impl
 			}
-			pctx := suite.PoisonAccessorContext[{{.QualifiedType}}]{
+			pctx := suite.PoisonAccessorContext[{{.InstantiatedType}}]{
 				T: t,
-				PoisonAccessorBindings: bindings.PoisonAccessorBindings[{{.QualifiedType}}]{
+				PoisonAccessorBindings: bindings.PoisonAccessorBindings[{{.InstantiatedType}}]{
 					Factory: prePopFactory,
-					Call: func(impl {{.QualifiedType}}) error {
+					Call: func(impl {{.InstantiatedType}}) error {
 						return impl.{{.Name}}()
 					},
 				},

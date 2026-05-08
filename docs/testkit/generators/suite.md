@@ -33,8 +33,12 @@ Detection rules (first match wins):
 |------|-----------|-------|
 | 1 | returns `iter.Seq[V]` or `iter.Seq2[V, error]` | **StreamReader** |
 | 2 | no ctx, returns `bool` only | **Predicate** |
-| 3 | no ctx, no error return | **Pure** |
+| 2.5 | one param, returns `(V, bool)` | **ReaderWithBool** |
+| 2.6 | one param, returns `(R1, R2, bool)` | **Lookup** |
+| 3 | no ctx, no error, has return value | **Pure** |
+| 3.5 | no ctx, no params, error-only return | **PoisonAccessor** |
 | 4 | `func(ctx, K) (V, error)` with `V != error` | **Reader** |
+| 4.5 | `func(ctx, V)` no return + `//testkit:mutator` | **Mutator** |
 | 5 | `func(ctx, K) error` (default) | **Writer** |
 | 5 | `func(ctx, K) error` + `//testkit:deleter` | **Deleter** |
 | 6 | `func(ctx, V) (R, error)` with `R != error` | **Writer** (with result) |
@@ -253,24 +257,34 @@ Each shape has its own typed plug-in. The dispatch table:
 
 | Method shape | `On<Method>` accepts |
 |--------------|----------------------|
-| Reader | `ReaderAssertion[T, K, V]` |
-| Writer | `WriterAssertion[T, V]` |
-| Deleter | `DeleterAssertion[T, K]` |
-| Lifecycle | `LifecycleAssertion[T]` |
-| Aggregator | `AggregatorAssertion[T, R]` |
-| Predicate | `PredicateAssertion[T]` |
-| Pure | `PureAssertion[T, R]` |
-| StreamReader | `StreamAssertion[T, V]` |
+| Reader | `suite.ReaderAssertion[T, K, V]` |
+| ReaderWithBool | `suite.ReaderWithBoolAssertion[T, K, V]` |
+| Lookup | `suite.LookupAssertion[T, K, V, R]` |
+| Writer | `suite.WriterAssertion[T, V]` |
+| Mutator | `suite.MutatorAssertion[T, V]` |
+| Deleter | `suite.DeleterAssertion[T, K]` |
+| Aggregator | `suite.AggregatorAssertion[T, R]` |
+| Lifecycle | `suite.LifecycleAssertion[T]` |
+| Pure | `suite.PureAssertion[T, R]` |
+| Predicate | `suite.PredicateAssertion[T]` |
+| StreamReader | `suite.StreamAssertion[T, V]` |
+| PoisonAccessor | `suite.PoisonAccessorAssertion[T]` |
 | Unknown | `func(*testing.T, T)` (free-form) |
 
 Library inventories per shape:
 
+- **Reader** — `AssertReturnsForKey`, `AssertReturnsSentinel`, `AssertConsistentReads`, `AssertReadsAreNonMutating`, `AssertReaderConcurrentSafe`
+- **ReaderWithBool** — `AssertReaderWithBoolReturns`, `AssertReaderWithBoolMissing`, `AssertReaderWithBoolConsistent`
+- **Lookup** — `AssertLookupReturns`, `AssertLookupMissing`
+- **Writer** — `AssertWriteSucceeds`, `AssertWriteIsObservable`, `AssertWriteRejectInvalid`, `AssertWriteOverwrite`
+- **Mutator** — `AssertMutatorSucceeds`, `AssertMutatorIdempotent`
 - **Deleter** — `AssertDeleteSucceeds`, `AssertDeleteIdempotent`, `AssertDeleteReturnsNotFound`
-- **Lifecycle** — `AssertLifecycleSucceeds`, `AssertLifecycleIdempotent`, `AssertLifecycleRespectsContext`
 - **Aggregator** — `AssertAggregatorReturns`, `AssertAggregatorBounded`, `AssertAggregatorConsistent`
-- **Predicate** — `AssertPredicateReturns`, `AssertPredicateConsistent`
+- **Lifecycle** — `AssertLifecycleSucceeds`, `AssertLifecycleIdempotent`, `AssertLifecycleRespectsContext`
 - **Pure** — `AssertDeterministic`, `AssertNoSideEffects`
+- **Predicate** — `AssertPredicateReturns`, `AssertPredicateConsistent`
 - **Stream** — `AssertStreamCompletes`, `AssertStreamRespectsBreak`, `AssertStreamReentrant`, `AssertStreamYieldsInOrder`, `AssertStreamHasNoDuplicates`
+- **PoisonAccessor** — `AssertPoisonAccessorNilOnFresh`, `AssertPoisonAccessorConsistent`
 
 Adding a custom assertion is just writing a function that matches the shape's `Assertion` type — a one-line closure over the shape's `Context`.
 

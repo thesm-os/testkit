@@ -1,51 +1,51 @@
 {{define "options"}}
 // {{.InterfaceName}}Option configures [Assert{{.InterfaceName}}Contract].
-type {{.InterfaceName}}Option func(*{{.LowerInterfaceName}}Config)
+type {{.InterfaceName}}Option{{.TypeParamDecl}} func(*{{.LowerInterfaceName}}Config{{.TypeParamArgs}})
 
 // {{.InterfaceName}}PrePopulate runs before subtests that need pre-populated state.
 // Called once per subtest against a fresh impl from the factory.
-func {{.InterfaceName}}PrePopulate(fn func(ctx context.Context, s {{.QualifiedType}})) {{.InterfaceName}}Option {
-	return func(c *{{.LowerInterfaceName}}Config) { c.prePopulate = fn }
+func {{.InterfaceName}}PrePopulate{{.TypeParamDecl}}(fn func(ctx context.Context, s {{.InstantiatedType}})) {{.InterfaceName}}Option{{.TypeParamArgs}} {
+	return func(c *{{.LowerInterfaceName}}Config{{.TypeParamArgs}}) { c.prePopulate = fn }
 }
 
 // {{.InterfaceName}}Custom adds a free-form subtest to the contract. Use this for
 // contracts not expressible via shape-specific primitives.
-func {{.InterfaceName}}Custom(name string, fn func(*testing.T, {{.QualifiedType}})) {{.InterfaceName}}Option {
-	return func(c *{{.LowerInterfaceName}}Config) {
-		c.custom = append(c.custom, {{.LowerInterfaceName}}CustomSubtest{name: name, fn: fn})
+func {{.InterfaceName}}Custom{{.TypeParamDecl}}(name string, fn func(*testing.T, {{.InstantiatedType}})) {{.InterfaceName}}Option{{.TypeParamArgs}} {
+	return func(c *{{.LowerInterfaceName}}Config{{.TypeParamArgs}}) {
+		c.custom = append(c.custom, {{.LowerInterfaceName}}CustomSubtest{{.TypeParamArgs}}{name: name, fn: fn})
 	}
 }
 {{range $m := .Methods}}{{if not $m.Skip}}
 // {{$.InterfaceName}}On{{$m.Name}} adds plug-in assertions for the {{$m.Name}} method.
-func {{$.InterfaceName}}On{{$m.Name}}(assertions ...{{$m.OnMethodAssertionType}}) {{$.InterfaceName}}Option {
-	return func(c *{{$.LowerInterfaceName}}Config) {
+func {{$.InterfaceName}}On{{$m.Name}}{{$.TypeParamDecl}}(assertions ...{{$m.OnMethodAssertionType}}) {{$.InterfaceName}}Option{{$.TypeParamArgs}} {
+	return func(c *{{$.LowerInterfaceName}}Config{{$.TypeParamArgs}}) {
 		c.on{{$m.Name}} = append(c.on{{$m.Name}}, assertions...)
 	}
 }
 {{end}}{{end}}
 // {{.InterfaceName}}OnAll adds cross-method assertions that span multiple methods.
-func {{.InterfaceName}}OnAll(assertions ...suite.CrossMethodAssertion[{{.QualifiedType}}]) {{.InterfaceName}}Option {
-	return func(c *{{.LowerInterfaceName}}Config) {
+func {{.InterfaceName}}OnAll{{.TypeParamDecl}}(assertions ...suite.CrossMethodAssertion[{{.InstantiatedType}}]) {{.InterfaceName}}Option{{.TypeParamArgs}} {
+	return func(c *{{.LowerInterfaceName}}Config{{.TypeParamArgs}}) {
 		c.onAll = append(c.onAll, assertions...)
 	}
 }
 
-type {{.LowerInterfaceName}}CustomSubtest struct {
+type {{.LowerInterfaceName}}CustomSubtest{{.TypeParamDecl}} struct {
 	name string
-	fn   func(*testing.T, {{.QualifiedType}})
+	fn   func(*testing.T, {{.InstantiatedType}})
 }
 
-type {{.LowerInterfaceName}}Config struct {
-	prePopulate func(context.Context, {{.QualifiedType}})
-	custom      []{{.LowerInterfaceName}}CustomSubtest
-	onAll       []suite.CrossMethodAssertion[{{.QualifiedType}}]
+type {{.LowerInterfaceName}}Config{{.TypeParamDecl}} struct {
+	prePopulate func(context.Context, {{.InstantiatedType}})
+	custom      []{{.LowerInterfaceName}}CustomSubtest{{.TypeParamArgs}}
+	onAll       []suite.CrossMethodAssertion[{{.InstantiatedType}}]
 {{- range .Methods}}{{if not .Skip}}
 	on{{.Name}} []{{.OnMethodAssertionType}}
 {{- end}}{{end}}
 }
 
-func new{{.InterfaceName}}Config(opts ...{{.InterfaceName}}Option) {{.LowerInterfaceName}}Config {
-	var cfg {{.LowerInterfaceName}}Config
+func new{{.InterfaceName}}Config{{.TypeParamDecl}}(opts ...{{.InterfaceName}}Option{{.TypeParamArgs}}) {{.LowerInterfaceName}}Config{{.TypeParamArgs}} {
+	var cfg {{.LowerInterfaceName}}Config{{.TypeParamArgs}}
 	for _, opt := range opts {
 		opt(&cfg)
 	}

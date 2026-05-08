@@ -3,27 +3,27 @@ package {{.PackageName}}
 {{template "imports" .}}
 
 // Assert{{.InterfaceName}}Contract runs conformance assertions against
-// implementations of [{{.QualifiedType}}] produced by factory.
+// implementations of [{{.InstantiatedType}}] produced by factory.
 //
 //	Default subtests: {{.DefaultSubtestCount}} across {{.ActiveMethodCount}} methods
 //	Shapes detected:  {{.ShapeSummary}}
 //	Directives:       {{.DirectiveSummary}}
 //	Plug-in points:   {{.PluginPoints}}
-func Assert{{.InterfaceName}}Contract(
+func Assert{{.InterfaceName}}Contract{{.TypeParamDecl}}(
 	t *testing.T,
-	factory func() {{.QualifiedType}},
-	opts ...{{.InterfaceName}}Option,
+	factory func() {{.InstantiatedType}},
+	opts ...{{.InterfaceName}}Option{{.TypeParamArgs}},
 ) {
 	t.Helper()
-	cfg := new{{.InterfaceName}}Config(opts...)
+	cfg := new{{.InterfaceName}}Config{{.TypeParamArgs}}(opts...)
 {{range $m := .Methods}}{{if not $m.Skip}}
-	run{{$.InterfaceName}}{{$m.Name}}(t, factory, &cfg)
+	run{{$.InterfaceName}}{{$m.Name}}{{$.TypeParamArgs}}(t, factory, &cfg)
 {{- end}}{{end}}
 
 	for _, a := range cfg.onAll {
-		cctx := suite.CrossContext[{{.QualifiedType}}]{
+		cctx := suite.CrossContext[{{.InstantiatedType}}]{
 			T:            t,
-			CrossBindings: bindings.CrossBindings[{{.QualifiedType}}]{Factory: factory},
+			CrossBindings: bindings.CrossBindings[{{.InstantiatedType}}]{Factory: factory},
 		}
 		a(cctx)
 	}

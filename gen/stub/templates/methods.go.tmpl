@@ -1,7 +1,7 @@
 {{define "methods"}}
 // --- Interface method implementations ---
 {{range $m := .Methods}}{{if not $m.Skip}}
-func (s *{{$.StubName}}) {{$m.Name}}({{$m.ParamList}}){{if $m.ResultList}} {{$m.ResultList}}{{end}} {
+func (s *{{$.StubName}}{{$.TypeParamArgs}}) {{$m.Name}}({{$m.ParamList}}){{if $m.ResultList}} {{$m.ResultList}}{{end}} {
 {{- if $m.Deprecated}}
 	if tb := s.On{{$m.Name}}.TB(); tb != nil {
 		tb.Logf("{{$.TypeName}}.{{$m.Name}} is deprecated, use {{$m.Deprecated}} instead")
@@ -14,7 +14,7 @@ func (s *{{$.StubName}}) {{$m.Name}}({{$m.ParamList}}){{if $m.ResultList}} {{$m.
 {{- if $.HasOrderConstraint}}
 	defer s.order.Record("{{$m.Name}}")
 {{- end}}
-	call := {{$m.CallType}}{{"{"}}{{$m.ParamFieldAssign}}}
+	call := {{$m.QualCallType}}{{"{"}}{{$m.ParamFieldAssign}}}
 {{- if $m.ReturnsError}}
 	if fired, faultErr := s.On{{$m.Name}}.ShouldFaultFor(call); fired {
 		call.{{$m.ErrFieldName}} = faultErr

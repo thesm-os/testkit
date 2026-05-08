@@ -29,10 +29,22 @@ type InterfaceData struct {
 	Name          string // "Store"
 	StubName      string // "StoreStub"
 	TypeName      string // "Store" (for method naming prefixes)
-	QualifiedType string // "store.Store"
+	QualifiedType string // "store.Store" or "page.Cursor[T]"
+	TypeParamDecl string // "[T any]" for generics, "" otherwise
+	TypeParamArgs string // "[T]" for generics, "" otherwise
 	Methods       []*MethodData
 
 	sourcePkgPath string // source package import path (for qualifying sentinels)
+}
+
+// InstantiatedType returns QualifiedType with type args appended.
+func (d *InterfaceData) InstantiatedType() string {
+	return d.QualifiedType + d.TypeParamArgs
+}
+
+// IsGeneric reports whether the interface has type parameters.
+func (d *InterfaceData) IsGeneric() bool {
+	return d.TypeParamDecl != ""
 }
 
 // FirstContextMethod returns the first non-skipped method that has a
@@ -107,6 +119,21 @@ type MethodData struct {
 	// Auto-detected — no directive needed.
 	Iter gen.IterSeqInfo // iter.Seq[T] or iter.Seq2[K, V] return type info
 }
+
+// TypeParamDecl returns the interface's type parameter declaration.
+func (m *MethodData) TypeParamDecl() string { return m.iface.TypeParamDecl }
+
+// TypeParamArgs returns the interface's type parameter args for instantiation.
+func (m *MethodData) TypeParamArgs() string { return m.iface.TypeParamArgs }
+
+// QualCallType returns CallType with type args: "CacheGetCall[K, V]".
+func (m *MethodData) QualCallType() string { return m.CallType + m.iface.TypeParamArgs }
+
+// QualStubType returns StubType with type args: "CacheGetStub[K, V]".
+func (m *MethodData) QualStubType() string { return m.StubType + m.iface.TypeParamArgs }
+
+// QualReturnType returns ReturnType with type args: "cacheGetReturn[K, V]".
+func (m *MethodData) QualReturnType() string { return m.ReturnType + m.iface.TypeParamArgs }
 
 // PartitionInfo describes a partition field for per-key fault targeting.
 type PartitionInfo struct {

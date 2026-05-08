@@ -21,7 +21,7 @@ A `factory func() Iface` is the single required injection. Every bench construct
 
 ## Method-shape detection
 
-Identical to `suite` — the same nine-rule detection table classifies methods into Reader, Writer, Deleter, Aggregator, Lifecycle, Predicate, Pure, StreamReader, or Unknown. See [Generators / suite — shape detection](suite.md#method-shape-detection) for the table.
+Identical to `suite` — the same detection table classifies methods into one of 13 shapes (Reader, ReaderWithBool, Lookup, Writer, Mutator, Deleter, Aggregator, StreamReader, Lifecycle, Pure, Predicate, PoisonAccessor, or Unknown). See [Generators / suite — shape detection](suite.md#method-shape-detection) for the table.
 
 The shape determines:
 
@@ -140,24 +140,33 @@ servicetest.ServiceBenchOnGet(
 | Method shape | `BenchOn<Method>` accepts |
 |--------------|---------------------------|
 | Reader | `bench.Reader[T, K, V]` |
+| ReaderWithBool | `bench.ReaderWithBool[T, K, V]` |
+| Lookup | `bench.Lookup[T, K, V, R]` |
 | Writer | `bench.Writer[T, V]` |
+| Mutator | `bench.Mutator[T, V]` |
 | Deleter | `bench.Deleter[T, K]` |
-| Lifecycle | `bench.Lifecycle[T]` |
 | Aggregator | `bench.Aggregator[T, R]` |
-| Predicate | `bench.Predicate[T]` |
+| Lifecycle | `bench.Lifecycle[T]` |
 | Pure | `bench.Pure[T, R]` |
+| Predicate | `bench.Predicate[T]` |
 | StreamReader | `bench.Stream[T, V]` |
+| PoisonAccessor | `bench.PoisonAccessor[T]` |
 | Unknown | `func(*testing.B, T)` (free-form) |
 
 Bench-library inventories per shape (in `bench/`):
 
+- **Reader** — `ReaderHotPath(key)`, `ReaderAllocsWithin(key, maxAllocs)`, `ReaderConcurrentThroughput(key, parallelism)`
+- **ReaderWithBool** — `ReaderWithBoolHotPath(key)`, `ReaderWithBoolAllocsWithin(key, maxAllocs)`
+- **Lookup** — `LookupHotPath(key)`, `LookupAllocsWithin(key, maxAllocs)`
 - **Writer** — `WriterHotPath(sample)`, `WriterAllocsWithin(sample, maxAllocs)`
+- **Mutator** — `MutatorHotPath(sample)`, `MutatorAllocsWithin(sample, maxAllocs)`
 - **Deleter** — `DeleterHotPath(key)`, `DeleterAllocsWithin(key, maxAllocs)`
-- **Lifecycle** — `LifecycleAllocsWithin(maxAllocs)`
 - **Aggregator** — `AggregatorAllocsWithin(maxAllocs)`
-- **Predicate** — `PredicateAllocsWithin(maxAllocs)`
+- **Lifecycle** — `LifecycleAllocsWithin(maxAllocs)`
 - **Pure** — `PureAllocsWithin(maxAllocs)`, `PureConcurrentThroughput(parallelism)`
+- **Predicate** — `PredicateAllocsWithin(maxAllocs)`
 - **Stream** — `StreamHotPath()`, `StreamAllocsWithin(maxAllocs)`
+- **PoisonAccessor** — `PoisonAccessorAllocsWithin(maxAllocs)`
 
 Each shape ships at least an `AllocsWithin` gate; Reader/Writer/Deleter/Stream additionally ship hot-path measurements that target a specific key/sample (the auto-detected hot-path uses zero-value inputs, which may not be representative for a backing store with real data). Adding a custom bench primitive is a closure over the shape's typed `Context`.
 

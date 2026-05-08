@@ -2,6 +2,9 @@
 package {{.PackageName}}
 {{template "imports" .}}
 {{- range $iface := .Interfaces}}
+{{- if $iface.IsGeneric}}
+// Skipped: {{$iface.StubName}} is generic — instantiate with concrete types in consumer tests.
+{{- else}}
 
 func Test{{$iface.StubName}}(t *testing.T) {
 	t.Parallel()
@@ -353,5 +356,6 @@ func Test{{$iface.StubName}}BenchModeZeroAlloc(t *testing.T) {
 	})
 {{end}}{{end}}
 }
+{{- end}}
 {{end}}
 {{end}}

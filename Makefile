@@ -182,6 +182,7 @@ GEN_TESTDATA := \
 	gen/stub/testdata/companion/storetest \
 	gen/stub/testdata/newdirectives/runnertest \
 	gen/stub/testdata/iterators/scannertest \
+	gen/stub/testdata/generics/cachetest \
 	gen/builder/testdata/basic/basictest \
 	gen/builder/testdata/defaults/defaultstest \
 	gen/builder/testdata/fielddefaults/fielddefaultstest \
@@ -203,8 +204,10 @@ GEN_TESTDATA := \
 	gen/suite/testdata/samples/hashertest \
 	gen/suite/testdata/voidctx/countertest \
 	gen/suite/testdata/newshapes/devicetest \
+	gen/suite/testdata/generics/cachetest \
 	gen/bench/testdata/basic/storetest \
 	gen/bench/testdata/allshapes/servicetest \
+	gen/bench/testdata/generics/cachetest \
 	gen/model/testdata/basic/storetest \
 	gen/model/testdata/allshapes/servicetest \
 	gen/model/testdata/noncrud/closertest \

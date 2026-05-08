@@ -37,11 +37,15 @@ func Analyze(pkg *gen.Package, args []string, cfg gen.Config, opts gen.Options) 
 			return nil, err
 		}
 
+		typeParamDecl := iface.TypeParamDecl(tracker)
+		typeParamArgs := iface.TypeParamArgs()
 		ifaceData := InterfaceData{
 			Name:          name,
 			StubName:      name + cfg.Stub.TypeSuffix,
 			TypeName:      name,
 			QualifiedType: gen.QualifyType(tracker.AddPath(pkg.Pkg.Path()), name),
+			TypeParamDecl: typeParamDecl,
+			TypeParamArgs: typeParamArgs,
 			sourcePkgPath: pkg.Pkg.Path(),
 		}
 

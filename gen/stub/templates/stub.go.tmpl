@@ -3,8 +3,10 @@ package {{.PackageName}}
 {{template "imports" .}}
 {{- range $iface := .Interfaces}}
 
+{{- if not $iface.IsGeneric}}
 // Compile-time interface check.
 var _ {{$iface.QualifiedType}} = (*{{$iface.StubName}})(nil)
+{{- end}}
 
 {{template "calltypes" $iface}}
 {{template "perstub" $iface}}

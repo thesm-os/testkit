@@ -18,8 +18,16 @@ type SpecData struct {
 	PackageName   string
 	Imports       []gen.Import
 	InterfaceName string
-	QualifiedType string
+	QualifiedType string // "page.Cursor[T]" for generics, "store.Store" otherwise
+	TypeParamDecl string // "[T any]" for generics, "" otherwise
+	TypeParamArgs string // "[T]" for generics, "" otherwise
 	Methods       []*SpecMethodData
+}
+
+// InstantiatedType returns QualifiedType with type args appended.
+// "page.Cursor" + "[T]" → "page.Cursor[T]", "store.Store" + "" → "store.Store".
+func (d *SpecData) InstantiatedType() string {
+	return d.QualifiedType + d.TypeParamArgs
 }
 
 // LowerInterfaceName returns the interface name with the first letter lowered.
@@ -182,7 +190,9 @@ type SpecMethodData struct {
 
 	// Base fields populated by Analyze.
 	InterfaceName string // "Store" — for naming generated functions
-	QualifiedType string // "store.Store" — for factory type
+	QualifiedType string // "store.Store" or "page.Cursor[T]" — for factory type
+	TypeParamDecl string // "[T any]" for generics, "" otherwise
+	TypeParamArgs string // "[T]" for generics, "" otherwise
 	tracker       *gen.ImportTracker
 
 	// Directive-driven fields — zero-value means not applicable.
@@ -226,6 +236,11 @@ func (m *SpecMethodData) LowerInterfaceName() string {
 		return ""
 	}
 	return strings.ToLower(m.InterfaceName[:1]) + m.InterfaceName[1:]
+}
+
+// InstantiatedType returns QualifiedType with type args appended.
+func (m *SpecMethodData) InstantiatedType() string {
+	return m.QualifiedType + m.TypeParamArgs
 }
 
 // IsReader reports whether the method has Reader shape.
@@ -280,31 +295,31 @@ func (m *SpecMethodData) HasDirective(name string) bool {
 func (m *SpecMethodData) OnMethodAssertionType() string {
 	switch m.Shape.Shape {
 	case gen.ShapeReader:
-		return "suite.ReaderAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "suite.ReaderAssertion[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeWriter:
-		return "suite.WriterAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.WriterAssertion[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeDeleter:
-		return "suite.DeleterAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
+		return "suite.DeleterAssertion[" + m.InstantiatedType() + ", " + m.Shape.KeyType + "]"
 	case gen.ShapeStreamReader:
-		return "suite.StreamAssertion[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+		return "suite.StreamAssertion[" + m.InstantiatedType() + ", " + m.Shape.IterInfo.ElemType + "]"
 	case gen.ShapeAggregator:
-		return "suite.AggregatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.AggregatorAssertion[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLifecycle:
-		return "suite.LifecycleAssertion[" + m.QualifiedType + "]"
+		return "suite.LifecycleAssertion[" + m.InstantiatedType() + "]"
 	case gen.ShapePure:
-		return "suite.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.PureAssertion[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
-		return "suite.PredicateAssertion[" + m.QualifiedType + "]"
+		return "suite.PredicateAssertion[" + m.InstantiatedType() + "]"
 	case gen.ShapeMutator:
-		return "suite.MutatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "suite.MutatorAssertion[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeReaderWithBool:
-		return "suite.ReaderWithBoolAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "suite.ReaderWithBoolAssertion[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLookup:
-		return "suite.LookupAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
+		return "suite.LookupAssertion[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
 	case gen.ShapePoisonAccessor:
-		return "suite.PoisonAccessorAssertion[" + m.QualifiedType + "]"
+		return "suite.PoisonAccessorAssertion[" + m.InstantiatedType() + "]"
 	default:
-		return "func(*testing.T, " + m.QualifiedType + ")"
+		return "func(*testing.T, " + m.InstantiatedType() + ")"
 	}
 }
 
@@ -314,31 +329,31 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 func (m *SpecMethodData) OnMethodBenchType() string {
 	switch m.Shape.Shape {
 	case gen.ShapeReader:
-		return "bench.Reader[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "bench.Reader[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeWriter:
-		return "bench.Writer[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Writer[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeDeleter:
-		return "bench.Deleter[" + m.QualifiedType + ", " + m.Shape.KeyType + "]"
+		return "bench.Deleter[" + m.InstantiatedType() + ", " + m.Shape.KeyType + "]"
 	case gen.ShapeStreamReader:
-		return "bench.Stream[" + m.QualifiedType + ", " + m.Shape.IterInfo.ElemType + "]"
+		return "bench.Stream[" + m.InstantiatedType() + ", " + m.Shape.IterInfo.ElemType + "]"
 	case gen.ShapeAggregator:
-		return "bench.Aggregator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Aggregator[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLifecycle:
-		return "bench.Lifecycle[" + m.QualifiedType + "]"
+		return "bench.Lifecycle[" + m.InstantiatedType() + "]"
 	case gen.ShapePure:
-		return "bench.Pure[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Pure[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
-		return "bench.Predicate[" + m.QualifiedType + "]"
+		return "bench.Predicate[" + m.InstantiatedType() + "]"
 	case gen.ShapeMutator:
-		return "bench.Mutator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+		return "bench.Mutator[" + m.InstantiatedType() + ", " + m.Shape.ValType + "]"
 	case gen.ShapeReaderWithBool:
-		return "bench.ReaderWithBool[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+		return "bench.ReaderWithBool[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
 	case gen.ShapeLookup:
-		return "bench.Lookup[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
+		return "bench.Lookup[" + m.InstantiatedType() + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
 	case gen.ShapePoisonAccessor:
-		return "bench.PoisonAccessor[" + m.QualifiedType + "]"
+		return "bench.PoisonAccessor[" + m.InstantiatedType() + "]"
 	default:
-		return "func(*testing.B, " + m.QualifiedType + ")"
+		return "func(*testing.B, " + m.InstantiatedType() + ")"
 	}
 }
 
@@ -528,6 +543,11 @@ func (m *SpecMethodData) nilableParams() []NilableParam {
 	for i := range n {
 		p := params.At(i)
 		if gen.IsContextType(p.Type()) {
+			continue
+		}
+		// Type parameters are not nilable — their underlying type is
+		// the constraint interface, which would falsely match below.
+		if _, isTP := p.Type().(*types.TypeParam); isTP {
 			continue
 		}
 		switch p.Type().Underlying().(type) {
