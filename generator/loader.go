@@ -494,24 +494,6 @@ func (p *Package) inlineCommentFor(typeName, fieldName string) string {
 	return ""
 }
 
-// rawDocText returns the raw text of a [*ast.CommentGroup] preserving
-// every line's leading "//" — including directive-style lines that
-// [ast.CommentGroup.Text] silently filters out.
-//
-// We need the raw form because [ast.CommentGroup.Text] applies
-// `isDirective` filtering (lines like "//go:build", "//testkit:errors")
-// — exactly the lines [parseDirectivesFromDoc] needs to read.
-func rawDocText(g *ast.CommentGroup) string {
-	if g == nil {
-		return ""
-	}
-	parts := make([]string, len(g.List))
-	for i, c := range g.List {
-		parts[i] = c.Text
-	}
-	return strings.Join(parts, "\n")
-}
-
 // methodDoc returns the doc comment of a concrete-type method.
 func (p *Package) methodDoc(typeName, methodName string) string {
 	for _, file := range p.Syntax {
@@ -558,6 +540,44 @@ func (p *Package) interfaceMethodDoc(typeName, methodName string) string {
 		}
 	}
 	return ""
+}
+
+// FieldDirectives returns the //testkit: directives attached to one
+// field of a named struct. Both the field's doc comment (above the
+// declaration) and its trailing comment (inline after the type) are
+// scanned and concatenated. Used by the builder generator to read
+// `//testkit:default "value"` annotations for per-field defaults.
+func (p *Package) FieldDirectives(typeName, fieldName string) []directive.Directive {
+	for _, f := range p.Syntax {
+		for _, decl := range f.Decls {
+			gd, ok := decl.(*ast.GenDecl)
+			if !ok {
+				continue
+			}
+			for _, spec := range gd.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok || ts.Name.Name != typeName {
+					continue
+				}
+				strct, ok := ts.Type.(*ast.StructType)
+				if !ok {
+					continue
+				}
+				for _, field := range strct.Fields.List {
+					for _, n := range field.Names {
+						if n.Name != fieldName {
+							continue
+						}
+						pos := p.Fset.Position(n.Pos())
+						out := parseDirectivesFromDoc(rawDocText(field.Doc), pos)
+						out = append(out, parseDirectivesFromDoc(rawDocText(field.Comment), pos)...)
+						return out
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // parseTypeDirectives extracts //testkit: directives from a top-level
@@ -750,4 +770,22 @@ func recvName(recv *ast.FieldList) string {
 		}
 	}
 	return ""
+}
+
+// rawDocText returns the raw text of a [*ast.CommentGroup] preserving
+// every line's leading "//" — including directive-style lines that
+// [ast.CommentGroup.Text] silently filters out.
+//
+// We need the raw form because [ast.CommentGroup.Text] applies
+// `isDirective` filtering (lines like "//go:build", "//testkit:errors")
+// — exactly the lines [parseDirectivesFromDoc] needs to read.
+func rawDocText(g *ast.CommentGroup) string {
+	if g == nil {
+		return ""
+	}
+	parts := make([]string, len(g.List))
+	for i, c := range g.List {
+		parts[i] = c.Text
+	}
+	return strings.Join(parts, "\n")
 }

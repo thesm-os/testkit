@@ -1,0 +1,147 @@
+{{- /*
+The "builder-type" partial emits one builder for one struct:
+
+  - Type declaration:    type <Name>Builder[...] struct{ v <Type> }
+  - Constructors:        New<Name>()  +  New<Name>From(v)
+  - Field setters:       per-field With<Field> (variant by field shape)
+  - Mutate:              free-form mutation hook
+  - Clone:               deep copy (handles slice/map/bytes)
+  - Build:               returns the constructed value
+
+Generic plumbing flows through TypeParamDecl / TypeParamArgs so
+generic structs render as:
+
+  type ContainerBuilder[T any] struct{ v Container[T] }
+  func NewContainer[T any]() *ContainerBuilder[T] { ... }
+  func (b *ContainerBuilder[T]) WithLabel(v string) *ContainerBuilder[T] { ... }
+
+Data input: one builder.StructData.
+*/ -}}
+{{define "builder-type"}}
+{{- $s := . -}}
+{{- $bd := printf "%s%s" $s.BuilderName $s.TypeParamDecl}}
+{{- $ba := printf "%s%s" $s.BuilderName $s.TypeParamArgs}}
+
+// {{$s.BuilderName}} constructs [{{$s.QualifiedType}}] values for tests.
+// Start with [New{{$s.Name}}] or [New{{$s.Name}}From], chain With*
+// setters, then call [{{$s.BuilderName}}.Build].
+type {{$bd}} struct {
+	v {{$s.QualifiedType}}
+}
+
+// New{{$s.Name}} creates a builder{{if $s.HasDefaults}} seeded via
+// [{{$s.DefaultsFunc}}]{{else if $s.HasFieldDefaults}} seeded with
+// per-field //testkit:default directive values{{else}} with zero
+// values{{end}}.
+func New{{$s.Name}}{{$s.TypeParamDecl}}() *{{$ba}} {
+{{- if $s.HasDefaults}}
+	return &{{$ba}}{v: {{$s.DefaultsFunc}}()}
+{{- else if $s.HasFieldDefaults}}
+	return &{{$ba}}{v: {{$s.QualifiedType}}{
+{{- range $s.Fields}}{{if .DefaultValue}}
+		{{.Name}}: {{.DefaultValue}},
+{{- end}}{{end}}
+	}}
+{{- else}}
+	return &{{$ba}}{}
+{{- end}}
+}
+
+// New{{$s.Name}}From creates a builder seeded with v. Use when the
+// test starts from a known value rather than defaults — e.g. for
+// round-trip / clone scenarios.
+func New{{$s.Name}}From{{$s.TypeParamDecl}}(v {{$s.QualifiedType}}) *{{$ba}} {
+	return &{{$ba}}{v: v}
+}
+{{range $f := $s.Fields}}
+{{- if $f.IsSlice}}
+// With{{$f.Name}} replaces the {{$f.Name}} slice (variadic). The
+// second call overwrites the first — use Append{{$f.Name}} to extend.
+func (b *{{$ba}}) With{{$f.Name}}(v ...{{$f.ElemTypeStr}}) *{{$ba}} {
+	b.v.{{$f.Name}} = v
+	return b
+}
+
+// Append{{$f.Name}} appends to the {{$f.Name}} slice, preserving
+// any previously-set elements.
+func (b *{{$ba}}) Append{{$f.Name}}(v ...{{$f.ElemTypeStr}}) *{{$ba}} {
+	b.v.{{$f.Name}} = append(b.v.{{$f.Name}}, v...)
+	return b
+}
+{{else if $f.IsMap}}
+// With{{$f.Name}} replaces the {{$f.Name}} map.
+func (b *{{$ba}}) With{{$f.Name}}(m {{$f.TypeStr}}) *{{$ba}} {
+	b.v.{{$f.Name}} = m
+	return b
+}
+
+// With{{$f.Name}}Entry adds or replaces a single entry. Lazy-inits
+// the map if it's currently nil.
+func (b *{{$ba}}) With{{$f.Name}}Entry(k {{$f.MapKeyTypeStr}}, v {{$f.MapValTypeStr}}) *{{$ba}} {
+	if b.v.{{$f.Name}} == nil {
+		b.v.{{$f.Name}} = {{$f.TypeStr}}{}
+	}
+	b.v.{{$f.Name}}[k] = v
+	return b
+}
+{{else if $f.IsBytes}}
+// With{{$f.Name}} sets the {{$f.Name}} field.
+func (b *{{$ba}}) With{{$f.Name}}(v []byte) *{{$ba}} {
+	b.v.{{$f.Name}} = v
+	return b
+}
+
+// With{{$f.Name}}String sets {{$f.Name}} from a string. Convenience
+// for tests that don't want to wrap their literal in []byte(...).
+func (b *{{$ba}}) With{{$f.Name}}String(s string) *{{$ba}} {
+	b.v.{{$f.Name}} = []byte(s)
+	return b
+}
+{{else}}
+// With{{$f.Name}} sets the {{$f.Name}} field.
+func (b *{{$ba}}) With{{$f.Name}}(v {{$f.TypeStr}}) *{{$ba}} {
+	b.v.{{$f.Name}} = v
+	return b
+}
+{{end}}
+{{- end}}
+// Mutate applies fn to the value under construction. Use for
+// deeply-nested fields or mutations that don't warrant a dedicated
+// setter.
+func (b *{{$ba}}) Mutate(fn func(*{{$s.QualifiedType}})) *{{$ba}} {
+	fn(&b.v)
+	return b
+}
+
+// Clone returns a deep copy of the builder. Slice, map, and []byte
+// fields are copied so mutations to the clone don't bleed into the
+// original — scalar and struct-value fields use Go's default copy
+// semantics.
+func (b *{{$ba}}) Clone() *{{$ba}} {
+	out := &{{$ba}}{v: b.v}
+{{- range $f := $s.Fields}}
+{{- if $f.IsSlice}}
+	if b.v.{{$f.Name}} != nil {
+		out.v.{{$f.Name}} = append([]{{$f.ElemTypeStr}}(nil), b.v.{{$f.Name}}...)
+	}
+{{- else if $f.IsMap}}
+	if b.v.{{$f.Name}} != nil {
+		out.v.{{$f.Name}} = make({{$f.TypeStr}}, len(b.v.{{$f.Name}}))
+		for k, v := range b.v.{{$f.Name}} {
+			out.v.{{$f.Name}}[k] = v
+		}
+	}
+{{- else if $f.IsBytes}}
+	if b.v.{{$f.Name}} != nil {
+		out.v.{{$f.Name}} = append([]byte(nil), b.v.{{$f.Name}}...)
+	}
+{{- end}}
+{{- end}}
+	return out
+}
+
+// Build returns the constructed [{{$s.QualifiedType}}].
+func (b *{{$ba}}) Build() {{$s.QualifiedType}} {
+	return b.v
+}
+{{end}}

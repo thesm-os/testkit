@@ -111,3 +111,24 @@ func BuildResultFields(tup *types.Tuple, tracker *ImportTracker) []FieldData {
 	_ = hasErr
 	return out
 }
+
+// HasUnexportedFields reports whether typ (or its named underlying
+// struct) contains at least one unexported field. The builder
+// generator uses this to suppress the New<Type>From zero-value
+// round-trip subtest, since [cmp.Diff] can't compare across an
+// unexported boundary without an opt-in option.
+func HasUnexportedFields(typ types.Type) bool {
+	if named, ok := typ.(*types.Named); ok {
+		typ = named.Underlying()
+	}
+	strct, ok := typ.(*types.Struct)
+	if !ok {
+		return false
+	}
+	for field := range strct.Fields() {
+		if !field.Exported() {
+			return true
+		}
+	}
+	return false
+}

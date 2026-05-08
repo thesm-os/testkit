@@ -106,6 +106,16 @@ type Renderer[D any] struct {
 
 	// Path computes the output file path from opts. Required.
 	Path func(opts Options) string
+
+	// Transform optionally reshapes the data model for this
+	// renderer's view. Returns the (possibly modified) data passed
+	// to the template. Used when a generator emits multiple files
+	// from one Analyze pass but each file needs a slightly
+	// different view — e.g. builder's test file lives in a
+	// sibling package and needs PackageName / Imports /
+	// GenQualifier reshaped via [BuildTestFileInfo]. Nil means
+	// the data is passed through verbatim.
+	Transform func(d D, opts Options) D
 }
 
 // SkippableData is an opt-in interface a generator's data type can
@@ -217,10 +227,14 @@ func (p *Pipeline[D]) Run(pkg *Package, args []string, cfg Config, opts Options)
 		header.Args = opts.Invocation
 	}
 
-	// 8. Render every Renderer.
+	// 8. Render every Renderer (each may reshape the data via Transform).
 	files := make([]OutputFile, 0, len(p.Renderers))
 	for _, r := range p.Renderers {
-		content, err := renderTemplateOrSet(tmpl, r.TemplateName, data, header)
+		view := data
+		if r.Transform != nil {
+			view = r.Transform(data, opts)
+		}
+		content, err := renderTemplateOrSet(tmpl, r.TemplateName, view, header)
 		if err != nil {
 			return nil, fmt.Errorf("render %s/%s: %w", p.Name, r.TemplateName, err)
 		}

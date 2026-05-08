@@ -1,0 +1,401 @@
+{{- /*
+The "builder-test-type" partial emits one Test<Name>Builder
+function per struct, with subtests covering the shared builder
+contract and the per-field-shape cases.
+
+Coverage discipline: Mutate, Clone, and Build are always exercised
+— even for structs whose fields offer no observable basic-
+comparable assertion (interface-only, func-only, etc.). The
+{{`{{with}}`}} blocks pick a strong-assertion form when a
+basic-comparable field exists, falling back to a smoke form that
+calls the method without asserting field-level state.
+
+Two paths:
+
+  - Generic types instantiate concrete (Test<Name>Builder runs
+    against e.g. Container[string]); zero-value round-trip is
+    skipped (cmp on a fresh instantiation isn't meaningful).
+    TestSample / TestQualifiedType drive sample rendering.
+
+  - Non-generic types include the zero-value round-trip subtest
+    when no unexported fields exist (cmp.Diff can't compare those
+    without an opt-in option).
+
+Data input: a dict with two keys:
+  - "Type"  — one builder.StructData
+  - "Local" — the enclosing builder.Data (for GenQualifier)
+
+The dict shape is the standard text/template idiom for passing
+multiple values to a sub-template.
+*/ -}}
+{{define "builder-test-type"}}
+{{- $s := .Type}}{{- $local := .Local -}}
+
+// Test{{$s.BuilderName}} verifies the {{$s.BuilderName}} contract
+// against the generated builder: constructor seeding and every
+// per-field setter
+{{- with $s.FirstComparableField}}, plus Mutate / Clone independence
+// asserted via {{.Name}}{{- end}}
+{{- if and (not $s.IsGeneric) (not $s.HasUnexportedFields)}}, plus a
+// zero-value round-trip via [New{{$s.Name}}From]{{- end}}.
+func Test{{$s.BuilderName}}(t *testing.T) {
+	t.Parallel()
+{{- if $s.IsGeneric}}
+
+	// Generic builder runs against a concrete instantiation chosen
+	// by the generator (TestTypeArgs); zero-value round-trip is
+	// skipped because cmp.Diff against a fresh struct literal
+	// isn't meaningful for the generic test view.
+	t.Run("Build does not panic", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().Build()
+	})
+
+	t.Run("New{{$s.Name}}From round-trips", func(t *testing.T) {
+		t.Parallel()
+		v := {{$s.TestQualifiedType}}{}
+		got := {{$local.GenQualifier}}New{{$s.Name}}From(v).Build()
+		testkit.Equal(t, got, v, "must round-trip zero value")
+	})
+{{- range $f := $s.Fields}}
+{{- if $f.IsSlice}}
+
+	t.Run("With{{$f.Name}} replaces existing slice", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.TestSample}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}(sample...).
+			With{{$f.Name}}(sample...).
+			Build()
+		testkit.Len(t, got.{{$f.Name}}, len(sample),
+			"With must replace, not append — second call overwrites first")
+	})
+
+	t.Run("Append{{$f.Name}} preserves existing", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.TestSample}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}(sample...).
+			Append{{$f.Name}}(sample...).
+			Build()
+		testkit.Len(t, got.{{$f.Name}}, len(sample)*2,
+			"Append must preserve existing + add new")
+	})
+
+	t.Run("Clone deep-copies {{$f.Name}} slice", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.TestSample}}
+		base := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().With{{$f.Name}}(sample...)
+		clone := base.Clone()
+		clone.Append{{$f.Name}}(sample...)
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.{{$f.Name}}, len(sample),
+			"original slice must be unchanged after clone mutation")
+		testkit.Len(t, modified.{{$f.Name}}, len(sample)*2,
+			"clone must have appended")
+	})
+{{- else if $f.IsMap}}
+
+	t.Run("With{{$f.Name}} replaces map", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.TestSample}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}(sample).Build()
+		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+	})
+
+	t.Run("With{{$f.Name}}Entry lazy-inits and adds", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}Entry({{$f.TestMapKeySample}}, {{$f.TestMapValSample}}).
+			Build()
+		testkit.Len(t, got.{{$f.Name}}, 1, "lazy-init map must have 1 entry")
+		testkit.Equal(t, got.{{$f.Name}}[{{$f.TestMapKeySample}}], {{$f.TestMapValSample}},
+			"entry must be added")
+	})
+
+	t.Run("Clone deep-copies {{$f.Name}} map", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}Entry({{$f.TestMapKeySample}}, {{$f.TestMapValSample}})
+		clone := base.Clone()
+		clone.Mutate(func(v *{{$s.TestQualifiedType}}) {
+			delete(v.{{$f.Name}}, {{$f.TestMapKeySample}})
+		})
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.{{$f.Name}}, 1,
+			"original map must be unchanged after clone deletes")
+		testkit.Len(t, modified.{{$f.Name}}, 0,
+			"clone map must reflect the delete")
+	})
+{{- else if $f.IsBytes}}
+
+	t.Run("With{{$f.Name}}String sets bytes from string", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}String("hello").Build()
+		testkit.Equal(t, string(got.{{$f.Name}}), "hello",
+			"With{{$f.Name}}String must convert")
+	})
+
+	t.Run("Clone deep-copies {{$f.Name}} bytes", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}String("original")
+		clone := base.Clone()
+		clone.With{{$f.Name}}String("modified")
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Equal(t, string(original.{{$f.Name}}), "original",
+			"original bytes must be unchanged after clone")
+		testkit.Equal(t, string(modified.{{$f.Name}}), "modified",
+			"clone must have new bytes")
+	})
+{{- else}}
+
+	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			With{{$f.Name}}({{$f.EffectiveSample}}).Build()
+		testkit.Equal(t, got.{{$f.Name}}, {{$f.EffectiveSample}}, "must set {{$f.Name}}")
+	})
+{{- end}}
+{{- end}}
+{{- with $s.FirstComparableField}}
+
+	t.Run("Clone forks independent copy", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}()
+		clone := base.Clone().With{{.Name}}({{.TestSample}})
+		original := base.Build()
+		modified := clone.Build()
+		testkit.NotEqual(t, original.{{.Name}}, modified.{{.Name}},
+			"Clone must produce independent copy")
+	})
+
+	t.Run("Mutate modifies value", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			Mutate(func(v *{{$s.TestQualifiedType}}) {
+				v.{{.Name}} = {{.TestSample}}
+			}).Build()
+		testkit.Equal(t, got.{{.Name}}, {{.TestSample}}, "Mutate must modify")
+	})
+{{- else}}
+
+	// Smoke coverage when no basic-comparable field is available
+	// for an independence assertion. Clone and Mutate still execute
+	// their bodies — any panic in the deep-copy / callback machinery
+	// surfaces here.
+	t.Run("Clone returns a usable builder", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().Clone().Build()
+	})
+
+	t.Run("Mutate is callable", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}{{$s.TestTypeArgs}}().
+			Mutate(func(*{{$s.TestQualifiedType}}) {}).Build()
+	})
+{{- end}}
+}
+{{- else}}
+
+	t.Run("New{{$s.Name}} builds without panic", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}().Build()
+	})
+{{- if not $s.HasUnexportedFields}}
+
+	t.Run("New{{$s.Name}}From zero value round-trips", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).Build()
+		testkit.Equal(t, got, {{$s.QualifiedType}}{}, "must return zero value")
+	})
+{{- end}}
+{{- if $s.HasDefaults}}
+
+	t.Run("New{{$s.Name}} uses defaults", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}().Build()
+		want := {{$s.DefaultsFunc}}()
+		testkit.Equal(t, got, want, "New{{$s.Name}} must use {{$s.DefaultsFunc}}")
+	})
+{{- else if $s.HasFieldDefaults}}
+
+	t.Run("New{{$s.Name}} uses field defaults", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}().Build()
+{{- range $s.Fields}}{{if .DefaultValue}}
+		testkit.Equal(t, got.{{.Name}}, {{.DefaultValue}},
+			"{{.Name}} default must match directive")
+{{- end}}{{end}}
+	})
+{{- end}}
+{{range $f := $s.Fields}}
+{{- if $f.IsSlice}}
+
+	t.Run("With{{$f.Name}} replaces existing slice", func(t *testing.T) {
+		t.Parallel()
+		replacement := {{$f.SampleValue}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}(replacement...).
+			With{{$f.Name}}(replacement...).
+			Build()
+		testkit.Equal(t, got.{{$f.Name}}, replacement,
+			"With must replace, not append — second call overwrites first")
+	})
+
+	t.Run("Append{{$f.Name}} preserves existing", func(t *testing.T) {
+		t.Parallel()
+		seed := {{$f.SampleValue}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}(seed...).
+			Append{{$f.Name}}(seed...).
+			Build()
+		testkit.Len(t, got.{{$f.Name}}, len(seed)*2,
+			"Append must preserve existing + add new")
+	})
+{{- else if $f.IsMap}}
+
+	t.Run("With{{$f.Name}} replaces map", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.SampleValue}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}(sample).
+			Build()
+		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+	})
+
+	t.Run("With{{$f.Name}}Entry lazy-inits and adds", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}Entry({{$f.MapKeySample}}, {{$f.MapValSample}}).
+			Build()
+		testkit.Len(t, got.{{$f.Name}}, 1, "lazy-init map must have 1 entry")
+		testkit.Equal(t, got.{{$f.Name}}[{{$f.MapKeySample}}], {{$f.MapValSample}},
+			"entry must be added")
+	})
+{{- else if $f.IsBytes}}
+
+	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
+		t.Parallel()
+		sample := {{$f.SampleValue}}
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}(sample).
+			Build()
+		testkit.Equal(t, got.{{$f.Name}}, sample, "must set {{$f.Name}}")
+	})
+
+	t.Run("With{{$f.Name}}String sets from string", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}String("hello").
+			Build()
+		testkit.Equal(t, string(got.{{$f.Name}}), "hello",
+			"With{{$f.Name}}String must convert")
+	})
+{{- else}}
+
+	t.Run("With{{$f.Name}} sets field", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}({{$f.SampleValue}}).
+			Build()
+		testkit.Equal(t, got.{{$f.Name}}, {{$f.SampleValue}}, "must set {{$f.Name}}")
+	})
+{{- end}}
+{{- end}}
+{{- range $f := $s.Fields}}
+{{- if $f.IsSlice}}
+
+	t.Run("Clone deep-copies {{$f.Name}} slice", func(t *testing.T) {
+		t.Parallel()
+		seed := {{$f.SampleValue}}
+		base := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).With{{$f.Name}}(seed...)
+		clone := base.Clone()
+		clone.Append{{$f.Name}}(seed...)
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.{{$f.Name}}, len(seed),
+			"original slice must be unchanged after clone mutation")
+		testkit.Len(t, modified.{{$f.Name}}, len(seed)*2,
+			"clone must have appended")
+	})
+{{- else if $f.IsBytes}}
+
+	t.Run("Clone deep-copies {{$f.Name}} bytes", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}String("original")
+		clone := base.Clone()
+		clone.With{{$f.Name}}String("modified")
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Equal(t, string(original.{{$f.Name}}), "original",
+			"original bytes must be unchanged after clone")
+		testkit.Equal(t, string(modified.{{$f.Name}}), "modified",
+			"clone must have new bytes")
+	})
+{{- else if $f.IsMap}}
+
+	t.Run("Clone deep-copies {{$f.Name}} map", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			With{{$f.Name}}Entry({{$f.MapKeySample}}, {{$f.MapValSample}})
+		clone := base.Clone()
+		clone.Mutate(func(v *{{$s.QualifiedType}}) {
+			delete(v.{{$f.Name}}, {{$f.MapKeySample}})
+		})
+		original := base.Build()
+		modified := clone.Build()
+		testkit.Len(t, original.{{$f.Name}}, 1,
+			"original map must be unchanged after clone deletes")
+		testkit.Len(t, modified.{{$f.Name}}, 0,
+			"clone map must reflect the delete")
+	})
+{{- end}}
+{{- end}}
+{{- with $s.FirstComparableField}}
+
+	t.Run("Clone forks independent scalar", func(t *testing.T) {
+		t.Parallel()
+		base := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{})
+		clone := base.Clone().With{{.Name}}({{.SampleValue}})
+		original := base.Build()
+		modified := clone.Build()
+		testkit.NotEqual(t, original.{{.Name}}, modified.{{.Name}},
+			"Clone must produce independent copy")
+	})
+
+	t.Run("Mutate modifies value", func(t *testing.T) {
+		t.Parallel()
+		got := {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			Mutate(func(v *{{$s.QualifiedType}}) {
+				v.{{.Name}} = {{.SampleValue}}
+			}).
+			Build()
+		testkit.Equal(t, got.{{.Name}}, {{.SampleValue}}, "Mutate must modify")
+	})
+{{- else}}
+
+	// Smoke coverage when no basic-comparable field is available
+	// for an independence assertion. Clone and Mutate still execute
+	// their bodies — any panic in the deep-copy / callback machinery
+	// surfaces here.
+	t.Run("Clone returns a usable builder", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).Clone().Build()
+	})
+
+	t.Run("Mutate is callable", func(t *testing.T) {
+		t.Parallel()
+		_ = {{$local.GenQualifier}}New{{$s.Name}}From({{$s.QualifiedType}}{}).
+			Mutate(func(*{{$s.QualifiedType}}) {}).Build()
+	})
+{{- end}}
+}
+{{- end}}
+{{end}}

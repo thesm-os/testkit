@@ -4,6 +4,7 @@
 package generator_test
 
 import (
+	"go/types"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -110,5 +111,35 @@ type I interface { F(string, int) }
 		testkit.Len(t, got, 2, "two synthesized params")
 		testkit.Equal(t, got[0].FieldName, "P0", "first synthesized")
 		testkit.Equal(t, got[1].FieldName, "P1", "second synthesized")
+	})
+}
+
+func TestHasUnexportedFields(t *testing.T) {
+	t.Parallel()
+
+	t.Run("named struct with unexported field → true", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "structs")
+		s, err := pkg.Struct("Item")
+		testkit.NoError(t, err, "Struct Item")
+		testkit.True(t, generator.HasUnexportedFields(s.Type), "Item.hidden is unexported")
+	})
+
+	t.Run("named struct with only exported fields → false", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "structs")
+		s, err := pkg.Struct("Order")
+		testkit.NoError(t, err, "Struct Order")
+		testkit.False(t, generator.HasUnexportedFields(s.Type), "Order is fully exported")
+	})
+
+	t.Run("non-struct type → false", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		// Status is a named int — not a struct.
+		c, ok := pkg.Pkg.Scope().Lookup("Status").(interface{ Type() types.Type })
+		testkit.True(t, ok, "Status defined")
+		testkit.False(t, generator.HasUnexportedFields(c.Type()),
+			"non-struct underlying → false")
 	})
 }

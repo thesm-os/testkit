@@ -197,7 +197,7 @@ test-generated:
 	else \
 		for pkg in $(GEN_TESTDATA); do \
 			echo "$(BLUE)  $$pkg$(NC)"; \
-			$(GO) test -count=1 $$pkg || exit 1; \
+			$(GO) test -cover -count=1 $$pkg || exit 1; \
 		done; \
 	fi
 	@echo "$(GREEN)Generated tests passed$(NC)"

@@ -15,5 +15,10 @@
 //                        directives.
 //
 // The defaultstest/ subdirectory holds the sibling test package
-// where RequestDefaults lives and the generated builder lands.
+// where RequestDefaults lives and the generated builders land.
+// Each source file owns its own go:generate directive so the
+// emitted artifacts mirror the source basename:
+//
+//   defaults/convention.go      defaults/defaultstest/convention.gen.go
+//                               defaults/defaultstest/convention.gen_test.go
 package defaults

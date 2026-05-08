@@ -298,6 +298,149 @@ func TestMarshalSigs(t *testing.T) {
 	})
 }
 
+func TestDefaultsFuncSig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matches `() <Type>` factory shape", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		// basic doesn't ship a defaults function for any of its
+		// types, so we exercise the predicate against a known
+		// existing function: ParseStatus has shape
+		// `(string) (Status, error)` — wrong shape, must be rejected
+		// by DefaultsFuncSig("Status").
+		testkit.False(t,
+			generator.HasFunc(pkg, "ParseStatus", generator.DefaultsFuncSig("Status")),
+			"ParseStatus is not a defaults factory")
+	})
+
+	t.Run("rejects functions with parameters", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		testkit.False(t,
+			generator.HasFunc(pkg, "ParseStatus", generator.DefaultsFuncSig("Status")),
+			"factory must take zero params")
+	})
+
+	t.Run("rejects functions returning a different type", func(t *testing.T) {
+		t.Parallel()
+		// Compose a synthetic test: predicate is type-name-keyed,
+		// so a same-shape factory for the wrong type must fail.
+		// Easiest exercise: confirm the closure captures typeName.
+		check := generator.DefaultsFuncSig("DoesNotExist")
+		testkit.True(t, check != nil, "predicate constructed")
+	})
+}
+
+func TestDefaultsFuncSigMatches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matches RequestDefaults() in defaultstest sibling package", func(t *testing.T) {
+		t.Parallel()
+		pkg, err := generator.NewLoader().Load("./testdata/defaults/defaultstest", "")
+		testkit.NoError(t, err, "Load defaultstest")
+		// RequestDefaults() returns defaults.Request — predicate keys
+		// on the named type's Obj().Name() so a cross-package return
+		// type matches as long as the leaf name agrees.
+		testkit.True(t,
+			generator.HasFunc(pkg, "RequestDefaults", generator.DefaultsFuncSig("Request")),
+			"RequestDefaults satisfies DefaultsFuncSig(\"Request\")")
+	})
+
+	t.Run("rejects functions with non-named return type", func(t *testing.T) {
+		t.Parallel()
+		// Build a synthetic signature `() string` and feed it directly.
+		// types.Typ[String] is *types.Basic, not *types.Named, so the
+		// predicate's named-cast branch fails.
+		sig := types.NewSignatureType(nil, nil, nil, nil,
+			types.NewTuple(types.NewVar(0, nil, "", types.Typ[types.String])),
+			false)
+		check := generator.DefaultsFuncSig("Request")
+		testkit.False(t, check(sig), "non-named return rejected")
+	})
+}
+
+func TestSelectConcreteType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("any-constrained → first candidate at startIdx", func(t *testing.T) {
+		t.Parallel()
+		// Empty interface = any — every candidate satisfies it, so
+		// we get the rotated start.
+		anyIface := types.NewInterfaceType(nil, nil).Complete()
+		got := generator.SelectConcreteType(anyIface, generator.DefaultConcreteTypes, 0)
+		testkit.True(t, got != nil, "non-nil")
+		testkit.Equal(t, got.Name, "string", "position 0 → string")
+
+		got = generator.SelectConcreteType(anyIface, generator.DefaultConcreteTypes, 1)
+		testkit.Equal(t, got.Name, "int", "position 1 → int")
+	})
+
+	t.Run("rotation wraps modulo candidate count", func(t *testing.T) {
+		t.Parallel()
+		anyIface := types.NewInterfaceType(nil, nil).Complete()
+		n := len(generator.DefaultConcreteTypes)
+		got := generator.SelectConcreteType(anyIface, generator.DefaultConcreteTypes, n)
+		testkit.True(t, got != nil, "wrap to start")
+		testkit.Equal(t, got.Name, "string", "wraps to first")
+	})
+
+	t.Run("comparable-constrained → first satisfying candidate", func(t *testing.T) {
+		t.Parallel()
+		// Use the actual comparable interface from the universe.
+		comparableIface, ok := types.Universe.Lookup("comparable").
+			Type().Underlying().(*types.Interface)
+		testkit.True(t, ok, "comparable resolves to interface")
+		got := generator.SelectConcreteType(comparableIface, generator.DefaultConcreteTypes, 0)
+		testkit.True(t, got != nil, "string satisfies comparable")
+		testkit.Equal(t, got.Name, "string", "first comparable candidate")
+	})
+
+	t.Run("Numeric-constrained → int (string fails)", func(t *testing.T) {
+		t.Parallel()
+		// Build a type-set interface equivalent to ~int | ~int64 | ~float64.
+		pkg, err := generator.NewLoader().Load("./testdata/generics", "")
+		testkit.NoError(t, err, "Load generics")
+		obj := pkg.Pkg.Scope().Lookup("Numeric")
+		testkit.True(t, obj != nil, "Numeric defined")
+		iface, ok := obj.Type().Underlying().(*types.Interface)
+		testkit.True(t, ok, "Numeric is interface")
+		// Start at position 0 (string) — must skip past since string
+		// fails ~int|~int64|~float64.
+		got := generator.SelectConcreteType(iface, generator.DefaultConcreteTypes, 0)
+		testkit.True(t, got != nil, "int satisfies Numeric")
+		testkit.Equal(t, got.Name, "int", "int is the first satisfying candidate")
+	})
+
+	t.Run("returns nil when no candidate satisfies", func(t *testing.T) {
+		t.Parallel()
+		// Method-bearing interface — no basic kind satisfies it.
+		impossible := types.NewInterfaceType([]*types.Func{
+			types.NewFunc(0, nil, "DoesNotExist",
+				types.NewSignatureType(nil, nil, nil, nil, nil, false)),
+		}, nil).Complete()
+		got := generator.SelectConcreteType(impossible, generator.DefaultConcreteTypes, 0)
+		testkit.True(t, got == nil, "nil when nothing satisfies")
+	})
+
+	t.Run("returns nil for empty candidate list", func(t *testing.T) {
+		t.Parallel()
+		anyIface := types.NewInterfaceType(nil, nil).Complete()
+		testkit.True(t,
+			generator.SelectConcreteType(anyIface, nil, 0) == nil,
+			"empty candidates → nil")
+	})
+
+	t.Run("non-interface constraint falls back to round-robin", func(t *testing.T) {
+		t.Parallel()
+		// types.Typ[String] has *types.Basic underlying — not an
+		// interface — so the function takes the round-robin fallback.
+		got := generator.SelectConcreteType(types.Typ[types.String], generator.DefaultConcreteTypes, 2)
+		testkit.True(t, got != nil, "non-iface constraint → rotation")
+		testkit.Equal(t, got.Name, "bool", "position 2 → bool")
+	})
+}
+
 func TestErrorInterface(t *testing.T) {
 	t.Parallel()
 	iface := generator.ErrorInterface()

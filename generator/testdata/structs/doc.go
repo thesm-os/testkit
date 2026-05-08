@@ -16,5 +16,12 @@
 //                  values, and *Customer pointer field
 //
 // Type names address one concern each so a test can scope to its
-// shape via `builder Item`, `builder Order`, etc.
+// shape via `builder Item`, `builder Order`, etc. Each source file
+// owns its own go:generate directive — the builder emits into a
+// sibling structstest/ package using the source basename, so a
+// listing groups source + generated impl + test by basename:
+//
+//   structs/fields.go      structs/structstest/fields.gen.go
+//                          structs/structstest/fields.gen_test.go
 package structs
+

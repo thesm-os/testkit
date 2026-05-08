@@ -255,6 +255,21 @@ func UnmarshalJSONSig(sig *types.Signature) bool {
 	return unmarshalBytesErrSig(sig)
 }
 
+// DefaultsFuncSig returns a predicate matching `() <typeName>` —
+// the convention-based factory shape used by the builder generator
+// to seed a builder with non-zero values via a sibling
+// `<TypeName>Defaults()` function. Closes over typeName so callers
+// don't need to reimplement the named-result-type check.
+func DefaultsFuncSig(typeName string) func(*types.Signature) bool {
+	return func(sig *types.Signature) bool {
+		if sig.Params().Len() != 0 || sig.Results().Len() != 1 {
+			return false
+		}
+		named, ok := sig.Results().At(0).Type().(*types.Named)
+		return ok && named.Obj().Name() == typeName
+	}
+}
+
 // MarshalBinarySig matches `() ([]byte, error)` — the canonical
 // [encoding.BinaryMarshaler] signature. Identical wire shape to
 // the text/JSON variants; kept distinct so callers express intent.
@@ -310,3 +325,118 @@ func ErrorInterface() *types.Interface {
 }
 
 var errorIfaceCache = types.Universe.Lookup("error").Type().Underlying().(*types.Interface)
+
+// ConcreteType is one candidate the generator can substitute for a
+// generic type parameter when emitting concrete instantiations in
+// generated test code. Constraint-aware selection (see
+// [SelectConcreteType]) picks the first candidate whose underlying
+// Go type satisfies the type parameter's constraint, so a `T any`
+// param gets `string`, a `T Numeric` (~int | ~float) param gets
+// `int`, and a `T comparable` param gets `string`.
+type ConcreteType struct {
+	// Name is the rendered Go type name as it appears in source —
+	// "string", "int", "float64", etc.
+	Name string
+
+	// Type is the [types.Type] used by [types.Satisfies] to check
+	// whether this candidate is in a type-parameter constraint's
+	// type set.
+	Type types.Type
+
+	// Sample renders a non-zero literal of the candidate type for
+	// use in generated test bodies. fieldName is consulted so
+	// string samples can carry a hint ("test-id" instead of a
+	// generic placeholder).
+	Sample func(fieldName string) string
+}
+
+// DefaultConcreteTypes is the canonical candidate list for
+// substituting into generic type parameters in generated tests.
+// Order matters: [SelectConcreteType] walks from a rotated start
+// so multi-parameter generics under `any`-shaped constraints get
+// distinct samples per position (Pair[A,B any] → A=string, B=int);
+// narrow constraints (Numeric ~int|~int64|~float64) fall through
+// to the first satisfying candidate regardless of position.
+//
+// Covers every Go basic kind that can be a meaningful field value
+// (excludes untyped kinds and unsafe.Pointer): string, bool, the
+// signed/unsigned integer family, float32/64, and the complex
+// pair. Strings come first because most fixtures default to a
+// readable "test-<name>" sample; numerics next because they're the
+// next-most-common constraint surface.
+var DefaultConcreteTypes = []ConcreteType{
+	{
+		Name:   "string",
+		Type:   types.Typ[types.String],
+		Sample: func(fieldName string) string { return `"test-` + lowerASCII(fieldName) + `"` },
+	},
+	{Name: "int", Type: types.Typ[types.Int], Sample: func(string) string { return "42" }},
+	{Name: "bool", Type: types.Typ[types.Bool], Sample: func(string) string { return "true" }},
+	{Name: "float64", Type: types.Typ[types.Float64], Sample: func(string) string { return "3.14" }},
+
+	// Signed integer family — sized variants for constraints that
+	// require a specific width (e.g. `~int64` in audit-log offsets).
+	{Name: "int8", Type: types.Typ[types.Int8], Sample: func(string) string { return "8" }},
+	{Name: "int16", Type: types.Typ[types.Int16], Sample: func(string) string { return "16" }},
+	{Name: "int32", Type: types.Typ[types.Int32], Sample: func(string) string { return "32" }},
+	{Name: "int64", Type: types.Typ[types.Int64], Sample: func(string) string { return "64" }},
+
+	// Unsigned integer family.
+	{Name: "uint", Type: types.Typ[types.Uint], Sample: func(string) string { return "42" }},
+	{Name: "uint8", Type: types.Typ[types.Uint8], Sample: func(string) string { return "8" }},
+	{Name: "uint16", Type: types.Typ[types.Uint16], Sample: func(string) string { return "16" }},
+	{Name: "uint32", Type: types.Typ[types.Uint32], Sample: func(string) string { return "32" }},
+	{Name: "uint64", Type: types.Typ[types.Uint64], Sample: func(string) string { return "64" }},
+	{Name: "uintptr", Type: types.Typ[types.Uintptr], Sample: func(string) string { return "0" }},
+
+	// The remaining numeric kinds.
+	{Name: "float32", Type: types.Typ[types.Float32], Sample: func(string) string { return "1.5" }},
+	{Name: "complex64", Type: types.Typ[types.Complex64], Sample: func(string) string { return "complex(1, 2)" }},
+	{Name: "complex128", Type: types.Typ[types.Complex128], Sample: func(string) string { return "complex(1, 2)" }},
+}
+
+// SelectConcreteType picks the first candidate (starting at
+// startIdx, wrapping around) whose underlying type satisfies
+// constraint. Returns nil when no candidate satisfies — callers
+// decide the fallback.
+//
+// startIdx drives the round-robin so multi-parameter generics get
+// distinct samples per position under unconstrained ("any") type
+// parameters; narrow constraints (Numeric, comparable, …) fall
+// through to the first satisfying candidate regardless.
+func SelectConcreteType(constraint types.Type, candidates []ConcreteType, startIdx int) *ConcreteType {
+	if len(candidates) == 0 {
+		return nil
+	}
+	iface, _ := constraint.Underlying().(*types.Interface)
+	if iface == nil {
+		// Constraint isn't an interface (rare — would be a type
+		// alias). Fall back to round-robin.
+		i := ((startIdx % len(candidates)) + len(candidates)) % len(candidates)
+		return &candidates[i]
+	}
+	n := len(candidates)
+	for k := range n {
+		i := ((startIdx+k)%n + n) % n
+		if types.Satisfies(candidates[i].Type, iface) {
+			return &candidates[i]
+		}
+	}
+	return nil
+}
+
+// lowerASCII is a small helper so [DefaultConcreteTypes] doesn't
+// pull strings into scan.go's import list. ASCII-only matches Go
+// identifier rules for field names; non-ASCII would render the
+// same way under strings.ToLower.
+func lowerASCII(s string) string {
+	b := make([]byte, len(s))
+	for i := range len(s) {
+		c := s[i]
+		if c >= 'A' && c <= 'Z' {
+			c += 'a' - 'A'
+		}
+		b[i] = c
+	}
+	return string(b)
+}

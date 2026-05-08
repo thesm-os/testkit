@@ -304,6 +304,75 @@ func tupleString(tup *types.Tuple, tracker *ImportTracker, variadic bool) string
 	return out
 }
 
+// TypeParamDecl renders the type parameter declaration for a
+// generic interface, e.g. `[K comparable, V any]`. Returns the
+// empty string for non-generic interfaces. Used by stub/suite/bench
+// when emitting generic interface types.
+func (i *InterfaceInfo) TypeParamDecl(t *ImportTracker) string {
+	return typeParamDecl(i.TypeParams, t)
+}
+
+// TypeParamArgs renders the type-parameter names for an
+// instantiation, e.g. `[K, V]`. Returns the empty string for
+// non-generic interfaces.
+func (i *InterfaceInfo) TypeParamArgs() string {
+	return typeParamArgs(i.TypeParams)
+}
+
+// TypeParamDecl renders the type parameter declaration for a
+// generic struct. See [InterfaceInfo.TypeParamDecl].
+func (s *StructInfo) TypeParamDecl(t *ImportTracker) string {
+	return typeParamDecl(s.TypeParams, t)
+}
+
+// TypeParamArgs renders the type-parameter names for an
+// instantiation. See [InterfaceInfo.TypeParamArgs].
+func (s *StructInfo) TypeParamArgs() string {
+	return typeParamArgs(s.TypeParams)
+}
+
+// typeParamDecl is the shared implementation: renders
+// `[<name> <constraint>, ...]` from a TypeParamInfo slice. Empty
+// slice → empty string.
+func typeParamDecl(params []TypeParamInfo, t *ImportTracker) string {
+	if len(params) == 0 {
+		return ""
+	}
+	parts := make([]string, len(params))
+	for i, tp := range params {
+		parts[i] = tp.Name + " " + types.TypeString(tp.Constraint, t.Qualifier())
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// typeParamArgs is the shared implementation: renders
+// `[<name>, ...]` from a TypeParamInfo slice. Empty slice → empty
+// string.
+func typeParamArgs(params []TypeParamInfo) string {
+	if len(params) == 0 {
+		return ""
+	}
+	names := make([]string, len(params))
+	for i, tp := range params {
+		names[i] = tp.Name
+	}
+	return "[" + strings.Join(names, ", ") + "]"
+}
+
+// QualifyType prefixes typeName with qualifier when non-empty:
+//
+//	QualifyType("store", "Item") → "store.Item"
+//	QualifyType("",      "Item") → "Item"
+//
+// Used wherever templates must render a source-package-qualified
+// type name from a separate qualifier and base name.
+func QualifyType(qualifier, typeName string) string {
+	if qualifier == "" {
+		return typeName
+	}
+	return qualifier + "." + typeName
+}
+
 // tupleTypeString renders a tuple's types only, dropping names. Used
 // for FuncType rendering where parameter names are not part of the
 // type signature. The result is always a bare comma-separated list;

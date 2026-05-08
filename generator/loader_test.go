@@ -208,4 +208,38 @@ func TestLoader(t *testing.T) {
 		dirs := pkg.PackageDirectives()
 		testkit.Len(t, dirs, 0, "storage has no package directives")
 	})
+
+	t.Run("FieldDirectives returns inline //testkit:default annotations", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "defaults")
+		host := pkg.FieldDirectives("Config", "Host")
+		testkit.Len(t, host, 1, "Host has one directive")
+		testkit.Equal(t, host[0].Name, "default", "name is `default`")
+		testkit.Equal(t, host[0].Args[0], `"localhost"`, "arg is the literal default")
+
+		port := pkg.FieldDirectives("Config", "Port")
+		testkit.Len(t, port, 1, "Port has one directive")
+		testkit.Equal(t, port[0].Args[0], "8080", "Port default is integer literal")
+	})
+
+	t.Run("FieldDirectives returns nil for un-annotated fields", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "defaults")
+		got := pkg.FieldDirectives("Config", "Name")
+		testkit.Len(t, got, 0, "Name has no directive")
+	})
+
+	t.Run("FieldDirectives returns nil for missing types and fields", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "defaults")
+		testkit.Len(t, pkg.FieldDirectives("DoesNotExist", "X"), 0, "missing type")
+		testkit.Len(t, pkg.FieldDirectives("Config", "DoesNotExist"), 0, "missing field")
+	})
+
+	t.Run("FieldDirectives returns nil for non-struct types", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		// Status is an enum (named int) — not a struct.
+		testkit.Len(t, pkg.FieldDirectives("Status", "X"), 0, "non-struct → nil")
+	})
 }

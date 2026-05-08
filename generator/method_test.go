@@ -281,3 +281,88 @@ type I interface { F() string }
 		testkit.Equal(t, generator.TypeStr(sig.Results().At(0).Type(), nil), "string", "no tracker fallback")
 	})
 }
+
+func TestQualifyType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("prefixes typeName with qualifier", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, generator.QualifyType("store", "Item"), "store.Item", "qualified")
+	})
+	t.Run("returns typeName unchanged for empty qualifier", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, generator.QualifyType("", "Item"), "Item", "no qualifier")
+	})
+}
+
+func TestTypeParamRendering(t *testing.T) {
+	t.Parallel()
+
+	loadGenerics := func(t *testing.T) *generator.Package {
+		t.Helper()
+		pkg, err := generator.NewLoader().Load("./testdata/generics", "")
+		testkit.NoError(t, err, "Load testdata/generics")
+		return pkg
+	}
+
+	t.Run("StructInfo emits TypeParamDecl + TypeParamArgs for generic struct", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadGenerics(t)
+		s, err := pkg.Struct("Container")
+		testkit.NoError(t, err, "Struct Container")
+		tracker := generator.NewImportTracker(pkg.Path())
+		testkit.Equal(t, s.TypeParamDecl(tracker), "[T any]", "single-param decl")
+		testkit.Equal(t, s.TypeParamArgs(), "[T]", "single-param args")
+	})
+
+	t.Run("StructInfo handles multi-parameter generic", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadGenerics(t)
+		s, err := pkg.Struct("Pair")
+		testkit.NoError(t, err, "Struct Pair")
+		tracker := generator.NewImportTracker(pkg.Path())
+		// go/types normalizes shared constraints into per-param form.
+		testkit.Equal(t, s.TypeParamDecl(tracker), "[A any, B any]", "two-param decl")
+		testkit.Equal(t, s.TypeParamArgs(), "[A, B]", "two-param args")
+	})
+
+	t.Run("StructInfo renders constrained parameter", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadGenerics(t)
+		s, err := pkg.Struct("Lookup")
+		testkit.NoError(t, err, "Struct Lookup")
+		tracker := generator.NewImportTracker(pkg.Path())
+		testkit.Equal(t, s.TypeParamDecl(tracker), "[K comparable, V any]", "comparable constraint")
+		testkit.Equal(t, s.TypeParamArgs(), "[K, V]", "args")
+	})
+
+	t.Run("StructInfo returns empty strings for non-generic", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadFixture(t, "structs")
+		s, err := pkg.Struct("Item")
+		testkit.NoError(t, err, "Struct Item")
+		tracker := generator.NewImportTracker(pkg.Path())
+		testkit.Equal(t, s.TypeParamDecl(tracker), "", "non-generic decl")
+		testkit.Equal(t, s.TypeParamArgs(), "", "non-generic args")
+	})
+
+	t.Run("InterfaceInfo returns empty strings for non-generic interface", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		i, err := pkg.Interface("Store")
+		testkit.NoError(t, err, "Interface Store")
+		tracker := generator.NewImportTracker(pkg.Path())
+		testkit.Equal(t, i.TypeParamDecl(tracker), "", "non-generic iface decl")
+		testkit.Equal(t, i.TypeParamArgs(), "", "non-generic iface args")
+	})
+}
+
+// loadFixture loads a fixture package by name from generator/testdata/.
+// Mirrors the helper in builder/helpers_test.go for use across the
+// generator's own external tests (loader/method/fields).
+func loadFixture(t *testing.T, name string) *generator.Package {
+	t.Helper()
+	pkg, err := generator.NewLoader().Load("./testdata/"+name, "")
+	testkit.NoError(t, err, "Load testdata/"+name)
+	return pkg
+}
