@@ -1,9 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package basic
-
-//go:generate testkit enum -o color.gen_test.go Color
+package enums
 
 // Color uses explicit (non-iota) values, including a negative one
 // and a non-contiguous range. Used by enum-generator tests to

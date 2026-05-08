@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package basic
+package invalid
 
 // Tag is a string-typed enum. Used by enum-generator tests to
 // confirm analyze rejects non-integer underlying types up front

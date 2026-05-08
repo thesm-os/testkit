@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package basic
+package invalid
 
 // WrongSig has methods that look like Stringer/Parse/marshalers but
 // have wrong signatures. The enum generator's signature predicates

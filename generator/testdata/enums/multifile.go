@@ -1,12 +1,10 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package basic
-
-//go:generate testkit enum -o region.gen_test.go Region
+package enums
 
 // Region is a multi-file enum — half the constants live here, half
-// in region_more.go. Used by enum-generator tests to exercise
+// in multifile_more.go. Used by enum-generator tests to exercise
 // ScanConstsOfType's source-position sort across files (filename
 // lexical order disambiguates ties).
 type Region int

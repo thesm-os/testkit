@@ -1,7 +1,7 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-package basic
+package enums
 
 // Continued constants of type Region, declared in a second file to
 // exercise ScanConstsOfType's cross-file sort. Source-position

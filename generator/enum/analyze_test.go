@@ -156,7 +156,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("wrong-signature String() rejected → HasString false", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"WrongSig"},
+		data, err := enum.Analyze(loadFixture(t, "invalid"), []string{"WrongSig"},
 			generator.DefaultConfig(), generator.Options{Output: "wrong.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		testkit.False(t, data.Enums[0].HasString,
@@ -165,7 +165,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("wrong-signature Parse rejected → HasParse false", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"WrongSig"},
+		data, err := enum.Analyze(loadFixture(t, "invalid"), []string{"WrongSig"},
 			generator.DefaultConfig(), generator.Options{Output: "wrong.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		testkit.False(t, data.Enums[0].HasParse,
@@ -174,7 +174,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("wrong-signature MarshalText rejected → HasMarshalText false", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"WrongSig"},
+		data, err := enum.Analyze(loadFixture(t, "invalid"), []string{"WrongSig"},
 			generator.DefaultConfig(), generator.Options{Output: "wrong.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		testkit.False(t, data.Enums[0].HasMarshalText,
@@ -183,7 +183,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("explicit non-iota values are surfaced with their declared values", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"Color"},
+		data, err := enum.Analyze(loadFixture(t, "enums"), []string{"Color"},
 			generator.DefaultConfig(), generator.Options{Output: "color.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		c := data.Enums[0]
@@ -201,7 +201,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("ZeroValueName empty when no declared constant has value 0", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"Color"},
+		data, err := enum.Analyze(loadFixture(t, "enums"), []string{"Color"},
 			generator.DefaultConfig(), generator.Options{Output: "color.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		testkit.Equal(t, data.Enums[0].ZeroValueName, "",
@@ -210,16 +210,16 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("constants spanning multiple files preserve cross-file declaration order", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"Region"},
+		data, err := enum.Analyze(loadFixture(t, "enums"), []string{"Region"},
 			generator.DefaultConfig(), generator.Options{Output: "region.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		names := make([]string, len(data.Enums[0].Values))
 		for i, v := range data.Enums[0].Values {
 			names[i] = v.Name
 		}
-		// region.go declares RegionUS, RegionEU; region_more.go
+		// multifile.go declares RegionUS, RegionEU; multifile_more.go
 		// declares RegionAP, RegionLA. Source position sorts by
-		// filename first, then offset — region.go < region_more.go
+		// filename first, then offset — multifile.go < multifile_more.go
 		// lexically.
 		testkit.Equal(t, names,
 			[]string{"RegionUS", "RegionEU", "RegionAP", "RegionLA"},
@@ -231,7 +231,7 @@ func TestAnalyze(t *testing.T) {
 		// Tag is `type Tag string` — wire-compat assumes integer
 		// values, so analyze must reject up front. The diagnostic
 		// names the type and explains why.
-		_, err := enum.Analyze(loadFixture(t, "basic"), []string{"Tag"},
+		_, err := enum.Analyze(loadFixture(t, "invalid"), []string{"Tag"},
 			generator.DefaultConfig(), generator.Options{Output: "tag.gen_test.go"})
 		testkit.True(t, err != nil, "string-typed enum rejected")
 		testkit.Assert(t, err.Error()).
@@ -241,7 +241,7 @@ func TestAnalyze(t *testing.T) {
 
 	t.Run("unexported constants are skipped", func(t *testing.T) {
 		t.Parallel()
-		data, err := enum.Analyze(loadFixture(t, "basic"), []string{"Region"},
+		data, err := enum.Analyze(loadFixture(t, "enums"), []string{"Region"},
 			generator.DefaultConfig(), generator.Options{Output: "region.gen_test.go"})
 		testkit.NoError(t, err, "Analyze")
 		for _, v := range data.Enums[0].Values {
