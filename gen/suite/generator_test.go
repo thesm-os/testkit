@@ -79,6 +79,7 @@ func TestGenerate(t *testing.T) {
 		{"weird/scheduler", "weird", "Scheduler", "weirdtest/scheduler_spec.gen.go"},
 		{"voidpure", "voidpure", "Stream", ""},
 		{"voidctx", "voidctx", "Counter", ""},
+		{"newshapes", "newshapes", "Device", ""},
 		{"samples", "samples", "Hasher", ""},
 	}
 

@@ -69,3 +69,31 @@ type PredicateBindings[T any] struct {
 	Factory func() T
 	Call    func(T) bool
 }
+
+// MutatorBindings holds the reusable shape wiring for a Mutator-shaped method.
+// A Mutator has the signature func(ctx, V) with no return value.
+type MutatorBindings[T, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, V)
+}
+
+// ReaderWithBoolBindings holds the reusable shape wiring for a
+// ReaderWithBool-shaped method: func(ctx, K) (V, bool) or func(K) (V, bool).
+type ReaderWithBoolBindings[T any, K comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) (V, bool)
+}
+
+// LookupBindings holds the reusable shape wiring for a Lookup-shaped method:
+// func(ctx, K) (R1, R2, bool) or func(K) (R1, R2, bool).
+type LookupBindings[T any, K comparable, V, R any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) (V, R, bool)
+}
+
+// PoisonAccessorBindings holds the reusable shape wiring for a
+// PoisonAccessor-shaped method: func() error.
+type PoisonAccessorBindings[T any] struct {
+	Factory func() T
+	Call    func(T) error
+}

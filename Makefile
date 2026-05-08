@@ -202,6 +202,7 @@ GEN_TESTDATA := \
 	gen/suite/testdata/voidpure/streamtest \
 	gen/suite/testdata/samples/hashertest \
 	gen/suite/testdata/voidctx/countertest \
+	gen/suite/testdata/newshapes/devicetest \
 	gen/bench/testdata/basic/storetest \
 	gen/bench/testdata/allshapes/servicetest \
 	gen/model/testdata/basic/storetest \

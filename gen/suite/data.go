@@ -295,6 +295,14 @@ func (m *SpecMethodData) OnMethodAssertionType() string {
 		return "suite.PureAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
 		return "suite.PredicateAssertion[" + m.QualifiedType + "]"
+	case gen.ShapeMutator:
+		return "suite.MutatorAssertion[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeReaderWithBool:
+		return "suite.ReaderWithBoolAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeLookup:
+		return "suite.LookupAssertion[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
+	case gen.ShapePoisonAccessor:
+		return "suite.PoisonAccessorAssertion[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.T, " + m.QualifiedType + ")"
 	}
@@ -321,6 +329,14 @@ func (m *SpecMethodData) OnMethodBenchType() string {
 		return "bench.Pure[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
 	case gen.ShapePredicate:
 		return "bench.Predicate[" + m.QualifiedType + "]"
+	case gen.ShapeMutator:
+		return "bench.Mutator[" + m.QualifiedType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeReaderWithBool:
+		return "bench.ReaderWithBool[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + "]"
+	case gen.ShapeLookup:
+		return "bench.Lookup[" + m.QualifiedType + ", " + m.Shape.KeyType + ", " + m.Shape.ValType + ", " + m.Shape.RetType + "]"
+	case gen.ShapePoisonAccessor:
+		return "bench.PoisonAccessor[" + m.QualifiedType + "]"
 	default:
 		return "func(*testing.B, " + m.QualifiedType + ")"
 	}

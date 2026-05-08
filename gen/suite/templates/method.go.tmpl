@@ -205,6 +205,110 @@ func run{{.InterfaceName}}{{.Name}}(t *testing.T, factory func() {{.QualifiedTyp
 			}
 		})
 	}
+{{- else if .IsMutator}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			mctx := suite.MutatorContext[{{.QualifiedType}}, {{.Shape.ValType}}]{
+				T: t,
+				MutatorBindings: bindings.MutatorBindings[{{.QualifiedType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, v {{.Shape.ValType}}) {
+						impl.{{.Name}}(ctx, v)
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(mctx)
+			}
+		})
+	}
+{{- else if .IsReaderWithBool}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			rctx := suite.ReaderWithBoolContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+				T: t,
+				ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, bool) {
+{{- if .HasCtx}}
+						return impl.{{.Name}}(ctx, k)
+{{- else}}
+						return impl.{{.Name}}(k)
+{{- end}}
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(rctx)
+			}
+		})
+	}
+{{- else if .IsLookup}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			lctx := suite.LookupContext[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+				T: t,
+				LookupBindings: bindings.LookupBindings[{{.QualifiedType}}, {{.Shape.KeyType}}, {{.Shape.ValType}}, {{.Shape.RetType}}]{
+					Factory: prePopFactory,
+					Call: func(ctx context.Context, impl {{.QualifiedType}}, k {{.Shape.KeyType}}) ({{.Shape.ValType}}, {{.Shape.RetType}}, bool) {
+{{- if .HasCtx}}
+						return impl.{{.Name}}(ctx, k)
+{{- else}}
+						return impl.{{.Name}}(k)
+{{- end}}
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(lctx)
+			}
+		})
+	}
+{{- else if .IsPoisonAccessor}}
+	if len(cfg.on{{.Name}}) > 0 {
+		t.Run("{{.Name}}", func(t *testing.T) {
+			prePopFactory := func() {{.QualifiedType}} {
+				impl := factory()
+				if cfg.prePopulate != nil {
+					cfg.prePopulate(t.Context(), impl)
+				}
+				return impl
+			}
+			pctx := suite.PoisonAccessorContext[{{.QualifiedType}}]{
+				T: t,
+				PoisonAccessorBindings: bindings.PoisonAccessorBindings[{{.QualifiedType}}]{
+					Factory: prePopFactory,
+					Call: func(impl {{.QualifiedType}}) error {
+						return impl.{{.Name}}()
+					},
+				},
+			}
+			for _, a := range cfg.on{{.Name}} {
+				a(pctx)
+			}
+		})
+	}
 {{- else}}
 	if len(cfg.on{{.Name}}) > 0 {
 		t.Run("{{.Name}}", func(t *testing.T) {

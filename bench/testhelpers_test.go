@@ -106,6 +106,57 @@ func newValidator(v bool) *validator { return &validator{valid: v} }
 
 func (v *validator) IsValid() bool { return v.valid }
 
+// --- Mutator fixture ---
+
+type accumulator struct{ total int64 }
+
+func newAccumulator() *accumulator { return &accumulator{} }
+
+func (a *accumulator) Add(_ context.Context, v int64) { a.total += v }
+
+// --- ReaderWithBool fixture ---
+
+type boolMap struct{ data map[string]int64 }
+
+func newBoolMap(data map[string]int64) *boolMap { return &boolMap{data: data} }
+
+func (m *boolMap) Load(_ context.Context, key string) (int64, bool) {
+	v, ok := m.data[key]
+	return v, ok
+}
+
+// --- Lookup fixture ---
+
+type lookupMeta struct{ Version string }
+
+type lookupStore struct {
+	values map[string]int64
+	meta   map[string]lookupMeta
+}
+
+func newLookupStore() *lookupStore {
+	return &lookupStore{
+		values: map[string]int64{"a": 10},
+		meta:   map[string]lookupMeta{"a": {Version: "v1"}},
+	}
+}
+
+func (s *lookupStore) Inspect(_ context.Context, key string) (int64, lookupMeta, bool) {
+	v, ok := s.values[key]
+	if !ok {
+		return 0, lookupMeta{}, false
+	}
+	return v, s.meta[key], true
+}
+
+// --- PoisonAccessor fixture ---
+
+type healthChecker struct{ err error }
+
+func newHealthChecker() *healthChecker { return &healthChecker{} }
+
+func (h *healthChecker) Err() error { return h.err }
+
 // --- Stream fixture ---
 
 type listStore struct {
