@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"go.thesmos.sh/testkit/gen/bench"
+	"go.thesmos.sh/testkit/generator/bench"
 )
 
 var benchCmd = &cobra.Command{

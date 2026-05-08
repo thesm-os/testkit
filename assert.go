@@ -6,6 +6,7 @@ package testkit
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -206,5 +207,51 @@ func Sequence[T any](tb testing.TB, items []T, pred func(earlier, later T) bool,
 			tb.Fatalf("%s: sequence violated at index %d: %v → %v",
 				msg, i, items[i-1], items[i])
 		}
+	}
+}
+
+// HasPrefix calls tb.Fatalf if s does not start with prefix. Useful
+// for asserting structural properties of generated or formatted output
+// (sentinel error messages, log lines, render headers).
+//
+//	testkit.HasPrefix(t, err.Error(), "store: ", "errors must carry the package prefix")
+func HasPrefix(tb testing.TB, s, prefix, msg string) {
+	tb.Helper()
+	if !strings.HasPrefix(s, prefix) {
+		tb.Fatalf("%s: %q does not start with %q", msg, s, prefix)
+	}
+}
+
+// HasSuffix calls tb.Fatalf if s does not end with suffix.
+//
+//	testkit.HasSuffix(t, path, ".gen.go", "generated files must end in .gen.go")
+func HasSuffix(tb testing.TB, s, suffix, msg string) {
+	tb.Helper()
+	if !strings.HasSuffix(s, suffix) {
+		tb.Fatalf("%s: %q does not end with %q", msg, s, suffix)
+	}
+}
+
+// ContainsInOrder calls tb.Fatalf if every needle is not present in
+// haystack in the given order. Each needle must appear after the
+// previous one's match end. Useful when [Contains] is too lax —
+// asserting that fields appear in a specific order in formatted
+// output catches Error-format regressions that swap or reorder
+// fields.
+//
+//	testkit.ContainsInOrder(t, err.Error(),
+//	    []string{"basic:", "validation:", "test-field", "test-message"},
+//	    "Error() must include fields in source order")
+func ContainsInOrder(tb testing.TB, haystack string, needles []string, msg string) {
+	tb.Helper()
+	cursor := 0
+	for i, n := range needles {
+		idx := strings.Index(haystack[cursor:], n)
+		if idx < 0 {
+			tb.Fatalf("%s: needle[%d] %q not found after position %d in %q",
+				msg, i, n, cursor, haystack)
+			return
+		}
+		cursor += idx + len(n)
 	}
 }

@@ -452,3 +452,115 @@ func TestSequence(t *testing.T) {
 		}
 	})
 }
+
+func TestHasPrefix(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matching prefix passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.HasPrefix(f, "store: not found", "store: ", "package prefix")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("missing prefix fails with descriptive message", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.HasPrefix(f, "different: prefix", "store: ", "package prefix")
+		if !f.Failed() {
+			t.Fatal("should fail")
+		}
+		if !strings.Contains(f.Msg(), "does not start with") {
+			t.Fatalf("should describe the violation, got: %s", f.Msg())
+		}
+	})
+}
+
+func TestHasSuffix(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matching suffix passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.HasSuffix(f, "errors.gen.go", ".gen.go", "generated suffix")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("missing suffix fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.HasSuffix(f, "errors.go", ".gen.go", "generated suffix")
+		if !f.Failed() {
+			t.Fatal("should fail")
+		}
+	})
+}
+
+func TestContainsInOrder(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ordered substrings pass", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.ContainsInOrder(f,
+			"basic: validation: test-field: test-message",
+			[]string{"basic:", "validation:", "test-field", "test-message"},
+			"format ordering")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("out-of-order substrings fail", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		// "test-message" appears BEFORE "test-field" — caller's expected
+		// order has them reversed.
+		testkit.ContainsInOrder(f,
+			"basic: test-message: test-field",
+			[]string{"test-field", "test-message"},
+			"reversed order")
+		if !f.Failed() {
+			t.Fatal("should fail when later needle precedes earlier needle")
+		}
+	})
+
+	t.Run("missing needle fails with index", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.ContainsInOrder(f,
+			"only the first",
+			[]string{"only", "second"},
+			"missing needle")
+		if !f.Failed() {
+			t.Fatal("should fail when a needle is absent")
+		}
+		if !strings.Contains(f.Msg(), "needle[1]") {
+			t.Fatalf("should cite missing index, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("empty needle list passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.ContainsInOrder(f, "anything", nil, "empty")
+		if f.Failed() {
+			t.Fatalf("empty needles should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("repeated needle is matched once and advances cursor", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		// Two "x" needles: cursor must advance past the first match
+		// before searching for the second one.
+		testkit.ContainsInOrder(f, "axbxc", []string{"x", "x"}, "two xs in order")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+}

@@ -1,5 +1,5 @@
 .PHONY: help bootstrap install generate fmt license vet lint lint-md \
-        test test-generated test-race test-bench test-coverage \
+        test test-generated test-race test-bench test-fuzz test-coverage \
         tidy check-tidy \
         check check-coverage check-vuln \
         build clean release
@@ -16,7 +16,7 @@ GO      := go
 FLAGS   ?=
 
 # ─── Module directories ─────────────────────────────────────────
-MODULES := . clitest
+MODULES := .
 
 # ─── Paths ───────────────────────────────────────────────────────
 BIN_DIR      := bin
@@ -30,6 +30,9 @@ TEST_CPU         ?= 4
 TEST_COUNT       ?= 3
 TEST_TIMEOUT     ?= 10m
 TEST_RACE_COUNT  ?= 3
+# FUZZ_TIME is the per-target wall-clock budget for `go test -fuzz`.
+# Default keeps a CI run bounded; bump locally with FUZZ_TIME=5m.
+FUZZ_TIME        ?= 30s
 
 # ─── Build variables ─────────────────────────────────────────────
 VERSION    ?= dev
@@ -75,6 +78,7 @@ help:
 	@echo "  test               Run tests with coverage across all modules"
 	@echo "  test-race          Run tests with race detector"
 	@echo "  test-bench         Run all benchmarks"
+	@echo "  test-fuzz          Run every Fuzz* target for FUZZ_TIME (default: 30s)"
 	@echo "  test-coverage      Generate HTML coverage report"
 	@echo ""
 	@echo "$(GREEN)Quality gates:$(NC)"
@@ -93,6 +97,7 @@ help:
 	@echo "          TEST_COUNT=1                  iteration count for plain tests"
 	@echo "          TEST_RACE_COUNT=3             iteration count for test-race"
 	@echo "          TEST_CPU=8                    -cpu=N for parallel scheduling"
+	@echo "          FUZZ_TIME=5m                  per-target budget for test-fuzz"
 	@echo ""
 	@echo "$(RED)Naming:$(NC)  test-* runs tests; check-* enforces a quality gate"
 
@@ -127,10 +132,12 @@ generate:
 	@echo "$(BLUE)Running code generation...$(NC)"
 	$(call foreach_module,$(GO) generate ./...)
 	@echo "$(BLUE)Regenerating testdata golden files...$(NC)"
-	@for dir in gen/*/testdata/*/; do \
-		if [ -d "$$dir" ]; then \
-			(cd $$dir && GOWORK=off $(GO) generate ./... 2>/dev/null) || true; \
-		fi; \
+	@dirs=$$(grep -rl '//go:generate' --include='*.go' \
+		$$(find . -type d -path '*/testdata/*' -not -path './.git/*' -not -path './vendor/*' 2>/dev/null) 2>/dev/null \
+		| xargs -n1 dirname 2>/dev/null | sort -u); \
+	for dir in $$dirs; do \
+		echo "$(BLUE)  $$dir$(NC)"; \
+		(cd $$dir && $(GO) generate ./... 2>/dev/null) || true; \
 	done
 	@$(MAKE) fmt
 	@echo "$(GREEN)Done$(NC)"
@@ -167,86 +174,13 @@ lint-md:
 	markdownlint-cli2 "**/*.md" "#vendor" "#dist" "#node_modules"
 
 # ─── Generated testdata packages ────────────────────────────────
-# go test ./... excludes testdata/ by convention. These packages
-# contain generated code with tests that verify the generators
-# produce correct, compilable, 100%-covered output.
-GEN_TESTDATA := \
-	gen/testdata/basic/storetest \
-	gen/testdata/allshapes/servicetest \
-	gen/testdata/generics/cachetest \
-	gen/testdata/iterators/scannertest \
-	gen/testdata/nocontext/cachetest \
-	gen/testdata/erroronly/closertest \
-	gen/testdata/variadic/findertest \
-	gen/testdata/multireturns/servicetest \
-	gen/testdata/namedreturns/servicetest \
-	gen/testdata/noerror/cachetest \
-	gen/testdata/interfaces/processortest \
-	gen/testdata/voidctx/countertest \
-	gen/testdata/voidpure/streamtest \
-	gen/testdata/samples/hashertest \
-	gen/testdata/weird/weirdtest \
-	gen/testdata/companion/storetest \
-	gen/testdata/stubdirectives/runnertest \
-	gen/stub/testdata/basic/storetest \
-	gen/stub/testdata/directives/storetest \
-	gen/stub/testdata/noerror/cachetest \
-	gen/stub/testdata/variadic/findertest \
-	gen/stub/testdata/namedreturns/servicetest \
-	gen/stub/testdata/interfaces/processortest \
-	gen/stub/testdata/nocontext/closertest \
-	gen/stub/testdata/multireturns/servicetest \
-	gen/stub/testdata/companion/storetest \
-	gen/stub/testdata/newdirectives/runnertest \
-	gen/stub/testdata/iterators/scannertest \
-	gen/stub/testdata/generics/cachetest \
-	gen/builder/testdata/basic/basictest \
-	gen/builder/testdata/defaults/defaultstest \
-	gen/builder/testdata/fielddefaults/fielddefaultstest \
-	gen/builder/testdata/generics/genericstest \
-	gen/builder/testdata/nested/nestedtest \
-	gen/sentinel/testdata/basic \
-	gen/enum/testdata/basic \
-	gen/suite/testdata/basic/storetest \
-	gen/suite/testdata/nocontext/cachetest \
-	gen/suite/testdata/multireturn/servicetest \
-	gen/suite/testdata/mixed/processortest \
-	gen/suite/testdata/erroronly/closertest \
-	gen/suite/testdata/iterators/scannertest \
-	gen/suite/testdata/readers/registrytest \
-	gen/suite/testdata/writers/storetest \
-	gen/suite/testdata/allshapes/servicetest \
-	gen/suite/testdata/weird/weirdtest \
-	gen/suite/testdata/voidpure/streamtest \
-	gen/suite/testdata/samples/hashertest \
-	gen/suite/testdata/voidctx/countertest \
-	gen/suite/testdata/newshapes/devicetest \
-	gen/suite/testdata/generics/cachetest \
-	gen/bench/testdata/basic/storetest \
-	gen/bench/testdata/allshapes/servicetest \
-	gen/bench/testdata/generics/cachetest \
-	gen/model/testdata/basic/storetest \
-	gen/model/testdata/allshapes/servicetest \
-	gen/model/testdata/noncrud/closertest \
-	gen/model/testdata/unknown/processortest \
-	gen/model/testdata/keyfield/storetest \
-	gen/model/testdata/multisentinel/vaulttest \
-	gen/model/testdata/richstruct/storetest \
-	gen/model/testdata/generic/repotest \
-	gen/model/testdata/newshapes/machinetest \
-	gen/model/testdata/thesmos/registrytest \
-	gen/model/testdata/thesmos/statetest \
-	gen/model/testdata/thesmos/machinetest \
-	gen/model/testdata/thesmos/schedulertest \
-	gen/model/testdata/auditchain/auditlogtest \
-	gen/model/testdata/auditchain_partitioned/partlogtest \
-	gen/model/testdata/auditchain_causal/causallogtest \
-	gen/model/testdata/auditchain_hash/hashlogtest \
-	gen/model/testdata/timeaware/storetest \
-	gen/model/testdata/leakcheck/storetest \
-	gen/model/testdata/eventually/buffertest \
-	gen/model/testdata/thesmos/ledgertest \
-	gen/model/testdata/composed/composedtest
+# `go test ./...` excludes testdata/ by Go convention. These packages
+# carry generator output (and the tests that verify it compiles and
+# behaves). Discovered automatically: every directory under any
+# `testdata/` with a `*_test.go` file gets tested explicitly.
+GEN_TESTDATA := $(shell find . -path '*/testdata/*' -name '*_test.go' \
+	-not -path './.git/*' -not -path './vendor/*' \
+	-exec dirname {} \; 2>/dev/null | sort -u)
 
 # ─── Testing ─────────────────────────────────────────────────────
 
@@ -258,11 +192,14 @@ test: test-generated
 
 test-generated:
 	@echo "$(BLUE)Running generated testdata tests...$(NC)"
-	@for pkg in $(GEN_TESTDATA); do \
-		relpath=$$(echo $$pkg | sed 's|^gen/||'); \
-		echo "$(BLUE)  $$relpath$(NC)"; \
-		(cd gen && GOWORK=off $(GO) test -count=1 ./$$relpath/) || exit 1; \
-	done
+	@if [ -z "$(GEN_TESTDATA)" ]; then \
+		echo "$(YELLOW)  no testdata packages with tests$(NC)"; \
+	else \
+		for pkg in $(GEN_TESTDATA); do \
+			echo "$(BLUE)  $$pkg$(NC)"; \
+			$(GO) test -count=1 $$pkg || exit 1; \
+		done; \
+	fi
 	@echo "$(GREEN)Generated tests passed$(NC)"
 
 test-race:
@@ -273,6 +210,28 @@ test-race:
 test-bench:
 	@echo "$(BLUE)Running benchmarks (timeout=$(TEST_TIMEOUT))...$(NC)"
 	$(call foreach_module,$(GO) test -bench=. -run=^$$ -benchmem -timeout=$(TEST_TIMEOUT) $(FLAGS) ./...)
+
+# go test only fuzzes one target per invocation, so we discover every
+# Fuzz* function in the tree and run them sequentially. Each gets
+# FUZZ_TIME of wall-clock budget; bump it for deeper local runs.
+test-fuzz:
+	@echo "$(BLUE)Running fuzz tests (fuzztime=$(FUZZ_TIME))...$(NC)"
+	@found=0; \
+	for f in $$(grep -rl '^func Fuzz' --include='*_test.go' . 2>/dev/null); do \
+		pkg=$$(dirname $$f); \
+		names=$$(awk '/^func Fuzz/ { sub(/\(.*/, "", $$2); print $$2 }' $$f); \
+		for fn in $$names; do \
+			echo "$(BLUE)  $$pkg :: $$fn$(NC)"; \
+			regex="^$$fn$$"; \
+			$(GO) test -run='^$$$$' -fuzz="$$regex" -fuzztime=$(FUZZ_TIME) $$pkg || exit 1; \
+			found=$$((found + 1)); \
+		done; \
+	done; \
+	if [ $$found -eq 0 ]; then \
+		echo "$(YELLOW)  no fuzz tests found$(NC)"; \
+	else \
+		echo "$(GREEN)$$found fuzz target(s) ran for $(FUZZ_TIME) each$(NC)"; \
+	fi
 
 test-coverage: test
 	@echo "$(BLUE)Generating coverage reports...$(NC)"

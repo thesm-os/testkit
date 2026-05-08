@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"go.thesmos.sh/testkit/gen/suite"
+	"go.thesmos.sh/testkit/generator/suite"
 )
 
 var suiteCmd = &cobra.Command{

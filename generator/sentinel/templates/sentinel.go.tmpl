@@ -1,0 +1,28 @@
+{{- /*
+The "sentinel" template is the entry point invoked by the generator's
+[generator.Renderer]. It composes the partial templates that together
+form one sentinel _test.go file:
+
+  - "header"        — package + imports
+  - "sentinel-vars" — TestXxxSentinelErrors function (when there are
+                      Err* sentinels)
+  - "cross-pkg"     — TestXxxSentinelNoOverlapWith function per peer
+                      package declared via the
+                      //testkit:sentinel-no-overlap-with directive
+                      (G24)
+  - "error-type"    — TestXxxError function per custom error type
+                      (each in turn includes "error-type-is" and
+                      "error-type-unwrap" when those methods exist)
+*/ -}}
+{{define "sentinel"}}
+{{template "header" .}}
+{{- if .Sentinels}}
+{{template "sentinel-vars" .}}
+{{- end}}
+{{- if .Sentinels}}{{- range $cp := .CrossPackages}}
+{{template "cross-pkg" (dict "Local" $ "Peer" $cp)}}
+{{- end}}{{- end}}
+{{- range $et := .ErrorTypes}}
+{{template "error-type" $et}}
+{{- end}}
+{{end}}

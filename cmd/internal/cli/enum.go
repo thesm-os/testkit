@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"go.thesmos.sh/testkit/gen/enum"
+	"go.thesmos.sh/testkit/generator/enum"
 )
 
 var enumCmd = &cobra.Command{

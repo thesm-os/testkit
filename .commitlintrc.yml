@@ -26,29 +26,6 @@ rules:
       - chore
       - revert
 
-  # Allowed scopes — optional, but must be from this list when used.
-  scope-enum:
-    - 2 # error
-    - always
-    - - assertions    # Equal, ErrorIs, fluent Assert chain
-      - recording     # Recorder, filtering, waiting, hooks, gating
-      - fault         # FaultInjector
-      - bench         # StartContract, allocation/latency ceilings
-      - golden        # AssertGolden, scrubbers
-      - polling       # RetryUntil, AssertEventually
-      - concurrency   # ConcurrentStress, GoroutineLeak
-      - context       # Timeout
-      - helpers       # TestError, SeededRand, FailableTB, TableTest, etc.
-      - gen           # generator + validator engine
-      - cmd           # CLI wrapper
-      - container     # testcontainers sub-module
-      - httptest      # HTTP assertion sub-module
-      - oteltest      # OTel assertion sub-module
-      - clitest       # CLI testing sub-module
-      - ci            # CI/CD workflows
-      - deps          # dependency updates
-  scope-empty: [0]    # scope is optional
-
   # Subject line limits
   header-max-length: [2, always, 72]
   subject-empty: [2, never]

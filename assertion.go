@@ -237,6 +237,68 @@ func (a *Assertion[T]) IsWithin(lo, hi float64, msg string) *Assertion[T] {
 	return a
 }
 
+// HasPrefix calls tb.Fatalf if got (string or []byte) does not start
+// with prefix.
+//
+//	testkit.Assert(t, err.Error()).HasPrefix("store: ", "package prefix")
+func (a *Assertion[T]) HasPrefix(prefix, msg string) *Assertion[T] {
+	a.tb.Helper()
+	s, ok := stringOf(a.got)
+	if !ok {
+		a.tb.Fatalf("%s: HasPrefix requires string or []byte, got %T", msg, a.got)
+		return a
+	}
+	if !strings.HasPrefix(s, prefix) {
+		a.tb.Fatalf("%s: %q does not start with %q", msg, s, prefix)
+	}
+	return a
+}
+
+// HasSuffix calls tb.Fatalf if got (string or []byte) does not end
+// with suffix.
+//
+//	testkit.Assert(t, path).HasSuffix(".gen.go", "must be a generated file")
+func (a *Assertion[T]) HasSuffix(suffix, msg string) *Assertion[T] {
+	a.tb.Helper()
+	s, ok := stringOf(a.got)
+	if !ok {
+		a.tb.Fatalf("%s: HasSuffix requires string or []byte, got %T", msg, a.got)
+		return a
+	}
+	if !strings.HasSuffix(s, suffix) {
+		a.tb.Fatalf("%s: %q does not end with %q", msg, s, suffix)
+	}
+	return a
+}
+
+// ContainsInOrder calls tb.Fatalf if every needle is not present in
+// got (string or []byte) in the given order. Each needle must appear
+// after the previous one's match end — useful for catching reorder
+// regressions in formatted output.
+//
+//	testkit.Assert(t, err.Error()).
+//	    ContainsInOrder([]string{"basic:", "validation:", "test-field"},
+//	        "fields must render in source order")
+func (a *Assertion[T]) ContainsInOrder(needles []string, msg string) *Assertion[T] {
+	a.tb.Helper()
+	s, ok := stringOf(a.got)
+	if !ok {
+		a.tb.Fatalf("%s: ContainsInOrder requires string or []byte, got %T", msg, a.got)
+		return a
+	}
+	cursor := 0
+	for i, n := range needles {
+		idx := strings.Index(s[cursor:], n)
+		if idx < 0 {
+			a.tb.Fatalf("%s: needle[%d] %q not found after position %d in %q",
+				msg, i, n, cursor, s)
+			return a
+		}
+		cursor += idx + len(n)
+	}
+	return a
+}
+
 // Panics calls tb.Fatalf if got (which must be a func()) does not panic. If
 // got is not a func(), it fatals immediately.
 func (a *Assertion[T]) Panics(msg string) *Assertion[T] {

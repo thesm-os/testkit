@@ -1,0 +1,6 @@
+{{- /* Smoke template used by pipeline_test.go. Kept minimal: declares
+       a struct named after the analyzed type so tests can assert
+       output presence without a heavy fixture. */ -}}
+package smoke
+
+type {{.Type}} struct{}

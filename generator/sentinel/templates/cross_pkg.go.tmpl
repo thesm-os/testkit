@@ -1,0 +1,57 @@
+{{- /*
+The "cross-pkg" partial emits one Test<Pkg>SentinelNoOverlapWith<Peer>
+function per peer package declared via
+//testkit:sentinel-no-overlap-with. Each subtest asserts errors.Is
+returns false for every (local sentinel × peer sentinel) pair —
+catching cross-package alias bugs that would let a local
+ErrNotFound silently match a peer ErrMissing.
+
+Data input: a dict with two keys:
+
+  - "Local" — the full sentinel.Data of the package being generated
+  - "Peer"  — one sentinel.CrossPackage entry to render
+
+The dict shape is the standard text/template idiom for passing
+multiple values to a sub-template.
+*/ -}}
+{{define "cross-pkg"}}
+{{- $local := .Local}}{{- $peer := .Peer -}}
+// Test{{$local.TestName}}NoOverlapWith{{title $peer.Alias}} asserts
+// errors.Is returns false for every (local sentinel × peer sentinel)
+// pair. This catches cross-package alias bugs where, for example, a
+// local ErrNotFound silently matches a peer's ErrMissing because of a
+// shared underlying error value or a careless var aliasing.
+//
+// Driven by:
+//   //testkit:sentinel-no-overlap-with {{$peer.ImportPath}}
+func Test{{$local.TestName}}NoOverlapWith{{title $peer.Alias}}(t *testing.T) {
+	t.Parallel()
+
+	type errEntry struct {
+		name string
+		err  error
+	}
+	local := []errEntry{
+{{- range $local.Sentinels}}
+		{"{{.Name}}", {{$local.Qualifier}}{{.Name}}},
+{{- end}}
+	}
+	peer := []errEntry{
+{{- range $peer.Sentinels}}
+		{"{{.Name}}", {{$peer.Alias}}.{{.Name}}},
+{{- end}}
+	}
+
+	// One subtest per (local × peer) pair so a failure pinpoints the
+	// exact alias rather than reporting "some pair overlaps".
+	for _, l := range local {
+		for _, p := range peer {
+			t.Run(l.name+" must not match "+"{{$peer.Alias}}."+p.name, func(t *testing.T) {
+				t.Parallel()
+				testkit.ErrorIsNot(t, l.err, p.err,
+					l.name+" must not match {{$peer.Alias}}."+p.name)
+			})
+		}
+	}
+}
+{{end}}

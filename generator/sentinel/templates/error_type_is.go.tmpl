@@ -1,0 +1,47 @@
+{{- /*
+The "error-type-is" partial emits the three Is(error) bool subtests
+included only when the error type defines a custom Is method:
+
+  - Is matches same type
+  - Is matches across instances with different fields (when there are fields)
+  - Is rejects different error types
+
+Data input: one sentinel.ErrorType.
+*/ -}}
+{{define "error-type-is"}}
+	// Is(): a custom Is method must accept any other instance of the
+	// same type — otherwise errors.Is(*X{a}, *X{b}) breaks for callers
+	// that reasonably expect type-level equivalence.
+	t.Run("Is matches same type", func(t *testing.T) {
+		t.Parallel()
+		a := &{{.Qualifier}}{{.Name}}{}
+		b := &{{.Qualifier}}{{.Name}}{}
+		testkit.ErrorIs(t, a, b, "Is must match same type")
+	})
+{{- if .Fields}}
+
+	// Is() must not be field-sensitive — populating a non-zero field
+	// on either side must not change the match result.
+	t.Run("Is matches across instances with different fields", func(t *testing.T) {
+		t.Parallel()
+		a := &{{.Qualifier}}{{.Name}}{
+{{- range .Fields}}
+			{{.Name}}: {{.SampleValue}},
+{{- end}}
+		}
+		b := &{{.Qualifier}}{{.Name}}{}
+		testkit.ErrorIs(t, a, b,
+			"Is must match across instances regardless of field values")
+	})
+{{- end}}
+
+	// Is() must reject foreign error types — without this, every
+	// errors.Is(err, anything) on this type would return true.
+	t.Run("Is rejects different error types", func(t *testing.T) {
+		t.Parallel()
+		err := &{{.Qualifier}}{{.Name}}{}
+		other := errors.New("different error")
+		testkit.ErrorIsNot(t, err, other,
+			"Is must reject different error types")
+	})
+{{end}}

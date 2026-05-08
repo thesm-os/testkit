@@ -1,0 +1,129 @@
+{{- /*
+The "error-type" partial emits Test<TypeName> — one test function per
+custom error type. Always-emitted subtests cover errors.As round-trip,
+errors.Join wrapping, fmt.Errorf wrapping, Error() format strictness
+(ContainsInOrder over FormatCheckOrder, when at least one field
+contributes a check value), and non-overlap with the package's
+other error types. Conditional Is/Unwrap coverage is delegated to
+two sibling partials so this file stays focused.
+
+Data input: one sentinel.ErrorType.
+*/ -}}
+{{define "error-type"}}
+// Test{{.Name}} verifies the *{{.Qualifier}}{{.Name}} contract:
+//
+//   - errors.As round-trip:    extracted instance preserves every field
+//   - errors.Join wrapping:    errors.As succeeds through errors.Join
+//   - fmt.Errorf wrapping:     errors.As succeeds through fmt.Errorf("%w")
+//   - Error() format:          output includes every field value in source order
+{{- if .OtherTypes}}
+//   - non-overlap:             does not alias other custom error types via errors.Is
+{{- end}}
+{{- if .HasIs}}
+//   - Is method:               accepts same-type instances regardless of field values, rejects foreign errors
+{{- end}}
+{{- if .HasUnwrap}}
+//   - Unwrap method:           returns the cause field; errors.Is traverses the chain; nil when unset
+{{- end}}
+func Test{{.Name}}(t *testing.T) {
+	t.Parallel()
+
+	// errors.As must extract the concrete error type and round-trip
+	// every exported field value back to the caller.
+	t.Run("errors.As extracts type", func(t *testing.T) {
+		t.Parallel()
+{{- range .Fields}}
+		want{{.Name}} := {{.SampleValue}}
+{{- end}}
+		err := &{{.Qualifier}}{{.Name}}{
+{{- range .Fields}}
+			{{.Name}}: want{{.Name}},
+{{- end}}
+		}
+		target := testkit.ErrorAs[*{{.Qualifier}}{{.Name}}](t, err,
+			"errors.As must succeed for *{{.Name}}")
+{{- range .Fields}}
+{{- if .IsError}}
+		testkit.ErrorIs(t, target.{{.Name}}, want{{.Name}},
+			"{{.Name}} must round-trip through errors.As")
+{{- else}}
+		testkit.Equal(t, target.{{.Name}}, want{{.Name}},
+			"{{.Name}} must round-trip through errors.As")
+{{- end}}
+{{- end}}
+	})
+
+	// errors.As must keep working when the error is one branch of an
+	// errors.Join multi-error — confirms the type is reachable through
+	// the Join tree, not just at the top level.
+	t.Run("survives errors.Join wrapping", func(t *testing.T) {
+		t.Parallel()
+		original := &{{.Qualifier}}{{.Name}}{
+{{- range .Fields}}
+			{{.Name}}: {{.SampleValue}},
+{{- end}}
+		}
+		wrapped := errors.Join(original, errors.New("extra context"))
+		_ = testkit.ErrorAs[*{{.Qualifier}}{{.Name}}](t, wrapped,
+			"errors.As must work through errors.Join")
+	})
+
+	// errors.As must keep working when the error is wrapped via
+	// fmt.Errorf("...: %w", err) — the canonical Go wrapping idiom.
+	t.Run("survives fmt.Errorf wrapping", func(t *testing.T) {
+		t.Parallel()
+		original := &{{.Qualifier}}{{.Name}}{
+{{- range .Fields}}
+			{{.Name}}: {{.SampleValue}},
+{{- end}}
+		}
+		wrapped := fmt.Errorf("context: %w", original)
+		_ = testkit.ErrorAs[*{{.Qualifier}}{{.Name}}](t, wrapped,
+			"errors.As must work through fmt.Errorf")
+	})
+
+	// Error() output must (a) be non-empty and (b) include every
+	// identifiable field value in source declaration order. Catches
+	// regressions where a refactor drops a field from the format
+	// string or reorders them past a reader's expectation.
+	t.Run("Error format includes all fields in source order", func(t *testing.T) {
+		t.Parallel()
+		err := &{{.Qualifier}}{{.Name}}{
+{{- range .Fields}}
+			{{.Name}}: {{.SampleValue}},
+{{- end}}
+		}
+		got := err.Error()
+		testkit.Assert(t, got).IsNotEmpty("Error() must return non-empty string")
+{{- if .FormatCheckOrder}}
+		testkit.ContainsInOrder(t, got,
+			[]string{ {{- range $i, $v := .FormatCheckOrder}}{{if $i}}, {{end}}"{{$v}}"{{end}} },
+			"Error() must include every field value in source order")
+{{- end}}
+	})
+{{- if .OtherTypes}}
+
+	// Each custom error type must be distinct from every other custom
+	// error type in the package — errors.Is on a foreign type must
+	// return false. Catches degenerate Is() implementations that
+	// silently match unrelated types.
+	t.Run("does not match other error types in package", func(t *testing.T) {
+		t.Parallel()
+		err := &{{.Qualifier}}{{.Name}}{}
+{{- range .OtherTypes}}
+		t.Run("not {{.}}", func(t *testing.T) {
+			t.Parallel()
+			testkit.ErrorIsNot(t, err, &{{$.Qualifier}}{{.}}{},
+				"*{{$.Name}} must not match *{{.}}")
+		})
+{{- end}}
+	})
+{{- end}}
+{{- if .HasIs}}
+{{template "error-type-is" .}}
+{{- end}}
+{{- if .HasUnwrap}}
+{{template "error-type-unwrap" .}}
+{{- end}}
+}
+{{end}}

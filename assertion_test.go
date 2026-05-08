@@ -539,6 +539,114 @@ func TestAssertion_Panics(t *testing.T) {
 	})
 }
 
+func TestAssertion_HasPrefix(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matching prefix passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "store: not found").HasPrefix("store: ", "package prefix")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("missing prefix fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "different").HasPrefix("store: ", "package prefix")
+		if !f.Failed() {
+			t.Fatal("should fail")
+		}
+	})
+
+	t.Run("non-string subject fails immediately", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, 42).HasPrefix("anything", "wrong type")
+		if !f.Failed() {
+			t.Fatal("should fail for non-string subject")
+		}
+	})
+
+	t.Run("[]byte is also accepted", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, []byte("hello world")).HasPrefix("hello", "byte prefix")
+		if f.Failed() {
+			t.Fatalf("should pass for []byte, got: %s", f.Msg())
+		}
+	})
+}
+
+func TestAssertion_HasSuffix(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matching suffix passes", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "foo.gen.go").HasSuffix(".gen.go", "generated")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("non-matching suffix fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "foo.go").HasSuffix(".gen.go", "generated")
+		if !f.Failed() {
+			t.Fatal("should fail")
+		}
+	})
+}
+
+func TestAssertion_ContainsInOrder(t *testing.T) {
+	t.Parallel()
+
+	t.Run("ordered needles pass", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "basic: validation: field: msg").
+			ContainsInOrder([]string{"basic:", "validation:", "field", "msg"},
+				"all in order")
+		if f.Failed() {
+			t.Fatalf("should pass, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("out-of-order needles fail", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "msg: field").
+			ContainsInOrder([]string{"field", "msg"}, "wrong order")
+		if !f.Failed() {
+			t.Fatal("should fail")
+		}
+	})
+
+	t.Run("non-string subject fails immediately", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, 42).ContainsInOrder([]string{"x"}, "wrong type")
+		if !f.Failed() {
+			t.Fatal("should fail for non-string subject")
+		}
+	})
+
+	t.Run("chains with other matchers", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, "store: ok").
+			HasPrefix("store: ", "prefix").
+			ContainsInOrder([]string{"store:", "ok"}, "ordered").
+			IsNotEmpty("non-empty")
+		if f.Failed() {
+			t.Fatalf("chain should pass, got: %s", f.Msg())
+		}
+	})
+}
+
 func TestAssertion_chaining(t *testing.T) {
 	t.Parallel()
 

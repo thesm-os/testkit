@@ -27,7 +27,6 @@ linters:
     - gosec
     - govet
     - nilerr
-    - noinlineerr
     - predeclared
     - staticcheck
     - unused
@@ -81,7 +80,7 @@ linters:
           list-mode: strict
           files:
             - "!**/cmd/**"
-            - "!**/gen/**"
+            - "!**/generator/**"
             - "!**/container/**"
             - "!**/httptest/**"
             - "!**/oteltest/**"
@@ -100,25 +99,25 @@ linters:
             - $gostd
             - go.thesmos.sh/testkit
             - go.thesmos.sh/testkit/cmd
-            - go.thesmos.sh/testkit/gen
+            - go.thesmos.sh/testkit/generator
             - github.com/google/go-cmp
             - github.com/spf13/cobra
             - github.com/spf13/viper
-        gen:
+        generator:
           list-mode: lax
           files:
-            - "**/gen/**"
+            - "**/generator/**"
           deny:
             - pkg: go.thesmos.sh/testkit/cmd
-              desc: "gen must not import cmd"
+              desc: "generator must not import cmd"
             - pkg: go.thesmos.sh/testkit/container
-              desc: "gen must not import sub-packages"
+              desc: "generator must not import sub-packages"
             - pkg: go.thesmos.sh/testkit/httptest
-              desc: "gen must not import sub-packages"
+              desc: "generator must not import sub-packages"
             - pkg: go.thesmos.sh/testkit/oteltest
-              desc: "gen must not import sub-packages"
+              desc: "generator must not import sub-packages"
             - pkg: go.thesmos.sh/testkit/clitest
-              desc: "gen must not import sub-packages"
+              desc: "generator must not import sub-packages"
         container:
           list-mode: strict
           files:
@@ -185,9 +184,8 @@ linters:
       disabled-checks:
         - ifElseChain
         - commentedOutCode
+        - hugeParam
       settings:
-        hugeParam:
-          sizeThreshold: 256
         rangeValCopy:
           sizeThreshold: 256
 

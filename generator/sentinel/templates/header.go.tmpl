@@ -1,0 +1,50 @@
+{{- /*
+The "header" partial emits the file's package declaration and import
+block. Imports adjust to what the body actually uses — fmt is only
+imported when at least one error-type test is rendered, and each peer
+package referenced by a //testkit:sentinel-no-overlap-with directive
+gets its own import line.
+
+Data input: the full sentinel.Data.
+*/ -}}
+{{define "header"}}
+// This file verifies the package's sentinel error variables and custom
+// error types satisfy a battery of stdlib contracts:
+//
+//   - sentinels share a "{{.Prefix}}" prefix and have unique .Error() messages
+//   - errors.Is rejects every cross-pair (no two sentinels alias)
+//   - sentinels survive errors.Join and fmt.Errorf("%w") wrapping
+//   - custom error types round-trip through errors.As
+//   - Error() output orders every field value in source declaration order
+//   - error types do not alias one another via errors.Is
+//   - Is/Unwrap methods (when present) behave per the stdlib contract
+{{- if .CrossPackages}}
+//   - this package's sentinels do not alias any peer package's sentinels
+{{- end}}
+{{- if .Directives}}
+//
+// Directives consumed:
+{{- range .Directives}}
+//   {{.}}
+{{- end}}
+{{- end}}
+package {{.PackageName}}
+
+import (
+	"errors"
+{{- if .ErrorTypes}}
+	"fmt"
+{{- end}}
+	"strings"
+	"testing"
+{{- if .ImportPath}}
+
+	"{{.ImportPath}}"
+{{- end}}
+{{- range .CrossPackages}}
+	"{{.ImportPath}}"
+{{- end}}
+
+	"go.thesmos.sh/testkit"
+)
+{{end}}
