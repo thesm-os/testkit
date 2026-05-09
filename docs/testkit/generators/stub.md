@@ -174,15 +174,17 @@ Alongside the stub, a `_test.go` file exercises the generated plumbing — every
 
 ## Directive-driven additions
 
-The generator reads `//testkit:` directives and emits per-method helpers:
+The generator reads `//testkit:` directives and emits per-method helpers or alters dispatch logic:
 
 | Directive | Effect |
 |-----------|--------|
-| `errors ErrA ErrB` | One `Fault<ShortName>()` helper per sentinel: `s.OnGet.FaultNotFound()` calls `s.Faults(ErrNotFound, 1)` |
-| `deprecated <Replacement>` | Adds `tb.Logf("<Method> is deprecated, use <Replacement> instead")` at the top of dispatch (only if tb is non-nil) |
-| `integration-only` | Skips stub emission for that method — the interface-check still includes it; consumers must implement it via `DelegateTo` |
-
-`partition`, `order-after`, and `retry-succeeds-on-attempt` are documented in the directive vocabulary but their stub-side helpers are not yet emitted.
+| `errors ErrA ErrB` | Emits a `Fault<ShortName>()` helper per sentinel (e.g., `s.OnGet.FaultNotFound()` calls `s.Faults(ErrNotFound, 1)`). |
+| `wrapped-via Target` | Modifies the `Fault<ShortName>()` helpers to wrap the sentinel via the specified target error struct. |
+| `deprecated <Replacement>` | Injects `tb.Logf("<Method> is deprecated, use <Replacement> instead")` at the top of the generated dispatch (if `tb` is non-nil). |
+| `integration-only` | Skips stub emission for that method. The compile-time interface check still includes it, so consumers must wire it via `DelegateTo`. |
+| `retry-succeeds-on-attempt N` | Emits a `RetrySchedule(err)` helper that returns a fault sequence simulating a transient failure that succeeds on the Nth attempt. |
+| `partition Field` | Emits `FaultForPartition` and `FaultForOtherPartitions` helpers to inject faults isolated to a specific request parameter (e.g., isolating a network fault to a specific tenant ID). |
+| `order-after Method` | Emits an `AssertAfter` check inside the dispatch body (active in strict mode) to fatal the test if the method is called out of order. |
 
 ## Usage patterns
 
@@ -398,6 +400,19 @@ s := storetest.NewStoreStub(t,
 | No way to assert "the data the test wrote is what it reads back" | Real state means real round-trip works |
 
 The companion is the substrate for any integration-grade test where the stub would otherwise need an unreasonable number of `Returns` calls. The stub layer remains useful — it adds recording, fault injection, expectations, observation hooks — without forcing the test to also write the domain logic.
+
+## Layout Conventions
+
+A typical interface generates its stub into a `<pkg>test/` sub-package. This prevents test-infrastructure code from bloating the production binary and clearly delineates the testing surface.
+
+**What goes where:**
+
+| File | Owner | Contents |
+|------|-------|----------|
+| `*_stub.gen.go` | Generator | The generated recording stub (DO NOT EDIT). |
+| `*_stub.gen_test.go` | Generator | The self-verifying test suite for the generated stub (DO NOT EDIT). |
+| `companion.go` | Developer | The hand-written fake or in-memory implementation (e.g., `InMemoryStore`). |
+| `setup.go` | Developer | Test helpers that construct the `NewStoreStub(t, StoreStubDelegateTo(companion))` wiring. |
 
 ## See also
 

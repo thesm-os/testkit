@@ -2,6 +2,14 @@
 
 `RandSource` is a pluggable random-number-generator interface used by probabilistic fault injection. testkit defines the interface; consumers inject their own deterministic RNG (e.g., a simulation engine's seeded PCG) when reproducibility matters.
 
+## The Architectural Pattern
+
+Why require a `RandSource` interface instead of relying on `math/rand`?
+
+If a test fails because a probabilistic network fault fired at the worst possible moment, you must be able to reproduce that exact failure to fix it. If the fault relies on the global `math/rand` source, reproducing the exact sequence of "random" events across thousands of concurrent goroutines is mathematically impossible. 
+
+The `RandSource` interface allows the `model`, `sim`, and `chaos` harnesses to inject a single, master-seeded PRNG. If a property test finds a failing trace on iteration 42,901, the engine simply hands you the seed. Supplying that seed to your local environment guarantees the `RandSource` will yield the exact same sequence of probabilities, firing the exact same faults, reproducing the bug instantly.
+
 ## Interface
 
 ```go

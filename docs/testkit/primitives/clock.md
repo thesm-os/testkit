@@ -2,6 +2,14 @@
 
 `Clock` abstracts time operations for deterministic testing. testkit defines the interface; consumers inject implementations. The default is real wall-clock time (`RealClock`); tests use `TestClock` for manual advancement; simulation engines plug in their own clock that drives every method, fault, and recorder timestamp from a single virtual timebase.
 
+## The Architectural Pattern
+
+Why require a `Clock` interface instead of just using `time.Now()` and `time.Sleep()`?
+
+Real-time tests in distributed systems are fundamentally flawed. A `time.Sleep(100ms)` race condition that passes consistently on a developer's fast laptop will inevitably fail on a busy, resource-constrained CI runner. Furthermore, wall-clock fault windows are impossible to reproduce—a fault configured to fire at "12:00:00" cannot be replayed deterministically if the test fails.
+
+The `Clock` interface separates the *concept* of time ("I need a timestamp" or "I need to wait") from the *execution* of time. In production, your code uses the real wall-clock. In tests, you inject a virtual `TestClock`. Time only advances when your test explicitly calls `clk.Advance()`, completely eliminating scheduling flakes and ensuring 100% reproducible execution traces.
+
 ## Interface
 
 ```go

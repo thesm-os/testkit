@@ -2,6 +2,14 @@
 
 `Recorder[T]` is the thread-safe call log that captures values of type `T`. It is the core observation primitive used by `MethodStub`, simulation drivers, and integration tests.
 
+## The Architectural Pattern
+
+Why use a generic `Recorder[T]` instead of just appending to a slice, or using a traditional mock expectation like `mock.AssertCalled("Method", arg)`?
+
+1. **Thread Safety & Isolation:** In concurrent tests (especially under Tier 2/3 `model` linearizability checking), thousands of goroutines might hit your stub simultaneously. Slices race; traditional mocks often hold global locks that skew performance. `Recorder[T]` is highly optimized for concurrent appends.
+2. **Asynchronous Causality:** Distributed systems are asynchronous. A call to `Put` might eventually trigger a call to `Notify`. `Recorder` provides `WaitForN` and `WaitFor` (backed by condition variables, not polling) to deterministically synchronize tests across goroutine boundaries without `time.Sleep()`.
+3. **Simulation Hooks & Gating:** In Tier 5 simulation, you need to precisely control the ordering of events. `Recorder` allows you to install synchronous `Hooks` to broadcast events to a trace engine, and `Gates` to deliberately block execution until a specific condition is met, allowing you to synthesize and test impossible race conditions.
+
 ## Construction and basic recording
 
 ```go

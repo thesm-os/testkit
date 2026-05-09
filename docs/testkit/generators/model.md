@@ -1,15 +1,18 @@
 # Model
 
-> **Status: planned.** The `model` subcommand is wired into the CLI but the analyze + render implementation has not yet landed; invocations return a port-pending error. This document records the intended design — shape vocabulary, directive surface, runner semantics — so consumers can plan adoption against a stable target.
+> **Status: planned.** The `model` subcommand is wired into the CLI but the analyze + render implementation has not yet landed. Invocations return a port-pending error. This document records the intended design so consumers can plan adoption against a stable target.
 
-Tier 2-3 conformance. Reads a Go interface, classifies each method by shape, and emits a `rapid`-driven property-based state-machine harness. Every iteration constructs a fresh SUT and (optionally) a reference implementation, runs a random sequence of actions drawn from the interface methods, and checks:
+Tier 2-3 conformance. The `model` generator elevates your testing from "single-call assertions" (Tier 1) to **Property-Based State Machines**.
 
-- **Differential correctness** — SUT and reference produce identical results for every action.
-- **Auto-derived laws** — shape-specific invariants (ReadAfterWrite, DeleteReturnsNotFound, PureDeterminism, etc.) checked after every action.
-- **Trace combinators** — temporal assertions across the action sequence (AfterEvery, EventuallyAfter, Never).
-- **Goroutine leak detection** — compares goroutine sets before and after the property run.
+It reads a Go interface, detects the mathematical *shape* of every method, and emits a rigorous verification harness that attacks your implementation with randomized, concurrent, and adversarial sequences of operations, shrinking failures down to the minimal reproducing trace.
 
-When a failure is found, rapid shrinks the action sequence to the minimal reproducer.
+## The Technologies Explained
+
+To understand the `model` generator, you must understand the three formal verification techniques it orchestrates for you:
+
+1. **Property-Based Testing (PBT):** Instead of writing explicit "Arrange-Act-Assert" tests (e.g., `Put("A", 1)`, then `Get("A") == 1`), PBT declares generic "Laws" (e.g., `ReadAfterWrite`). The engine ([`pgregory.net/rapid`](https://pgregory.net/rapid)) generates thousands of random operation sequences. If a sequence breaks a Law, the engine "shrinks" the trace, intelligently removing operations until it finds the exact 3-step sequence that triggered the bug.
+2. **Bounded Model Checking (BMC):** A deterministic alternative to PBT's randomized exploration. The harness performs a Depth-First Search (DFS) over the entire state space of your interface, restricted by a configurable boundary (e.g., max 5 steps deep). It exhaustively proves that *no* path within those bounds violates your invariants.
+3. **Linearizability Checking:** In concurrent systems, operations overlap. How do you assert correctness when 10 goroutines are calling `Put` and `Get` simultaneously? The harness uses [`anishathalye/porcupine`](https://github.com/anishathalye/porcupine) to record the start and end times of every operation. It then mathematically proves whether that concurrent history could have been serialized into a strict, step-by-step sequence that obeys your sequential Laws.
 
 ## Directive
 
@@ -23,172 +26,164 @@ When a failure is found, rapid shrinks the action sequence to the minimal reprod
 
 `<package>test/<subject>_model.gen.go`.
 
-## What is generated
+## The Three-Tier Shape Taxonomy
 
-For a CRUD interface:
+While the `suite` generator relies strictly on method signatures (Tier 1), the `model` generator analyzes the broader topology of your interface to infer multi-method state machines.
+
+### Tier 1: Signature-tier (21 shapes)
+The baseline detection. Evaluates a single method isolated from its peers.
+*   **Reading Band:** `Reader`, `BatchReader`, `Lookup`
+*   **Writing Band:** `Writer`, `Mutator`, `Deleter`
+*   **Streaming Band:** `StreamReader`, `StreamConsumer`
+*   **Lifecycle Band:** `Aggregator`, `Lifecycle`, `Pure`
+*(See [Shapes](shapes.md) for the full taxonomy).*
+
+### Tier 2: Contract-tier (12 shapes)
+Detected by looking at sibling methods, struct fields, and parameter types across the interface.
+*   `CompareAndSwap` (takes Version, sibling Reader returns Version).
+*   `GetOrCompute` (takes a `func() V`).
+*   `AcquireLease` (sibling `Release` exists).
+*   `Watcher` / `Publisher` / `Subscriber`.
+*   *(And 6 others: `TransactionFunc`, `Paginator`, `Persister`, `Updater`, `Upserter`, `Appender`)*
+
+### Tier 3: Composite-tier (4 shapes)
+Multi-method shapes that form closed-loop state machines.
+*   `Pool` (Balanced `Get`/`Put` or `Acquire`/`Release`).
+*   `Cursor` (Interface has both `Next()` and `Close()`).
+*   `TwoPhase` (Returns a Tx with `Commit()` and `Rollback()`).
+*   `Saga` (Chained methods passing results forward; requires `//testkit:saga` directive).
+
+## The Orthogonal Axis: Mixins
+
+Mixins apply orthogonal behavioral properties to any shape via `//testkit:` directives. The `model` generator ships with **31 mixins**, which automatically emit corresponding verification laws.
+
+**Examples:**
+*   `//testkit:idempotent`: Emits a law proving `F(x); F(x) == F(x)`.
+*   `//testkit:commutative`: Emits a law proving `A;B == B;A` (for Mutators).
+*   `//testkit:associative`: Emits a law proving `(A;B);C == A;(B;C)`.
+*   `//testkit:tamper-evident`: Adds post-write corruption detection.
+*   `//testkit:leak-free`: Wraps the execution to detect goroutine/FD leaks across cycles.
+*   `//testkit:point-in-time`: Enforces snapshot isolation semantics for readers.
+
+*(Applying a mixin to an incompatible shape—e.g., `//testkit:commutative` on a `Lifecycle` method—results in a hard codegen error, never a silent fallback).*
+
+## What is Generated
+
+For an interface `Store`, the generator emits four entry points into `<pkg>test`:
 
 ```go
-type Store interface {
-    //testkit:errors ErrNotFound
-    Get(ctx context.Context, id string) (Item, error)
-    Put(ctx context.Context, item Item) error
-    //testkit:deleter
-    Delete(ctx context.Context, id string) error
-    Count(ctx context.Context) (int, error)
-    Close(ctx context.Context) error
-    Describe() string
-    IsEmpty() bool
-    List(ctx context.Context) iter.Seq2[Item, error]
-}
-```
-
-the generator emits four entry points:
-
-```go
-// Run as a standard test with default 100 iterations.
+// Run as a standard PBT test (default 100 iterations).
 func StoreModelTest(t *testing.T, factory func() store.Store, opts ...StoreModelOption)
 
-// Run as a rapid property test (custom iteration control).
+// Run as a PBT test with custom rapid.T configuration.
 func StoreModelAssert(t *testing.T, factory func() store.Store, opts ...StoreModelOption)
 
-// Run as a fuzz target for corpus-driven exploration.
+// Run as a native Go fuzz target for corpus-driven exploration.
 func StoreModelFuzz(f *testing.F, factory func() store.Store, opts ...StoreModelOption)
 
-// Exported property function for advanced composition.
+// Exported property function for advanced harness composition.
 func StoreModelProperty(factory func() store.Store, opts ...StoreModelOption) func(*model.T)
 ```
 
-## Actions by shape
+## State Machine Execution
 
-Each method is classified into a shape and gets an auto-generated action helper. CRUD shapes (Reader, Writer, Deleter) produce comparison actions that call both SUT and reference and diff results. Non-CRUD shapes produce stress-only actions when no reference is available.
+During execution, `rapid` drives the `StoreModelTest` harness:
+1.  It instantiates a fresh System Under Test (SUT) via your `factory`.
+2.  It selects a random `Action` (derived from your interface's methods).
+3.  It generates fuzzed arguments for that Action.
+4.  It applies the Action to the SUT.
+5.  It evaluates all **Auto-Derived Laws** against the new state.
+6.  It loops this sequence (default 100 times per test run).
 
-| Shape | Action behavior | Example methods |
-|-------|----------------|-----------------|
-| Reader | `action.Reader` — compare `(V, error)` from SUT and ref | `Get(ctx, K) (V, error)` |
-| ReaderWithBool | `action.ReaderWithBool` — compare `(V, bool)` | `Load(ctx, K) (V, bool)` |
-| Lookup | `action.Stress` — call SUT only | `Inspect(K) (V, R, bool)` |
-| Writer | `action.Writer` — compare `error` from SUT and ref | `Put(ctx, V) error` |
-| Mutator | `action.Mutator` — call both SUT and ref | `Add(ctx, int64)` |
-| Deleter | `action.Deleter` — compare `error` from SUT and ref | `Delete(ctx, K) error` |
-| Aggregator | `action.Aggregator` — compare `(V, error)` | `Count(ctx) (int, error)` |
-| Lifecycle | `action.Lifecycle` — compare `error` | `Close(ctx) error` |
-| Pure | `action.Pure` — compare return values | `Describe() string` |
-| Predicate | `action.Predicate` — compare `bool` | `IsEmpty() bool` |
-| StreamReader | `action.Stream` — collect and compare elements | `List(ctx) iter.Seq2[V, error]` |
-| PoisonAccessor | `action.PoisonCheck` — compare `error` | `Err() error` |
-| Unknown | `action.Stress` — call SUT only, no comparison | Anything else |
+If any law fails, `rapid` halts and begins **shrinking**, manipulating the sequence of actions and their arguments to present you with the absolute smallest reproducible failure trace.
 
-Methods annotated with `//testkit:nondeterministic` emit `action.Stress` instead of comparison actions, even for shapes that would normally compare.
+### The Law Engine: Auto-Derived Invariants
 
-## Auto-derived laws
+A "Law" in `testkit` is a formal invariant evaluated after an action executes. The generator auto-derives over 80 distinct laws by cross-referencing your interface's shapes and mixins. Laws are categorized by their statefulness:
 
-Laws are invariants checked after every action in the sequence. The generator auto-derives laws from the interface shape:
+#### Stateless Laws (Pre/Post Call)
+These laws evaluate the result of a single action against the current state.
+*   **`AUTO-READ-AFTER-WRITE`:** (Requires `Reader` + `Writer` + `KeyField`). After a successful write, the harness automatically invokes the Reader with the same key and asserts the returned value exactly matches the written value.
+*   **`AUTO-DELETE-RETURNS-NOT-FOUND`:** (Requires `Reader` + `Deleter` + `//testkit:errors ErrNotFound`). After a successful delete, the harness invokes the Reader and asserts `errors.Is(err, ErrNotFound)`.
+*   **`AUTO-PURE-DETERMINISM`:** (Requires `Pure` shape). The harness caches the result of the first invocation. All subsequent invocations during the property run must return the exact same value.
+*   **`AUTO-STREAM-REENTRANCY`:** (Requires `StreamReader`). The harness consumes the iterator twice and asserts both passes yielded identical sequences.
 
-| Law | Condition | What it checks |
-|-----|-----------|----------------|
-| `ReadAfterWrite` | Has Reader + Writer + KeyField | Write then read with same key returns the written value |
-| `DeleteReturnsNotFound` | Has Reader + Deleter + errors ErrNotFound | Delete then read returns ErrNotFound |
-| `CountEqualsReference` | Has Aggregator + RefFactory | SUT count matches reference count |
-| `PureDeterminism` | Has Pure methods (not `nondeterministic`) | N calls with same input produce identical output |
-| `PredicateConsistency` | Has Predicate methods (not `nondeterministic`) | N calls produce same bool |
-| `StreamReentrancy` | Has StreamReader methods | Two collect passes produce same elements |
+#### Stateful Laws (Temporal & Trace-Aware)
+These laws analyze the *entire history* of actions executed so far.
+*   **`AUTO-APPENDER-MONOTONIC`:** (Requires `Appender`). Scans the trace to ensure every returned offset/index is strictly greater than the previous one.
+*   **`AUTO-POOL-BALANCED`:** (Requires `Pool` composite shape). Analyzes the trace to ensure every `Acquire` is matched by a `Release` before the run terminates, and that no `Release` is called twice for the same resource.
 
-Laws are suppressed per-method with `//testkit:nondeterministic` (e.g., `Clock.Now()`).
+### Trace Combinators (Temporal Logic)
 
-## Concurrent stress
+You are not limited to auto-derived laws. You can compose complex, domain-specific temporal logic by supplying `model.Law[T]` implementations via `StoreModelExtraLaws`. The `model` package provides Trace Combinators that evaluate predicates over the historical action sequence:
 
-When configured with `StoreModelConcurrent(opts...)`, the runner spawns multiple goroutines executing random actions against a shared SUT. CRUD shapes (Reader, Writer, Deleter) get Porcupine linearizability checking — the recorded operation history is verified against a sequential specification. Non-CRUD shapes are stress-tested without linearizability (call-only, checking for panics and races).
+*   **`model.AfterEvery(trigger, check)`:** A strict causality constraint. Example: After every `BeginTx` action, the *very next* action involving that Tx ID must be `Commit` or `Rollback`.
+*   **`model.EventuallyAfter(trigger, check, budget)`:** A liveness constraint for AP systems. Example: After a `Publish` action, the message must be observable via `Read` within `budget` subsequent actions (simulating asynchronous replication delay).
+*   **`model.Never(check)`:** A safety constraint. Example: The state must never reflect a balance below zero.
 
-## Trace combinators
+### Mutation Testing (Runtime Differential)
 
-Laws can include temporal assertions over the action trace:
+How do you know if your Laws are strict enough? The `model` generator includes a built-in Mutation Testing engine. 
 
-- **`AfterEvery(trigger, check)`** — after every action matching `trigger`, the next action must satisfy `check`.
-- **`EventuallyAfter(trigger, check, budget)`** — after `trigger`, `check` must hold within `budget` subsequent actions.
-- **`Never(check)`** — `check` must never hold in any action.
+When enabled, the runner instantiates a parallel "Shadow" SUT. It intercepts operations bound for the shadow SUT and injects adversarial mutations:
+*   `DropWrites`: Silently ignores a `Put` operation.
+*   `ReturnWrongValue`: Alters a `Get` result.
+*   `RandomDelay`: Sleeps unpredictably to expose race conditions.
+*   `OffByOneIndex`: Corrupts paginator cursors.
 
-Trace combinators are attached via `StoreModelExtraLaws`.
+The runner then verifies that your Law suite **catches** the mutant (i.e., at least one Law fails). If the mutant survives the entire sequence, your Laws are too weak.
 
-## TimeDriven integration
+## The Reference Pattern (Differential Rollout)
 
-Interfaces annotated with `//testkit:time-aware` on any method get `TestClock` integration. The generator emits `StoreModelClockFactory(func(clock.Clock) Store)` — the runner creates paired `TestClock` instances for SUT and reference, advances both by the same random duration between actions, and injects the clock into the factory.
+The most powerful way to test a complex system is to compare it to a simple one. The `model` harness supports **Differential Correctness**.
 
-## Directives consumed
-
-| Directive | Effect |
-|-----------|--------|
-| `errors ErrX` | Auto-derives `DeleteReturnsNotFound` law when Reader+Deleter present |
-| `deleter` | Marks method as Deleter shape |
-| `mutator` | Marks method as Mutator shape |
-| `keyfield FieldName` | Key extraction for reference map synthesis |
-| `nondeterministic` | Suppresses determinism laws; emits `action.Stress` instead of comparison |
-| `time-aware` | Enables `TestClock` pair injection |
-| `appends` | Chain: marks append operation |
-| `verifies` | Chain: marks integrity verifier |
-| `replays` | Chain: marks replay/stream operation |
-| `partition-by Field` | Chain: partition key field |
-| `entry-id Field` | Chain: unique entry ID field |
-| `depends-on Field` | Chain: causal dependency field |
-| `hash Pkg.Func` | Chain: custom hash function |
-| `integration-only` | Skips method entirely |
-
-## Extension points
+You can supply a "Reference Implementation" (typically a `testkit stub` wrapping a naive in-memory map):
 
 ```go
 storetest.StoreModelTest(t, factory,
-    // Differential mode: compare SUT against a reference.
     storetest.StoreModelReference(func() store.Store {
-        return store.NewInMemoryStore()
-    }),
-
-    // Add custom actions beyond the auto-generated ones.
-    storetest.StoreModelExtraActions(
-        storetest.StoreGetAction(),    // auto-generated per-method helper
-        storetest.StorePutAction(),
-        storetest.StoreDeleteAction(),
-    ),
-
-    // Add custom laws.
-    storetest.StoreModelExtraLaws(
-        customInvariant,
-    ),
-
-    // Concurrent stress with linearizability.
-    storetest.StoreModelConcurrent(
-        model.Workers(4),
-        model.OpsPerWorker(50),
-    ),
-
-    // TimeDriven (for //testkit:time-aware interfaces).
-    storetest.StoreModelClockFactory(func(c clock.Clock) store.Store {
-        return store.NewTTLStore(c)
+        return storetest.NewStoreStub(nil, storetest.StoreStubDelegateTo(store.NewInMemoryStore()))
     }),
 )
 ```
 
-## Rapid facade
+When a Reference is provided:
+1. Every action is applied to *both* the SUT and the Reference simultaneously.
+2. The harness asserts that the SUT and the Reference produce the **exact same return values and errors** for every single operation.
 
-Generated code imports `go.thesmos.sh/testkit/model` instead of `pgregory.net/rapid` directly. The `model` package re-exports all rapid types and generator functions (`model.T`, `model.Generator[V]`, `model.StringMatching`, `model.SliceOf`, etc.) so consumers extending model specs with custom actions or laws never need rapid in their `go.mod`.
+This is the ultimate confidence builder for a database migration or refactor: you prove that the highly optimized V2 implementation behaves identically to the naive V1 implementation under chaotic, randomized load.
 
-## Stub-as-reference pattern
+## Concurrent Linearizability
 
-The recommended reference implementation for model testing is a configured stub:
+By default, actions are applied sequentially. When you enable concurrency:
 
 ```go
-storetest.StoreModelReference(func() store.Store {
-    return storetest.NewStoreStub(nil, storetest.StoreStubDelegateTo(store.NewInMemoryStore()))
-})
+storetest.StoreModelTest(t, factory,
+    storetest.StoreModelConcurrent(
+        model.Workers(4),
+        model.OpsPerWorker(50),
+    ),
+)
 ```
 
-Pass `nil` as the `testing.TB` argument (not `f` or `t`) when the reference is created inside a property iteration — this skips cleanup registration which is forbidden inside fuzz bodies.
+The runner spawns multiple goroutines firing randomized actions at a shared SUT. For CRUD shapes, it feeds the resulting execution history into **Porcupine**, proving whether your supposedly thread-safe code actually honors linearizability.
 
-## Fuzz safety
+## Layout Conventions
 
-Stubs detect `*testing.F` and skip `tb.Cleanup` registration. This allows stubs to be constructed inside fuzz iteration bodies without panicking. The model's `Fuzz` entry point passes `*testing.F` to the outer harness; rapid's per-iteration `*rapid.T` (which implements `testing.TB`) is available inside the property function for per-iteration cleanup.
+A typical `model` configuration generates into a `<pkg>test/` sub-package. 
+
+**What goes where:**
+
+| File | Owner | Contents |
+|------|-------|----------|
+| `*_model.gen.go` | Generator | The generated state-machine harness and actions (DO NOT EDIT). |
+| `model_test.go` | Developer | Hand-written test functions wiring `StoreModelTest`, `StoreModelFuzz`, and `StoreModelOption` injections. |
+| `companion.go` | Developer | (Optional) The naive in-memory reference implementation used for Differential Correctness. |
+
+Keep `model_test.go` separated from `spec_test.go` (the Tier 1 suite). Model tests often run longer and require different CI configurations (e.g., `-count=10` or prolonged Fuzzing).
 
 ## See also
 
-- [Generators / suite](suite.md) — Tier 1 single-call conformance (same shape detection)
-- [Generators / bench](bench.md) — Tier 4 benchmarking (same shape detection)
-- [Primitives / concurrency](../primitives/concurrency.md) — goroutine leak detection primitives
-- [Primitives / clock](../primitives/clock.md) — `TestClock` for deterministic time testing
+- [Shape Classification](shapes.md) — The signature-tier foundation.
+- [Generators / suite](suite.md) — Tier 1 single-call conformance.
+- [Generators / stub](stub.md) — How to generate a stub for use as a Reference implementation.

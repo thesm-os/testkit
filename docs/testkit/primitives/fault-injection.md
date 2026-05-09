@@ -2,6 +2,12 @@
 
 Fault injection in testkit is a strategy pattern. The `Fault` interface decides whether a fault should fire for a given call; testkit ships five strategies and two composers.
 
+## The Architectural Pattern
+
+Traditional test doubles (mocks) force you to hardcode failure logic directly into your test setup (e.g., `mock.On("Get").Return(ErrNotFound)`). This is brittle and difficult to scale when testing complex, intermittent failure modes like "fail 5% of the time" or "fail exactly on the 3rd retry."
+
+The `testkit` fault injection system completely separates **Domain Behavior** from **Adversarial Failure**. You provide a real, working implementation (like an `InMemoryStore` companion), and then you dynamically attach `Fault` strategies onto the generated stub wrapper. When the strategy fires, it bypasses the companion and returns the error. When it doesn't fire, the real logic executes. This decoupling is the engine that powers the `sim` and `chaos` tier generators, allowing them to ablate faults independently of the domain logic.
+
 ## Fault interface
 
 ```go

@@ -5,6 +5,13 @@ Two layers of benchmarking primitives:
 - **`testkit.StartContract`** — scope-based allocation and latency contract, a drop-in replacement for `for b.Loop()` that adds explicit ceilings.
 - **`testkit/bench` runtime helpers** — a thin layer over `b.Loop` / `b.RunParallel` that drives single-goroutine measurement, parallel throughput, and the three opt-in budget gates (`allocs`, `latency`, `percentiles`). The shape-typed primitives consumed by [`bench` generator](../generators/bench.md) sit on top of these helpers.
 
+## The Architectural Pattern
+
+Why use custom benchmarking primitives instead of standard `testing.B` loops?
+
+1. **Eliminating Vanity Metrics:** Standard Go benchmarks report metrics, but they do not enforce bounds. A benchmark that reports `0 allocs/op` today can silently degrade to `3 allocs/op` tomorrow without failing a CI run. The `testkit` primitives turn benchmarks into **Contracts**. They take explicit `maxAllocs` and `maxLatency` ceilings and call `b.Fatalf` if the implementation violates them, turning performance regressions into immediate build failures.
+2. **Defeating Closure-Escape Contamination:** A common mistake in custom benchmark helpers is accepting a callback (e.g., `Measure(func() { ... })`). In Go, capturing variables in a closure often forces them to escape to the heap, creating artificial allocations that pollute your `allocs/op` measurements. `testkit.StartContract` uses a scope-based `for c.Loop()` design to completely avoid closure contamination. For the `testkit/bench` helpers that *do* use callbacks, the documentation provides strict rules (like using package-level `errSink`s) to defeat compiler elision without boxing values.
+
 ## Contract (`testkit.StartContract`)
 
 Scope-based contract with chained ceilings:
@@ -97,7 +104,3 @@ The bench generator wires `BytesPerOp` automatically for `StreamConsumer` method
 | One ad-hoc benchmark with mean-latency / alloc ceilings | `testkit.StartContract` |
 | Hand-written benchmark with shape-style primitives (multiple `b.Run` namespaces, percentile gating, parallel sweep) | `bench` runtime helpers |
 | Generated benchmarks for a whole interface | [`bench` generator](../generators/bench.md) — emits typed `<Iface>BenchOn<Method>` plug-ins on top of the helpers |
-
-## Why this exists
-
-Benchmarks without ceilings are vanity metrics. A benchmark that reports `0 allocs/op` today silently becomes `3 allocs/op` tomorrow with no test failure. Both layers make the budget explicit and assert on it; the [`benchmarks` validator](../validators/benchmarks.md) enforces every `Benchmark*` function uses one of them, and the [`bench-regression` validator](../validators/bench-regression.md) (planned) compares benchmark output against a pinned baseline so any performance degradation surfaces in CI.

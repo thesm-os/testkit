@@ -4,6 +4,12 @@
 
 `MethodStub` is the runtime substrate that conformance tiers (`suite`, `model`, `bench`) and pre-prod tiers (`sim`, `chaos`, `replay`) build on top of. Most consumers interact with it through generated stub code rather than directly.
 
+## The Architectural Pattern
+
+Why does the `stub` generator embed `*testkit.MethodStub[Call]` instead of just generating a raw struct for every method? 
+
+The answer is **behavioral uniformity**. Whether your method is a `Reader`, `Writer`, `StreamConsumer`, or `Lifecycle`, the mechanics of recording a call, injecting a time-windowed fault, asserting a call count, or simulating latency are identical. By embedding `MethodStub[C]`, the generator ensures that every stub in your project inherits the exact same, heavily tested observation and fault-injection runtime. The generator only has to emit the type-safe `Call` struct (the `C` type parameter) and the dispatch logic to route arguments into it.
+
 ## Construction
 
 ```go

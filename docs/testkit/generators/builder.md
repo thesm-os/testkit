@@ -1,6 +1,6 @@
 # Builder
 
-Generates a fluent fixture builder for a Go struct. Emits one `With*` setter per exported field, plus shape-specific extras: `Append*` for slices, `WithDataString` for `[]byte`, `With<Field>Entry` for maps. Always emits `Mutate`, `Clone`, and `Build`. Generic types are preserved with type parameters intact.
+Generates a fluent test-fixture builder for Go structs. Each generation emits two files: the impl (`builder.gen.go`) containing the builders, and a companion test file (`builder_test.gen.go`) verifying the contract every builder honors. Emits one `With*` setter per exported field, plus shape-specific extras: `Append*` for slices, `WithDataString` for `[]byte`, `With<Field>Entry` for maps. Always emits `Mutate`, `Clone`, and `Build`. Generic types are preserved with type parameters intact.
 
 ## Directive
 
@@ -240,3 +240,19 @@ b := base.Clone().WithID("b").Build()
 ## Why
 
 Builders eliminate brittle inline struct construction. When a field is added, only `<Type>Defaults` (or the field's `//testkit:default`) needs updating — every test using the builder continues to compile and run. The generator produces deterministic output: setters sorted by name, deep-copy logic emitted only for fields that need it (slices, maps, byte slices), and generic type parameters preserved exactly as written.
+
+## Layout Conventions
+
+A typical domain object generates its builder into a `<pkg>test/` sub-package. This ensures the builder is accessible to integration tests across your codebase without leaking test-infrastructure dependencies into your production binary.
+
+**What goes where:**
+
+| File | Owner | Contents |
+|------|-------|----------|
+| `types.go` | Developer | The source file containing the struct definition. |
+| `*_builder.gen.go` | Generator | The fluent builder implementation (DO NOT EDIT). |
+| `*_builder.gen_test.go` | Generator | The self-verifying test suite for the builder itself (DO NOT EDIT). |
+| `defaults.go` | Developer | Hand-written `func <Type>Defaults() <Type>` factories. |
+
+## See also
+- [Generators / Overview](README.md)
