@@ -3,6 +3,8 @@
 
 package basic
 
+//go:generate testkit bench -o storetest/sampler_bench.gen.go Sampler
+
 import "context"
 
 // Sampler exercises the //testkit:sample directive: each method

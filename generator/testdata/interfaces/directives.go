@@ -5,6 +5,7 @@ package interfaces
 
 //go:generate testkit stub -o directivestest/directives.gen.go Directives
 //go:generate testkit suite -o directivestest/directives_spec.gen_test.go Directives
+//go:generate testkit bench -o directivestest/directives_bench.gen.go Directives
 
 import (
 	"context"

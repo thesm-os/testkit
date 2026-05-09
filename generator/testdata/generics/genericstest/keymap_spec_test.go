@@ -4,26 +4,26 @@
 package genericstest_test
 
 import (
+	"context"
 	"testing"
+
+	"go.thesmos.sh/testkit/generator/testdata/generics"
 )
 
-// TestKeyMapContract is intentionally a Skip pending a generator
-// fix. The Reader baseline emits two contract assertions keyed on
-// the sample input:
+// TestKeyMapContract closes the loop on the two-parameter generic
+// suite generator. AssertKeyMapContract instantiates at K=string,
+// V=int. The factory pre-seeds the zero K → zero V pair so the
+// Reader baseline lands on a real entry.
 //
-//	AssertReturnsForKey   (*new(K), *new(V))         — expects (zeroV, nil)
-//	AssertReturnsSentinel (*new(K), ErrNotFound)     — expects (anything, ErrNotFound)
-//
-// For non-generic K the sample literal ("test-key") differs from
-// the zero literal (""), so the two assertions land on different
-// keys. For generic K, [spec.Method.SampleParamAt] and ZeroParamAt
-// both render `*new(K)`, so the two assertions hit the same key
-// and become mutually exclusive — no factory can satisfy both.
-//
-// Fix path: emit the Sentinel assertion conditionally for generic
-// shapes (skip when sample key == zero key), or render distinct
-// "invalid-K" literal alongside SampleParamAt. Tracked as a
-// generator follow-up.
+// The contract emits AssertReturnsForKey (sample → zeroV) but
+// omits AssertReturnsSentinel — the suite generator's
+// SampleEqualsZero predicate detects that sample key == zero key
+// for generic Reader and skips the conflicting sentinel assertion.
 func TestKeyMapContract(t *testing.T) {
-	t.Skip("generator emits sample==zero key for generic Reader; AssertReturnsForKey conflicts with AssertReturnsSentinel until the generator distinguishes them")
+	t.Parallel()
+	AssertKeyMapContract(t, func() generics.KeyMap[string, int] {
+		m := generics.NewInMemoryKeyMap[string, int]()
+		_ = m.Set(context.Background(), "", 0)
+		return m
+	})
 }

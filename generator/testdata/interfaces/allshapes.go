@@ -5,6 +5,7 @@ package interfaces
 
 //go:generate testkit stub -o allshapestest/allshapes.gen.go AllShapes
 //go:generate testkit suite -o allshapestest/allshapes_spec.gen_test.go AllShapes
+//go:generate testkit bench -o allshapestest/allshapes_bench.gen.go AllShapes
 
 import (
 	"context"

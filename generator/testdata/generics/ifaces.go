@@ -9,6 +9,9 @@ package generics
 //go:generate testkit suite -o genericstest/holder_spec.gen_test.go Holder
 //go:generate testkit suite -o genericstest/keymap_spec.gen_test.go KeyMap
 //go:generate testkit suite -o genericstest/tally_spec.gen_test.go  Tally
+//go:generate testkit bench -o genericstest/holder_bench.gen.go     Holder
+//go:generate testkit bench -o genericstest/keymap_bench.gen.go     KeyMap
+//go:generate testkit bench -o genericstest/tally_bench.gen.go      Tally
 
 import (
 	"context"
