@@ -1,0 +1,60 @@
+{{- /* Driver partial: emits the consumer-facing entry points.
+       - <Iface>Factory                    — function alias
+       - <Iface>NamedFactory               — name + factory tuple
+       - Assert<Iface>Contract(t, factory) — single-impl driver
+       - Assert<Iface>ContractAcrossImpls  — multi-impl driver
+
+       The single-impl driver runs every per-method subtest against
+       one factory-produced impl. The multi-impl driver wraps it in
+       a `t.Run(name, ...)` per [NamedFactory] — adding a new impl
+       is a one-line slice append on the consumer side. */ -}}
+{{- define "driver" -}}
+{{- $iface := .IfaceName -}}
+{{- $tpDecl := .Spec.TypeParamDecl -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+{{- $type := .Spec.QualifiedType -}}
+{{- $factory := .FactoryTypeName -}}
+{{- $namedFactory := .NamedFactoryTypeName -}}
+{{- $driver := .DriverName -}}
+{{- $across := .AcrossImplsName -}}
+
+// {{ $factory }} produces an implementation of [{{ $type }}] for use
+// by the contract driver. Each call must yield a fresh, independent
+// instance — the contract subtests reset state between runs by
+// asking the factory for a new impl.
+type {{ $factory }}{{ $tpDecl }} func() {{ $type }}
+
+// {{ $namedFactory }} pairs a human-readable name with a factory.
+// The multi-impl driver runs the contract once per named factory
+// with `t.Run(Name, ...)`; the name surfaces in test output.
+type {{ $namedFactory }}{{ $tpDecl }} struct {
+	Name    string
+	Factory {{ $factory }}{{ $tpArgs }}
+}
+
+// {{ $driver }} runs the full {{ $iface }} contract against any
+// implementation produced by `factory`. Each subtest constructs a
+// fresh impl via the factory so per-test state isolation is the
+// caller's responsibility — the factory should return an
+// independently-state'd instance every call.
+func {{ $driver }}{{ $tpDecl }}(t *testing.T, factory {{ $factory }}{{ $tpArgs }}) {
+	t.Helper()
+{{- if .HasErrorMethod }}
+	errTest := testkit.TestError("{{ $iface }}-contract")
+	_ = errTest
+{{- end }}
+{{ template "test-method-smoke" . }}
+}
+
+// {{ $across }} runs [{{ $driver }}] once per named factory under
+// `t.Run(Name, ...)`. New impls drop in via slice append.
+func {{ $across }}{{ $tpDecl }}(t *testing.T, factories ...{{ $namedFactory }}{{ $tpArgs }}) {
+	t.Helper()
+	for _, nf := range factories {
+		t.Run(nf.Name, func(t *testing.T) {
+			t.Parallel()
+			{{ $driver }}{{ $tpArgs }}(t, nf.Factory)
+		})
+	}
+}
+{{- end -}}

@@ -24,4 +24,3 @@
 //   structs/fields.go      structs/structstest/fields.gen.go
 //                          structs/structstest/fields.gen_test.go
 package structs
-
