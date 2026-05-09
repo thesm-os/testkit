@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -22,14 +24,10 @@ type Lookup[T any, K comparable, V, R any] func(LookupContext[T, K, V, R])
 // LookupHotPath measures lookup throughput against a known key.
 func LookupHotPath[T any, K comparable, V, R any](key K) Lookup[T, K, V, R] {
 	return func(ctx LookupContext[T, K, V, R]) {
-		ctx.B.Run("hot-path", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				_, _, _ = ctx.Call(bctx, impl, key)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}
 }
@@ -38,15 +36,35 @@ func LookupHotPath[T any, K comparable, V, R any](key K) Lookup[T, K, V, R] {
 // the benchmark if allocs exceed maxAllocs.
 func LookupAllocsWithin[T any, K comparable, V, R any](key K, maxAllocs int) Lookup[T, K, V, R] {
 	return func(ctx LookupContext[T, K, V, R]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			allocs := testing.AllocsPerRun(100, func() {
-				_, _, _ = ctx.Call(bctx, impl, key)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("lookup allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+			_, _, _ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// LookupLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+func LookupLatencyWithin[T any, K comparable, V, R any](key K, maxLatency time.Duration) Lookup[T, K, V, R] {
+	return func(ctx LookupContext[T, K, V, R]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+			_, _, _ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// LookupConcurrentThroughput measures lookup throughput under
+// contention. Uses b.RunParallel for correct iteration scaling.
+// Reports ns/op and allocs/op.
+func LookupConcurrentThroughput[T any, K comparable, V, R any](key K, parallelism int) Lookup[T, K, V, R] {
+	return func(ctx LookupContext[T, K, V, R]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}
 }

@@ -6,6 +6,7 @@ package bench_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -32,4 +33,14 @@ func BenchmarkLookupHotPath(b *testing.B) {
 func BenchmarkLookupAllocsWithin(b *testing.B) {
 	ctx := benchLookupCtx(b)
 	bench.LookupAllocsWithin[*lookupStore, string, int64, lookupMeta]("a", 0)(ctx)
+}
+
+func BenchmarkLookupLatencyWithin(b *testing.B) {
+	ctx := benchLookupCtx(b)
+	bench.LookupLatencyWithin[*lookupStore, string, int64, lookupMeta]("a", 100*time.Millisecond)(ctx)
+}
+
+func BenchmarkLookupConcurrentThroughput(b *testing.B) {
+	ctx := benchLookupCtx(b)
+	bench.LookupConcurrentThroughput[*lookupStore, string, int64, lookupMeta]("a", 4)(ctx)
 }

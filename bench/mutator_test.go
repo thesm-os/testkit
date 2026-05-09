@@ -6,6 +6,7 @@ package bench_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -32,4 +33,14 @@ func BenchmarkMutatorHotPath(b *testing.B) {
 func BenchmarkMutatorAllocsWithin(b *testing.B) {
 	ctx := benchMutatorCtx(b)
 	bench.MutatorAllocsWithin[*accumulator, int64](1, 0)(ctx)
+}
+
+func BenchmarkMutatorLatencyWithin(b *testing.B) {
+	ctx := benchMutatorCtx(b)
+	bench.MutatorLatencyWithin[*accumulator, int64](1, 100*time.Millisecond)(ctx)
+}
+
+func BenchmarkMutatorConcurrentThroughput(b *testing.B) {
+	ctx := benchMutatorCtx(b)
+	bench.MutatorConcurrentThroughput[*accumulator, int64](1, 4)(ctx)
 }

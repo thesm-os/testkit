@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -19,18 +21,46 @@ type PredicateContext[T any] struct {
 // Predicate is a typed bench primitive for Predicate-shaped methods.
 type Predicate[T any] func(PredicateContext[T])
 
+// PredicateHotPath measures the single-goroutine predicate-call
+// latency and allocation rate. Reports ns/op and allocs/op.
+func PredicateHotPath[T any]() Predicate[T] {
+	return func(ctx PredicateContext[T]) {
+		impl := ctx.Factory()
+		HotPath(ctx.B, "hot-path", func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
 // PredicateAllocsWithin measures allocations per predicate call and fails
 // the benchmark if allocs exceed maxAllocs.
 func PredicateAllocsWithin[T any](maxAllocs int) Predicate[T] {
 	return func(ctx PredicateContext[T]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			allocs := testing.AllocsPerRun(100, func() {
-				_ = ctx.Call(impl)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("predicate allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), maxAllocs, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// PredicateLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+func PredicateLatencyWithin[T any](maxLatency time.Duration) Predicate[T] {
+	return func(ctx PredicateContext[T]) {
+		impl := ctx.Factory()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v", maxLatency), maxLatency, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// PredicateConcurrentThroughput measures predicate-call throughput
+// under contention. Uses b.RunParallel for correct iteration scaling.
+func PredicateConcurrentThroughput[T any](parallelism int) Predicate[T] {
+	return func(ctx PredicateContext[T]) {
+		impl := ctx.Factory()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d", parallelism), parallelism, func() {
+			_ = ctx.Call(impl)
 		})
 	}
 }

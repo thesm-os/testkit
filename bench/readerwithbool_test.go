@@ -6,6 +6,7 @@ package bench_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -32,4 +33,14 @@ func BenchmarkReaderWithBoolHotPath(b *testing.B) {
 func BenchmarkReaderWithBoolAllocsWithin(b *testing.B) {
 	ctx := benchReaderWithBoolCtx(b)
 	bench.ReaderWithBoolAllocsWithin[*boolMap, string, int64]("a", 0)(ctx)
+}
+
+func BenchmarkReaderWithBoolLatencyWithin(b *testing.B) {
+	ctx := benchReaderWithBoolCtx(b)
+	bench.ReaderWithBoolLatencyWithin[*boolMap, string, int64]("a", 100*time.Millisecond)(ctx)
+}
+
+func BenchmarkReaderWithBoolConcurrentThroughput(b *testing.B) {
+	ctx := benchReaderWithBoolCtx(b)
+	bench.ReaderWithBoolConcurrentThroughput[*boolMap, string, int64]("a", 4)(ctx)
 }

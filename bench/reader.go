@@ -6,6 +6,7 @@ package bench
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -20,7 +21,7 @@ type ReaderContext[T any, K comparable, V any] struct {
 
 // Reader is a typed bench primitive for Reader-shaped methods.
 // Primitives are either measurements (HotPath, ConcurrentThroughput)
-// or gates (AllocsWithin).
+// or gates (AllocsWithin, LatencyWithin).
 type Reader[T any, K comparable, V any] func(ReaderContext[T, K, V])
 
 // ReaderHotPath measures the single-goroutine read latency and
@@ -28,13 +29,10 @@ type Reader[T any, K comparable, V any] func(ReaderContext[T, K, V])
 // Measurement only — does not fail the benchmark.
 func ReaderHotPath[T any, K comparable, V any](key K) Reader[T, K, V] {
 	return func(ctx ReaderContext[T, K, V]) {
-		ctx.B.Run(fmt.Sprintf("hot-path/%v", key), func(b *testing.B) {
-			impl := ctx.Factory()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				_, _ = ctx.Call(b.Context(), impl, key)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+			_, errSink = ctx.Call(bctx, impl, key)
 		})
 	}
 }
@@ -43,14 +41,23 @@ func ReaderHotPath[T any, K comparable, V any](key K) Reader[T, K, V] {
 // benchmark if allocs exceed maxAllocs. Deterministic gate suitable for CI.
 func ReaderAllocsWithin[T any, K comparable, V any](key K, maxAllocs int) Reader[T, K, V] {
 	return func(ctx ReaderContext[T, K, V]) {
-		ctx.B.Run(fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), func(b *testing.B) {
-			impl := ctx.Factory()
-			allocs := testing.AllocsPerRun(100, func() {
-				_, _ = ctx.Call(b.Context(), impl, key)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("reader allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+			_, errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// ReaderLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+// Deterministic gate suitable for CI.
+func ReaderLatencyWithin[T any, K comparable, V any](key K, maxLatency time.Duration) Reader[T, K, V] {
+	return func(ctx ReaderContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+			_, errSink = ctx.Call(bctx, impl, key)
 		})
 	}
 }
@@ -60,16 +67,10 @@ func ReaderAllocsWithin[T any, K comparable, V any](key K, maxAllocs int) Reader
 // Reports ns/op and allocs/op. Measurement only — does not fail the benchmark.
 func ReaderConcurrentThroughput[T any, K comparable, V any](key K, parallelism int) Reader[T, K, V] {
 	return func(ctx ReaderContext[T, K, V]) {
-		ctx.B.Run(fmt.Sprintf("concurrent-%d/%v", parallelism, key), func(b *testing.B) {
-			impl := ctx.Factory()
-			b.SetParallelism(parallelism)
-			b.ResetTimer()
-			b.ReportAllocs()
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					_, _ = ctx.Call(b.Context(), impl, key)
-				}
-			})
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+			_, errSink = ctx.Call(bctx, impl, key)
 		})
 	}
 }

@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -19,18 +21,47 @@ type PoisonAccessorContext[T any] struct {
 // PoisonAccessor is a typed bench primitive for PoisonAccessor-shaped methods.
 type PoisonAccessor[T any] func(PoisonAccessorContext[T])
 
+// PoisonAccessorHotPath measures the single-goroutine accessor-call
+// latency and allocation rate. Reports ns/op and allocs/op.
+func PoisonAccessorHotPath[T any]() PoisonAccessor[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		impl := ctx.Factory()
+		HotPath(ctx.B, "hot-path", func() {
+			errSink = ctx.Call(impl)
+		})
+	}
+}
+
 // PoisonAccessorAllocsWithin measures allocations per accessor call
 // and fails the benchmark if allocs exceed maxAllocs.
 func PoisonAccessorAllocsWithin[T any](maxAllocs int) PoisonAccessor[T] {
 	return func(ctx PoisonAccessorContext[T]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			allocs := testing.AllocsPerRun(100, func() {
-				_ = ctx.Call(impl)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("poison-accessor allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), maxAllocs, func() {
+			errSink = ctx.Call(impl)
+		})
+	}
+}
+
+// PoisonAccessorLatencyWithin enforces a per-call latency budget and
+// fails the benchmark if the measured per-call latency exceeds
+// maxLatency.
+func PoisonAccessorLatencyWithin[T any](maxLatency time.Duration) PoisonAccessor[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		impl := ctx.Factory()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v", maxLatency), maxLatency, func() {
+			errSink = ctx.Call(impl)
+		})
+	}
+}
+
+// PoisonAccessorConcurrentThroughput measures accessor-call throughput
+// under contention. Uses b.RunParallel for correct iteration scaling.
+func PoisonAccessorConcurrentThroughput[T any](parallelism int) PoisonAccessor[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		impl := ctx.Factory()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d", parallelism), parallelism, func() {
+			errSink = ctx.Call(impl)
 		})
 	}
 }

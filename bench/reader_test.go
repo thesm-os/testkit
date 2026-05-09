@@ -6,6 +6,7 @@ package bench_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -32,6 +33,11 @@ func BenchmarkReaderHotPath(b *testing.B) {
 func BenchmarkReaderAllocsWithin(b *testing.B) {
 	ctx := benchReaderCtx(b, map[string]string{"a": "alpha"})
 	bench.ReaderAllocsWithin[*mapReader, string, string]("a", 0)(ctx)
+}
+
+func BenchmarkReaderLatencyWithin(b *testing.B) {
+	ctx := benchReaderCtx(b, map[string]string{"a": "alpha"})
+	bench.ReaderLatencyWithin[*mapReader, string, string]("a", 100*time.Millisecond)(ctx)
 }
 
 func BenchmarkReaderConcurrentThroughput(b *testing.B) {

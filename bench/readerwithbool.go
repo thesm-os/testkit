@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -20,16 +22,13 @@ type ReaderWithBoolContext[T any, K comparable, V any] struct {
 type ReaderWithBool[T any, K comparable, V any] func(ReaderWithBoolContext[T, K, V])
 
 // ReaderWithBoolHotPath measures read throughput against a known key.
+// Reports ns/op and allocs/op.
 func ReaderWithBoolHotPath[T any, K comparable, V any](key K) ReaderWithBool[T, K, V] {
 	return func(ctx ReaderWithBoolContext[T, K, V]) {
-		ctx.B.Run("hot-path", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				_, _ = ctx.Call(bctx, impl, key)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+			_, _ = ctx.Call(bctx, impl, key)
 		})
 	}
 }
@@ -38,15 +37,35 @@ func ReaderWithBoolHotPath[T any, K comparable, V any](key K) ReaderWithBool[T, 
 // the benchmark if allocs exceed maxAllocs.
 func ReaderWithBoolAllocsWithin[T any, K comparable, V any](key K, maxAllocs int) ReaderWithBool[T, K, V] {
 	return func(ctx ReaderWithBoolContext[T, K, V]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			allocs := testing.AllocsPerRun(100, func() {
-				_, _ = ctx.Call(bctx, impl, key)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("reader-with-bool allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+			_, _ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// ReaderWithBoolLatencyWithin enforces a per-call latency budget and
+// fails the benchmark if the measured per-call latency exceeds
+// maxLatency.
+func ReaderWithBoolLatencyWithin[T any, K comparable, V any](key K, maxLatency time.Duration) ReaderWithBool[T, K, V] {
+	return func(ctx ReaderWithBoolContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+			_, _ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// ReaderWithBoolConcurrentThroughput measures read throughput under
+// contention. Uses b.RunParallel for correct iteration scaling.
+func ReaderWithBoolConcurrentThroughput[T any, K comparable, V any](key K, parallelism int) ReaderWithBool[T, K, V] {
+	return func(ctx ReaderWithBoolContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+			_, _ = ctx.Call(bctx, impl, key)
 		})
 	}
 }

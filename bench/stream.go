@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -20,18 +22,14 @@ type StreamContext[T, V any] struct {
 type Stream[T, V any] func(StreamContext[T, V])
 
 // StreamHotPath measures the full iteration latency and allocation rate.
-// Reports ns/op and allocs/op.
+// Reports ns/op and allocs/op (per full iteration of the stream).
 func StreamHotPath[T, V any]() Stream[T, V] {
 	return func(ctx StreamContext[T, V]) {
-		ctx.B.Run("iterate-all", func(b *testing.B) {
-			impl := ctx.Factory()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				for v, err := range ctx.Call(b.Context(), impl) {
-					_ = v
-					_ = err
-				}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, "iterate-all", func() {
+			for _, err := range ctx.Call(bctx, impl) {
+				errSink = err
 			}
 		})
 	}
@@ -41,16 +39,43 @@ func StreamHotPath[T, V any]() Stream[T, V] {
 // the benchmark if allocs exceed maxAllocs.
 func StreamAllocsWithin[T, V any](maxAllocs int) Stream[T, V] {
 	return func(ctx StreamContext[T, V]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			allocs := testing.AllocsPerRun(100, func() {
-				for v, err := range ctx.Call(b.Context(), impl) {
-					_ = v
-					_ = err
-				}
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("stream allocs %d exceeds budget %d", int(allocs), maxAllocs)
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), maxAllocs, func() {
+			for _, err := range ctx.Call(bctx, impl) {
+				errSink = err
+			}
+		})
+	}
+}
+
+// StreamLatencyWithin enforces a per-iteration latency budget and
+// fails the benchmark if the measured per-iteration latency exceeds
+// maxLatency. Per-iteration here means a full pass through the stream,
+// not per-element.
+func StreamLatencyWithin[T, V any](maxLatency time.Duration) Stream[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v", maxLatency), maxLatency, func() {
+			for _, err := range ctx.Call(bctx, impl) {
+				errSink = err
+			}
+		})
+	}
+}
+
+// StreamConcurrentThroughput measures stream-iteration throughput
+// under contention. Uses b.RunParallel for correct iteration scaling.
+// Each goroutine independently materializes a fresh iter.Seq2 via
+// ctx.Call and iterates to completion.
+func StreamConcurrentThroughput[T, V any](parallelism int) Stream[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d", parallelism), parallelism, func() {
+			for _, err := range ctx.Call(bctx, impl) {
+				errSink = err
 			}
 		})
 	}

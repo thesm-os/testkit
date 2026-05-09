@@ -6,6 +6,7 @@ package bench
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -20,21 +21,13 @@ type PureContext[T, R any] struct {
 // Pure is a typed bench primitive for Pure-shaped methods.
 type Pure[T, R any] func(PureContext[T, R])
 
-// PureConcurrentThroughput measures pure-method throughput under
-// contention. Uses b.RunParallel for correct iteration scaling.
-// Reports ns/op and allocs/op. Measurement only — does not fail.
-func PureConcurrentThroughput[T, R any](parallelism int) Pure[T, R] {
+// PureHotPath measures the single-goroutine pure-call latency and
+// allocation rate. Reports ns/op and allocs/op.
+func PureHotPath[T, R any]() Pure[T, R] {
 	return func(ctx PureContext[T, R]) {
-		ctx.B.Run(fmt.Sprintf("concurrent-%d", parallelism), func(b *testing.B) {
-			impl := ctx.Factory()
-			b.SetParallelism(parallelism)
-			b.ResetTimer()
-			b.ReportAllocs()
-			b.RunParallel(func(pb *testing.PB) {
-				for pb.Next() {
-					_ = ctx.Call(impl)
-				}
-			})
+		impl := ctx.Factory()
+		HotPath(ctx.B, "hot-path", func() {
+			_ = ctx.Call(impl)
 		})
 	}
 }
@@ -43,14 +36,32 @@ func PureConcurrentThroughput[T, R any](parallelism int) Pure[T, R] {
 // the benchmark if allocs exceed maxAllocs.
 func PureAllocsWithin[T, R any](maxAllocs int) Pure[T, R] {
 	return func(ctx PureContext[T, R]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			allocs := testing.AllocsPerRun(100, func() {
-				_ = ctx.Call(impl)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("pure allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), maxAllocs, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// PureLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+func PureLatencyWithin[T, R any](maxLatency time.Duration) Pure[T, R] {
+	return func(ctx PureContext[T, R]) {
+		impl := ctx.Factory()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v", maxLatency), maxLatency, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// PureConcurrentThroughput measures pure-call throughput under
+// contention. Uses b.RunParallel for correct iteration scaling.
+// Reports ns/op and allocs/op.
+func PureConcurrentThroughput[T, R any](parallelism int) Pure[T, R] {
+	return func(ctx PureContext[T, R]) {
+		impl := ctx.Factory()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d", parallelism), parallelism, func() {
+			_ = ctx.Call(impl)
 		})
 	}
 }

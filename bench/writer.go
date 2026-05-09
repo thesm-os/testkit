@@ -6,6 +6,7 @@ package bench
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -18,36 +19,60 @@ type WriterContext[T, V any] struct {
 }
 
 // Writer is a typed bench primitive for Writer-shaped methods.
+// Primitives are either measurements (HotPath, ConcurrentThroughput)
+// or gates (AllocsWithin, LatencyWithin).
 type Writer[T, V any] func(WriterContext[T, V])
 
 // WriterHotPath measures the single-goroutine write latency and
 // allocation rate for the given value. Reports ns/op and allocs/op.
+// Repeated writes accumulate in the impl; benchmarks should pick a
+// value whose write is idempotent (e.g. overwriting the same key) or
+// use a factory that reinitializes between primitive invocations.
 func WriterHotPath[T, V any](sample V) Writer[T, V] {
 	return func(ctx WriterContext[T, V]) {
-		ctx.B.Run(fmt.Sprintf("hot-path/%v", sample), func(b *testing.B) {
-			impl := ctx.Factory()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				_ = ctx.Call(b.Context(), impl, sample)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", sample), func() {
+			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}
 }
 
 // WriterAllocsWithin measures allocations per write and fails the
-// benchmark if allocs exceed maxAllocs. Uses a fresh factory per
-// AllocsPerRun invocation to avoid state accumulation from 101 writes.
+// benchmark if allocs exceed maxAllocs. Deterministic gate suitable for CI.
 func WriterAllocsWithin[T, V any](sample V, maxAllocs int) Writer[T, V] {
 	return func(ctx WriterContext[T, V]) {
-		ctx.B.Run(fmt.Sprintf("allocs-within-%d/%v", maxAllocs, sample), func(b *testing.B) {
-			allocs := testing.AllocsPerRun(100, func() {
-				impl := ctx.Factory()
-				_ = ctx.Call(b.Context(), impl, sample)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("writer allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, sample), maxAllocs, func() {
+			errSink = ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
+// WriterLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+// Deterministic gate suitable for CI.
+func WriterLatencyWithin[T, V any](sample V, maxLatency time.Duration) Writer[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, sample), maxLatency, func() {
+			errSink = ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
+// WriterConcurrentThroughput measures write throughput under contention.
+// Uses b.RunParallel for correct iteration scaling. Reports ns/op and
+// allocs/op — typically dominated by the impl's synchronization
+// strategy (mutex, sync.Map, lock-striping, etc.).
+func WriterConcurrentThroughput[T, V any](sample V, parallelism int) Writer[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, sample), parallelism, func() {
+			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}
 }

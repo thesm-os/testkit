@@ -6,6 +6,7 @@ package bench_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -31,6 +32,17 @@ func BenchmarkDeleterHotPath(b *testing.B) {
 
 func BenchmarkDeleterAllocsWithin(b *testing.B) {
 	ctx := benchDeleterCtx(b)
-	// Budget accounts for factory allocation inside AllocsPerRun closure.
-	bench.DeleterAllocsWithin[*delStore, string]("existing", 5)(ctx)
+	// First iteration deletes; subsequent iterations hit the not-found path
+	// that constructs the sentinel error.
+	bench.DeleterAllocsWithin[*delStore, string]("existing", 1)(ctx)
+}
+
+func BenchmarkDeleterLatencyWithin(b *testing.B) {
+	ctx := benchDeleterCtx(b)
+	bench.DeleterLatencyWithin[*delStore, string]("existing", 100*time.Millisecond)(ctx)
+}
+
+func BenchmarkDeleterConcurrentThroughput(b *testing.B) {
+	ctx := benchDeleterCtx(b)
+	bench.DeleterConcurrentThroughput[*delStore, string]("existing", 4)(ctx)
 }

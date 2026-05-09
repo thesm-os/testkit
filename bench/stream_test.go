@@ -7,6 +7,7 @@ import (
 	"context"
 	"iter"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bench"
 	"go.thesmos.sh/testkit/bindings"
@@ -34,4 +35,14 @@ func BenchmarkStreamAllocsWithin(b *testing.B) {
 	ctx := benchStreamCtx(b, []string{"a", "b", "c"})
 	// Budget accounts for iterator allocation overhead.
 	bench.StreamAllocsWithin[*listStore, string](5)(ctx)
+}
+
+func BenchmarkStreamLatencyWithin(b *testing.B) {
+	ctx := benchStreamCtx(b, []string{"a", "b", "c"})
+	bench.StreamLatencyWithin[*listStore, string](100 * time.Millisecond)(ctx)
+}
+
+func BenchmarkStreamConcurrentThroughput(b *testing.B) {
+	ctx := benchStreamCtx(b, []string{"a", "b", "c"})
+	bench.StreamConcurrentThroughput[*listStore, string](4)(ctx)
 }

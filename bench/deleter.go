@@ -6,6 +6,7 @@ package bench
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -22,15 +23,15 @@ type Deleter[T any, K comparable] func(DeleterContext[T, K])
 
 // DeleterHotPath measures the single-goroutine delete latency and
 // allocation rate for the given key. Reports ns/op and allocs/op.
+// After the first iteration the key is gone — subsequent iterations
+// exercise the not-found path. Use a factory that reinitializes
+// between primitive invocations to control which path dominates.
 func DeleterHotPath[T any, K comparable](key K) Deleter[T, K] {
 	return func(ctx DeleterContext[T, K]) {
-		ctx.B.Run(fmt.Sprintf("hot-path/%v", key), func(b *testing.B) {
-			impl := ctx.Factory()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				_ = ctx.Call(b.Context(), impl, key)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+			errSink = ctx.Call(bctx, impl, key)
 		})
 	}
 }
@@ -39,14 +40,36 @@ func DeleterHotPath[T any, K comparable](key K) Deleter[T, K] {
 // benchmark if allocs exceed maxAllocs.
 func DeleterAllocsWithin[T any, K comparable](key K, maxAllocs int) Deleter[T, K] {
 	return func(ctx DeleterContext[T, K]) {
-		ctx.B.Run(fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), func(b *testing.B) {
-			allocs := testing.AllocsPerRun(100, func() {
-				impl := ctx.Factory()
-				_ = ctx.Call(b.Context(), impl, key)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("deleter allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+			errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// DeleterLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+func DeleterLatencyWithin[T any, K comparable](key K, maxLatency time.Duration) Deleter[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+			errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
+// DeleterConcurrentThroughput measures delete throughput under
+// contention. Uses b.RunParallel for correct iteration scaling.
+// Reports ns/op and allocs/op — typically dominated by the impl's
+// synchronization strategy.
+func DeleterConcurrentThroughput[T any, K comparable](key K, parallelism int) Deleter[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+			errSink = ctx.Call(bctx, impl, key)
 		})
 	}
 }

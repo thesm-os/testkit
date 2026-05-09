@@ -4,7 +4,9 @@
 package bench
 
 import (
+	"fmt"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/bindings"
 )
@@ -20,16 +22,15 @@ type MutatorContext[T, V any] struct {
 type Mutator[T, V any] func(MutatorContext[T, V])
 
 // MutatorHotPath measures mutator throughput with a sample value.
+// Repeated calls accumulate state in the impl; benchmarks should
+// pick a value whose mutation is idempotent or use a factory that
+// reinitializes between primitive invocations.
 func MutatorHotPath[T, V any](sample V) Mutator[T, V] {
 	return func(ctx MutatorContext[T, V]) {
-		ctx.B.Run("hot-path", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			b.ResetTimer()
-			b.ReportAllocs()
-			for b.Loop() {
-				ctx.Call(bctx, impl, sample)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", sample), func() {
+			ctx.Call(bctx, impl, sample)
 		})
 	}
 }
@@ -38,15 +39,34 @@ func MutatorHotPath[T, V any](sample V) Mutator[T, V] {
 // the benchmark if allocs exceed maxAllocs.
 func MutatorAllocsWithin[T, V any](sample V, maxAllocs int) Mutator[T, V] {
 	return func(ctx MutatorContext[T, V]) {
-		ctx.B.Run("allocs-within", func(b *testing.B) {
-			impl := ctx.Factory()
-			bctx := b.Context()
-			allocs := testing.AllocsPerRun(100, func() {
-				ctx.Call(bctx, impl, sample)
-			})
-			if int(allocs) > maxAllocs {
-				b.Fatalf("mutator allocs %d exceeds budget %d", int(allocs), maxAllocs)
-			}
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, sample), maxAllocs, func() {
+			ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
+// MutatorLatencyWithin enforces a per-call latency budget and fails
+// the benchmark if the measured per-call latency exceeds maxLatency.
+func MutatorLatencyWithin[T, V any](sample V, maxLatency time.Duration) Mutator[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, sample), maxLatency, func() {
+			ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
+// MutatorConcurrentThroughput measures mutator throughput under
+// contention. Uses b.RunParallel for correct iteration scaling.
+func MutatorConcurrentThroughput[T, V any](sample V, parallelism int) Mutator[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, sample), parallelism, func() {
+			ctx.Call(bctx, impl, sample)
 		})
 	}
 }
