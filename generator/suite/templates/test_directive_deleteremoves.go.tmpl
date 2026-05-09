@@ -1,0 +1,23 @@
+{{- /* Delete-removes contract: directive sits on the deleter method
+       (Deleter shape: ctx, K → error). After delete, the named
+       reader must return the configured not-found sentinel for the
+       same key. Composes with the //testkit:errors directive — the
+       reader's first sentinel is the not-found target. */ -}}
+{{- define "test-directive-deleteremoves" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $K := $m.ShapeKeyType -}}
+{{- if $m.HasFirstSentinel }}
+		suite.AssertDeleteRemovesByKey[{{ $iface }}, {{ $K }}, any](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.FirstSentinel }},
+			func(ctx context.Context, impl {{ $iface }}, k {{ $K }}) error {
+				return impl.{{ $m.Name }}(ctx, k)
+			},
+			func(ctx context.Context, impl {{ $iface }}, k {{ $K }}) (any, error) {
+				return impl.{{ $m.DeleteRemovesReader }}(ctx, k)
+			},
+		)(t, factory)
+{{- end }}
+{{- end -}}

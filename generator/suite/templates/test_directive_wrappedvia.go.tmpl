@@ -1,0 +1,18 @@
+{{- /* Wrapped-via contract: emits one call to [suite.AssertWrappedVia]
+       with target sentinel + first declared sentinel + a typed error
+       closure. Composes with errors directive (the directive
+       validator rejects wrapped-via without errors). */ -}}
+{{- define "test-directive-wrappedvia" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- if $m.HasFirstSentinel }}
+		suite.AssertWrappedVia[{{ $iface }}](
+			{{ $m.WrappedViaTarget }}, {{ $m.FirstSentinel }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				{{ $m.ErrCaptureLHS }} := impl.{{ $m.Name }}({{ $m.ZeroArgs $tracker }})
+				return err
+			},
+		)(t, factory)
+{{- end }}
+{{- end -}}

@@ -4,13 +4,21 @@
 package suite
 
 import (
+	"bytes"
 	"context"
+	"io"
 	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/bindings"
 )
+
+// defaultStreamSampleBytes is the byte payload `bytes.NewReader` wraps
+// when a StreamConsumer baseline runs without a consumer-supplied
+// [WithStreamSample]. Nine bytes — short enough for a full read in one
+// call but non-empty so the impl exercises a real read path.
+const defaultStreamSampleBytes = "test-data"
 
 // StreamConsumerContext provides a typed factory and call function to
 // StreamConsumer-shape primitives. A StreamConsumer-shaped method has
@@ -115,6 +123,90 @@ func AssertStreamConsumerConcurrentSafe[T, S, V any](
 				wg.Go(func() {
 					for range iters {
 						_, _ = ctx.Call(t.Context(), impl, streamFactory())
+					}
+				})
+			}
+			wg.Wait()
+		})
+	}
+}
+
+// AssertStreamConsumerSucceedsWithDefault calls the consumer with a
+// fresh `bytes.NewReader([]byte("test-data"))` stream and asserts the
+// returned value equals `want`. Use this when the StreamConsumer's
+// stream type is [io.Reader] and the consumer hasn't supplied
+// [WithStreamSample] — the default sample exercises a real read path
+// without requiring per-fixture stream construction.
+//
+// S must be assignable from [*bytes.Reader] for the default to apply.
+// Generators dispatch to this variant when no [WithStreamSample] is
+// resolved; consumers whose S is some other interface type must
+// supply [WithStreamSample] and the generator emits the typed
+// [AssertStreamConsumerSucceeds] instead.
+func AssertStreamConsumerSucceedsWithDefault[T any, S io.Reader, V comparable](
+	want V,
+) StreamConsumerAssertion[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		ctx.T.Run("succeeds (default sample)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			stream, ok := any(bytes.NewReader([]byte(defaultStreamSampleBytes))).(S)
+			testkit.True(
+				t,
+				ok,
+				"default stream sample must satisfy the StreamConsumer's S; supply WithStreamSample for non-io.Reader S",
+			)
+			got, err := ctx.Call(t.Context(), impl, stream)
+			testkit.NoError(t, err, "stream consumer must not error on default sample")
+			testkit.Equal(t, got, want,
+				"stream consumer must return expected value for default sample")
+		})
+	}
+}
+
+// AssertStreamConsumerRespectsContextWithDefault invokes the consumer
+// with a cancelled context and a fresh default-sample stream; asserts
+// the impl surfaces [context.Canceled].
+func AssertStreamConsumerRespectsContextWithDefault[T any, S io.Reader, V any]() StreamConsumerAssertion[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		ctx.T.Run("respects context (default sample)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			stream, ok := any(bytes.NewReader([]byte(defaultStreamSampleBytes))).(S)
+			testkit.True(
+				t,
+				ok,
+				"default stream sample must satisfy the StreamConsumer's S; supply WithStreamSample for non-io.Reader S",
+			)
+			_, err := ctx.Call(cctx, impl, stream)
+			testkit.ErrorIs(t, err, context.Canceled,
+				"stream consumer must surface ctx.Canceled when called with a cancelled context")
+		})
+	}
+}
+
+// AssertStreamConsumerConcurrentSafeWithDefault runs the consumer from
+// N goroutines concurrently, each constructing a fresh default-sample
+// stream per iteration. The race detector finds data races when -race
+// is enabled; panics propagate.
+func AssertStreamConsumerConcurrentSafeWithDefault[T any, S io.Reader, V any](
+	workers, iters int,
+) StreamConsumerAssertion[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		ctx.T.Run("concurrent safe (default sample)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						stream, ok := any(bytes.NewReader([]byte(defaultStreamSampleBytes))).(S)
+						if !ok {
+							return
+						}
+						_, _ = ctx.Call(t.Context(), impl, stream)
 					}
 				})
 			}

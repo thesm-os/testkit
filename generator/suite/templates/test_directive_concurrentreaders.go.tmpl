@@ -1,0 +1,18 @@
+{{- /* Concurrent-readers contract: emits one call to
+       [suite.AssertConcurrentReadersParallel] with a void-returning
+       closure. The runtime forks 32 readers; race detector catches
+       RWMutex violations. */ -}}
+{{- define "test-directive-concurrentreaders" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+		suite.AssertConcurrentReadersParallel[{{ $iface }}](
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

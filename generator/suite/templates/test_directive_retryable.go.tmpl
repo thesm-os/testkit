@@ -1,0 +1,20 @@
+{{- /* Retry-succeeds-on-attempt contract: emits one call to
+       [suite.AssertRetrySucceedsOnAttempt] with a typed error-
+       returning closure. The closure captures the impl's trailing
+       error via [ErrCaptureLHS]. The directive validator (Task 18)
+       rejects retry-succeeds-on-attempt on void methods — the
+       contract isn't expressible. */ -}}
+{{- define "test-directive-retryable" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- if $m.ReturnsError }}
+		suite.AssertRetrySucceedsOnAttempt[{{ $iface }}](
+			{{ $m.RetryN }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				{{ $m.ErrCaptureLHS }} := impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+				return err
+			},
+		)(t, factory)
+{{- end }}
+{{- end -}}

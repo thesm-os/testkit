@@ -1,0 +1,25 @@
+{{- /* Order-after contract — emits one call to
+       [suite.AssertOrderAfter] with typed prereq + carrier
+       closures. The carrier closure captures the impl's trailing
+       error via [ErrCaptureLHS], which handles arity uniformly
+       across Reader/Writer/Lifecycle/MultiReader shapes. The
+       directive validator (Task 18) rejects order-after on methods
+       that don't return an error — the contract isn't expressible
+       through the closure boundary. */ -}}
+{{- define "test-directive-orderafter" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- if $m.ReturnsError }}
+		suite.AssertOrderAfter[{{ $iface }}](
+			{{ printf "%q" $m.OrderAfterTarget }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				return impl.{{ $m.OrderAfterTarget }}(ctx)
+			},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				{{ $m.ErrCaptureLHS }} := impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+				return err
+			},
+		)(t, factory)
+{{- end }}
+{{- end -}}

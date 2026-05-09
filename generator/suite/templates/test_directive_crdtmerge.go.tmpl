@@ -1,0 +1,24 @@
+{{- /* CRDT-merge contract: emits one call to [suite.AssertCRDTMerge]
+       with typed merge closure. Runtime owns the two-impl construction,
+       reverse-order merging, and equality (falls back to
+       reflect.DeepEqual when no stateEqual is supplied). */ -}}
+{{- define "test-directive-crdtmerge" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $V := $m.ShapeValType -}}
+{{- $opts := .Opts -}}
+		suite.AssertCRDTMerge[{{ $iface }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.ZeroParamAt 0 $tracker }},
+			func(ctx context.Context, impl {{ $iface }}, v {{ $V }}) error {
+				return impl.{{ $m.Name }}(ctx, v)
+			},
+			func() func(a, b {{ $iface }}) bool {
+				if eq, ok := {{ $opts }}.StateEqual.(func(a, b {{ $iface }}) bool); ok {
+					return eq
+				}
+				return nil
+			}(),
+		)(t, factory)
+{{- end -}}

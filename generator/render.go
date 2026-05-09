@@ -74,7 +74,19 @@ func FuncMap() template.FuncMap {
 		"add":            func(a, b int) int { return a + b },
 		"dict":           templateDict,
 		"splitLines":     func(s string) []string { return strings.Split(s, "\n") },
+		"seq":            templateSeq,
 	}
+}
+
+// templateSeq returns the slice [0, 1, ..., n-1] for use in
+// `{{- range $i := seq $m.NonCtxParamCount }}` constructs that
+// need the index for positional-arg rendering.
+func templateSeq(n int) []int {
+	out := make([]int, n)
+	for i := range out {
+		out[i] = i
+	}
+	return out
 }
 
 // templateDict assembles a map[string]any from alternating

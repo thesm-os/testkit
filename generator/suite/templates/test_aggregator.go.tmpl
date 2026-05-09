@@ -3,6 +3,7 @@
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
 {{- $tracker := .Tracker -}}
+{{- $opts := .Opts -}}
 {{- $R := $m.ShapeValType -}}
 		sctx := suite.AggregatorContextFor[{{ $iface }}, {{ $R }}](t, factory,
 			func(ctx context.Context, impl {{ $iface }}) ({{ $R }}, error) {
@@ -15,8 +16,12 @@
 		suite.AssertAggregatorReturns[{{ $iface }}, {{ $R }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
 		suite.AssertAggregatorRespectsContext[{{ $iface }}, {{ $R }}]()(sctx)
 		suite.AssertAggregatorConsistent[{{ $iface }}, {{ $R }}](3)(sctx)
-		t.Run("rejects invalid", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline reserved for consumer-supplied bounds via AssertAggregatorBounded")
-		})
+		if len({{ $opts }}.AggregatorBounds) > 0 {
+			if lower, lok := {{ $opts }}.AggregatorBounds[0].Lower.({{ $R }}); lok {
+				if upper, uok := {{ $opts }}.AggregatorBounds[0].Upper.({{ $R }}); uok {
+					suite.AssertAggregatorBounded[{{ $iface }}, {{ $R }}](lower, upper)(sctx)
+				}
+			}
+		}
 		suite.AssertAggregatorConcurrentSafe[{{ $iface }}, {{ $R }}](4, 10)(sctx)
 {{- end -}}

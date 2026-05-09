@@ -1,0 +1,30 @@
+{{- /* Atomic contract: emits one call to [suite.AssertAtomicNoTrace]
+       with a failing-call closure (zero args trigger the error path)
+       and the resolved StateEqual from Options. Gated on
+       HasFirstSentinel — without a known error path, "failed
+       mutation" isn't observable and the contract is a category
+       error. The directive validator (Task 18) will reject atomic
+       without errors. */ -}}
+{{- define "test-directive-atomic" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $opts := .Opts -}}
+{{- if $m.HasFirstSentinel }}
+		suite.AssertAtomicNoTrace[{{ $iface }}](
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.ZeroArgs $tracker }})
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.ZeroArgs $tracker }})
+{{- end }}
+			},
+			func() func(a, b {{ $iface }}) bool {
+				if eq, ok := {{ $opts }}.StateEqual.(func(a, b {{ $iface }}) bool); ok {
+					return eq
+				}
+				return nil
+			}(),
+		)(t, factory)
+{{- end }}
+{{- end -}}

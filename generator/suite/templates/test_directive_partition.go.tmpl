@@ -1,0 +1,24 @@
+{{- /* Partition isolation contract: emits one call to
+       [suite.AssertPartitionIsolation]. The closure normalizes
+       the carrier's return shape: error-returning methods return
+       impl's error directly; void methods return nil. */ -}}
+{{- define "test-directive-partition" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+		suite.AssertPartitionIsolation[{{ $iface }}](
+			{{ printf "%q" $m.PartitionField }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+{{- if $m.ReturnsError }}
+				{{ $m.ErrCaptureLHS }} := impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+				return err
+{{- else if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+				return nil
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+				return nil
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

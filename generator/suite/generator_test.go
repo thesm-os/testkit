@@ -49,10 +49,12 @@ func TestGenerator(t *testing.T) {
 		testkit.NoError(t, err, "Generate")
 		out := string(res.Files[0].Content)
 		testkit.Assert(t, out).
-			Contains("func AssertStoreContract(t *testing.T, factory StoreFactory)",
-				"single-impl driver").
-			Contains("func AssertStoreContractAcrossImpls(t *testing.T, factories ...StoreNamedFactory)",
-				"multi-impl driver").
+			Contains("func AssertStoreContract(t *testing.T, factory StoreFactory, opts ...suite.Option)",
+				"single-impl driver accepts ...Option").
+			Contains("resolved := suite.ResolveOptions(opts...)",
+				"driver folds options once").
+			Contains("func AssertStoreContractAcrossImpls(t *testing.T, factories []StoreNamedFactory, opts ...suite.Option)",
+				"multi-impl driver takes []NamedFactory + ...Option").
 			Contains("type StoreFactory func() basic.Store", "factory alias").
 			Contains("type StoreNamedFactory struct", "named factory tuple")
 	})
@@ -304,5 +306,43 @@ func TestMethodView(t *testing.T) {
 		m := d.FirstNonSkipMethod()
 		testkit.True(t, m != nil, "Directives has non-skip methods")
 		testkit.False(t, m.IsIntegrationOnly(), "returned method is not skipped")
+	})
+
+	t.Run("SampleParamAt prefers //testkit:sample over default literal", func(t *testing.T) {
+		t.Parallel()
+		d := analyzeAndProject(t, "basic", "Sampler")
+		lookup := methodByName(t, d, "Lookup")
+		testkit.Equal(t, lookup.SampleParamAt(0, d.Spec.Tracker), "basic.SampleKey()",
+			"SampleKey directive overrides default test-key literal")
+		apply := methodByName(t, d, "Apply")
+		testkit.Equal(t, apply.SampleParamAt(0, d.Spec.Tracker), "basic.SampleKey()",
+			"first sample param resolves to qualified SampleKey()")
+		testkit.Equal(t, apply.SampleParamAt(1, d.Spec.Tracker), "basic.SampleItem()",
+			"second sample param resolves to qualified SampleItem()")
+	})
+
+	t.Run("SampleParamAt falls back to default when no //testkit:sample", func(t *testing.T) {
+		t.Parallel()
+		d := analyzeAndProject(t, "basic", "Store")
+		get := methodByName(t, d, "Get")
+		testkit.Equal(t, get.SampleParamAt(0, d.Spec.Tracker), `"test-key"`,
+			"Get without sample directive uses default test-key literal")
+	})
+
+	t.Run("SampleArgs uses //testkit:sample call list when count matches", func(t *testing.T) {
+		t.Parallel()
+		d := analyzeAndProject(t, "basic", "Sampler")
+		apply := methodByName(t, d, "Apply")
+		testkit.Equal(t, apply.SampleArgs(d.Spec.Tracker),
+			"t.Context(), basic.SampleKey(), basic.SampleItem()",
+			"SampleArgs prepends t.Context() and joins qualified sample calls")
+	})
+
+	t.Run("SampleArgs falls back to default when no //testkit:sample", func(t *testing.T) {
+		t.Parallel()
+		d := analyzeAndProject(t, "basic", "Store")
+		get := methodByName(t, d, "Get")
+		testkit.Equal(t, get.SampleArgs(d.Spec.Tracker), `t.Context(), "test-key"`,
+			"SampleArgs falls back to spec defaults")
 	})
 }

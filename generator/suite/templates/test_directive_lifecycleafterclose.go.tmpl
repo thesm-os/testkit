@@ -1,0 +1,14 @@
+{{- /* Lifecycle-after-close contract: emits one call to
+       [suite.AssertLifecycleAfterCloseReflective] with a typed
+       close closure. Runtime owns the reflection on the named
+       reader + non-nil error assertion. */ -}}
+{{- define "test-directive-lifecycleafterclose" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		suite.AssertLifecycleAfterCloseReflective[{{ $iface }}](
+			{{ printf "%q" $m.LifecycleAfterCloseReader }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				return impl.{{ $m.Name }}(ctx)
+			},
+		)(t, factory)
+{{- end -}}

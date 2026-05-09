@@ -1,0 +1,25 @@
+{{- /* Pagination contract: cursor-based iteration terminates and
+       yields no duplicates. The runtime helper [suite.AssertPaginates]
+       follows the cursor by reflection — extracts `Items` slice and
+       the named cursor field from the page struct, accumulates items
+       in a set, fails on duplicates or runaway iteration (default
+       1000-iteration cap).
+
+       Method signature: `func(ctx, cursor) (Page, error)` where
+       `Page` is a struct with `Items` and the named cursor field. */ -}}
+{{- define "test-directive-pagination" -}}
+{{- $m := .M -}}
+{{- $tracker := .Tracker -}}
+{{- $iface := .Iface -}}
+{{- $cursor := $m.ParamTypeAt 0 $tracker -}}
+{{- $page := $m.ResultTypeAt 0 $tracker -}}
+		suite.AssertPaginates[{{ $iface }}, {{ $cursor }}, {{ $page }}](
+			suite.PaginationConfig{
+				CursorField: {{ printf "%q" $m.PaginationCursor }},
+				EmptyCursor: {{ $m.ZeroParamAt 0 $tracker }},
+			},
+			func(ctx context.Context, impl {{ $iface }}, cursor {{ $cursor }}) ({{ $page }}, error) {
+				return impl.{{ $m.Name }}(ctx, cursor)
+			},
+		)(t, factory)
+{{- end -}}

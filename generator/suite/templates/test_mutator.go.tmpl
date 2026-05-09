@@ -3,6 +3,7 @@
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
 {{- $tracker := .Tracker -}}
+{{- $opts := .Opts -}}
 {{- $V := $m.ShapeValType -}}
 		sctx := suite.MutatorContextFor[{{ $iface }}, {{ $V }}](t, factory,
 			func(ctx context.Context, impl {{ $iface }}, value {{ $V }}) {
@@ -15,8 +16,8 @@
 		suite.AssertMutatorSucceeds[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
 		suite.AssertMutatorRespectsContext[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
 		suite.AssertMutatorIdempotent[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		t.Run("rejects invalid", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: AssertMutatorRejectInvalid requires consumer-supplied check observing rejection via paired reader/aggregator")
-		})
+		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
+			suite.AssertMutatorRejectInvalidWith[{{ $iface }}, {{ $V }}](invalidFactory, {{ $m.SampleParamAt 0 $tracker }})(sctx)
+		}
 		suite.AssertMutatorConcurrentSafe[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
 {{- end -}}

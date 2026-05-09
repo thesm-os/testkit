@@ -84,6 +84,30 @@ func AssertMutatorRejectInvalid[T, V any](
 	}
 }
 
+// AssertMutatorRejectInvalidWith calls the mutator on an invalid-factory
+// impl with the sample value and asserts no panic. Mutators have no
+// return position; the contract under "invalid impl" is the no-panic
+// guarantee — observable rejection (the mutation didn't take effect)
+// belongs to the cross-method invariant directives that pair the
+// writer with a reader.
+func AssertMutatorRejectInvalidWith[T, V any](
+	invalidFactory func() T,
+	sample V,
+) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		ctx.T.Run("rejects invalid", func(t *testing.T) {
+			t.Parallel()
+			impl := invalidFactory()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("mutator on invalid impl must not panic, got: %v", r)
+				}
+			}()
+			ctx.Call(t.Context(), impl, sample)
+		})
+	}
+}
+
 // AssertMutatorConcurrentSafe runs the mutator from N goroutines concurrently
 // using the given sample value.
 func AssertMutatorConcurrentSafe[T, V any](sample V, workers, iters int) MutatorAssertion[T, V] {

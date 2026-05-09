@@ -10,9 +10,12 @@
                                         //testkit:errors)
          - AssertReaderConcurrentSafe  (ConcurrentSafe)
 
-       Methods without a sentinel directive get a documented
-       no-sentinel subtest that records the omission rather than
-       silently dropping it. */ -}}
+       Methods without a sentinel directive simply omit the
+       AssertReturnsSentinel call — the contract is unverifiable
+       without a named sentinel; emitting nothing is honest.
+       Generic Reader where the sample key equals the zero key
+       (`*new(K)`) also omits the sentinel call to avoid the
+       sample/missing-key collision (see Task 9). */ -}}
 {{- define "test-method-reader" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
@@ -30,12 +33,8 @@
 		suite.AssertReturnsForKey[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }})(sctx)
 		suite.AssertReaderRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
 		suite.AssertConsistentReads[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
-{{- if $m.HasFirstSentinel }}
+{{- if and $m.HasFirstSentinel (not ($m.SampleEqualsZero 0 $tracker)) }}
 		suite.AssertReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
-{{- else }}
-		t.Run("rejects invalid (no sentinel)", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline requires //testkit:errors <Sentinel>; subtest omitted to avoid a meaningless assertion")
-		})
 {{- end }}
 		suite.AssertReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
 {{- end -}}

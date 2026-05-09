@@ -85,6 +85,27 @@ func AssertVoidLifecycleRejectInvalid[T any](
 	}
 }
 
+// AssertVoidLifecycleRejectInvalidWith runs the method against an
+// invalid-factory impl and asserts no panic. VoidLifecycle has no
+// return position; the contract under "invalid" input is therefore
+// the no-panic guarantee — observable rejection (the mutation didn't
+// take effect) belongs to the cross-method invariant directives that
+// pair the writer with a reader.
+func AssertVoidLifecycleRejectInvalidWith[T any](invalidFactory func() T) VoidLifecycleAssertion[T] {
+	return func(ctx VoidLifecycleContext[T]) {
+		ctx.T.Run("rejects invalid", func(t *testing.T) {
+			t.Parallel()
+			impl := invalidFactory()
+			defer func() {
+				if r := recover(); r != nil {
+					t.Fatalf("VoidLifecycle on invalid impl must not panic, got: %v", r)
+				}
+			}()
+			ctx.Call(t.Context(), impl)
+		})
+	}
+}
+
 // AssertVoidLifecycleConcurrentSafe runs the method from N goroutines
 // concurrently.
 func AssertVoidLifecycleConcurrentSafe[T any](workers, iters int) VoidLifecycleAssertion[T] {

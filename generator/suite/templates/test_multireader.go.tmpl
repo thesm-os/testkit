@@ -19,10 +19,6 @@
 		suite.AssertMultiReaderConsistent[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
 {{- if $m.HasFirstSentinel }}
 		suite.AssertMultiReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
-{{- else }}
-		t.Run("rejects invalid (no sentinel)", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline requires //testkit:errors <Sentinel>")
-		})
 {{- end }}
 		suite.AssertMultiReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
 {{- end -}}

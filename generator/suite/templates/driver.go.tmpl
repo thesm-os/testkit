@@ -42,8 +42,29 @@ type {{ $namedFactory }} struct {
 // fresh impl via the factory so per-test state isolation is the
 // caller's responsibility — the factory should return an
 // independently-state'd instance every call.
-func {{ $driver }}(t *testing.T, factory {{ $factory }}) {
+//
+// Variadic `opts` carry impl-supplied inputs the contract needs but
+// the generator can't synthesize: invalid factories for RejectInvalid
+// baselines, prePopulate seeders, paired observers, aggregator
+// bounds, stream samples, scope context, lease release, and more.
+// See [suite.Option] and the `WithX` constructors for the full set.
+func {{ $driver }}(t *testing.T, factory {{ $factory }}, opts ...suite.Option) {
 	t.Helper()
+	resolved := suite.ResolveOptions(opts...)
+	_ = resolved
+	// When the consumer supplies WithPrePopulate, wrap the factory once
+	// so every fresh impl handed to a subtest gets seeded before any
+	// contract assertion runs. The wrapper is identity when no
+	// PrePopulate option is supplied — production-cost is a single
+	// type assertion + nil check at driver entry.
+	if seed, ok := resolved.PrePopulate.(func({{ $type }})); ok {
+		base := factory
+		factory = func() {{ $type }} {
+			impl := base()
+			seed(impl)
+			return impl
+		}
+	}
 {{- if .HasErrorMethod }}
 	errTest := testkit.TestError("{{ $iface }}-contract")
 	_ = errTest
@@ -52,13 +73,14 @@ func {{ $driver }}(t *testing.T, factory {{ $factory }}) {
 }
 
 // {{ $across }} runs [{{ $driver }}] once per named factory under
-// `t.Run(Name, ...)`. New impls drop in via slice append.
-func {{ $across }}(t *testing.T, factories ...{{ $namedFactory }}) {
+// `t.Run(Name, ...)`. New impls drop in via slice append. The
+// variadic `opts` apply to every factory's contract run.
+func {{ $across }}(t *testing.T, factories []{{ $namedFactory }}, opts ...suite.Option) {
 	t.Helper()
 	for _, nf := range factories {
 		t.Run(nf.Name, func(t *testing.T) {
 			t.Parallel()
-			{{ $driver }}(t, nf.Factory)
+			{{ $driver }}(t, nf.Factory, opts...)
 		})
 	}
 }

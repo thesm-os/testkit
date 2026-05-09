@@ -1,0 +1,30 @@
+{{- /* Sideeffect contract: emits one call to
+       [suite.AssertSideEffectObservable] with a reflection-driven
+       observe closure (invokes the named paired method) and a
+       typed mutate closure. */ -}}
+{{- define "test-directive-sideeffect" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+		suite.AssertSideEffectObservable[{{ $iface }}](
+			{{ printf "%q" $m.SideEffectMethod }},
+			func(ctx context.Context, impl {{ $iface }}) any {
+				rv := reflect.ValueOf(impl).MethodByName({{ printf "%q" $m.SideEffectMethod }})
+				if !rv.IsValid() {
+					return nil
+				}
+				results := rv.Call([]reflect.Value{reflect.ValueOf(ctx)})
+				if len(results) == 0 {
+					return nil
+				}
+				return results[0].Interface()
+			},
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

@@ -20,10 +20,6 @@
 		suite.AssertBatchReaderConsistent[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, 3)(sctx)
 {{- if $m.HasFirstSentinel }}
 		suite.AssertBatchReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.FirstSentinel }})(sctx)
-{{- else }}
-		t.Run("rejects invalid (no sentinel)", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline requires //testkit:errors <Sentinel>")
-		})
 {{- end }}
 		suite.AssertBatchReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, 4, 10)(sctx)
 {{- end -}}

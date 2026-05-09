@@ -1,30 +1,23 @@
-{{- /* MultiArgWriter-shape baseline body. Scoped to 3 non-ctx args;
-       methods with 4+ params emit a documented Skip pointing at the
-       consumer plug-in path. Body-only partial. */ -}}
+{{- /* MultiArgWriter-shape baseline body. Body-only partial.
+
+       Uses the variadic suite runtime so any non-ctx arity works
+       from one set of assertions. The emitted wrapper closure
+       converts `[]any` back to typed args at the call site —
+       type safety at the consumer boundary, arity-agnosticism in
+       the runtime. */ -}}
 {{- define "test-method-multiargwriter" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
 {{- $tracker := .Tracker -}}
-{{- if eq $m.NonCtxParamCount 3 }}
-{{- $P1 := $m.ParamTypeAt 0 $tracker -}}
-{{- $P2 := $m.ParamTypeAt 1 $tracker -}}
-{{- $P3 := $m.ParamTypeAt 2 $tracker -}}
-		sctx := suite.MultiArgWriterContextFor[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}](t, factory,
-			func(ctx context.Context, impl {{ $iface }}, p1 {{ $P1 }}, p2 {{ $P2 }}, p3 {{ $P3 }}) error {
-				return impl.{{ $m.Name }}(ctx, p1, p2, p3)
+		sctx := suite.MultiArgWriterVariadicContextFor[{{ $iface }}](t, factory,
+			func(ctx context.Context, impl {{ $iface }}, args ...any) error {
+				return impl.{{ $m.Name }}(ctx{{ range $i := seq $m.NonCtxParamCount }}, args[{{ $i }}].({{ $m.ParamTypeAt $i $tracker }}){{ end }})
 			})
-		suite.AssertMultiArgWriteSucceeds[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }})(sctx)
-		suite.AssertMultiArgWriterRespectsContext[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }})(sctx)
-		suite.AssertMultiArgWriterIdempotent[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }})(sctx)
+		suite.AssertMultiArgWriteSucceedsVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
+		suite.AssertMultiArgWriterRespectsContextVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
+		suite.AssertMultiArgWriterIdempotentVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
 {{- if $m.HasFirstSentinel }}
-		suite.AssertMultiArgWriteRejectInvalid[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.ZeroParamAt 2 $tracker }}, {{ $m.FirstSentinel }})(sctx)
-{{- else }}
-		t.Run("rejects invalid (no sentinel)", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline requires //testkit:errors <Sentinel>")
-		})
+		suite.AssertMultiArgWriteRejectInvalidVariadic[{{ $iface }}]({{ $m.FirstSentinel }}{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.ZeroParamAt $i $tracker }}{{ end }})(sctx)
 {{- end }}
-		suite.AssertMultiArgWriterConcurrentSafe[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, 4, 10)(sctx)
-{{- else }}
-		t.Skipf("{{ $m.Name }}: MultiArgWriter baseline runtime is scoped to 3 non-ctx params; this method has %d. Use a consumer plug-in.", {{ $m.NonCtxParamCount }})
-{{- end }}
+		suite.AssertMultiArgWriterConcurrentSafeVariadic[{{ $iface }}](4, 10{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
 {{- end -}}

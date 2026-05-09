@@ -88,6 +88,24 @@ func AssertLifecycleRejectInvalid[T any](invalidFactory func() T, sentinel error
 	}
 }
 
+// AssertLifecycleRejectInvalidWith calls the lifecycle method against an
+// invalid-factory impl and asserts the call returns a non-nil error.
+// Use this when the method has no `//testkit:errors` sentinel — the
+// contract is just "errors on invalid input" without naming a specific
+// sentinel. When a sentinel is declared, prefer
+// [AssertLifecycleRejectInvalid] which asserts errors.Is against it.
+func AssertLifecycleRejectInvalidWith[T any](invalidFactory func() T) LifecycleAssertion[T] {
+	return func(ctx LifecycleContext[T]) {
+		ctx.T.Run("lifecycle rejects invalid", func(t *testing.T) {
+			t.Parallel()
+			impl := invalidFactory()
+			err := ctx.Call(t.Context(), impl)
+			testkit.True(t, err != nil,
+				"lifecycle on invalid impl must return a non-nil error")
+		})
+	}
+}
+
 // AssertLifecycleConcurrentSafe runs the lifecycle method from N goroutines
 // concurrently.
 func AssertLifecycleConcurrentSafe[T any](workers, iters int) LifecycleAssertion[T] {

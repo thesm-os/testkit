@@ -18,10 +18,6 @@
 		suite.AssertCompositeWriterIdempotent[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }})(sctx)
 {{- if $m.HasFirstSentinel }}
 		suite.AssertCompositeWriteRejectInvalid[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.FirstSentinel }})(sctx)
-{{- else }}
-		t.Run("rejects invalid (no sentinel)", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: RejectInvalid baseline requires //testkit:errors <Sentinel>")
-		})
 {{- end }}
 		suite.AssertCompositeWriterConcurrentSafe[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, 4, 10)(sctx)
 {{- end -}}

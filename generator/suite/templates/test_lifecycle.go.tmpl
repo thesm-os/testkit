@@ -2,6 +2,7 @@
 {{- define "test-method-lifecycle" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
+{{- $opts := .Opts -}}
 		sctx := suite.LifecycleContextFor[{{ $iface }}](t, factory,
 			func(ctx context.Context, impl {{ $iface }}) error {
 				return impl.{{ $m.Name }}(ctx)
@@ -9,8 +10,12 @@
 		suite.AssertLifecycleSucceeds[{{ $iface }}]()(sctx)
 		suite.AssertLifecycleRespectsContext[{{ $iface }}]()(sctx)
 		suite.AssertLifecycleIdempotent[{{ $iface }}]()(sctx)
-		t.Run("rejects invalid", func(t *testing.T) {
-			t.Skipf("{{ $m.Name }}: AssertLifecycleRejectInvalid requires consumer-supplied invalidFactory + sentinel")
-		})
+		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
+{{- if $m.HasFirstSentinel }}
+			suite.AssertLifecycleRejectInvalid[{{ $iface }}](invalidFactory, {{ $m.FirstSentinel }})(sctx)
+{{- else }}
+			suite.AssertLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory)(sctx)
+{{- end }}
+		}
 		suite.AssertLifecycleConcurrentSafe[{{ $iface }}](4, 10)(sctx)
 {{- end -}}

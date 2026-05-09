@@ -190,7 +190,10 @@ func DeleterContextFor[T any, K comparable](
 	}
 }
 
-// MultiArgWriterContextFor constructs a [MultiArgWriterContext].
+// MultiArgWriterContextFor constructs a typed [MultiArgWriterContext]
+// at exactly 3 non-ctx params. Use this when writing assertions by
+// hand against a known signature; for arity-agnostic generator-emitted
+// contracts use [MultiArgWriterVariadicContextFor].
 func MultiArgWriterContextFor[T, P1, P2, P3 any](
 	t *testing.T,
 	factory func() T,
@@ -200,6 +203,26 @@ func MultiArgWriterContextFor[T, P1, P2, P3 any](
 	return MultiArgWriterContext[T, P1, P2, P3]{
 		T: t,
 		MultiArgWriterBindings: bindings.MultiArgWriterBindings[T, P1, P2, P3]{
+			Factory: factory,
+			Call:    call,
+		},
+	}
+}
+
+// MultiArgWriterVariadicContextFor constructs a
+// [MultiArgWriterVariadicContext]. The `call` closure takes a
+// variadic `...any` arg list — the generator emits a per-method
+// typed wrapper that converts back to typed args at the call site,
+// restoring type safety at the consumer boundary.
+func MultiArgWriterVariadicContextFor[T any](
+	t *testing.T,
+	factory func() T,
+	call func(context.Context, T, ...any) error,
+) MultiArgWriterVariadicContext[T] {
+	t.Helper()
+	return MultiArgWriterVariadicContext[T]{
+		T: t,
+		MultiArgWriterVariadicBindings: bindings.MultiArgWriterVariadicBindings[T]{
 			Factory: factory,
 			Call:    call,
 		},

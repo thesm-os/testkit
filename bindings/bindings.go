@@ -143,13 +143,26 @@ type CompositeWriterBindings[T any, K1 comparable, V any] struct {
 
 // MultiArgWriterBindings holds the reusable shape wiring for a
 // MultiArgWriter-shaped method with 3 non-ctx params: func(ctx,
-// p1, p2, p3) error. Methods with 4+ non-ctx params use a
-// consumer-supplied plug-in primitive — the binding is intentionally
-// scoped to 3 since that's the Watcher / Subscribe / Schedule
-// pattern that actually appears in real interfaces.
+// p1, p2, p3) error. Used by the bench generator's typed hot-path
+// measurements where boxing through `any` would defeat the
+// allocation/latency contract.
 type MultiArgWriterBindings[T any, P1, P2, P3 any] struct {
 	Factory func() T
 	Call    func(context.Context, T, P1, P2, P3) error
+}
+
+// MultiArgWriterVariadicBindings holds arity-agnostic shape wiring
+// for a MultiArgWriter-shaped method. Suite uses this so contract
+// baselines exercise methods with any non-ctx arity (2, 3, 4, …)
+// from a single runtime; the generator emits a typed wrapper that
+// converts `[]any` back to typed args at the call site, restoring
+// type safety at the consumer boundary.
+//
+// Bench keeps the typed [MultiArgWriterBindings] above — boxing
+// through `any` defeats hot-path measurements.
+type MultiArgWriterVariadicBindings[T any] struct {
+	Factory func() T
+	Call    func(ctx context.Context, impl T, args ...any) error
 }
 
 // MultiAggregatorBindings holds the reusable shape wiring for a

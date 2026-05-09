@@ -1,0 +1,20 @@
+{{- /* Bounded contract: emits one call to [suite.AssertBoundedRange]
+       with a single-shot sampler closure. Runtime owns the
+       comparison. */ -}}
+{{- define "test-directive-bounded" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $R := $m.ResultTypeAt 0 $tracker -}}
+		suite.AssertBoundedRange[{{ $iface }}, {{ $R }}](
+			"[{{ $m.BoundedMin }}, {{ $m.BoundedMax }}]",
+			{{ $m.BoundedMin }}, {{ $m.BoundedMax }},
+			func(ctx context.Context, impl {{ $iface }}) ({{ $R }}, error) {
+{{- if $m.ReturnsError }}
+				return impl.{{ $m.Name }}(ctx)
+{{- else }}
+				return impl.{{ $m.Name }}(ctx), nil
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

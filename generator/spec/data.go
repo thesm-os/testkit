@@ -219,6 +219,19 @@ func (m *Method) ParamTypeAt(i int, t *generator.ImportTracker) string {
 	return generator.TypeStr(m.NonCtxParamAt(i), t)
 }
 
+// ResultTypeAt returns the rendered Go type of the i-th result
+// (0-indexed, raw position — the trailing error is at the last
+// index). Used by per-directive subtests that need the impl's
+// return type at template time (e.g. pagination's Page struct).
+// Empty when i is out of range.
+func (m *Method) ResultTypeAt(i int, t *generator.ImportTracker) string {
+	results := m.Signature.Results()
+	if i < 0 || i >= results.Len() {
+		return ""
+	}
+	return generator.TypeStr(results.At(i).Type(), t)
+}
+
 // SampleParamAt returns the rendered sample literal for the i-th
 // non-ctx parameter (0-indexed). Generators emitting per-shape
 // subtests use this to populate the K/V/P slots a shape's assertion

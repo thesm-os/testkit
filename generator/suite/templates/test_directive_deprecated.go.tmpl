@@ -1,0 +1,19 @@
+{{- /* Deprecated contract: emits one call to
+       [suite.AssertDeprecatedSmoke] with a typed call closure that
+       discards the impl's results. The runtime handles t.Run +
+       t.Logf + recover. */ -}}
+{{- define "test-directive-deprecated" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+		suite.AssertDeprecatedSmoke[{{ $iface }}](
+			{{ printf "%q" $m.Name }}, {{ printf "%q" $m.DeprecatedReplacement }},
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

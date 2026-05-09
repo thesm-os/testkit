@@ -76,8 +76,19 @@ const (
 	// Sample directive (smoke + bench input replacement).
 	Sample = "sample"
 
-	// Cross-method invariants.
-	Cross = "cross"
+	// Cross-method invariants. Each is a first-class directive; the
+	// suite emits one assertion per directive at the carrier method's
+	// t.Run block. Adding a new invariant is one new descriptor +
+	// consumer + runtime helper + template — no umbrella `cross`
+	// indirection, no closed set. The `Cross` directive remains for
+	// future generic invariant declarations not yet shaped into a
+	// per-invariant directive.
+	Cross                   = "cross"
+	ReadAfterWrite          = "read-after-write"
+	DeleteRemoves           = "delete-removes"
+	StreamReflectsMutations = "stream-reflects-mutations"
+	LifecycleAfterClose     = "lifecycle-after-close"
+	CRDTMerge               = "crdt-merge"
 
 	// Sentinel cross-package non-overlap.
 	SentinelNoOverlapWith = "sentinel-no-overlap-with"
@@ -181,9 +192,10 @@ func defaultDescriptors() []Descriptor {
 			Consumed("stub", "tb.Logf in dispatch + // Deprecated: doc comment"),
 		),
 		New(Lease,
-			Describe("acquires resource, must release"),
+			Describe("acquires resource, must release via the named method"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
+			Arg("Release", ArgIdent, Required),
 		),
 		New(IntegrationOnly,
 			Describe("opt out of stubbing"),
@@ -342,13 +354,44 @@ func defaultDescriptors() []Descriptor {
 			Arg("FuncName", ArgIdent, Required, Multi),
 		),
 
-		// Cross-method invariants.
+		// Cross-method invariants — one descriptor per invariant; the
+		// suite emits a paired-method contract subtest per directive.
 		New(Cross,
-			Describe("cross-method invariant"),
+			Describe("generic cross-method invariant declaration (escape hatch)"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("name", ArgIdent, Required),
 			Arg("Methods", ArgKey, Required, Multi),
+		),
+		New(ReadAfterWrite,
+			Describe("after this writer, the named reader returns the written value"),
+			InCategory(Enrichment),
+			InPhase(Phase3),
+			Arg("Reader", ArgIdent, Required),
+		),
+		New(DeleteRemoves,
+			Describe("after this deleter, the named reader returns the not-found sentinel"),
+			InCategory(Enrichment),
+			InPhase(Phase3),
+			Arg("Reader", ArgIdent, Required),
+		),
+		New(StreamReflectsMutations,
+			Describe("after this writer, the named stream method yields the written value"),
+			InCategory(Enrichment),
+			InPhase(Phase3),
+			Arg("Stream", ArgIdent, Required),
+		),
+		New(LifecycleAfterClose,
+			Describe("after this close, the named reader returns the closed sentinel"),
+			InCategory(Enrichment),
+			InPhase(Phase3),
+			Arg("Reader", ArgIdent, Required),
+		),
+		New(CRDTMerge,
+			Describe("two impls applying operations in opposite orders converge to equal state"),
+			InCategory(Enrichment),
+			InPhase(Phase3),
+			Arg("Other", ArgIdent, Required),
 		),
 
 		// Sentinel cross-package non-overlap.

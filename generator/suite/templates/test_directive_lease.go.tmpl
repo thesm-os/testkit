@@ -1,0 +1,15 @@
+{{- /* Lease contract: emits one call to [suite.AssertLeaseAcquireRelease]
+       with typed acquire + release closures. Runtime owns both
+       sub-cases. */ -}}
+{{- define "test-directive-lease" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		suite.AssertLeaseAcquireRelease[{{ $iface }}](
+			func(ctx context.Context, impl {{ $iface }}) error {
+				return impl.{{ $m.Name }}(ctx)
+			},
+			func(ctx context.Context, impl {{ $iface }}) error {
+				return impl.{{ $m.LeaseRelease }}(ctx)
+			},
+		)(t, factory)
+{{- end -}}

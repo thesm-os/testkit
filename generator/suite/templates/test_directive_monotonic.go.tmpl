@@ -1,0 +1,21 @@
+{{- /* Monotonic contract: emits one call to
+       [suite.AssertMonotonicNonDecreasing] with a single-shot
+       sampler closure. Runtime owns the loop + comparison. The
+       directive validator (Task 18) rejects monotonic on result
+       types that don't satisfy [cmp.Ordered]. */ -}}
+{{- define "test-directive-monotonic" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $R := $m.ResultTypeAt 0 $tracker -}}
+		suite.AssertMonotonicNonDecreasing[{{ $iface }}, {{ $R }}](
+			6,
+			func(ctx context.Context, impl {{ $iface }}) ({{ $R }}, error) {
+{{- if $m.ReturnsError }}
+				return impl.{{ $m.Name }}(ctx)
+{{- else }}
+				return impl.{{ $m.Name }}(ctx), nil
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

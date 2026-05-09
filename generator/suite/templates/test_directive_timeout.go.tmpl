@@ -1,0 +1,17 @@
+{{- /* Timeout contract: emits one call to [suite.AssertTimeoutWithin]
+       with the duration + descriptor + a void-returning closure. */ -}}
+{{- define "test-directive-timeout" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+		suite.AssertTimeoutWithin[{{ $iface }}](
+			{{ $m.TimeoutDuration }}, {{ printf "%q" $m.TimeoutDuration }},
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasResults }}
+				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- else }}
+				impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})
+{{- end }}
+			},
+		)(t, factory)
+{{- end -}}

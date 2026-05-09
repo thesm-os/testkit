@@ -15,7 +15,7 @@
 {{- if not $m.IsIntegrationOnly }}
 	t.Run("{{ $m.Name }}", func(t *testing.T) {
 {{ template "test-method-smoke" (dict "M" $m "Tracker" $tracker "Spec" $spec) }}
-{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker) -}}
+{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker "Opts" "resolved") -}}
 {{- if eq $m.ShapeName "Reader" }}
 {{ template "test-method-reader" $args }}
 {{- else if eq $m.ShapeName "ReaderNoError" }}
@@ -59,6 +59,63 @@
 {{- else if eq $m.ShapeName "PoisonAccessor" }}
 {{ template "test-method-poisonaccessor" $args }}
 {{- end }}
+{{- /* Per-directive subtests, in registry order. Each partial is
+       gated on the directive's HasX predicate; partials emit
+       nothing when the predicate is false. */ -}}
+{{- if $m.IsDeprecated }}
+{{ template "test-directive-deprecated" $args }}{{ end }}
+{{- if $m.HasRetrySucceeds }}
+{{ template "test-directive-retryable" $args }}{{ end }}
+{{- if $m.HasOrderAfter }}
+{{ template "test-directive-orderafter" $args }}{{ end }}
+{{- if $m.HasPartition }}
+{{ template "test-directive-partition" $args }}{{ end }}
+{{- if $m.HasWrappedVia }}
+{{ template "test-directive-wrappedvia" $args }}{{ end }}
+{{- if $m.IsIdempotent }}
+{{ template "test-directive-idempotent" $args }}{{ end }}
+{{- if $m.IsPure }}
+{{ template "test-directive-pure" $args }}{{ end }}
+{{- if $m.IsCacheable }}
+{{ template "test-directive-cacheable" $args }}{{ end }}
+{{- if $m.IsMonotonic }}
+{{ template "test-directive-monotonic" $args }}{{ end }}
+{{- if $m.IsConcurrent }}
+{{ template "test-directive-concurrent" $args }}{{ end }}
+{{- if $m.IsConcurrentReaders }}
+{{ template "test-directive-concurrentreaders" $args }}{{ end }}
+{{- if $m.IsNilSafe }}
+{{ template "test-directive-nilsafe" $args }}{{ end }}
+{{- if $m.IsAtomic }}
+{{ template "test-directive-atomic" $args }}{{ end }}
+{{- if $m.HasBounded }}
+{{ template "test-directive-bounded" $args }}{{ end }}
+{{- if $m.HasTimeout }}
+{{ template "test-directive-timeout" $args }}{{ end }}
+{{- if $m.HasSideEffect }}
+{{ template "test-directive-sideeffect" $args }}{{ end }}
+{{- if $m.HasValidates }}
+{{ template "test-directive-validates" $args }}{{ end }}
+{{- if $m.HasHooks }}
+{{ template "test-directive-hooks" $args }}{{ end }}
+{{- if $m.HasEventually }}
+{{ template "test-directive-eventually" $args }}{{ end }}
+{{- if $m.HasScope }}
+{{ template "test-directive-scope" $args }}{{ end }}
+{{- if $m.HasPagination }}
+{{ template "test-directive-pagination" $args }}{{ end }}
+{{- if $m.HasLease }}
+{{ template "test-directive-lease" $args }}{{ end }}
+{{- if $m.HasReadAfterWrite }}
+{{ template "test-directive-readafterwrite" $args }}{{ end }}
+{{- if $m.HasDeleteRemoves }}
+{{ template "test-directive-deleteremoves" $args }}{{ end }}
+{{- if $m.HasStreamReflectsMutations }}
+{{ template "test-directive-streamreflectsmutations" $args }}{{ end }}
+{{- if $m.HasLifecycleAfterClose }}
+{{ template "test-directive-lifecycleafterclose" $args }}{{ end }}
+{{- if $m.HasCRDTMerge }}
+{{ template "test-directive-crdtmerge" $args }}{{ end }}
 	})
 {{ end }}{{ end -}}
 {{- end -}}

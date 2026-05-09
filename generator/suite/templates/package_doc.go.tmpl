@@ -28,15 +28,16 @@
 // `t.Run(name, ...)` per impl:
 //
 //	func TestStoreContractAcrossImpls(t *testing.T) {
-//	    {{ $across }}{{ .Spec.TypeParamArgs }}(t,
-//	        suite.NamedFactory[{{ .QualifiedTypeForTest }}]{Name: "InMemory", Factory: newInMemory},
-//	        suite.NamedFactory[{{ .QualifiedTypeForTest }}]{Name: "Postgres",  Factory: newPostgres},
-//	    )
+//	    {{ $across }}(t, []{{ .NamedFactoryTypeName }}{
+//	        {Name: "InMemory", Factory: newInMemory},
+//	        {Name: "Postgres", Factory: newPostgres},
+//	    })
 //	}
 //
 // New impls drop into the slice — no per-impl test function to
 // hand-wire. The driver emits identical per-method, per-shape, and
-// per-directive subtests across every factory.
+// per-directive subtests across every factory. Variadic `suite.Option`
+// arguments apply to every factory's contract run.
 //
 // # Contract coverage
 //
