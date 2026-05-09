@@ -48,7 +48,7 @@ func AssertPredicateReturns[T any](want bool) PredicateAssertion[T] {
 			t.Parallel()
 			impl := ctx.Factory()
 			got := ctx.Call(impl)
-			testkit.Equal(t, got, want, "predicate must return expected value")
+			testkit.Equal(t, got, want, sampleAlignmentHint("Predicate", "the predicate"))
 		})
 	}
 }

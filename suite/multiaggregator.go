@@ -36,8 +36,9 @@ func AssertMultiAggregatorReturns[T any, V1, V2 comparable](
 			impl := ctx.Factory()
 			got1, got2, err := ctx.Call(t.Context(), impl)
 			testkit.NoError(t, err, "multi-aggregator must not error")
-			testkit.Equal(t, got1, want1, "first return value must match")
-			testkit.Equal(t, got2, want2, "second return value must match")
+			hint := sampleAlignmentHint("MultiAggregator", "the multi-aggregator")
+			testkit.Equal(t, got1, want1, "first result: "+hint)
+			testkit.Equal(t, got2, want2, "second result: "+hint)
 		})
 	}
 }

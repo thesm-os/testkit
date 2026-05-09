@@ -33,7 +33,7 @@ func AssertAggregatorReturns[T any, R comparable](want R) AggregatorAssertion[T,
 			impl := ctx.Factory()
 			got, err := ctx.Call(t.Context(), impl)
 			testkit.NoError(t, err, "aggregator must not error")
-			testkit.Equal(t, got, want, "aggregator must return expected value")
+			testkit.Equal(t, got, want, sampleAlignmentHint("Aggregator", "the aggregator"))
 		})
 	}
 }

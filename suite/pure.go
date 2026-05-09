@@ -30,7 +30,7 @@ func AssertPureReturns[T any, R comparable](want R) PureAssertion[T, R] {
 			t.Parallel()
 			impl := ctx.Factory()
 			got := ctx.Call(impl)
-			testkit.Equal(t, got, want, "pure method must return expected value")
+			testkit.Equal(t, got, want, sampleAlignmentHint("Pure", "the pure method"))
 		})
 	}
 }
