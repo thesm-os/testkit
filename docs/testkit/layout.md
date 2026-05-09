@@ -19,7 +19,7 @@ crypto/
     hasher_stub.gen.go       # testkit stub    — test double
     hasher_spec.gen.go       # testkit suite   — Tier 1 conformance
     hasher_bench.gen.go      # testkit bench   — Tier 4 benchmarks
-    hasher_model.gen.go      # testkit model   — Tier 2-3 property testing
+    hasher_model.gen.go      # testkit model   — Tier 2-3 property testing (planned)
     signer_stub.gen.go
     signer_spec.gen.go
     signer_bench.gen.go
@@ -40,7 +40,7 @@ crypto/
 | `*_stub.go` | Developer | Stub companion — wraps `DelegateTo` with a production impl for integration-style stubs. Optional; only needed when consumers want a pre-wired stub. |
 | `sample_helpers.go` | Developer | Sample builder functions that don't belong in the source package's public API. Referenced by `//testkit:sample` directives. |
 | `spec_test.go` | Developer | Wires `AssertHasherContract(t, factory, ...)` and `BenchmarkHasherContract(b, factory)` with the factory closure and options. One per interface, or combine small interfaces. |
-| `model_test.go` | Developer | Wires `HasherModelTest`, `HasherModelFuzz` with factory, reference, extra actions/laws. Separate from spec because model tests are heavier and may need different build tags. |
+| `model_test.go` | Developer | Wires `HasherModelTest`, `HasherModelFuzz` with factory, reference, extra actions/laws. Separate from spec because model tests are heavier and may need different build tags. *(planned — model generator not yet shipped.)* |
 
 ## Where sample builders go
 

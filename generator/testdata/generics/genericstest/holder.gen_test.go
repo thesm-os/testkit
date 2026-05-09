@@ -3,7 +3,7 @@
 //
 // Directives:
 //   Delete: //testkit:deleter
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 
 // Package genericstest_test verifies the HolderStub dispatch contract.
 //

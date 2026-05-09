@@ -68,14 +68,17 @@ func AssertPoisonAccessorRespectsContext[T any]() PoisonAccessorAssertion[T] {
 // the configured sentinel. The consumer supplies a poisonedFactory that
 // produces an impl in a known-bad state; the contract is that the
 // accessor surfaces the sentinel rather than masking the poison.
-func AssertPoisonAccessorRejectInvalid[T any](poisonedFactory func() T, sentinel error) PoisonAccessorAssertion[T] {
+func AssertPoisonAccessorRejectInvalid[T any](
+	poisonedFactory func() T,
+	sentinels ...error,
+) PoisonAccessorAssertion[T] {
 	return func(ctx PoisonAccessorContext[T]) {
 		ctx.T.Run("rejects invalid (poisoned)", func(t *testing.T) {
 			t.Parallel()
 			impl := poisonedFactory()
 			err := ctx.Call(impl)
-			testkit.ErrorIs(t, err, sentinel,
-				"poisoned impl must surface the configured sentinel")
+			assertSentinelMatch(t, err,
+				"poisoned impl must surface the configured sentinel", sentinels...)
 		})
 	}
 }

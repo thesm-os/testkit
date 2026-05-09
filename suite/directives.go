@@ -117,10 +117,15 @@ func AssertPartitionIsolation[T any](
 }
 
 // AssertWrappedVia verifies error returns satisfy errors.Is against
-// both the wrap target and the named sentinel.
+// the wrap target AND against at least one of the declared sentinels.
+// Variadic sentinels so methods declaring multiple //testkit:errors
+// entries assert "the error wraps target AND unwraps to one of the
+// declared set" — single-call invocation produces one error, which
+// must match the wrap target and at least one declared sentinel.
 func AssertWrappedVia[T any](
-	target, sentinel error,
+	target error,
 	call func(ctx context.Context, impl T) error,
+	sentinels ...error,
 ) func(*testing.T, func() T) {
 	return func(t *testing.T, factory func() T) {
 		t.Helper()
@@ -129,7 +134,9 @@ func AssertWrappedVia[T any](
 			err := call(t.Context(), factory())
 			if err != nil {
 				testkit.ErrorIs(t, err, target, "error must wrap the target")
-				testkit.ErrorIs(t, err, sentinel, "error must also unwrap to the sentinel")
+				assertSentinelMatch(t, err,
+					"error must also unwrap to one of the declared sentinels",
+					sentinels...)
 			}
 		})
 	}

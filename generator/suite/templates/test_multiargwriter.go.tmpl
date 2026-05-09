@@ -14,10 +14,13 @@
 				return impl.{{ $m.Name }}(ctx{{ range $i := seq $m.NonCtxParamCount }}, args[{{ $i }}].({{ $m.ParamTypeAt $i $tracker }}){{ end }})
 			})
 		sampleArgs := []any{ {{- range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end -}} }
+{{- if $m.HasFirstSentinel }}
+		invalidArgs := []any{ {{- range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.ZeroParamAt $i $tracker }}{{ end -}} }
+{{- end }}
 		suite.AssertMultiArgWriterBaselineVariadic[{{ $iface }}](
 			sampleArgs,
 {{- if $m.HasFirstSentinel }}
-			suite.AssertMultiArgWriteRejectInvalidVariadic[{{ $iface }}]({{ $m.FirstSentinel }}{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.ZeroParamAt $i $tracker }}{{ end }}),
+			suite.AssertMultiArgWriteRejectInvalidVariadic[{{ $iface }}](invalidArgs, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

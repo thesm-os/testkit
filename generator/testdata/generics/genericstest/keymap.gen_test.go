@@ -2,7 +2,7 @@
 // Source: ifaces.go:50-53 (testkit stub -o genericstest/keymap.gen.go KeyMap)
 //
 // Directives:
-//   Get: //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get: //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 
 // Package genericstest_test verifies the KeyMapStub dispatch contract.
 //

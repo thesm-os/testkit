@@ -6,6 +6,7 @@ package generator
 import (
 	"fmt"
 	"go/types"
+	"strconv"
 	"strings"
 )
 
@@ -139,7 +140,18 @@ func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) str
 		return SampleBasicValue(u, fieldName)
 	case *types.Slice:
 		elemStr := types.TypeString(u.Elem(), tracker.Qualifier())
-		sample := SampleValueOf(u.Elem(), fieldName, tracker)
+		// Element seed strips a single trailing 's' from a plural
+		// param name so a `keys ...string` parameter samples as
+		// `[]string{"test-key"}` rather than `[]string{"test-keys"}`,
+		// keeping the rendered literal consistent with the
+		// `test-key` convention used for non-variadic key slots.
+		// Conservative: only strips when the result has at least
+		// three characters and the name actually ends in 's'.
+		elemName := fieldName
+		if len(fieldName) > 3 && strings.HasSuffix(fieldName, "s") {
+			elemName = strings.TrimSuffix(fieldName, "s")
+		}
+		sample := SampleValueOf(u.Elem(), elemName, tracker)
 		return fmt.Sprintf("[]%s{%s}", elemStr, sample)
 	case *types.Array:
 		return types.TypeString(typ, tracker.Qualifier()) + "{1}"
@@ -166,9 +178,15 @@ func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) str
 }
 
 // SampleBasicValue returns a non-zero Go literal for a basic type.
-// Strings render as `"test-<fieldname>"` so that the seeded value is
+// Strings render as `"test-<fieldname>"` so the seeded value is
 // recognizable when it appears in rendered output (e.g. an Error()
-// string concatenation).
+// string concatenation). Integers and floats derive from the
+// fieldName's trailing digit when present so multi-slot signatures
+// (MultiAggregator's two ints, MultiReader's two values) sample
+// distinct values rather than colliding on the same default — a
+// collision would prevent contract assertions from catching a
+// tuple-swap bug. fieldName "Result0" → 42, "Result1" → 43, etc.;
+// names without a trailing digit fall back to the default literal.
 func SampleBasicValue(b *types.Basic, fieldName string) string {
 	switch {
 	case b.Info()&types.IsString != 0:
@@ -176,12 +194,37 @@ func SampleBasicValue(b *types.Basic, fieldName string) string {
 	case b.Info()&types.IsBoolean != 0:
 		return "true"
 	case b.Info()&types.IsFloat != 0:
-		return "3.14"
+		return floatSampleFor(fieldName)
 	case b.Info()&types.IsInteger != 0:
-		return "42"
+		return intSampleFor(fieldName)
 	default:
 		return "0"
 	}
+}
+
+// intSampleFor returns "42" plus the trailing-digit offset of
+// fieldName so multi-slot signatures sample distinct integers.
+func intSampleFor(fieldName string) string {
+	base := 42
+	if n := len(fieldName); n > 0 {
+		if c := fieldName[n-1]; c >= '0' && c <= '9' {
+			base += int(c - '0')
+		}
+	}
+	return strconv.Itoa(base)
+}
+
+// floatSampleFor returns "3.14" plus the trailing-digit offset of
+// fieldName as a hundredths increment so multi-slot signatures
+// sample distinct floats.
+func floatSampleFor(fieldName string) string {
+	base := 3.14
+	if n := len(fieldName); n > 0 {
+		if c := fieldName[n-1]; c >= '0' && c <= '9' {
+			base += float64(c-'0') / 100
+		}
+	}
+	return fmt.Sprintf("%g", base)
 }
 
 // sampleStructLiteral produces a non-zero struct literal by populating

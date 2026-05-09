@@ -4,7 +4,6 @@
 package suite_test
 
 import (
-	"strings"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -75,7 +74,7 @@ func TestGenerator(t *testing.T) {
 			Contains(`suite.AssertWriterBaseline[`, "Writer baseline call (smoke folded into runtime)")
 	})
 
-	t.Run("integration-only methods skipped", func(t *testing.T) {
+	t.Run("integration-only methods emit a documented Skip block", func(t *testing.T) {
 		t.Parallel()
 		pkg, err := generator.NewLoader().Load("./../testdata/interfaces", "")
 		testkit.NoError(t, err, "Load interfaces fixture")
@@ -85,8 +84,13 @@ func TestGenerator(t *testing.T) {
 			})
 		testkit.NoError(t, err, "Generate")
 		out := string(res.Files[0].Content)
-		testkit.False(t, strings.Contains(out, `t.Run("Close"`),
-			"Close is //testkit:integration-only — must be skipped")
+		// Close is //testkit:integration-only. The dispatcher emits
+		// a t.Run("Close", ...) with t.Skip rather than silently
+		// eliding the method, so a reader scanning the file sees it
+		// exists and is deliberately skipped at this level.
+		testkit.Assert(t, out).
+			Contains(`t.Run("Close"`, "Close per-method block emitted").
+			Contains("//testkit:integration-only", "Close skip cites the directive")
 	})
 
 	t.Run("non-interface arg surfaces a hard error", func(t *testing.T) {

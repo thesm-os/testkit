@@ -87,9 +87,9 @@ func TestAssertWrappedVia(t *testing.T) {
 	t.Parallel()
 	target := errors.New("target")
 	sentinel := errors.New("sentinel")
-	fn := suite.AssertWrappedVia(target, sentinel, func(_ context.Context, _ *directive) error {
+	fn := suite.AssertWrappedVia(target, func(_ context.Context, _ *directive) error {
 		return errors.Join(target, sentinel)
-	})
+	}, sentinel)
 	fn(t, directiveFactory)
 }
 

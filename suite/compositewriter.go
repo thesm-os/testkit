@@ -41,20 +41,22 @@ func AssertCompositeWriteSucceeds[T any, K1 comparable, V any](
 	}
 }
 
-// AssertCompositeWriteRejectInvalid writes an invalid value and asserts
-// the configured sentinel is returned.
+// AssertCompositeWriteRejectInvalid writes an invalid value and
+// asserts the returned error matches one of the declared sentinels
+// via [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries pass the full set.
 func AssertCompositeWriteRejectInvalid[T any, K1 comparable, V any](
 	k1 K1,
 	invalid V,
-	sentinel error,
+	sentinels ...error,
 ) CompositeWriterAssertion[T, K1, V] {
 	return func(ctx CompositeWriterContext[T, K1, V]) {
 		ctx.T.Run("rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, k1, invalid)
-			testkit.ErrorIs(t, err, sentinel,
-				"composite writer must surface sentinel for invalid value")
+			assertSentinelMatch(t, err,
+				"composite writer must surface sentinel for invalid value", sentinels...)
 		})
 	}
 }

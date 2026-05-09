@@ -109,12 +109,17 @@ const (
 func defaultDescriptors() []Descriptor {
 	return []Descriptor{
 		// Error & return contract.
-		New(Errors,
+		New(
+			Errors,
 			Describe("sentinel error returns"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("ErrName", ArgIdent, Required, Multi),
 			Consumed("stub", "Fault<Sentinel>() helper per name"),
+			Consumed(
+				"suite",
+				"AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion",
+			),
 		),
 		New(WrappedVia,
 			Describe("error wrapping discipline"),
@@ -123,6 +128,7 @@ func defaultDescriptors() []Descriptor {
 			Arg("ErrName", ArgIdent, Required),
 			Requires(Errors),
 			Consumed("stub", "Fault<Sentinel> helpers wrap via target"),
+			Consumed("suite", "AssertWrappedVia subtest verifies error chain"),
 		),
 
 		// Behavioral properties (Mixin tier).
@@ -130,6 +136,7 @@ func defaultDescriptors() []Descriptor {
 			Describe("repeated calls produce same result"),
 			InCategory(Mixin),
 			InPhase(Phase1),
+			Consumed("suite", "AssertIdempotentSecondCall subtest"),
 		),
 		New(Pure,
 			Describe("no side effects"),
@@ -137,17 +144,20 @@ func defaultDescriptors() []Descriptor {
 			InPhase(Phase1),
 			ConflictsWith(SideEffect, Monotonic),
 			Implies(Idempotent),
+			Consumed("suite", "AssertPureImplIndependent cross-impl agreement subtest"),
 		),
 		New(Cacheable,
 			Describe("deterministic function of inputs"),
 			InCategory(Mixin),
 			InPhase(Phase3),
 			Implies(Pure),
+			Consumed("suite", "AssertCacheableRepeatedReads three-call equality subtest"),
 		),
 		New(Monotonic,
 			Describe("ordered results"),
 			InCategory(Mixin),
 			InPhase(Phase3),
+			Consumed("suite", "AssertMonotonicNonDecreasing subtest (cmp.Ordered required)"),
 		),
 
 		// Safety (Mixin tier).
@@ -156,21 +166,26 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Mixin),
 			InPhase(Phase1),
 			ConflictsWith(ConcurrentReaders),
+			Consumed("suite", "AssertConcurrentStrict 16×25 fanout subtest"),
 		),
 		New(ConcurrentReaders,
 			Describe("parallel reads, serialised writes"),
 			InCategory(Mixin),
 			InPhase(Phase3),
+			Consumed("suite", "AssertConcurrentReadersParallel 32-reader fanout subtest"),
 		),
 		New(NilSafe,
 			Describe("zero/nil inputs do not panic"),
 			InCategory(Mixin),
 			InPhase(Phase1),
+			Consumed("suite", "AssertNilSafeNoPanic subtest"),
 		),
 		New(Atomic,
 			Describe("all-or-nothing"),
 			InCategory(Mixin),
 			InPhase(Phase3),
+			Requires(Errors),
+			Consumed("suite", "AssertAtomicNoTrace failure-path observation subtest"),
 		),
 
 		// Context & lifecycle.
@@ -184,6 +199,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("duration", ArgDuration, Required),
+			Consumed("suite", "AssertTimeoutWithin deadline-bound subtest"),
 		),
 		New(Deprecated,
 			Describe("method is deprecated"),
@@ -191,18 +207,21 @@ func defaultDescriptors() []Descriptor {
 			InPhase(Phase5),
 			Arg("Replacement", ArgString, Required),
 			Consumed("stub", "tb.Logf in dispatch + // Deprecated: doc comment"),
+			Consumed("suite", "AssertDeprecatedSmoke subtest"),
 		),
 		New(Lease,
 			Describe("acquires resource, must release via the named method"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Release", ArgIdent, Required),
+			Consumed("suite", "AssertLeaseAcquireRelease pair-method subtest"),
 		),
 		New(IntegrationOnly,
 			Describe("opt out of stubbing"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
 			Consumed("stub", "skip dispatch (zero return, no record)"),
+			Consumed("suite", "documented t.Skip in per-method block"),
 		),
 
 		// Performance.
@@ -239,6 +258,7 @@ func defaultDescriptors() []Descriptor {
 			Arg("N", ArgInt, Required),
 			Requires(Retryable),
 			Consumed("stub", "RetrySchedule(err) helper"),
+			Consumed("suite", "AssertRetrySucceedsOnAttempt N-try recovery subtest"),
 		),
 
 		// Causality & ordering.
@@ -247,6 +267,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Method", ArgKey, Required),
+			Consumed("suite", "AssertSideEffectObservable paired-method subtest"),
 		),
 		New(OrderAfter,
 			Describe("call ordering constraint"),
@@ -254,6 +275,7 @@ func defaultDescriptors() []Descriptor {
 			InPhase(Phase3),
 			Arg("Method", ArgKey, Required),
 			Consumed("stub", "AssertAfter check in dispatch (strict mode)"),
+			Consumed("suite", "AssertOrderAfter precedence subtest"),
 		),
 
 		// Isolation.
@@ -263,6 +285,7 @@ func defaultDescriptors() []Descriptor {
 			InPhase(Phase3),
 			Arg("Field", ArgIdent, Required),
 			Consumed("stub", "FaultForPartition / FaultForOtherPartitions helpers"),
+			Consumed("suite", "AssertPartitionIsolation cross-partition fanout subtest"),
 		),
 
 		// Input & validation.
@@ -271,12 +294,14 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Field", ArgIdent, Required),
+			Consumed("suite", "AssertValidatesZeroInput zero-value rejection subtest"),
 		),
 		New(Bounded,
 			Describe("return value bounds"),
 			InCategory(Mixin),
 			InPhase(Phase3),
 			Arg("min..max", ArgRange, Required),
+			Consumed("suite", "AssertBoundedRange in-range subtest"),
 		),
 
 		// Properties & invariants.
@@ -298,6 +323,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase5),
 			Arg("HookName", ArgIdent, Required, Multi),
+			Consumed("suite", "AssertHooksFire registry-driven subtest"),
 		),
 		New(Req,
 			Describe("requirement traceability"),
@@ -312,6 +338,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("timeout", ArgDuration, Required),
+			Consumed("suite", "AssertEventuallyConverges polling-based subtest (no time.Sleep)"),
 		),
 
 		// Authorization.
@@ -320,6 +347,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase5),
 			Arg("ScopeName", ArgIdent, Required),
+			Consumed("suite", "AssertScopeAuthRequired unauthorized-rejection subtest"),
 		),
 
 		// Iteration.
@@ -328,6 +356,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("CursorField", ArgIdent, Required),
+			Consumed("suite", "AssertPaginates corpus-drain subtest"),
 		),
 
 		// Shape hints.
@@ -375,30 +404,35 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
+			Consumed("suite", "AssertReadAfterWriteByKey paired write+read subtest"),
 		),
 		New(DeleteRemoves,
 			Describe("after this deleter, the named reader returns the not-found sentinel"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
+			Consumed("suite", "AssertDeleteRemovesByKey paired delete+read subtest"),
 		),
 		New(StreamReflectsMutations,
 			Describe("after this writer, the named stream method yields the written value"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Stream", ArgIdent, Required),
+			Consumed("suite", "AssertStreamReflectsValueWritten paired write+drain subtest"),
 		),
 		New(LifecycleAfterClose,
 			Describe("after this close, the named reader returns the closed sentinel"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
+			Consumed("suite", "AssertLifecycleAfterCloseReflective paired close+read subtest"),
 		),
 		New(CRDTMerge,
 			Describe("two impls applying operations in opposite orders converge to equal state"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Other", ArgIdent, Required),
+			Consumed("suite", "AssertCRDTMerge dual-impl convergence subtest"),
 		),
 
 		// Sentinel cross-package non-overlap.

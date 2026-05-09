@@ -2,17 +2,17 @@
 // Source: directives.go:29-88 (testkit suite -o directivestest/directives_spec.gen_test.go Directives)
 //
 // Directives:
-//   Close:      //testkit:integration-only                [stub: skip dispatch (zero return, no record)]
-//   Legacy:     //testkit:deprecated Submit               [stub: tb.Logf in dispatch + // Deprecated: doc comment]
-//   Read:       //testkit:order-after Open                [stub: AssertAfter check in dispatch (strict mode)]
+//   Close:      //testkit:integration-only                [stub: skip dispatch (zero return, no record), suite: documented t.Skip in per-method block]
+//   Legacy:     //testkit:deprecated Submit               [stub: tb.Logf in dispatch + // Deprecated: doc comment, suite: AssertDeprecatedSmoke subtest]
+//   Read:       //testkit:order-after Open                [stub: AssertAfter check in dispatch (strict mode), suite: AssertOrderAfter precedence subtest]
 //   Retry:      //testkit:retryable                       [stub: required companion of retry-succeeds-on-attempt]
-//   Retry:      //testkit:retry-succeeds-on-attempt 3     [stub: RetrySchedule(err) helper]
-//   Shard:      //testkit:partition ID                    [stub: FaultForPartition / FaultForOtherPartitions helpers]
-//   ShardByKey: //testkit:partition key                   [stub: FaultForPartition / FaultForOtherPartitions helpers]
-//   Submit:     //testkit:errors ErrNotFound ErrConflict  [stub: Fault<Sentinel>() helper per name]
-//   Submit:     //testkit:wrapped-via ErrInternal         [stub: Fault<Sentinel> helpers wrap via target]
-//   Wrap:       //testkit:errors ErrForbidden             [stub: Fault<Sentinel>() helper per name]
-//   Wrap:       //testkit:wrapped-via ErrInternal         [stub: Fault<Sentinel> helpers wrap via target]
+//   Retry:      //testkit:retry-succeeds-on-attempt 3     [stub: RetrySchedule(err) helper, suite: AssertRetrySucceedsOnAttempt N-try recovery subtest]
+//   Shard:      //testkit:partition ID                    [stub: FaultForPartition / FaultForOtherPartitions helpers, suite: AssertPartitionIsolation cross-partition fanout subtest]
+//   ShardByKey: //testkit:partition key                   [stub: FaultForPartition / FaultForOtherPartitions helpers, suite: AssertPartitionIsolation cross-partition fanout subtest]
+//   Submit:     //testkit:errors ErrNotFound ErrConflict  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
+//   Submit:     //testkit:wrapped-via ErrInternal         [stub: Fault<Sentinel> helpers wrap via target, suite: AssertWrappedVia subtest verifies error chain]
+//   Wrap:       //testkit:errors ErrForbidden             [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
+//   Wrap:       //testkit:wrapped-via ErrInternal         [stub: Fault<Sentinel> helpers wrap via target, suite: AssertWrappedVia subtest verifies error chain]
 
 // Package directivestest_test verifies that any implementation of
 // [interfaces.Directives] honors the contract declared by the
@@ -62,7 +62,6 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/testdata/interfaces"
 	"go.thesmos.sh/testkit/suite"
 )
@@ -109,8 +108,22 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 			return impl
 		}
 	}
-	errTest := testkit.TestError("Directives-contract")
-	_ = errTest
+
+	// Close — //testkit:integration-only.
+	//
+	// This method is annotated as integration-only: its behavior is
+	// observable only against a real backing system (network/disk/
+	// external service), not against the in-memory companion that
+	// drives the suite's contract-correctness path. Emitting the
+	// per-method t.Run as a documented Skip preserves visibility —
+	// a reader scanning the file sees the method exists and is
+	// deliberately not contract-tested at this level. Integration
+	// coverage is the consumer's responsibility (typically a
+	// hand-written test under the interface package's own _test
+	// directory, gated on a build tag or env var).
+	t.Run("Close", func(t *testing.T) {
+		t.Skip("//testkit:integration-only — contract-correctness path skipped; integration coverage lives in the consumer's own test layer")
+	})
 
 	// Legacy — Writer-shape method.
 	//
@@ -365,15 +378,16 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 			})
 		suite.AssertWriterBaseline[interfaces.Directives, interfaces.Record](
 			interfaces.Record{ID: "test-id"},
-			suite.AssertWriteRejectInvalid[interfaces.Directives, interfaces.Record](interfaces.Record{}, interfaces.ErrNotFound),
+			suite.AssertWriteRejectInvalid[interfaces.Directives, interfaces.Record](interfaces.Record{}, interfaces.ErrNotFound, interfaces.ErrConflict),
 		)(sctx)
 
 		suite.AssertWrappedVia[interfaces.Directives](
-			interfaces.ErrInternal, interfaces.ErrNotFound,
+			interfaces.ErrInternal,
 			func(ctx context.Context, impl interfaces.Directives) error {
 				err := impl.Submit(t.Context(), interfaces.Record{})
 				return err
 			},
+			interfaces.ErrNotFound, interfaces.ErrConflict,
 		)(t, factory)
 	})
 
@@ -412,11 +426,12 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(sctx)
 
 		suite.AssertWrappedVia[interfaces.Directives](
-			interfaces.ErrInternal, interfaces.ErrForbidden,
+			interfaces.ErrInternal,
 			func(ctx context.Context, impl interfaces.Directives) error {
 				err := impl.Wrap(t.Context(), "")
 				return err
 			},
+			interfaces.ErrForbidden,
 		)(t, factory)
 	})
 

@@ -59,14 +59,20 @@ func AssertDeleteIdempotent[T any, K comparable](key K) DeleterAssertion[T, K] {
 }
 
 // AssertDeleteReturnsNotFound deletes an unknown key and asserts the
-// given not-found sentinel is returned.
-func AssertDeleteReturnsNotFound[T any, K comparable](unknown K, sentinel error) DeleterAssertion[T, K] {
+// returned error matches one of the declared sentinels via
+// [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries pass the full set.
+func AssertDeleteReturnsNotFound[T any, K comparable](
+	unknown K,
+	sentinels ...error,
+) DeleterAssertion[T, K] {
 	return func(ctx DeleterContext[T, K]) {
 		ctx.T.Run(fmt.Sprintf("delete returns not-found for %v", unknown), func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, unknown)
-			testkit.ErrorIs(t, err, sentinel, "delete of unknown key must return sentinel")
+			assertSentinelMatch(t, err,
+				"delete of unknown key must return sentinel", sentinels...)
 		})
 	}
 }

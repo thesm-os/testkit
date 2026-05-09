@@ -25,7 +25,7 @@
 			{{ $m.SampleParamAt 0 $tracker }},
 			{{ $m.SampleResultAt 0 $tracker }},
 {{- if and $m.HasFirstSentinel (not ($m.SampleEqualsZero 0 $tracker)) }}
-			suite.AssertReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
+			suite.AssertReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

@@ -21,32 +21,49 @@ A `factory func() Iface` is the single required injection. Every subtest constru
 
 ## Method-shape detection
 
-Each method is classified by `gen.DetectShape` from its signature. The shape determines:
+Each method is classified by `shape.Detect` from its signature. The shape determines:
 
 - which auto-detected subtests run for that method,
-- which typed context (`ReaderContext`, `WriterContext`, etc.) is wired into plug-in dispatch,
+- which typed context (`ReaderContext`, `WriterContext`, ...) is wired into plug-in dispatch,
 - which assertion-library primitives the consumer can plug in.
 
-Detection rules (first match wins):
+Detection iterates priority-ordered detectors; the first match wins. The 21 shapes form a four-primitive vocabulary across reading, writing, aggregating, streaming, stateless, and lifecycle bands:
 
-| Rule | Signature | Shape |
-|------|-----------|-------|
-| 1 | returns `iter.Seq[V]` or `iter.Seq2[V, error]` | **StreamReader** |
-| 2 | no ctx, returns `bool` only | **Predicate** |
-| 2.5 | one param, returns `(V, bool)` | **ReaderWithBool** |
-| 2.6 | one param, returns `(R1, R2, bool)` | **Lookup** |
-| 3 | no ctx, no error, has return value | **Pure** |
-| 3.5 | no ctx, no params, error-only return | **PoisonAccessor** |
-| 4 | `func(ctx, K) (V, error)` with `V != error` | **Reader** |
-| 4.5 | `func(ctx, V)` no return + `//testkit:mutator` | **Mutator** |
-| 5 | `func(ctx, K) error` (default) | **Writer** |
-| 5 | `func(ctx, K) error` + `//testkit:deleter` | **Deleter** |
-| 6 | `func(ctx, V) (R, error)` with `R != error` | **Writer** (with result) |
-| 7 | `func(ctx) (T, error)` | **Aggregator** |
-| 8 | `func(ctx) error` | **Lifecycle** |
-| 9 | none of the above | **Unknown** |
+| Band | Shapes |
+|------|--------|
+| Reading | `Reader`, `ReaderNoError`, `ReaderWithBool`, `Lookup`, `PointerReader`, `MultiReader`, `BatchReader` |
+| Writing | `Writer`, `CompositeWriter`, `Mutator`, `Deleter`, `MultiArgWriter` |
+| Aggregating | `Aggregator`, `MultiAggregator` |
+| Streaming | `StreamReader`, `StreamConsumer` |
+| Stateless | `Pure`, `Predicate`, `PoisonAccessor` |
+| Lifecycle | `Lifecycle`, `VoidLifecycle` |
 
-The header comment at the top of the generated file lists which methods landed in which shape, so a misclassification is obvious on inspection.
+| Shape | Signature pattern |
+|-------|-------------------|
+| `Reader` | `func(ctx?, K) (V, error)` |
+| `ReaderNoError` | `func(ctx?, K) V` |
+| `ReaderWithBool` | `func(ctx?, K) (V, bool)` |
+| `Lookup` | `func(ctx?, K) (V, R, bool)` |
+| `PointerReader` | `func(ctx?, K) *V` |
+| `MultiReader` | `func(ctx?, K) (V1, V2, error)` |
+| `BatchReader` | `func(ctx?, ...K) ([]V, error)` |
+| `Writer` | `func(ctx?, V) error` or `func(ctx?, V) (R, error)` |
+| `CompositeWriter` | `func(ctx?, K1, V) error` |
+| `Mutator` | `func(ctx?, V)` (no return) |
+| `Deleter` | `func(ctx?, K) error` + `//testkit:deleter` |
+| `MultiArgWriter` | `func(ctx, p1, p2, p3, ...) error` (3+ non-ctx params) |
+| `Aggregator` | `func(ctx?) (T, error)` or `func(ctx?) T` |
+| `MultiAggregator` | `func(ctx?) (V1, V2, error)` |
+| `StreamReader` | returns `iter.Seq[V]` or `iter.Seq2[V, error]` |
+| `StreamConsumer` | `func(ctx, S) (V, error)` where `S` is interface-typed |
+| `Pure` | `func() T` (no params, no ctx, no error) |
+| `Predicate` | `func() bool` |
+| `PoisonAccessor` | `func() error` (no ctx, no params) |
+| `Lifecycle` | `func(ctx) error` (no other params) |
+| `VoidLifecycle` | `func()` or `func(ctx)` |
+| *(none of the above)* | `Unknown` |
+
+The header comment at the top of each generated method block lists the detected shape and applied directives, so a misclassification is obvious on inspection. The full detector implementation lives in `generator/shape/`.
 
 ## What is generated
 
@@ -200,19 +217,42 @@ Context parameters are not affected — they always get `t.Context()` or `b.Cont
 
 ## Directive-driven subtests
 
-Added when the directive is present on the method:
+Added when the directive is present on the method. Subtests are emitted in registry order and grouped under the per-method `t.Run("<Method>", ...)` block.
 
 | Directive | Adds subtest | Behavior |
 |-----------|--------------|----------|
-| `errors ErrX` | `<Method>/returns X` | Calls method with zero-value, asserts `errors.Is(err, ErrX)`. One subtest per sentinel listed. |
-| `nilsafe` | `<Method>/nilsafe` | `testkit.AssertNilSafe` wrapping the method call. |
-| `pure` | `<Method>/pure` | `testkit.AssertPure` with `prePopulate` + observation closure. Skipped if `PrePopulate` not configured. |
-| `bounded N M` | `<Method>/bounded N M` | `testkit.AssertBounded(t, N, M, fn)`. |
-| `timeout D` | `<Method>/timeout D` | `testkit.AssertTimeout(t, D, fn)`. |
-| `deprecated <Replacement>` | `<Method>/deprecated` | `t.Logf("<Method> is deprecated, use <Replacement> instead")` + `t.Skip("deprecated method")`. |
-| `sample Fn [Fn...]` | *(no extra subtest)* | Replaces zero-value arguments with `Fn(impl)` calls in smoke tests, hot-path benchmarks, and plug-in dispatch `Call` closures. See [Sample directive](#sample-directive) below. |
+| `errors ErrX [ErrY...]` | `<Method>/returns X` | One subtest per sentinel; calls method with zero-value, asserts `errors.Is(err, ErrX)`. |
+| `wrapped-via ErrX` | `<Method>/wrapped-via` | Asserts the returned error wraps `ErrX` via `errors.Is` (paired with `errors`). |
+| `deprecated <Replacement>` | `<Method>/deprecated` | `t.Logf("<Method> is deprecated, use <Replacement>")` + `t.Skip`. |
+| `nilsafe` | `<Method>/nilsafe` | `testkit.AssertNilSafe` wrapping the call. |
+| `pure` | `<Method>/pure` | `testkit.AssertPure` with `prePopulate` + observation. Skipped when `PrePopulate` is not configured. |
+| `idempotent` | `<Method>/idempotent` | Asserts repeated calls produce the same result. |
+| `cacheable` | `<Method>/cacheable` | Asserts deterministic input → output (implies `pure`). |
+| `monotonic` | `<Method>/monotonic` | Asserts results are non-decreasing across calls. |
+| `concurrent` | `<Method>/concurrent` | Stress-runs the method from N goroutines; asserts no race / no panic. |
+| `concurrent-readers` | `<Method>/concurrent-readers` | Parallel reads, serialised writes. |
+| `atomic` | `<Method>/atomic` | Asserts all-or-nothing semantics on failure paths. |
+| `bounded N M` | `<Method>/bounded` | `testkit.AssertBounded(t, N, M, fn)`. |
+| `timeout D` | `<Method>/timeout` | `testkit.AssertTimeout(t, D, fn)`. |
+| `sideeffect <Method>` | `<Method>/sideeffect` | Asserts the named method observes the effect. |
+| `validates <Field>` | `<Method>/validates` | Asserts the field is validated and returns a sentinel on bad input. |
+| `hooks <Hook> [<Hook>...]` | `<Method>/hooks` | Asserts each named hook fires when the method is called. |
+| `eventually <D>` | `<Method>/eventually` | Polls until the post-condition holds; fails after `D`. |
+| `scope <ScopeName>` | `<Method>/scope` | Asserts an authorization scope is enforced. |
+| `pagination <CursorField>` | `<Method>/pagination` | Asserts paginated traversal terminates and yields all entries. |
+| `lease <Release>` | `<Method>/lease` | Asserts the named release method runs on cleanup. |
+| `partition <Field>` | `<Method>/partition` | Asserts per-partition isolation when faults are injected. |
+| `order-after <Method>` | `<Method>/order-after` | Asserts the call ordering constraint holds across the named method. |
+| `retry-succeeds-on-attempt N` | `<Method>/retry-succeeds-on-attempt` | Drives a retry schedule that fails N-1 times then succeeds. |
+| `read-after-write <Reader>` | `<Method>/read-after-write` | After this writer, the named reader returns the written value. |
+| `delete-removes <Reader>` | `<Method>/delete-removes` | After this deleter, the named reader returns the not-found sentinel. |
+| `stream-reflects-mutations <Stream>` | `<Method>/stream-reflects-mutations` | After this writer, the named stream method yields the written value. |
+| `lifecycle-after-close <Reader>` | `<Method>/lifecycle-after-close` | After this close, the named reader returns the closed sentinel. |
+| `crdt-merge <Other>` | `<Method>/crdt-merge` | Two impls applying operations in opposite orders converge to equal state. |
+| `sample <Func> [<Func>...]` | *(no extra subtest)* | Replaces synthesized literals with `Func(impl)` in smoke / plug-in / bench-hot-path call sites. See [Sample directive](#sample-directive). |
+| `integration-only` | *(method skipped)* | The method's `t.Run` block is omitted. |
 
-The `ctx` directive doesn't add a subtest — the auto-detected `ctx cancellation`/`ctx deadline`/`nil context` subtests already cover its semantics. Marking a method with `//testkit:ctx` is a documentation hint that the consumer expects context handling, not a new test.
+The `ctx` directive doesn't add a subtest — the auto-emitted `ctx cancellation` / `ctx deadline` / `nil context` subtests already cover its semantics. Marking a method with `//testkit:ctx` is a documentation hint, not a new test.
 
 ## Plug-in extension points (typed by shape)
 
@@ -258,33 +298,39 @@ Each shape has its own typed plug-in. The dispatch table:
 | Method shape | `On<Method>` accepts |
 |--------------|----------------------|
 | Reader | `suite.ReaderAssertion[T, K, V]` |
+| ReaderNoError | `suite.ReaderNoErrorAssertion[T, K, V]` |
 | ReaderWithBool | `suite.ReaderWithBoolAssertion[T, K, V]` |
 | Lookup | `suite.LookupAssertion[T, K, V, R]` |
+| PointerReader | `suite.PointerReaderAssertion[T, K, V]` |
+| MultiReader | `suite.MultiReaderAssertion[T, K, V1, V2]` |
+| BatchReader | `suite.BatchReaderAssertion[T, K, V]` |
 | Writer | `suite.WriterAssertion[T, V]` |
+| CompositeWriter | `suite.CompositeWriterAssertion[T, K1, V]` |
 | Mutator | `suite.MutatorAssertion[T, V]` |
 | Deleter | `suite.DeleterAssertion[T, K]` |
+| MultiArgWriter (arity 3) | `suite.MultiArgWriterAssertion[T, P1, P2, P3]` |
+| MultiArgWriter (arity ≠ 3) | `func(*testing.T, T)` (free-form) |
 | Aggregator | `suite.AggregatorAssertion[T, R]` |
-| Lifecycle | `suite.LifecycleAssertion[T]` |
+| MultiAggregator | `suite.MultiAggregatorAssertion[T, V1, V2]` |
+| StreamReader | `suite.StreamAssertion[T, V]` |
+| StreamConsumer | `suite.StreamConsumerAssertion[T, S, V]` |
 | Pure | `suite.PureAssertion[T, R]` |
 | Predicate | `suite.PredicateAssertion[T]` |
-| StreamReader | `suite.StreamAssertion[T, V]` |
 | PoisonAccessor | `suite.PoisonAccessorAssertion[T]` |
+| Lifecycle | `suite.LifecycleAssertion[T]` |
+| VoidLifecycle | `suite.VoidLifecycleAssertion[T]` |
 | Unknown | `func(*testing.T, T)` (free-form) |
 
-Library inventories per shape:
+Every shape ships a baseline vocabulary covering the most common contract assertions plus a default `Smoke` and `Baseline` primitive. Shape-specific primitives extend the baseline with concerns unique to that shape — e.g. `Reader.AssertReturnsForKey`, `Writer.AssertWriteOverwrite`, `Stream.AssertStreamRespectsBreak`. The full per-shape inventory lives in `suite/<shape>.go`; calling out specific primitives in this doc would drift fast.
 
-- **Reader** — `AssertReturnsForKey`, `AssertReturnsSentinel`, `AssertConsistentReads`, `AssertReadsAreNonMutating`, `AssertReaderConcurrentSafe`
-- **ReaderWithBool** — `AssertReaderWithBoolReturns`, `AssertReaderWithBoolMissing`, `AssertReaderWithBoolConsistent`
-- **Lookup** — `AssertLookupReturns`, `AssertLookupMissing`
-- **Writer** — `AssertWriteSucceeds`, `AssertWriteIsObservable`, `AssertWriteRejectInvalid`, `AssertWriteOverwrite`
-- **Mutator** — `AssertMutatorSucceeds`, `AssertMutatorIdempotent`
-- **Deleter** — `AssertDeleteSucceeds`, `AssertDeleteIdempotent`, `AssertDeleteReturnsNotFound`
-- **Aggregator** — `AssertAggregatorReturns`, `AssertAggregatorBounded`, `AssertAggregatorConsistent`
-- **Lifecycle** — `AssertLifecycleSucceeds`, `AssertLifecycleIdempotent`, `AssertLifecycleRespectsContext`
-- **Pure** — `AssertDeterministic`, `AssertNoSideEffects`
-- **Predicate** — `AssertPredicateReturns`, `AssertPredicateConsistent`
-- **Stream** — `AssertStreamCompletes`, `AssertStreamRespectsBreak`, `AssertStreamReentrant`, `AssertStreamYieldsInOrder`, `AssertStreamHasNoDuplicates`
-- **PoisonAccessor** — `AssertPoisonAccessorNilOnFresh`, `AssertPoisonAccessorConsistent`
+The shared baseline across shapes:
+
+- **Smoke** — invoke the method with a sample input and ignore the result; surfaces panics and obvious wiring bugs.
+- **Baseline** — composite of the most common assertions for the shape, configured by a single options struct.
+- **`RespectsContext`** (ctx-taking shapes) — pre-cancelled / past-deadline / nil-context coverage.
+- **`ConcurrentSafe`** — parallel invocation under contention, asserts no race / no panic.
+- **`Idempotent`** (writer-class shapes) — repeated invocation with the same input is a no-op.
+- **`RejectInvalid`** (writer-class shapes) — invalid input returns the configured sentinel.
 
 Adding a custom assertion is just writing a function that matches the shape's `Assertion` type — a one-line closure over the shape's `Context`.
 
@@ -303,11 +349,15 @@ storetest.StoreOnAll(
 )
 ```
 
-Cross-method library:
+Cross-method library — one assertion per cross-method invariant directive:
 
-- `AssertReadAfterWrite(sample, write, read, key)`
-- `AssertDeleteRemovesValue(sample, write, read, delete, key, sentinel)`
-- `AssertStreamReflectsMutations(sample, write, stream, key)`
+- `AssertReadAfterWrite` (`//testkit:read-after-write`) — after the writer, the named reader returns the written value.
+- `AssertDeleteRemovesValue` (`//testkit:delete-removes`) — after the deleter, the named reader returns the not-found sentinel.
+- `AssertStreamReflectsMutations` (`//testkit:stream-reflects-mutations`) — after the writer, the named stream method yields the written value.
+- `AssertLifecycleAfterClose` (`//testkit:lifecycle-after-close`) — after the close, the named reader returns the closed sentinel.
+- `AssertCRDTMerge` (`//testkit:crdt-merge`) — two impls applying operations in opposite orders converge to equal state.
+
+The suite generator emits these automatically when the directive is present on the carrier method (e.g. `//testkit:read-after-write Get` on `Put`); plug-ins through `OnAll` are for hand-rolled cross-method scenarios that don't map to a directive.
 
 ### Free-form custom subtests
 

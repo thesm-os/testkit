@@ -17,6 +17,9 @@ Type-safe assertion helpers with mandatory contract messages. Every assertion ac
 | `Len(t, obj, n, msg)` | Length check (slice, map, string, chan, array) |
 | `Contains(t, haystack, needle, msg)` | Substring / element / map-key membership |
 | `NotContains(t, haystack, needle, msg)` | Inverse of `Contains` |
+| `HasPrefix(t, s, prefix, msg)` | Fails if string `s` doesn't start with `prefix` |
+| `HasSuffix(t, s, suffix, msg)` | Fails if string `s` doesn't end with `suffix` |
+| `ContainsInOrder(t, haystack, needles, msg)` | Fails unless all needles appear in order within haystack |
 | `Panics(t, fn, msg) any` | Fails unless `fn` panics; returns recovered value |
 | `Sequence[T](t, items, pred, msg)` | Fails unless `pred(items[i-1], items[i])` holds for every adjacent pair |
 
@@ -26,6 +29,9 @@ Type-safe assertion helpers with mandatory contract messages. Every assertion ac
 testkit.Equal(t, got, want, "Get must return the stored item")
 testkit.ErrorIs(t, err, store.ErrNotFound, "Get on missing key")
 testkit.ErrorIsNot(t, err1, err2, "ErrA and ErrB must be distinct")
+testkit.HasPrefix(t, path, "/api/", "path must start with /api/")
+testkit.ContainsInOrder(t, log, []string{"init", "ready", "shutdown"},
+    "lifecycle events must appear in order")
 testkit.Sequence(t, timestamps,
     func(a, b time.Time) bool { return a.Before(b) },
     "timestamps must be strictly ordered")
@@ -50,6 +56,8 @@ testkit.Assert(t, got).
 | `HasLen(n, msg)` | Length check |
 | `IsEmpty(msg)` / `IsNotEmpty(msg)` | Length 0 / >0 |
 | `Contains(needle, msg)` / `NotContains(needle, msg)` | Membership |
+| `HasPrefix(prefix, msg)` / `HasSuffix(suffix, msg)` | String prefix/suffix checks |
+| `ContainsInOrder(needles, msg)` | Ordered substring membership |
 | `IsError(target, msg)` / `IsNotError(target, msg)` | `errors.Is` checks |
 | `Matches(pattern, msg)` | Regexp match on string/[]byte |
 | `IsApproximately(want, tol, msg)` | Numeric within tolerance |
@@ -60,4 +68,4 @@ Use whichever reads more clearly: positional for a single assertion, fluent for 
 
 ## Directive-driven assertions
 
-For semantic properties that match `//testkit:` directives, see [directive-assertions.md](directive-assertions.md): `AssertNilSafe`, `AssertCtxCancellation`, `AssertTimeout`, `AssertPure`, `AssertBounded`.
+For semantic properties that match `//testkit:` directives, see [directive-assertions.md](directive-assertions.md) — 21 directive-driven assertions, cross-method invariants, HookRecorder, and suite options.

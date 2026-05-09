@@ -65,10 +65,6 @@ func {{ $driver }}(t *testing.T, factory {{ $factory }}, opts ...suite.Option) {
 			return impl
 		}
 	}
-{{- if .HasErrorMethod }}
-	errTest := testkit.TestError("{{ $iface }}-contract")
-	_ = errTest
-{{- end }}
 {{ template "test-method" . }}
 }
 

@@ -4,7 +4,7 @@ A CLI tool that reads Go type definitions and proto descriptors and emits the te
 
 All generators use `go/types` for Go source analysis and `protodesc` for proto schema. Generators are invoked via `//go:generate` directives in the source package — no central type registry. Project-wide conventions (suffix, test package style, directive composition) live in `.testkit.yml`; see [Configuration](../configuration.md).
 
-**Status.** Seven generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`, `model`, `bench`. The remaining generators (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
+**Status.** Six generators ship today: `stub`, `builder`, `sentinel`, `enum`, `suite`, `bench`. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; their docs document the planned shape and are clearly marked.
 
 ## CLI
 
@@ -44,8 +44,8 @@ Each conformance generator targets a tier. Lower tiers run in seconds; higher ti
 | static | [`sentinel`](sentinel.md), [`enum`](enum.md) | Compile-time + structural invariants |
 | wire | [`codec`](codec.md) | Round-trip + binary fixtures |
 | 1 | [`suite`](suite.md) | Single-call contract per directive |
-| 2-3 | [`model`](model.md) | Property-based state-machine, differential, workload |
-| 4 | [`bench`](bench.md) | Allocation + latency ceilings, complexity shape |
+| 2-3 | [`model`](model.md) | Property-based state-machine, differential, workload (planned) |
+| 4 | [`bench`](bench.md) | Allocation, latency, and per-percentile budgets across 21 shapes |
 | 5 | [`sim`](sim.md) | Subsystem simulation harness |
 | 5 | [`chaos`](chaos.md) | Continuous fault injection on top of sim |
 | 5 | [`differential-rollout`](differential-rollout.md) | Shadow-traffic comparison |
@@ -76,20 +76,19 @@ Every generator accepts `-o <file>` to set the output path. Multiple types passe
 
 ## Directive vocabulary
 
-Conformance generators are driven by `//testkit:` directives on interface methods. Directives are validated at codegen time — unknown directives error, conflicts error, redundancies warn. See [`Configuration`](../configuration.md) for the full vocabulary and composition rules.
+Conformance generators are driven by `//testkit:` directives on interface methods. Directives are validated at codegen time — unknown directives error, conflicting combinations error, redundant pairs warn. The full registry lives in `generator/directive/known.go`; the top-level [`README`](../../../README.md#directives) carries the per-generator consumption matrix.
 
-The generators that consume directives:
+What each shipped generator consumes:
 
-- **`stub`** — `errors`, `deprecated`, `integration-only`, `retry-succeeds-on-attempt`, `partition`, `order-after`
-- **`suite`** — most behavioral directives (`nilsafe`, `ctx`, `timeout`, `pure`, `validates`, `bounded`, `errors`, `deprecated`, `sample`, `req`, `integration-only`)
-- **`model`** — property directives (`errors`, `nondeterministic`, `time-aware`, `deleter`, `mutator`, `keyfield`, `appends`, `verifies`, `replays`, `partition-by`, `entry-id`, `depends-on`, `hash`, `req`, `integration-only`)
-- **`bench`** — `allocs`, `latency`, `complexity`, `concurrent`, `timeout`, `req`
-- **`sim`** — directives that influence simulation behavior (most of the matrix)
-- **`chaos`** / **`differential-rollout`** / **`replay`** — directives that map onto each tier-5 lens (fault scheduling, equivalence relations, replay ordering)
-- **`smoke`** — CLI-specific (`exit-code`, `golden-output`, `signal`, `flag-validation`, etc.)
-- **`builder`** — `default` only
+- **`stub`** — `errors`, `wrapped-via`, `deprecated`, `integration-only`, `retry-succeeds-on-attempt`, `partition`, `order-after`.
+- **`suite`** — every behavioral and cross-method directive: `errors`, `wrapped-via`, `nilsafe`, `pure`, `idempotent`, `cacheable`, `monotonic`, `concurrent`, `concurrent-readers`, `atomic`, `bounded`, `timeout`, `sideeffect`, `validates`, `hooks`, `eventually`, `scope`, `pagination`, `lease`, `partition`, `order-after`, `retry-succeeds-on-attempt`, `wrapped-via`, `deprecated`, `read-after-write`, `delete-removes`, `stream-reflects-mutations`, `lifecycle-after-close`, `crdt-merge`, `sample`, `integration-only`.
+- **`bench`** — `allocs`, `latency`, `percentiles`, `sample`, `integration-only`.
+- **`builder`** — `default` only (field-scoped).
+- **`sentinel`** — `sentinel-no-overlap-with` (declares additional packages for non-overlap verification).
 
-`sentinel`, `enum`, `codec`, and `pkgdoc` are directive-free or consume their own narrow vocabulary.
+Planned generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `smoke`, `codec`, `pkgdoc`) document their planned directive surface in their respective doc files. `enum` is directive-free — it derives its assertions from the type's stringer-tagged constants.
+
+Shape hints (`deleter`, `mutator`, `not-mutator`, `keyfield`) influence shape detection during analysis but don't add subtests directly. The `req` directive carries requirement IDs into generated subtests' names so REQ-to-test traceability surfaces in `go test -v` output.
 
 ## Generators
 
@@ -100,9 +99,9 @@ The generators that consume directives:
 | [`sentinel`](sentinel.md) | static | ready | Prefix, uniqueness, non-overlap, unwrap-chain, custom-error round-trip |
 | [`enum`](enum.md) | static | ready | Exhaustiveness, stringer round-trip, out-of-range, optional Marshal/Parse |
 | [`codec`](codec.md) | wire | planned | `codectest.Spec[T]`, round-trip suite + bench + fuzz seeds + `testdata/wire/*.bin` fixtures |
-| [`suite`](suite.md) | 1 | ready | `Assert<Iface>Contract(t, factory, opts...)` with shape-detected subtests + typed plug-in points |
-| [`model`](model.md) | 2-3 | ready | rapid property-based state-machine with differential SUT/ref testing, shape-specific laws, concurrent stress, trace combinators |
-| [`bench`](bench.md) | 4 | ready | `Benchmark<Iface>Contract(b, factory, opts...)` with shape-detected hot-path benchmarks + typed bench plug-ins |
+| [`suite`](suite.md) | 1 | ready | `Assert<Iface>Contract(t, factory, opts...)` with 21-shape-detected subtests + typed plug-in points |
+| [`model`](model.md) | 2-3 | planned | rapid property-based state-machine with differential SUT/ref testing, shape-specific laws, concurrent stress, trace combinators |
+| [`bench`](bench.md) | 4 | ready | `Benchmark<Iface>Contract(b, factory, opts...)` with 21-shape-detected hot-path / concurrent benchmarks, opt-in `allocs`/`latency`/`percentiles` budget gates, typed plug-in points |
 | [`sim`](sim.md) | 5 | planned | Subsystem simulation harness — engine clock + rand + capture-on-failure + workloads + invariants |
 | [`chaos`](chaos.md) | 5 | planned | Continuous fault simulation: random schedules, partitions, skew, restarts |
 | [`differential-rollout`](differential-rollout.md) | 5 | planned | Shadow-traffic harness with response comparison and divergence reporting |

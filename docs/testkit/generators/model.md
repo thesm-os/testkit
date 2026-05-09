@@ -1,5 +1,7 @@
 # Model
 
+> **Status: planned.** The `model` subcommand is wired into the CLI but the analyze + render implementation has not yet landed; invocations return a port-pending error. This document records the intended design — shape vocabulary, directive surface, runner semantics — so consumers can plan adoption against a stable target.
+
 Tier 2-3 conformance. Reads a Go interface, classifies each method by shape, and emits a `rapid`-driven property-based state-machine harness. Every iteration constructs a fresh SUT and (optionally) a reference implementation, runs a random sequence of actions drawn from the interface methods, and checks:
 
 - **Differential correctness** — SUT and reference produce identical results for every action.

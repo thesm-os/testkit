@@ -39,15 +39,21 @@ func AssertReturnsForKey[T any, K comparable, V any](key K, want V) ReaderAssert
 	}
 }
 
-// AssertReturnsSentinel calls the reader with the given unknown key and
-// asserts it returns the given sentinel error.
-func AssertReturnsSentinel[T any, K comparable, V any](unknown K, sentinel error) ReaderAssertion[T, K, V] {
+// AssertReturnsSentinel calls the reader with the given unknown key
+// and asserts the returned error matches one of the declared
+// sentinels via [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries pass the full set; the assertion succeeds
+// when the returned error matches any of them.
+func AssertReturnsSentinel[T any, K comparable, V any](
+	unknown K,
+	sentinels ...error,
+) ReaderAssertion[T, K, V] {
 	return func(ctx ReaderContext[T, K, V]) {
 		ctx.T.Run(fmt.Sprintf("returns sentinel for %v", unknown), func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			_, err := ctx.Call(t.Context(), impl, unknown)
-			testkit.ErrorIs(t, err, sentinel, "reader must return sentinel for unknown key")
+			assertSentinelMatch(t, err, "reader must return sentinel for unknown key", sentinels...)
 		})
 	}
 }

@@ -76,14 +76,18 @@ func AssertLifecycleRespectsContext[T any]() LifecycleAssertion[T] {
 // an impl in a known-bad state (e.g. an already-closed connection); the
 // contract is that the lifecycle call refuses to operate and surfaces the
 // sentinel rather than silently no-op'ing.
-func AssertLifecycleRejectInvalid[T any](invalidFactory func() T, sentinel error) LifecycleAssertion[T] {
+func AssertLifecycleRejectInvalid[T any](
+	invalidFactory func() T,
+	sentinels ...error,
+) LifecycleAssertion[T] {
 	return func(ctx LifecycleContext[T]) {
 		ctx.T.Run("lifecycle rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := invalidFactory()
 			err := ctx.Call(t.Context(), impl)
-			testkit.ErrorIs(t, err, sentinel,
-				"lifecycle must surface the configured sentinel against an invalid-state impl")
+			assertSentinelMatch(t, err,
+				"lifecycle must surface the configured sentinel against an invalid-state impl",
+				sentinels...)
 		})
 	}
 }

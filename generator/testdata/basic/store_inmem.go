@@ -48,10 +48,17 @@ func (s *InMemoryStore) Get(ctx context.Context, key string) (Item, error) {
 	return v, nil
 }
 
-// Put implements [Store]. Keys by item.ID.
+// Put implements [Store]. Keys by item.ID. Rejects empty-ID writes
+// with [ErrConflict] so the //testkit:atomic contract has an
+// observable failure path: AssertAtomicNoTrace forces this branch
+// with a zero-valued Item and asserts the map's pre-state is
+// unchanged.
 func (s *InMemoryStore) Put(ctx context.Context, item Item) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if item.ID == "" {
+		return ErrConflict
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()

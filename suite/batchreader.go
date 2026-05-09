@@ -41,19 +41,22 @@ func AssertBatchReaderReturnsAll[T any, K comparable, V any](
 	}
 }
 
-// AssertBatchReaderReturnsSentinel calls the reader with keys including
-// an unknown one and asserts the configured sentinel is returned.
+// AssertBatchReaderReturnsSentinel calls the reader with keys
+// including an unknown one and asserts the returned error matches
+// one of the declared sentinels via [errors.Is]. Variadic so methods
+// declaring multiple //testkit:errors entries pass the full set.
 func AssertBatchReaderReturnsSentinel[T any, K comparable, V any](
 	keys []K,
-	sentinel error,
+	sentinels ...error,
 ) BatchReaderAssertion[T, K, V] {
 	return func(ctx BatchReaderContext[T, K, V]) {
 		ctx.T.Run("returns sentinel", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			_, err := ctx.Call(t.Context(), impl, keys)
-			testkit.ErrorIs(t, err, sentinel,
-				"batch reader must return sentinel when batch contains unknown key")
+			assertSentinelMatch(t, err,
+				"batch reader must return sentinel when batch contains unknown key",
+				sentinels...)
 		})
 	}
 }

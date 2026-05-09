@@ -3,7 +3,7 @@
 //
 // Directives:
 //   Delete: //testkit:deleter
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 
 // Package genericstest_test verifies that any implementation of
 // [generics.Holder[V]] honors the contract declared by the
@@ -53,7 +53,6 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/testdata/generics"
 	"go.thesmos.sh/testkit/suite"
 )
@@ -100,8 +99,6 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 			return impl
 		}
 	}
-	errTest := testkit.TestError("Holder-contract")
-	_ = errTest
 
 	// Delete — Deleter-shape method.
 	//
@@ -119,6 +116,19 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	//       deleting the same key twice returns nil twice
 	//   - concurrent safe
 	//       4 workers × 10 iterations under -race
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 	t.Run("Delete", func(t *testing.T) {
 		sctx := suite.DeleterContextFor[generics.Holder[string], string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) error {
@@ -149,6 +159,19 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	// Optional baseline extras (gated on signature/options):
 	//   - returns sentinel for unknown key
 	//       //testkit:errors declared generics.ErrNotFound — surfaces it on lookup of the zero key
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 	t.Run("Get", func(t *testing.T) {
 		sctx := suite.ReaderContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) (string, error) {
@@ -177,6 +200,19 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	//       writing the same pair twice returns nil twice
 	//   - concurrent safe
 	//       4 workers × 10 iterations under -race
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 	t.Run("Put", func(t *testing.T) {
 		sctx := suite.CompositeWriterContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], k1 string, value string) error {

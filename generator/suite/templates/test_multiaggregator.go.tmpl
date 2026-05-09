@@ -17,7 +17,7 @@
 		var extras []suite.MultiAggregatorAssertion[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]
 {{- if $m.HasFirstSentinel }}
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
-			extras = append(extras, suite.AssertMultiAggregatorReturnsSentinel[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](invalidFactory, {{ $m.FirstSentinel }}))
+			extras = append(extras, suite.AssertMultiAggregatorReturnsSentinel[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](invalidFactory, {{ $m.SentinelsList }}))
 		}
 {{- end }}
 		suite.AssertMultiAggregatorBaseline[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](

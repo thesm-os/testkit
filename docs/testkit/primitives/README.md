@@ -18,16 +18,16 @@ Optional sub-packages have additional dependencies — see [sub-packages.md](../
 | Document | Surface |
 |----------|---------|
 | [Assertions](assertions.md) | Positional + fluent helpers with go-cmp diffs |
-| [Directive assertions](directive-assertions.md) | `AssertNilSafe`, `AssertCtxCancellation`, `AssertTimeout`, `AssertPure`, `AssertBounded` — match testkit directive semantics |
+| [Directive assertions](directive-assertions.md) | 21 directive-driven contract assertions, cross-method invariants, HookRecorder, suite options |
 | [MethodStub](method-stub.md) | Generic per-method test double — recording, faults, clock, strict, verify |
 | [Recording](recording.md) | `Recorder[T]` with filtering, waiting, hooks, gating, timestamping, bench mode |
 | [Fault injection](fault-injection.md) | `Fault` interface + 5 strategies (counted, retry, probability, windowed, predicate) + `And`/`Or` composition |
 | [Clock](clock.md) | `Clock` interface + `RealClock` + `TestClock` for deterministic time |
 | [OrderTracker](order-tracker.md) | Cross-method call-order constraints (driven by `//testkit:order-after`) |
 | [RandSource](rand.md) | Pluggable RNG for probabilistic faults; defaults to `math/rand/v2`, `FixedRandSource` for tests |
-| [Concurrency](concurrency.md) | `ConcurrentStress`, `GoroutineLeak`, `Timeout` |
+| [Concurrency](concurrency.md) | `ConcurrentStress`, `GoroutineLeak`, `Timeout`, goroutine capture utilities |
 | [Benchmarking](benchmarking.md) | `Contract` for allocation and latency gates |
-| [Golden files](golden-files.md) | `AssertGolden` + scrubbers |
+| [Golden files](golden-files.md) | `AssertGolden`, `AssertGoldenAt`, `AssertGoldenJSONField`, `Compare` + scrubbers |
 | [Polling](polling.md) | `RetryUntil`, `AssertEventually` |
 | [Helpers](helpers.md) | `TestError`, `RequireEnv`, `SeededRand`, `MustMarshal`, `Quiet`, `FailableTB`, `TempFile`, `FreePort`, `SortedKeys`, `TableTest`, `MapDiff`, rapid generators |
 

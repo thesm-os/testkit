@@ -44,21 +44,23 @@ func AssertMultiArgWriteSucceeds[T, P1, P2, P3 any](
 	}
 }
 
-// AssertMultiArgWriteRejectInvalid writes invalid args and asserts the
-// configured sentinel is returned.
+// AssertMultiArgWriteRejectInvalid writes invalid args and asserts
+// the returned error matches one of the declared sentinels via
+// [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries pass the full set.
 func AssertMultiArgWriteRejectInvalid[T, P1, P2, P3 any](
 	p1 P1,
 	p2 P2,
 	p3 P3,
-	sentinel error,
+	sentinels ...error,
 ) MultiArgWriterAssertion[T, P1, P2, P3] {
 	return func(ctx MultiArgWriterContext[T, P1, P2, P3]) {
 		ctx.T.Run("rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, p1, p2, p3)
-			testkit.ErrorIs(t, err, sentinel,
-				"multi-arg writer must surface sentinel for invalid args")
+			assertSentinelMatch(t, err,
+				"multi-arg writer must surface sentinel for invalid args", sentinels...)
 		})
 	}
 }
@@ -163,19 +165,21 @@ func AssertMultiArgWriteSucceedsVariadic[T any](args ...any) MultiArgWriterVaria
 }
 
 // AssertMultiArgWriteRejectInvalidVariadic writes invalid args and
-// asserts the configured sentinel is returned. Variadic counterpart
-// of [AssertMultiArgWriteRejectInvalid].
+// asserts the returned error matches one of the declared sentinels
+// via [errors.Is]. Variadic counterpart of
+// [AssertMultiArgWriteRejectInvalid]; takes args as a slice so the
+// trailing variadic can carry any number of declared sentinels.
 func AssertMultiArgWriteRejectInvalidVariadic[T any](
-	sentinel error,
-	args ...any,
+	args []any,
+	sentinels ...error,
 ) MultiArgWriterVariadicAssertion[T] {
 	return func(ctx MultiArgWriterVariadicContext[T]) {
 		ctx.T.Run("rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, args...)
-			testkit.ErrorIs(t, err, sentinel,
-				"multi-arg writer must surface sentinel for invalid args")
+			assertSentinelMatch(t, err,
+				"multi-arg writer must surface sentinel for invalid args", sentinels...)
 		})
 	}
 }

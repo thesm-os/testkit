@@ -10,7 +10,7 @@
 		var extras []suite.LifecycleAssertion[{{ $iface }}]
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
 {{- if $m.HasFirstSentinel }}
-			extras = append(extras, suite.AssertLifecycleRejectInvalid[{{ $iface }}](invalidFactory, {{ $m.FirstSentinel }}))
+			extras = append(extras, suite.AssertLifecycleRejectInvalid[{{ $iface }}](invalidFactory, {{ $m.SentinelsList }}))
 {{- else }}
 			extras = append(extras, suite.AssertLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory))
 {{- end }}

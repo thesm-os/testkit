@@ -44,18 +44,21 @@ func AssertMultiReaderReturnsForKey[T any, K, V1, V2 comparable](
 	}
 }
 
-// AssertMultiReaderReturnsSentinel calls the reader with an unknown key
-// and asserts the configured sentinel error is returned.
+// AssertMultiReaderReturnsSentinel calls the reader with an unknown
+// key and asserts the returned error matches one of the declared
+// sentinels via [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries pass the full set.
 func AssertMultiReaderReturnsSentinel[T any, K comparable, V1, V2 any](
 	unknown K,
-	sentinel error,
+	sentinels ...error,
 ) MultiReaderAssertion[T, K, V1, V2] {
 	return func(ctx MultiReaderContext[T, K, V1, V2]) {
 		ctx.T.Run("returns sentinel", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			_, _, err := ctx.Call(t.Context(), impl, unknown)
-			testkit.ErrorIs(t, err, sentinel, "reader must return sentinel for unknown key")
+			assertSentinelMatch(t, err,
+				"reader must return sentinel for unknown key", sentinels...)
 		})
 	}
 }

@@ -13,7 +13,40 @@
 {{- $tracker := .Spec.Tracker -}}
 {{- $spec := .Spec -}}
 {{- range $m := .Methods }}
-{{- if not $m.IsIntegrationOnly }}
+{{- if $m.IsIntegrationOnly }}
+
+	// {{ $m.Name }} — //testkit:integration-only.
+	//
+	// This method is annotated as integration-only: its behavior is
+	// observable only against a real backing system (network/disk/
+	// external service), not against the in-memory companion that
+	// drives the suite's contract-correctness path. Emitting the
+	// per-method t.Run as a documented Skip preserves visibility —
+	// a reader scanning the file sees the method exists and is
+	// deliberately not contract-tested at this level. Integration
+	// coverage is the consumer's responsibility (typically a
+	// hand-written test under the interface package's own _test
+	// directory, gated on a build tag or env var).
+	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		t.Skip("//testkit:integration-only — contract-correctness path skipped; integration coverage lives in the consumer's own test layer")
+	})
+{{- else if eq (len $m.BaselineSubtests) 0 }}
+
+	// {{ $m.Name }} — {{ $m.ShapeName }} shape (no baseline contract).
+	//
+	// The shape detector returned a category for which the suite
+	// framework has no per-shape baseline runtime helper. Emitting
+	// the per-method t.Run as a documented Skip surfaces the
+	// signature in the generated file so a reader knows the method
+	// exists and is deliberately not contract-tested at this level.
+	// Closing the gap requires either: a new shape entry in the
+	// detector with a corresponding suite/<shape>.go runtime helper,
+	// or a //testkit directive that maps this signature to an
+	// existing shape.
+	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		t.Skip("{{ $m.ShapeName }} shape — no baseline contract emitted; suite needs a per-shape runtime helper to verify this signature category")
+	})
+{{- else }}
 
 	// {{ $m.Name }} — {{ $m.ShapeName }}-shape method.
 	//
@@ -33,6 +66,21 @@
 	//   - {{ $c.Name }}
 	//       {{ $c.Description }}
 {{- end }}
+{{- end }}
+{{- if $spec.IsGeneric }}
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 {{- end }}
 {{- $directives := $m.DirectiveContracts }}
 {{- if $directives }}

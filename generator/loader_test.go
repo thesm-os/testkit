@@ -77,9 +77,13 @@ func TestLoader(t *testing.T) {
 		iface, _ := pkg.Interface("Store")
 		put := iface.Methods[1]
 		testkit.Equal(t, put.Name, "Put", "Put is second")
-		testkit.Len(t, put.Directives, 2, "bundle expanded to 2 directives")
-		testkit.Equal(t, put.Directives[0].Name, "atomic", "atomic from bundle")
-		testkit.Equal(t, put.Directives[1].Name, "idempotent", "idempotent from bundle")
+		// Put declares: //testkit:errors ErrConflict (1)
+		// + //testkit:directive atomic idempotent (bundle expands to 2).
+		// Order is source-declaration: errors first, then bundle members.
+		testkit.Len(t, put.Directives, 3, "errors + bundle (atomic + idempotent)")
+		testkit.Equal(t, put.Directives[0].Name, "errors", "errors declared first")
+		testkit.Equal(t, put.Directives[1].Name, "atomic", "atomic from bundle")
+		testkit.Equal(t, put.Directives[2].Name, "idempotent", "idempotent from bundle")
 	})
 
 	t.Run("Struct returns named fields in declaration order", func(t *testing.T) {

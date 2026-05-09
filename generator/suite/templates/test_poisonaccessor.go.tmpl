@@ -10,7 +10,7 @@
 		var extras []suite.PoisonAccessorAssertion[{{ $iface }}]
 {{- if $m.HasFirstSentinel }}
 		if poisonedFactory, ok := {{ $opts }}.PoisonedFactory.(func() {{ $iface }}); ok {
-			extras = append(extras, suite.AssertPoisonAccessorRejectInvalid[{{ $iface }}](poisonedFactory, {{ $m.FirstSentinel }}))
+			extras = append(extras, suite.AssertPoisonAccessorRejectInvalid[{{ $iface }}](poisonedFactory, {{ $m.SentinelsList }}))
 		}
 {{- end }}
 		suite.AssertPoisonAccessorBaseline[{{ $iface }}](extras...)(sctx)

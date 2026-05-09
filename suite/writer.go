@@ -58,17 +58,23 @@ func AssertWriteIsObservable[T, V any, K comparable](
 	}
 }
 
-// AssertWriteRejectInvalid writes an invalid value and asserts error.
-// If sentinel is non-nil, also asserts the error wraps it.
-func AssertWriteRejectInvalid[T, V any](invalid V, sentinel error) WriterAssertion[T, V] {
+// AssertWriteRejectInvalid writes an invalid value and asserts the
+// returned error matches one of the declared sentinels via
+// [errors.Is]. Variadic so methods declaring multiple
+// //testkit:errors entries (the common case for write paths that
+// can fail with conflict OR not-found) can verify all of them
+// against the same invalid input — only one sentinel will fire on
+// any given impl, but the directive's semantics permit any of the
+// declared set.
+func AssertWriteRejectInvalid[T, V any](invalid V, sentinels ...error) WriterAssertion[T, V] {
 	return func(ctx WriterContext[T, V]) {
 		ctx.T.Run("write rejects invalid", func(t *testing.T) {
 			t.Parallel()
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, invalid)
 			testkit.Error(t, err, "write must reject invalid value")
-			if sentinel != nil {
-				testkit.ErrorIs(t, err, sentinel, "write must return expected sentinel")
+			if len(sentinels) > 0 {
+				assertSentinelMatch(t, err, "write must return expected sentinel", sentinels...)
 			}
 		})
 	}

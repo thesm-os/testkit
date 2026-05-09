@@ -271,12 +271,23 @@ func (m *Method) ZeroParamAt(i int, t *generator.ImportTracker) string {
 // the last index). Used by per-shape subtests to populate the
 // expected-value slot of Returns-style assertions. Empty when i is
 // out of range.
+//
+// The fieldName seed encodes the result index ("Result0", "Result1",
+// …) so multi-result signatures (MultiReader, MultiAggregator,
+// Lookup) sample distinct values across slots. Without the index,
+// two same-typed results would collide on the same default literal
+// and the contract couldn't catch a tuple-swap bug. Named results
+// take precedence over the default seed.
 func (m *Method) SampleResultAt(i int, t *generator.ImportTracker) string {
 	results := m.Signature.Results()
 	if i < 0 || i >= results.Len() {
 		return ""
 	}
-	return generator.SampleValueOf(results.At(i).Type(), "Result", t)
+	name := results.At(i).Name()
+	if name == "" {
+		name = fmt.Sprintf("Result%d", i)
+	}
+	return generator.SampleValueOf(results.At(i).Type(), name, t)
 }
 
 // ZeroResultAt returns the rendered zero literal for the i-th

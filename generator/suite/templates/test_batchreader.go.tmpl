@@ -19,7 +19,7 @@
 			sampleKeys,
 			sampleVals,
 {{- if $m.HasFirstSentinel }}
-			suite.AssertBatchReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.FirstSentinel }}),
+			suite.AssertBatchReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

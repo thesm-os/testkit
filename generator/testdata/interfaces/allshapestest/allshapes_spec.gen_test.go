@@ -2,7 +2,7 @@
 // Source: allshapes.go:40-111 (testkit suite -o allshapestest/allshapes_spec.gen_test.go AllShapes)
 //
 // Directives:
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 //   Remove: //testkit:deleter
 
 // Package allshapestest_test verifies that any implementation of
@@ -55,7 +55,6 @@ import (
 	"iter"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/testdata/interfaces"
 	"go.thesmos.sh/testkit/suite"
 )
@@ -102,13 +101,11 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 			return impl
 		}
 	}
-	errTest := testkit.TestError("AllShapes-contract")
-	_ = errTest
 
 	// All — StreamReader-shape method.
 	//
 	// Shape semantics:
-	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant.
+	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant. The baseline asserts structural properties (terminates, reentrant, respects-break) but does not assert content — an empty stream trivially passes all baseline subtests. To verify content, pre-populate via the contract driver's WithPrePopulate option or compose with //testkit:eventually for convergence-style checks.
 	//
 	// Default contracts (always run for StreamReader):
 	//   - smoke
@@ -193,7 +190,7 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 			func(impl interfaces.AllShapes) string {
 				return impl.Description()
 			})
-		suite.AssertPureBaseline[interfaces.AllShapes, string]("test-result")(sctx)
+		suite.AssertPureBaseline[interfaces.AllShapes, string]("test-result0")(sctx)
 	})
 
 	// Err — PoisonAccessor-shape method.
@@ -245,7 +242,7 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 		suite.AssertMultiReaderBaseline[interfaces.AllShapes, string, interfaces.Record, string](
 			"test-key",
 			interfaces.Record{ID: "test-id"},
-			"test-result",
+			"test-result1",
 		)(sctx)
 	})
 
@@ -481,7 +478,7 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 			func(ctx context.Context, impl interfaces.AllShapes, keys []string) ([]interfaces.Record, error) {
 				return impl.Many(ctx, keys...)
 			})
-		sampleKeys := []string{"test-keys"}
+		sampleKeys := []string{"test-key"}
 		sampleVals := []interfaces.Record{interfaces.Record{ID: "test-id"}}
 		suite.AssertBatchReaderBaseline[interfaces.AllShapes, string, interfaces.Record](
 			sampleKeys,
@@ -598,7 +595,7 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 	// Scan — StreamReader-shape method.
 	//
 	// Shape semantics:
-	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant.
+	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant. The baseline asserts structural properties (terminates, reentrant, respects-break) but does not assert content — an empty stream trivially passes all baseline subtests. To verify content, pre-populate via the contract driver's WithPrePopulate option or compose with //testkit:eventually for convergence-style checks.
 	//
 	// Default contracts (always run for StreamReader):
 	//   - smoke
@@ -675,13 +672,19 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 		)(sctx)
 	})
 
-	// Statistics — Unknown-shape method.
+	// Statistics — Unknown shape (no baseline contract).
 	//
-	// Shape semantics:
-	//
-	//
-	// Default contracts (always run for Unknown):
+	// The shape detector returned a category for which the suite
+	// framework has no per-shape baseline runtime helper. Emitting
+	// the per-method t.Run as a documented Skip surfaces the
+	// signature in the generated file so a reader knows the method
+	// exists and is deliberately not contract-tested at this level.
+	// Closing the gap requires either: a new shape entry in the
+	// detector with a corresponding suite/<shape>.go runtime helper,
+	// or a //testkit directive that maps this signature to an
+	// existing shape.
 	t.Run("Statistics", func(t *testing.T) {
+		t.Skip("Unknown shape — no baseline contract emitted; suite needs a per-shape runtime helper to verify this signature category")
 	})
 
 	// Stats — MultiAggregator-shape method.
@@ -708,7 +711,7 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 		var extras []suite.MultiAggregatorAssertion[interfaces.AllShapes, int, int]
 		suite.AssertMultiAggregatorBaseline[interfaces.AllShapes, int, int](
 			42,
-			42,
+			43,
 			extras...,
 		)(sctx)
 	})

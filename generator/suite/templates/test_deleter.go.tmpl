@@ -15,7 +15,7 @@
 		suite.AssertDeleterBaseline[{{ $iface }}, {{ $K }}](
 			{{ $m.SampleParamAt 0 $tracker }},
 {{- if $m.HasFirstSentinel }}
-			suite.AssertDeleteReturnsNotFound[{{ $iface }}, {{ $K }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
+			suite.AssertDeleteReturnsNotFound[{{ $iface }}, {{ $K }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

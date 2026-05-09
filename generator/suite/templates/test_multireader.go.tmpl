@@ -19,7 +19,7 @@
 			{{ $m.SampleResultAt 0 $tracker }},
 			{{ $m.SampleResultAt 1 $tracker }},
 {{- if $m.HasFirstSentinel }}
-			suite.AssertMultiReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
+			suite.AssertMultiReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

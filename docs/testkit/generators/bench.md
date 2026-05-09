@@ -1,11 +1,12 @@
 # Bench
 
-Tier 4 conformance. Reads a Go interface, classifies each method into a *shape* using the same `gen.DetectShape` rules as `suite`, and emits a `Benchmark<Iface>Contract(b, factory, opts...)` harness with two layers:
+Tier 4 conformance. Reads a Go interface, classifies each method into one of 21 *shapes* via signature matching, and emits a `Benchmark<Iface>Contract(b, factory, opts...)` harness with two layers:
 
-- **Auto-detected** `<Method>/hot-path` benchmarks per shape — single `b.Loop()` measurement with `b.ResetTimer` and `b.ReportAllocs`. Run by default; no consumer code required.
-- **Plug-in** sub-benchmarks wired through typed extension points that match the method's shape. The consumer composes shape-appropriate primitives from `testkit/bench_*.go` — `BenchReaderHotPath`, `BenchWriterAllocsWithin`, `BenchReaderConcurrentThroughput`, etc.
+- **Always-emitted primitives** per method — `<Method>/hot-path` (single-goroutine ns/op + allocs/op) and, for shapes where it's safe, `<Method>/concurrent-4` (multi-goroutine throughput). No consumer code required.
+- **Opt-in budget gates** driven by directives — `<Method>/allocs-within-N`, `<Method>/latency-within-D`, `<Method>/percentiles`. Each fails the benchmark when the measured value exceeds the consumer-declared ceiling.
+- **Plug-in primitives** through typed `<Iface>BenchOn<Method>(...)` slots that match the method's shape, plus a free-form `<Iface>BenchCustom(name, fn)` escape hatch.
 
-A `factory func() Iface` is the single required injection. Every bench constructs a fresh implementation per run.
+A `factory func() Iface` is the single required injection. Every per-method bench constructs a fresh implementation per iteration via the seeded factory.
 
 ## Directive
 
@@ -21,154 +22,144 @@ A `factory func() Iface` is the single required injection. Every bench construct
 
 ## Method-shape detection
 
-Identical to `suite` — the same detection table classifies methods into one of 13 shapes (Reader, ReaderWithBool, Lookup, Writer, Mutator, Deleter, Aggregator, StreamReader, Lifecycle, Pure, Predicate, PoisonAccessor, or Unknown). See [Generators / suite — shape detection](suite.md#method-shape-detection) for the table.
+Identical to `suite` — the same `shape.Detect` priority table classifies every method into one of 21 shapes. See [Generators / suite — shape detection](suite.md#method-shape-detection) for the full table.
 
 The shape determines:
 
-- which auto-detected hot-path benchmark template is emitted,
-- which typed bench-context (`BenchReaderContext`, `BenchWriterContext`, etc.) is wired into the plug-in dispatch,
-- which bench-library primitives the consumer can plug in.
+- which typed bench Context (`bench.ReaderContext`, `bench.WriterContext`, ...) is wired into the per-method helper,
+- which primitives the helper calls (HotPath / Concurrent / AllocsWithin / LatencyWithin / LatencyPercentilesWithin),
+- which typed primitives consumers can plug in through `<Iface>BenchOn<Method>`.
 
-The header comment at the top of the generated file lists which methods landed in which shape, plus the count of default benchmarks and the available plug-in points.
+A per-method docblock at the top of each generated helper lists the detected shape, the directives applied, the synthesized sample inputs, and the exact list of subtests emitted — so a misclassification or a missing seed shows up by reading the file.
+
+## Always-emitted primitives
+
+Every non-skipped method produces:
+
+- `<Method>/hot-path` — single-goroutine `b.Loop()` measurement reporting `ns/op` and `allocs/op`. The hot-path calls the method with sample literals (synthesized from the parameter types, or supplied via `//testkit:sample`).
+- `<Method>/concurrent-4` — `b.RunParallel`-style throughput at parallelism 4.
+
+`Lifecycle`, `VoidLifecycle`, and `Unknown` shapes skip the concurrent emission by default — concurrent invocation of `Init` / `Close` / `Reset` on a shared impl is rarely safe, and the typed primitive can't guarantee otherwise. Consumers that need concurrent measurement on those methods supply a primitive through the `<Iface>BenchOn<Method>` plug-in slot.
+
+For methods whose hot-path uses synthesized sample literals (no `//testkit:sample` directive), the generated helper emits a `b.Logf` warning at the top of the run so consumers reading the output don't silently measure the not-found / error path:
+
+```
+Hot: hot-path uses synthesized sample literals; declare //testkit:sample <Func>...
+and seed the factory with matching values, or the benchmark may measure the
+not-found / error path instead of the success path
+```
+
+`StreamConsumer` methods whose stream type is `io.Reader` automatically wire `BytesPerOp` from the synthesized stream sample (`bytes.NewReader([]byte("test-data"))` = 9 bytes) so MB/s reports without per-method configuration. Override via the consumer's `<Iface>BenchSetBytes` option.
+
+## Directives consumed
+
+| Directive | Adds subtest | Behavior |
+|-----------|--------------|----------|
+| `//testkit:allocs N` | `<Method>/allocs-within-N` | Fails when the measured allocs/op exceeds `N`. `N=0` is a valid alloc-free assertion. |
+| `//testkit:latency D` | `<Method>/latency-within-D` | Fails when the mean ns/op exceeds the duration ceiling. |
+| `//testkit:percentiles p<N>=D...` | `<Method>/percentiles` | Records each iteration's duration, sorts the distribution, reports `p50-ns/op` / `p95-ns/op` / `p99-ns/op` via `b.ReportMetric`, and fails when any budgeted percentile exceeds its ceiling. Multiple budgets supported (e.g. `p50=10us p95=50us p99=100us`); percentiles in [1, 99]. |
+| `//testkit:sample <Func>...` | *(no extra subtest)* | Replaces the synthesized sample literals in the hot-path / concurrent / budget-gate calls with `<Func>()` invocations. One builder per non-context parameter; called once at construction time. See [suite — sample directive](suite.md#sample-directive) for the resolution rules. |
+| `//testkit:integration-only` | *(method skipped)* | The method's helper is omitted entirely. Use for methods that can't be benched in a hermetic harness (network, hardware, persistence). |
+
+`bench` shares the directive registry with every other generator, so a method may carry directives consumed by `suite` (`errors`, `pure`, `nilsafe`, ...) without affecting the bench output — `bench` reads only the five directives above.
 
 ## What is generated
 
-For an interface with eight methods covering every shape:
+For an interface declaring three budget gates plus a sample directive on a key parameter:
 
 ```go
-type Service interface {
-    Get(ctx context.Context, id string) (Item, error)        // Reader
-    Put(ctx context.Context, item Item) error                // Writer
-    //testkit:deleter
-    Delete(ctx context.Context, id string) error             // Deleter
-    Count(ctx context.Context) (int, error)                  // Aggregator
-    Close(ctx context.Context) error                         // Lifecycle
-    Describe() string                                        // Pure
-    IsEmpty() bool                                           // Predicate
-    List(ctx context.Context) iter.Seq2[Item, error]         // StreamReader
+type Perf interface {
+    //testkit:allocs 0
+    //testkit:latency 100us
+    //testkit:percentiles p50=50us p95=200us p99=500us
+    //testkit:sample SeededKey
+    Hot(ctx context.Context, key string) (Item, error)
 }
 ```
 
-the generator emits:
+the generator emits a per-method helper:
 
 ```go
-// BenchmarkServiceContract runs performance benchmarks against
-// implementations of [allshapes.Service] produced by factory.
+// benchPerfHot measures Perf.Hot(ctx context.Context, key string) (basic.Item, error).
 //
-//   Default benchmarks: 8 hot-path measurements across 8 methods
-//   Shapes benchmarked: Reader (Get), Writer (Put), Deleter (Delete),
-//                       Aggregator (Count), StreamReader (List),
-//                       Lifecycle (Close), Pure (Describe), Predicate (IsEmpty)
-//   Plug-in points:     ServiceBenchOnClose, ServiceBenchOnCount,
-//                       ServiceBenchOnDelete, ServiceBenchOnDescribe,
-//                       ServiceBenchOnGet, ServiceBenchOnIsEmpty,
-//                       ServiceBenchOnList, ServiceBenchOnPut,
-//                       ServiceBenchCustom
-func BenchmarkServiceContract(
-    b *testing.B,
-    factory func() allshapes.Service,
-    opts ...ServiceBenchOption,
-) {
+//   Shape:      Reader
+//   Directives: //testkit:allocs 0
+//               //testkit:latency 100us
+//               //testkit:percentiles p50=50us p95=200us p99=500us
+//               //testkit:sample SeededKey
+//   Sample inputs: SeededKey()
+//   Emits:      Hot/hot-path
+//               Hot/concurrent-4
+//               Hot/allocs-within-0     (//testkit:allocs gate)
+//               Hot/latency-within-100us     (//testkit:latency gate)
+//               Hot/percentiles    (//testkit:percentiles p50=50us p95=200us p99=500us)
+//               Hot/<consumer-supplied>     (via cfg.onHot)
+func benchPerfHot(b *testing.B, factory func() basic.Perf, cfg *perfBenchConfig) {
     b.Helper()
-    cfg := newServiceBenchConfig(opts...)
-
-    benchServiceClose(b, factory, &cfg)
-    benchServiceCount(b, factory, &cfg)
-    benchServiceDelete(b, factory, &cfg)
-    benchServiceDescribe(b, factory, &cfg)
-    benchServiceGet(b, factory, &cfg)
-    benchServiceIsEmpty(b, factory, &cfg)
-    benchServiceList(b, factory, &cfg)
-    benchServicePut(b, factory, &cfg)
-
-    for _, custom := range cfg.custom {
-        b.Run(custom.name, func(b *testing.B) {
-            custom.fn(b, factory())
-        })
-    }
+    b.Run("Hot", func(b *testing.B) {
+        seededFactory := func() basic.Perf {
+            impl := factory()
+            if cfg.prePopulate != nil {
+                cfg.prePopulate(b.Context(), impl)
+            }
+            return impl
+        }
+        rctx := bench.ReaderContext[basic.Perf, string, basic.Item]{ /* ... */ }
+        bench.ReaderHotPath[basic.Perf, string, basic.Item](SeededKey())(rctx)
+        bench.ReaderConcurrentThroughput[basic.Perf, string, basic.Item](SeededKey(), 4)(rctx)
+        bench.ReaderAllocsWithin[basic.Perf, string, basic.Item](SeededKey(), 0)(rctx)
+        bench.ReaderLatencyWithin[basic.Perf, string, basic.Item](SeededKey(), time.Duration(100000) /* 100us */)(rctx)
+        bench.ReaderLatencyPercentilesWithin[basic.Perf, string, basic.Item](SeededKey(), map[float64]time.Duration{
+            0.50: time.Duration(50000)  /* p50=50us */,
+            0.95: time.Duration(200000) /* p95=200us */,
+            0.99: time.Duration(500000) /* p99=500us */,
+        })(rctx)
+        for _, p := range cfg.onHot { p(rctx) }
+    })
 }
 ```
 
-One `bench<Iface><Method>` per method, plus top-level dispatch for `Custom` sub-benchmarks.
-
-## Auto-detected hot-path benchmarks
-
-Every method gets a `<Method>/hot-path` benchmark with the same shape:
-
-```go
-b.Run("Get/hot-path", func(b *testing.B) {
-    impl := factory()
-    if cfg.prePopulate != nil {
-        cfg.prePopulate(b.Context(), impl)
-    }
-    b.ResetTimer()
-    b.ReportAllocs()
-    for b.Loop() {
-        _, _ = impl.Get(b.Context(), "")
-    }
-})
-```
-
-The hot-path body calls the method with zero-value inputs in a tight `b.Loop()`. `ResetTimer` excludes setup; `ReportAllocs` enables alloc accounting. The result of any return value is discarded so the benchmark measures call overhead, not the consumer's downstream work.
-
-The hot-path wraps the call in `defer func() { if r := recover(); r != nil { b.Skipf(...) } }()`. If a method panics on zero-value inputs, the benchmark skips with a diagnostic instead of failing. Annotate the method with `//testkit:sample` (see [suite — sample directive](suite.md#sample-directive)) to replace zero values with valid samples.
-
-Hot-path is a measurement, not a gate — no allocation or latency ceiling is asserted. Gates come from the plug-in primitives below.
+The driver then dispatches one helper per method, plus the top-level `Custom` and option-folding scaffolding.
 
 ## Plug-in extension points (typed by shape)
 
-Each method gets a `<Iface>BenchOn<Method>` option whose argument type depends on the method's shape. The consumer composes assertions from `testkit/bench_*.go`.
-
-### Reader plug-ins
-
-```go
-servicetest.ServiceBenchOnGet(
-    bench.ReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
-    bench.ReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
-    bench.ReaderConcurrentThroughput[allshapes.Service, string, allshapes.Item]("seed-1", 4),
-)
-```
-
-`...bench.Reader[T, K, V]`. Library:
-
-- `bench.ReaderHotPath(key)` — single-thread measurement against a known key (replaces the auto-detected zero-key hot-path with a realistic one).
-- `bench.ReaderAllocsWithin(key, maxAllocs)` — gate: fail if allocs/op exceeds `maxAllocs`.
-- `bench.ReaderConcurrentThroughput(key, parallelism)` — `b.RunParallel`-style stress at the given parallelism.
-
-### Writer / Deleter / Lifecycle / Aggregator / Pure / Predicate / Stream
+Each method gets a `<Iface>BenchOn<Method>` option whose argument type depends on the method's shape. The consumer composes typed bench primitives from `bench/`:
 
 | Method shape | `BenchOn<Method>` accepts |
 |--------------|---------------------------|
 | Reader | `bench.Reader[T, K, V]` |
+| ReaderNoError | `bench.ReaderNoError[T, K, V]` |
 | ReaderWithBool | `bench.ReaderWithBool[T, K, V]` |
 | Lookup | `bench.Lookup[T, K, V, R]` |
+| PointerReader | `bench.PointerReader[T, K, V]` |
+| MultiReader | `bench.MultiReader[T, K, V1, V2]` |
+| BatchReader | `bench.BatchReader[T, K, V]` |
 | Writer | `bench.Writer[T, V]` |
+| CompositeWriter | `bench.CompositeWriter[T, K1, V]` |
 | Mutator | `bench.Mutator[T, V]` |
 | Deleter | `bench.Deleter[T, K]` |
+| MultiArgWriter (arity 3) | `bench.MultiArgWriter[T, P1, P2, P3]` |
+| MultiArgWriter (arity ≠ 3) | `func(*testing.B, T)` (free-form) |
 | Aggregator | `bench.Aggregator[T, R]` |
-| Lifecycle | `bench.Lifecycle[T]` |
+| MultiAggregator | `bench.MultiAggregator[T, V1, V2]` |
+| StreamReader | `bench.Stream[T, V]` |
+| StreamConsumer | `bench.StreamConsumer[T, S, V]` |
 | Pure | `bench.Pure[T, R]` |
 | Predicate | `bench.Predicate[T]` |
-| StreamReader | `bench.Stream[T, V]` |
 | PoisonAccessor | `bench.PoisonAccessor[T]` |
+| Lifecycle | `bench.Lifecycle[T]` |
+| VoidLifecycle | `bench.VoidLifecycle[T]` |
 | Unknown | `func(*testing.B, T)` (free-form) |
 
-Bench-library inventories per shape (in `bench/`):
+Every shape ships the same five-primitive vocabulary (where applicable):
 
-- **Reader** — `ReaderHotPath(key)`, `ReaderAllocsWithin(key, maxAllocs)`, `ReaderConcurrentThroughput(key, parallelism)`
-- **ReaderWithBool** — `ReaderWithBoolHotPath(key)`, `ReaderWithBoolAllocsWithin(key, maxAllocs)`
-- **Lookup** — `LookupHotPath(key)`, `LookupAllocsWithin(key, maxAllocs)`
-- **Writer** — `WriterHotPath(sample)`, `WriterAllocsWithin(sample, maxAllocs)`
-- **Mutator** — `MutatorHotPath(sample)`, `MutatorAllocsWithin(sample, maxAllocs)`
-- **Deleter** — `DeleterHotPath(key)`, `DeleterAllocsWithin(key, maxAllocs)`
-- **Aggregator** — `AggregatorAllocsWithin(maxAllocs)`
-- **Lifecycle** — `LifecycleAllocsWithin(maxAllocs)`
-- **Pure** — `PureAllocsWithin(maxAllocs)`, `PureConcurrentThroughput(parallelism)`
-- **Predicate** — `PredicateAllocsWithin(maxAllocs)`
-- **Stream** — `StreamHotPath()`, `StreamAllocsWithin(maxAllocs)`
-- **PoisonAccessor** — `PoisonAccessorAllocsWithin(maxAllocs)`
+- `<Shape>HotPath(...)` — single-goroutine measurement (overrides the auto-emitted hot-path).
+- `<Shape>ConcurrentThroughput(..., parallelism)` — `b.RunParallel`-style stress.
+- `<Shape>AllocsWithin(..., maxAllocs)` — gate: fail when allocs/op exceeds `maxAllocs`.
+- `<Shape>LatencyWithin(..., maxLatency)` — gate: fail when ns/op exceeds `maxLatency`.
+- `<Shape>LatencyPercentilesWithin(..., budgets map[float64]time.Duration)` — gate: fail when any budgeted percentile exceeds its ceiling; reports `p50/p95/p99` via `b.ReportMetric` regardless of which percentiles are budgeted.
 
-Each shape ships at least an `AllocsWithin` gate; Reader/Writer/Deleter/Stream additionally ship hot-path measurements that target a specific key/sample (the auto-detected hot-path uses zero-value inputs, which may not be representative for a backing store with real data). Adding a custom bench primitive is a closure over the shape's typed `Context`.
+Consumer-defined primitives are one-line closures over the shape's typed `Context`.
 
 ## PrePopulate
 
@@ -178,16 +169,12 @@ servicetest.ServiceBenchPrePopulate(func(ctx context.Context, s allshapes.Servic
 })
 ```
 
-`PrePopulate` runs before each benchmark against a fresh impl from the factory. State is not shared across benchmarks; every `<Method>/hot-path` and every plug-in primitive sees a freshly-populated impl. This keeps benchmarks isolated and stable across runs.
-
-PrePopulate runs *outside* the timed region — `b.ResetTimer` is called after PrePopulate completes, so seed cost is excluded from the measurement.
+`PrePopulate` is wrapped into a `seededFactory` closure that the per-method helper calls every time a primitive needs a fresh impl. State is not shared across iterations — `b.Loop()` and `b.RunParallel` see the seeded baseline on every reconstruction. PrePopulate cost is paid inside the timed region; if you want to exclude seeding from the measurement, do the work in the `factory` closure instead.
 
 ## Custom sub-benchmarks
 
 ```go
 servicetest.ServiceBenchCustom("put-then-get-round-trip", func(b *testing.B, s allshapes.Service) {
-    b.ResetTimer()
-    b.ReportAllocs()
     for b.Loop() {
         _ = s.Put(b.Context(), allshapes.Item{ID: "rt"})
         _, _ = s.Get(b.Context(), "rt")
@@ -195,7 +182,11 @@ servicetest.ServiceBenchCustom("put-then-get-round-trip", func(b *testing.B, s a
 })
 ```
 
-For benchmarks that aren't shape-aligned — multi-method round-trips, workload mixes, scenario benchmarks. Use sparingly; most performance contracts have a shape primitive that fits.
+For benchmarks outside the shape vocabulary — multi-method round-trips, workload mixes, scenario benchmarks. Each `Custom` sub-benchmark receives a fresh `factory()`-produced impl. Use sparingly; most performance contracts have a shape primitive that fits.
+
+## Stub interaction
+
+When the consumer's factory returns a generated stub (from [`testkit stub`](stub.md)), the bench harness automatically benefits from `BenchMode` — recording is skipped for the duration of the run so per-call overhead reflects the underlying implementation, not the recorder. `BenchMode` is enabled per stub via the stub's `Bench()` mode option.
 
 ## Wiring against an implementation
 
@@ -203,7 +194,7 @@ For benchmarks that aren't shape-aligned — multi-method round-trips, workload 
 // servicetest/bench_test.go
 package servicetest_test
 
-func BenchmarkAllShapesContract(b *testing.B) {
+func BenchmarkServiceContract(b *testing.B) {
     factory := func() allshapes.Service {
         s := allshapes.NewInMemoryService()
         _ = s.Put(context.Background(), allshapes.Item{ID: "seed-1", Name: "seed"})
@@ -215,66 +206,43 @@ func BenchmarkAllShapesContract(b *testing.B) {
             _ = s.Put(ctx, allshapes.Item{ID: "pre-1", Name: "prepopulated"})
         }),
 
-        // Reader: Get
+        // Override the synthesized hot-path with a real seeded key.
         servicetest.ServiceBenchOnGet(
             bench.ReaderHotPath[allshapes.Service, string, allshapes.Item]("seed-1"),
-            bench.ReaderAllocsWithin[allshapes.Service, string, allshapes.Item]("seed-1", 0),
-        ),
-
-        // Writer: Put
-        servicetest.ServiceBenchOnPut(
-            bench.WriterHotPath[allshapes.Service, allshapes.Item](
-                allshapes.Item{ID: "bench-w", Name: "bench"},
+            bench.ReaderLatencyPercentilesWithin[allshapes.Service, string, allshapes.Item](
+                "seed-1",
+                map[float64]time.Duration{
+                    0.50: 5 * time.Microsecond,
+                    0.99: 100 * time.Microsecond,
+                },
             ),
         ),
 
-        // Deleter: Delete (declared with //testkit:deleter)
-        servicetest.ServiceBenchOnDelete(
-            bench.DeleterHotPath[allshapes.Service, string]("seed-1"),
-        ),
-
-        // Aggregator: Count — gate allocs.
-        servicetest.ServiceBenchOnCount(
-            bench.AggregatorAllocsWithin[allshapes.Service, int](0),
-        ),
-
-        // Lifecycle: Close — gate allocs.
-        servicetest.ServiceBenchOnClose(
-            bench.LifecycleAllocsWithin[allshapes.Service](0),
-        ),
-
-        // Pure: Describe — gate allocs.
-        servicetest.ServiceBenchOnDescribe(
-            bench.PureAllocsWithin[allshapes.Service, string](0),
-        ),
-
-        // Predicate: IsEmpty — gate allocs.
-        servicetest.ServiceBenchOnIsEmpty(
-            bench.PredicateAllocsWithin[allshapes.Service](0),
-        ),
-
-        // Stream: List
-        servicetest.ServiceBenchOnList(
-            bench.StreamHotPath[allshapes.Service, allshapes.Item](),
-        ),
+        // Free-form scenario benchmark.
+        servicetest.ServiceBenchCustom("put-then-get-round-trip", func(b *testing.B, s allshapes.Service) {
+            for b.Loop() {
+                _ = s.Put(b.Context(), allshapes.Item{ID: "rt"})
+                _, _ = s.Get(b.Context(), "rt")
+            }
+        }),
     )
 }
 ```
 
-A second implementation plugs in by changing the `factory` closure — every benchmark runs against every implementation. Comparing benchmark output across factories produces a per-method performance comparison without writing more code.
+A second implementation plugs in by changing the `factory` closure — every emitted bench runs against every implementation. Comparing benchmark output across factories produces a per-method performance comparison without writing more code.
 
 ## Relationship to suite
 
-`suite` and `bench` share `gen.DetectShape`, the same `On<Method>` plug-in pattern, and the same per-shape typed bindings (`ReaderBindings`, `WriterBindings`, etc.) — but `bench` uses `*testing.B`-rooted `BenchXContext` types, while `suite` uses `*testing.T`-rooted `XContext` types. Plug-in primitives are not interchangeable between them: a `ReaderAssertion` cannot be passed to `BenchOnGet`, and a `BenchReader` cannot be passed to `OnGet`. The split keeps the bench primitives free of `t.Run` overhead and lets each side compose differently with the auto-detected layer.
+`suite` and `bench` share `shape.Detect`, the same `On<Method>` plug-in pattern, and the same per-shape typed bindings (`ReaderBindings`, `WriterBindings`, ...) — but `bench` uses `*testing.B`-rooted `<Shape>Context` types, while `suite` uses `*testing.T`-rooted `<Shape>Context` types. Plug-in primitives are not interchangeable: a `suite.ReaderAssertion` cannot be passed to `BenchOnGet`, and a `bench.Reader` cannot be passed to `OnGet`. The split keeps bench primitives free of `t.Run` overhead and lets each side compose differently with the auto-emitted layer.
 
 ## Symbol naming
 
-Every option is prefixed with the interface name and `Bench` (`ServiceBenchOption`, `ServiceBenchPrePopulate`, `ServiceBenchOnGet`, `ServiceBenchCustom`, etc.) so multiple interfaces — and both suite and bench output for the same interface — can land in the same `*test` package without symbol collisions. The internal accumulator type is unexported (`serviceBenchConfig`).
+Every option is prefixed with the interface name and `Bench` (`ServiceBenchOption`, `ServiceBenchPrePopulate`, `ServiceBenchOnGet`, `ServiceBenchCustom`, ...) so multiple interfaces — and both suite and bench output for the same interface — can land in the same `*test` package without symbol collisions. The internal config struct is unexported (`serviceBenchConfig`).
 
 ## See also
 
-- [Primitives / Contract](../primitives/benchmarking.md) — `StartContract` is the runtime gate primitive bench primitives layer on top of
-- [Generators / suite](suite.md) — Tier 1 conformance with the same shape detection
-- Shape-specific bench files in `bench/`: `reader.go`, `writer.go`, `deleter.go`, `lifecycle.go`, `aggregator.go`, `predicate.go`, `pure.go`, `stream.go`
-- [Validators / benchmarks](../validators/benchmarks.md) — enforces every benchmark uses `StartContract`
-- [Validators / bench-regression](../validators/bench-regression.md) — compares benchmark output against pinned baseline
+- [Primitives / Benchmarking](../primitives/benchmarking.md) — `StartContract` is the runtime gate primitive bench primitives layer on top of.
+- [Generators / suite](suite.md) — Tier 1 conformance with the same shape detection.
+- Shape-specific bench files in `bench/` — one file per shape (`reader.go`, `writer.go`, `aggregator.go`, ...) carrying the typed Context and the five primitives.
+- [Validators / benchmarks](../validators/benchmarks.md) — enforces every benchmark uses `StartContract`.
+- [Validators / bench-regression](../validators/bench-regression.md) — compares benchmark output against a pinned baseline (planned).

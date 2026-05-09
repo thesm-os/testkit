@@ -165,7 +165,7 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("WithTags replaces existing slice", func(t *testing.T) {
 		t.Parallel()
-		replacement := []string{"test-tags"}
+		replacement := []string{"test-tag"}
 		got := structstest.NewItemFrom(structs.Item{}).
 			WithTags(replacement...).
 			WithTags(replacement...).
@@ -176,7 +176,7 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("AppendTags preserves existing", func(t *testing.T) {
 		t.Parallel()
-		seed := []string{"test-tags"}
+		seed := []string{"test-tag"}
 		got := structstest.NewItemFrom(structs.Item{}).
 			WithTags(seed...).
 			AppendTags(seed...).
@@ -247,7 +247,7 @@ func TestItemBuilder(t *testing.T) {
 
 	t.Run("Clone deep-copies Tags slice", func(t *testing.T) {
 		t.Parallel()
-		seed := []string{"test-tags"}
+		seed := []string{"test-tag"}
 		base := structstest.NewItemFrom(structs.Item{}).WithTags(seed...)
 		clone := base.Clone()
 		clone.AppendTags(seed...)

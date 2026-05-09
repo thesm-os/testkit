@@ -97,17 +97,17 @@ func TestRenderMethodDirectives(t *testing.T) {
 
 	t.Run("omits annotation when descriptor declares no consumers", func(t *testing.T) {
 		t.Parallel()
-		// `cacheable` exists in DefaultRegistry but declares no
+		// `ctx` exists in DefaultRegistry but declares no
 		// Consumed(...) — line renders without the [..] suffix.
 		methods := []MethodInfo{
 			{Name: "Get", Directives: []directive.Directive{
-				{Name: directive.Cacheable},
+				{Name: directive.Ctx},
 			}},
 		}
 		got := RenderMethodDirectives(methods)
 		testkit.Len(t, got, 1, "single line")
 		testkit.Assert(t, got[0]).
-			HasPrefix("Get: //testkit:cacheable", "directive name").
+			HasPrefix("Get: //testkit:ctx", "directive name").
 			NotContains("[", "no consumer annotation")
 	})
 }
@@ -123,8 +123,8 @@ func TestConsumerAnnotations(t *testing.T) {
 
 	t.Run("returns nil for directive without Consumers", func(t *testing.T) {
 		t.Parallel()
-		// `cacheable` is known but has no Consumed(...) entries.
-		got := consumerAnnotations(directive.DefaultRegistry(), directive.Cacheable)
+		// `ctx` is known but has no Consumed(...) entries.
+		got := consumerAnnotations(directive.DefaultRegistry(), directive.Ctx)
 		testkit.True(t, got == nil, "no consumers → nil")
 	})
 

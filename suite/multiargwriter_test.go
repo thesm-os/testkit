@@ -115,7 +115,7 @@ func TestMultiArgWriterVariadic(t *testing.T) {
 	t.Run("WriteRejectInvalid surfaces the sentinel", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMultiArgWriteRejectInvalidVariadic[*scheduler](
-			errSchedInvalid, "k", "v", -1)(multiArgVariadicCtx(t))
+			[]any{"k", "v", -1}, errSchedInvalid)(multiArgVariadicCtx(t))
 	})
 
 	t.Run("Idempotent succeeds on repeat write", func(t *testing.T) {

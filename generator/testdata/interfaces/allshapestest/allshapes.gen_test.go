@@ -2,7 +2,7 @@
 // Source: allshapes.go:40-111 (testkit stub -o allshapestest/allshapes.gen.go AllShapes)
 //
 // Directives:
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 //   Remove: //testkit:deleter
 
 // Package allshapestest_test verifies the AllShapesStub dispatch contract.
@@ -661,22 +661,22 @@ func TestAllShapesStub(t *testing.T) {
 	t.Run("Statistics/Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStatistics.Returns(42, 42, 42, nil)
+		s.OnStatistics.Returns(42, 43, 44, nil)
 		v0, v1, v2, err := s.Statistics(t.Context())
 		testkit.NoError(t, err, "Statistics: Returns must surface nil error")
 		testkit.Equal(t, v0, 42, "Statistics Returns: v0 must match the configured Returns value")
-		testkit.Equal(t, v1, 42, "Statistics Returns: v1 must match the configured Returns value")
-		testkit.Equal(t, v2, 42, "Statistics Returns: v2 must match the configured Returns value")
+		testkit.Equal(t, v1, 43, "Statistics Returns: v1 must match the configured Returns value")
+		testkit.Equal(t, v2, 44, "Statistics Returns: v2 must match the configured Returns value")
 	})
 
 	t.Run("Stats/Returns fixed value", func(t *testing.T) {
 		t.Parallel()
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStats.Returns(42, 42, nil)
+		s.OnStats.Returns(42, 43, nil)
 		v0, v1, err := s.Stats(t.Context())
 		testkit.NoError(t, err, "Stats: Returns must surface nil error")
 		testkit.Equal(t, v0, 42, "Stats Returns: v0 must match the configured Returns value")
-		testkit.Equal(t, v1, 42, "Stats Returns: v1 must match the configured Returns value")
+		testkit.Equal(t, v1, 43, "Stats Returns: v1 must match the configured Returns value")
 	})
 
 	t.Run("All/records calls", func(t *testing.T) {
@@ -1068,22 +1068,22 @@ func TestAllShapesStub(t *testing.T) {
 	t.Run("Statistics/records call results", func(t *testing.T) {
 		t.Parallel()
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStatistics.Returns(42, 42, 42, nil)
+		s.OnStatistics.Returns(42, 43, 44, nil)
 		_, _, _, _ = s.Statistics(t.Context())
 		call := s.OnStatistics.LastCall(t)
 		testkit.Equal(t, call.Result0, 42, "Statistics records results: Result0 must be stamped on the Call")
-		testkit.Equal(t, call.Result1, 42, "Statistics records results: Result1 must be stamped on the Call")
-		testkit.Equal(t, call.Result2, 42, "Statistics records results: Result2 must be stamped on the Call")
+		testkit.Equal(t, call.Result1, 43, "Statistics records results: Result1 must be stamped on the Call")
+		testkit.Equal(t, call.Result2, 44, "Statistics records results: Result2 must be stamped on the Call")
 	})
 
 	t.Run("Stats/records call results", func(t *testing.T) {
 		t.Parallel()
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStats.Returns(42, 42, nil)
+		s.OnStats.Returns(42, 43, nil)
 		_, _, _ = s.Stats(t.Context())
 		call := s.OnStats.LastCall(t)
 		testkit.Equal(t, call.Result0, 42, "Stats records results: Result0 must be stamped on the Call")
-		testkit.Equal(t, call.Result1, 42, "Stats records results: Result1 must be stamped on the Call")
+		testkit.Equal(t, call.Result1, 43, "Stats records results: Result1 must be stamped on the Call")
 	})
 
 	t.Run("All/OnRecord hook fires", func(t *testing.T) {
@@ -2412,7 +2412,7 @@ func TestAllShapesStub(t *testing.T) {
 		t.Parallel()
 		called := false
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStatistics.Returns(42, 42, 42, nil)
+		s.OnStatistics.Returns(42, 43, 44, nil)
 		s.OnStatistics.Func(func(ctx context.Context) (int, int, int, error) {
 			called = true
 			return 0, 0, 0, nil
@@ -2425,7 +2425,7 @@ func TestAllShapesStub(t *testing.T) {
 		t.Parallel()
 		called := false
 		s := allshapestest.NewAllShapesStub(t)
-		s.OnStats.Returns(42, 42, nil)
+		s.OnStats.Returns(42, 43, nil)
 		s.OnStats.Func(func(ctx context.Context) (int, int, error) {
 			called = true
 			return 0, 0, nil
@@ -2727,8 +2727,8 @@ func TestAllShapesStubBenchModeZeroAlloc(t *testing.T) {
 	s.OnScan.Returns(nil)
 	s.OnSchedule.Returns(nil)
 	s.OnSet.Returns(nil)
-	s.OnStatistics.Returns(42, 42, 42, nil)
-	s.OnStats.Returns(42, 42, nil)
+	s.OnStatistics.Returns(42, 43, 44, nil)
+	s.OnStats.Returns(42, 43, nil)
 
 	t.Run("All", func(t *testing.T) {
 		allocs := testing.AllocsPerRun(100, func() {

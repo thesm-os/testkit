@@ -38,7 +38,10 @@ func TestComposition(t *testing.T) {
 
 	t.Run("clean composition produces no issues", func(t *testing.T) {
 		t.Parallel()
-		issues := directive.Issues(makeDirs("atomic", "idempotent"))
+		// atomic Requires errors (the failure path must be observable
+		// via a declared sentinel) — include errors so the composition
+		// is actually clean.
+		issues := directive.Issues(makeDirs("atomic", "idempotent", "errors"))
 		testkit.Len(t, issues, 0, "no composition issues")
 	})
 
@@ -79,7 +82,10 @@ func TestComposition(t *testing.T) {
 
 	t.Run("ValidateComposition returns nil when no hard issues", func(t *testing.T) {
 		t.Parallel()
-		err := directive.ValidateComposition(makeDirs("atomic", "idempotent"), token.Position{})
+		err := directive.ValidateComposition(
+			makeDirs("atomic", "idempotent", "errors"),
+			token.Position{},
+		)
 		testkit.NoError(t, err, "clean composition")
 	})
 

@@ -185,6 +185,32 @@ func (m MethodView) FirstSentinel() string {
 // RejectInvalid emission per method.
 func (m MethodView) HasFirstSentinel() bool { return m.FirstSentinel() != "" }
 
+// Sentinels returns the qualified expressions of every sentinel
+// declared via //testkit:errors on this method, in declaration
+// order. Drives multi-sentinel emission in the sentinel-bearing
+// runtime helpers (AssertWriteRejectInvalid, AssertReturnsSentinel,
+// etc.) — each helper's variadic `sentinels ...error` parameter
+// receives every entry, so methods declaring multiple sentinels
+// (e.g. "//testkit:errors ErrNotFound ErrConflict") have their full
+// set asserted against rather than only the first.
+func (m MethodView) Sentinels() []string {
+	if p, ok := errors.Get(m.Method); ok {
+		out := make([]string, 0, len(p.Sentinels))
+		for _, s := range p.Sentinels {
+			out = append(out, s.Qualified)
+		}
+		return out
+	}
+	return nil
+}
+
+// SentinelsList returns [Sentinels] joined with ", " for direct use
+// in templates as a variadic-arg list — `func(..., {{ .SentinelsList }})`.
+// Empty when no sentinels are declared.
+func (m MethodView) SentinelsList() string {
+	return strings.Join(m.Sentinels(), ", ")
+}
+
 // ShapeName returns the detected shape's display name as a string —
 // "Reader", "Writer", "StreamReader", etc. Templates dispatch on
 // this to pick the per-shape subtest partial.
@@ -673,7 +699,7 @@ func (m MethodView) ShapeDescription() string {
 	case shapePoisonAccessor:
 		return "func() error — poison-state accessor. Returns nil on a fresh impl, returns the configured sentinel after a poisoned-factory builds it."
 	case shapeStreamReader:
-		return "func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant."
+		return "func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant. The baseline asserts structural properties (terminates, reentrant, respects-break) but does not assert content — an empty stream trivially passes all baseline subtests. To verify content, pre-populate via the contract driver's WithPrePopulate option or compose with //testkit:eventually for convergence-style checks."
 	case shapeStreamConsumer:
 		return "func(ctx, S) (V, error) — stream consumer. Reads from S (typically io.Reader) and returns a parsed value."
 	}

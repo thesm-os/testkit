@@ -2,7 +2,7 @@
 // Source: allshapes.go:40-111 (testkit stub -o allshapestest/allshapes.gen.go AllShapes)
 //
 // Directives:
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 //   Remove: //testkit:deleter
 
 // Package allshapestest provides AllShapesStub, a configurable test double

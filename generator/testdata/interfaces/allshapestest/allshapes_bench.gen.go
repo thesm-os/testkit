@@ -2,7 +2,7 @@
 // Source: allshapes.go:40-111 (testkit bench -o allshapestest/allshapes_bench.gen.go AllShapes)
 //
 // Directives:
-//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name]
+//   Get:    //testkit:errors ErrNotFound  [stub: Fault<Sentinel>() helper per name, suite: AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion]
 //   Remove: //testkit:deleter
 
 // Package allshapestest measures performance characteristics of
@@ -882,7 +882,7 @@ func benchAllShapesLookup(b *testing.B, factory func() interfaces.AllShapes, cfg
 // benchAllShapesMany measures AllShapes.Many(ctx context.Context, keys ...string) ([]interfaces.Record, error).
 //
 //	Shape:      BatchReader
-//	Sample inputs: []string{"test-keys"}
+//	Sample inputs: []string{"test-key"}
 //	Factory must seed these values for the hot-path measurement to
 //	land on the success path; unseeded keys hit the not-found path
 //	and report error-allocation costs instead of operation costs.
@@ -910,7 +910,7 @@ func benchAllShapesMany(b *testing.B, factory func() interfaces.AllShapes, cfg *
 				},
 			},
 		}
-		sampleKeys := []string{"test-keys"}
+		sampleKeys := []string{"test-key"}
 		bench.BatchReaderHotPath[interfaces.AllShapes, string, interfaces.Record](sampleKeys)(brctx)
 		bench.BatchReaderConcurrentThroughput[interfaces.AllShapes, string, interfaces.Record](sampleKeys, 4)(brctx)
 		for _, p := range cfg.onMany {

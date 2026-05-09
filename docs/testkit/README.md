@@ -16,7 +16,7 @@
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine in `gen/` are stable. Seven generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`model`**, **`bench`**. The remaining generators (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
+Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strategies, `Clock`/`TestClock`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine in `generator/` are stable. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented — their docs document the planned shape and are clearly marked.
 
 ## Documentation
 
@@ -50,7 +50,7 @@ Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `Fault` strateg
 | [`suite`](generators/suite.md) | Tier 1: `Assert<Iface>Contract` with shape-detected subtests + typed plug-in points (ready) |
 | [`bench`](generators/bench.md) | Tier 4: `Benchmark<Iface>Contract` with shape-detected hot-paths + typed bench plug-ins (ready) |
 | [`codec`](generators/codec.md) | `codectest.Spec[T]` + suite + bench + fuzz seeds + wire fixtures (planned) |
-| [`model`](generators/model.md) | Tier 2-3: rapid property-based state-machine with differential testing, shape-specific laws, concurrent stress, trace combinators (ready) |
+| [`model`](generators/model.md) | Tier 2-3: rapid property-based state-machine with differential testing, shape-specific laws, concurrent stress, trace combinators (planned) |
 | [`sim`](generators/sim.md) | Tier 5: subsystem simulation harness (planned) |
 | [`chaos`](generators/chaos.md) | Tier 5: continuous fault simulation on top of sim (planned) |
 | [`differential-rollout`](generators/differential-rollout.md) | Tier 5: shadow-traffic comparison harness (planned) |

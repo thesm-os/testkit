@@ -42,19 +42,22 @@ func AssertMultiAggregatorReturns[T any, V1, V2 comparable](
 	}
 }
 
-// AssertMultiAggregatorReturnsSentinel calls the aggregator on a known-
-// invalid factory and asserts the configured sentinel is returned.
+// AssertMultiAggregatorReturnsSentinel calls the aggregator on a
+// known-invalid factory and asserts the returned error matches one
+// of the declared sentinels via [errors.Is]. Variadic so methods
+// declaring multiple //testkit:errors entries pass the full set.
 func AssertMultiAggregatorReturnsSentinel[T, V1, V2 any](
 	invalidFactory func() T,
-	sentinel error,
+	sentinels ...error,
 ) MultiAggregatorAssertion[T, V1, V2] {
 	return func(ctx MultiAggregatorContext[T, V1, V2]) {
 		ctx.T.Run("returns sentinel", func(t *testing.T) {
 			t.Parallel()
 			impl := invalidFactory()
 			_, _, err := ctx.Call(t.Context(), impl)
-			testkit.ErrorIs(t, err, sentinel,
-				"multi-aggregator must surface sentinel against an invalid-state impl")
+			assertSentinelMatch(t, err,
+				"multi-aggregator must surface sentinel against an invalid-state impl",
+				sentinels...)
 		})
 	}
 }

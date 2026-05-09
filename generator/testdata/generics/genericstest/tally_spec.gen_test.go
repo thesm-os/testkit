@@ -49,7 +49,6 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/testdata/generics"
 	"go.thesmos.sh/testkit/suite"
 )
@@ -96,8 +95,6 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 			return impl
 		}
 	}
-	errTest := testkit.TestError("Tally-contract")
-	_ = errTest
 
 	// Add — CompositeWriter-shape method.
 	//
@@ -115,6 +112,19 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	//       writing the same pair twice returns nil twice
 	//   - concurrent safe
 	//       4 workers × 10 iterations under -race
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 	t.Run("Add", func(t *testing.T) {
 		sctx := suite.CompositeWriterContextFor[generics.Tally[int], string, int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int], k1 string, value int) error {
@@ -142,6 +152,19 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	//       three sequential calls yield equal results
 	//   - concurrent safe
 	//       4 workers × 10 iterations under -race
+	//
+	// Generic instantiation note:
+	//   This method belongs to a generic interface. Sample values
+	//   for type-parameter slots default to the zero value of the
+	//   concrete test substitution (e.g. V=string yields ""), so
+	//   the baseline contract verifies "the impl returns the
+	//   declared sample for the seeded key" against an in-mem
+	//   pre-seeded with that zero value. The pass is correct but
+	//   shallow — an impl that always returns the zero V would
+	//   also pass. To strengthen the contract, declare
+	//   //testkit:sample on this method (with type-aware sample
+	//   functions resolved at the test instantiation site) so
+	//   non-zero values flow through both seed and assertion.
 	t.Run("Total", func(t *testing.T) {
 		sctx := suite.AggregatorContextFor[generics.Tally[int], int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int]) (int, error) {

@@ -1,11 +1,13 @@
 # Golden Files
 
+The `golden` package (`testkit/golden`) provides update-or-compare assertions for wire snapshots, fixture files, and expected output.
+
 ## AssertGolden
 
-Update-or-compare pattern for wire snapshots, fixture files, and expected output. Flag registration (`-update`) is automatic via `init()`.
+Compares `got` against a golden file under `testdata/golden/`. Flag registration (`-update`) is automatic via `init()`.
 
 ```go
-testkit.AssertGolden(t, "snapshot.bin", got)
+golden.AssertGolden(t, "snapshot.bin", got, golden.ShouldUpdate())
 
 // Regenerate goldens:
 //   go test -update ./...
@@ -13,23 +15,58 @@ testkit.AssertGolden(t, "snapshot.bin", got)
 
 | Outcome | Behavior |
 |---------|----------|
-| File missing + `-update` | Write, pass |
-| File missing + no flag | Fail with regenerate instruction |
+| File missing + update=true | Write, pass |
+| File missing + update=false | Fail with regenerate instruction |
 | Content matches | Pass |
-| Content differs + `-update` | Overwrite, pass |
-| Content differs + no flag | Fail with line-level diff |
+| Content differs + update=true | Overwrite, pass |
+| Content differs + update=false | Fail with line-level diff |
 
-Golden artifacts live under `testdata/golden/` relative to the test's package directory.
+## AssertGoldenAt
+
+Same as `AssertGolden` but takes a literal file path instead of a `testdata/golden/`-relative name. Useful when the golden file lives outside the conventional directory.
+
+```go
+golden.AssertGoldenAt(t, "path/to/expected.json", got, golden.ShouldUpdate())
+```
+
+## AssertGoldenJSONField
+
+Per-field update-or-compare for JSON golden files. Updates or compares a single field within a JSON object, preserving sibling fields across regenerations.
+
+```go
+golden.AssertGoldenJSONField(t, "api.golden.json", "users", got,
+    golden.ShouldUpdate(),
+    golden.ScrubTimestamps(),
+)
+```
+
+| Outcome | Behavior |
+|---------|----------|
+| Field present + matches | Pass |
+| Field present + differs + update=false | Fail with `cmp.Diff` over the field |
+| Field present + differs + update=true | Replace field value; siblings preserved |
+| Field absent + update=true | Add field |
+| Field absent + update=false | Fail with regenerate instruction |
+
+Comparison is structural (both sides re-marshaled with the same indent) so whitespace differences don't false-fail.
+
+## Compare
+
+Returns a diff string (empty when equal) without failing the test. Useful for custom assertion logic.
+
+```go
+if diff := golden.Compare(want, got, golden.ScrubTimestamps()); diff != "" {
+    t.Errorf("mismatch:\n%s", diff)
+}
+```
 
 ## ShouldUpdate
 
 ```go
-if testkit.ShouldUpdate() {
+if golden.ShouldUpdate() {
     // -update flag was passed; regenerate fixture
 }
 ```
-
-For test code that needs to know whether the user passed `-update` (e.g., when generating fixtures alongside the assertion).
 
 ## Scrubbers
 
@@ -43,9 +80,9 @@ Byte-level transformations applied to golden output before comparison. Use them 
 | `ScrubRunIDs()` | Replace `run_[a-z0-9]{16}` tokens with `"SCRUBBED_RUN"` |
 
 ```go
-testkit.AssertGolden(t, "response.json", got,
-    testkit.ScrubTimestamps(),
-    testkit.ScrubJSONFields("request_id", "trace_id"),
+golden.AssertGolden(t, "response.json", got, golden.ShouldUpdate(),
+    golden.ScrubTimestamps(),
+    golden.ScrubJSONFields("request_id", "trace_id"),
 )
 ```
 

@@ -17,7 +17,7 @@
 			{{ $m.SampleParamAt 0 $tracker }},
 			{{ $m.SampleParamAt 1 $tracker }},
 {{- if $m.HasFirstSentinel }}
-			suite.AssertCompositeWriteRejectInvalid[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.FirstSentinel }}),
+			suite.AssertCompositeWriteRejectInvalid[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.SentinelsList }}),
 {{- end }}
 		)(sctx)
 {{- end -}}

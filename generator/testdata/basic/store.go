@@ -24,7 +24,10 @@ type Store interface {
 	//testkit:errors ErrNotFound
 	Get(ctx context.Context, key string) (Item, error)
 
-	// Put writes by key.
+	// Put writes by key. Empty ID is rejected so the atomic
+	// contract has an observable failure path.
+	//
+	//testkit:errors ErrConflict
 	//testkit:directive atomic idempotent
 	Put(ctx context.Context, item Item) error
 }
