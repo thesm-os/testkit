@@ -29,7 +29,7 @@ func MutatorHotPath[T, V any](sample V) Mutator[T, V] {
 	return func(ctx MutatorContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", sample), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(sample), func() {
 			ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -41,7 +41,7 @@ func MutatorAllocsWithin[T, V any](sample V, maxAllocs int) Mutator[T, V] {
 	return func(ctx MutatorContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, sample), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(sample)), maxAllocs, func() {
 			ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -53,7 +53,7 @@ func MutatorLatencyWithin[T, V any](sample V, maxLatency time.Duration) Mutator[
 	return func(ctx MutatorContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, sample), maxLatency, func() {
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(sample)), maxLatency, func() {
 			ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -65,7 +65,8 @@ func MutatorConcurrentThroughput[T, V any](sample V, parallelism int) Mutator[T,
 	return func(ctx MutatorContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, sample), parallelism, func() {
+		name := fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(sample))
+		ConcurrentThroughput(ctx.B, name, parallelism, func() {
 			ctx.Call(bctx, impl, sample)
 		})
 	}

@@ -30,6 +30,11 @@ TEST_CPU         ?= 4
 TEST_COUNT       ?= 3
 TEST_TIMEOUT     ?= 10m
 TEST_RACE_COUNT  ?= 3
+# BENCH_COUNT is the per-target run count for `make bench-baseline`
+# and `make bench-regression`. benchstat compares distributions, so
+# more samples mean tighter confidence bands. Default 6 keeps a CI
+# run bounded; bump locally with BENCH_COUNT=12 for stable numbers.
+BENCH_COUNT      ?= 6
 # FUZZ_TIME is the per-target wall-clock budget for `go test -fuzz`.
 # Default keeps a CI run bounded; bump locally with FUZZ_TIME=5m.
 FUZZ_TIME        ?= 30s
@@ -78,6 +83,8 @@ help:
 	@echo "  test               Run tests with coverage across all modules"
 	@echo "  test-race          Run tests with race detector"
 	@echo "  test-bench         Run all benchmarks"
+	@echo "  bench-baseline     Record bench/baseline.txt for regression comparison"
+	@echo "  bench-regression   Diff current numbers against bench/baseline.txt via benchstat"
 	@echo "  test-fuzz          Run every Fuzz* target for FUZZ_TIME (default: 30s)"
 	@echo "  test-coverage      Generate HTML coverage report"
 	@echo ""
@@ -210,6 +217,28 @@ test-race:
 test-bench:
 	@echo "$(BLUE)Running benchmarks (timeout=$(TEST_TIMEOUT))...$(NC)"
 	$(call foreach_module,$(GO) test -bench=. -run=^$$ -benchmem -timeout=$(TEST_TIMEOUT) $(FLAGS) ./...)
+
+# bench-baseline records a fresh baseline file at bench/baseline.txt
+# that subsequent runs compare against. Run this when intentional
+# performance changes land — the new baseline becomes the reference.
+bench-baseline:
+	@echo "$(BLUE)Recording bench baseline to bench/baseline.txt...$(NC)"
+	@$(GO) test -bench=. -run=^$$ -benchmem -count=$(BENCH_COUNT) -timeout=$(TEST_TIMEOUT) $(FLAGS) ./bench/... | tee bench/baseline.txt
+	@echo "$(GREEN)Baseline recorded$(NC)"
+
+# bench-regression compares current numbers to bench/baseline.txt
+# via benchstat. Fails if any metric regresses by more than
+# BENCH_REGRESSION_THRESHOLD (default 5%). Wire this into CI on the
+# release branch to catch performance drift.
+bench-regression:
+	@if [ ! -f bench/baseline.txt ]; then \
+		echo "$(YELLOW)bench/baseline.txt missing — run 'make bench-baseline' first$(NC)"; \
+		exit 1; \
+	fi
+	@echo "$(BLUE)Running current benchmarks (count=$(BENCH_COUNT))...$(NC)"
+	@$(GO) test -bench=. -run=^$$ -benchmem -count=$(BENCH_COUNT) -timeout=$(TEST_TIMEOUT) $(FLAGS) ./bench/... > /tmp/bench-current.txt
+	@echo "$(BLUE)Comparing against baseline...$(NC)"
+	@benchstat bench/baseline.txt /tmp/bench-current.txt
 
 # go test only fuzzes one target per invocation, so we discover every
 # Fuzz* function in the tree and run them sequentially. Each gets

@@ -1,0 +1,36 @@
+{{- /* Lookup-shape body. `func(ctx?, K) (V, R, bool)` — get the
+       entity + metadata + present-bit idioms. */ -}}
+{{- define "bench-method-lookup" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $K := $m.ShapeKeyType -}}
+{{- $V := $m.ShapeValType -}}
+{{- $R := $m.ShapeRetType -}}
+		lctx := bench.LookupContext[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]{
+			B: b,
+			LookupBindings: bindings.LookupBindings[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]{
+				Factory: seededFactory,
+				Call: func(ctx context.Context, impl {{ $iface }}, key {{ $K }}) ({{ $V }}, {{ $R }}, bool) {
+{{- if $m.HasContext }}
+					return impl.{{ $m.Name }}(ctx, key)
+{{- else }}
+					return impl.{{ $m.Name }}(key)
+{{- end }}
+				},
+			},
+		}
+		bench.LookupHotPath[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }})(lctx)
+{{- if $m.EmitsConcurrent }}
+		bench.LookupConcurrentThroughput[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }}, 4)(lctx)
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.LookupAllocsWithin[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.AllocsBudget }})(lctx)
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.LookupLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(lctx)
+{{- end }}
+		for _, p := range cfg.{{ $m.OnFieldName }} {
+			p(lctx)
+		}
+{{- end -}}

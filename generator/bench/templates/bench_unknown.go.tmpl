@@ -1,0 +1,67 @@
+{{- /* Unknown-shape body. Methods that don't fit any of the 21
+       typed shapes — 3+ non-error returns, MultiArgWriter with
+       4+ params, etc. — fall here. The bench package has no typed
+       primitive for these, so the body emits:
+         - An inline hot-path measurement via bench.HotPath
+         - An inline concurrent-throughput run via bench.ConcurrentThroughput
+         - Opt-in budget gates (allocs, latency) when the directives
+           are declared
+         - Plug-in dispatch using the raw `func(*testing.B, T)`
+           signature from the option's slot
+
+       Each primitive constructs its own `impl := seededFactory()`
+       inside its scope so per-primitive state isolation matches
+       what typed shapes get from `ctx.Factory()` running inside
+       each `<Shape>HotPath` / `<Shape>ConcurrentThroughput` call. */ -}}
+{{- define "bench-method-unknown" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $callArgs := "" -}}
+{{- if $m.HasContext -}}{{- $callArgs = "b.Context()" -}}{{- end -}}
+{{- range $i := seq $m.NonCtxParamCount -}}
+{{- if $callArgs -}}{{- $callArgs = printf "%s, %s" $callArgs ($m.SampleParamAt $i $tracker) -}}
+{{- else -}}{{- $callArgs = $m.SampleParamAt $i $tracker -}}{{- end -}}
+{{- end }}
+		bench.HotPath(b, "hot-path", func() {
+			impl := seededFactory()
+{{- if $m.HasResults }}
+			{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $callArgs }})
+{{- else }}
+			impl.{{ $m.Name }}({{ $callArgs }})
+{{- end }}
+		})
+{{- if $m.EmitsConcurrent }}
+		bench.ConcurrentThroughput(b, "concurrent-4", 4, func() {
+			impl := seededFactory()
+{{- if $m.HasResults }}
+			{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $callArgs }})
+{{- else }}
+			impl.{{ $m.Name }}({{ $callArgs }})
+{{- end }}
+		})
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.AllocsWithin(b, "allocs-within-{{ $m.AllocsBudget }}", {{ $m.AllocsBudget }}, func() {
+			impl := seededFactory()
+{{- if $m.HasResults }}
+			{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $callArgs }})
+{{- else }}
+			impl.{{ $m.Name }}({{ $callArgs }})
+{{- end }}
+		})
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.LatencyWithin(b, "latency-within-{{ $m.LatencyBudgetRaw }}", {{ $m.LatencyBudgetExpr }}, func() {
+			impl := seededFactory()
+{{- if $m.HasResults }}
+			{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $callArgs }})
+{{- else }}
+			impl.{{ $m.Name }}({{ $callArgs }})
+{{- end }}
+		})
+{{- end }}
+		for _, fn := range cfg.{{ $m.OnFieldName }} {
+			fn(b, seededFactory())
+		}
+{{- end -}}

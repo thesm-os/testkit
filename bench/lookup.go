@@ -26,7 +26,7 @@ func LookupHotPath[T any, K comparable, V, R any](key K) Lookup[T, K, V, R] {
 	return func(ctx LookupContext[T, K, V, R]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(key), func() {
 			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -38,7 +38,7 @@ func LookupAllocsWithin[T any, K comparable, V, R any](key K, maxAllocs int) Loo
 	return func(ctx LookupContext[T, K, V, R]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(key)), maxAllocs, func() {
 			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -50,7 +50,7 @@ func LookupLatencyWithin[T any, K comparable, V, R any](key K, maxLatency time.D
 	return func(ctx LookupContext[T, K, V, R]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(key)), maxLatency, func() {
 			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -63,7 +63,7 @@ func LookupConcurrentThroughput[T any, K comparable, V, R any](key K, parallelis
 	return func(ctx LookupContext[T, K, V, R]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(key)), parallelism, func() {
 			_, _, _ = ctx.Call(bctx, impl, key)
 		})
 	}

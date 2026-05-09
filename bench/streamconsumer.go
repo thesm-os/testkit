@@ -15,9 +15,14 @@ import (
 // StreamConsumer-shape bench primitives. A StreamConsumer-shaped
 // method has the signature `func(ctx, S) (V, error)` where S is
 // interface-typed.
+//
+// BytesPerOp records bytes consumed per call (e.g. payload size of
+// the stream input). When non-zero, primitives call b.SetBytes so
+// `go test -bench` reports MB/s alongside ns/op.
 type StreamConsumerContext[T, S, V any] struct {
 	B *testing.B
 	bindings.StreamConsumerBindings[T, S, V]
+	BytesPerOp int64
 }
 
 // StreamConsumer is a typed bench primitive for StreamConsumer-shaped methods.
@@ -32,7 +37,7 @@ func StreamConsumerHotPath[T, S, V any](streamFactory func() S) StreamConsumer[T
 	return func(ctx StreamConsumerContext[T, S, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, "hot-path", func() {
+		HotPathWithBytes(ctx.B, "hot-path", ctx.BytesPerOp, func() {
 			_, errSink = ctx.Call(bctx, impl, streamFactory())
 		})
 	}
@@ -44,7 +49,7 @@ func StreamConsumerAllocsWithin[T, S, V any](streamFactory func() S, maxAllocs i
 	return func(ctx StreamConsumerContext[T, S, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), maxAllocs, func() {
+		AllocsWithinWithBytes(ctx.B, fmt.Sprintf("allocs-within-%d", maxAllocs), ctx.BytesPerOp, maxAllocs, func() {
 			_, errSink = ctx.Call(bctx, impl, streamFactory())
 		})
 	}
@@ -60,7 +65,7 @@ func StreamConsumerLatencyWithin[T, S, V any](
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
 		name := fmt.Sprintf("latency-within-%v", maxLatency)
-		LatencyWithin(ctx.B, name, maxLatency, func() {
+		LatencyWithinWithBytes(ctx.B, name, ctx.BytesPerOp, maxLatency, func() {
 			_, errSink = ctx.Call(bctx, impl, streamFactory())
 		})
 	}
@@ -74,7 +79,8 @@ func StreamConsumerConcurrentThroughput[T, S, V any](streamFactory func() S, par
 	return func(ctx StreamConsumerContext[T, S, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d", parallelism), parallelism, func() {
+		name := fmt.Sprintf("concurrent-%d", parallelism)
+		ConcurrentThroughputWithBytes(ctx.B, name, ctx.BytesPerOp, parallelism, func() {
 			_, errSink = ctx.Call(bctx, impl, streamFactory())
 		})
 	}

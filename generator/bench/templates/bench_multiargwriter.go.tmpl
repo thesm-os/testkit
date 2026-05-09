@@ -1,0 +1,34 @@
+{{- /* MultiArgWriter-shape body (arity=3 only). `func(ctx, P1, P2, P3) error` —
+       three positional params. The bench primitive is parametrized
+       over [T, P1, P2, P3]. Methods with 4+ params route through the
+       Unknown body via the dispatcher. */ -}}
+{{- define "bench-method-multiargwriter" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $P1 := $m.ParamTypeAt 0 $tracker -}}
+{{- $P2 := $m.ParamTypeAt 1 $tracker -}}
+{{- $P3 := $m.ParamTypeAt 2 $tracker -}}
+		mawctx := bench.MultiArgWriterContext[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]{
+			B: b,
+			MultiArgWriterBindings: bindings.MultiArgWriterBindings[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]{
+				Factory: seededFactory,
+				Call: func(ctx context.Context, impl {{ $iface }}, p1 {{ $P1 }}, p2 {{ $P2 }}, p3 {{ $P3 }}) error {
+					return impl.{{ $m.Name }}(ctx, p1, p2, p3)
+				},
+			},
+		}
+		bench.MultiArgWriterHotPath[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }})(mawctx)
+{{- if $m.EmitsConcurrent }}
+		bench.MultiArgWriterConcurrentThroughput[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, 4)(mawctx)
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.MultiArgWriterAllocsWithin[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, {{ $m.AllocsBudget }})(mawctx)
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.MultiArgWriterLatencyWithin[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, {{ $m.LatencyBudgetExpr }})(mawctx)
+{{- end }}
+		for _, p := range cfg.{{ $m.OnFieldName }} {
+			p(mawctx)
+		}
+{{- end -}}

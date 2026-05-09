@@ -29,7 +29,7 @@ func CompositeWriterHotPath[T any, K1 comparable, V any](namespace K1, sample V)
 	return func(ctx CompositeWriterContext[T, K1, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v/%v", namespace, sample), func() {
+		HotPath(ctx.B, fmt.Sprintf("hot-path/%s/%s", SubtestKey(namespace), SubtestKey(sample)), func() {
 			errSink = ctx.Call(bctx, impl, namespace, sample)
 		})
 	}
@@ -43,7 +43,7 @@ func CompositeWriterAllocsWithin[T any, K1 comparable, V any](
 	return func(ctx CompositeWriterContext[T, K1, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		name := fmt.Sprintf("allocs-within-%d/%v/%v", maxAllocs, namespace, sample)
+		name := fmt.Sprintf("allocs-within-%d/%s/%s", maxAllocs, SubtestKey(namespace), SubtestKey(sample))
 		AllocsWithin(ctx.B, name, maxAllocs, func() {
 			errSink = ctx.Call(bctx, impl, namespace, sample)
 		})
@@ -59,7 +59,7 @@ func CompositeWriterLatencyWithin[T any, K1 comparable, V any](
 	return func(ctx CompositeWriterContext[T, K1, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		name := fmt.Sprintf("latency-within-%v/%v/%v", maxLatency, namespace, sample)
+		name := fmt.Sprintf("latency-within-%v/%s/%s", maxLatency, SubtestKey(namespace), SubtestKey(sample))
 		LatencyWithin(ctx.B, name, maxLatency, func() {
 			errSink = ctx.Call(bctx, impl, namespace, sample)
 		})
@@ -75,7 +75,7 @@ func CompositeWriterConcurrentThroughput[T any, K1 comparable, V any](
 	return func(ctx CompositeWriterContext[T, K1, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		name := fmt.Sprintf("concurrent-%d/%v/%v", parallelism, namespace, sample)
+		name := fmt.Sprintf("concurrent-%d/%s/%s", parallelism, SubtestKey(namespace), SubtestKey(sample))
 		ConcurrentThroughput(ctx.B, name, parallelism, func() {
 			errSink = ctx.Call(bctx, impl, namespace, sample)
 		})

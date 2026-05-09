@@ -28,7 +28,7 @@ func PointerReaderHotPath[T any, K comparable, V any](key K) PointerReader[T, K,
 	return func(ctx PointerReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(key), func() {
 			_ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -40,7 +40,7 @@ func PointerReaderAllocsWithin[T any, K comparable, V any](key K, maxAllocs int)
 	return func(ctx PointerReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(key)), maxAllocs, func() {
 			_ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -53,7 +53,7 @@ func PointerReaderLatencyWithin[T any, K comparable, V any](key K, maxLatency ti
 	return func(ctx PointerReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(key)), maxLatency, func() {
 			_ = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -65,7 +65,7 @@ func PointerReaderConcurrentThroughput[T any, K comparable, V any](key K, parall
 	return func(ctx PointerReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(key)), parallelism, func() {
 			_ = ctx.Call(bctx, impl, key)
 		})
 	}

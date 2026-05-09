@@ -32,7 +32,7 @@ func WriterHotPath[T, V any](sample V) Writer[T, V] {
 	return func(ctx WriterContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", sample), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(sample), func() {
 			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -44,7 +44,7 @@ func WriterAllocsWithin[T, V any](sample V, maxAllocs int) Writer[T, V] {
 	return func(ctx WriterContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, sample), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(sample)), maxAllocs, func() {
 			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -57,7 +57,7 @@ func WriterLatencyWithin[T, V any](sample V, maxLatency time.Duration) Writer[T,
 	return func(ctx WriterContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, sample), maxLatency, func() {
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(sample)), maxLatency, func() {
 			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}
@@ -71,7 +71,8 @@ func WriterConcurrentThroughput[T, V any](sample V, parallelism int) Writer[T, V
 	return func(ctx WriterContext[T, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, sample), parallelism, func() {
+		name := fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(sample))
+		ConcurrentThroughput(ctx.B, name, parallelism, func() {
 			errSink = ctx.Call(bctx, impl, sample)
 		})
 	}

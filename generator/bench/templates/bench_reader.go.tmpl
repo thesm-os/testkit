@@ -1,0 +1,39 @@
+{{- /* Reader-shape body. Body-only partial — invoked from
+       `method-helpers` inside the seededFactory-bearing `b.Run`.
+       Constructs the typed bench.ReaderContext, runs HotPath +
+       ConcurrentThroughput unconditionally, opt-in AllocsWithin /
+       LatencyWithin gates, then dispatches to consumer-supplied
+       primitives. */ -}}
+{{- define "bench-method-reader" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $K := $m.ShapeKeyType -}}
+{{- $V := $m.ShapeValType -}}
+		rctx := bench.ReaderContext[{{ $iface }}, {{ $K }}, {{ $V }}]{
+			B: b,
+			ReaderBindings: bindings.ReaderBindings[{{ $iface }}, {{ $K }}, {{ $V }}]{
+				Factory: seededFactory,
+				Call: func(ctx context.Context, impl {{ $iface }}, key {{ $K }}) ({{ $V }}, error) {
+{{- if $m.HasContext }}
+					return impl.{{ $m.Name }}(ctx, key)
+{{- else }}
+					return impl.{{ $m.Name }}(key)
+{{- end }}
+				},
+			},
+		}
+		bench.ReaderHotPath[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(rctx)
+{{- if $m.EmitsConcurrent }}
+		bench.ReaderConcurrentThroughput[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4)(rctx)
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.ReaderAllocsWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.AllocsBudget }})(rctx)
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.ReaderLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(rctx)
+{{- end }}
+		for _, p := range cfg.{{ $m.OnFieldName }} {
+			p(rctx)
+		}
+{{- end -}}

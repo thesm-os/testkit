@@ -30,7 +30,7 @@ func DeleterHotPath[T any, K comparable](key K) Deleter[T, K] {
 	return func(ctx DeleterContext[T, K]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(key), func() {
 			errSink = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -42,7 +42,7 @@ func DeleterAllocsWithin[T any, K comparable](key K, maxAllocs int) Deleter[T, K
 	return func(ctx DeleterContext[T, K]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(key)), maxAllocs, func() {
 			errSink = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -54,7 +54,7 @@ func DeleterLatencyWithin[T any, K comparable](key K, maxLatency time.Duration) 
 	return func(ctx DeleterContext[T, K]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%v", maxLatency, key), maxLatency, func() {
+		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(key)), maxLatency, func() {
 			errSink = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -68,7 +68,7 @@ func DeleterConcurrentThroughput[T any, K comparable](key K, parallelism int) De
 	return func(ctx DeleterContext[T, K]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%v", parallelism, key), parallelism, func() {
+		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(key)), parallelism, func() {
 			errSink = ctx.Call(bctx, impl, key)
 		})
 	}

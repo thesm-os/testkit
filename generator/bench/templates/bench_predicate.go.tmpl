@@ -1,0 +1,28 @@
+{{- /* Predicate-shape body. `func() bool` — no ctx, no params,
+       boolean return. */ -}}
+{{- define "bench-method-predicate" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		pctx := bench.PredicateContext[{{ $iface }}]{
+			B: b,
+			PredicateBindings: bindings.PredicateBindings[{{ $iface }}]{
+				Factory: seededFactory,
+				Call: func(impl {{ $iface }}) bool {
+					return impl.{{ $m.Name }}()
+				},
+			},
+		}
+		bench.PredicateHotPath[{{ $iface }}]()(pctx)
+{{- if $m.EmitsConcurrent }}
+		bench.PredicateConcurrentThroughput[{{ $iface }}](4)(pctx)
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.PredicateAllocsWithin[{{ $iface }}]({{ $m.AllocsBudget }})(pctx)
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.PredicateLatencyWithin[{{ $iface }}]({{ $m.LatencyBudgetExpr }})(pctx)
+{{- end }}
+		for _, p := range cfg.{{ $m.OnFieldName }} {
+			p(pctx)
+		}
+{{- end -}}

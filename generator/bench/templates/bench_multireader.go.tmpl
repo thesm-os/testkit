@@ -1,0 +1,36 @@
+{{- /* MultiReader-shape body. `func(ctx?, K) (V1, V2, error)` —
+       get-the-entity + metadata idioms. */ -}}
+{{- define "bench-method-multireader" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $K := $m.ShapeKeyType -}}
+{{- $V1 := $m.ShapeValType -}}
+{{- $V2 := $m.ShapeValType2 -}}
+		mrctx := bench.MultiReaderContext[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]{
+			B: b,
+			MultiReaderBindings: bindings.MultiReaderBindings[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]{
+				Factory: seededFactory,
+				Call: func(ctx context.Context, impl {{ $iface }}, key {{ $K }}) ({{ $V1 }}, {{ $V2 }}, error) {
+{{- if $m.HasContext }}
+					return impl.{{ $m.Name }}(ctx, key)
+{{- else }}
+					return impl.{{ $m.Name }}(key)
+{{- end }}
+				},
+			},
+		}
+		bench.MultiReaderHotPath[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }})(mrctx)
+{{- if $m.EmitsConcurrent }}
+		bench.MultiReaderConcurrentThroughput[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, 4)(mrctx)
+{{- end }}
+{{- if $m.HasAllocsBudget }}
+		bench.MultiReaderAllocsWithin[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.AllocsBudget }})(mrctx)
+{{- end }}
+{{- if $m.HasLatencyBudget }}
+		bench.MultiReaderLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(mrctx)
+{{- end }}
+		for _, p := range cfg.{{ $m.OnFieldName }} {
+			p(mrctx)
+		}
+{{- end -}}

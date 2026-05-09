@@ -29,7 +29,7 @@ func MultiReaderHotPath[T any, K comparable, V1, V2 any](key K) MultiReader[T, K
 	return func(ctx MultiReaderContext[T, K, V1, V2]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/%v", key), func() {
+		HotPath(ctx.B, "hot-path/"+SubtestKey(key), func() {
 			_, _, errSink = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -41,7 +41,7 @@ func MultiReaderAllocsWithin[T any, K comparable, V1, V2 any](key K, maxAllocs i
 	return func(ctx MultiReaderContext[T, K, V1, V2]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%v", maxAllocs, key), maxAllocs, func() {
+		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/%s", maxAllocs, SubtestKey(key)), maxAllocs, func() {
 			_, _, errSink = ctx.Call(bctx, impl, key)
 		})
 	}
@@ -56,7 +56,7 @@ func MultiReaderLatencyWithin[T any, K comparable, V1, V2 any](
 	return func(ctx MultiReaderContext[T, K, V1, V2]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		name := fmt.Sprintf("latency-within-%v/%v", maxLatency, key)
+		name := fmt.Sprintf("latency-within-%v/%s", maxLatency, SubtestKey(key))
 		LatencyWithin(ctx.B, name, maxLatency, func() {
 			_, _, errSink = ctx.Call(bctx, impl, key)
 		})
@@ -71,7 +71,7 @@ func MultiReaderConcurrentThroughput[T any, K comparable, V1, V2 any](
 	return func(ctx MultiReaderContext[T, K, V1, V2]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		name := fmt.Sprintf("concurrent-%d/%v", parallelism, key)
+		name := fmt.Sprintf("concurrent-%d/%s", parallelism, SubtestKey(key))
 		ConcurrentThroughput(ctx.B, name, parallelism, func() {
 			_, _, errSink = ctx.Call(bctx, impl, key)
 		})

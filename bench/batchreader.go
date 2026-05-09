@@ -14,9 +14,15 @@ import (
 // BatchReaderContext provides a typed factory and call function to
 // BatchReader-shape bench primitives. A BatchReader-shaped method has the
 // signature `func(ctx?, ...K) ([]V, error)` — variadic-key fetch.
+//
+// BytesPerOp records bytes processed per batch (e.g. byte size of
+// the returned []V slice). When non-zero, primitives call
+// b.SetBytes so `go test -bench` reports MB/s alongside ns/op —
+// useful for comparing impls on payload-size-bound workloads.
 type BatchReaderContext[T any, K comparable, V any] struct {
 	B *testing.B
 	bindings.BatchReaderBindings[T, K, V]
+	BytesPerOp int64
 }
 
 // BatchReader is a typed bench primitive for BatchReader-shaped methods.
@@ -28,7 +34,7 @@ func BatchReaderHotPath[T any, K comparable, V any](keys []K) BatchReader[T, K, 
 	return func(ctx BatchReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		HotPath(ctx.B, fmt.Sprintf("hot-path/n=%d", len(keys)), func() {
+		HotPathWithBytes(ctx.B, fmt.Sprintf("hot-path/n=%d", len(keys)), ctx.BytesPerOp, func() {
 			_, errSink = ctx.Call(bctx, impl, keys)
 		})
 	}
@@ -40,7 +46,8 @@ func BatchReaderAllocsWithin[T any, K comparable, V any](keys []K, maxAllocs int
 	return func(ctx BatchReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		AllocsWithin(ctx.B, fmt.Sprintf("allocs-within-%d/n=%d", maxAllocs, len(keys)), maxAllocs, func() {
+		name := fmt.Sprintf("allocs-within-%d/n=%d", maxAllocs, len(keys))
+		AllocsWithinWithBytes(ctx.B, name, ctx.BytesPerOp, maxAllocs, func() {
 			_, errSink = ctx.Call(bctx, impl, keys)
 		})
 	}
@@ -53,7 +60,8 @@ func BatchReaderLatencyWithin[T any, K comparable, V any](keys []K, maxLatency t
 	return func(ctx BatchReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		LatencyWithin(ctx.B, fmt.Sprintf("latency-within-%v/n=%d", maxLatency, len(keys)), maxLatency, func() {
+		name := fmt.Sprintf("latency-within-%v/n=%d", maxLatency, len(keys))
+		LatencyWithinWithBytes(ctx.B, name, ctx.BytesPerOp, maxLatency, func() {
 			_, errSink = ctx.Call(bctx, impl, keys)
 		})
 	}
@@ -65,7 +73,8 @@ func BatchReaderConcurrentThroughput[T any, K comparable, V any](keys []K, paral
 	return func(ctx BatchReaderContext[T, K, V]) {
 		impl := ctx.Factory()
 		bctx := ctx.B.Context()
-		ConcurrentThroughput(ctx.B, fmt.Sprintf("concurrent-%d/n=%d", parallelism, len(keys)), parallelism, func() {
+		name := fmt.Sprintf("concurrent-%d/n=%d", parallelism, len(keys))
+		ConcurrentThroughputWithBytes(ctx.B, name, ctx.BytesPerOp, parallelism, func() {
 			_, errSink = ctx.Call(bctx, impl, keys)
 		})
 	}
