@@ -166,19 +166,16 @@ func sanitizeForFilename(s string) string {
 const defaultArtifactDir = ".testkit/artifacts"
 
 // ResolveArtifactDir returns the artifact directory based on priority:
-// 1. Explicit override (from WithArtifactDir option) — used as-is
-// 2. Fallback: <module-root>/.testkit/artifacts/
 //
-// Paths are resolved relative to the module root (where go.mod lives),
-// not the package dir (where go test runs). This matches .testkit.yml
-// which lives at the module root.
-// ResolveArtifactDir returns the artifact directory. Exported for use
-// by generated code.
+//  1. Explicit override (from [WithArtifactDir] option) — used as-is.
+//  2. Fallback: `<module-root>/.testkit/artifacts/`.
+//
+// Paths resolve relative to the module root (where .testkit.yml or
+// go.mod lives), not the package dir (where `go test` runs). This
+// matches .testkit.yml which lives at the module root.
+//
+// Exported so generator-emitted code can resolve consistently.
 func ResolveArtifactDir(override string) string {
-	return resolveArtifactDir(override)
-}
-
-func resolveArtifactDir(override string) string {
 	if override != "" {
 		return override
 	}

@@ -97,3 +97,63 @@ func TestTimeout(t *testing.T) {
 		testkit.ErrorIs(t, ctx.Err(), context.DeadlineExceeded, "must be deadline exceeded")
 	})
 }
+
+func TestCaptureGoroutineIDs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns at least the calling goroutine", func(t *testing.T) {
+		t.Parallel()
+		ids := concurrency.CaptureGoroutineIDs()
+		testkit.True(t, len(ids) >= 1, "at least one goroutine ID")
+	})
+
+	t.Run("captures spawned goroutines while alive", func(t *testing.T) {
+		t.Parallel()
+		// Spawn a worker that blocks until released; observe its ID is
+		// in the live set, then release and observe it leaving.
+		release := make(chan struct{})
+		started := make(chan struct{})
+		go func() {
+			close(started)
+			<-release
+		}()
+		<-started
+		live := concurrency.CaptureGoroutineIDs()
+		testkit.True(t, len(live) >= 2, "self + worker visible in capture")
+		close(release)
+	})
+}
+
+func TestCaptureGoroutineStacks(t *testing.T) {
+	t.Parallel()
+	stacks := concurrency.CaptureGoroutineStacks()
+	testkit.True(t, len(stacks) > 0, "non-empty stack output")
+	testkit.Contains(t, string(stacks), "goroutine ", "contains goroutine headers")
+}
+
+func TestDiffGoroutineIDs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns IDs in after but not before", func(t *testing.T) {
+		t.Parallel()
+		before := map[uint64]struct{}{1: {}, 2: {}}
+		after := map[uint64]struct{}{1: {}, 2: {}, 3: {}, 4: {}}
+		diff := concurrency.DiffGoroutineIDs(before, after)
+		testkit.Len(t, diff, 2, "two new IDs")
+	})
+
+	t.Run("empty when no new goroutines", func(t *testing.T) {
+		t.Parallel()
+		ids := map[uint64]struct{}{1: {}, 2: {}}
+		testkit.Len(t, concurrency.DiffGoroutineIDs(ids, ids), 0, "no diff")
+	})
+
+	t.Run("excludes IDs present in before but absent in after", func(t *testing.T) {
+		t.Parallel()
+		before := map[uint64]struct{}{1: {}, 2: {}, 3: {}}
+		after := map[uint64]struct{}{1: {}}
+		// 2 and 3 disappeared; not "leaked" — diff returns nothing.
+		testkit.Len(t, concurrency.DiffGoroutineIDs(before, after), 0,
+			"diff is asymmetric: only after-minus-before")
+	})
+}

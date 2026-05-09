@@ -136,23 +136,38 @@ type Config[T any] struct {
 // Run executes a model-based test. For each rapid iteration, it
 // creates fresh SUT and reference instances, runs a random sequence
 // of actions, and checks all registered laws after every action.
+// When [Config.Concurrent] is non-nil, dispatches to the concurrent
+// linearizability runner instead of the sequential property.
 //
 // Use -rapid.checks=N to control iteration count (default 100).
 func Run[T any](t rapid.TB, cfg Config[T]) {
 	t.Helper()
-	opts := []Option[T]{
-		WithActions[T](cfg.Actions...),
+	dispatch(t, cfg)
+}
+
+// dispatch is the shared entry point for [Run] and [Assert]. Routes
+// to the sequential or concurrent runner based on [Config.Concurrent]
+// and rejects unsupported combinations rather than silently dropping
+// configuration.
+func dispatch[T any](t rapid.TB, cfg Config[T]) {
+	t.Helper()
+	if cfg.Concurrent != nil {
+		// Laws + concurrent execution is currently unsupported: laws
+		// expect sequential SUT/ref comparison, but the concurrent
+		// runner has no reference under linearizability and no
+		// well-defined "after every action" boundary across workers.
+		// Reject loud rather than silently drop the laws.
+		if cfg.Laws != nil && len(cfg.Laws.laws) > 0 {
+			t.Fatal("model: Laws are unsupported with Concurrent — laws " +
+				"require sequential SUT/ref comparison. Use the sequential " +
+				"runner with stress workers if both invariants and " +
+				"concurrency matter, or drop Laws for pure linearizability " +
+				"checking.")
+		}
+		runConcurrent(t, cfg)
+		return
 	}
-	if cfg.RefFactory != nil {
-		opts = append(opts, WithReference(cfg.RefFactory))
-	}
-	if cfg.Laws != nil {
-		opts = append(opts, WithLaws(cfg.Laws))
-	}
-	if cfg.Cleanup != nil {
-		opts = append(opts, WithCleanup(cfg.Cleanup))
-	}
-	rapid.Check(t, Property(cfg.SUTFactory, opts...))
+	rapid.Check(t, propertyFromConfig(cfg))
 }
 
 // Property builds the rapid property function from a factory and options
@@ -165,6 +180,14 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	return propertyFromConfig(cfg)
+}
+
+// propertyFromConfig builds the rapid property function from an
+// already-built Config. Shared between [Property] (which builds cfg
+// from options) and [dispatch] (which receives cfg directly via
+// [Run]).
+func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 	if cfg.Laws == nil {
 		cfg.Laws = NewRegistry[T]()
 	}
@@ -360,30 +383,27 @@ func WithArtifactDir[T any](dir string) Option[T] {
 }
 
 // shouldAttachTrace returns true if the Kind policy says trace
-// should be attached to a failure.
+// should be attached to a failure. Liveness failures (goroutine
+// leaks, deadlocks) carry their own artifact (goroutine stacks)
+// and don't benefit from the operation trace; every other kind
+// gets the trace because the operation history is what diagnoses
+// the failure — especially Semantic (SUT vs reference divergence)
+// where the sequence of preceding operations is the bug context.
 func shouldAttachTrace(k FailureKind) bool {
-	switch k {
-	case FailureUnclassified, FailureStructural, FailureInvariant:
-		return true
-	case FailureSemantic, FailureLiveness:
-		return false
-	default:
-		return true
-	}
+	return k != FailureLiveness
 }
 
-// Assert is the convenience entry point.
+// Assert is the convenience entry point. Builds a [Config] from
+// options and delegates to [Run] — the dispatcher is shared so the
+// two entry points are observably identical (Concurrent dispatch,
+// Laws validation, defaulting).
 func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) {
 	t.Helper()
 	cfg := Config[T]{SUTFactory: sutFactory}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	if cfg.Concurrent != nil {
-		runConcurrent(t, cfg)
-		return
-	}
-	rapid.Check(t, Property(sutFactory, opts...))
+	dispatch(t, cfg)
 }
 
 // taggedLaw wraps a law with a REQ ID override.

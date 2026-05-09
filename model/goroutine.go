@@ -7,51 +7,21 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
+
+	"go.thesmos.sh/testkit/concurrency"
 )
 
 // goroutineIDPattern matches "goroutine N [status]:" header lines.
 var goroutineIDPattern = regexp.MustCompile(`^goroutine (\d+) `)
 
-// captureGoroutineIDs captures all goroutine IDs from the current
-// process. Uses runtime.Stack with grow-to-fit (1MB start, 2x to
-// 8MB cap).
-func captureGoroutineIDs() map[int]struct{} {
-	buf := captureAllStacks()
-	return parseGoroutineIDs(buf)
-}
-
-// parseGoroutineIDs extracts goroutine IDs from runtime.Stack output.
-func parseGoroutineIDs(stack []byte) map[int]struct{} {
-	ids := make(map[int]struct{})
-	for line := range strings.SplitSeq(string(stack), "\n") {
-		if m := goroutineIDPattern.FindStringSubmatch(line); m != nil {
-			id, err := strconv.Atoi(m[1])
-			if err == nil {
-				ids[id] = struct{}{}
-			}
-		}
-	}
-	return ids
-}
-
-// diffGoroutineIDs returns IDs present in end but not in start.
-func diffGoroutineIDs(start, end map[int]struct{}) map[int]struct{} {
-	diff := make(map[int]struct{})
-	for id := range end {
-		if _, ok := start[id]; !ok {
-			diff[id] = struct{}{}
-		}
-	}
-	return diff
-}
-
 // splitGoroutineStacks splits runtime.Stack output into per-goroutine
-// sections keyed by goroutine ID.
-func splitGoroutineStacks(stack []byte) map[int]string {
-	result := make(map[int]string)
+// sections keyed by goroutine ID. Model needs this beyond what
+// [concurrency.CaptureGoroutineIDs] returns because the leak filter
+// inspects per-goroutine call frames to drop framework-only stacks.
+func splitGoroutineStacks(stack []byte) map[uint64]string {
+	result := make(map[uint64]string)
 	sections := strings.Split(string(stack), "\ngoroutine ")
 	for i, section := range sections {
 		var full string
@@ -65,7 +35,7 @@ func splitGoroutineStacks(stack []byte) map[int]string {
 			full = "goroutine " + section
 		}
 		if m := goroutineIDPattern.FindStringSubmatch(full); m != nil {
-			id, err := strconv.Atoi(m[1])
+			id, err := strconv.ParseUint(m[1], 10, 64)
 			if err == nil {
 				result[id] = full
 			}
@@ -75,7 +45,7 @@ func splitGoroutineStacks(stack []byte) map[int]string {
 }
 
 // extractStacksForIDs returns the full stack text for the given IDs.
-func extractStacksForIDs(stack []byte, ids map[int]struct{}) string {
+func extractStacksForIDs(stack []byte, ids map[uint64]struct{}) string {
 	goroutines := splitGoroutineStacks(stack)
 	var b strings.Builder
 	for id := range ids {
@@ -87,10 +57,19 @@ func extractStacksForIDs(stack []byte, ids map[int]struct{}) string {
 	return b.String()
 }
 
-// CheckGoroutineLeaks runs fn and checks for goroutine leaks by
-// comparing goroutine IDs before and after. This runs at the
-// AssertXxxModel wrapper level (outside rapid.Check) so rapid's
-// transient goroutines are quiescent at both observation points.
+// CheckGoroutineLeaks runs fn and reports goroutine leaks via t.Errorf.
+// Capture and diff use [concurrency.CaptureGoroutineIDs] /
+// [concurrency.DiffGoroutineIDs]; model adds two layers on top:
+//
+//   - Framework-frame filtering — goroutines whose stacks consist
+//     entirely of runtime/testing/rapid frames are dropped (rapid's
+//     transient workers, runtime poll, etc.).
+//   - Artifact emission — leaked goroutines' full stacks are written
+//     to <artifactDir>/<test>-goroutines.txt for later inspection.
+//
+// This runs at the AssertXxxModel wrapper level (outside rapid.Check)
+// so rapid's transient goroutines are quiescent at both observation
+// points.
 func CheckGoroutineLeaks(t interface {
 	Helper()
 	Errorf(format string, args ...any)
@@ -99,17 +78,21 @@ func CheckGoroutineLeaks(t interface {
 }, artifactDir string, fn func(),
 ) {
 	t.Helper()
-	startIDs := captureGoroutineIDs()
+	startIDs := concurrency.CaptureGoroutineIDs()
 	fn()
-	endIDs := captureGoroutineIDs()
-	diff := diffGoroutineIDs(startIDs, endIDs)
-	if len(diff) == 0 {
+	endIDs := concurrency.CaptureGoroutineIDs()
+	leaked := concurrency.DiffGoroutineIDs(startIDs, endIDs)
+	if len(leaked) == 0 {
 		return
 	}
+	leakedSet := make(map[uint64]struct{}, len(leaked))
+	for _, id := range leaked {
+		leakedSet[id] = struct{}{}
+	}
 	// Re-capture full stacks and filter framework goroutines.
-	fullStacks := captureAllStacks()
-	leaked := filterFrameworkGoroutines(fullStacks, diff)
-	if len(leaked) == 0 {
+	fullStacks := concurrency.CaptureGoroutineStacks()
+	userLeaked := filterFrameworkGoroutines(fullStacks, leakedSet)
+	if len(userLeaked) == 0 {
 		return
 	}
 	// Write artifact.
@@ -119,7 +102,7 @@ func CheckGoroutineLeaks(t interface {
 		if err == nil {
 			name := sanitizeForFilename(t.Name()) + "-goroutines.txt"
 			path := filepath.Join(artifactDir, name)
-			content := extractStacksForIDs(fullStacks, leaked)
+			content := extractStacksForIDs(fullStacks, userLeaked)
 			err := os.WriteFile(path, []byte(content), 0o600) //nolint:gosec // test artifacts
 			if err == nil {
 				artifactPath = path
@@ -130,21 +113,21 @@ func CheckGoroutineLeaks(t interface {
 	if artifactPath != "" {
 		t.Errorf(
 			"[liveness] AUTO-NO-GOROUTINE-LEAKS: %d goroutine(s) leaked (before: %d, after: %d)\n  goroutine stacks: %s",
-			len(leaked),
+			len(userLeaked),
 			len(startIDs),
 			len(endIDs),
 			artifactPath,
 		)
 	} else {
 		t.Errorf("[liveness] AUTO-NO-GOROUTINE-LEAKS: %d goroutine(s) leaked (before: %d, after: %d)",
-			len(leaked), len(startIDs), len(endIDs))
+			len(userLeaked), len(startIDs), len(endIDs))
 	}
 }
 
 // filterFrameworkGoroutines removes goroutine IDs whose stacks are
 // entirely framework/runtime code. Only user-code goroutines remain.
-func filterFrameworkGoroutines(stacks []byte, ids map[int]struct{}) map[int]struct{} {
-	remaining := make(map[int]struct{})
+func filterFrameworkGoroutines(stacks []byte, ids map[uint64]struct{}) map[uint64]struct{} {
+	remaining := make(map[uint64]struct{})
 	sections := splitGoroutineStacks(stacks)
 	for id := range ids {
 		if section, ok := sections[id]; ok {
@@ -181,6 +164,7 @@ var frameworkFramePrefixes = []string{
 	"pgregory.net/rapid",
 	"testing.",
 	"go.thesmos.sh/testkit/model.",
+	"go.thesmos.sh/testkit/concurrency.",
 	"internal/poll.",
 }
 
@@ -191,21 +175,4 @@ func isFrameworkFrame(line string) bool {
 		}
 	}
 	return false
-}
-
-// captureAllStacks captures all goroutine stacks with grow-to-fit
-// (1MB start, 2x to 8MB cap). Returns the filled portion of the buffer.
-func captureAllStacks() []byte {
-	buf := make([]byte, 1<<20) // 1MB
-	for {
-		n := runtime.Stack(buf, true)
-		if n < len(buf) {
-			return buf[:n]
-		}
-		if len(buf) >= 8<<20 { // 8MB cap
-			// Truncated — append marker and return.
-			return append(buf[:n], "\n... TRUNCATED\n"...)
-		}
-		buf = make([]byte, len(buf)*2)
-	}
 }

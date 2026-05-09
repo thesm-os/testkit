@@ -135,7 +135,7 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 		case porcupine.Ok:
 			// Linearizable — pass.
 		case porcupine.Illegal:
-			artifactDir := resolveArtifactDir(cfg.ArtifactDir)
+			artifactDir := ResolveArtifactDir(cfg.ArtifactDir)
 			vizPath := writeVisualization(rt, cc.Model, info, artifactDir)
 			// Convert Porcupine history to trace events for the formatter.
 			traceEvents := make([]trace.Event, len(history))
@@ -171,7 +171,10 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 
 // writeVisualization writes a Porcupine visualization HTML file to
 // the configured artifact directory. Returns the path, or empty
-// string on write failure (logged via rt.Logf).
+// string on write failure (logged via rt.Logf). The path is reported
+// via rt.Logf — the surrounding [Fatalf] message folds the path
+// into the failure context, so this helper does not itself mark the
+// test as failed.
 func writeVisualization(rt rapid.TB, m porcupine.Model, info porcupine.LinearizationInfo, artifactDir string) string {
 	err := os.MkdirAll(artifactDir, 0o750) //nolint:gosec // test artifacts
 	if err != nil {
@@ -185,6 +188,6 @@ func writeVisualization(rt rapid.TB, m porcupine.Model, info porcupine.Lineariza
 		rt.Logf("failed to write artifact: %v", err)
 		return ""
 	}
-	rt.Errorf("linearizability viz: %s", path)
+	rt.Logf("linearizability viz: %s", path)
 	return path
 }
