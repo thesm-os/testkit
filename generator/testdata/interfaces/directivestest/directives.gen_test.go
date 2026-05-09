@@ -5,7 +5,7 @@
 //   Close:      //testkit:integration-only                [stub: skip dispatch (zero return, no record)]
 //   Legacy:     //testkit:deprecated Submit               [stub: tb.Logf in dispatch + // Deprecated: doc comment]
 //   Read:       //testkit:order-after Open                [stub: AssertAfter check in dispatch (strict mode)]
-//   Retry:      //testkit:retryable
+//   Retry:      //testkit:retryable                       [stub: required companion of retry-succeeds-on-attempt]
 //   Retry:      //testkit:retry-succeeds-on-attempt 3     [stub: RetrySchedule(err) helper]
 //   Shard:      //testkit:partition ID                    [stub: FaultForPartition / FaultForOtherPartitions helpers]
 //   ShardByKey: //testkit:partition key                   [stub: FaultForPartition / FaultForOtherPartitions helpers]
@@ -1072,6 +1072,16 @@ func TestDirectivesStub(t *testing.T) {
 		s := directivestest.NewDirectivesStub(f, directivestest.DirectivesStubStrict())
 		_, _ = s.Read(t.Context(), "")
 		testkit.True(t, f.Failed(), "Read: out-of-order call must fatal in strict mode")
+	})
+	t.Run("Read/order-after Open passes when Open ran first", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := directivestest.NewDirectivesStub(f, directivestest.DirectivesStubStrict())
+		s.OnOpen.Returns(nil)
+		s.OnRead.Returns(interfaces.Record{ID: "test-id"}, nil)
+		_ = s.Open(t.Context())
+		_, _ = s.Read(t.Context(), "")
+		testkit.False(t, f.Failed(), "Read: in-order call must NOT fatal in strict mode")
 	})
 
 	t.Run("Legacy/deprecated logs replacement guidance", func(t *testing.T) {

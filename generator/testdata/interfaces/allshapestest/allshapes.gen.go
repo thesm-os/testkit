@@ -414,7 +414,7 @@ type AllShapesStubInit struct {
 //
 //   - Func(fn)              — install a function override.
 //   - Returns(vals…)        — install a fixed return value (fallback).
-//   - FaultMiss()           — dispatch surfaces (zero, false).
+//   - FaultMiss()           — dispatch surfaces (interfaces.Record{}, "", false).
 type AllShapesStubInspect struct {
 	*stub.MethodStub[AllShapesStubInspectCall]
 	fn       func(context.Context, string) (interfaces.Record, string, bool)
@@ -427,7 +427,6 @@ type AllShapesStubInspect struct {
 //
 //   - Func(fn)              — install a function override.
 //   - Returns(vals…)        — install a fixed return value (fallback).
-//   - FaultMiss()           — dispatch surfaces (zero, false).
 type AllShapesStubIsHealthy struct {
 	*stub.MethodStub[AllShapesStubIsHealthyCall]
 	fn       func() bool
@@ -440,7 +439,7 @@ type AllShapesStubIsHealthy struct {
 //
 //   - Func(fn)              — install a function override.
 //   - Returns(vals…)        — install a fixed return value (fallback).
-//   - FaultMiss()           — dispatch surfaces (zero, false).
+//   - FaultMiss()           — dispatch surfaces (interfaces.Record{}, false).
 type AllShapesStubLoad struct {
 	*stub.MethodStub[AllShapesStubLoadCall]
 	fn       func(context.Context, string) (interfaces.Record, bool)
@@ -1002,9 +1001,8 @@ func (s *AllShapesStubScan) YieldsError(items []interfaces.Record, err error) *A
 }
 
 // FaultMiss configures the dispatch to surface the canonical "miss"
-// outcome for Inspect: zero values for every non-bool result
-// and false for the trailing bool. Equivalent to Returns with all
-// zeros.
+// outcome for Inspect — (interfaces.Record{}, "", false).
+// Equivalent to Returns(interfaces.Record{}, "", false).
 func (s *AllShapesStubInspect) FaultMiss() *AllShapesStubInspect {
 	var miss allShapesStubInspectReturn
 	s.fallback = &miss
@@ -1012,19 +1010,8 @@ func (s *AllShapesStubInspect) FaultMiss() *AllShapesStubInspect {
 }
 
 // FaultMiss configures the dispatch to surface the canonical "miss"
-// outcome for IsHealthy: zero values for every non-bool result
-// and false for the trailing bool. Equivalent to Returns with all
-// zeros.
-func (s *AllShapesStubIsHealthy) FaultMiss() *AllShapesStubIsHealthy {
-	var miss allShapesStubIsHealthyReturn
-	s.fallback = &miss
-	return s
-}
-
-// FaultMiss configures the dispatch to surface the canonical "miss"
-// outcome for Load: zero values for every non-bool result
-// and false for the trailing bool. Equivalent to Returns with all
-// zeros.
+// outcome for Load — (interfaces.Record{}, false).
+// Equivalent to Returns(interfaces.Record{}, false).
 func (s *AllShapesStubLoad) FaultMiss() *AllShapesStubLoad {
 	var miss allShapesStubLoadReturn
 	s.fallback = &miss

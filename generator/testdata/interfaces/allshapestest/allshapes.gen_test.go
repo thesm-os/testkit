@@ -2540,14 +2540,6 @@ func TestAllShapesStub(t *testing.T) {
 		testkit.Equal(t, v2, false, "Inspect FaultMiss: v2 must be zero")
 	})
 
-	t.Run("IsHealthy/FaultMiss surfaces zero+false", func(t *testing.T) {
-		t.Parallel()
-		s := allshapestest.NewAllShapesStub(t)
-		s.OnIsHealthy.FaultMiss()
-		v0 := s.IsHealthy()
-		testkit.Equal(t, v0, false, "IsHealthy FaultMiss: v0 must be zero")
-	})
-
 	t.Run("Load/FaultMiss surfaces zero+false", func(t *testing.T) {
 		t.Parallel()
 		s := allshapestest.NewAllShapesStub(t)

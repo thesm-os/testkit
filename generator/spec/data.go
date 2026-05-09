@@ -184,23 +184,52 @@ func (m *Method) HasNonErrorResults() bool {
 func (m *Method) HasNonContextParam() bool { return m.NonCtxParamCount() > 0 }
 
 // HasTrailingBool reports whether the method's final result is a
-// builtin bool with no error in the result list — the
-// ReaderWithBool / Lookup signature pattern where the bool encodes
+// builtin bool that follows at least one non-bool result with no
+// error in the list — the ReaderWithBool `(V, bool)` and Lookup
+// `(V0, V1, bool)` signature pattern where the bool encodes
 // presence (true → found, false → miss). Generators emit a
-// FaultMiss-style helper for these methods so consumers configure
-// the "miss" outcome ergonomically without re-spelling the zero
-// values for every other result.
+// FaultMiss helper for these methods so consumers configure the
+// "miss" outcome ergonomically without re-spelling the zero values
+// for every other result.
+//
+// A single-bool result (Predicate, e.g. `IsHealthy() bool`) does
+// NOT qualify — the bool there is the value itself, not a presence
+// flag, and FaultMiss would conflate a "fault" with the legitimate
+// `false` outcome. Predicate consumers wanting the false outcome
+// use `Returns(false)` directly.
 func (m *Method) HasTrailingBool() bool {
 	if m.ReturnsError() {
 		return false
 	}
 	results := m.Signature.Results()
 	n := results.Len()
-	if n == 0 {
+	if n < 2 {
 		return false
 	}
 	b, ok := results.At(n - 1).Type().(*types.Basic)
 	return ok && b.Kind() == types.Bool
+}
+
+// MissResultsTuple renders the comma-joined "miss" return list for
+// a [HasTrailingBool] method: zero values for every non-bool result
+// followed by `false` for the trailing bool. Empty for methods that
+// don't qualify. Used by templates that document FaultMiss's
+// observable outcome.
+//
+//	(V, bool)         → "<zero V>, false"
+//	(V, M, bool)      → "<zero V>, <zero M>, false"
+func (m *Method) MissResultsTuple(t *generator.ImportTracker) string {
+	if !m.HasTrailingBool() {
+		return ""
+	}
+	results := m.Signature.Results()
+	n := results.Len()
+	parts := make([]string, n)
+	for i := range n - 1 {
+		parts[i] = generator.ZeroValueOf(results.At(i).Type(), t)
+	}
+	parts[n-1] = "false"
+	return strings.Join(parts, ", ")
 }
 
 // ParamFieldAssign renders the per-method Call struct's parameter

@@ -329,14 +329,38 @@ func TestMethodTemplateHelpers(t *testing.T) {
 		t.Parallel()
 		// Get (Record, error): error-bearing → false.
 		testkit.False(t, byName["Get"].HasTrailingBool(), "error-bearing → false")
-		// Load(ctx, key) (Record, bool): trailing bool, no error → true.
+		// Load(ctx, key) (Record, bool): trailing bool after a value → true.
 		testkit.True(t, byName["Load"].HasTrailingBool(), "Load is ReaderWithBool")
-		// Inspect(ctx, key) (Record, string, bool): trailing bool, no error → true.
+		// Inspect(ctx, key) (Record, string, bool): trailing bool after values → true.
 		testkit.True(t, byName["Inspect"].HasTrailingBool(), "Inspect is Lookup")
 		// Lookup(ctx, key) Record (no bool): false.
 		testkit.False(t, byName["Lookup"].HasTrailingBool(), "ReaderNoError has no trailing bool")
 		// Reset() (void): false.
 		testkit.False(t, byName["Reset"].HasTrailingBool(), "void method")
+		// IsHealthy() bool — single-bool result is a Predicate, not a
+		// presence flag; FaultMiss would be semantically wrong.
+		testkit.False(t, byName["IsHealthy"].HasTrailingBool(),
+			"single-bool Predicate is excluded")
+	})
+
+	t.Run("MissResultsTuple renders zeros + trailing false for HasTrailingBool", func(t *testing.T) {
+		t.Parallel()
+		// Load (Record, bool) — one zero before the false.
+		testkit.Assert(t, byName["Load"].MissResultsTuple(tracker)).
+			HasSuffix(", false", "trailing false").
+			Contains("Record", "Record zero rendered")
+		// Inspect (Record, string, bool) — two zeros before the false.
+		got := byName["Inspect"].MissResultsTuple(tracker)
+		testkit.Assert(t, got).
+			HasSuffix(", false", "trailing false").
+			Contains("Record", "Record zero").
+			Contains(`""`, "string zero")
+		// Get (Record, error) — error-bearing → empty.
+		testkit.Equal(t, byName["Get"].MissResultsTuple(tracker), "",
+			"error-bearing has no miss tuple")
+		// IsHealthy() bool — single-bool Predicate → empty.
+		testkit.Equal(t, byName["IsHealthy"].MissResultsTuple(tracker), "",
+			"Predicate has no miss tuple")
 	})
 
 	t.Run("HasAssertableNonCtxParams filters by ctx / variadic / type", func(t *testing.T) {

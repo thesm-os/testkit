@@ -211,6 +211,7 @@ func defaultDescriptors() []Descriptor {
 			Describe("safe to retry"),
 			InCategory(Mixin),
 			InPhase(Phase3),
+			Consumed("stub", "required companion of retry-succeeds-on-attempt"),
 		),
 		New(RetrySucceedsOnAttempt,
 			Describe("transient-failure recovery"),

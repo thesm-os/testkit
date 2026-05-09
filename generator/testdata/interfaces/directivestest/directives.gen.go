@@ -5,7 +5,7 @@
 //   Close:      //testkit:integration-only                [stub: skip dispatch (zero return, no record)]
 //   Legacy:     //testkit:deprecated Submit               [stub: tb.Logf in dispatch + // Deprecated: doc comment]
 //   Read:       //testkit:order-after Open                [stub: AssertAfter check in dispatch (strict mode)]
-//   Retry:      //testkit:retryable
+//   Retry:      //testkit:retryable                       [stub: required companion of retry-succeeds-on-attempt]
 //   Retry:      //testkit:retry-succeeds-on-attempt 3     [stub: RetrySchedule(err) helper]
 //   Shard:      //testkit:partition ID                    [stub: FaultForPartition / FaultForOtherPartitions helpers]
 //   ShardByKey: //testkit:partition key                   [stub: FaultForPartition / FaultForOtherPartitions helpers]

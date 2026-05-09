@@ -37,7 +37,7 @@
 //   - YieldsError(items, err) — iterator yields items then a terminal error.
 {{- end }}
 {{- if $m.HasTrailingBool }}
-//   - FaultMiss()           — dispatch surfaces (zero, false).
+//   - FaultMiss()           — dispatch surfaces ({{ $m.MissResultsTuple $tracker }}).
 {{- end }}
 type {{ $m.StubType }}{{ $tpDecl }} struct {
 	*stub.MethodStub[{{ $m.QualCallType }}]

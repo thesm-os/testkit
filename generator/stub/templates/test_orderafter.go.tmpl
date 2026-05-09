@@ -1,8 +1,11 @@
-{{- /* Order-after subtest per //testkit:order-after method.
-       Strict mode fatals when the dependent method runs before its
-       prerequisite. The subtest stages a [testkit.FailableTB] to
-       capture the t.Fatalf without aborting the surrounding test
-       process — the failure is the whole assertion. */ -}}
+{{- /* Order-after subtests per //testkit:order-after method.
+       Two cases per dependent method:
+         1. Negative: dependent called WITHOUT prerequisite under
+            strict mode → must fatal.
+         2. Positive: prerequisite then dependent under strict mode
+            → must NOT fatal.
+       Both stage a [testkit.FailableTB] so the t.Fatalf surfaces as
+       a captured signal instead of aborting the surrounding test. */ -}}
 {{- define "test-method-orderafter" -}}
 {{- $tracker := .Spec.Tracker -}}
 {{- $stub := .StubName -}}
@@ -19,5 +22,29 @@
 {{- end }}
 		testkit.True(t, f.Failed(), "{{ $m.Name }}: out-of-order call must fatal in strict mode")
 	})
+{{- range $prereq := $.Methods }}{{ if eq $prereq.Name $m.OrderAfter }}
+	t.Run("{{ $m.Name }}/order-after {{ $m.OrderAfter }} passes when {{ $m.OrderAfter }} ran first", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(f, {{ $gq }}{{ $stub }}Strict{{ $.TestTypeArgs }}())
+{{- if $prereq.HasResults }}
+		s.On{{ $prereq.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($prereq.SampleResults $tracker) }})
+{{- end }}
+{{- if $m.HasResults }}
+		s.On{{ $m.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($m.SampleResults $tracker) }})
+{{- end }}
+{{- if $prereq.HasResults }}
+		{{ $prereq.BlankResults }} = s.{{ $prereq.Name }}({{ $.Spec.SubstituteTypeParams ($prereq.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $prereq.Name }}({{ $.Spec.SubstituteTypeParams ($prereq.ZeroArgs $tracker) }})
+{{- end }}
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.False(t, f.Failed(), "{{ $m.Name }}: in-order call must NOT fatal in strict mode")
+	})
+{{- end }}{{ end }}
 {{ end }}{{ end -}}
 {{- end -}}
