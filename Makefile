@@ -20,7 +20,7 @@ MODULES := .
 
 # ─── Paths ───────────────────────────────────────────────────────
 BIN_DIR      := bin
-COVERAGE_DIR := coverage
+COVERAGE_DIR := .testkit/coverage
 
 # ─── Test tuning ─────────────────────────────────────────────────
 # TEST_TIMEOUT applies to test, test-race, and test-bench. Override

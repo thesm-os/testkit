@@ -14,6 +14,7 @@ The `enum` generator is a "Static" conformance tier tool. It scans `const` block
 ## Default output
 
 The generator emits two files in the source package directory:
+
 1. `<subject>_enum.gen_test.go` (or your chosen `-o` path) — The test file.
 2. `<subject>_wire.json` — A committed golden file mapping constant names to their exact integer values.
 
@@ -152,4 +153,5 @@ Unlike the `suite` and `stub` generators which write to a `<pkg>test/` sub-packa
 Because `_test.go` files and `_wire.json` files are excluded from the final production binary, this layout provides 100% test coverage without bloating the compiled artifact.
 
 ## See also
+
 - [Generators / Overview](README.md)

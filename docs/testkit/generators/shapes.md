@@ -20,6 +20,7 @@ Classification is handled by a priority-ordered registry of detectors. The regis
 Every shape expects its leading `context.Context` parameter to be optional. When `ctx?` is listed below, it means the shape matches both `func(ctx context.Context, ...)` and `func(...)`.
 
 ### Reading Band
+
 Idempotent operations that retrieve data without mutating system state.
 
 | Shape | Signature Pattern | Description | Suite Baseline Law | Example |
@@ -33,6 +34,7 @@ Idempotent operations that retrieve data without mutating system state.
 | **BatchReader** | `func(ctx?, ...K) ([]V, error)` | Fetch for a slice/variadic list of keys. | **Partial Failure:** Batch queries don't fail entirely if one key is missing. | `Many(ctx, ...string) ([]Record, error)` |
 
 ### Writing Band
+
 Operations that mutate system state.
 
 | Shape | Signature Pattern | Description | Suite Baseline Law | Example |
@@ -47,6 +49,7 @@ Operations that mutate system state.
 > **Note on Mutator:** Automatically detected from any `func(ctx?, V)` signature that has no returns. Use `//testkit:not-mutator` to opt out.
 
 ### Streaming Band
+
 High-throughput or unbounded data sequences.
 
 | Shape | Signature Pattern | Description | Suite Baseline Law | Example |
@@ -55,6 +58,7 @@ High-throughput or unbounded data sequences.
 | **StreamConsumer** | `func(ctx, io.Reader) (V, error)` | Consumes a stream interface. | **Backpressure Respect:** Stops consuming if context is canceled. | `ReadFrom(ctx, io.Reader) (int, error)` |
 
 ### Aggregation & Lifecycle
+
 System-level state, counting, or management.
 
 | Shape | Signature Pattern | Description | Suite Baseline Law | Example |
@@ -68,6 +72,7 @@ System-level state, counting, or management.
 > **Note on Lifecycle:** A signature like `func() error` could be an `Aggregator`, `Lifecycle`, or `PoisonAccessor`. To disambiguate, `Lifecycle` requires a `context.Context` parameter, while `PoisonAccessor` strictly forbids it.
 
 ### Stateless Band
+
 Utility methods that do not rely on or modify the system's internal state.
 
 | Shape | Signature Pattern | Description | Suite Baseline Law | Example |
@@ -81,23 +86,23 @@ Utility methods that do not rely on or modify the system's internal state.
 
 In addition to shape-specific laws, the `suite` generator automatically enforces **Universal Laws** on every method, based solely on the presence of `context.Context` and `error`:
 
-1.  **Context Cancellation:** If `ctx` is present, it is canceled immediately; the method MUST return a context error.
-2.  **Context Deadline Exceeded:** If `ctx` is present, a pre-expired context is passed; the method MUST return a deadline error.
-3.  **Nil Context Safety:** If `ctx` is present, `nil` is passed; the method MUST NOT panic.
-4.  **Smoke Test:** Automatically generates zero-value or sampled inputs to ensure the method does not panic on basic invocation.
+1. **Context Cancellation:** If `ctx` is present, it is canceled immediately; the method MUST return a context error.
+2. **Context Deadline Exceeded:** If `ctx` is present, a pre-expired context is passed; the method MUST return a deadline error.
+3. **Nil Context Safety:** If `ctx` is present, `nil` is passed; the method MUST NOT panic.
+4. **Smoke Test:** Automatically generates zero-value or sampled inputs to ensure the method does not panic on basic invocation.
 
 ## Overriding Detection
 
 The priority registry is robust, but sometimes Go's type system isn't expressive enough to capture your intent. You can use **Shape Hints** (directives) to force or prevent specific classification:
 
-*   `//testkit:deleter` — Elevates a `func(ctx?, string) error` signature. Without this, the registry detects it as a generic `Writer(V)`; with it, it becomes a `Deleter(K)`, enabling delete-removes validation.
-*   `//testkit:mutator` — Explicit marker for state-changing methods (though `func(ctx?, V)` is auto-detected as a `Mutator` even without it).
-*   `//testkit:not-mutator` — Prevents `Mutator` auto-detection for a void-return method (e.g., `Log(v)`). It falls back to `Unknown`.
-*   `//testkit:directive mutator=off` — The bundle-syntax equivalent of `not-mutator`.
-*   `//testkit:keyfield FieldName` — While not changing the shape, this hint tells the registry which struct field to extract when synthesizing a `K` from a `V`.
+* `//testkit:deleter` — Elevates a `func(ctx?, string) error` signature. Without this, the registry detects it as a generic `Writer(V)`; with it, it becomes a `Deleter(K)`, enabling delete-removes validation.
+* `//testkit:mutator` — Explicit marker for state-changing methods (though `func(ctx?, V)` is auto-detected as a `Mutator` even without it).
+* `//testkit:not-mutator` — Prevents `Mutator` auto-detection for a void-return method (e.g., `Log(v)`). It falls back to `Unknown`.
+* `//testkit:directive mutator=off` — The bundle-syntax equivalent of `not-mutator`.
+* `//testkit:keyfield FieldName` — While not changing the shape, this hint tells the registry which struct field to extract when synthesizing a `K` from a `V`.
 
 ## See also
 
-- [Generators / suite](suite.md) — How the Tier 1 test suite utilizes shapes.
-- [Generators / bench](bench.md) — How benchmarks use shapes to determine hot-paths.
-- [Generators / model](model.md) — How the state-machine uses shapes to infer transitions.
+* [Generators / suite](suite.md) — How the Tier 1 test suite utilizes shapes.
+* [Generators / bench](bench.md) — How benchmarks use shapes to determine hot-paths.
+* [Generators / model](model.md) — How the state-machine uses shapes to infer transitions.

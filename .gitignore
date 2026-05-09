@@ -20,7 +20,6 @@ fuzz/
 # regression. Only ignore rapid/ at the repo root (build artifacts).
 !/testdata/rapid/
 !**/testdata/rapid/
-coverage/
 coverage.txt
 coverage.html
 profile.out

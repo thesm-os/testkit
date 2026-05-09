@@ -255,4 +255,5 @@ A typical domain object generates its builder into a `<pkg>test/` sub-package. T
 | `defaults.go` | Developer | Hand-written `func <Type>Defaults() <Type>` factories. |
 
 ## See also
+
 - [Generators / Overview](README.md)

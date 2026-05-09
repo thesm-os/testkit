@@ -3,6 +3,7 @@
 Tier 1 conformance. Reads a Go interface, classifies each method into a *shape* by signature pattern, and emits an `Assert<Iface>Contract(t, factory, opts...)` test harness.
 
 The generated suite evaluates implementations against two layers of contracts:
+
 1. **Baseline contracts:** Auto-detected invariants derived from the method's shape (e.g., a `Reader` must return consistent reads; a `Writer` must succeed on the first try).
 2. **Directive contracts:** Orthogonal behaviors triggered by `//testkit:` annotations (e.g., `//testkit:idempotent`, `//testkit:concurrent`, `//testkit:atomic`).
 
@@ -21,6 +22,7 @@ A `factory func() Iface` is the single required injection. Every subtest constru
 The generated entry points support the **Multi-Implementation Conformance Pattern**. This is the load-bearing pattern for database migrations, refactoring, and verifying mocks against real implementations. You write the contract suite wiring *once*, and run it against *N* implementations.
 
 ### Single-Implementation Driver
+
 ```go
 func AssertStoreContract(
     t *testing.T, 
@@ -30,6 +32,7 @@ func AssertStoreContract(
 ```
 
 ### Multi-Implementation Driver
+
 ```go
 func AssertStoreContractAcrossImpls(
     t *testing.T, 
@@ -37,6 +40,7 @@ func AssertStoreContractAcrossImpls(
     opts ...suite.Option,
 )
 ```
+
 This driver runs the exact same contract suite once per provided factory, wrapped in `t.Run(Name, ...)`.
 
 ## Auto-detected Baseline Contracts
@@ -44,12 +48,14 @@ This driver runs the exact same contract suite once per provided factory, wrappe
 Each method is classified by `shape.Detect` from its signature (see [Shapes](shapes.md)). The shape dictates which `suite.Assert<Shape>Baseline` is invoked.
 
 Regardless of shape, every method that accepts a `context.Context` automatically receives:
+
 - `<Method> / smoke` — fail-fast bare invocation with sample args.
 - `<Method> / respects context` — asserts `ctx.Done()` halts execution and returns a context error.
 - `<Method> / respects deadline` — asserts a pre-expired context fails immediately.
 - `<Method> / nil context` — asserts `nil` context does not panic.
 
 Shape baselines add deeper semantics:
+
 - **Reader:** Asserts `consistent reads` (repeated calls return identical values).
 - **StreamReader:** Asserts it `completes` (terminates), is `reentrant` (two iterators yield equal sequences), and `respects break` (early return from a `for` loop halts production cleanly).
 - **Aggregator:** Asserts `count consistency` (stable across immediate re-reads).
@@ -104,6 +110,7 @@ Because `Assert<Iface>Contract` tests your implementation as a black box, it nee
 You inject state into the driver via `suite.Option` values:
 
 ### `suite.WithPrePopulate(func(impl T))`
+
 The most critical option. The driver wraps your factory: before handing a fresh implementation to any subtest, it calls your `PrePopulate` closure to seed the database with known data. Reader baselines and `pure` subtests rely on this state existing.
 
 ```go
@@ -115,9 +122,11 @@ AssertStoreContract(t, factory,
 ```
 
 ### `suite.WithInvalidFactory(func() T)`
+
 Used by Mutator and Lifecycle shapes to test the "Reject Invalid" baseline. You supply a factory that produces an implementation fundamentally incapable of succeeding (e.g., a database connection with a bad password), and the suite asserts that writes predictably fail.
 
 ### `suite.WithRetryFactory(func() T)`
+
 When a method is marked `//testkit:retry-succeeds-on-attempt N`, you must provide an implementation that simulates a transient network failure, returning errors for N-1 calls before succeeding.
 
 ## Layout Conventions

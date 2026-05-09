@@ -31,39 +31,46 @@ To understand the `model` generator, you must understand the three formal verifi
 While the `suite` generator relies strictly on method signatures (Tier 1), the `model` generator analyzes the broader topology of your interface to infer multi-method state machines.
 
 ### Tier 1: Signature-tier (21 shapes)
+
 The baseline detection. Evaluates a single method isolated from its peers.
-*   **Reading Band:** `Reader`, `BatchReader`, `Lookup`
-*   **Writing Band:** `Writer`, `Mutator`, `Deleter`
-*   **Streaming Band:** `StreamReader`, `StreamConsumer`
-*   **Lifecycle Band:** `Aggregator`, `Lifecycle`, `Pure`
+
+* **Reading Band:** `Reader`, `BatchReader`, `Lookup`
+* **Writing Band:** `Writer`, `Mutator`, `Deleter`
+* **Streaming Band:** `StreamReader`, `StreamConsumer`
+* **Lifecycle Band:** `Aggregator`, `Lifecycle`, `Pure`
 *(See [Shapes](shapes.md) for the full taxonomy).*
 
 ### Tier 2: Contract-tier (12 shapes)
+
 Detected by looking at sibling methods, struct fields, and parameter types across the interface.
-*   `CompareAndSwap` (takes Version, sibling Reader returns Version).
-*   `GetOrCompute` (takes a `func() V`).
-*   `AcquireLease` (sibling `Release` exists).
-*   `Watcher` / `Publisher` / `Subscriber`.
-*   *(And 6 others: `TransactionFunc`, `Paginator`, `Persister`, `Updater`, `Upserter`, `Appender`)*
+
+* `CompareAndSwap` (takes Version, sibling Reader returns Version).
+* `GetOrCompute` (takes a `func() V`).
+* `AcquireLease` (sibling `Release` exists).
+* `Watcher` / `Publisher` / `Subscriber`.
+* *(And 6 others: `TransactionFunc`, `Paginator`, `Persister`, `Updater`, `Upserter`, `Appender`)*
 
 ### Tier 3: Composite-tier (4 shapes)
+
 Multi-method shapes that form closed-loop state machines.
-*   `Pool` (Balanced `Get`/`Put` or `Acquire`/`Release`).
-*   `Cursor` (Interface has both `Next()` and `Close()`).
-*   `TwoPhase` (Returns a Tx with `Commit()` and `Rollback()`).
-*   `Saga` (Chained methods passing results forward; requires `//testkit:saga` directive).
+
+* `Pool` (Balanced `Get`/`Put` or `Acquire`/`Release`).
+* `Cursor` (Interface has both `Next()` and `Close()`).
+* `TwoPhase` (Returns a Tx with `Commit()` and `Rollback()`).
+* `Saga` (Chained methods passing results forward; requires `//testkit:saga` directive).
 
 ## The Orthogonal Axis: Mixins
 
 Mixins apply orthogonal behavioral properties to any shape via `//testkit:` directives. The `model` generator ships with **31 mixins**, which automatically emit corresponding verification laws.
 
 **Examples:**
-*   `//testkit:idempotent`: Emits a law proving `F(x); F(x) == F(x)`.
-*   `//testkit:commutative`: Emits a law proving `A;B == B;A` (for Mutators).
-*   `//testkit:associative`: Emits a law proving `(A;B);C == A;(B;C)`.
-*   `//testkit:tamper-evident`: Adds post-write corruption detection.
-*   `//testkit:leak-free`: Wraps the execution to detect goroutine/FD leaks across cycles.
-*   `//testkit:point-in-time`: Enforces snapshot isolation semantics for readers.
+
+* `//testkit:idempotent`: Emits a law proving `F(x); F(x) == F(x)`.
+* `//testkit:commutative`: Emits a law proving `A;B == B;A` (for Mutators).
+* `//testkit:associative`: Emits a law proving `(A;B);C == A;(B;C)`.
+* `//testkit:tamper-evident`: Adds post-write corruption detection.
+* `//testkit:leak-free`: Wraps the execution to detect goroutine/FD leaks across cycles.
+* `//testkit:point-in-time`: Enforces snapshot isolation semantics for readers.
 
 *(Applying a mixin to an incompatible shape—e.g., `//testkit:commutative` on a `Lifecycle` method—results in a hard codegen error, never a silent fallback).*
 
@@ -88,12 +95,13 @@ func StoreModelProperty(factory func() store.Store, opts ...StoreModelOption) fu
 ## State Machine Execution
 
 During execution, `rapid` drives the `StoreModelTest` harness:
-1.  It instantiates a fresh System Under Test (SUT) via your `factory`.
-2.  It selects a random `Action` (derived from your interface's methods).
-3.  It generates fuzzed arguments for that Action.
-4.  It applies the Action to the SUT.
-5.  It evaluates all **Auto-Derived Laws** against the new state.
-6.  It loops this sequence (default 100 times per test run).
+
+1. It instantiates a fresh System Under Test (SUT) via your `factory`.
+2. It selects a random `Action` (derived from your interface's methods).
+3. It generates fuzzed arguments for that Action.
+4. It applies the Action to the SUT.
+5. It evaluates all **Auto-Derived Laws** against the new state.
+6. It loops this sequence (default 100 times per test run).
 
 If any law fails, `rapid` halts and begins **shrinking**, manipulating the sequence of actions and their arguments to present you with the absolute smallest reproducible failure trace.
 
@@ -102,34 +110,39 @@ If any law fails, `rapid` halts and begins **shrinking**, manipulating the seque
 A "Law" in `testkit` is a formal invariant evaluated after an action executes. The generator auto-derives over 80 distinct laws by cross-referencing your interface's shapes and mixins. Laws are categorized by their statefulness:
 
 #### Stateless Laws (Pre/Post Call)
+
 These laws evaluate the result of a single action against the current state.
-*   **`AUTO-READ-AFTER-WRITE`:** (Requires `Reader` + `Writer` + `KeyField`). After a successful write, the harness automatically invokes the Reader with the same key and asserts the returned value exactly matches the written value.
-*   **`AUTO-DELETE-RETURNS-NOT-FOUND`:** (Requires `Reader` + `Deleter` + `//testkit:errors ErrNotFound`). After a successful delete, the harness invokes the Reader and asserts `errors.Is(err, ErrNotFound)`.
-*   **`AUTO-PURE-DETERMINISM`:** (Requires `Pure` shape). The harness caches the result of the first invocation. All subsequent invocations during the property run must return the exact same value.
-*   **`AUTO-STREAM-REENTRANCY`:** (Requires `StreamReader`). The harness consumes the iterator twice and asserts both passes yielded identical sequences.
+
+* **`AUTO-READ-AFTER-WRITE`:** (Requires `Reader` + `Writer` + `KeyField`). After a successful write, the harness automatically invokes the Reader with the same key and asserts the returned value exactly matches the written value.
+* **`AUTO-DELETE-RETURNS-NOT-FOUND`:** (Requires `Reader` + `Deleter` + `//testkit:errors ErrNotFound`). After a successful delete, the harness invokes the Reader and asserts `errors.Is(err, ErrNotFound)`.
+* **`AUTO-PURE-DETERMINISM`:** (Requires `Pure` shape). The harness caches the result of the first invocation. All subsequent invocations during the property run must return the exact same value.
+* **`AUTO-STREAM-REENTRANCY`:** (Requires `StreamReader`). The harness consumes the iterator twice and asserts both passes yielded identical sequences.
 
 #### Stateful Laws (Temporal & Trace-Aware)
+
 These laws analyze the *entire history* of actions executed so far.
-*   **`AUTO-APPENDER-MONOTONIC`:** (Requires `Appender`). Scans the trace to ensure every returned offset/index is strictly greater than the previous one.
-*   **`AUTO-POOL-BALANCED`:** (Requires `Pool` composite shape). Analyzes the trace to ensure every `Acquire` is matched by a `Release` before the run terminates, and that no `Release` is called twice for the same resource.
+
+* **`AUTO-APPENDER-MONOTONIC`:** (Requires `Appender`). Scans the trace to ensure every returned offset/index is strictly greater than the previous one.
+* **`AUTO-POOL-BALANCED`:** (Requires `Pool` composite shape). Analyzes the trace to ensure every `Acquire` is matched by a `Release` before the run terminates, and that no `Release` is called twice for the same resource.
 
 ### Trace Combinators (Temporal Logic)
 
 You are not limited to auto-derived laws. You can compose complex, domain-specific temporal logic by supplying `model.Law[T]` implementations via `StoreModelExtraLaws`. The `model` package provides Trace Combinators that evaluate predicates over the historical action sequence:
 
-*   **`model.AfterEvery(trigger, check)`:** A strict causality constraint. Example: After every `BeginTx` action, the *very next* action involving that Tx ID must be `Commit` or `Rollback`.
-*   **`model.EventuallyAfter(trigger, check, budget)`:** A liveness constraint for AP systems. Example: After a `Publish` action, the message must be observable via `Read` within `budget` subsequent actions (simulating asynchronous replication delay).
-*   **`model.Never(check)`:** A safety constraint. Example: The state must never reflect a balance below zero.
+* **`model.AfterEvery(trigger, check)`:** A strict causality constraint. Example: After every `BeginTx` action, the *very next* action involving that Tx ID must be `Commit` or `Rollback`.
+* **`model.EventuallyAfter(trigger, check, budget)`:** A liveness constraint for AP systems. Example: After a `Publish` action, the message must be observable via `Read` within `budget` subsequent actions (simulating asynchronous replication delay).
+* **`model.Never(check)`:** A safety constraint. Example: The state must never reflect a balance below zero.
 
 ### Mutation Testing (Runtime Differential)
 
-How do you know if your Laws are strict enough? The `model` generator includes a built-in Mutation Testing engine. 
+How do you know if your Laws are strict enough? The `model` generator includes a built-in Mutation Testing engine.
 
 When enabled, the runner instantiates a parallel "Shadow" SUT. It intercepts operations bound for the shadow SUT and injects adversarial mutations:
-*   `DropWrites`: Silently ignores a `Put` operation.
-*   `ReturnWrongValue`: Alters a `Get` result.
-*   `RandomDelay`: Sleeps unpredictably to expose race conditions.
-*   `OffByOneIndex`: Corrupts paginator cursors.
+
+* `DropWrites`: Silently ignores a `Put` operation.
+* `ReturnWrongValue`: Alters a `Get` result.
+* `RandomDelay`: Sleeps unpredictably to expose race conditions.
+* `OffByOneIndex`: Corrupts paginator cursors.
 
 The runner then verifies that your Law suite **catches** the mutant (i.e., at least one Law fails). If the mutant survives the entire sequence, your Laws are too weak.
 
@@ -148,6 +161,7 @@ storetest.StoreModelTest(t, factory,
 ```
 
 When a Reference is provided:
+
 1. Every action is applied to *both* the SUT and the Reference simultaneously.
 2. The harness asserts that the SUT and the Reference produce the **exact same return values and errors** for every single operation.
 
@@ -170,7 +184,7 @@ The runner spawns multiple goroutines firing randomized actions at a shared SUT.
 
 ## Layout Conventions
 
-A typical `model` configuration generates into a `<pkg>test/` sub-package. 
+A typical `model` configuration generates into a `<pkg>test/` sub-package.
 
 **What goes where:**
 
@@ -184,6 +198,6 @@ Keep `model_test.go` separated from `spec_test.go` (the Tier 1 suite). Model tes
 
 ## See also
 
-- [Shape Classification](shapes.md) — The signature-tier foundation.
-- [Generators / suite](suite.md) — Tier 1 single-call conformance.
-- [Generators / stub](stub.md) — How to generate a stub for use as a Reference implementation.
+* [Shape Classification](shapes.md) — The signature-tier foundation.
+* [Generators / suite](suite.md) — Tier 1 single-call conformance.
+* [Generators / stub](stub.md) — How to generate a stub for use as a Reference implementation.

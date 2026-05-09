@@ -3,6 +3,7 @@
 Tier 4 conformance. Reads a Go interface, classifies each method into a *shape* by signature pattern, and emits a `Benchmark<Iface>Contract(b, factory, opts...)` harness.
 
 The generated `bench` harness evaluates implementations against three layers of performance contracts:
+
 1. **Baseline throughput:** Auto-emitted `hot-path` and `concurrent-4` sub-benchmarks for every method.
 2. **Deterministic budget gates:** Opt-in directives (e.g., `//testkit:allocs 0`, `//testkit:latency 100us`) that fail the CI run if an implementation violates performance ceilings.
 3. **Shape-specific plug-ins:** Extensible `BenchOn<Method>` hooks to inject domain-specific load tests (e.g., measuring a `Reader` against 10,000 keys instead of just 1).
@@ -19,7 +20,7 @@ A `factory func() Iface` is the single required injection. Every per-method benc
 
 ## The Conformance Pattern
 
-Like the `suite` generator, `bench` produces entry points designed for the **Multi-Implementation Conformance Pattern**. 
+Like the `suite` generator, `bench` produces entry points designed for the **Multi-Implementation Conformance Pattern**.
 
 ```go
 func BenchmarkStoreContract(
@@ -36,15 +37,18 @@ You write the benchmark wiring once. By passing different factories (e.g., `InMe
 Every method is classified by `shape.Detect` from its signature (see [Shapes](shapes.md)). Based on this shape, the generator emits default sub-benchmarks without requiring any consumer code.
 
 For every non-skipped method, the harness emits:
+
 - `<Method> / hot-path` — Single-goroutine `b.Loop()` measurement reporting `ns/op` and `allocs/op`.
 - `<Method> / concurrent-4` — `b.RunParallel`-style throughput measurement at a parallelism of 4.
 
 > **Note on Lifecycle Shapes:** `Lifecycle`, `VoidLifecycle`, and `Unknown` shapes skip the `concurrent-4` emission by default. Concurrent invocation of `Init()` or `Close()` on a shared implementation is rarely safe.
 
 ### The Zero-Allocation Guarantee
+
 The auto-emitted benchmark helpers are strictly optimized. The harness guarantees zero allocations from the testing infrastructure inside the timed `b.Loop()` and `b.RunParallel` blocks. Every reported allocation (`allocs/op`) belongs strictly to your implementation.
 
 ### Smoke Values & `//testkit:sample`
+
 To benchmark a method, the generator must pass arguments to it. By default, it synthesizes zero-value literals. If your method fast-fails on zero values (e.g., `if id == "" { return ErrInvalid }`), you will inadvertently benchmark the error path instead of the success path.
 
 Use the `//testkit:sample` directive to provide a valid builder function:
@@ -73,7 +77,8 @@ When a method carries these directives, the generator emits the corresponding `a
 Like `suite`, you configure the benchmark harness by passing `StoreBenchOption` values into the entry point.
 
 ### `StoreBenchPrePopulate(func(impl T))`
-Because you cannot benchmark a `Get` method on an empty database, you must seed state. `PrePopulate` registers a one-shot seeder that runs against every freshly-instantiated implementation *before* the per-method benchmarks observe it. 
+
+Because you cannot benchmark a `Get` method on an empty database, you must seed state. `PrePopulate` registers a one-shot seeder that runs against every freshly-instantiated implementation *before* the per-method benchmarks observe it.
 
 **Crucially**, the cost of `PrePopulate` is paid *outside* the timed `b.Loop()`. It does not pollute your `ns/op` measurements.
 
@@ -86,6 +91,7 @@ BenchmarkStoreContract(b, factory,
 ```
 
 ### Shape-Specific Plug-ins
+
 You can override the auto-emitted hot-paths or add new load profiles by injecting primitives into the `<Iface>BenchOn<Method>` slots. These slots are strongly typed by the method's detected shape.
 
 ```go
@@ -98,6 +104,7 @@ BenchmarkStoreContract(b, factory,
 ```
 
 ### Free-Form Custom Benchmarks
+
 For measurements outside the shape vocabulary (e.g., multi-method scenarios like reading while writing), use the `Custom` extension point:
 
 ```go
@@ -108,13 +115,13 @@ storetest.StoreBenchCustom("read-write-contention", func(b *testing.B, s basic.S
 
 ## Integration with Stubs
 
-When your factory returns a generated `testkit stub` (often used to benchmark the overhead of decorators or intermediate layers), the `bench` harness automatically triggers the stub's `BenchMode()`. 
+When your factory returns a generated `testkit stub` (often used to benchmark the overhead of decorators or intermediate layers), the `bench` harness automatically triggers the stub's `BenchMode()`.
 
 In `BenchMode`, the stub disables all call recording and expectation tracking. The per-call overhead drops to near-zero, ensuring your benchmark reflects the underlying implementation's speed, not the testkit recorder's overhead.
 
 ## Layout Conventions
 
-A typical interface generates its bench harness into a `<pkg>test/` sub-package. 
+A typical interface generates its bench harness into a `<pkg>test/` sub-package.
 
 **What goes where:**
 

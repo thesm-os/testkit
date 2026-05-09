@@ -13,11 +13,25 @@ import (
 	"go.thesmos.sh/testkit/generator/spec"
 )
 
+// Subtests share the package-global consumer registry, so they run
+// serially — t.Parallel() siblings would race their snapshot/restore
+// cleanup against each other and clobber in-flight registrations.
+//
+//nolint:tparallel,paralleltest // subtests share package-global registry; see comment above
 func TestEnrich(t *testing.T) {
 	t.Parallel()
 
+	// snapshotRegistry captures the consumer registry and restores it
+	// on cleanup so repeated runs (go test -count=N) don't accumulate
+	// the per-subtest registrations.
+	snapshotRegistry := func(t *testing.T) {
+		t.Helper()
+		snap := spec.SnapshotConsumers()
+		t.Cleanup(func() { spec.RestoreConsumers(snap) })
+	}
+
 	t.Run("dispatches registered consumers per directive", func(t *testing.T) {
-		t.Parallel()
+		snapshotRegistry(t)
 		// Use a fresh probe directive so we don't interact with the
 		// shared sample registration.
 		const probe = "spec-test-probe"
@@ -43,7 +57,7 @@ func TestEnrich(t *testing.T) {
 	})
 
 	t.Run("propagates consumer errors with method position context", func(t *testing.T) {
-		t.Parallel()
+		snapshotRegistry(t)
 		const probe = "spec-test-probe-err"
 		want := errors.New("boom")
 		spec.RegisterConsumer(probe, func(
@@ -69,7 +83,7 @@ func TestEnrich(t *testing.T) {
 	})
 
 	t.Run("Consumers returns the registered slice (copy)", func(t *testing.T) {
-		t.Parallel()
+		snapshotRegistry(t)
 		const probe = "spec-test-probe-list"
 		spec.RegisterConsumer(probe, func(
 			_ *spec.Method, _ directive.Directive,
