@@ -119,3 +119,41 @@ func AssertCompositeWriterConcurrentSafe[T any, K1 comparable, V any](
 		})
 	}
 }
+
+// AssertCompositeWriterSmoke calls the writer once with the sample
+// pair on a fresh impl. The subtest fails fast on panic, surfacing a
+// broken Factory or a method that panics on bare invocation as one
+// localized failure before any contract assertion runs.
+func AssertCompositeWriterSmoke[T any, K1 comparable, V any](
+	sampleKey K1,
+	sampleVal V,
+) CompositeWriterAssertion[T, K1, V] {
+	return func(ctx CompositeWriterContext[T, K1, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, sampleKey, sampleVal)
+		})
+	}
+}
+
+// AssertCompositeWriterBaseline runs the CompositeWriter-shape baseline:
+// smoke, WriteSucceeds(k1, sample), RespectsContext, Idempotent, and
+// ConcurrentSafe (4×10). Optional extras (e.g. WriteRejectInvalid) run
+// between idempotency and concurrency.
+func AssertCompositeWriterBaseline[T any, K1 comparable, V any](
+	sampleKey K1,
+	sampleVal V,
+	extra ...CompositeWriterAssertion[T, K1, V],
+) CompositeWriterAssertion[T, K1, V] {
+	return func(ctx CompositeWriterContext[T, K1, V]) {
+		AssertCompositeWriterSmoke[T, K1, V](sampleKey, sampleVal)(ctx)
+		AssertCompositeWriteSucceeds[T, K1, V](sampleKey, sampleVal)(ctx)
+		AssertCompositeWriterRespectsContext[T, K1, V](sampleKey, sampleVal)(ctx)
+		AssertCompositeWriterIdempotent[T, K1, V](sampleKey, sampleVal)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertCompositeWriterConcurrentSafe[T, K1, V](sampleKey, sampleVal, 4, 10)(ctx)
+	}
+}

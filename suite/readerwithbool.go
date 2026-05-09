@@ -122,3 +122,40 @@ func AssertReaderWithBoolConcurrentSafe[T any, K comparable, V any](
 		})
 	}
 }
+
+// AssertReaderWithBoolSmoke calls the reader once with the sample key
+// on a fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertReaderWithBoolSmoke[T any, K comparable, V any](sampleKey K) ReaderWithBoolAssertion[T, K, V] {
+	return func(ctx ReaderWithBoolContext[T, K, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertReaderWithBoolBaseline runs the ReaderWithBool-shape baseline:
+// smoke, Returns(key, want), RespectsContext, Consistent over 3 calls,
+// Missing(zeroKey), and ConcurrentSafe (4×10). Optional extras run
+// between the missing check and concurrency.
+func AssertReaderWithBoolBaseline[T any, K comparable, V any](
+	sampleKey K,
+	sampleVal V,
+	zeroKey K,
+	extra ...ReaderWithBoolAssertion[T, K, V],
+) ReaderWithBoolAssertion[T, K, V] {
+	return func(ctx ReaderWithBoolContext[T, K, V]) {
+		AssertReaderWithBoolSmoke[T, K, V](sampleKey)(ctx)
+		AssertReaderWithBoolReturns[T, K, V](sampleKey, sampleVal)(ctx)
+		AssertReaderWithBoolRespectsContext[T, K, V](sampleKey)(ctx)
+		AssertReaderWithBoolConsistent[T, K, V](sampleKey, 3)(ctx)
+		AssertReaderWithBoolMissing[T, K, V](zeroKey)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertReaderWithBoolConcurrentSafe[T, K, V](sampleKey, 4, 10)(ctx)
+	}
+}

@@ -101,3 +101,38 @@ func AssertPredicateConcurrentSafe[T any](workers, iters int) PredicateAssertion
 		})
 	}
 }
+
+// AssertPredicateSmoke calls the Predicate method once on a fresh
+// impl. The subtest fails fast on panic, so a broken Factory or a
+// method that panics on bare invocation surfaces as one localized
+// failure before any contract assertion runs.
+func AssertPredicateSmoke[T any]() PredicateAssertion[T] {
+	return func(ctx PredicateContext[T]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// AssertPredicateBaseline runs the Predicate-shape baseline: smoke,
+// Returns(want), RespectsContext (structural), Consistent over 3 calls,
+// RejectInvalid (structural — no inputs), and ConcurrentSafe (4×10).
+// Optional extras run between consistency and concurrency.
+func AssertPredicateBaseline[T any](
+	want bool,
+	extra ...PredicateAssertion[T],
+) PredicateAssertion[T] {
+	return func(ctx PredicateContext[T]) {
+		AssertPredicateSmoke[T]()(ctx)
+		AssertPredicateReturns[T](want)(ctx)
+		AssertPredicateRespectsContext[T]()(ctx)
+		AssertPredicateConsistent[T](3)(ctx)
+		AssertPredicateRejectInvalid[T]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertPredicateConcurrentSafe[T](4, 10)(ctx)
+	}
+}

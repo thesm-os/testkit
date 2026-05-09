@@ -106,3 +106,37 @@ func AssertDeleterConcurrentSafe[T any, K comparable](key K, workers, iters int)
 		})
 	}
 }
+
+// AssertDeleterSmoke calls the deleter once with the sample key on a
+// fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertDeleterSmoke[T any, K comparable](sampleKey K) DeleterAssertion[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertDeleterBaseline runs the Deleter-shape baseline: smoke,
+// DeleteSucceeds(key), RespectsContext, DeleteIdempotent, and
+// ConcurrentSafe (4×10). Optional extras (e.g. DeleteReturnsNotFound)
+// run between idempotency and concurrency.
+func AssertDeleterBaseline[T any, K comparable](
+	sampleKey K,
+	extra ...DeleterAssertion[T, K],
+) DeleterAssertion[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		AssertDeleterSmoke[T, K](sampleKey)(ctx)
+		AssertDeleteSucceeds[T, K](sampleKey)(ctx)
+		AssertDeleterRespectsContext[T, K](sampleKey)(ctx)
+		AssertDeleteIdempotent[T, K](sampleKey)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertDeleterConcurrentSafe[T, K](sampleKey, 4, 10)(ctx)
+	}
+}

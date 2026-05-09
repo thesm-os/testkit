@@ -120,3 +120,39 @@ func AssertMultiAggregatorConcurrentSafe[T, V1, V2 any](
 		})
 	}
 }
+
+// AssertMultiAggregatorSmoke calls the aggregator once on a fresh impl.
+// The subtest fails fast on panic, surfacing a broken Factory or a
+// method that panics on bare invocation as one localized failure before
+// any contract assertion runs.
+func AssertMultiAggregatorSmoke[T, V1, V2 any]() MultiAggregatorAssertion[T, V1, V2] {
+	return func(ctx MultiAggregatorContext[T, V1, V2]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _, _ = ctx.Call(t.Context(), impl)
+		})
+	}
+}
+
+// AssertMultiAggregatorBaseline runs the MultiAggregator-shape baseline:
+// smoke, Returns(wantV1, wantV2), RespectsContext, Consistent over 3
+// calls, and ConcurrentSafe (4×10). Optional extras (e.g.
+// ReturnsSentinel under an InvalidFactory) run between consistency and
+// concurrency.
+func AssertMultiAggregatorBaseline[T any, V1, V2 comparable](
+	wantV1 V1,
+	wantV2 V2,
+	extra ...MultiAggregatorAssertion[T, V1, V2],
+) MultiAggregatorAssertion[T, V1, V2] {
+	return func(ctx MultiAggregatorContext[T, V1, V2]) {
+		AssertMultiAggregatorSmoke[T, V1, V2]()(ctx)
+		AssertMultiAggregatorReturns[T, V1, V2](wantV1, wantV2)(ctx)
+		AssertMultiAggregatorRespectsContext[T, V1, V2]()(ctx)
+		AssertMultiAggregatorConsistent[T, V1, V2](3)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertMultiAggregatorConcurrentSafe[T, V1, V2](4, 10)(ctx)
+	}
+}

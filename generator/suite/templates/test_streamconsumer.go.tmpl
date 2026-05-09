@@ -16,7 +16,5 @@
 			func(ctx context.Context, impl {{ $iface }}, s {{ $S }}) ({{ $V }}, error) {
 				return impl.{{ $m.Name }}(ctx, s)
 			})
-		suite.AssertStreamConsumerSucceedsWithDefault[{{ $iface }}, {{ $S }}, {{ $V }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertStreamConsumerRespectsContextWithDefault[{{ $iface }}, {{ $S }}, {{ $V }}]()(sctx)
-		suite.AssertStreamConsumerConcurrentSafeWithDefault[{{ $iface }}, {{ $S }}, {{ $V }}](4, 10)(sctx)
+		suite.AssertStreamConsumerBaselineWithDefault[{{ $iface }}, {{ $S }}, {{ $V }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
 {{- end -}}

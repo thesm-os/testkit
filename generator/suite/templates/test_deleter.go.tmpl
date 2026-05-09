@@ -12,11 +12,10 @@
 				return impl.{{ $m.Name }}(key)
 {{- end }}
 			})
-		suite.AssertDeleteSucceeds[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertDeleterRespectsContext[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertDeleteIdempotent[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
+		suite.AssertDeleterBaseline[{{ $iface }}, {{ $K }}](
+			{{ $m.SampleParamAt 0 $tracker }},
 {{- if $m.HasFirstSentinel }}
-		suite.AssertDeleteReturnsNotFound[{{ $iface }}, {{ $K }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertDeleteReturnsNotFound[{{ $iface }}, {{ $K }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertDeleterConcurrentSafe[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

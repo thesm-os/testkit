@@ -13,9 +13,9 @@
 				return impl.{{ $m.Name }}(key)
 {{- end }}
 			})
-		suite.AssertReaderWithBoolReturns[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertReaderWithBoolRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertReaderWithBoolConsistent[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
-		suite.AssertReaderWithBoolMissing[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }})(sctx)
-		suite.AssertReaderWithBoolConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		suite.AssertReaderWithBoolBaseline[{{ $iface }}, {{ $K }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.SampleResultAt 0 $tracker }},
+			{{ $m.ZeroParamAt 0 $tracker }},
+		)(sctx)
 {{- end -}}

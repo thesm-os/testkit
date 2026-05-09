@@ -93,3 +93,21 @@ func TestReader(t *testing.T) {
 		suite.AssertReaderConcurrentSafe[*mapReader, string, string]("x", 4, 100)(ctx)
 	})
 }
+
+func TestAssertReaderBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]string{"a": "alpha"}
+	ctx := suite.ReaderContext[*mapReader, string, string]{
+		T: t,
+		ReaderBindings: bindings.ReaderBindings[*mapReader, string, string]{
+			Factory: func() *mapReader { return newMapReader(data) },
+			Call: func(c context.Context, r *mapReader, k string) (string, error) {
+				if err := c.Err(); err != nil {
+					return "", err
+				}
+				return r.Get(c, k)
+			},
+		},
+	}
+	suite.AssertReaderBaseline[*mapReader, string, string]("a", "alpha")(ctx)
+}

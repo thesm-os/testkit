@@ -99,3 +99,36 @@ func AssertPoisonAccessorConcurrentSafe[T any](workers, iters int) PoisonAccesso
 		})
 	}
 }
+
+// AssertPoisonAccessorSmoke calls the accessor once on a fresh impl.
+// The subtest fails fast on panic, surfacing a broken Factory or a
+// method that panics on bare invocation as one localized failure
+// before any contract assertion runs.
+func AssertPoisonAccessorSmoke[T any]() PoisonAccessorAssertion[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// AssertPoisonAccessorBaseline runs the PoisonAccessor-shape baseline:
+// smoke, NilOnFresh, RespectsContext (structural), Consistent, and
+// ConcurrentSafe (4×10). Optional extras (e.g. RejectInvalid under a
+// PoisonedFactory) run between consistency and concurrency.
+func AssertPoisonAccessorBaseline[T any](
+	extra ...PoisonAccessorAssertion[T],
+) PoisonAccessorAssertion[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		AssertPoisonAccessorSmoke[T]()(ctx)
+		AssertPoisonAccessorNilOnFresh[T]()(ctx)
+		AssertPoisonAccessorRespectsContext[T]()(ctx)
+		AssertPoisonAccessorConsistent[T]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertPoisonAccessorConcurrentSafe[T](4, 10)(ctx)
+	}
+}

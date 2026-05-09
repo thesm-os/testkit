@@ -78,3 +78,22 @@ func TestReaderWithBool(t *testing.T) {
 			"a", 4, 50)(readerWithBoolCtx(t, data))
 	})
 }
+
+func TestAssertReaderWithBoolBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]int64{"a": 10}
+	ctx := suite.ReaderWithBoolContext[*boolMap, string, int64]{
+		T: t,
+		ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[*boolMap, string, int64]{
+			Factory: func() *boolMap { return newBoolMap(data) },
+			Call: func(c context.Context, m *boolMap, k string) (int64, bool) {
+				if c.Err() != nil {
+					return 0, false
+				}
+				return m.Load(c, k)
+			},
+		},
+	}
+	suite.AssertReaderWithBoolBaseline[*boolMap, string, int64](
+		"a", 10, "missing")(ctx)
+}

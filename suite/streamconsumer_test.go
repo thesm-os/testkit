@@ -116,3 +116,22 @@ func TestStreamConsumer(t *testing.T) {
 			4, 50)(streamConsumerCtx(t))
 	})
 }
+
+func TestAssertStreamConsumerBaselineWithDefault(t *testing.T) {
+	t.Parallel()
+	ctx := suite.StreamConsumerContext[*byteCounter, io.Reader, int]{
+		T: t,
+		StreamConsumerBindings: bindings.StreamConsumerBindings[*byteCounter, io.Reader, int]{
+			Factory: func() *byteCounter { return &byteCounter{} },
+			Call: func(c context.Context, b *byteCounter, r io.Reader) (int, error) {
+				if err := c.Err(); err != nil {
+					return 0, err
+				}
+				return b.ReadFrom(c, r)
+			},
+		},
+	}
+	// The default sample is "test-data" (9 bytes); expect length 9.
+	suite.AssertStreamConsumerBaselineWithDefault[*byteCounter, io.Reader, int](
+		9)(ctx)
+}

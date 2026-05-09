@@ -13,11 +13,11 @@
 				return impl.{{ $m.Name }}(k1, value)
 {{- end }}
 			})
-		suite.AssertCompositeWriteSucceeds[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }})(sctx)
-		suite.AssertCompositeWriterRespectsContext[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }})(sctx)
-		suite.AssertCompositeWriterIdempotent[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }})(sctx)
+		suite.AssertCompositeWriterBaseline[{{ $iface }}, {{ $K1 }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.SampleParamAt 1 $tracker }},
 {{- if $m.HasFirstSentinel }}
-		suite.AssertCompositeWriteRejectInvalid[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertCompositeWriteRejectInvalid[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.ZeroParamAt 1 $tracker }}, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertCompositeWriterConcurrentSafe[{{ $iface }}, {{ $K1 }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

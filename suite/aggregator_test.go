@@ -67,3 +67,20 @@ func TestAggregator(t *testing.T) {
 		suite.AssertAggregatorConcurrentSafe[*itemCounter, int](4, 50)(aggregatorCtx(t, 42))
 	})
 }
+
+func TestAssertAggregatorBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.AggregatorContext[*itemCounter, int]{
+		T: t,
+		AggregatorBindings: bindings.AggregatorBindings[*itemCounter, int]{
+			Factory: func() *itemCounter { return newItemCounter(0) },
+			Call: func(c context.Context, ic *itemCounter) (int, error) {
+				if err := c.Err(); err != nil {
+					return 0, err
+				}
+				return ic.Count(c)
+			},
+		},
+	}
+	suite.AssertAggregatorBaseline[*itemCounter, int](0)(ctx)
+}

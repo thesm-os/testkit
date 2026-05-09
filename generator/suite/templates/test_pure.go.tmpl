@@ -8,9 +8,5 @@
 			func(impl {{ $iface }}) {{ $R }} {
 				return impl.{{ $m.Name }}()
 			})
-		suite.AssertPureReturns[{{ $iface }}, {{ $R }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertPureRespectsContext[{{ $iface }}, {{ $R }}]()(sctx)
-		suite.AssertDeterministic[{{ $iface }}, {{ $R }}](3)(sctx)
-		suite.AssertPureRejectInvalid[{{ $iface }}, {{ $R }}]()(sctx)
-		suite.AssertPureConcurrentSafe[{{ $iface }}, {{ $R }}](4, 10)(sctx)
+		suite.AssertPureBaseline[{{ $iface }}, {{ $R }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
 {{- end -}}

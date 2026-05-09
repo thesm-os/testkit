@@ -87,3 +87,21 @@ func TestLookup(t *testing.T) {
 			"a", 4, 50)(lookupCtx(t))
 	})
 }
+
+func TestAssertLookupBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.LookupContext[*lookupMap, string, int64, meta]{
+		T: t,
+		LookupBindings: bindings.LookupBindings[*lookupMap, string, int64, meta]{
+			Factory: newLookupMap,
+			Call: func(c context.Context, m *lookupMap, k string) (int64, meta, bool) {
+				if c.Err() != nil {
+					return 0, meta{}, false
+				}
+				return m.Inspect(c, k)
+			},
+		},
+	}
+	suite.AssertLookupBaseline[*lookupMap, string, int64, meta](
+		"a", 10, "missing")(ctx)
+}

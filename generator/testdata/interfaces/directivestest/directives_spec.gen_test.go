@@ -112,20 +112,34 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 	errTest := testkit.TestError("Directives-contract")
 	_ = errTest
 
+	// Legacy — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - deprecated smoke
+	//       //testkit:deprecated — the method still answers; the marker is documentation, not a runtime gate
 	t.Run("Legacy", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Legacy(t.Context(), interfaces.Record{ID: "test-id"})
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value interfaces.Record) error {
 				return impl.Legacy(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, interfaces.Record](
+			interfaces.Record{ID: "test-id"},
+		)(sctx)
 		suite.AssertDeprecatedSmoke[interfaces.Directives](
 			"Legacy", "Submit",
 			func(ctx context.Context, impl interfaces.Directives) {
@@ -134,39 +148,67 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// Open — Lifecycle-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) error — lifecycle method (typically Open/Close). Idempotent across repeated invocations.
+	//
+	// Default contracts (always run for Lifecycle):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - lifecycle succeeds
+	//       first call returns nil
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - lifecycle idempotent
+	//       second call returns nil too
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid (when InvalidFactory option supplied)
+	//       under suite.WithInvalidFactory the lifecycle method must error on a misconfigured impl
 	t.Run("Open", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Open(t.Context())
-		})
 		sctx := suite.LifecycleContextFor[interfaces.Directives](t, factory,
 			func(ctx context.Context, impl interfaces.Directives) error {
 				return impl.Open(ctx)
 			})
-		suite.AssertLifecycleSucceeds[interfaces.Directives]()(sctx)
-		suite.AssertLifecycleRespectsContext[interfaces.Directives]()(sctx)
-		suite.AssertLifecycleIdempotent[interfaces.Directives]()(sctx)
+		var extras []suite.LifecycleAssertion[interfaces.Directives]
 		if invalidFactory, ok := resolved.InvalidFactory.(func() interfaces.Directives); ok {
-			suite.AssertLifecycleRejectInvalidWith[interfaces.Directives](invalidFactory)(sctx)
+			extras = append(extras, suite.AssertLifecycleRejectInvalidWith[interfaces.Directives](invalidFactory))
 		}
-		suite.AssertLifecycleConcurrentSafe[interfaces.Directives](4, 10)(sctx)
+		suite.AssertLifecycleBaseline[interfaces.Directives](extras...)(sctx)
 	})
 
+	// Read — Reader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects.
+	//
+	// Default contracts (always run for Reader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - returns for key <sample>
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads of the same key yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - order after
+	//       //testkit:order-after Open — invoking Open before this method changes its observed result
 	t.Run("Read", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Read(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderContextFor[interfaces.Directives, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, key string) (interfaces.Record, error) {
 				return impl.Read(ctx, key)
 			})
-		suite.AssertReturnsForKey[interfaces.Directives, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertReaderRespectsContext[interfaces.Directives, string, interfaces.Record]("test-key")(sctx)
-		suite.AssertConsistentReads[interfaces.Directives, string, interfaces.Record]("test-key", 3)(sctx)
-		suite.AssertReaderConcurrentSafe[interfaces.Directives, string, interfaces.Record]("test-key", 4, 10)(sctx)
+		suite.AssertReaderBaseline[interfaces.Directives, string, interfaces.Record](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+		)(sctx)
 
 		suite.AssertOrderAfter[interfaces.Directives](
 			"Open",
@@ -180,20 +222,34 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// Retry — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - retry succeeds within 3 attempts
+	//       //testkit:retry-succeeds-on-attempt — the method must succeed within N invocations under the runtime's retry harness
 	t.Run("Retry", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Retry(t.Context(), "test-key")
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, string](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value string) error {
 				return impl.Retry(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, string]("test-key", 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, string](
+			"test-key",
+		)(sctx)
 
 		suite.AssertRetrySucceedsOnAttempt[interfaces.Directives](
 			3,
@@ -204,20 +260,34 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// Shard — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - partition isolation
+	//       //testkit:partition — concurrent invocations on disjoint partition keys must not contend
 	t.Run("Shard", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Shard(t.Context(), interfaces.Record{ID: "test-id"})
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value interfaces.Record) error {
 				return impl.Shard(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, interfaces.Record](
+			interfaces.Record{ID: "test-id"},
+		)(sctx)
 		suite.AssertPartitionIsolation[interfaces.Directives](
 			"ID",
 			func(ctx context.Context, impl interfaces.Directives) error {
@@ -227,20 +297,34 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// ShardByKey — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - partition isolation
+	//       //testkit:partition — concurrent invocations on disjoint partition keys must not contend
 	t.Run("ShardByKey", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.ShardByKey(t.Context(), "test-key")
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, string](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value string) error {
 				return impl.ShardByKey(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, string]("test-key", 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, string](
+			"test-key",
+		)(sctx)
 		suite.AssertPartitionIsolation[interfaces.Directives](
 			"key",
 			func(ctx context.Context, impl interfaces.Directives) error {
@@ -250,21 +334,39 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// Submit — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid input
+	//       //testkit:errors declared interfaces.ErrNotFound — writing the zero value returns it
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - wrapped via
+	//       //testkit:wrapped-via interfaces.ErrInternal — internal errors must wrap interfaces.ErrInternal so callers see the canonical type
 	t.Run("Submit", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Submit(t.Context(), interfaces.Record{ID: "test-id"})
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value interfaces.Record) error {
 				return impl.Submit(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriteRejectInvalid[interfaces.Directives, interfaces.Record](interfaces.Record{}, interfaces.ErrNotFound)(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, interfaces.Record](interfaces.Record{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, interfaces.Record](
+			interfaces.Record{ID: "test-id"},
+			suite.AssertWriteRejectInvalid[interfaces.Directives, interfaces.Record](interfaces.Record{}, interfaces.ErrNotFound),
+		)(sctx)
 
 		suite.AssertWrappedVia[interfaces.Directives](
 			interfaces.ErrInternal, interfaces.ErrNotFound,
@@ -275,21 +377,39 @@ func AssertDirectivesContract(t *testing.T, factory DirectivesFactory, opts ...s
 		)(t, factory)
 	})
 
+	// Wrap — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid input
+	//       //testkit:errors declared interfaces.ErrForbidden — writing the zero value returns it
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - wrapped via
+	//       //testkit:wrapped-via interfaces.ErrInternal — internal errors must wrap interfaces.ErrInternal so callers see the canonical type
 	t.Run("Wrap", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Wrap(t.Context(), "test-key")
-		})
 		sctx := suite.WriterContextFor[interfaces.Directives, string](t, factory,
 			func(ctx context.Context, impl interfaces.Directives, value string) error {
 				return impl.Wrap(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterRespectsContext[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriterIdempotent[interfaces.Directives, string]("test-key")(sctx)
-		suite.AssertWriteRejectInvalid[interfaces.Directives, string]("", interfaces.ErrForbidden)(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.Directives, string]("test-key", 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.Directives, string](
+			"test-key",
+			suite.AssertWriteRejectInvalid[interfaces.Directives, string]("", interfaces.ErrForbidden),
+		)(sctx)
 
 		suite.AssertWrappedVia[interfaces.Directives](
 			interfaces.ErrInternal, interfaces.ErrForbidden,

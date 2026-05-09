@@ -120,3 +120,39 @@ func AssertPureConcurrentSafe[T, R any](workers, iters int) PureAssertion[T, R] 
 		})
 	}
 }
+
+// AssertPureSmoke calls the Pure method once on a fresh impl. The
+// subtest fails fast on panic, so a broken Factory or a method that
+// panics on bare invocation surfaces as one localized failure before
+// any contract assertion runs.
+func AssertPureSmoke[T, R any]() PureAssertion[T, R] {
+	return func(ctx PureContext[T, R]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// AssertPureBaseline runs the Pure-shape baseline: smoke, Returns(want),
+// RespectsContext (structural), Deterministic over 3 calls, RejectInvalid
+// (structural — no inputs), and ConcurrentSafe (4×10). Optional extras
+// run after the deterministic check and before concurrency, so failures
+// localize before fanout.
+func AssertPureBaseline[T any, R comparable](
+	want R,
+	extra ...PureAssertion[T, R],
+) PureAssertion[T, R] {
+	return func(ctx PureContext[T, R]) {
+		AssertPureSmoke[T, R]()(ctx)
+		AssertPureReturns[T, R](want)(ctx)
+		AssertPureRespectsContext[T, R]()(ctx)
+		AssertDeterministic[T, R](3)(ctx)
+		AssertPureRejectInvalid[T, R]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertPureConcurrentSafe[T, R](4, 10)(ctx)
+	}
+}

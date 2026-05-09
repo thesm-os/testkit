@@ -122,3 +122,38 @@ func AssertBatchReaderConcurrentSafe[T any, K comparable, V any](
 		})
 	}
 }
+
+// AssertBatchReaderSmoke calls the reader once with the sample keys on
+// a fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertBatchReaderSmoke[T any, K comparable, V any](sampleKeys []K) BatchReaderAssertion[T, K, V] {
+	return func(ctx BatchReaderContext[T, K, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _ = ctx.Call(t.Context(), impl, sampleKeys)
+		})
+	}
+}
+
+// AssertBatchReaderBaseline runs the BatchReader-shape baseline: smoke,
+// ReturnsAll(keys, vals), RespectsContext, Consistent over 3 calls, and
+// ConcurrentSafe (4×10). Optional extras (e.g. ReturnsSentinel) run
+// between consistency and concurrency.
+func AssertBatchReaderBaseline[T any, K comparable, V any](
+	sampleKeys []K,
+	sampleVals []V,
+	extra ...BatchReaderAssertion[T, K, V],
+) BatchReaderAssertion[T, K, V] {
+	return func(ctx BatchReaderContext[T, K, V]) {
+		AssertBatchReaderSmoke[T, K, V](sampleKeys)(ctx)
+		AssertBatchReaderReturnsAll[T, K, V](sampleKeys, sampleVals)(ctx)
+		AssertBatchReaderRespectsContext[T, K, V](sampleKeys)(ctx)
+		AssertBatchReaderConsistent[T, K, V](sampleKeys, 3)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertBatchReaderConcurrentSafe[T, K, V](sampleKeys, 4, 10)(ctx)
+	}
+}

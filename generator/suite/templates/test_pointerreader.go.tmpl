@@ -13,9 +13,9 @@
 				return impl.{{ $m.Name }}(key)
 {{- end }}
 			})
-		suite.AssertPointerReaderReturnsForKey[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertPointerReaderRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertPointerReaderConsistent[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
-		suite.AssertPointerReaderNilOnUnknown[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }})(sctx)
-		suite.AssertPointerReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		suite.AssertPointerReaderBaseline[{{ $iface }}, {{ $K }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.SampleResultAt 0 $tracker }},
+			{{ $m.ZeroParamAt 0 $tracker }},
+		)(sctx)
 {{- end -}}

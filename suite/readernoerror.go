@@ -117,3 +117,41 @@ func AssertReaderNoErrorConcurrentSafe[T any, K comparable, V any](
 		})
 	}
 }
+
+// AssertReaderNoErrorSmoke calls the reader once with the sample key
+// on a fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertReaderNoErrorSmoke[T any, K comparable, V any](sampleKey K) ReaderNoErrorAssertion[T, K, V] {
+	return func(ctx ReaderNoErrorContext[T, K, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertReaderNoErrorBaseline runs the ReaderNoError-shape baseline:
+// smoke, ReturnsForKey(key, want), RespectsContext, Consistent over 3
+// calls, ZeroOnUnknown(zeroKey, zeroVal), and ConcurrentSafe (4×10).
+// Optional extras run between the zero-on-unknown check and concurrency.
+func AssertReaderNoErrorBaseline[T any, K, V comparable](
+	sampleKey K,
+	sampleVal V,
+	zeroKey K,
+	zeroVal V,
+	extra ...ReaderNoErrorAssertion[T, K, V],
+) ReaderNoErrorAssertion[T, K, V] {
+	return func(ctx ReaderNoErrorContext[T, K, V]) {
+		AssertReaderNoErrorSmoke[T, K, V](sampleKey)(ctx)
+		AssertReaderNoErrorReturnsForKey[T, K, V](sampleKey, sampleVal)(ctx)
+		AssertReaderNoErrorRespectsContext[T, K, V](sampleKey)(ctx)
+		AssertReaderNoErrorConsistent[T, K, V](sampleKey, 3)(ctx)
+		AssertReaderNoErrorZeroOnUnknown[T, K, V](zeroKey, zeroVal)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertReaderNoErrorConcurrentSafe[T, K, V](sampleKey, 4, 10)(ctx)
+	}
+}

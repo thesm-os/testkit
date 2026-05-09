@@ -127,3 +127,37 @@ func AssertMutatorConcurrentSafe[T, V any](sample V, workers, iters int) Mutator
 		})
 	}
 }
+
+// AssertMutatorSmoke calls the mutator once with the sample value on a
+// fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertMutatorSmoke[T, V any](sample V) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			ctx.Call(t.Context(), impl, sample)
+		})
+	}
+}
+
+// AssertMutatorBaseline runs the Mutator-shape baseline: smoke,
+// Succeeds(sample), RespectsContext, Idempotent, and ConcurrentSafe
+// (4×10). Optional extras (e.g. RejectInvalidWith under an
+// InvalidFactory) run between idempotency and concurrency.
+func AssertMutatorBaseline[T, V any](
+	sample V,
+	extra ...MutatorAssertion[T, V],
+) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		AssertMutatorSmoke[T, V](sample)(ctx)
+		AssertMutatorSucceeds[T, V](sample)(ctx)
+		AssertMutatorRespectsContext[T, V](sample)(ctx)
+		AssertMutatorIdempotent[T, V](sample)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertMutatorConcurrentSafe[T, V](sample, 4, 10)(ctx)
+	}
+}

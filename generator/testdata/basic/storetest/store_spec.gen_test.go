@@ -104,37 +104,68 @@ func AssertStoreContract(t *testing.T, factory StoreFactory, opts ...suite.Optio
 	errTest := testkit.TestError("Store-contract")
 	_ = errTest
 
+	// Get — Reader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects.
+	//
+	// Default contracts (always run for Reader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - returns for key <sample>
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads of the same key yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - returns sentinel for unknown key
+	//       //testkit:errors declared basic.ErrNotFound — surfaces it on lookup of the zero key
 	t.Run("Get", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Get(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderContextFor[basic.Store, string, basic.Item](t, factory,
 			func(ctx context.Context, impl basic.Store, key string) (basic.Item, error) {
 				return impl.Get(ctx, key)
 			})
-		suite.AssertReturnsForKey[basic.Store, string, basic.Item]("test-key", basic.Item{ID: "test-id"})(sctx)
-		suite.AssertReaderRespectsContext[basic.Store, string, basic.Item]("test-key")(sctx)
-		suite.AssertConsistentReads[basic.Store, string, basic.Item]("test-key", 3)(sctx)
-		suite.AssertReturnsSentinel[basic.Store, string, basic.Item]("", basic.ErrNotFound)(sctx)
-		suite.AssertReaderConcurrentSafe[basic.Store, string, basic.Item]("test-key", 4, 10)(sctx)
+		suite.AssertReaderBaseline[basic.Store, string, basic.Item](
+			"test-key",
+			basic.Item{ID: "test-id"},
+			suite.AssertReturnsSentinel[basic.Store, string, basic.Item]("", basic.ErrNotFound),
+		)(sctx)
 	})
 
+	// Put — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Directive contracts (extra subtests below the baseline):
+	//   - idempotent (second call)
+	//       //testkit:idempotent — a second identical call does not error or alter observable state beyond the first
+	//   - atomic (no observable trace on failure)
+	//       //testkit:atomic — when the method errors, observable state is unchanged
 	t.Run("Put", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Put(t.Context(), basic.Item{ID: "test-id"})
-		})
 		sctx := suite.WriterContextFor[basic.Store, basic.Item](t, factory,
 			func(ctx context.Context, impl basic.Store, value basic.Item) error {
 				return impl.Put(ctx, value)
 			})
-		suite.AssertWriteSucceeds[basic.Store, basic.Item](basic.Item{ID: "test-id"})(sctx)
-		suite.AssertWriterRespectsContext[basic.Store, basic.Item](basic.Item{ID: "test-id"})(sctx)
-		suite.AssertWriterIdempotent[basic.Store, basic.Item](basic.Item{ID: "test-id"})(sctx)
-		suite.AssertWriterConcurrentSafe[basic.Store, basic.Item](basic.Item{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertWriterBaseline[basic.Store, basic.Item](
+			basic.Item{ID: "test-id"},
+		)(sctx)
 		suite.AssertIdempotentSecondCall[basic.Store](
 			func(ctx context.Context, impl basic.Store) {
 				_ = impl.Put(t.Context(), basic.Item{ID: "test-id"})

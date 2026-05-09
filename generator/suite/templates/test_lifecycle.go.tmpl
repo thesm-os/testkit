@@ -7,15 +7,13 @@
 			func(ctx context.Context, impl {{ $iface }}) error {
 				return impl.{{ $m.Name }}(ctx)
 			})
-		suite.AssertLifecycleSucceeds[{{ $iface }}]()(sctx)
-		suite.AssertLifecycleRespectsContext[{{ $iface }}]()(sctx)
-		suite.AssertLifecycleIdempotent[{{ $iface }}]()(sctx)
+		var extras []suite.LifecycleAssertion[{{ $iface }}]
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
 {{- if $m.HasFirstSentinel }}
-			suite.AssertLifecycleRejectInvalid[{{ $iface }}](invalidFactory, {{ $m.FirstSentinel }})(sctx)
+			extras = append(extras, suite.AssertLifecycleRejectInvalid[{{ $iface }}](invalidFactory, {{ $m.FirstSentinel }}))
 {{- else }}
-			suite.AssertLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory)(sctx)
+			extras = append(extras, suite.AssertLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory))
 {{- end }}
 		}
-		suite.AssertLifecycleConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+		suite.AssertLifecycleBaseline[{{ $iface }}](extras...)(sctx)
 {{- end -}}

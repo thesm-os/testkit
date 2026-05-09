@@ -260,6 +260,19 @@ func newDirectivesBenchConfig(opts ...DirectivesBenchOption) directivesBenchConf
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// DirectivesBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *directivesBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchDirectivesLegacy measures Directives.Legacy(ctx context.Context, item interfaces.Record) error.
 //
 //	Shape:      Writer
@@ -274,6 +287,7 @@ func newDirectivesBenchConfig(opts ...DirectivesBenchOption) directivesBenchConf
 func benchDirectivesLegacy(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Legacy", func(b *testing.B) {
+		b.Logf("Legacy: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -343,6 +357,7 @@ func benchDirectivesOpen(b *testing.B, factory func() interfaces.Directives, cfg
 func benchDirectivesRead(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Read", func(b *testing.B) {
+		b.Logf("Read: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -382,6 +397,7 @@ func benchDirectivesRead(b *testing.B, factory func() interfaces.Directives, cfg
 func benchDirectivesRetry(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Retry", func(b *testing.B) {
+		b.Logf("Retry: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -420,6 +436,7 @@ func benchDirectivesRetry(b *testing.B, factory func() interfaces.Directives, cf
 func benchDirectivesShard(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Shard", func(b *testing.B) {
+		b.Logf("Shard: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -458,6 +475,7 @@ func benchDirectivesShard(b *testing.B, factory func() interfaces.Directives, cf
 func benchDirectivesShardByKey(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("ShardByKey", func(b *testing.B) {
+		b.Logf("ShardByKey: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -497,6 +515,7 @@ func benchDirectivesShardByKey(b *testing.B, factory func() interfaces.Directive
 func benchDirectivesSubmit(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Submit", func(b *testing.B) {
+		b.Logf("Submit: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -536,6 +555,7 @@ func benchDirectivesSubmit(b *testing.B, factory func() interfaces.Directives, c
 func benchDirectivesWrap(b *testing.B, factory func() interfaces.Directives, cfg *directivesBenchConfig) {
 	b.Helper()
 	b.Run("Wrap", func(b *testing.B) {
+		b.Logf("Wrap: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.Directives {
 			impl := factory()
 			if cfg.prePopulate != nil {

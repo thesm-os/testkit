@@ -236,3 +236,38 @@ func AssertMultiArgWriterConcurrentSafeVariadic[T any](
 		})
 	}
 }
+
+// AssertMultiArgWriterSmokeVariadic calls the writer once with the
+// sample args on a fresh impl. The subtest fails fast on panic,
+// surfacing a broken Factory or a method that panics on bare
+// invocation as one localized failure before any contract assertion
+// runs.
+func AssertMultiArgWriterSmokeVariadic[T any](args ...any) MultiArgWriterVariadicAssertion[T] {
+	return func(ctx MultiArgWriterVariadicContext[T]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, args...)
+		})
+	}
+}
+
+// AssertMultiArgWriterBaselineVariadic runs the MultiArgWriter-shape
+// variadic baseline: smoke, WriteSucceeds(args), RespectsContext(args),
+// Idempotent(args), and ConcurrentSafe(4×10, args). Optional extras
+// (e.g. WriteRejectInvalid) run between idempotency and concurrency.
+func AssertMultiArgWriterBaselineVariadic[T any](
+	args []any,
+	extra ...MultiArgWriterVariadicAssertion[T],
+) MultiArgWriterVariadicAssertion[T] {
+	return func(ctx MultiArgWriterVariadicContext[T]) {
+		AssertMultiArgWriterSmokeVariadic[T](args...)(ctx)
+		AssertMultiArgWriteSucceedsVariadic[T](args...)(ctx)
+		AssertMultiArgWriterRespectsContextVariadic[T](args...)(ctx)
+		AssertMultiArgWriterIdempotentVariadic[T](args...)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertMultiArgWriterConcurrentSafeVariadic[T](4, 10, args...)(ctx)
+	}
+}

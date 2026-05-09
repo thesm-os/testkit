@@ -4,6 +4,7 @@
 package suite
 
 import (
+	"fmt"
 	"strings"
 
 	"go.thesmos.sh/testkit/generator"
@@ -563,4 +564,621 @@ func (m MethodView) CRDTMergeOther() string {
 		return p.Other
 	}
 	return ""
+}
+
+// ContractDoc is a one-line description of a single conformance
+// subtest emitted by the suite generator. The Name mirrors the t.Run
+// name (or its template, when the runtime parameterizes it) and the
+// Description explains what behavior the subtest verifies. Used to
+// populate the per-method docblock so an engineer reading the
+// generated file sees the full contract surface inline rather than
+// having to grep the runtime helpers in suite/<shape>.go.
+type ContractDoc struct {
+	Name        string
+	Description string
+}
+
+// Subtest names common across many shapes. Kept as constants so the
+// docblock stays in lockstep with the runtime t.Run names; renaming a
+// universal primitive flips both at once.
+const (
+	subtestSmoke         = "smoke"
+	subtestConcurrent    = "concurrent safe"
+	subtestRespectsCtx   = "respects context"
+	subtestRespectsCtxSt = "respects context (structural)"
+	subtestConsistent    = "consistent reads"
+	subtestReturnsForKey = "returns for key"
+)
+
+// Description fragments shared across shapes for the same primitive
+// behavior. Same rationale as the subtest-name constants above.
+const (
+	descSmokeBare    = "fail-fast bare invocation"
+	descConcurrent10 = "4 workers × 10 iterations under -race"
+	descCtxCanceled  = "ctx.Done() surfaces context.Canceled"
+	descConsistent3  = "three sequential calls yield equal results"
+	descRejectInvOpt = "rejects invalid (when InvalidFactory option supplied)"
+)
+
+// Shape-name constants for the switch statements below. Keeping them
+// here lets static analysis cross-check the dispatcher's coverage of
+// the suite's known shapes.
+const (
+	shapePure            = "Pure"
+	shapePredicate       = "Predicate"
+	shapeAggregator      = "Aggregator"
+	shapeMultiAggregator = "MultiAggregator"
+	shapeReader          = "Reader"
+	shapeReaderNoError   = "ReaderNoError"
+	shapeReaderWithBool  = "ReaderWithBool"
+	shapePointerReader   = "PointerReader"
+	shapeLookup          = "Lookup"
+	shapeMultiReader     = "MultiReader"
+	shapeBatchReader     = "BatchReader"
+	shapeWriter          = "Writer"
+	shapeCompositeWriter = "CompositeWriter"
+	shapeMultiArgWriter  = "MultiArgWriter"
+	shapeDeleter         = "Deleter"
+	shapeMutator         = "Mutator"
+	shapeLifecycle       = "Lifecycle"
+	shapeVoidLifecycle   = "VoidLifecycle"
+	shapePoisonAccessor  = "PoisonAccessor"
+	shapeStreamReader    = "StreamReader"
+	shapeStreamConsumer  = "StreamConsumer"
+)
+
+// ShapeDescription returns a one-paragraph description of the
+// method's detected shape — its signature category, what guarantees
+// the shape claims, and the kind of behavior the runtime baseline
+// verifies. Grounding for an engineer who hasn't memorized the shape
+// vocabulary; ignored when ShapeName is unrecognized.
+func (m MethodView) ShapeDescription() string {
+	switch m.ShapeName() {
+	case shapePure:
+		return "func() R — pure function. No context, no error. Deterministic across calls; no observable side effects."
+	case shapePredicate:
+		return "func() bool — predicate. No inputs; returns true/false. Race-free under concurrent access."
+	case shapeAggregator:
+		return "func(ctx) (R, error) — scalar aggregator. Reads internal state through a context-aware ctor; returns one value plus an error. Consistent across calls when state hasn't changed."
+	case shapeMultiAggregator:
+		return "func(ctx) (V1, V2, error) — multi-value aggregator. Same shape as Aggregator but returns two values."
+	case shapeReader:
+		return "func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects."
+	case shapeReaderNoError:
+		return "func(ctx, K) V — keyed reader without error. Returns the zero V for unknown keys; no sentinel discipline."
+	case shapeReaderWithBool:
+		return "func(ctx, K) (V, bool) — keyed reader with presence bool. ok=false replaces error/sentinel for missing keys."
+	case shapePointerReader:
+		return "func(ctx, K) *V — keyed reader returning a pointer. nil signals missing; non-nil is the value."
+	case shapeLookup:
+		return "func(ctx, K) (V, R, bool) — keyed lookup with a secondary result and presence bool."
+	case shapeMultiReader:
+		return "func(ctx, K) (V1, V2, error) — keyed reader returning two values."
+	case shapeBatchReader:
+		return "func(ctx, ...K) ([]V, error) — batch reader. Variadic key input, slice value output, parallel arity."
+	case shapeWriter:
+		return "func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation."
+	case shapeCompositeWriter:
+		return "func(ctx, K1, V) error — composite-keyed writer. Same idempotency contract as Writer with a paired key+value input."
+	case shapeMultiArgWriter:
+		return "func(ctx, ...) error — multi-arg writer. Arity-agnostic via variadic dispatch; runtime restores typed args at the boundary."
+	case shapeDeleter:
+		return "func(ctx, K) error — keyed deleter. Idempotent on repeated deletes of the same key."
+	case shapeMutator:
+		return "func(ctx, V) — void mutator. Mutates internal state on each call; no return."
+	case shapeLifecycle:
+		return "func(ctx) error — lifecycle method (typically Open/Close). Idempotent across repeated invocations."
+	case shapeVoidLifecycle:
+		return "func(ctx) — void lifecycle method. Same shape as Lifecycle but no error return."
+	case shapePoisonAccessor:
+		return "func() error — poison-state accessor. Returns nil on a fresh impl, returns the configured sentinel after a poisoned-factory builds it."
+	case shapeStreamReader:
+		return "func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant."
+	case shapeStreamConsumer:
+		return "func(ctx, S) (V, error) — stream consumer. Reads from S (typically io.Reader) and returns a parsed value."
+	}
+	return ""
+}
+
+// BaselineSubtests returns the subtests the per-shape AssertXBaseline
+// runs unconditionally against this method. Each entry mirrors the
+// runtime t.Run name (or its parameterized template) so a failure
+// path from `go test -v` maps directly back to the corresponding
+// runtime helper in suite/<shape>.go.
+func (m MethodView) BaselineSubtests() []ContractDoc {
+	switch m.ShapeName() {
+	case shapePure:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast bare invocation; catches panics from a broken Factory or panic-on-call"},
+			{"returns expected", "value matches the configured sample"},
+			{
+				subtestRespectsCtxSt,
+				"Pure has no ctx parameter — structural smoke proves no goroutine-local ctx subverts the no-ctx contract",
+			},
+			{"deterministic", descConsistent3},
+			{
+				"rejects invalid (structural — no inputs)",
+				"Pure has no input — total over its empty domain; structural smoke",
+			},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapePredicate:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"predicate returns expected", "result matches the configured value"},
+			{subtestRespectsCtxSt, "Predicate has no ctx — structural smoke"},
+			{"predicate consistent", descConsistent3},
+			{"rejects invalid (structural — no inputs)", "Predicate has no input — structural smoke"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeAggregator:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"aggregator returns expected", "value matches the configured sample with no error"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"aggregator consistent", descConsistent3},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeMultiAggregator:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"multi-aggregator returns expected", "both values match their configured samples with no error"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"multi-aggregator consistent", descConsistent3},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeReader:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast bare invocation with the sample key"},
+			{"returns for key <sample>", "happy-path read against the configured sample"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{subtestConsistent, "three sequential reads of the same key yield equal results"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeReaderNoError:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{subtestReturnsForKey, "happy-path read against the configured sample"},
+			{subtestRespectsCtx, "ctx.Done() surfaces a degraded/zero return without panic"},
+			{subtestConsistent, "three sequential reads yield equal results"},
+			{"zero on unknown key", "missing key returns the zero V (no sentinel discipline)"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeReaderWithBool:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"returns for key (ok=true)", "known key returns ok=true with the expected value"},
+			{subtestRespectsCtx, "ctx.Done() returns ok=false rather than blocking"},
+			{subtestConsistent, "three sequential reads yield equal (value, ok) pairs"},
+			{"missing key (ok=false)", "unknown key returns ok=false"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapePointerReader:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{subtestReturnsForKey, "known key returns non-nil with the expected value"},
+			{subtestRespectsCtx, "ctx.Done() returns nil rather than blocking"},
+			{subtestConsistent, "three sequential reads return equal *V"},
+			{"nil on unknown key", "unknown key returns nil"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeLookup:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{subtestReturnsForKey, "known key returns ok=true with the expected (value, R)"},
+			{subtestRespectsCtx, "ctx.Done() surfaces an honest miss"},
+			{"consistent lookups", "three sequential lookups yield equal results"},
+			{"missing key", "unknown key returns ok=false"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeMultiReader:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{subtestReturnsForKey, "known key returns both values with no error"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{subtestConsistent, "three sequential reads yield equal value pairs"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeBatchReader:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast bare invocation with the sample keys"},
+			{"returns all (batch)", "result slice matches the configured sample"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"batch consistent", "three sequential batch reads yield equal slices"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeWriter:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"write succeeds", "happy-path write against the configured sample"},
+			{subtestRespectsCtx, "ctx.Done() surfaces context.Canceled before mutation"},
+			{"idempotent", "writing the same value twice returns nil twice"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeCompositeWriter:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"composite write succeeds", "happy-path write against the (key, value) pair"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"composite idempotent", "writing the same pair twice returns nil twice"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeMultiArgWriter:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast bare invocation with the sample args"},
+			{"multi-arg write succeeds", "happy-path write against the configured args"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"multi-arg idempotent", "writing the same args twice returns nil twice"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeDeleter:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast bare invocation with the sample key"},
+			{"delete succeeds", "happy-path delete returns nil"},
+			{subtestRespectsCtx, "ctx.Done() surfaces context.Canceled before mutation"},
+			{"delete idempotent", "deleting the same key twice returns nil twice"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeMutator:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"mutator succeeds", "happy-path mutation completes without panic"},
+			{subtestRespectsCtx, "ctx.Done() short-circuits the mutation"},
+			{"mutator idempotent", "applying the same mutation twice does not panic"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeLifecycle:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"lifecycle succeeds", "first call returns nil"},
+			{subtestRespectsCtx, descCtxCanceled},
+			{"lifecycle idempotent", "second call returns nil too"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeVoidLifecycle:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"void-lifecycle succeeds", "first call completes without panic"},
+			{subtestRespectsCtx, "ctx.Done() short-circuits the call"},
+			{"void-lifecycle idempotent", "second call also completes"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapePoisonAccessor:
+		return []ContractDoc{
+			{subtestSmoke, descSmokeBare},
+			{"nil on fresh", "fresh impl returns nil — poison only surfaces post-poisoning"},
+			{subtestRespectsCtxSt, "PoisonAccessor has no ctx — structural smoke"},
+			{"poison consistent", "repeated calls return the same nil result on a fresh impl"},
+			{subtestConcurrent, descConcurrent10},
+		}
+	case shapeStreamReader:
+		return []ContractDoc{
+			{subtestSmoke, "fail-fast iter drain on a fresh impl"},
+			{"completes", "iter terminates without producing an unbounded stream"},
+			{subtestRespectsCtx, "ctx.Done() halts iteration; no further yields"},
+			{"reentrant", "two iterators against the same impl yield equal sequences"},
+			{"respects break", "early break from the for-range halts production cleanly"},
+			{"concurrent safe", "4 workers iterate independently under -race"},
+		}
+	case shapeStreamConsumer:
+		return []ContractDoc{
+			{"smoke (default sample)", "fail-fast invocation with bytes.NewReader([]byte(\"test-data\"))"},
+			{"succeeds (default sample)", "default sample produces the expected V"},
+			{"respects context (default sample)", "ctx.Done() surfaces context.Canceled"},
+			{"concurrent safe (default sample)", "4 workers × 10 iterations, fresh stream per call, under -race"},
+		}
+	}
+	return nil
+}
+
+// OptionalBaselineExtras returns baseline extras that fire only when
+// a signature- or option-driven gate is satisfied — e.g.
+// AssertReturnsSentinel only emits when the method declares
+// //testkit:errors with a nameable sentinel and the sample key
+// differs from the zero key. Returns nil when no extras apply.
+func (m MethodView) OptionalBaselineExtras() []ContractDoc {
+	var out []ContractDoc
+	switch m.ShapeName() {
+	case shapeReader:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"returns sentinel for unknown key",
+				fmt.Sprintf("//testkit:errors declared %s — surfaces it on lookup of the zero key", m.FirstSentinel()),
+			})
+		}
+	case shapeBatchReader, shapeMultiReader:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"returns sentinel for unknown key",
+				fmt.Sprintf("//testkit:errors declared %s — surfaces it on lookup of the zero key", m.FirstSentinel()),
+			})
+		}
+	case shapeWriter, shapeCompositeWriter, shapeMultiArgWriter:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"rejects invalid input",
+				fmt.Sprintf("//testkit:errors declared %s — writing the zero value returns it", m.FirstSentinel()),
+			})
+		}
+	case shapeDeleter:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"returns not-found on unknown key",
+				fmt.Sprintf("//testkit:errors declared %s — deleting the zero key returns it", m.FirstSentinel()),
+			})
+		}
+	case shapeLifecycle:
+		out = append(out, ContractDoc{
+			descRejectInvOpt,
+			"under suite.WithInvalidFactory the lifecycle method must error on a misconfigured impl",
+		})
+	case shapeVoidLifecycle:
+		out = append(out, ContractDoc{
+			descRejectInvOpt,
+			"under suite.WithInvalidFactory the void method must complete without panic on a misconfigured impl",
+		})
+	case shapeMutator:
+		out = append(out, ContractDoc{
+			descRejectInvOpt,
+			"under suite.WithInvalidFactory the mutator must complete without panic on a misconfigured impl",
+		})
+	case shapeMultiAggregator:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"returns sentinel (when InvalidFactory option supplied)",
+				fmt.Sprintf(
+					"under suite.WithInvalidFactory + //testkit:errors %s, the misconfigured impl returns the sentinel",
+					m.FirstSentinel(),
+				),
+			})
+		}
+	case shapePoisonAccessor:
+		if m.HasFirstSentinel() {
+			out = append(out, ContractDoc{
+				"rejects invalid (when PoisonedFactory option supplied)",
+				fmt.Sprintf(
+					"under suite.WithPoisonedFactory + //testkit:errors %s, the poisoned impl surfaces the sentinel",
+					m.FirstSentinel(),
+				),
+			})
+		}
+	case shapeAggregator:
+		if m.HasBounded() {
+			out = append(out, ContractDoc{
+				"aggregator bounded (when AggregatorBounds option supplied)",
+				fmt.Sprintf(
+					"//testkit:bounded declares range [%s..%s]; result must lie within",
+					m.BoundedMin(),
+					m.BoundedMax(),
+				),
+			})
+		}
+	}
+	return out
+}
+
+// DirectiveContracts returns one entry per directive attached to
+// this method that drives an extra subtest below the baseline. The
+// dispatcher emits each directive's partial inside the same per-method
+// t.Run, so failures appear under the same path as the baseline.
+func (m MethodView) DirectiveContracts() []ContractDoc {
+	var out []ContractDoc
+	if m.IsDeprecated() {
+		out = append(out, ContractDoc{
+			"deprecated smoke",
+			"//testkit:deprecated — the method still answers; the marker is documentation, not a runtime gate",
+		})
+	}
+	if m.HasRetrySucceeds() {
+		out = append(out, ContractDoc{
+			fmt.Sprintf("retry succeeds within %d attempts", m.RetryN()),
+			"//testkit:retry-succeeds-on-attempt — the method must succeed within N invocations under the runtime's retry harness",
+		})
+	}
+	if m.HasOrderAfter() {
+		out = append(out, ContractDoc{
+			"order after",
+			fmt.Sprintf(
+				"//testkit:order-after %s — invoking %s before this method changes its observed result",
+				m.OrderAfterTarget(),
+				m.OrderAfterTarget(),
+			),
+		})
+	}
+	if m.HasPartition() {
+		out = append(out, ContractDoc{
+			"partition isolation",
+			"//testkit:partition — concurrent invocations on disjoint partition keys must not contend",
+		})
+	}
+	if m.HasWrappedVia() {
+		out = append(out, ContractDoc{
+			"wrapped via",
+			fmt.Sprintf(
+				"//testkit:wrapped-via %s — internal errors must wrap %s so callers see the canonical type",
+				m.WrappedViaTarget(),
+				m.WrappedViaTarget(),
+			),
+		})
+	}
+	if m.IsIdempotent() {
+		out = append(out, ContractDoc{
+			"idempotent (second call)",
+			"//testkit:idempotent — a second identical call does not error or alter observable state beyond the first",
+		})
+	}
+	if m.IsPure() {
+		out = append(out, ContractDoc{
+			"pure (impl-independent)",
+			"//testkit:pure — output depends only on inputs; multiple impls must agree given the same input",
+		})
+	}
+	if m.IsCacheable() {
+		out = append(out, ContractDoc{
+			"cacheable (repeated reads)",
+			"//testkit:cacheable — three sequential calls return equal values; the impl is free to cache without divergence",
+		})
+	}
+	if m.IsMonotonic() {
+		out = append(out, ContractDoc{
+			"monotonic non-decreasing",
+			"//testkit:monotonic — the result type satisfies cmp.Ordered and never decreases across sequential calls",
+		})
+	}
+	if m.IsConcurrent() {
+		out = append(out, ContractDoc{
+			"concurrent strict (16×25)",
+			"//testkit:concurrent — 16 workers × 25 iterations under -race; explicit strict-concurrency guarantee beyond the baseline",
+		})
+	}
+	if m.IsConcurrentReaders() {
+		out = append(out, ContractDoc{
+			"concurrent readers parallel (32 readers)",
+			"//testkit:concurrent-readers — 32 simultaneous readers; verifies reader-side contention is non-blocking",
+		})
+	}
+	if m.IsNilSafe() {
+		out = append(out, ContractDoc{
+			"nil-safe (no panic)",
+			"//testkit:nil-safe — the method handles nil-bearing inputs without panic",
+		})
+	}
+	if m.IsAtomic() {
+		out = append(out, ContractDoc{
+			"atomic (no observable trace on failure)",
+			"//testkit:atomic — when the method errors, observable state is unchanged",
+		})
+	}
+	if m.HasBounded() {
+		out = append(out, ContractDoc{
+			"bounded range",
+			fmt.Sprintf(
+				"//testkit:bounded %s..%s — return value lies within the declared inclusive range",
+				m.BoundedMin(),
+				m.BoundedMax(),
+			),
+		})
+	}
+	if m.HasTimeout() {
+		out = append(out, ContractDoc{
+			"timeout",
+			fmt.Sprintf(
+				"//testkit:timeout %s — the method completes within the declared deadline",
+				m.TimeoutDuration(),
+			),
+		})
+	}
+	if m.HasSideEffect() {
+		out = append(out, ContractDoc{
+			"side-effect observable",
+			fmt.Sprintf(
+				"//testkit:side-effect Method=%s — the named observation method reflects the effect",
+				m.SideEffectMethod(),
+			),
+		})
+	}
+	if m.HasValidates() {
+		out = append(out, ContractDoc{
+			"validates input (zero rejected)",
+			fmt.Sprintf(
+				"//testkit:validates %s — invocation with the zero value of %s returns a non-nil error",
+				m.ValidatesField(),
+				m.ValidatesField(),
+			),
+		})
+	}
+	if m.HasHooks() {
+		out = append(out, ContractDoc{
+			"hooks fire",
+			fmt.Sprintf(
+				"//testkit:hooks %s — the named hooks fire in declared order during the method's execution",
+				strings.Join(m.HookNames(), ", "),
+			),
+		})
+	}
+	if m.HasEventually() {
+		out = append(out, ContractDoc{
+			"eventually converges",
+			fmt.Sprintf(
+				"//testkit:eventually %s — the method's observable state converges to the expected value within the declared timeout (polled, no time.Sleep)",
+				m.EventuallyTimeout(),
+			),
+		})
+	}
+	if m.HasScope() {
+		out = append(out, ContractDoc{
+			"scope auth required",
+			fmt.Sprintf(
+				"//testkit:scope %s — invocation without the named scope context returns ErrUnauthorized",
+				m.ScopeName(),
+			),
+		})
+	}
+	if m.HasPagination() {
+		out = append(out, ContractDoc{
+			"paginates",
+			fmt.Sprintf(
+				"//testkit:pagination %s — repeated calls with the cursor field eventually drain the corpus and the cursor terminates",
+				m.PaginationCursor(),
+			),
+		})
+	}
+	if m.HasLease() {
+		out = append(out, ContractDoc{
+			"lease acquire/release",
+			fmt.Sprintf(
+				"//testkit:lease Release=%s — acquiring with this method, releasing via %s, releases the lease for re-acquisition",
+				m.LeaseRelease(),
+				m.LeaseRelease(),
+			),
+		})
+	}
+	if m.HasReadAfterWrite() {
+		out = append(out, ContractDoc{
+			"read after write",
+			fmt.Sprintf(
+				"//testkit:read-after-write Reader=%s — a write of (key, value) followed by a read returns the written value",
+				m.ReadAfterWriteReader(),
+			),
+		})
+	}
+	if m.HasDeleteRemoves() {
+		out = append(out, ContractDoc{
+			"delete removes",
+			fmt.Sprintf(
+				"//testkit:delete-removes Reader=%s — a delete of key followed by a read surfaces the missing-key sentinel",
+				m.DeleteRemovesReader(),
+			),
+		})
+	}
+	if m.HasStreamReflectsMutations() {
+		out = append(out, ContractDoc{
+			"stream reflects mutations",
+			fmt.Sprintf(
+				"//testkit:stream-reflects-mutations Stream=%s — values written via this method appear in the named stream",
+				m.StreamReflectsMutationsStream(),
+			),
+		})
+	}
+	if m.HasLifecycleAfterClose() {
+		out = append(out, ContractDoc{
+			"lifecycle after close",
+			fmt.Sprintf(
+				"//testkit:lifecycle-after-close Reader=%s — calls to %s after this method returns ErrClosed (or equivalent)",
+				m.LifecycleAfterCloseReader(),
+				m.LifecycleAfterCloseReader(),
+			),
+		})
+	}
+	if m.HasCRDTMerge() {
+		out = append(out, ContractDoc{
+			"crdt merge",
+			fmt.Sprintf(
+				"//testkit:crdt-merge Other=%s — paired with %s, this method's output is invariant under merge order",
+				m.CRDTMergeOther(),
+				m.CRDTMergeOther(),
+			),
+		})
+	}
+	return out
 }

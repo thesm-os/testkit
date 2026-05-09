@@ -13,11 +13,11 @@
 			func(ctx context.Context, impl {{ $iface }}, args ...any) error {
 				return impl.{{ $m.Name }}(ctx{{ range $i := seq $m.NonCtxParamCount }}, args[{{ $i }}].({{ $m.ParamTypeAt $i $tracker }}){{ end }})
 			})
-		suite.AssertMultiArgWriteSucceedsVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
-		suite.AssertMultiArgWriterRespectsContextVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
-		suite.AssertMultiArgWriterIdempotentVariadic[{{ $iface }}]({{ range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
+		sampleArgs := []any{ {{- range $i := seq $m.NonCtxParamCount }}{{ if $i }}, {{ end }}{{ $m.SampleParamAt $i $tracker }}{{ end -}} }
+		suite.AssertMultiArgWriterBaselineVariadic[{{ $iface }}](
+			sampleArgs,
 {{- if $m.HasFirstSentinel }}
-		suite.AssertMultiArgWriteRejectInvalidVariadic[{{ $iface }}]({{ $m.FirstSentinel }}{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.ZeroParamAt $i $tracker }}{{ end }})(sctx)
+			suite.AssertMultiArgWriteRejectInvalidVariadic[{{ $iface }}]({{ $m.FirstSentinel }}{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.ZeroParamAt $i $tracker }}{{ end }}),
 {{- end }}
-		suite.AssertMultiArgWriterConcurrentSafeVariadic[{{ $iface }}](4, 10{{ range $i := seq $m.NonCtxParamCount }}, {{ $m.SampleParamAt $i $tracker }}{{ end }})(sctx)
+		)(sctx)
 {{- end -}}

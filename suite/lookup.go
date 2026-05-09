@@ -106,3 +106,40 @@ func AssertLookupConcurrentSafe[T any, K comparable, V, R any](key K, workers, i
 		})
 	}
 }
+
+// AssertLookupSmoke calls the lookup once with the sample key on a
+// fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertLookupSmoke[T any, K comparable, V, R any](sampleKey K) LookupAssertion[T, K, V, R] {
+	return func(ctx LookupContext[T, K, V, R]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _, _ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertLookupBaseline runs the Lookup-shape baseline: smoke,
+// Returns(key, want), RespectsContext, Consistent over 3 calls,
+// Missing(zeroKey), and ConcurrentSafe (4×10). Optional extras run
+// between the missing check and concurrency.
+func AssertLookupBaseline[T any, K comparable, V, R any](
+	sampleKey K,
+	sampleVal V,
+	zeroKey K,
+	extra ...LookupAssertion[T, K, V, R],
+) LookupAssertion[T, K, V, R] {
+	return func(ctx LookupContext[T, K, V, R]) {
+		AssertLookupSmoke[T, K, V, R](sampleKey)(ctx)
+		AssertLookupReturns[T, K, V, R](sampleKey, sampleVal)(ctx)
+		AssertLookupRespectsContext[T, K, V, R](sampleKey)(ctx)
+		AssertLookupConsistent[T, K, V, R](sampleKey, 3)(ctx)
+		AssertLookupMissing[T, K, V, R](zeroKey)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertLookupConcurrentSafe[T, K, V, R](sampleKey, 4, 10)(ctx)
+	}
+}

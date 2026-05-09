@@ -5,6 +5,7 @@ package suite_test
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -84,4 +85,27 @@ func TestDeleter(t *testing.T) {
 		suite.AssertDeleterConcurrentSafe[*delStore, string](
 			"nonexistent", 4, 50)(deleterCtx(t))
 	})
+}
+
+func TestAssertDeleterBaseline(t *testing.T) {
+	t.Parallel()
+	// Baseline needs a Call that (a) respects context and (b) is idempotent
+	// (no error on missing key). Wrap Delete to swallow errNotFound.
+	ctx := suite.DeleterContext[*delStore, string]{
+		T: t,
+		DeleterBindings: bindings.DeleterBindings[*delStore, string]{
+			Factory: newDelStore,
+			Call: func(c context.Context, s *delStore, k string) error {
+				if err := c.Err(); err != nil {
+					return err
+				}
+				err := s.Delete(c, k)
+				if errors.Is(err, errNotFound) {
+					return nil
+				}
+				return err
+			},
+		},
+	}
+	suite.AssertDeleterBaseline[*delStore, string]("existing")(ctx)
 }

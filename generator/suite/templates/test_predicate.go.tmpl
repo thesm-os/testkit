@@ -6,9 +6,5 @@
 			func(impl {{ $iface }}) bool {
 				return impl.{{ $m.Name }}()
 			})
-		suite.AssertPredicateReturns[{{ $iface }}](true)(sctx)
-		suite.AssertPredicateRespectsContext[{{ $iface }}]()(sctx)
-		suite.AssertPredicateConsistent[{{ $iface }}](3)(sctx)
-		suite.AssertPredicateRejectInvalid[{{ $iface }}]()(sctx)
-		suite.AssertPredicateConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+		suite.AssertPredicateBaseline[{{ $iface }}](true)(sctx)
 {{- end -}}

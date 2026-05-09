@@ -672,7 +672,10 @@ func (s *DirectivesStub) Close(ctx context.Context) error {
 //
 // Deprecated: use Submit instead.
 func (s *DirectivesStub) Legacy(ctx context.Context, item interfaces.Record) error {
-	if tb := s.OnLegacy.TB(); tb != nil {
+	// Skip the deprecation log under BenchMode — tb.Logf formats the
+	// message every dispatch, which dominates per-call allocation
+	// counts in benchmarks (see stub.Recorder.IsBenchMode).
+	if tb := s.OnLegacy.TB(); tb != nil && !s.OnLegacy.IsBenchMode() {
 		tb.Logf("Directives.Legacy is deprecated, use Submit instead")
 	}
 	s.OnLegacy.SleepLatency()

@@ -1,20 +1,49 @@
 {{- /* Per-method dispatcher.
        For each non-skipped method, opens one t.Run("<Method>", ...)
-       block containing the smoke subtest and the shape-specific
-       baseline assertions. Test output groups every conformance
-       subtest under one path per method:
+       block containing the shape-specific baseline assertion. Each
+       Assert<Shape>Baseline runs its own "smoke" subtest first
+       (fail-fast on panic), then the contract assertions, so test
+       output groups uniformly under one path per method:
          TestStoreContract/Get/smoke
-         TestStoreContract/Get/reader returns expected
+         TestStoreContract/Get/returns for key …
          TestStoreContract/Get/respects context
-       … rather than scattering smoke as a sibling group. */ -}}
+       … with smoke owned by the runtime, not the dispatcher. */ -}}
 {{- define "test-method" -}}
 {{- $iface := .QualifiedTypeForTest -}}
 {{- $tracker := .Spec.Tracker -}}
 {{- $spec := .Spec -}}
 {{- range $m := .Methods }}
 {{- if not $m.IsIntegrationOnly }}
+
+	// {{ $m.Name }} — {{ $m.ShapeName }}-shape method.
+	//
+	// Shape semantics:
+	//   {{ $m.ShapeDescription }}
+	//
+	// Default contracts (always run for {{ $m.ShapeName }}):
+{{- range $c := $m.BaselineSubtests }}
+	//   - {{ $c.Name }}
+	//       {{ $c.Description }}
+{{- end }}
+{{- $extras := $m.OptionalBaselineExtras }}
+{{- if $extras }}
+	//
+	// Optional baseline extras (gated on signature/options):
+{{- range $c := $extras }}
+	//   - {{ $c.Name }}
+	//       {{ $c.Description }}
+{{- end }}
+{{- end }}
+{{- $directives := $m.DirectiveContracts }}
+{{- if $directives }}
+	//
+	// Directive contracts (extra subtests below the baseline):
+{{- range $c := $directives }}
+	//   - {{ $c.Name }}
+	//       {{ $c.Description }}
+{{- end }}
+{{- end }}
 	t.Run("{{ $m.Name }}", func(t *testing.T) {
-{{ template "test-method-smoke" (dict "M" $m "Tracker" $tracker "Spec" $spec) }}
 {{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker "Opts" "resolved") -}}
 {{- if eq $m.ShapeName "Reader" }}
 {{ template "test-method-reader" $args }}

@@ -106,3 +106,9 @@ func TestStream(t *testing.T) {
 			streamCtx(t, []string{"a", "b", "c"}))
 	})
 }
+
+func TestAssertStreamBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertStreamBaseline[*listStore, string]()(
+		streamCtx(t, []string{"a", "b", "c"}))
+}

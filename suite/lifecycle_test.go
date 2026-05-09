@@ -127,3 +127,20 @@ func TestLifecycle(t *testing.T) {
 		suite.AssertLifecycleConcurrentSafe[*lifecycle](4, 50)(lifecycleCtx(t))
 	})
 }
+
+func TestAssertLifecycleBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.LifecycleContext[*lifecycle]{
+		T: t,
+		LifecycleBindings: bindings.LifecycleBindings[*lifecycle]{
+			Factory: newLifecycle,
+			Call: func(c context.Context, l *lifecycle) error {
+				if err := c.Err(); err != nil {
+					return err
+				}
+				return l.Open(c)
+			},
+		},
+	}
+	suite.AssertLifecycleBaseline[*lifecycle]()(ctx)
+}

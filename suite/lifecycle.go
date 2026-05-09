@@ -125,3 +125,36 @@ func AssertLifecycleConcurrentSafe[T any](workers, iters int) LifecycleAssertion
 		})
 	}
 }
+
+// AssertLifecycleSmoke calls the lifecycle method once on a fresh
+// impl. The subtest fails fast on panic, surfacing a broken Factory or
+// a method that panics on bare invocation as one localized failure
+// before any contract assertion runs.
+func AssertLifecycleSmoke[T any]() LifecycleAssertion[T] {
+	return func(ctx LifecycleContext[T]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl)
+		})
+	}
+}
+
+// AssertLifecycleBaseline runs the Lifecycle-shape baseline: smoke,
+// Succeeds, RespectsContext, Idempotent, and ConcurrentSafe (4×10).
+// Optional extras (e.g. RejectInvalid or RejectInvalidWith under an
+// InvalidFactory) run between idempotency and concurrency.
+func AssertLifecycleBaseline[T any](
+	extra ...LifecycleAssertion[T],
+) LifecycleAssertion[T] {
+	return func(ctx LifecycleContext[T]) {
+		AssertLifecycleSmoke[T]()(ctx)
+		AssertLifecycleSucceeds[T]()(ctx)
+		AssertLifecycleRespectsContext[T]()(ctx)
+		AssertLifecycleIdempotent[T]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertLifecycleConcurrentSafe[T](4, 10)(ctx)
+	}
+}

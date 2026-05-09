@@ -102,36 +102,62 @@ func AssertKeyMapContract(t *testing.T, factory KeyMapFactory, opts ...suite.Opt
 	errTest := testkit.TestError("KeyMap-contract")
 	_ = errTest
 
+	// Get — Reader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects.
+	//
+	// Default contracts (always run for Reader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - returns for key <sample>
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads of the same key yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - returns sentinel for unknown key
+	//       //testkit:errors declared generics.ErrNotFound — surfaces it on lookup of the zero key
 	t.Run("Get", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Get(t.Context(), *new(string))
-		})
 		sctx := suite.ReaderContextFor[generics.KeyMap[string, int], string, int](t, factory,
 			func(ctx context.Context, impl generics.KeyMap[string, int], key string) (int, error) {
 				return impl.Get(ctx, key)
 			})
-		suite.AssertReturnsForKey[generics.KeyMap[string, int], string, int](*new(string), *new(int))(sctx)
-		suite.AssertReaderRespectsContext[generics.KeyMap[string, int], string, int](*new(string))(sctx)
-		suite.AssertConsistentReads[generics.KeyMap[string, int], string, int](*new(string), 3)(sctx)
-		suite.AssertReaderConcurrentSafe[generics.KeyMap[string, int], string, int](*new(string), 4, 10)(sctx)
+		suite.AssertReaderBaseline[generics.KeyMap[string, int], string, int](
+			*new(string),
+			*new(int),
+		)(sctx)
 	})
 
+	// Set — CompositeWriter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K1, V) error — composite-keyed writer. Same idempotency contract as Writer with a paired key+value input.
+	//
+	// Default contracts (always run for CompositeWriter):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - composite write succeeds
+	//       happy-path write against the (key, value) pair
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - composite idempotent
+	//       writing the same pair twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Set", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Set(t.Context(), *new(string), *new(int))
-		})
 		sctx := suite.CompositeWriterContextFor[generics.KeyMap[string, int], string, int](t, factory,
 			func(ctx context.Context, impl generics.KeyMap[string, int], k1 string, value int) error {
 				return impl.Set(ctx, k1, value)
 			})
-		suite.AssertCompositeWriteSucceeds[generics.KeyMap[string, int], string, int](*new(string), *new(int))(sctx)
-		suite.AssertCompositeWriterRespectsContext[generics.KeyMap[string, int], string, int](*new(string), *new(int))(sctx)
-		suite.AssertCompositeWriterIdempotent[generics.KeyMap[string, int], string, int](*new(string), *new(int))(sctx)
-		suite.AssertCompositeWriterConcurrentSafe[generics.KeyMap[string, int], string, int](*new(string), *new(int), 4, 10)(sctx)
+		suite.AssertCompositeWriterBaseline[generics.KeyMap[string, int], string, int](
+			*new(string),
+			*new(int),
+		)(sctx)
 	})
 
 }

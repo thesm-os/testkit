@@ -214,3 +214,44 @@ func AssertStreamConsumerConcurrentSafeWithDefault[T any, S io.Reader, V any](
 		})
 	}
 }
+
+// AssertStreamConsumerSmokeWithDefault calls the consumer once with a
+// fresh default-sample stream on a fresh impl. The subtest fails fast
+// on panic, surfacing a broken Factory or a method that panics on bare
+// invocation as one localized failure before any contract assertion
+// runs.
+func AssertStreamConsumerSmokeWithDefault[T any, S io.Reader, V any]() StreamConsumerAssertion[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			stream, ok := any(bytes.NewReader([]byte(defaultStreamSampleBytes))).(S)
+			testkit.True(
+				t,
+				ok,
+				"default stream sample must satisfy the StreamConsumer's S; supply WithStreamSample for non-io.Reader S",
+			)
+			_, _ = ctx.Call(t.Context(), impl, stream)
+		})
+	}
+}
+
+// AssertStreamConsumerBaselineWithDefault runs the StreamConsumer-shape
+// default-sample baseline: smoke, SucceedsWithDefault(want),
+// RespectsContextWithDefault, and ConcurrentSafeWithDefault (4×10).
+// Optional extras (e.g. RejectInvalid with a custom invalid stream) run
+// between context and concurrency.
+func AssertStreamConsumerBaselineWithDefault[T any, S io.Reader, V comparable](
+	want V,
+	extra ...StreamConsumerAssertion[T, S, V],
+) StreamConsumerAssertion[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		AssertStreamConsumerSmokeWithDefault[T, S, V]()(ctx)
+		AssertStreamConsumerSucceedsWithDefault[T, S, V](want)(ctx)
+		AssertStreamConsumerRespectsContextWithDefault[T, S, V]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertStreamConsumerConcurrentSafeWithDefault[T, S, V](4, 10)(ctx)
+	}
+}

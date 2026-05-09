@@ -99,43 +99,63 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	errTest := testkit.TestError("Tally-contract")
 	_ = errTest
 
+	// Add — CompositeWriter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K1, V) error — composite-keyed writer. Same idempotency contract as Writer with a paired key+value input.
+	//
+	// Default contracts (always run for CompositeWriter):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - composite write succeeds
+	//       happy-path write against the (key, value) pair
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - composite idempotent
+	//       writing the same pair twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Add", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Add(t.Context(), "test-key", *new(int))
-		})
 		sctx := suite.CompositeWriterContextFor[generics.Tally[int], string, int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int], k1 string, value int) error {
 				return impl.Add(ctx, k1, value)
 			})
-		suite.AssertCompositeWriteSucceeds[generics.Tally[int], string, int]("test-key", *new(int))(sctx)
-		suite.AssertCompositeWriterRespectsContext[generics.Tally[int], string, int]("test-key", *new(int))(sctx)
-		suite.AssertCompositeWriterIdempotent[generics.Tally[int], string, int]("test-key", *new(int))(sctx)
-		suite.AssertCompositeWriterConcurrentSafe[generics.Tally[int], string, int]("test-key", *new(int), 4, 10)(sctx)
+		suite.AssertCompositeWriterBaseline[generics.Tally[int], string, int](
+			"test-key",
+			*new(int),
+		)(sctx)
 	})
 
+	// Total — Aggregator-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) (R, error) — scalar aggregator. Reads internal state through a context-aware ctor; returns one value plus an error. Consistent across calls when state hasn't changed.
+	//
+	// Default contracts (always run for Aggregator):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - aggregator returns expected
+	//       value matches the configured sample with no error
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - aggregator consistent
+	//       three sequential calls yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Total", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Total(t.Context())
-		})
 		sctx := suite.AggregatorContextFor[generics.Tally[int], int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int]) (int, error) {
 				return impl.Total(ctx)
 			})
-		suite.AssertAggregatorReturns[generics.Tally[int], int](*new(int))(sctx)
-		suite.AssertAggregatorRespectsContext[generics.Tally[int], int]()(sctx)
-		suite.AssertAggregatorConsistent[generics.Tally[int], int](3)(sctx)
+		var extras []suite.AggregatorAssertion[generics.Tally[int], int]
 		if len(resolved.AggregatorBounds) > 0 {
 			if lower, lok := resolved.AggregatorBounds[0].Lower.(int); lok {
 				if upper, uok := resolved.AggregatorBounds[0].Upper.(int); uok {
-					suite.AssertAggregatorBounded[generics.Tally[int], int](lower, upper)(sctx)
+					extras = append(extras, suite.AssertAggregatorBounded[generics.Tally[int], int](lower, upper))
 				}
 			}
 		}
-		suite.AssertAggregatorConcurrentSafe[generics.Tally[int], int](4, 10)(sctx)
+		suite.AssertAggregatorBaseline[generics.Tally[int], int](*new(int), extras...)(sctx)
 	})
 
 }

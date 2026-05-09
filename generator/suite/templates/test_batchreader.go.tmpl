@@ -15,11 +15,11 @@
 			})
 		sampleKeys := {{ $m.SampleParamAt 0 $tracker }}
 		sampleVals := {{ $m.SampleResultAt 0 $tracker }}
-		suite.AssertBatchReaderReturnsAll[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, sampleVals)(sctx)
-		suite.AssertBatchReaderRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys)(sctx)
-		suite.AssertBatchReaderConsistent[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, 3)(sctx)
+		suite.AssertBatchReaderBaseline[{{ $iface }}, {{ $K }}, {{ $V }}](
+			sampleKeys,
+			sampleVals,
 {{- if $m.HasFirstSentinel }}
-		suite.AssertBatchReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertBatchReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertBatchReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

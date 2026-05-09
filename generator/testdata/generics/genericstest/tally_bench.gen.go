@@ -175,6 +175,19 @@ func newTallyBenchConfig(opts ...TallyBenchOption) tallyBenchConfig {
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// TallyBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *tallyBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchTallyAdd measures Tally.Add(ctx context.Context, key string, delta T) error.
 //
 //	Shape:      CompositeWriter
@@ -189,6 +202,7 @@ func newTallyBenchConfig(opts ...TallyBenchOption) tallyBenchConfig {
 func benchTallyAdd(b *testing.B, factory func() generics.Tally[int], cfg *tallyBenchConfig) {
 	b.Helper()
 	b.Run("Add", func(b *testing.B) {
+		b.Logf("Add: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() generics.Tally[int] {
 			impl := factory()
 			if cfg.prePopulate != nil {

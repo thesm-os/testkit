@@ -125,3 +125,39 @@ func AssertMultiReaderConcurrentSafe[T any, K comparable, V1, V2 any](
 		})
 	}
 }
+
+// AssertMultiReaderSmoke calls the reader once with the sample key on
+// a fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertMultiReaderSmoke[T any, K comparable, V1, V2 any](sampleKey K) MultiReaderAssertion[T, K, V1, V2] {
+	return func(ctx MultiReaderContext[T, K, V1, V2]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _, _ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertMultiReaderBaseline runs the MultiReader-shape baseline: smoke,
+// ReturnsForKey(key, v1, v2), RespectsContext, Consistent over 3 calls,
+// and ConcurrentSafe (4×10). Optional extras (e.g. ReturnsSentinel) run
+// between consistency and concurrency.
+func AssertMultiReaderBaseline[T any, K, V1, V2 comparable](
+	sampleKey K,
+	sampleV1 V1,
+	sampleV2 V2,
+	extra ...MultiReaderAssertion[T, K, V1, V2],
+) MultiReaderAssertion[T, K, V1, V2] {
+	return func(ctx MultiReaderContext[T, K, V1, V2]) {
+		AssertMultiReaderSmoke[T, K, V1, V2](sampleKey)(ctx)
+		AssertMultiReaderReturnsForKey[T, K, V1, V2](sampleKey, sampleV1, sampleV2)(ctx)
+		AssertMultiReaderRespectsContext[T, K, V1, V2](sampleKey)(ctx)
+		AssertMultiReaderConsistent[T, K, V1, V2](sampleKey, 3)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertMultiReaderConcurrentSafe[T, K, V1, V2](sampleKey, 4, 10)(ctx)
+	}
+}

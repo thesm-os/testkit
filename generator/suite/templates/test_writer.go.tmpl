@@ -12,11 +12,10 @@
 				return impl.{{ $m.Name }}(value)
 {{- end }}
 			})
-		suite.AssertWriteSucceeds[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertWriterRespectsContext[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertWriterIdempotent[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
+		suite.AssertWriterBaseline[{{ $iface }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
 {{- if $m.HasFirstSentinel }}
-		suite.AssertWriteRejectInvalid[{{ $iface }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertWriteRejectInvalid[{{ $iface }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertWriterConcurrentSafe[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

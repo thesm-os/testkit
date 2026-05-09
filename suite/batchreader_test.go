@@ -93,3 +93,22 @@ func TestBatchReader(t *testing.T) {
 			[]string{"a", "b"}, 4, 50)(ctx)
 	})
 }
+
+func TestAssertBatchReaderBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]string{"a": "alpha", "b": "beta"}
+	ctx := suite.BatchReaderContext[*batchStore, string, string]{
+		T: t,
+		BatchReaderBindings: bindings.BatchReaderBindings[*batchStore, string, string]{
+			Factory: func() *batchStore { return newBatchStore(data) },
+			Call: func(c context.Context, s *batchStore, keys []string) ([]string, error) {
+				if err := c.Err(); err != nil {
+					return nil, err
+				}
+				return s.Many(c, keys)
+			},
+		},
+	}
+	suite.AssertBatchReaderBaseline[*batchStore, string, string](
+		[]string{"a", "b"}, []string{"alpha", "beta"})(ctx)
+}

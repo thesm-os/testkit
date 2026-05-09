@@ -82,3 +82,23 @@ func TestPointerReader(t *testing.T) {
 			"k1", 4, 50)(pointerReaderCtx(t, data))
 	})
 }
+
+func TestAssertPointerReaderBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]string{"k1": "alpha"}
+	want := "alpha"
+	ctx := suite.PointerReaderContext[*ptrStore, string, string]{
+		T: t,
+		PointerReaderBindings: bindings.PointerReaderBindings[*ptrStore, string, string]{
+			Factory: func() *ptrStore { return newPtrStore(data) },
+			Call: func(c context.Context, s *ptrStore, k string) *string {
+				if c.Err() != nil {
+					return nil
+				}
+				return s.Find(c, k)
+			},
+		},
+	}
+	suite.AssertPointerReaderBaseline[*ptrStore, string, string](
+		"k1", &want, "missing")(ctx)
+}

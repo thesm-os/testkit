@@ -80,3 +80,8 @@ func TestVoidLifecycle(t *testing.T) {
 		suite.AssertVoidLifecycleConcurrentSafe[*resetter](4, 50)(voidLifecycleCtx(t))
 	})
 }
+
+func TestAssertVoidLifecycleBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertVoidLifecycleBaseline[*resetter]()(voidLifecycleCtx(t))
+}

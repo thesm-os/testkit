@@ -59,7 +59,7 @@ func TestGenerator(t *testing.T) {
 			Contains("type StoreNamedFactory struct", "named factory tuple")
 	})
 
-	t.Run("smoke subtests emitted per non-skip method", func(t *testing.T) {
+	t.Run("per-method baseline emitted per non-skip method", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadFixture(t, "basic")
 		res, err := (&suite.Generator{}).Generate(pkg, []string{"Store"},
@@ -71,7 +71,8 @@ func TestGenerator(t *testing.T) {
 		testkit.Assert(t, out).
 			Contains(`t.Run("Get"`, "Get per-method block").
 			Contains(`t.Run("Put"`, "Put per-method block").
-			Contains(`t.Run("smoke"`, "nested smoke subtest")
+			Contains(`suite.AssertReaderBaseline[`, "Reader baseline call (smoke folded into runtime)").
+			Contains(`suite.AssertWriterBaseline[`, "Writer baseline call (smoke folded into runtime)")
 	})
 
 	t.Run("integration-only methods skipped", func(t *testing.T) {
@@ -98,7 +99,7 @@ func TestGenerator(t *testing.T) {
 		testkit.True(t, err != nil, "non-interface rejected")
 	})
 
-	t.Run("AllShapes emits per-shape subtests", func(t *testing.T) {
+	t.Run("AllShapes emits per-shape baseline calls", func(t *testing.T) {
 		t.Parallel()
 		pkg, err := generator.NewLoader().Load("./../testdata/interfaces", "")
 		testkit.NoError(t, err, "Load interfaces fixture")
@@ -109,13 +110,18 @@ func TestGenerator(t *testing.T) {
 		testkit.NoError(t, err, "Generate AllShapes")
 		out := string(res.Files[0].Content)
 		// Verify representative shapes get per-method blocks each
-		// containing a nested smoke subtest.
+		// dispatching to its Assert<Shape>Baseline runtime helper.
+		// Smoke runs inside the baseline; no separate t.Run("smoke")
+		// appears in the emission.
 		testkit.Assert(t, out).
 			Contains(`t.Run("Get"`, "Reader per-method block").
 			Contains(`t.Run("Put"`, "Writer per-method block").
 			Contains(`t.Run("Touch"`, "Mutator per-method block").
 			Contains(`t.Run("Init"`, "Lifecycle per-method block").
-			Contains(`t.Run("smoke"`, "nested smoke subtest")
+			Contains(`suite.AssertReaderBaseline[`, "Reader baseline call").
+			Contains(`suite.AssertWriterBaseline[`, "Writer baseline call").
+			Contains(`suite.AssertMutatorBaseline[`, "Mutator baseline call").
+			Contains(`suite.AssertLifecycleBaseline[`, "Lifecycle baseline call")
 	})
 
 	t.Run("generic interface emits concrete instantiation", func(t *testing.T) {

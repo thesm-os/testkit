@@ -7,13 +7,11 @@
 			func(impl {{ $iface }}) error {
 				return impl.{{ $m.Name }}()
 			})
-		suite.AssertPoisonAccessorNilOnFresh[{{ $iface }}]()(sctx)
-		suite.AssertPoisonAccessorRespectsContext[{{ $iface }}]()(sctx)
-		suite.AssertPoisonAccessorConsistent[{{ $iface }}]()(sctx)
+		var extras []suite.PoisonAccessorAssertion[{{ $iface }}]
 {{- if $m.HasFirstSentinel }}
 		if poisonedFactory, ok := {{ $opts }}.PoisonedFactory.(func() {{ $iface }}); ok {
-			suite.AssertPoisonAccessorRejectInvalid[{{ $iface }}](poisonedFactory, {{ $m.FirstSentinel }})(sctx)
+			extras = append(extras, suite.AssertPoisonAccessorRejectInvalid[{{ $iface }}](poisonedFactory, {{ $m.FirstSentinel }}))
 		}
 {{- end }}
-		suite.AssertPoisonAccessorConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+		suite.AssertPoisonAccessorBaseline[{{ $iface }}](extras...)(sctx)
 {{- end -}}

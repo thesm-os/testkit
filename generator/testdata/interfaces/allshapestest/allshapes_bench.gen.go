@@ -434,6 +434,19 @@ func newAllShapesBenchConfig(opts ...AllShapesBenchOption) allShapesBenchConfig 
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// AllShapesBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *allShapesBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchAllShapesAll measures AllShapes.All(ctx context.Context) iter.Seq[interfaces.Record].
 //
 //	Shape:      StreamReader
@@ -586,6 +599,7 @@ func benchAllShapesErr(b *testing.B, factory func() interfaces.AllShapes, cfg *a
 func benchAllShapesFetch(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Fetch", func(b *testing.B) {
+		b.Logf("Fetch: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -623,6 +637,7 @@ func benchAllShapesFetch(b *testing.B, factory func() interfaces.AllShapes, cfg 
 func benchAllShapesFind(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Find", func(b *testing.B) {
+		b.Logf("Find: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -661,6 +676,7 @@ func benchAllShapesFind(b *testing.B, factory func() interfaces.AllShapes, cfg *
 func benchAllShapesGet(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Get", func(b *testing.B) {
+		b.Logf("Get: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -729,6 +745,7 @@ func benchAllShapesInit(b *testing.B, factory func() interfaces.AllShapes, cfg *
 func benchAllShapesInspect(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Inspect", func(b *testing.B) {
+		b.Logf("Inspect: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -799,6 +816,7 @@ func benchAllShapesIsHealthy(b *testing.B, factory func() interfaces.AllShapes, 
 func benchAllShapesLoad(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Load", func(b *testing.B) {
+		b.Logf("Load: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -836,6 +854,7 @@ func benchAllShapesLoad(b *testing.B, factory func() interfaces.AllShapes, cfg *
 func benchAllShapesLookup(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Lookup", func(b *testing.B) {
+		b.Logf("Lookup: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -873,6 +892,7 @@ func benchAllShapesLookup(b *testing.B, factory func() interfaces.AllShapes, cfg
 func benchAllShapesMany(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Many", func(b *testing.B) {
+		b.Logf("Many: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -912,6 +932,7 @@ func benchAllShapesMany(b *testing.B, factory func() interfaces.AllShapes, cfg *
 func benchAllShapesPut(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Put", func(b *testing.B) {
+		b.Logf("Put: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -949,6 +970,7 @@ func benchAllShapesPut(b *testing.B, factory func() interfaces.AllShapes, cfg *a
 func benchAllShapesReadFrom(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("ReadFrom", func(b *testing.B) {
+		b.Logf("ReadFrom: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -957,8 +979,12 @@ func benchAllShapesReadFrom(b *testing.B, factory func() interfaces.AllShapes, c
 			return impl
 		}
 		scctx := bench.StreamConsumerContext[interfaces.AllShapes, io.Reader, int]{
-			B:          b,
-			BytesPerOp: cfg.bytesPerOp["ReadFrom"],
+			B: b,
+			// Auto-derive BytesPerOp from the synthesized stream sample
+			// (bytes.NewReader([]byte("test-data")), 9 bytes) so MB/s
+			// reports without per-method configuration. A consumer-supplied
+			// interfaces.AllShapesBenchSetBytes overrides.
+			BytesPerOp: cfg.bytesPerOpOr("ReadFrom", 9),
 			StreamConsumerBindings: bindings.StreamConsumerBindings[interfaces.AllShapes, io.Reader, int]{
 				Factory: seededFactory,
 				Call: func(ctx context.Context, impl interfaces.AllShapes, s io.Reader) (int, error) {
@@ -989,6 +1015,7 @@ func benchAllShapesReadFrom(b *testing.B, factory func() interfaces.AllShapes, c
 func benchAllShapesRemove(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Remove", func(b *testing.B) {
+		b.Logf("Remove: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -1093,6 +1120,7 @@ func benchAllShapesScan(b *testing.B, factory func() interfaces.AllShapes, cfg *
 func benchAllShapesSchedule(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Schedule", func(b *testing.B) {
+		b.Logf("Schedule: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -1131,6 +1159,7 @@ func benchAllShapesSchedule(b *testing.B, factory func() interfaces.AllShapes, c
 func benchAllShapesSet(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Set", func(b *testing.B) {
+		b.Logf("Set: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -1171,10 +1200,12 @@ func benchAllShapesStatistics(b *testing.B, factory func() interfaces.AllShapes,
 			return impl
 		}
 
-		bench.HotPath(b, "hot-path", func() {
+		{
 			impl := seededFactory()
-			_, _, _, _ = impl.Statistics(b.Context())
-		})
+			bench.HotPath(b, "hot-path", func() {
+				_, _, _, _ = impl.Statistics(b.Context())
+			})
+		}
 		for _, fn := range cfg.onStatistics {
 			fn(b, seededFactory())
 		}
@@ -1227,6 +1258,7 @@ func benchAllShapesStats(b *testing.B, factory func() interfaces.AllShapes, cfg 
 func benchAllShapesTouch(b *testing.B, factory func() interfaces.AllShapes, cfg *allShapesBenchConfig) {
 	b.Helper()
 	b.Run("Touch", func(b *testing.B) {
+		b.Logf("Touch: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() interfaces.AllShapes {
 			impl := factory()
 			if cfg.prePopulate != nil {

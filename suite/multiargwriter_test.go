@@ -145,3 +145,24 @@ func TestMultiArgWriterVariadic(t *testing.T) {
 			4, 50, "k", "v", 1)(multiArgVariadicCtx(t))
 	})
 }
+
+func TestAssertMultiArgWriterBaselineVariadic(t *testing.T) {
+	t.Parallel()
+	ctx := suite.MultiArgWriterVariadicContext[*scheduler]{
+		T: t,
+		MultiArgWriterVariadicBindings: bindings.MultiArgWriterVariadicBindings[*scheduler]{
+			Factory: func() *scheduler { return &scheduler{} },
+			Call: func(c context.Context, s *scheduler, args ...any) error {
+				if err := c.Err(); err != nil {
+					return err
+				}
+				key, _ := args[0].(string)
+				value, _ := args[1].(string)
+				priority, _ := args[2].(int)
+				return s.Schedule(c, key, value, priority)
+			},
+		},
+	}
+	suite.AssertMultiArgWriterBaselineVariadic[*scheduler](
+		[]any{"k", "v", 1})(ctx)
+}

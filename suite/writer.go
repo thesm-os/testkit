@@ -155,3 +155,38 @@ func AssertWriterConcurrentSafe[T, V any](
 		})
 	}
 }
+
+// AssertWriterSmoke calls the writer once with the sample value on a
+// fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertWriterSmoke[T, V any](sample V) WriterAssertion[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, sample)
+		})
+	}
+}
+
+// AssertWriterBaseline runs the Writer-shape baseline: smoke,
+// WriteSucceeds(sample), RespectsContext, Idempotent, and ConcurrentSafe
+// (4×10). Optional extras (e.g. WriteRejectInvalid for methods that
+// declare //testkit:errors with a nameable sentinel) run between
+// idempotency and concurrency.
+func AssertWriterBaseline[T, V any](
+	sample V,
+	extra ...WriterAssertion[T, V],
+) WriterAssertion[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		AssertWriterSmoke[T, V](sample)(ctx)
+		AssertWriteSucceeds[T, V](sample)(ctx)
+		AssertWriterRespectsContext[T, V](sample)(ctx)
+		AssertWriterIdempotent[T, V](sample)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertWriterConcurrentSafe[T, V](sample, 4, 10)(ctx)
+	}
+}

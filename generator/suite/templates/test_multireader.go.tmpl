@@ -14,11 +14,12 @@
 				return impl.{{ $m.Name }}(key)
 {{- end }}
 			})
-		suite.AssertMultiReaderReturnsForKey[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }}, {{ $m.SampleResultAt 1 $tracker }})(sctx)
-		suite.AssertMultiReaderRespectsContext[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertMultiReaderConsistent[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
+		suite.AssertMultiReaderBaseline[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.SampleResultAt 0 $tracker }},
+			{{ $m.SampleResultAt 1 $tracker }},
 {{- if $m.HasFirstSentinel }}
-		suite.AssertMultiReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertMultiReaderReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertMultiReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

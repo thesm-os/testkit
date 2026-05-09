@@ -14,13 +14,15 @@
 				return impl.{{ $m.Name }}()
 {{- end }}
 			})
-		suite.AssertMultiAggregatorReturns[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleResultAt 0 $tracker }}, {{ $m.SampleResultAt 1 $tracker }})(sctx)
-		suite.AssertMultiAggregatorRespectsContext[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]()(sctx)
-		suite.AssertMultiAggregatorConsistent[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](3)(sctx)
+		var extras []suite.MultiAggregatorAssertion[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]
 {{- if $m.HasFirstSentinel }}
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
-			suite.AssertMultiAggregatorReturnsSentinel[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](invalidFactory, {{ $m.FirstSentinel }})(sctx)
+			extras = append(extras, suite.AssertMultiAggregatorReturnsSentinel[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](invalidFactory, {{ $m.FirstSentinel }}))
 		}
 {{- end }}
-		suite.AssertMultiAggregatorConcurrentSafe[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](4, 10)(sctx)
+		suite.AssertMultiAggregatorBaseline[{{ $iface }}, {{ $V1 }}, {{ $V2 }}](
+			{{ $m.SampleResultAt 0 $tracker }},
+			{{ $m.SampleResultAt 1 $tracker }},
+			extras...,
+		)(sctx)
 {{- end -}}

@@ -191,6 +191,19 @@ func newHolderBenchConfig(opts ...HolderBenchOption) holderBenchConfig {
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// HolderBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *holderBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchHolderDelete measures Holder.Delete(ctx context.Context, key string) error.
 //
 //	Shape:      Deleter
@@ -205,6 +218,7 @@ func newHolderBenchConfig(opts ...HolderBenchOption) holderBenchConfig {
 func benchHolderDelete(b *testing.B, factory func() generics.Holder[string], cfg *holderBenchConfig) {
 	b.Helper()
 	b.Run("Delete", func(b *testing.B) {
+		b.Logf("Delete: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() generics.Holder[string] {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -243,6 +257,7 @@ func benchHolderDelete(b *testing.B, factory func() generics.Holder[string], cfg
 func benchHolderGet(b *testing.B, factory func() generics.Holder[string], cfg *holderBenchConfig) {
 	b.Helper()
 	b.Run("Get", func(b *testing.B) {
+		b.Logf("Get: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() generics.Holder[string] {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -281,6 +296,7 @@ func benchHolderGet(b *testing.B, factory func() generics.Holder[string], cfg *h
 func benchHolderPut(b *testing.B, factory func() generics.Holder[string], cfg *holderBenchConfig) {
 	b.Helper()
 	b.Run("Put", func(b *testing.B) {
+		b.Logf("Put: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() generics.Holder[string] {
 			impl := factory()
 			if cfg.prePopulate != nil {

@@ -11,11 +11,9 @@
 				impl.{{ $m.Name }}()
 {{- end }}
 			})
-		suite.AssertVoidLifecycleSucceeds[{{ $iface }}]()(sctx)
-		suite.AssertVoidLifecycleRespectsContext[{{ $iface }}]()(sctx)
-		suite.AssertVoidLifecycleIdempotent[{{ $iface }}]()(sctx)
+		var extras []suite.VoidLifecycleAssertion[{{ $iface }}]
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
-			suite.AssertVoidLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory)(sctx)
+			extras = append(extras, suite.AssertVoidLifecycleRejectInvalidWith[{{ $iface }}](invalidFactory))
 		}
-		suite.AssertVoidLifecycleConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+		suite.AssertVoidLifecycleBaseline[{{ $iface }}](extras...)(sctx)
 {{- end -}}

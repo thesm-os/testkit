@@ -179,6 +179,19 @@ func newSamplerBenchConfig(opts ...SamplerBenchOption) samplerBenchConfig {
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// SamplerBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *samplerBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchSamplerApply measures Sampler.Apply(ctx context.Context, key string, item basic.Item) error.
 //
 //	Shape:      CompositeWriter

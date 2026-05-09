@@ -180,6 +180,19 @@ func newStoreBenchConfig(opts ...StoreBenchOption) storeBenchConfig {
 	return cfg
 }
 
+// bytesPerOpOr returns the consumer-supplied BytesPerOp for the
+// named method, or fallback when no value was set via
+// StoreBenchSetBytes. The fallback is generator-derived
+// (e.g. len("test-data") for io.Reader-shaped StreamConsumer
+// methods) so MB/s reporting works out of the box without
+// per-method configuration.
+func (cfg *storeBenchConfig) bytesPerOpOr(method string, fallback int64) int64 {
+	if v, ok := cfg.bytesPerOp[method]; ok {
+		return v
+	}
+	return fallback
+}
+
 // benchStoreGet measures Store.Get(ctx context.Context, key string) (basic.Item, error).
 //
 //	Shape:      Reader
@@ -194,6 +207,7 @@ func newStoreBenchConfig(opts ...StoreBenchOption) storeBenchConfig {
 func benchStoreGet(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Get", func(b *testing.B) {
+		b.Logf("Get: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() basic.Store {
 			impl := factory()
 			if cfg.prePopulate != nil {
@@ -233,6 +247,7 @@ func benchStoreGet(b *testing.B, factory func() basic.Store, cfg *storeBenchConf
 func benchStorePut(b *testing.B, factory func() basic.Store, cfg *storeBenchConfig) {
 	b.Helper()
 	b.Run("Put", func(b *testing.B) {
+		b.Logf("Put: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
 		seededFactory := func() basic.Store {
 			impl := factory()
 			if cfg.prePopulate != nil {

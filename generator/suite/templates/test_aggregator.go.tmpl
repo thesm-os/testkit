@@ -13,15 +13,13 @@
 				return impl.{{ $m.Name }}()
 {{- end }}
 			})
-		suite.AssertAggregatorReturns[{{ $iface }}, {{ $R }}]({{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertAggregatorRespectsContext[{{ $iface }}, {{ $R }}]()(sctx)
-		suite.AssertAggregatorConsistent[{{ $iface }}, {{ $R }}](3)(sctx)
+		var extras []suite.AggregatorAssertion[{{ $iface }}, {{ $R }}]
 		if len({{ $opts }}.AggregatorBounds) > 0 {
 			if lower, lok := {{ $opts }}.AggregatorBounds[0].Lower.({{ $R }}); lok {
 				if upper, uok := {{ $opts }}.AggregatorBounds[0].Upper.({{ $R }}); uok {
-					suite.AssertAggregatorBounded[{{ $iface }}, {{ $R }}](lower, upper)(sctx)
+					extras = append(extras, suite.AssertAggregatorBounded[{{ $iface }}, {{ $R }}](lower, upper))
 				}
 			}
 		}
-		suite.AssertAggregatorConcurrentSafe[{{ $iface }}, {{ $R }}](4, 10)(sctx)
+		suite.AssertAggregatorBaseline[{{ $iface }}, {{ $R }}]({{ $m.SampleResultAt 0 $tracker }}, extras...)(sctx)
 {{- end -}}

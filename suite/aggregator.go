@@ -109,3 +109,37 @@ func AssertAggregatorConcurrentSafe[T, R any](workers, iters int) AggregatorAsse
 		})
 	}
 }
+
+// AssertAggregatorSmoke calls the aggregator once on a fresh impl. The
+// subtest fails fast on panic, surfacing a broken Factory or a method
+// that panics on bare invocation as one localized failure before any
+// contract assertion runs.
+func AssertAggregatorSmoke[T, R any]() AggregatorAssertion[T, R] {
+	return func(ctx AggregatorContext[T, R]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _ = ctx.Call(t.Context(), impl)
+		})
+	}
+}
+
+// AssertAggregatorBaseline runs the Aggregator-shape baseline: smoke,
+// Returns(want), RespectsContext, Consistent over 3 calls, and
+// ConcurrentSafe (4×10). Optional extras (e.g. Bounded for methods that
+// declare //testkit:bounded) run between consistency and concurrency.
+func AssertAggregatorBaseline[T any, R comparable](
+	want R,
+	extra ...AggregatorAssertion[T, R],
+) AggregatorAssertion[T, R] {
+	return func(ctx AggregatorContext[T, R]) {
+		AssertAggregatorSmoke[T, R]()(ctx)
+		AssertAggregatorReturns[T, R](want)(ctx)
+		AssertAggregatorRespectsContext[T, R]()(ctx)
+		AssertAggregatorConsistent[T, R](3)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertAggregatorConcurrentSafe[T, R](4, 10)(ctx)
+	}
+}

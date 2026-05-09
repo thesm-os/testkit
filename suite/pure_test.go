@@ -62,3 +62,8 @@ func TestPure(t *testing.T) {
 		suite.AssertPureConcurrentSafe[*counter, int](4, 50)(pureCtx(t))
 	})
 }
+
+func TestAssertPureBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertPureBaseline[*counter, int](42)(pureCtx(t))
+}

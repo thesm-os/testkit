@@ -170,3 +170,39 @@ func AssertStreamConcurrentSafe[T, V any](workers int) StreamAssertion[T, V] {
 		})
 	}
 }
+
+// AssertStreamSmoke drains the stream once on a fresh impl. The
+// subtest fails fast on panic, surfacing a broken Factory or a method
+// that panics on bare invocation as one localized failure before any
+// contract assertion runs.
+func AssertStreamSmoke[T, V any]() StreamAssertion[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			for _, err := range ctx.Call(t.Context(), impl) {
+				_ = err
+			}
+		})
+	}
+}
+
+// AssertStreamBaseline runs the StreamReader-shape baseline: smoke,
+// Completes, RespectsContext, Reentrant, RespectsBreak, and
+// ConcurrentSafe (4 workers). Optional extras (e.g. YieldsInOrder,
+// HasNoDuplicates) run between break and concurrency.
+func AssertStreamBaseline[T, V any](
+	extra ...StreamAssertion[T, V],
+) StreamAssertion[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		AssertStreamSmoke[T, V]()(ctx)
+		AssertStreamCompletes[T, V]()(ctx)
+		AssertStreamRespectsContext[T, V]()(ctx)
+		AssertStreamReentrant[T, V]()(ctx)
+		AssertStreamRespectsBreak[T, V]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertStreamConcurrentSafe[T, V](4)(ctx)
+	}
+}

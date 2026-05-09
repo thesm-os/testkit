@@ -135,3 +135,21 @@ func TestWriter(t *testing.T) {
 			entry{Key: "a", Value: "alpha"}, 4, 50)(writerCtx(t))
 	})
 }
+
+func TestAssertWriterBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.WriterContext[*mapWriter, entry]{
+		T: t,
+		WriterBindings: bindings.WriterBindings[*mapWriter, entry]{
+			Factory: newMapWriter,
+			Call: func(c context.Context, w *mapWriter, e entry) error {
+				if err := c.Err(); err != nil {
+					return err
+				}
+				return w.Put(c, e)
+			},
+		},
+	}
+	suite.AssertWriterBaseline[*mapWriter, entry](
+		entry{Key: "a", Value: "alpha"})(ctx)
+}

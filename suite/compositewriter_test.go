@@ -87,3 +87,21 @@ func TestCompositeWriter(t *testing.T) {
 			"k1", "value", 4, 50)(compositeWriterCtx(t))
 	})
 }
+
+func TestAssertCompositeWriterBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.CompositeWriterContext[*compositeStore, string, string]{
+		T: t,
+		CompositeWriterBindings: bindings.CompositeWriterBindings[*compositeStore, string, string]{
+			Factory: newCompositeStore,
+			Call: func(c context.Context, s *compositeStore, k1, v string) error {
+				if err := c.Err(); err != nil {
+					return err
+				}
+				return s.Set(c, k1, v)
+			},
+		},
+	}
+	suite.AssertCompositeWriterBaseline[*compositeStore, string, string](
+		"k1", "v1")(ctx)
+}

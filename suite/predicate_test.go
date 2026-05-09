@@ -60,3 +60,8 @@ func TestPredicate(t *testing.T) {
 		suite.AssertPredicateConcurrentSafe[*validator](4, 50)(predicateCtx(t, true))
 	})
 }
+
+func TestAssertPredicateBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertPredicateBaseline[*validator](true)(predicateCtx(t, true))
+}

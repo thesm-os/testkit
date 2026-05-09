@@ -128,3 +128,40 @@ func AssertPointerReaderConcurrentSafe[T any, K comparable, V any](
 		})
 	}
 }
+
+// AssertPointerReaderSmoke calls the reader once with the sample key
+// on a fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertPointerReaderSmoke[T any, K comparable, V any](sampleKey K) PointerReaderAssertion[T, K, V] {
+	return func(ctx PointerReaderContext[T, K, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertPointerReaderBaseline runs the PointerReader-shape baseline:
+// smoke, ReturnsForKey(key, want), RespectsContext, Consistent over 3
+// calls, NilOnUnknown(zeroKey), and ConcurrentSafe (4×10). Optional
+// extras run between the nil-on-unknown check and concurrency.
+func AssertPointerReaderBaseline[T any, K, V comparable](
+	sampleKey K,
+	sampleVal *V,
+	zeroKey K,
+	extra ...PointerReaderAssertion[T, K, V],
+) PointerReaderAssertion[T, K, V] {
+	return func(ctx PointerReaderContext[T, K, V]) {
+		AssertPointerReaderSmoke[T, K, V](sampleKey)(ctx)
+		AssertPointerReaderReturnsForKey[T, K, V](sampleKey, sampleVal)(ctx)
+		AssertPointerReaderRespectsContext[T, K, V](sampleKey)(ctx)
+		AssertPointerReaderConsistent[T, K, V](sampleKey, 3)(ctx)
+		AssertPointerReaderNilOnUnknown[T, K, V](zeroKey)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertPointerReaderConcurrentSafe[T, K, V](sampleKey, 4, 10)(ctx)
+	}
+}

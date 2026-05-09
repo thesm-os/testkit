@@ -103,53 +103,89 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	errTest := testkit.TestError("Holder-contract")
 	_ = errTest
 
+	// Delete — Deleter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) error — keyed deleter. Idempotent on repeated deletes of the same key.
+	//
+	// Default contracts (always run for Deleter):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - delete succeeds
+	//       happy-path delete returns nil
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - delete idempotent
+	//       deleting the same key twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Delete", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Delete(t.Context(), "test-key")
-		})
 		sctx := suite.DeleterContextFor[generics.Holder[string], string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) error {
 				return impl.Delete(ctx, key)
 			})
-		suite.AssertDeleteSucceeds[generics.Holder[string], string]("test-key")(sctx)
-		suite.AssertDeleterRespectsContext[generics.Holder[string], string]("test-key")(sctx)
-		suite.AssertDeleteIdempotent[generics.Holder[string], string]("test-key")(sctx)
-		suite.AssertDeleterConcurrentSafe[generics.Holder[string], string]("test-key", 4, 10)(sctx)
+		suite.AssertDeleterBaseline[generics.Holder[string], string](
+			"test-key",
+		)(sctx)
 	})
 
+	// Get — Reader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects.
+	//
+	// Default contracts (always run for Reader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - returns for key <sample>
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads of the same key yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - returns sentinel for unknown key
+	//       //testkit:errors declared generics.ErrNotFound — surfaces it on lookup of the zero key
 	t.Run("Get", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Get(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) (string, error) {
 				return impl.Get(ctx, key)
 			})
-		suite.AssertReturnsForKey[generics.Holder[string], string, string]("test-key", *new(string))(sctx)
-		suite.AssertReaderRespectsContext[generics.Holder[string], string, string]("test-key")(sctx)
-		suite.AssertConsistentReads[generics.Holder[string], string, string]("test-key", 3)(sctx)
-		suite.AssertReturnsSentinel[generics.Holder[string], string, string]("", generics.ErrNotFound)(sctx)
-		suite.AssertReaderConcurrentSafe[generics.Holder[string], string, string]("test-key", 4, 10)(sctx)
+		suite.AssertReaderBaseline[generics.Holder[string], string, string](
+			"test-key",
+			*new(string),
+			suite.AssertReturnsSentinel[generics.Holder[string], string, string]("", generics.ErrNotFound),
+		)(sctx)
 	})
 
+	// Put — CompositeWriter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K1, V) error — composite-keyed writer. Same idempotency contract as Writer with a paired key+value input.
+	//
+	// Default contracts (always run for CompositeWriter):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - composite write succeeds
+	//       happy-path write against the (key, value) pair
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - composite idempotent
+	//       writing the same pair twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Put", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Put(t.Context(), "test-key", *new(string))
-		})
 		sctx := suite.CompositeWriterContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], k1 string, value string) error {
 				return impl.Put(ctx, k1, value)
 			})
-		suite.AssertCompositeWriteSucceeds[generics.Holder[string], string, string]("test-key", *new(string))(sctx)
-		suite.AssertCompositeWriterRespectsContext[generics.Holder[string], string, string]("test-key", *new(string))(sctx)
-		suite.AssertCompositeWriterIdempotent[generics.Holder[string], string, string]("test-key", *new(string))(sctx)
-		suite.AssertCompositeWriterConcurrentSafe[generics.Holder[string], string, string]("test-key", *new(string), 4, 10)(sctx)
+		suite.AssertCompositeWriterBaseline[generics.Holder[string], string, string](
+			"test-key",
+			*new(string),
+		)(sctx)
 	})
 
 }

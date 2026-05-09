@@ -125,3 +125,36 @@ func AssertVoidLifecycleConcurrentSafe[T any](workers, iters int) VoidLifecycleA
 		})
 	}
 }
+
+// AssertVoidLifecycleSmoke calls the method once on a fresh impl. The
+// subtest fails fast on panic, surfacing a broken Factory or a method
+// that panics on bare invocation as one localized failure before any
+// contract assertion runs.
+func AssertVoidLifecycleSmoke[T any]() VoidLifecycleAssertion[T] {
+	return func(ctx VoidLifecycleContext[T]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			ctx.Call(t.Context(), impl)
+		})
+	}
+}
+
+// AssertVoidLifecycleBaseline runs the VoidLifecycle-shape baseline:
+// smoke, Succeeds, RespectsContext, Idempotent, and ConcurrentSafe
+// (4×10). Optional extras (e.g. RejectInvalidWith under an
+// InvalidFactory) run between idempotency and concurrency.
+func AssertVoidLifecycleBaseline[T any](
+	extra ...VoidLifecycleAssertion[T],
+) VoidLifecycleAssertion[T] {
+	return func(ctx VoidLifecycleContext[T]) {
+		AssertVoidLifecycleSmoke[T]()(ctx)
+		AssertVoidLifecycleSucceeds[T]()(ctx)
+		AssertVoidLifecycleRespectsContext[T]()(ctx)
+		AssertVoidLifecycleIdempotent[T]()(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertVoidLifecycleConcurrentSafe[T](4, 10)(ctx)
+	}
+}

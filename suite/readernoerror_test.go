@@ -65,3 +65,10 @@ func TestReaderNoError(t *testing.T) {
 			"k1", 4, 50)(readerNoErrorCtx(t, data))
 	})
 }
+
+func TestAssertReaderNoErrorBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]string{"k1": "alpha"}
+	suite.AssertReaderNoErrorBaseline[*cache, string, string](
+		"k1", "alpha", "missing", "")(readerNoErrorCtx(t, data))
+}

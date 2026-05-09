@@ -83,3 +83,20 @@ func TestMultiAggregator(t *testing.T) {
 			multiAggregatorCtx(t, 3, 42))
 	})
 }
+
+func TestAssertMultiAggregatorBaseline(t *testing.T) {
+	t.Parallel()
+	ctx := suite.MultiAggregatorContext[*stats, int, int]{
+		T: t,
+		MultiAggregatorBindings: bindings.MultiAggregatorBindings[*stats, int, int]{
+			Factory: func() *stats { return newStats(0, 0) },
+			Call: func(c context.Context, s *stats) (int, int, error) {
+				if err := c.Err(); err != nil {
+					return 0, 0, err
+				}
+				return s.Stats(c)
+			},
+		},
+	}
+	suite.AssertMultiAggregatorBaseline[*stats, int, int](0, 0)(ctx)
+}

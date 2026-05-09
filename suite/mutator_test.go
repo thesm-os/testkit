@@ -82,3 +82,8 @@ func TestMutator(t *testing.T) {
 		suite.AssertMutatorConcurrentSafe[*accumulator, int64](1, 4, 50)(mutatorCtx(t))
 	})
 }
+
+func TestAssertMutatorBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertMutatorBaseline[*accumulator, int64](42)(mutatorCtx(t))
+}

@@ -13,11 +13,9 @@
 				impl.{{ $m.Name }}(value)
 {{- end }}
 			})
-		suite.AssertMutatorSucceeds[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertMutatorRespectsContext[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertMutatorIdempotent[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
+		var extras []suite.MutatorAssertion[{{ $iface }}, {{ $V }}]
 		if invalidFactory, ok := {{ $opts }}.InvalidFactory.(func() {{ $iface }}); ok {
-			suite.AssertMutatorRejectInvalidWith[{{ $iface }}, {{ $V }}](invalidFactory, {{ $m.SampleParamAt 0 $tracker }})(sctx)
+			extras = append(extras, suite.AssertMutatorRejectInvalidWith[{{ $iface }}, {{ $V }}](invalidFactory, {{ $m.SampleParamAt 0 $tracker }}))
 		}
-		suite.AssertMutatorConcurrentSafe[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		suite.AssertMutatorBaseline[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, extras...)(sctx)
 {{- end -}}

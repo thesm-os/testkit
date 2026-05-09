@@ -105,12 +105,25 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 	errTest := testkit.TestError("AllShapes-contract")
 	_ = errTest
 
+	// All — StreamReader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant.
+	//
+	// Default contracts (always run for StreamReader):
+	//   - smoke
+	//       fail-fast iter drain on a fresh impl
+	//   - completes
+	//       iter terminates without producing an unbounded stream
+	//   - respects context
+	//       ctx.Done() halts iteration; no further yields
+	//   - reentrant
+	//       two iterators against the same impl yield equal sequences
+	//   - respects break
+	//       early break from the for-range halts production cleanly
+	//   - concurrent safe
+	//       4 workers iterate independently under -race
 	t.Run("All", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.All(t.Context())
-		})
 		sctx := suite.StreamContextFor[interfaces.AllShapes, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) iter.Seq2[interfaces.Record, error] {
 				seq := impl.All(ctx)
@@ -122,380 +135,614 @@ func AssertAllShapesContract(t *testing.T, factory AllShapesFactory, opts ...sui
 					}
 				}
 			})
-		suite.AssertStreamCompletes[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamRespectsContext[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamReentrant[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamRespectsBreak[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamConcurrentSafe[interfaces.AllShapes, interfaces.Record](4)(sctx)
+		suite.AssertStreamBaseline[interfaces.AllShapes, interfaces.Record]()(sctx)
 	})
 
+	// Count — Aggregator-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) (R, error) — scalar aggregator. Reads internal state through a context-aware ctor; returns one value plus an error. Consistent across calls when state hasn't changed.
+	//
+	// Default contracts (always run for Aggregator):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - aggregator returns expected
+	//       value matches the configured sample with no error
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - aggregator consistent
+	//       three sequential calls yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Count", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Count(t.Context())
-		})
 		sctx := suite.AggregatorContextFor[interfaces.AllShapes, int](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) (int, error) {
 				return impl.Count(ctx)
 			})
-		suite.AssertAggregatorReturns[interfaces.AllShapes, int](42)(sctx)
-		suite.AssertAggregatorRespectsContext[interfaces.AllShapes, int]()(sctx)
-		suite.AssertAggregatorConsistent[interfaces.AllShapes, int](3)(sctx)
+		var extras []suite.AggregatorAssertion[interfaces.AllShapes, int]
 		if len(resolved.AggregatorBounds) > 0 {
 			if lower, lok := resolved.AggregatorBounds[0].Lower.(int); lok {
 				if upper, uok := resolved.AggregatorBounds[0].Upper.(int); uok {
-					suite.AssertAggregatorBounded[interfaces.AllShapes, int](lower, upper)(sctx)
+					extras = append(extras, suite.AssertAggregatorBounded[interfaces.AllShapes, int](lower, upper))
 				}
 			}
 		}
-		suite.AssertAggregatorConcurrentSafe[interfaces.AllShapes, int](4, 10)(sctx)
+		suite.AssertAggregatorBaseline[interfaces.AllShapes, int](42, extras...)(sctx)
 	})
 
+	// Description — Pure-shape method.
+	//
+	// Shape semantics:
+	//   func() R — pure function. No context, no error. Deterministic across calls; no observable side effects.
+	//
+	// Default contracts (always run for Pure):
+	//   - smoke
+	//       fail-fast bare invocation; catches panics from a broken Factory or panic-on-call
+	//   - returns expected
+	//       value matches the configured sample
+	//   - respects context (structural)
+	//       Pure has no ctx parameter — structural smoke proves no goroutine-local ctx subverts the no-ctx contract
+	//   - deterministic
+	//       three sequential calls yield equal results
+	//   - rejects invalid (structural — no inputs)
+	//       Pure has no input — total over its empty domain; structural smoke
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Description", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Description()
-		})
 		sctx := suite.PureContextFor[interfaces.AllShapes, string](t, factory,
 			func(impl interfaces.AllShapes) string {
 				return impl.Description()
 			})
-		suite.AssertPureReturns[interfaces.AllShapes, string]("test-result")(sctx)
-		suite.AssertPureRespectsContext[interfaces.AllShapes, string]()(sctx)
-		suite.AssertDeterministic[interfaces.AllShapes, string](3)(sctx)
-		suite.AssertPureRejectInvalid[interfaces.AllShapes, string]()(sctx)
-		suite.AssertPureConcurrentSafe[interfaces.AllShapes, string](4, 10)(sctx)
+		suite.AssertPureBaseline[interfaces.AllShapes, string]("test-result")(sctx)
 	})
 
+	// Err — PoisonAccessor-shape method.
+	//
+	// Shape semantics:
+	//   func() error — poison-state accessor. Returns nil on a fresh impl, returns the configured sentinel after a poisoned-factory builds it.
+	//
+	// Default contracts (always run for PoisonAccessor):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - nil on fresh
+	//       fresh impl returns nil — poison only surfaces post-poisoning
+	//   - respects context (structural)
+	//       PoisonAccessor has no ctx — structural smoke
+	//   - poison consistent
+	//       repeated calls return the same nil result on a fresh impl
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Err", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Err()
-		})
 		sctx := suite.PoisonAccessorContextFor[interfaces.AllShapes](t, factory,
 			func(impl interfaces.AllShapes) error {
 				return impl.Err()
 			})
-		suite.AssertPoisonAccessorNilOnFresh[interfaces.AllShapes]()(sctx)
-		suite.AssertPoisonAccessorRespectsContext[interfaces.AllShapes]()(sctx)
-		suite.AssertPoisonAccessorConsistent[interfaces.AllShapes]()(sctx)
-		suite.AssertPoisonAccessorConcurrentSafe[interfaces.AllShapes](4, 10)(sctx)
+		var extras []suite.PoisonAccessorAssertion[interfaces.AllShapes]
+		suite.AssertPoisonAccessorBaseline[interfaces.AllShapes](extras...)(sctx)
 	})
 
+	// Fetch — MultiReader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V1, V2, error) — keyed reader returning two values.
+	//
+	// Default contracts (always run for MultiReader):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - returns for key
+	//       known key returns both values with no error
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads yield equal value pairs
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Fetch", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _, _ = impl.Fetch(t.Context(), "test-key")
-		})
 		sctx := suite.MultiReaderContextFor[interfaces.AllShapes, string, interfaces.Record, string](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) (interfaces.Record, string, error) {
 				return impl.Fetch(ctx, key)
 			})
-		suite.AssertMultiReaderReturnsForKey[interfaces.AllShapes, string, interfaces.Record, string]("test-key", interfaces.Record{ID: "test-id"}, "test-result")(sctx)
-		suite.AssertMultiReaderRespectsContext[interfaces.AllShapes, string, interfaces.Record, string]("test-key")(sctx)
-		suite.AssertMultiReaderConsistent[interfaces.AllShapes, string, interfaces.Record, string]("test-key", 3)(sctx)
-		suite.AssertMultiReaderConcurrentSafe[interfaces.AllShapes, string, interfaces.Record, string]("test-key", 4, 10)(sctx)
+		suite.AssertMultiReaderBaseline[interfaces.AllShapes, string, interfaces.Record, string](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+			"test-result",
+		)(sctx)
 	})
 
+	// Find — PointerReader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) *V — keyed reader returning a pointer. nil signals missing; non-nil is the value.
+	//
+	// Default contracts (always run for PointerReader):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - returns for key
+	//       known key returns non-nil with the expected value
+	//   - respects context
+	//       ctx.Done() returns nil rather than blocking
+	//   - consistent reads
+	//       three sequential reads return equal *V
+	//   - nil on unknown key
+	//       unknown key returns nil
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Find", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Find(t.Context(), "test-key")
-		})
 		sctx := suite.PointerReaderContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) *interfaces.Record {
 				return impl.Find(ctx, key)
 			})
-		suite.AssertPointerReaderReturnsForKey[interfaces.AllShapes, string, interfaces.Record]("test-key", &interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertPointerReaderRespectsContext[interfaces.AllShapes, string, interfaces.Record]("test-key")(sctx)
-		suite.AssertPointerReaderConsistent[interfaces.AllShapes, string, interfaces.Record]("test-key", 3)(sctx)
-		suite.AssertPointerReaderNilOnUnknown[interfaces.AllShapes, string, interfaces.Record]("")(sctx)
-		suite.AssertPointerReaderConcurrentSafe[interfaces.AllShapes, string, interfaces.Record]("test-key", 4, 10)(sctx)
+		suite.AssertPointerReaderBaseline[interfaces.AllShapes, string, interfaces.Record](
+			"test-key",
+			&interfaces.Record{ID: "test-id"},
+			"",
+		)(sctx)
 	})
 
+	// Get — Reader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, error) — keyed reader. Maps a key to a value or surfaces a sentinel error for unknown keys. Reads must be consistent (same input → same output) and free of observable side effects.
+	//
+	// Default contracts (always run for Reader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - returns for key <sample>
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - consistent reads
+	//       three sequential reads of the same key yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - returns sentinel for unknown key
+	//       //testkit:errors declared interfaces.ErrNotFound — surfaces it on lookup of the zero key
 	t.Run("Get", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Get(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) (interfaces.Record, error) {
 				return impl.Get(ctx, key)
 			})
-		suite.AssertReturnsForKey[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertReaderRespectsContext[interfaces.AllShapes, string, interfaces.Record]("test-key")(sctx)
-		suite.AssertConsistentReads[interfaces.AllShapes, string, interfaces.Record]("test-key", 3)(sctx)
-		suite.AssertReturnsSentinel[interfaces.AllShapes, string, interfaces.Record]("", interfaces.ErrNotFound)(sctx)
-		suite.AssertReaderConcurrentSafe[interfaces.AllShapes, string, interfaces.Record]("test-key", 4, 10)(sctx)
+		suite.AssertReaderBaseline[interfaces.AllShapes, string, interfaces.Record](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+			suite.AssertReturnsSentinel[interfaces.AllShapes, string, interfaces.Record]("", interfaces.ErrNotFound),
+		)(sctx)
 	})
 
+	// Init — Lifecycle-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) error — lifecycle method (typically Open/Close). Idempotent across repeated invocations.
+	//
+	// Default contracts (always run for Lifecycle):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - lifecycle succeeds
+	//       first call returns nil
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - lifecycle idempotent
+	//       second call returns nil too
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid (when InvalidFactory option supplied)
+	//       under suite.WithInvalidFactory the lifecycle method must error on a misconfigured impl
 	t.Run("Init", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Init(t.Context())
-		})
 		sctx := suite.LifecycleContextFor[interfaces.AllShapes](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) error {
 				return impl.Init(ctx)
 			})
-		suite.AssertLifecycleSucceeds[interfaces.AllShapes]()(sctx)
-		suite.AssertLifecycleRespectsContext[interfaces.AllShapes]()(sctx)
-		suite.AssertLifecycleIdempotent[interfaces.AllShapes]()(sctx)
+		var extras []suite.LifecycleAssertion[interfaces.AllShapes]
 		if invalidFactory, ok := resolved.InvalidFactory.(func() interfaces.AllShapes); ok {
-			suite.AssertLifecycleRejectInvalidWith[interfaces.AllShapes](invalidFactory)(sctx)
+			extras = append(extras, suite.AssertLifecycleRejectInvalidWith[interfaces.AllShapes](invalidFactory))
 		}
-		suite.AssertLifecycleConcurrentSafe[interfaces.AllShapes](4, 10)(sctx)
+		suite.AssertLifecycleBaseline[interfaces.AllShapes](extras...)(sctx)
 	})
 
+	// Inspect — Lookup-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, R, bool) — keyed lookup with a secondary result and presence bool.
+	//
+	// Default contracts (always run for Lookup):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - returns for key
+	//       known key returns ok=true with the expected (value, R)
+	//   - respects context
+	//       ctx.Done() surfaces an honest miss
+	//   - consistent lookups
+	//       three sequential lookups yield equal results
+	//   - missing key
+	//       unknown key returns ok=false
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Inspect", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _, _ = impl.Inspect(t.Context(), "test-key")
-		})
 		sctx := suite.LookupContextFor[interfaces.AllShapes, string, interfaces.Record, string](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) (interfaces.Record, string, bool) {
 				return impl.Inspect(ctx, key)
 			})
-		suite.AssertLookupReturns[interfaces.AllShapes, string, interfaces.Record, string]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertLookupRespectsContext[interfaces.AllShapes, string, interfaces.Record, string]("test-key")(sctx)
-		suite.AssertLookupConsistent[interfaces.AllShapes, string, interfaces.Record, string]("test-key", 3)(sctx)
-		suite.AssertLookupMissing[interfaces.AllShapes, string, interfaces.Record, string]("")(sctx)
-		suite.AssertLookupConcurrentSafe[interfaces.AllShapes, string, interfaces.Record, string]("test-key", 4, 10)(sctx)
+		suite.AssertLookupBaseline[interfaces.AllShapes, string, interfaces.Record, string](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+			"",
+		)(sctx)
 	})
 
+	// IsHealthy — Predicate-shape method.
+	//
+	// Shape semantics:
+	//   func() bool — predicate. No inputs; returns true/false. Race-free under concurrent access.
+	//
+	// Default contracts (always run for Predicate):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - predicate returns expected
+	//       result matches the configured value
+	//   - respects context (structural)
+	//       Predicate has no ctx — structural smoke
+	//   - predicate consistent
+	//       three sequential calls yield equal results
+	//   - rejects invalid (structural — no inputs)
+	//       Predicate has no input — structural smoke
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("IsHealthy", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.IsHealthy()
-		})
 		sctx := suite.PredicateContextFor[interfaces.AllShapes](t, factory,
 			func(impl interfaces.AllShapes) bool {
 				return impl.IsHealthy()
 			})
-		suite.AssertPredicateReturns[interfaces.AllShapes](true)(sctx)
-		suite.AssertPredicateRespectsContext[interfaces.AllShapes]()(sctx)
-		suite.AssertPredicateConsistent[interfaces.AllShapes](3)(sctx)
-		suite.AssertPredicateRejectInvalid[interfaces.AllShapes]()(sctx)
-		suite.AssertPredicateConcurrentSafe[interfaces.AllShapes](4, 10)(sctx)
+		suite.AssertPredicateBaseline[interfaces.AllShapes](true)(sctx)
 	})
 
+	// Load — ReaderWithBool-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) (V, bool) — keyed reader with presence bool. ok=false replaces error/sentinel for missing keys.
+	//
+	// Default contracts (always run for ReaderWithBool):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - returns for key (ok=true)
+	//       known key returns ok=true with the expected value
+	//   - respects context
+	//       ctx.Done() returns ok=false rather than blocking
+	//   - consistent reads
+	//       three sequential reads yield equal (value, ok) pairs
+	//   - missing key (ok=false)
+	//       unknown key returns ok=false
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Load", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Load(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderWithBoolContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) (interfaces.Record, bool) {
 				return impl.Load(ctx, key)
 			})
-		suite.AssertReaderWithBoolReturns[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertReaderWithBoolRespectsContext[interfaces.AllShapes, string, interfaces.Record]("test-key")(sctx)
-		suite.AssertReaderWithBoolConsistent[interfaces.AllShapes, string, interfaces.Record]("test-key", 3)(sctx)
-		suite.AssertReaderWithBoolMissing[interfaces.AllShapes, string, interfaces.Record]("")(sctx)
-		suite.AssertReaderWithBoolConcurrentSafe[interfaces.AllShapes, string, interfaces.Record]("test-key", 4, 10)(sctx)
+		suite.AssertReaderWithBoolBaseline[interfaces.AllShapes, string, interfaces.Record](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+			"",
+		)(sctx)
 	})
 
+	// Lookup — ReaderNoError-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) V — keyed reader without error. Returns the zero V for unknown keys; no sentinel discipline.
+	//
+	// Default contracts (always run for ReaderNoError):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - returns for key
+	//       happy-path read against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces a degraded/zero return without panic
+	//   - consistent reads
+	//       three sequential reads yield equal results
+	//   - zero on unknown key
+	//       missing key returns the zero V (no sentinel discipline)
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Lookup", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Lookup(t.Context(), "test-key")
-		})
 		sctx := suite.ReaderNoErrorContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) interfaces.Record {
 				return impl.Lookup(ctx, key)
 			})
-		suite.AssertReaderNoErrorReturnsForKey[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertReaderNoErrorRespectsContext[interfaces.AllShapes, string, interfaces.Record]("test-key")(sctx)
-		suite.AssertReaderNoErrorConsistent[interfaces.AllShapes, string, interfaces.Record]("test-key", 3)(sctx)
-		suite.AssertReaderNoErrorZeroOnUnknown[interfaces.AllShapes, string, interfaces.Record]("", interfaces.Record{})(sctx)
-		suite.AssertReaderNoErrorConcurrentSafe[interfaces.AllShapes, string, interfaces.Record]("test-key", 4, 10)(sctx)
+		suite.AssertReaderNoErrorBaseline[interfaces.AllShapes, string, interfaces.Record](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+			"",
+			interfaces.Record{},
+		)(sctx)
 	})
 
+	// Many — BatchReader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, ...K) ([]V, error) — batch reader. Variadic key input, slice value output, parallel arity.
+	//
+	// Default contracts (always run for BatchReader):
+	//   - smoke
+	//       fail-fast bare invocation with the sample keys
+	//   - returns all (batch)
+	//       result slice matches the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - batch consistent
+	//       three sequential batch reads yield equal slices
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Many", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.Many(t.Context())
-		})
 		sctx := suite.BatchReaderContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, keys []string) ([]interfaces.Record, error) {
 				return impl.Many(ctx, keys...)
 			})
 		sampleKeys := []string{"test-keys"}
 		sampleVals := []interfaces.Record{interfaces.Record{ID: "test-id"}}
-		suite.AssertBatchReaderReturnsAll[interfaces.AllShapes, string, interfaces.Record](sampleKeys, sampleVals)(sctx)
-		suite.AssertBatchReaderRespectsContext[interfaces.AllShapes, string, interfaces.Record](sampleKeys)(sctx)
-		suite.AssertBatchReaderConsistent[interfaces.AllShapes, string, interfaces.Record](sampleKeys, 3)(sctx)
-		suite.AssertBatchReaderConcurrentSafe[interfaces.AllShapes, string, interfaces.Record](sampleKeys, 4, 10)(sctx)
+		suite.AssertBatchReaderBaseline[interfaces.AllShapes, string, interfaces.Record](
+			sampleKeys,
+			sampleVals,
+		)(sctx)
 	})
 
+	// Put — Writer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) error — value writer. Idempotent on repeated identical writes; honors ctx cancellation.
+	//
+	// Default contracts (always run for Writer):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - write succeeds
+	//       happy-path write against the configured sample
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - idempotent
+	//       writing the same value twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Put", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Put(t.Context(), interfaces.Record{ID: "test-id"})
-		})
 		sctx := suite.WriterContextFor[interfaces.AllShapes, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, value interfaces.Record) error {
 				return impl.Put(ctx, value)
 			})
-		suite.AssertWriteSucceeds[interfaces.AllShapes, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterRespectsContext[interfaces.AllShapes, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterIdempotent[interfaces.AllShapes, interfaces.Record](interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertWriterConcurrentSafe[interfaces.AllShapes, interfaces.Record](interfaces.Record{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertWriterBaseline[interfaces.AllShapes, interfaces.Record](
+			interfaces.Record{ID: "test-id"},
+		)(sctx)
 	})
 
+	// ReadFrom — StreamConsumer-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, S) (V, error) — stream consumer. Reads from S (typically io.Reader) and returns a parsed value.
+	//
+	// Default contracts (always run for StreamConsumer):
+	//   - smoke (default sample)
+	//       fail-fast invocation with bytes.NewReader([]byte("test-data"))
+	//   - succeeds (default sample)
+	//       default sample produces the expected V
+	//   - respects context (default sample)
+	//       ctx.Done() surfaces context.Canceled
+	//   - concurrent safe (default sample)
+	//       4 workers × 10 iterations, fresh stream per call, under -race
 	t.Run("ReadFrom", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _ = impl.ReadFrom(t.Context(), nil)
-		})
 		sctx := suite.StreamConsumerContextFor[interfaces.AllShapes, io.Reader, int](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, s io.Reader) (int, error) {
 				return impl.ReadFrom(ctx, s)
 			})
-		suite.AssertStreamConsumerSucceedsWithDefault[interfaces.AllShapes, io.Reader, int](42)(sctx)
-		suite.AssertStreamConsumerRespectsContextWithDefault[interfaces.AllShapes, io.Reader, int]()(sctx)
-		suite.AssertStreamConsumerConcurrentSafeWithDefault[interfaces.AllShapes, io.Reader, int](4, 10)(sctx)
+		suite.AssertStreamConsumerBaselineWithDefault[interfaces.AllShapes, io.Reader, int](42)(sctx)
 	})
 
+	// Remove — Deleter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K) error — keyed deleter. Idempotent on repeated deletes of the same key.
+	//
+	// Default contracts (always run for Deleter):
+	//   - smoke
+	//       fail-fast bare invocation with the sample key
+	//   - delete succeeds
+	//       happy-path delete returns nil
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled before mutation
+	//   - delete idempotent
+	//       deleting the same key twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Remove", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Remove(t.Context(), "test-key")
-		})
 		sctx := suite.DeleterContextFor[interfaces.AllShapes, string](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, key string) error {
 				return impl.Remove(ctx, key)
 			})
-		suite.AssertDeleteSucceeds[interfaces.AllShapes, string]("test-key")(sctx)
-		suite.AssertDeleterRespectsContext[interfaces.AllShapes, string]("test-key")(sctx)
-		suite.AssertDeleteIdempotent[interfaces.AllShapes, string]("test-key")(sctx)
-		suite.AssertDeleterConcurrentSafe[interfaces.AllShapes, string]("test-key", 4, 10)(sctx)
+		suite.AssertDeleterBaseline[interfaces.AllShapes, string](
+			"test-key",
+		)(sctx)
 	})
 
+	// Reset — VoidLifecycle-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) — void lifecycle method. Same shape as Lifecycle but no error return.
+	//
+	// Default contracts (always run for VoidLifecycle):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - void-lifecycle succeeds
+	//       first call completes without panic
+	//   - respects context
+	//       ctx.Done() short-circuits the call
+	//   - void-lifecycle idempotent
+	//       second call also completes
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid (when InvalidFactory option supplied)
+	//       under suite.WithInvalidFactory the void method must complete without panic on a misconfigured impl
 	t.Run("Reset", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			impl.Reset()
-		})
 		sctx := suite.VoidLifecycleContextFor[interfaces.AllShapes](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) {
 				impl.Reset()
 			})
-		suite.AssertVoidLifecycleSucceeds[interfaces.AllShapes]()(sctx)
-		suite.AssertVoidLifecycleRespectsContext[interfaces.AllShapes]()(sctx)
-		suite.AssertVoidLifecycleIdempotent[interfaces.AllShapes]()(sctx)
+		var extras []suite.VoidLifecycleAssertion[interfaces.AllShapes]
 		if invalidFactory, ok := resolved.InvalidFactory.(func() interfaces.AllShapes); ok {
-			suite.AssertVoidLifecycleRejectInvalidWith[interfaces.AllShapes](invalidFactory)(sctx)
+			extras = append(extras, suite.AssertVoidLifecycleRejectInvalidWith[interfaces.AllShapes](invalidFactory))
 		}
-		suite.AssertVoidLifecycleConcurrentSafe[interfaces.AllShapes](4, 10)(sctx)
+		suite.AssertVoidLifecycleBaseline[interfaces.AllShapes](extras...)(sctx)
 	})
 
+	// Scan — StreamReader-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant.
+	//
+	// Default contracts (always run for StreamReader):
+	//   - smoke
+	//       fail-fast iter drain on a fresh impl
+	//   - completes
+	//       iter terminates without producing an unbounded stream
+	//   - respects context
+	//       ctx.Done() halts iteration; no further yields
+	//   - reentrant
+	//       two iterators against the same impl yield equal sequences
+	//   - respects break
+	//       early break from the for-range halts production cleanly
+	//   - concurrent safe
+	//       4 workers iterate independently under -race
 	t.Run("Scan", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Scan(t.Context())
-		})
 		sctx := suite.StreamContextFor[interfaces.AllShapes, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) iter.Seq2[interfaces.Record, error] {
 				return impl.Scan(ctx)
 			})
-		suite.AssertStreamCompletes[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamRespectsContext[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamReentrant[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamRespectsBreak[interfaces.AllShapes, interfaces.Record]()(sctx)
-		suite.AssertStreamConcurrentSafe[interfaces.AllShapes, interfaces.Record](4)(sctx)
+		suite.AssertStreamBaseline[interfaces.AllShapes, interfaces.Record]()(sctx)
 	})
 
+	// Schedule — MultiArgWriter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, ...) error — multi-arg writer. Arity-agnostic via variadic dispatch; runtime restores typed args at the boundary.
+	//
+	// Default contracts (always run for MultiArgWriter):
+	//   - smoke
+	//       fail-fast bare invocation with the sample args
+	//   - multi-arg write succeeds
+	//       happy-path write against the configured args
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - multi-arg idempotent
+	//       writing the same args twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Schedule", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Schedule(t.Context(), "test-key", interfaces.Record{ID: "test-id"}, 42)
-		})
 		sctx := suite.MultiArgWriterVariadicContextFor[interfaces.AllShapes](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, args ...any) error {
 				return impl.Schedule(ctx, args[0].(string), args[1].(interfaces.Record), args[2].(int))
 			})
-		suite.AssertMultiArgWriteSucceedsVariadic[interfaces.AllShapes]("test-key", interfaces.Record{ID: "test-id"}, 42)(sctx)
-		suite.AssertMultiArgWriterRespectsContextVariadic[interfaces.AllShapes]("test-key", interfaces.Record{ID: "test-id"}, 42)(sctx)
-		suite.AssertMultiArgWriterIdempotentVariadic[interfaces.AllShapes]("test-key", interfaces.Record{ID: "test-id"}, 42)(sctx)
-		suite.AssertMultiArgWriterConcurrentSafeVariadic[interfaces.AllShapes](4, 10, "test-key", interfaces.Record{ID: "test-id"}, 42)(sctx)
+		sampleArgs := []any{"test-key", interfaces.Record{ID: "test-id"}, 42}
+		suite.AssertMultiArgWriterBaselineVariadic[interfaces.AllShapes](
+			sampleArgs,
+		)(sctx)
 	})
 
+	// Set — CompositeWriter-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, K1, V) error — composite-keyed writer. Same idempotency contract as Writer with a paired key+value input.
+	//
+	// Default contracts (always run for CompositeWriter):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - composite write succeeds
+	//       happy-path write against the (key, value) pair
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - composite idempotent
+	//       writing the same pair twice returns nil twice
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Set", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_ = impl.Set(t.Context(), "test-key", interfaces.Record{ID: "test-id"})
-		})
 		sctx := suite.CompositeWriterContextFor[interfaces.AllShapes, string, interfaces.Record](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, k1 string, value interfaces.Record) error {
 				return impl.Set(ctx, k1, value)
 			})
-		suite.AssertCompositeWriteSucceeds[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertCompositeWriterRespectsContext[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertCompositeWriterIdempotent[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"})(sctx)
-		suite.AssertCompositeWriterConcurrentSafe[interfaces.AllShapes, string, interfaces.Record]("test-key", interfaces.Record{ID: "test-id"}, 4, 10)(sctx)
+		suite.AssertCompositeWriterBaseline[interfaces.AllShapes, string, interfaces.Record](
+			"test-key",
+			interfaces.Record{ID: "test-id"},
+		)(sctx)
 	})
 
+	// Statistics — Unknown-shape method.
+	//
+	// Shape semantics:
+	//
+	//
+	// Default contracts (always run for Unknown):
 	t.Run("Statistics", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _, _, _ = impl.Statistics(t.Context())
-		})
 	})
 
+	// Stats — MultiAggregator-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx) (V1, V2, error) — multi-value aggregator. Same shape as Aggregator but returns two values.
+	//
+	// Default contracts (always run for MultiAggregator):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - multi-aggregator returns expected
+	//       both values match their configured samples with no error
+	//   - respects context
+	//       ctx.Done() surfaces context.Canceled
+	//   - multi-aggregator consistent
+	//       three sequential calls yield equal results
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
 	t.Run("Stats", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			_, _, _ = impl.Stats(t.Context())
-		})
 		sctx := suite.MultiAggregatorContextFor[interfaces.AllShapes, int, int](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes) (int, int, error) {
 				return impl.Stats(ctx)
 			})
-		suite.AssertMultiAggregatorReturns[interfaces.AllShapes, int, int](42, 42)(sctx)
-		suite.AssertMultiAggregatorRespectsContext[interfaces.AllShapes, int, int]()(sctx)
-		suite.AssertMultiAggregatorConsistent[interfaces.AllShapes, int, int](3)(sctx)
-		suite.AssertMultiAggregatorConcurrentSafe[interfaces.AllShapes, int, int](4, 10)(sctx)
+		var extras []suite.MultiAggregatorAssertion[interfaces.AllShapes, int, int]
+		suite.AssertMultiAggregatorBaseline[interfaces.AllShapes, int, int](
+			42,
+			42,
+			extras...,
+		)(sctx)
 	})
 
+	// Touch — Mutator-shape method.
+	//
+	// Shape semantics:
+	//   func(ctx, V) — void mutator. Mutates internal state on each call; no return.
+	//
+	// Default contracts (always run for Mutator):
+	//   - smoke
+	//       fail-fast bare invocation
+	//   - mutator succeeds
+	//       happy-path mutation completes without panic
+	//   - respects context
+	//       ctx.Done() short-circuits the mutation
+	//   - mutator idempotent
+	//       applying the same mutation twice does not panic
+	//   - concurrent safe
+	//       4 workers × 10 iterations under -race
+	//
+	// Optional baseline extras (gated on signature/options):
+	//   - rejects invalid (when InvalidFactory option supplied)
+	//       under suite.WithInvalidFactory the mutator must complete without panic on a misconfigured impl
 	t.Run("Touch", func(t *testing.T) {
-		t.Run("smoke", func(t *testing.T) {
-			t.Parallel()
-			impl := factory()
-			impl.Touch(t.Context(), "test-key")
-		})
 		sctx := suite.MutatorContextFor[interfaces.AllShapes, string](t, factory,
 			func(ctx context.Context, impl interfaces.AllShapes, value string) {
 				impl.Touch(ctx, value)
 			})
-		suite.AssertMutatorSucceeds[interfaces.AllShapes, string]("test-key")(sctx)
-		suite.AssertMutatorRespectsContext[interfaces.AllShapes, string]("test-key")(sctx)
-		suite.AssertMutatorIdempotent[interfaces.AllShapes, string]("test-key")(sctx)
+		var extras []suite.MutatorAssertion[interfaces.AllShapes, string]
 		if invalidFactory, ok := resolved.InvalidFactory.(func() interfaces.AllShapes); ok {
-			suite.AssertMutatorRejectInvalidWith[interfaces.AllShapes, string](invalidFactory, "test-key")(sctx)
+			extras = append(extras, suite.AssertMutatorRejectInvalidWith[interfaces.AllShapes, string](invalidFactory, "test-key"))
 		}
-		suite.AssertMutatorConcurrentSafe[interfaces.AllShapes, string]("test-key", 4, 10)(sctx)
+		suite.AssertMutatorBaseline[interfaces.AllShapes, string]("test-key", extras...)(sctx)
 	})
 
 }

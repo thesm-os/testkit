@@ -1,21 +1,12 @@
 {{- /* Reader-shape baseline body. Body-only partial — invoked from
        `test-method` inside the per-method t.Run. Builds the typed
-       ReaderContext via [suite.ReaderContextFor] and runs the 5
-       baseline assertions:
-         - AssertReturnsForKey         (Succeeds)
-         - AssertReaderRespectsContext (RespectsContext)
-         - AssertConsistentReads       (Idempotent)
-         - AssertReturnsSentinel       (RejectInvalid — emitted when
-                                        the method carries
-                                        //testkit:errors)
-         - AssertReaderConcurrentSafe  (ConcurrentSafe)
-
-       Methods without a sentinel directive simply omit the
-       AssertReturnsSentinel call — the contract is unverifiable
-       without a named sentinel; emitting nothing is honest.
-       Generic Reader where the sample key equals the zero key
-       (`*new(K)`) also omits the sentinel call to avoid the
-       sample/missing-key collision (see Task 9). */ -}}
+       ReaderContext via [suite.ReaderContextFor] and runs the Reader
+       baseline (Returns, RespectsContext, ConsistentReads,
+       ConcurrentSafe). The optional [suite.AssertReturnsSentinel]
+       extra fires when the method declares //testkit:errors with a
+       nameable sentinel; generic Readers where the sample key equals
+       the zero key (`*new(K)`) omit the sentinel — see Task 9 — to
+       avoid the sample/missing-key collision. */ -}}
 {{- define "test-method-reader" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
@@ -30,11 +21,11 @@
 				return impl.{{ $m.Name }}(key)
 {{- end }}
 			})
-		suite.AssertReturnsForKey[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }})(sctx)
-		suite.AssertReaderRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
-		suite.AssertConsistentReads[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
+		suite.AssertReaderBaseline[{{ $iface }}, {{ $K }}, {{ $V }}](
+			{{ $m.SampleParamAt 0 $tracker }},
+			{{ $m.SampleResultAt 0 $tracker }},
 {{- if and $m.HasFirstSentinel (not ($m.SampleEqualsZero 0 $tracker)) }}
-		suite.AssertReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }})(sctx)
+			suite.AssertReturnsSentinel[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.FirstSentinel }}),
 {{- end }}
-		suite.AssertReaderConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+		)(sctx)
 {{- end -}}

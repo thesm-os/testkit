@@ -86,3 +86,22 @@ func TestMultiReader(t *testing.T) {
 			"k1", 4, 50)(multiReaderCtx(t, data))
 	})
 }
+
+func TestAssertMultiReaderBaseline(t *testing.T) {
+	t.Parallel()
+	data := map[string]entityWithMeta{"k1": {name: "alpha", etag: "v1"}}
+	ctx := suite.MultiReaderContext[*entityStore, string, string, string]{
+		T: t,
+		MultiReaderBindings: bindings.MultiReaderBindings[*entityStore, string, string, string]{
+			Factory: func() *entityStore { return newEntityStore(data) },
+			Call: func(c context.Context, s *entityStore, k string) (string, string, error) {
+				if err := c.Err(); err != nil {
+					return "", "", err
+				}
+				return s.Fetch(c, k)
+			},
+		},
+	}
+	suite.AssertMultiReaderBaseline[*entityStore, string, string, string](
+		"k1", "alpha", "v1")(ctx)
+}

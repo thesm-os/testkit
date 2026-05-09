@@ -34,9 +34,5 @@
 				}
 {{- end }}
 			})
-		suite.AssertStreamCompletes[{{ $iface }}, {{ $V }}]()(sctx)
-		suite.AssertStreamRespectsContext[{{ $iface }}, {{ $V }}]()(sctx)
-		suite.AssertStreamReentrant[{{ $iface }}, {{ $V }}]()(sctx)
-		suite.AssertStreamRespectsBreak[{{ $iface }}, {{ $V }}]()(sctx)
-		suite.AssertStreamConcurrentSafe[{{ $iface }}, {{ $V }}](4)(sctx)
+		suite.AssertStreamBaseline[{{ $iface }}, {{ $V }}]()(sctx)
 {{- end -}}

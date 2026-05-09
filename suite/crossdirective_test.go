@@ -148,6 +148,44 @@ func TestAssertLifecycleAfterClose(t *testing.T) {
 	)(t, newCrossDirStore)
 }
 
+// closeable is a fixture that tracks closure and has a reflective reader.
+type closeable struct {
+	mu     sync.Mutex
+	closed bool
+}
+
+func closeableFactory() *closeable { return &closeable{} }
+
+// Close is the lifecycle method.
+func (c *closeable) Close(_ context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	return nil
+}
+
+// Count is the aggregator-like reader invoked via reflection. It returns
+// an error after close.
+func (c *closeable) Count(_ context.Context) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		return 0, errors.New("closed")
+	}
+	return 0, nil
+}
+
+func TestAssertLifecycleAfterCloseReflective(t *testing.T) {
+	t.Parallel()
+	closeFn := func(ctx context.Context, c *closeable) error {
+		return c.Close(ctx)
+	}
+	assertion := suite.AssertLifecycleAfterCloseReflective[*closeable](
+		"Count", closeFn,
+	)
+	assertion(t, closeableFactory)
+}
+
 func TestAssertCRDTMerge(t *testing.T) {
 	t.Parallel()
 	suite.AssertCRDTMerge[*crossDirStore, int](

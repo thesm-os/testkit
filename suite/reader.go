@@ -134,3 +134,40 @@ func AssertReaderRespectsContext[T any, K comparable, V any](key K) ReaderAssert
 		})
 	}
 }
+
+// AssertReaderSmoke calls the reader once with the sample key on a
+// fresh impl. The subtest fails fast on panic, surfacing a broken
+// Factory or a method that panics on bare invocation as one localized
+// failure before any contract assertion runs.
+func AssertReaderSmoke[T any, K comparable, V any](sampleKey K) ReaderAssertion[T, K, V] {
+	return func(ctx ReaderContext[T, K, V]) {
+		ctx.T.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_, _ = ctx.Call(t.Context(), impl, sampleKey)
+		})
+	}
+}
+
+// AssertReaderBaseline runs the Reader-shape baseline: smoke,
+// ReturnsForKey, RespectsContext, ConsistentReads (3×), and
+// ConcurrentSafe (4×10). Optional extras (e.g. AssertReturnsSentinel
+// for methods that declare //testkit:errors with a nameable sentinel)
+// run between consistency and concurrency so failures localize before
+// fanout.
+func AssertReaderBaseline[T any, K comparable, V any](
+	sampleKey K,
+	sampleVal V,
+	extra ...ReaderAssertion[T, K, V],
+) ReaderAssertion[T, K, V] {
+	return func(ctx ReaderContext[T, K, V]) {
+		AssertReaderSmoke[T, K, V](sampleKey)(ctx)
+		AssertReturnsForKey[T, K, V](sampleKey, sampleVal)(ctx)
+		AssertReaderRespectsContext[T, K, V](sampleKey)(ctx)
+		AssertConsistentReads[T, K, V](sampleKey, 3)(ctx)
+		for _, e := range extra {
+			e(ctx)
+		}
+		AssertReaderConcurrentSafe[T, K, V](sampleKey, 4, 10)(ctx)
+	}
+}

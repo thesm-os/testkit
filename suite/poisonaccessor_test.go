@@ -60,3 +60,8 @@ func TestPoisonAccessor(t *testing.T) {
 		suite.AssertPoisonAccessorConcurrentSafe[*healthChecker](4, 50)(poisonAccessorCtx(t))
 	})
 }
+
+func TestAssertPoisonAccessorBaseline(t *testing.T) {
+	t.Parallel()
+	suite.AssertPoisonAccessorBaseline[*healthChecker]()(poisonAccessorCtx(t))
+}
