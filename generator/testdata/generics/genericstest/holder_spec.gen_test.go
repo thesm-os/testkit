@@ -11,7 +11,7 @@
 //
 // # Usage
 //
-//	func TestStoreContract(t *testing.T) {
+//	func TestHolderContract(t *testing.T) {
 //	    AssertHolderContract[V](t, func() generics.Holder[string] {
 //	        return newInMemory()
 //	    })
@@ -22,7 +22,7 @@
 // Run the same contract once per implementation with
 // `t.Run(name, ...)` per impl:
 //
-//	func TestStoreContractAcrossImpls(t *testing.T) {
+//	func TestHolderContractAcrossImpls(t *testing.T) {
 //	    AssertHolderContractAcrossImpls(t, []HolderNamedFactory{
 //	        {Name: "InMemory", Factory: newInMemory},
 //	        {Name: "Postgres", Factory: newPostgres},
@@ -130,6 +130,7 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Delete", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.DeleterContextFor[generics.Holder[string], string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) error {
 				return impl.Delete(ctx, key)
@@ -173,6 +174,7 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Get", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.ReaderContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], key string) (string, error) {
 				return impl.Get(ctx, key)
@@ -214,6 +216,7 @@ func AssertHolderContract(t *testing.T, factory HolderFactory, opts ...suite.Opt
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Put", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.CompositeWriterContextFor[generics.Holder[string], string, string](t, factory,
 			func(ctx context.Context, impl generics.Holder[string], k1 string, value string) error {
 				return impl.Put(ctx, k1, value)

@@ -4,10 +4,14 @@
        stream is iterated, items collected into a slice, the
        written V's equality membership is asserted.
 
-       The named stream method must be StreamReader-shape and
-       compatible with iter.Seq (no error) or iter.Seq2 (paired
-       with error). The directive validator (Task 18) rejects on
-       mismatched shapes. */ -}}
+       Single-variable range works for both iter.Seq[V] and
+       iter.Seq2[V, error] — Seq yields the value directly, Seq2
+       yields V as the first range variable. Errors from Seq2 are
+       intentionally not observed here; the contract is membership,
+       not error-channel verification.
+
+       The directive validator (Task 18) rejects on shapes the
+       directive cannot express. */ -}}
 {{- define "test-directive-streamreflectsmutations" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
@@ -20,10 +24,7 @@
 			},
 			func(ctx context.Context, impl {{ $iface }}) ([]{{ $V }}, error) {
 				out := make([]{{ $V }}, 0)
-				for v, err := range impl.{{ $m.StreamReflectsMutationsStream }}(ctx) {
-					if err != nil {
-						return out, err
-					}
+				for v := range impl.{{ $m.StreamReflectsMutationsStream }}(ctx) {
 					out = append(out, v)
 				}
 				return out, nil

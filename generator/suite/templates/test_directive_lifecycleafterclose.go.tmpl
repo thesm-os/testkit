@@ -1,14 +1,69 @@
-{{- /* Lifecycle-after-close contract: emits one call to
-       [suite.AssertLifecycleAfterCloseReflective] with a typed
-       close closure. Runtime owns the reflection on the named
-       reader + non-nil error assertion. */ -}}
+{{- /* Lifecycle-after-close contract. Two emission paths:
+
+         - Reader-shape peer (ctx, K) → (V, error): emits the typed
+           [suite.AssertLifecycleAfterClose] with sample key + a typed
+           closure. The runtime reads via the typed read closure (no
+           reflection needed) and asserts the closed sentinel.
+
+         - No-key peer or shape we can't statically resolve: falls
+           back to [suite.AssertLifecycleAfterCloseReflective] which
+           reflects on the named reader and calls it with just ctx.
+
+       The carrier method (the close) is normalized to a func(ctx,
+       impl) error closure regardless of its real shape:
+         - Lifecycle (ctx) error          → return impl.Close(ctx)
+         - VoidLifecycle (ctx) void       → impl.Close(ctx); return nil
+         - VoidLifecycle () void          → impl.Close(); return nil
+         - Lifecycle () error             → return impl.Close()
+       so the runtime helper sees a uniform signature. */ -}}
 {{- define "test-directive-lifecycleafterclose" -}}
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
-		suite.AssertLifecycleAfterCloseReflective[{{ $iface }}](
-			{{ printf "%q" $m.LifecycleAfterCloseReader }},
+{{- $tracker := .Tracker -}}
+{{- $spec := .Spec -}}
+{{- $reader := $m.LifecycleAfterCloseReader -}}
+{{- $peerKey := $m.PeerShapeKeyType $reader $spec -}}
+{{- $peerVal := $m.PeerShapeValType $reader $spec -}}
+{{- $peerSentinel := $m.PeerFirstSentinel $reader $spec -}}
+{{- if and $peerKey $peerVal $peerSentinel }}
+		suite.AssertLifecycleAfterClose[{{ $iface }}, {{ $peerKey }}, {{ $peerVal }}](
+			{{ printf "%q" "test-key" }},
+			{{ $peerSentinel }},
 			func(ctx context.Context, impl {{ $iface }}) error {
+{{- if and $m.HasContext $m.ReturnsError }}
 				return impl.{{ $m.Name }}(ctx)
+{{- else if $m.HasContext }}
+				impl.{{ $m.Name }}(ctx)
+				return nil
+{{- else if $m.ReturnsError }}
+				return impl.{{ $m.Name }}()
+{{- else }}
+				_ = ctx
+				impl.{{ $m.Name }}()
+				return nil
+{{- end }}
+			},
+			func(ctx context.Context, impl {{ $iface }}, k {{ $peerKey }}) ({{ $peerVal }}, error) {
+				return impl.{{ $reader }}(ctx, k)
 			},
 		)(t, factory)
+{{- else }}
+		suite.AssertLifecycleAfterCloseReflective[{{ $iface }}](
+			{{ printf "%q" $reader }},
+			func(ctx context.Context, impl {{ $iface }}) error {
+{{- if and $m.HasContext $m.ReturnsError }}
+				return impl.{{ $m.Name }}(ctx)
+{{- else if $m.HasContext }}
+				impl.{{ $m.Name }}(ctx)
+				return nil
+{{- else if $m.ReturnsError }}
+				return impl.{{ $m.Name }}()
+{{- else }}
+				_ = ctx
+				impl.{{ $m.Name }}()
+				return nil
+{{- end }}
+			},
+		)(t, factory)
+{{- end }}
 {{- end -}}

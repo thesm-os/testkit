@@ -4,10 +4,16 @@
        Assert<Shape>Baseline runs its own "smoke" subtest first
        (fail-fast on panic), then the contract assertions, so test
        output groups uniformly under one path per method:
-         TestStoreContract/Get/smoke
-         TestStoreContract/Get/returns for key …
-         TestStoreContract/Get/respects context
-       … with smoke owned by the runtime, not the dispatcher. */ -}}
+         Test<Iface>Contract/Get/smoke
+         Test<Iface>Contract/Get/returns for key …
+         Test<Iface>Contract/Get/respects context
+       … with smoke owned by the runtime, not the dispatcher.
+
+       Each per-method t.Run block calls t.Parallel() at entry so
+       methods run concurrently — the per-shape baselines and
+       per-directive subtests already parallelize internally, but
+       opting the method-level scope into parallel execution
+       cuts wall-time when a contract has many methods. */ -}}
 {{- define "test-method" -}}
 {{- $iface := .QualifiedTypeForTest -}}
 {{- $tracker := .Spec.Tracker -}}
@@ -28,6 +34,7 @@
 	// hand-written test under the interface package's own _test
 	// directory, gated on a build tag or env var).
 	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("//testkit:integration-only — contract-correctness path skipped; integration coverage lives in the consumer's own test layer")
 	})
 {{- else if eq (len $m.BaselineSubtests) 0 }}
@@ -44,7 +51,52 @@
 	// or a //testkit directive that maps this signature to an
 	// existing shape.
 	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		t.Parallel()
 		t.Skip("{{ $m.ShapeName }} shape — no baseline contract emitted; suite needs a per-shape runtime helper to verify this signature category")
+	})
+{{- else if or $m.HasOrderAfter $m.HasScope $m.HasLease }}
+
+	// {{ $m.Name }} — {{ $m.ShapeName }}-shape method with
+{{- if $m.HasOrderAfter }}
+	// //testkit:order-after {{ $m.OrderAfterTarget }}.
+{{- else if $m.HasScope }}
+	// //testkit:scope {{ $m.ScopeName }}.
+{{- else }}
+	// //testkit:lease Release={{ $m.LeaseRelease }}.
+{{- end }}
+	//
+	// The shape baseline is intentionally suppressed for
+	// order-after / scope / lease methods. These directive
+	// contracts conflict with the baseline by design:
+	//
+	//   - The {{ $m.ShapeName }} baseline expects the method to
+	//     succeed (or return the sample value) on a fresh
+	//     factory-produced impl.
+	//   - order-after expects fresh-impl calls to fail until the
+	//     prerequisite runs.
+	//   - scope expects unauthorized calls to return the
+	//     unauthorized sentinel.
+	//   - lease expects double-acquire-without-release to fail
+	//     (the second acquire is not idempotent).
+	//
+	// The directive contract owns the per-method t.Run scope; the
+	// baseline is dropped so reviewers see one consistent verdict
+	// per call site rather than a baseline pass + directive fail
+	// (or vice versa).
+	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		t.Parallel()
+{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker "Opts" "resolved" "Spec" $spec) -}}
+{{- if $m.HasOrderAfter }}
+{{ template "test-directive-orderafter" $args }}
+{{- end }}
+{{- if $m.HasScope }}
+{{ template "test-directive-scope" $args }}
+{{- end }}
+{{- if $m.HasLease }}
+{{ template "test-directive-lease" $args }}
+{{- end }}
+{{- if $m.HasWrappedVia }}
+{{ template "test-directive-wrappedvia" $args }}{{ end }}
 	})
 {{- else }}
 
@@ -66,6 +118,11 @@
 	//   - {{ $c.Name }}
 	//       {{ $c.Description }}
 {{- end }}
+{{- end }}
+{{- $alignment := $m.BaselineSampleAlignment }}
+{{- if $alignment }}
+	//
+	// {{ $alignment }}
 {{- end }}
 {{- if $spec.IsGeneric }}
 	//
@@ -92,7 +149,8 @@
 {{- end }}
 {{- end }}
 	t.Run("{{ $m.Name }}", func(t *testing.T) {
-{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker "Opts" "resolved") -}}
+		t.Parallel()
+{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker "Opts" "resolved" "Spec" $spec) -}}
 {{- if eq $m.ShapeName "Reader" }}
 {{ template "test-method-reader" $args }}
 {{- else if eq $m.ShapeName "ReaderNoError" }}

@@ -7,7 +7,7 @@
 //
 // # Usage
 //
-//	func TestStoreContract(t *testing.T) {
+//	func TestTallyContract(t *testing.T) {
 //	    AssertTallyContract[T](t, func() generics.Tally[int] {
 //	        return newInMemory()
 //	    })
@@ -18,7 +18,7 @@
 // Run the same contract once per implementation with
 // `t.Run(name, ...)` per impl:
 //
-//	func TestStoreContractAcrossImpls(t *testing.T) {
+//	func TestTallyContractAcrossImpls(t *testing.T) {
 //	    AssertTallyContractAcrossImpls(t, []TallyNamedFactory{
 //	        {Name: "InMemory", Factory: newInMemory},
 //	        {Name: "Postgres", Factory: newPostgres},
@@ -126,6 +126,7 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Add", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.CompositeWriterContextFor[generics.Tally[int], string, int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int], k1 string, value int) error {
 				return impl.Add(ctx, k1, value)
@@ -153,6 +154,8 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	//   - concurrent safe
 	//       4 workers × 10 iterations under -race
 	//
+	// Sample alignment: Aggregator-shape methods have no input parameter, so the contract's expected sample (e.g. 42 for int) cannot be derived from a fresh impl's natural state. Configure your factory so this method returns the sample value — typically via an override field on the in-mem (see allshapestest.SetCountOverride for the pattern) or by pre-populating enough state that the state-derived return matches.
+	//
 	// Generic instantiation note:
 	//   This method belongs to a generic interface. Sample values
 	//   for type-parameter slots default to the zero value of the
@@ -166,6 +169,7 @@ func AssertTallyContract(t *testing.T, factory TallyFactory, opts ...suite.Optio
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Total", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.AggregatorContextFor[generics.Tally[int], int](t, factory,
 			func(ctx context.Context, impl generics.Tally[int]) (int, error) {
 				return impl.Total(ctx)

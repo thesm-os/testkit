@@ -6,7 +6,7 @@
 {{- $m := .M -}}
 {{- $iface := .Iface -}}
 		suite.AssertEventuallyConverges[{{ $iface }}](
-			{{ $m.EventuallyTimeout }}, {{ printf "%q" $m.EventuallyTimeout }},
+			{{ $m.EventuallyTimeoutGo }}, {{ printf "%q" $m.EventuallyTimeout }},
 			func(ctx context.Context, impl {{ $iface }}) any {
 {{- if $m.ReturnsError }}
 				cur, err := impl.{{ $m.Name }}(ctx)

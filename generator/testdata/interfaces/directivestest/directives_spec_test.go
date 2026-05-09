@@ -5,32 +5,46 @@ package directivestest_test
 
 import (
 	"testing"
+
+	"go.thesmos.sh/testkit/generator/testdata/interfaces"
+	"go.thesmos.sh/testkit/suite"
 )
 
-// TestDirectivesContract is intentionally a Skip. The generated
-// suite emits sample-driven baselines that conflict with
-// [interfaces.InMemoryDirectives]'s deliberate semantics:
+// TestDirectivesContract closes the e2e loop on the suite generator's
+// directive coverage. The fixture exercises the directives whose
+// contracts are most likely to interact with shape baselines:
+// errors, wrapped-via, deprecated, retryable + retry-succeeds-on-
+// attempt, order-after, partition.
 //
-//   - Submit returns ErrConflict on duplicate IDs, so the Writer
-//     idempotency baseline (`AssertWriterIdempotent` calls Submit
-//     twice with the same Record) fails on the second call.
-//   - Wrap always returns an error wrapped via ErrInternal — there
-//     is no "succeeds" path, so AssertWriteSucceeds fails for any
-//     input.
-//   - Submit's RejectInvalid baseline expects ErrNotFound on the
-//     zero Record, but Submit returns nil for a fresh empty ID.
+// The seed function pre-populates the items map under the contract's
+// sample key so Read's Reader baseline lands on the sample value;
+// other methods (Submit / Wrap / Retry / Shard / ShardByKey) honor
+// their declared sentinels via the in-mem's branch on zero-valued
+// inputs.
 //
-// These are not generator bugs — they're a deliberate gap between
-// the generic sample-driven contract template and an in-mem written
-// for stub-side dispatch testing. Closing the e2e loop here would
-// require either rewriting the in-mem to be contract-correct (and
-// breaking the existing stub tests), or layering a per-method
-// override mechanism into the generator. Both are out of scope for
-// the suite's testdata bench.
-//
-// The contract driver itself compiles against the suite runtime —
-// that's the regression the testdata bench needs to catch and the
-// committed [directives_spec.gen_test.go] proves it.
+// Two factories are wired into the contract:
+//   - The default factory returns a fresh in-mem with retryFailMode=
+//     false so the Writer baseline (Submit / Wrap / Retry / Shard /
+//     ShardByKey) sees first-call success.
+//   - WithRetryFactory supplies a separate in-mem with retryFailMode=
+//     true so AssertRetrySucceedsOnAttempt observes the N-1
+//     transient failures the directive declares.
 func TestDirectivesContract(t *testing.T) {
-	t.Skip("InMemoryDirectives semantics deliberately conflict with the generic Writer contract; see comment for details")
+	t.Parallel()
+	AssertDirectivesContract(t, func() interfaces.Directives {
+		d := interfaces.NewInMemoryDirectives()
+		// Read's Reader baseline expects items["test-key"] =
+		// Record{ID:"test-id"} so the happy-path read returns the
+		// sample value.
+		d.SeedAt("test-key", interfaces.Record{ID: "test-id"})
+		return d
+	}, suite.WithRetryFactory(func() interfaces.Directives {
+		// Retry contract requires N-1 transient failures + final
+		// success against the same impl. The retry factory builds an
+		// in-mem with retryFailMode=true so Retry returns ErrInternal
+		// on the first 2 calls and succeeds on the 3rd.
+		d := interfaces.NewInMemoryDirectives()
+		d.SetRetryFailMode(true)
+		return d
+	}))
 }

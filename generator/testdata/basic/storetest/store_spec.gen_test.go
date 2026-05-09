@@ -123,6 +123,7 @@ func AssertStoreContract(t *testing.T, factory StoreFactory, opts ...suite.Optio
 	//   - returns sentinel for unknown key
 	//       //testkit:errors declared basic.ErrNotFound — surfaces it on lookup of the zero key
 	t.Run("Get", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.ReaderContextFor[basic.Store, string, basic.Item](t, factory,
 			func(ctx context.Context, impl basic.Store, key string) (basic.Item, error) {
 				return impl.Get(ctx, key)
@@ -161,6 +162,7 @@ func AssertStoreContract(t *testing.T, factory StoreFactory, opts ...suite.Optio
 	//   - atomic (no observable trace on failure)
 	//       //testkit:atomic — when the method errors, observable state is unchanged
 	t.Run("Put", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.WriterContextFor[basic.Store, basic.Item](t, factory,
 			func(ctx context.Context, impl basic.Store, value basic.Item) error {
 				return impl.Put(ctx, value)

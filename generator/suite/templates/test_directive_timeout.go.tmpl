@@ -5,7 +5,7 @@
 {{- $iface := .Iface -}}
 {{- $tracker := .Tracker -}}
 		suite.AssertTimeoutWithin[{{ $iface }}](
-			{{ $m.TimeoutDuration }}, {{ printf "%q" $m.TimeoutDuration }},
+			{{ $m.TimeoutDurationGo }}, {{ printf "%q" $m.TimeoutDuration }},
 			func(ctx context.Context, impl {{ $iface }}) {
 {{- if $m.HasResults }}
 				{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $m.SampleArgs $tracker }})

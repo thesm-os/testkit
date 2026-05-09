@@ -9,6 +9,7 @@ import (
 	"path"
 	"sort"
 	"strconv"
+	"sync"
 )
 
 // ImportTracker collects import paths referenced by rendered code and
@@ -19,7 +20,14 @@ import (
 // Aliases are assigned deterministically: when two packages have the
 // same basename, the first to register keeps the bare name, subsequent
 // registrations get suffixed aliases ("model", "model2", ...).
+//
+// Goroutine-safe: AddPath / Add / Qualifier / Imports may be called
+// concurrently. The internal maps are guarded by an embedded mutex so
+// shared trackers (e.g. one tracker passed to several parallel
+// `go/types.TypeString` calls) don't race on read-modify-write of the
+// alias-collision counter.
 type ImportTracker struct {
+	mu       sync.Mutex
 	localPkg string            // import path of the package being generated
 	imports  map[string]string // path → alias (alias may be empty if name == basename)
 	names    map[string]int    // basename → count, for collision detection
@@ -56,6 +64,8 @@ func (t *ImportTracker) AddPath(pkgPath string) string {
 	if pkgPath == "" || pkgPath == t.localPkg {
 		return ""
 	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	if existing, ok := t.imports[pkgPath]; ok {
 		if existing != "" {
 			return existing
@@ -82,6 +92,8 @@ func (t *ImportTracker) AddPath(pkgPath string) string {
 // Imports returns the registered imports sorted by path. Used by
 // templates to render the import block.
 func (t *ImportTracker) Imports() []Import {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	out := make([]Import, 0, len(t.imports))
 	for p, alias := range t.imports {
 		out = append(out, Import{Alias: alias, Path: p})

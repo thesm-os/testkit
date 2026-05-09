@@ -10,7 +10,7 @@
 //
 // # Usage
 //
-//	func TestStoreContract(t *testing.T) {
+//	func TestKeyMapContract(t *testing.T) {
 //	    AssertKeyMapContract[K, V](t, func() generics.KeyMap[string, int] {
 //	        return newInMemory()
 //	    })
@@ -21,7 +21,7 @@
 // Run the same contract once per implementation with
 // `t.Run(name, ...)` per impl:
 //
-//	func TestStoreContractAcrossImpls(t *testing.T) {
+//	func TestKeyMapContractAcrossImpls(t *testing.T) {
 //	    AssertKeyMapContractAcrossImpls(t, []KeyMapNamedFactory{
 //	        {Name: "InMemory", Factory: newInMemory},
 //	        {Name: "Postgres", Factory: newPostgres},
@@ -133,6 +133,7 @@ func AssertKeyMapContract(t *testing.T, factory KeyMapFactory, opts ...suite.Opt
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Get", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.ReaderContextFor[generics.KeyMap[string, int], string, int](t, factory,
 			func(ctx context.Context, impl generics.KeyMap[string, int], key string) (int, error) {
 				return impl.Get(ctx, key)
@@ -173,6 +174,7 @@ func AssertKeyMapContract(t *testing.T, factory KeyMapFactory, opts ...suite.Opt
 	//   functions resolved at the test instantiation site) so
 	//   non-zero values flow through both seed and assertion.
 	t.Run("Set", func(t *testing.T) {
+		t.Parallel()
 		sctx := suite.CompositeWriterContextFor[generics.KeyMap[string, int], string, int](t, factory,
 			func(ctx context.Context, impl generics.KeyMap[string, int], k1 string, value int) error {
 				return impl.Set(ctx, k1, value)

@@ -69,8 +69,13 @@ type Directives interface {
 	Retry(ctx context.Context, key string) error
 
 	// Read enforces ordering: must be called after Open. The stub
-	// panics when called out of order.
+	// panics when called out of order. Reader-shape baseline is
+	// suppressed by the suite generator for methods carrying
+	// //testkit:order-after — the contracts conflict (one expects
+	// fresh-impl read to fail, the other expects fresh-impl read to
+	// return the sample value).
 	//
+	//testkit:errors ErrNotFound
 	//testkit:order-after Open
 	Read(ctx context.Context, key string) (Record, error)
 

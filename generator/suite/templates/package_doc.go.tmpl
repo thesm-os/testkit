@@ -16,7 +16,7 @@
 //
 // # Usage
 //
-//	func TestStoreContract(t *testing.T) {
+//	func Test{{ $iface }}Contract(t *testing.T) {
 //	    {{ $driver }}{{ .Spec.TypeParamArgs }}(t, func() {{ .QualifiedTypeForTest }} {
 //	        return newInMemory()
 //	    })
@@ -27,7 +27,7 @@
 // Run the same contract once per implementation with
 // `t.Run(name, ...)` per impl:
 //
-//	func TestStoreContractAcrossImpls(t *testing.T) {
+//	func Test{{ $iface }}ContractAcrossImpls(t *testing.T) {
 //	    {{ $across }}(t, []{{ .NamedFactoryTypeName }}{
 //	        {Name: "InMemory", Factory: newInMemory},
 //	        {Name: "Postgres", Factory: newPostgres},

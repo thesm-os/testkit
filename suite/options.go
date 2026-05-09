@@ -74,6 +74,16 @@ type Options struct {
 	// state-equality check. Falls back to reflect.DeepEqual when nil.
 	// Stored as any because T varies per impl.
 	StateEqual any
+
+	// RetryFactory produces an impl whose method-under-retry returns
+	// transient errors on the first N-1 calls and succeeds on the
+	// Nth — the inverse of the regular factory's "succeeds on first
+	// call" contract. AssertRetrySucceedsOnAttempt uses this when
+	// supplied so the same fixture can satisfy both the Writer
+	// baseline (succeed on first call) and the retry-succeeds
+	// contract (fail N-1 times, then succeed). Stored as any since T
+	// varies; the directive partial reflects to extract.
+	RetryFactory any
 }
 
 // BoundPair holds a lower/upper bound for a single Aggregator result
@@ -110,6 +120,20 @@ func ResolveOptions(opts ...Option) Options {
 func WithInvalidFactory[T any](factory func() T) Option {
 	return func(o *Options) {
 		o.InvalidFactory = factory
+	}
+}
+
+// WithRetryFactory installs a factory that produces an impl whose
+// retryable method returns transient errors on the first N-1 calls
+// and succeeds on the Nth, where N comes from
+// //testkit:retry-succeeds-on-attempt. AssertRetrySucceedsOnAttempt
+// uses this factory when supplied so the regular factory (which
+// satisfies the Writer baseline's "succeeds on first call" contract)
+// stays separate from the transient-failure contract. T is erased;
+// per-method partials reflect to extract.
+func WithRetryFactory[T any](factory func() T) Option {
+	return func(o *Options) {
+		o.RetryFactory = factory
 	}
 }
 

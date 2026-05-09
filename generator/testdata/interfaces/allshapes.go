@@ -60,7 +60,11 @@ type AllShapes interface {
 	// 820 — Predicate (() bool).
 	IsHealthy() bool
 
-	// 810 — VoidLifecycle (() void).
+	// 810 — VoidLifecycle (() void) +
+	// //testkit:lifecycle-after-close (Reset is the close — paired
+	// with Get, the post-Reset read returns the closed sentinel).
+	//
+	//testkit:lifecycle-after-close Get
 	Reset()
 
 	// 800 — Pure (() T).
@@ -69,7 +73,11 @@ type AllShapes interface {
 	// 750 — MultiArgWriter (ctx + 3+ non-ctx + error).
 	Schedule(ctx context.Context, key string, value Record, priority int) error
 
-	// 700 — CompositeWriter (ctx, K, V) error.
+	// 700 — CompositeWriter (ctx, K, V) error +
+	// //testkit:read-after-write (paired with Get — after Set(k, v),
+	// Get(k) returns v).
+	//
+	//testkit:read-after-write Get
 	Set(ctx context.Context, key string, value Record) error
 
 	// 650 — MultiReader (ctx, K) (V1, V2, error).
@@ -78,12 +86,18 @@ type AllShapes interface {
 	// 600 — MultiAggregator (ctx) (V1, V2, error).
 	Stats(ctx context.Context) (int, int, error)
 
-	// 550 — Deleter (ctx, K) error + //testkit:deleter.
+	// 550 — Deleter (ctx, K) error + //testkit:deleter +
+	// //testkit:delete-removes (cross-method invariant).
 	//
 	//testkit:deleter
+	//testkit:delete-removes Get
 	Remove(ctx context.Context, key string) error
 
-	// 500 — Writer (ctx, V) error.
+	// 500 — Writer (ctx, V) error +
+	// //testkit:stream-reflects-mutations (paired with All — after
+	// Put(item), the All() stream yields item).
+	//
+	//testkit:stream-reflects-mutations All
 	Put(ctx context.Context, item Record) error
 
 	// 450 — PointerReader (ctx, K) *V.

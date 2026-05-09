@@ -6,6 +6,7 @@ package suite
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"go.thesmos.sh/testkit/generator"
 	"go.thesmos.sh/testkit/generator/spec"
@@ -442,6 +443,20 @@ func (m MethodView) TimeoutDuration() string {
 	return ""
 }
 
+// TimeoutDurationGo returns the directive's duration as a Go
+// expression suitable for template interpolation
+// (`time.Duration(<nanos>)`). Returns "0" when the directive is
+// absent or unparseable; the corresponding template should gate on
+// HasTimeout before using it.
+func (m MethodView) TimeoutDurationGo() string {
+	if p, ok := timeout.Get(m.Method); ok {
+		if d, err := time.ParseDuration(p.Duration); err == nil {
+			return fmt.Sprintf("time.Duration(%d)", int64(d))
+		}
+	}
+	return "0"
+}
+
 // HasSideEffect reports whether the method carries //testkit:sideeffect.
 func (m MethodView) HasSideEffect() bool { return sideeffect.Has(m.Method) }
 
@@ -488,6 +503,17 @@ func (m MethodView) EventuallyTimeout() string {
 		return p.Duration
 	}
 	return ""
+}
+
+// EventuallyTimeoutGo returns the directive's duration as a Go
+// expression (`time.Duration(<nanos>)`). See [TimeoutDurationGo].
+func (m MethodView) EventuallyTimeoutGo() string {
+	if p, ok := eventually.Get(m.Method); ok {
+		if d, err := time.ParseDuration(p.Duration); err == nil {
+			return fmt.Sprintf("time.Duration(%d)", int64(d))
+		}
+	}
+	return "0"
 }
 
 // HasScope reports whether the method carries //testkit:scope.
@@ -588,6 +614,49 @@ func (m MethodView) HasCRDTMerge() bool { return crdtmerge.Has(m.Method) }
 func (m MethodView) CRDTMergeOther() string {
 	if p, ok := crdtmerge.Get(m.Method); ok {
 		return p.Other
+	}
+	return ""
+}
+
+// PeerShapeKeyType returns the rendered key type of the peer method
+// named `peer` on the same interface. Used by cross-method
+// invariant templates whose carrier is one shape but whose paired
+// reader/stream is a different shape — e.g.
+// //testkit:lifecycle-after-close on a VoidLifecycle method paired
+// with a Reader. Empty when the peer method isn't found or has no
+// key slot.
+func (m MethodView) PeerShapeKeyType(peer string, data *spec.Data) string {
+	for i := range data.Methods {
+		if data.Methods[i].Name == peer {
+			return m.sub(data.Methods[i].Shape.KeyType)
+		}
+	}
+	return ""
+}
+
+// PeerShapeValType returns the rendered value type of the peer method
+// named `peer`. See [PeerShapeKeyType].
+func (m MethodView) PeerShapeValType(peer string, data *spec.Data) string {
+	for i := range data.Methods {
+		if data.Methods[i].Name == peer {
+			return m.sub(data.Methods[i].Shape.ValType)
+		}
+	}
+	return ""
+}
+
+// PeerFirstSentinel returns the qualified expression of the peer
+// method's first declared //testkit:errors sentinel. Used by cross-
+// method invariant templates whose contract checks the peer's error
+// return — e.g. lifecycle-after-close Reader=Get expects the post-
+// close read to surface Get's own sentinel.
+func (MethodView) PeerFirstSentinel(peer string, data *spec.Data) string {
+	for i := range data.Methods {
+		if data.Methods[i].Name == peer {
+			if p, ok := errors.Get(&data.Methods[i]); ok && len(p.Sentinels) > 0 {
+				return p.Sentinels[0].Qualified
+			}
+		}
 	}
 	return ""
 }
@@ -702,6 +771,30 @@ func (m MethodView) ShapeDescription() string {
 		return "func(ctx) iter.Seq[V] / iter.Seq2[V, error] — stream reader. Must complete, respect ctx cancellation, support break, and be re-entrant. The baseline asserts structural properties (terminates, reentrant, respects-break) but does not assert content — an empty stream trivially passes all baseline subtests. To verify content, pre-populate via the contract driver's WithPrePopulate option or compose with //testkit:eventually for convergence-style checks."
 	case shapeStreamConsumer:
 		return "func(ctx, S) (V, error) — stream consumer. Reads from S (typically io.Reader) and returns a parsed value."
+	}
+	return ""
+}
+
+// BaselineSampleAlignment returns a docblock note for shapes whose
+// result is derived purely from impl state (no input parameter to
+// vary). For these shapes, the contract's expected sample value
+// (e.g. 42 for an int Aggregator, "test-result0" for a Pure string)
+// is fixed at the framework level and must be matched by the impl
+// the factory produces — there's no per-method //testkit:sample
+// override path for results today, so the consumer's only knob is
+// the impl's own state. Returns "" for shapes whose sample is
+// derived from a parameter (Reader, Writer, …) where consumer
+// alignment happens naturally through the factory's seed.
+func (m MethodView) BaselineSampleAlignment() string {
+	switch m.ShapeName() {
+	case shapePure, shapePredicate:
+		return "Sample alignment: this method has no input — its return value is purely a function of impl state. The contract asserts equality against the framework's default sample (see the 'returns expected' subtest above); align by configuring the factory so this method returns that exact value (e.g. a SetDescription(...) override on your in-mem). //testkit:sample is for parameters, not results — there is no source-side override for result-sample defaults today."
+	case shapeAggregator:
+		return "Sample alignment: Aggregator-shape methods have no input parameter, so the contract's expected sample (e.g. 42 for int) cannot be derived from a fresh impl's natural state. Configure your factory so this method returns the sample value — typically via an override field on the in-mem (see allshapestest.SetCountOverride for the pattern) or by pre-populating enough state that the state-derived return matches."
+	case shapeMultiAggregator:
+		return "Sample alignment: MultiAggregator-shape methods have no input parameter, so the contract's two expected samples (e.g. 42 and 43 for two ints, indexed via SampleResultAt(i)) cannot be derived from a fresh impl. Configure your factory so this method returns both sample values — typically via paired override fields on the in-mem (see allshapestest.SetStatsOverride for the pattern)."
+	case shapePoisonAccessor:
+		return "Sample alignment: PoisonAccessor's contract expects nil on a fresh impl, which most in-mems satisfy naturally. The poisoned-impl extra fires only when WithPoisonedFactory is supplied; that factory must produce an impl whose accessor returns the declared //testkit:errors sentinel."
 	}
 	return ""
 }

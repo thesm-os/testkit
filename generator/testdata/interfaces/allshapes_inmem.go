@@ -17,6 +17,15 @@ import (
 //
 // Goroutine-safe via a single sync.RWMutex. Reads grab RLock,
 // mutations grab Lock.
+//
+// Contract-alignment overrides: a handful of methods (Count, Stats,
+// Description, ReadFrom, Inspect's secondary, Fetch's secondary)
+// have setters that override their natural state-derived returns
+// with contract-aligned literals. The suite's e2e companion test
+// flips these overrides on so the generated baseline contracts (which
+// expect specific sample values like 42, "test-result0", etc.) line
+// up with what the in-mem returns. Without overrides the in-mem
+// behaves naturally.
 type InMemoryAllShapes struct {
 	mu sync.RWMutex
 
@@ -39,8 +48,26 @@ type InMemoryAllShapes struct {
 	// healthy is the value IsHealthy() returns.
 	healthy bool
 
-	// description is the value Description() returns.
+	// description is the value Description() returns. When non-empty
+	// (the default), Description returns it directly. Tests flip via
+	// SetDescription to align with contract sample literals.
 	description string
+
+	// Contract-alignment overrides. Zero values mean "compute from
+	// state"; non-zero/set values short-circuit to the configured
+	// literal.
+	countOverride       *int    // Count returns *countOverride when non-nil
+	statsOverride       *[2]int // Stats returns the pair when non-nil
+	readFromOverride    *int    // ReadFrom returns *readFromOverride when non-nil
+	inspectMetaOverride *string // Inspect's secondary returns *inspectMetaOverride when non-nil
+	fetchMetaOverride   *string // Fetch's secondary returns *fetchMetaOverride when non-nil
+
+	// invalidMode flips Init/Lifecycle methods to return ErrNotFound
+	// (treating an unconfigured impl as "invalid"). The suite's
+	// WithInvalidFactory wires a separate in-mem in this mode so the
+	// AssertLifecycleRejectInvalidWith assertion (which requires err
+	// != nil from a misconfigured impl) succeeds.
+	invalidMode bool
 }
 
 // NewInMemoryAllShapes returns an empty in-memory companion.
@@ -79,6 +106,76 @@ func (s *InMemoryAllShapes) SetHealthy(healthy bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.healthy = healthy
+}
+
+// SetDescription configures Description()'s return value.
+func (s *InMemoryAllShapes) SetDescription(d string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.description = d
+}
+
+// SetCountOverride pins Count() to return n regardless of items map
+// length. Used by the suite's e2e companion test to align with the
+// Aggregator contract's sample value.
+func (s *InMemoryAllShapes) SetCountOverride(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.countOverride = &n
+}
+
+// SetStatsOverride pins Stats() to return (v1, v2). Aligns with
+// MultiAggregator contract samples.
+func (s *InMemoryAllShapes) SetStatsOverride(v1, v2 int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	pair := [2]int{v1, v2}
+	s.statsOverride = &pair
+}
+
+// SetReadFromOverride pins ReadFrom() to return n. Aligns with
+// StreamConsumer contract sample.
+func (s *InMemoryAllShapes) SetReadFromOverride(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.readFromOverride = &n
+}
+
+// SetInspectMeta pins Inspect's secondary string return. Aligns with
+// Lookup contract's secondary-result sample.
+func (s *InMemoryAllShapes) SetInspectMeta(meta string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inspectMetaOverride = &meta
+}
+
+// SetFetchMeta pins Fetch's secondary string return. Aligns with
+// MultiReader contract's V2 sample.
+func (s *InMemoryAllShapes) SetFetchMeta(meta string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.fetchMetaOverride = &meta
+}
+
+// SetInvalidMode flips Init to return [ErrNotFound] (treating the
+// unconfigured impl as invalid). Used by the suite's
+// WithInvalidFactory option so AssertLifecycleRejectInvalidWith
+// observes a non-nil error from a misconfigured impl.
+func (s *InMemoryAllShapes) SetInvalidMode(invalid bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.invalidMode = invalid
+}
+
+// SeedAt seeds items[key] = item — keying by the explicit param rather
+// than item.ID. Reader / Lookup / etc. baselines call methods with the
+// contract's sample key ("test-key") and expect the configured sample
+// value (Record{ID:"test-id"}); SeedAt makes that mapping explicit
+// rather than overloading [Seed]'s by-ID convention.
+func (s *InMemoryAllShapes) SeedAt(key string, item Record) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items[key] = item
 }
 
 // InitCount returns how many times Init has been called — used by
@@ -139,7 +236,10 @@ func (s *InMemoryAllShapes) Scan(_ context.Context) iter.Seq2[Record, error] {
 
 // Many implements [AllShapes]. (BatchReader.) Returns the records
 // present for the given keys; missing keys are silently skipped.
-func (s *InMemoryAllShapes) Many(_ context.Context, keys ...string) ([]Record, error) {
+func (s *InMemoryAllShapes) Many(ctx context.Context, keys ...string) ([]Record, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]Record, 0, len(keys))
@@ -152,8 +252,12 @@ func (s *InMemoryAllShapes) Many(_ context.Context, keys ...string) ([]Record, e
 }
 
 // ReadFrom implements [AllShapes]. (StreamConsumer.) Reads to
-// completion; returns the byte count.
-func (s *InMemoryAllShapes) ReadFrom(_ context.Context, r io.Reader) (int, error) {
+// completion; returns the byte count, or the configured override
+// when one is set.
+func (s *InMemoryAllShapes) ReadFrom(ctx context.Context, r io.Reader) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	if r == nil {
 		return 0, nil
 	}
@@ -162,22 +266,40 @@ func (s *InMemoryAllShapes) ReadFrom(_ context.Context, r io.Reader) (int, error
 	if err == io.ErrUnexpectedEOF || err == io.EOF {
 		err = nil
 	}
+	s.mu.RLock()
+	override := s.readFromOverride
+	s.mu.RUnlock()
+	if override != nil {
+		return *override, err
+	}
 	return n, err
 }
 
 // Inspect implements [AllShapes]. (Lookup, 3-result with bool.)
-func (s *InMemoryAllShapes) Inspect(_ context.Context, key string) (Record, string, bool) {
+// Secondary string returns the configured inspectMetaOverride when
+// set, else "meta:" + v.ID.
+func (s *InMemoryAllShapes) Inspect(ctx context.Context, key string) (Record, string, bool) {
+	if ctx.Err() != nil {
+		return Record{}, "", false
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
 	if !ok {
 		return Record{}, "", false
 	}
-	return v, "meta:" + v.ID, true
+	meta := "meta:" + v.ID
+	if s.inspectMetaOverride != nil {
+		meta = *s.inspectMetaOverride
+	}
+	return v, meta, true
 }
 
 // Load implements [AllShapes]. (ReaderWithBool, comma-ok.)
-func (s *InMemoryAllShapes) Load(_ context.Context, key string) (Record, bool) {
+func (s *InMemoryAllShapes) Load(ctx context.Context, key string) (Record, bool) {
+	if ctx.Err() != nil {
+		return Record{}, false
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
@@ -219,7 +341,10 @@ func (s *InMemoryAllShapes) Description() string {
 // Schedule implements [AllShapes]. (MultiArgWriter.) Stores the
 // value under the key; priority is recorded as a metadata note in
 // the value's Value field for tests that want to observe it.
-func (s *InMemoryAllShapes) Schedule(_ context.Context, key string, value Record, priority int) error {
+func (s *InMemoryAllShapes) Schedule(ctx context.Context, key string, value Record, priority int) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items[key] = value
@@ -228,29 +353,48 @@ func (s *InMemoryAllShapes) Schedule(_ context.Context, key string, value Record
 }
 
 // Set implements [AllShapes]. (CompositeWriter.)
-func (s *InMemoryAllShapes) Set(_ context.Context, key string, value Record) error {
+func (s *InMemoryAllShapes) Set(ctx context.Context, key string, value Record) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items[key] = value
 	return nil
 }
 
-// Fetch implements [AllShapes]. (MultiReader.)
-func (s *InMemoryAllShapes) Fetch(_ context.Context, key string) (Record, string, error) {
+// Fetch implements [AllShapes]. (MultiReader.) Secondary string
+// returns the configured fetchMetaOverride when set, else
+// "meta:" + v.ID.
+func (s *InMemoryAllShapes) Fetch(ctx context.Context, key string) (Record, string, error) {
+	if err := ctx.Err(); err != nil {
+		return Record{}, "", err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
 	if !ok {
 		return Record{}, "", ErrNotFound
 	}
-	return v, "meta:" + v.ID, nil
+	meta := "meta:" + v.ID
+	if s.fetchMetaOverride != nil {
+		meta = *s.fetchMetaOverride
+	}
+	return v, meta, nil
 }
 
-// Stats implements [AllShapes]. (MultiAggregator.) Returns
-// (item count, touch sum, nil).
-func (s *InMemoryAllShapes) Stats(_ context.Context) (int, int, error) {
+// Stats implements [AllShapes]. (MultiAggregator.) Returns the
+// configured statsOverride pair when set, else (item count,
+// touch sum, nil).
+func (s *InMemoryAllShapes) Stats(ctx context.Context) (int, int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, 0, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if s.statsOverride != nil {
+		return s.statsOverride[0], s.statsOverride[1], nil
+	}
 	totalTouches := 0
 	for _, n := range s.touches {
 		totalTouches += n
@@ -259,7 +403,10 @@ func (s *InMemoryAllShapes) Stats(_ context.Context) (int, int, error) {
 }
 
 // Remove implements [AllShapes]. (Deleter.)
-func (s *InMemoryAllShapes) Remove(_ context.Context, key string) error {
+func (s *InMemoryAllShapes) Remove(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.items, key)
@@ -267,7 +414,10 @@ func (s *InMemoryAllShapes) Remove(_ context.Context, key string) error {
 }
 
 // Put implements [AllShapes]. (Writer.) Keys by item.ID.
-func (s *InMemoryAllShapes) Put(_ context.Context, item Record) error {
+func (s *InMemoryAllShapes) Put(ctx context.Context, item Record) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items[item.ID] = item
@@ -275,7 +425,10 @@ func (s *InMemoryAllShapes) Put(_ context.Context, item Record) error {
 }
 
 // Find implements [AllShapes]. (PointerReader.)
-func (s *InMemoryAllShapes) Find(_ context.Context, key string) *Record {
+func (s *InMemoryAllShapes) Find(ctx context.Context, key string) *Record {
+	if ctx.Err() != nil {
+		return nil
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
@@ -286,7 +439,10 @@ func (s *InMemoryAllShapes) Find(_ context.Context, key string) *Record {
 }
 
 // Get implements [AllShapes]. (Reader.) Returns ErrNotFound on miss.
-func (s *InMemoryAllShapes) Get(_ context.Context, key string) (Record, error) {
+func (s *InMemoryAllShapes) Get(ctx context.Context, key string) (Record, error) {
+	if err := ctx.Err(); err != nil {
+		return Record{}, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
@@ -298,30 +454,52 @@ func (s *InMemoryAllShapes) Get(_ context.Context, key string) (Record, error) {
 
 // Lookup implements [AllShapes]. (ReaderNoError.) Returns the zero
 // Record on miss.
-func (s *InMemoryAllShapes) Lookup(_ context.Context, key string) Record {
+func (s *InMemoryAllShapes) Lookup(ctx context.Context, key string) Record {
+	if ctx.Err() != nil {
+		return Record{}
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.items[key]
 }
 
-// Count implements [AllShapes]. (Aggregator.)
-func (s *InMemoryAllShapes) Count(_ context.Context) (int, error) {
+// Count implements [AllShapes]. (Aggregator.) Returns the configured
+// countOverride when set, else len(items).
+func (s *InMemoryAllShapes) Count(ctx context.Context) (int, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	if s.countOverride != nil {
+		return *s.countOverride, nil
+	}
 	return len(s.items), nil
 }
 
 // Touch implements [AllShapes]. (Mutator.)
-func (s *InMemoryAllShapes) Touch(_ context.Context, key string) {
+func (s *InMemoryAllShapes) Touch(ctx context.Context, key string) {
+	if ctx.Err() != nil {
+		return
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.touches[key]++
 }
 
-// Init implements [AllShapes]. (Lifecycle.)
-func (s *InMemoryAllShapes) Init(_ context.Context) error {
+// Init implements [AllShapes]. (Lifecycle.) Honors ctx cancellation
+// for the contract's respects-context assertion. Returns
+// [ErrNotFound] under invalidMode so AssertLifecycleRejectInvalidWith
+// sees the required non-nil error.
+func (s *InMemoryAllShapes) Init(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.invalidMode {
+		return ErrNotFound
+	}
 	s.initCount++
 	return nil
 }
