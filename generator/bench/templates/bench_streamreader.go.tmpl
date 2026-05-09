@@ -48,6 +48,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.StreamLatencyWithin[{{ $iface }}, {{ $V }}]({{ $m.LatencyBudgetExpr }})(srctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.StreamLatencyPercentilesWithin[{{ $iface }}, {{ $V }}]({{ $m.PercentilesBudgetsExpr }})(srctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(srctx)
 		}

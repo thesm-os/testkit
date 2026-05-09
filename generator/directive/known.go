@@ -32,8 +32,9 @@ const (
 	IntegrationOnly = "integration-only"
 
 	// Performance.
-	Allocs  = "allocs"
-	Latency = "latency"
+	Allocs      = "allocs"
+	Latency     = "latency"
+	Percentiles = "percentiles"
 
 	// Resilience.
 	Retryable              = "retryable"
@@ -216,6 +217,12 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase2),
 			Arg("duration", ArgDuration, Required),
+		),
+		New(Percentiles,
+			Describe("per-percentile latency ceilings"),
+			InCategory(Enrichment),
+			InPhase(Phase2),
+			Arg("budget", ArgString, Required, Multi),
 		),
 
 		// Resilience.

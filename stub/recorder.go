@@ -70,6 +70,20 @@ func (r *Recorder[T]) BenchMode() {
 	r.bench = true
 }
 
+// IsBenchMode reports whether [BenchMode] has been enabled. Generated
+// dispatch reads this to skip auxiliary work that would otherwise show
+// up in benchmark allocation counts — notably the //testkit:deprecated
+// log line, which calls [testing.TB.Logf] and allocates the formatted
+// message every dispatch.
+//
+// Reads `r.bench` without the mutex, matching [Recorder.Record]'s
+// fast-path. Callers must set BenchMode during single-threaded
+// construction (i.e. before invoking the stub from goroutines), the
+// same contract Record relies on.
+func (r *Recorder[T]) IsBenchMode() bool {
+	return r.bench
+}
+
 // Record appends v to the call log. If a [Gate] is active, Record blocks
 // until the gate releases. Hooks are fired synchronously after recording
 // (under the mutex — keep them fast). In bench mode, Record is a no-op.

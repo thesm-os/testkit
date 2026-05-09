@@ -60,7 +60,8 @@ func Enrich(d *Data, pkg *generator.Package) error {
 // Conditional imports (added to the tracker only when at least one
 // method actually uses them, to avoid unused-import errors):
 //
-//   - `time`         — when any method has //testkit:latency
+//   - `time`         — when any method has //testkit:latency or
+//     //testkit:percentiles (both render time.Duration literals)
 //   - `iter`         — when any method is a StreamReader (Call
 //     closure returns iter.Seq2[V, error])
 //   - `bytes` + `io` — when any StreamConsumer takes io.Reader
@@ -78,7 +79,7 @@ func Project(d *Data, _ *generator.Package) error {
 		if mv.IsIntegrationOnly() {
 			continue
 		}
-		if mv.HasLatencyBudget() {
+		if mv.HasLatencyBudget() || mv.HasPercentiles() {
 			needsTime = true
 		}
 		switch mv.ShapeName() {

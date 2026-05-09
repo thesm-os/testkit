@@ -28,6 +28,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.DeleterLatencyWithin[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(dctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.DeleterLatencyPercentilesWithin[{{ $iface }}, {{ $K }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(dctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(dctx)
 		}

@@ -59,6 +59,20 @@ func MutatorLatencyWithin[T, V any](sample V, maxLatency time.Duration) Mutator[
 	}
 }
 
+// MutatorLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func MutatorLatencyPercentilesWithin[T, V any](sample V, budgets map[float64]time.Duration) Mutator[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(sample), budgets, func() {
+			ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
 // MutatorConcurrentThroughput measures mutator throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 func MutatorConcurrentThroughput[T, V any](sample V, parallelism int) Mutator[T, V] {

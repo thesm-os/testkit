@@ -55,6 +55,19 @@ func PoisonAccessorLatencyWithin[T any](maxLatency time.Duration) PoisonAccessor
 	}
 }
 
+// PoisonAccessorLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func PoisonAccessorLatencyPercentilesWithin[T any](budgets map[float64]time.Duration) PoisonAccessor[T] {
+	return func(ctx PoisonAccessorContext[T]) {
+		impl := ctx.Factory()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			errSink = ctx.Call(impl)
+		})
+	}
+}
+
 // PoisonAccessorConcurrentThroughput measures accessor-call throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 func PoisonAccessorConcurrentThroughput[T any](parallelism int) PoisonAccessor[T] {

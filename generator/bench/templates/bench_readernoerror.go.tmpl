@@ -30,6 +30,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.ReaderNoErrorLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(rctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.ReaderNoErrorLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(rctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(rctx)
 		}

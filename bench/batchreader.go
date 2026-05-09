@@ -67,6 +67,24 @@ func BatchReaderLatencyWithin[T any, K comparable, V any](keys []K, maxLatency t
 	}
 }
 
+// BatchReaderLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) for full batch fetches and fails the
+// benchmark if any percentile exceeds its budget. Reports the measured
+// p50/p95/p99 values via b.ReportMetric regardless of whether they're
+// budgeted.
+func BatchReaderLatencyPercentilesWithin[T any, K comparable, V any](
+	keys []K, budgets map[float64]time.Duration,
+) BatchReader[T, K, V] {
+	return func(ctx BatchReaderContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		name := fmt.Sprintf("percentiles/n=%d", len(keys))
+		LatencyPercentilesWithin(ctx.B, name, budgets, func() {
+			_, errSink = ctx.Call(bctx, impl, keys)
+		})
+	}
+}
+
 // BatchReaderConcurrentThroughput measures batch-read throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 func BatchReaderConcurrentThroughput[T any, K comparable, V any](keys []K, parallelism int) BatchReader[T, K, V] {

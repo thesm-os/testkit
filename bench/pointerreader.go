@@ -59,6 +59,23 @@ func PointerReaderLatencyWithin[T any, K comparable, V any](key K, maxLatency ti
 	}
 }
 
+// PointerReaderLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func PointerReaderLatencyPercentilesWithin[T any, K comparable, V any](
+	key K,
+	budgets map[float64]time.Duration,
+) PointerReader[T, K, V] {
+	return func(ctx PointerReaderContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(key), budgets, func() {
+			_ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
 // PointerReaderConcurrentThroughput measures pointer-read throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 func PointerReaderConcurrentThroughput[T any, K comparable, V any](key K, parallelism int) PointerReader[T, K, V] {

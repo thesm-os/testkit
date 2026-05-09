@@ -62,6 +62,25 @@ func ReaderLatencyWithin[T any, K comparable, V any](key K, maxLatency time.Dura
 	}
 }
 
+// ReaderLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+// Pair with `//testkit:percentiles pXX=Dur ...` for directive-driven
+// emission, or use directly via the per-method plug-in slot.
+func ReaderLatencyPercentilesWithin[T any, K comparable, V any](
+	key K,
+	budgets map[float64]time.Duration,
+) Reader[T, K, V] {
+	return func(ctx ReaderContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(key), budgets, func() {
+			_, errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
 // ReaderConcurrentThroughput measures read throughput under contention.
 // Uses b.RunParallel for correct iteration scaling and goroutine lifecycle.
 // Reports ns/op and allocs/op. Measurement only — does not fail the benchmark.

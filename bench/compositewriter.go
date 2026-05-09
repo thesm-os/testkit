@@ -66,6 +66,23 @@ func CompositeWriterLatencyWithin[T any, K1 comparable, V any](
 	}
 }
 
+// CompositeWriterLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func CompositeWriterLatencyPercentilesWithin[T any, K1 comparable, V any](
+	namespace K1, sample V, budgets map[float64]time.Duration,
+) CompositeWriter[T, K1, V] {
+	return func(ctx CompositeWriterContext[T, K1, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		name := fmt.Sprintf("percentiles/%s/%s", SubtestKey(namespace), SubtestKey(sample))
+		LatencyPercentilesWithin(ctx.B, name, budgets, func() {
+			errSink = ctx.Call(bctx, impl, namespace, sample)
+		})
+	}
+}
+
 // CompositeWriterConcurrentThroughput measures composite-write
 // throughput under contention. Uses b.RunParallel for correct
 // iteration scaling.

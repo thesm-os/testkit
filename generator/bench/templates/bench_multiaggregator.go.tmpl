@@ -28,6 +28,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.MultiAggregatorLatencyWithin[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]({{ $m.LatencyBudgetExpr }})(mactx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.MultiAggregatorLatencyPercentilesWithin[{{ $iface }}, {{ $V1 }}, {{ $V2 }}]({{ $m.PercentilesBudgetsExpr }})(mactx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(mactx)
 		}

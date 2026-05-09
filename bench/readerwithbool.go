@@ -58,6 +58,23 @@ func ReaderWithBoolLatencyWithin[T any, K comparable, V any](key K, maxLatency t
 	}
 }
 
+// ReaderWithBoolLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func ReaderWithBoolLatencyPercentilesWithin[T any, K comparable, V any](
+	key K,
+	budgets map[float64]time.Duration,
+) ReaderWithBool[T, K, V] {
+	return func(ctx ReaderWithBoolContext[T, K, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(key), budgets, func() {
+			_, _ = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
 // ReaderWithBoolConcurrentThroughput measures read throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 func ReaderWithBoolConcurrentThroughput[T any, K comparable, V any](key K, parallelism int) ReaderWithBool[T, K, V] {

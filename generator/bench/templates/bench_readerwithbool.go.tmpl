@@ -29,6 +29,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.ReaderWithBoolLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(rctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.ReaderWithBoolLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(rctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(rctx)
 		}

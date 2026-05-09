@@ -32,6 +32,7 @@ func TestAllRegistersConsumers(t *testing.T) {
 		directive.WrappedVia,
 		directive.Allocs,
 		directive.Latency,
+		directive.Percentiles,
 	}
 	for _, name := range wired {
 		t.Run(name, func(t *testing.T) {

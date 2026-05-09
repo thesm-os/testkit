@@ -54,6 +54,19 @@ func PredicateLatencyWithin[T any](maxLatency time.Duration) Predicate[T] {
 	}
 }
 
+// PredicateLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func PredicateLatencyPercentilesWithin[T any](budgets map[float64]time.Duration) Predicate[T] {
+	return func(ctx PredicateContext[T]) {
+		impl := ctx.Factory()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
 // PredicateConcurrentThroughput measures predicate-call throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 func PredicateConcurrentThroughput[T any](parallelism int) Predicate[T] {

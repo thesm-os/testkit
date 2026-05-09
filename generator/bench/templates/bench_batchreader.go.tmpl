@@ -33,6 +33,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.BatchReaderLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.LatencyBudgetExpr }})(brctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.BatchReaderLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V }}](sampleKeys, {{ $m.PercentilesBudgetsExpr }})(brctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(brctx)
 		}

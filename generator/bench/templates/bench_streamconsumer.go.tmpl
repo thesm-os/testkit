@@ -13,8 +13,16 @@
 {{- $S := $m.ShapeKeyType -}}
 {{- $V := $m.ShapeValType -}}
 		scctx := bench.StreamConsumerContext[{{ $iface }}, {{ $S }}, {{ $V }}]{
-			B:          b,
+			B: b,
+{{- if eq $S "io.Reader" }}
+			// Auto-derive BytesPerOp from the synthesized stream sample
+			// (bytes.NewReader([]byte("test-data")), 9 bytes) so MB/s
+			// reports without per-method configuration. A consumer-supplied
+			// {{ $iface }}BenchSetBytes overrides.
+			BytesPerOp: cfg.bytesPerOpOr("{{ $m.Name }}", 9),
+{{- else }}
 			BytesPerOp: cfg.bytesPerOp["{{ $m.Name }}"],
+{{- end }}
 			StreamConsumerBindings: bindings.StreamConsumerBindings[{{ $iface }}, {{ $S }}, {{ $V }}]{
 				Factory: seededFactory,
 				Call: func(ctx context.Context, impl {{ $iface }}, s {{ $S }}) ({{ $V }}, error) {
@@ -33,6 +41,9 @@
 {{- end }}
 {{- if $m.HasLatencyBudget }}
 		bench.StreamConsumerLatencyWithin[{{ $iface }}, {{ $S }}, {{ $V }}](streamFactory, {{ $m.LatencyBudgetExpr }})(scctx)
+{{- end }}
+{{- if $m.HasPercentiles }}
+		bench.StreamConsumerLatencyPercentilesWithin[{{ $iface }}, {{ $S }}, {{ $V }}](streamFactory, {{ $m.PercentilesBudgetsExpr }})(scctx)
 {{- end }}
 {{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {

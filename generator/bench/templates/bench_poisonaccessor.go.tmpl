@@ -22,6 +22,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.PoisonAccessorLatencyWithin[{{ $iface }}]({{ $m.LatencyBudgetExpr }})(paxctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.PoisonAccessorLatencyPercentilesWithin[{{ $iface }}]({{ $m.PercentilesBudgetsExpr }})(paxctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(paxctx)
 		}

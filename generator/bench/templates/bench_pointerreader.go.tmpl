@@ -29,6 +29,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.PointerReaderLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(pctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.PointerReaderLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(pctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(pctx)
 		}

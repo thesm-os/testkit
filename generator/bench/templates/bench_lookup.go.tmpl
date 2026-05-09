@@ -30,6 +30,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.LookupLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(lctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.LookupLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V }}, {{ $R }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(lctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(lctx)
 		}

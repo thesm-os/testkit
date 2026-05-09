@@ -71,6 +71,23 @@ func StreamConsumerLatencyWithin[T, S, V any](
 	}
 }
 
+// StreamConsumerLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func StreamConsumerLatencyPercentilesWithin[T, S, V any](
+	streamFactory func() S, budgets map[float64]time.Duration,
+) StreamConsumer[T, S, V] {
+	return func(ctx StreamConsumerContext[T, S, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		name := "percentiles"
+		LatencyPercentilesWithin(ctx.B, name, budgets, func() {
+			_, errSink = ctx.Call(bctx, impl, streamFactory())
+		})
+	}
+}
+
 // StreamConsumerConcurrentThroughput measures consume-call throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 // `streamFactory` is invoked once per iteration on each goroutine —

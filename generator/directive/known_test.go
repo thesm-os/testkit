@@ -26,7 +26,7 @@ func TestKnownDescriptors(t *testing.T) {
 			directive.Idempotent, directive.Pure, directive.Cacheable, directive.Monotonic,
 			directive.Concurrent, directive.ConcurrentReaders, directive.NilSafe, directive.Atomic,
 			directive.Ctx, directive.Timeout, directive.Deprecated, directive.Lease, directive.IntegrationOnly,
-			directive.Allocs, directive.Latency,
+			directive.Allocs, directive.Latency, directive.Percentiles,
 			directive.Retryable, directive.RetrySucceedsOnAttempt,
 			directive.SideEffect, directive.OrderAfter,
 			directive.Partition,

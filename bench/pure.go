@@ -54,6 +54,19 @@ func PureLatencyWithin[T, R any](maxLatency time.Duration) Pure[T, R] {
 	}
 }
 
+// PureLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func PureLatencyPercentilesWithin[T, R any](budgets map[float64]time.Duration) Pure[T, R] {
+	return func(ctx PureContext[T, R]) {
+		impl := ctx.Factory()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
 // PureConcurrentThroughput measures pure-call throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 // Reports ns/op and allocs/op.

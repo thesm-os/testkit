@@ -28,6 +28,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.WriterLatencyWithin[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(wctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.WriterLatencyPercentilesWithin[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(wctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(wctx)
 		}

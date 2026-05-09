@@ -65,6 +65,23 @@ func MultiArgWriterLatencyWithin[T, P1, P2, P3 any](
 	}
 }
 
+// MultiArgWriterLatencyPercentilesWithin enforces per-percentile
+// latency budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func MultiArgWriterLatencyPercentilesWithin[T, P1, P2, P3 any](
+	p1 P1, p2 P2, p3 P3, budgets map[float64]time.Duration,
+) MultiArgWriter[T, P1, P2, P3] {
+	return func(ctx MultiArgWriterContext[T, P1, P2, P3]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		name := "percentiles"
+		LatencyPercentilesWithin(ctx.B, name, budgets, func() {
+			errSink = ctx.Call(bctx, impl, p1, p2, p3)
+		})
+	}
+}
+
 // MultiArgWriterConcurrentThroughput measures multi-arg-write throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 func MultiArgWriterConcurrentThroughput[T, P1, P2, P3 any](

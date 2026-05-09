@@ -5,6 +5,8 @@ package bench
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -219,4 +221,123 @@ func ConcurrentThroughputWithBytes(b *testing.B, name string, bytesPerOp int64, 
 			}
 		})
 	})
+}
+
+// LatencyPercentilesWithin records per-iteration latencies into a
+// pre-allocated slice, sorts at the end, computes p50/p95/p99 from
+// the sorted distribution, and reports each via [testing.B.ReportMetric].
+// `budgets` maps percentile (0.0..1.0) → maximum acceptable per-call
+// latency; any percentile that exceeds its budget fails the benchmark.
+//
+// Example:
+//
+//	bench.LatencyPercentilesWithin(b, "p99-budget",
+//	    map[float64]time.Duration{
+//	        0.50: 1 * time.Microsecond,
+//	        0.95: 50 * time.Microsecond,
+//	        0.99: 100 * time.Microsecond,
+//	    }, func() {
+//	        _, _ = ctx.Call(bctx, impl, key)
+//	    })
+//
+// Pass `-benchtime=Nx` for a fixed sample size; the gate is most
+// meaningful with N ≥ 1000 so the upper percentiles converge. Reports
+// the measured p50/p95/p99 values regardless of whether they're
+// budgeted, so consumers see the full distribution even when they
+// only gate the tail.
+//
+// Per-iteration recording uses a manual `time.Now()` delta — slightly
+// less precise than [testing.B]'s internal accounting but the only way
+// to capture the distribution. Suitable for latency-sensitive shapes
+// where mean-only gating would mask multi-modal behavior; not
+// recommended for sub-100ns operations where the overhead of
+// `time.Now()` itself dominates.
+func LatencyPercentilesWithin(b *testing.B, name string, budgets map[float64]time.Duration, call func()) {
+	b.Helper()
+	b.Run(name, func(b *testing.B) {
+		b.ReportAllocs()
+		// Pre-allocate the sample buffer at b.N so per-iteration
+		// recording is alloc-free. b.Loop sets b.N before the loop
+		// starts, so we can size accurately.
+		samples := make([]time.Duration, 0, b.N)
+		b.ResetTimer()
+		for b.Loop() {
+			start := time.Now()
+			call()
+			samples = append(samples, time.Since(start))
+		}
+		b.StopTimer()
+		if len(samples) == 0 {
+			return
+		}
+		slices.Sort(samples)
+		// Always report p50/p95/p99 so consumers see the distribution
+		// even when only one percentile is budgeted.
+		for _, p := range []float64{0.50, 0.95, 0.99} {
+			d := percentileAt(samples, p)
+			b.ReportMetric(float64(d.Nanoseconds()), fmt.Sprintf("p%d-ns/op", int(p*100)))
+		}
+		// Gate on every consumer-supplied budget. Sort the keys for
+		// deterministic failure messages across runs.
+		keys := make([]float64, 0, len(budgets))
+		for p := range budgets {
+			keys = append(keys, p)
+		}
+		sort.Float64s(keys)
+		for _, p := range keys {
+			d := percentileAt(samples, p)
+			budget := budgets[p]
+			if d > budget {
+				b.Fatalf("%s: p%d latency %v exceeds budget %v",
+					name, int(p*100), d, budget)
+			}
+		}
+	})
+}
+
+// percentileAt returns the value at the requested percentile from a
+// sorted slice. Uses nearest-rank interpolation: index = floor(p*n).
+// Clamps to [0, len-1] so 0.0 maps to the smallest sample and 1.0
+// maps to the largest.
+func percentileAt(sorted []time.Duration, p float64) time.Duration {
+	if len(sorted) == 0 {
+		return 0
+	}
+	if p <= 0 {
+		return sorted[0]
+	}
+	if p >= 1 {
+		return sorted[len(sorted)-1]
+	}
+	idx := int(p * float64(len(sorted)))
+	if idx >= len(sorted) {
+		idx = len(sorted) - 1
+	}
+	return sorted[idx]
+}
+
+// ReportRunningMetric exposes [testing.B.ReportMetric] for consumers
+// who want to publish a custom per-iteration metric (cache hit rate,
+// queue depth, GC cycles, etc.) alongside the standard ns/op +
+// allocs/op output. The helper exists so consumer code in plug-in
+// primitives doesn't have to reach into b directly:
+//
+//	StoreBenchOnGet(func(ctx bench.ReaderContext[*Store, string, Item]) {
+//	    impl := ctx.Factory()
+//	    var hits int64
+//	    bench.HotPath(ctx.B, "with-hits", func() {
+//	        if _, err := ctx.Call(ctx.B.Context(), impl, "test-key"); err == nil {
+//	            hits++
+//	        }
+//	    })
+//	    bench.ReportRunningMetric(ctx.B, "hits/op",
+//	        float64(hits)/float64(ctx.B.N))
+//	})
+//
+// The unit string is passed through to b.ReportMetric verbatim — Go's
+// benchmark output convention is "<unit>/op" for per-iteration
+// metrics, but any string works.
+func ReportRunningMetric(b *testing.B, unit string, value float64) {
+	b.Helper()
+	b.ReportMetric(value, unit)
 }

@@ -63,6 +63,20 @@ func WriterLatencyWithin[T, V any](sample V, maxLatency time.Duration) Writer[T,
 	}
 }
 
+// WriterLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func WriterLatencyPercentilesWithin[T, V any](sample V, budgets map[float64]time.Duration) Writer[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(sample), budgets, func() {
+			errSink = ctx.Call(bctx, impl, sample)
+		})
+	}
+}
+
 // WriterConcurrentThroughput measures write throughput under contention.
 // Uses b.RunParallel for correct iteration scaling. Reports ns/op and
 // allocs/op — typically dominated by the impl's synchronization

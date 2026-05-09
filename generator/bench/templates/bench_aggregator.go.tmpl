@@ -27,6 +27,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.AggregatorLatencyWithin[{{ $iface }}, {{ $V }}]({{ $m.LatencyBudgetExpr }})(actx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.AggregatorLatencyPercentilesWithin[{{ $iface }}, {{ $V }}]({{ $m.PercentilesBudgetsExpr }})(actx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(actx)
 		}

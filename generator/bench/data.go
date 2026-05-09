@@ -6,12 +6,14 @@ package bench
 import (
 	"fmt"
 	"go/types"
+	"strconv"
 	"strings"
 
 	"go.thesmos.sh/testkit/generator"
 	"go.thesmos.sh/testkit/generator/spec"
 	"go.thesmos.sh/testkit/generator/spec/allocs"
 	"go.thesmos.sh/testkit/generator/spec/latency"
+	"go.thesmos.sh/testkit/generator/spec/percentiles"
 	"go.thesmos.sh/testkit/generator/spec/sample"
 )
 
@@ -308,6 +310,80 @@ func (m MethodView) LatencyBudgetRaw() string {
 		return p.Raw
 	}
 	return ""
+}
+
+// HasPercentiles reports whether the method declares
+// `//testkit:percentiles pXX=Dur ...`. Drives whether the per-method
+// helper emits a [bench.LatencyPercentilesWithin] gate.
+func (m MethodView) HasPercentiles() bool { return percentiles.Has(m.Method) }
+
+// PercentilesBudgetsExpr renders the per-percentile budgets as a
+// `map[float64]time.Duration{...}` Go literal suitable for
+// embedding directly in the [bench.LatencyPercentilesWithin] call.
+// Each entry carries the original directive arg as a trailing
+// comment so durations round-trip stably without locale-sensitive
+// formatting (matching the [LatencyBudgetExpr] convention).
+//
+// Returns the empty string when no percentiles directive is present
+// — pair with [HasPercentiles] to gate emission.
+//
+//	method: //testkit:percentiles p50=10us p99=100us
+//
+//	→  map[float64]time.Duration{
+//	       0.50: time.Duration(10000) /* p50=10us */,
+//	       0.99: time.Duration(100000) /* p99=100us */,
+//	   }
+func (m MethodView) PercentilesBudgetsExpr() string {
+	p, ok := percentiles.Get(m.Method)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("map[float64]time.Duration{\n")
+	for _, budget := range p.Budgets {
+		b.WriteString("\t\t\t")
+		b.WriteString(strconv.FormatFloat(float64(budget.Percentile)/100.0, 'f', 2, 64))
+		b.WriteString(": time.Duration(")
+		b.WriteString(strconv.FormatInt(budget.Max.Nanoseconds(), 10))
+		b.WriteString(") /* ")
+		b.WriteString(budget.Raw)
+		b.WriteString(" */,\n")
+	}
+	b.WriteString("\t\t}")
+	return b.String()
+}
+
+// PercentilesBudgetsLines returns the directive's args verbatim
+// (e.g. ["p50=10us", "p99=100us"]) for inclusion in per-method
+// docblocks. Empty when no percentiles directive is present.
+func (m MethodView) PercentilesBudgetsLines() []string {
+	p, ok := percentiles.Get(m.Method)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(p.Budgets))
+	for _, b := range p.Budgets {
+		out = append(out, b.Raw)
+	}
+	return out
+}
+
+// HasSampleDirective reports whether the method carries
+// `//testkit:sample <Func>...`. Used to decide whether the per-
+// method helper emits a hot-path-may-be-measuring-the-wrong-path
+// warning at run time.
+func (m MethodView) HasSampleDirective() bool { return sample.Has(m.Method) }
+
+// NeedsSampleWarning reports whether the per-method helper should
+// emit a `b.Logf` warning above the hot-path. True when the method
+// has non-ctx params AND no //testkit:sample directive — the
+// generator falls back to synthesized literals (e.g. `"test-key"`)
+// that require the factory to pre-seed matching values for the
+// hot-path to land on the success path. The warning surfaces that
+// contract expectation at run time so consumers reading benchmark
+// output don't silently measure the not-found error path.
+func (m MethodView) NeedsSampleWarning() bool {
+	return m.NonCtxParamCount() > 0 && !m.HasSampleDirective()
 }
 
 // SampleInputsRendered returns the rendered sample expressions for

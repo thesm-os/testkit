@@ -42,6 +42,7 @@ import (
 	_ "go.thesmos.sh/testkit/generator/spec/orderafter"
 	_ "go.thesmos.sh/testkit/generator/spec/pagination"
 	_ "go.thesmos.sh/testkit/generator/spec/partition"
+	_ "go.thesmos.sh/testkit/generator/spec/percentiles"
 	_ "go.thesmos.sh/testkit/generator/spec/pure"
 	_ "go.thesmos.sh/testkit/generator/spec/readafterwrite"
 	_ "go.thesmos.sh/testkit/generator/spec/retrysucceeds"

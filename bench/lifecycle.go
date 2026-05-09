@@ -61,6 +61,20 @@ func LifecycleLatencyWithin[T any](maxLatency time.Duration) Lifecycle[T] {
 	}
 }
 
+// LifecycleLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func LifecycleLatencyPercentilesWithin[T any](budgets map[float64]time.Duration) Lifecycle[T] {
+	return func(ctx LifecycleContext[T]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			errSink = ctx.Call(bctx, impl)
+		})
+	}
+}
+
 // LifecycleConcurrentThroughput measures lifecycle-call throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 // The impl must be safe for concurrent invocation (idempotent or

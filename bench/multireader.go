@@ -63,6 +63,23 @@ func MultiReaderLatencyWithin[T any, K comparable, V1, V2 any](
 	}
 }
 
+// MultiReaderLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func MultiReaderLatencyPercentilesWithin[T any, K comparable, V1, V2 any](
+	key K, budgets map[float64]time.Duration,
+) MultiReader[T, K, V1, V2] {
+	return func(ctx MultiReaderContext[T, K, V1, V2]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		name := "percentiles/" + SubtestKey(key)
+		LatencyPercentilesWithin(ctx.B, name, budgets, func() {
+			_, _, errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
 // MultiReaderConcurrentThroughput measures multi-read throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 func MultiReaderConcurrentThroughput[T any, K comparable, V1, V2 any](

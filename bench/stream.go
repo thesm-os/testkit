@@ -73,6 +73,23 @@ func StreamLatencyWithin[T, V any](maxLatency time.Duration) Stream[T, V] {
 	}
 }
 
+// StreamLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) for full stream iteration and fails the
+// benchmark if any percentile exceeds its budget. Reports the measured
+// p50/p95/p99 values via b.ReportMetric regardless of whether they're
+// budgeted.
+func StreamLatencyPercentilesWithin[T, V any](budgets map[float64]time.Duration) Stream[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			for _, err := range ctx.Call(bctx, impl) {
+				errSink = err
+			}
+		})
+	}
+}
+
 // StreamConcurrentThroughput measures stream-iteration throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 // Each goroutine independently materializes a fresh iter.Seq2 via

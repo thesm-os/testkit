@@ -41,7 +41,10 @@ func consume(method *spec.Method, _ directive.Directive, _ *spec.Data, _ *genera
 	results := method.Signature.Results()
 	first := results.At(0).Type()
 	if !isOrdered(first) {
-		return fmt.Errorf("monotonic: first result type %s does not satisfy cmp.Ordered (need integer, float, or string)", first)
+		return fmt.Errorf(
+			"monotonic: first result type %s does not satisfy cmp.Ordered (need integer, float, or string)",
+			first,
+		)
 	}
 	spec.Set(&method.Attachments, directive.Monotonic, Presence{})
 	return nil

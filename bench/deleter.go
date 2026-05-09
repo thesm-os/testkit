@@ -60,6 +60,20 @@ func DeleterLatencyWithin[T any, K comparable](key K, maxLatency time.Duration) 
 	}
 }
 
+// DeleterLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func DeleterLatencyPercentilesWithin[T any, K comparable](key K, budgets map[float64]time.Duration) Deleter[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles/"+SubtestKey(key), budgets, func() {
+			errSink = ctx.Call(bctx, impl, key)
+		})
+	}
+}
+
 // DeleterConcurrentThroughput measures delete throughput under
 // contention. Uses b.RunParallel for correct iteration scaling.
 // Reports ns/op and allocs/op — typically dominated by the impl's

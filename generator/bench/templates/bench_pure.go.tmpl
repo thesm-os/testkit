@@ -25,6 +25,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.PureLatencyWithin[{{ $iface }}, {{ $V }}]({{ $m.LatencyBudgetExpr }})(pctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.PureLatencyPercentilesWithin[{{ $iface }}, {{ $V }}]({{ $m.PercentilesBudgetsExpr }})(pctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(pctx)
 		}

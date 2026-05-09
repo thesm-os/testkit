@@ -28,6 +28,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.MutatorLatencyWithin[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(mctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.MutatorLatencyPercentilesWithin[{{ $iface }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(mctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(mctx)
 		}

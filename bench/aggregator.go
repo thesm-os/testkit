@@ -58,6 +58,20 @@ func AggregatorLatencyWithin[T, R any](maxLatency time.Duration) Aggregator[T, R
 	}
 }
 
+// AggregatorLatencyPercentilesWithin enforces per-percentile latency
+// budgets (p50/p95/p99/...) and fails the benchmark if any
+// percentile exceeds its budget. Reports the measured p50/p95/p99
+// values via b.ReportMetric regardless of whether they're budgeted.
+func AggregatorLatencyPercentilesWithin[T, R any](budgets map[float64]time.Duration) Aggregator[T, R] {
+	return func(ctx AggregatorContext[T, R]) {
+		impl := ctx.Factory()
+		bctx := ctx.B.Context()
+		LatencyPercentilesWithin(ctx.B, "percentiles", budgets, func() {
+			_, errSink = ctx.Call(bctx, impl)
+		})
+	}
+}
+
 // AggregatorConcurrentThroughput measures aggregation throughput
 // under contention. Uses b.RunParallel for correct iteration scaling.
 func AggregatorConcurrentThroughput[T, R any](parallelism int) Aggregator[T, R] {

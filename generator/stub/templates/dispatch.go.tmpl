@@ -43,7 +43,10 @@ func (s *{{ $.StubName }}{{ $tpArgs }}) {{ $m.Name }}({{ $m.ParamList $tracker }
 {{- end }}
 func (s *{{ $.StubName }}{{ $tpArgs }}) {{ $m.Name }}({{ $m.ParamList $tracker }}){{ if $m.HasResults }} {{ $m.ResultList $tracker }}{{ end }} {
 {{- if $m.Deprecated }}
-	if tb := s.On{{ $m.Name }}.TB(); tb != nil {
+	// Skip the deprecation log under BenchMode — tb.Logf formats the
+	// message every dispatch, which dominates per-call allocation
+	// counts in benchmarks (see stub.Recorder.IsBenchMode).
+	if tb := s.On{{ $m.Name }}.TB(); tb != nil && !s.On{{ $m.Name }}.IsBenchMode() {
 		tb.Logf("{{ $type }}.{{ $m.Name }} is deprecated, use {{ $m.Deprecated }} instead")
 	}
 {{- end }}

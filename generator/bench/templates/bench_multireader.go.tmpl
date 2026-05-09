@@ -30,6 +30,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.MultiReaderLatencyWithin[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.LatencyBudgetExpr }})(mrctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.MultiReaderLatencyPercentilesWithin[{{ $iface }}, {{ $K }}, {{ $V1 }}, {{ $V2 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(mrctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(mrctx)
 		}

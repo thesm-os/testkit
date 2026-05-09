@@ -26,6 +26,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.VoidLifecycleLatencyWithin[{{ $iface }}]({{ $m.LatencyBudgetExpr }})(vlctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.VoidLifecycleLatencyPercentilesWithin[{{ $iface }}]({{ $m.PercentilesBudgetsExpr }})(vlctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(vlctx)
 		}

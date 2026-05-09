@@ -28,6 +28,9 @@
 {{- if $m.HasLatencyBudget }}
 		bench.MultiArgWriterLatencyWithin[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, {{ $m.LatencyBudgetExpr }})(mawctx)
 {{- end }}
+{{- if $m.HasPercentiles }}
+		bench.MultiArgWriterLatencyPercentilesWithin[{{ $iface }}, {{ $P1 }}, {{ $P2 }}, {{ $P3 }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleParamAt 1 $tracker }}, {{ $m.SampleParamAt 2 $tracker }}, {{ $m.PercentilesBudgetsExpr }})(mawctx)
+{{- end }}
 		for _, p := range cfg.{{ $m.OnFieldName }} {
 			p(mawctx)
 		}

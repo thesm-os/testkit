@@ -42,10 +42,16 @@
 {{- if $m.HasLatencyBudget }}
 //	            {{ $m.Name }}/latency-within-{{ $m.LatencyBudgetRaw }}     (//testkit:latency gate)
 {{- end }}
+{{- if $m.HasPercentiles }}
+//	            {{ $m.Name }}/percentiles    (//testkit:percentiles {{ join $m.PercentilesBudgetsLines " " }})
+{{- end }}
 //	            {{ $m.Name }}/<consumer-supplied>     (via cfg.{{ $m.OnFieldName }})
 func {{ $m.HelperName }}(b *testing.B, factory func() {{ $type }}, cfg *{{ $config }}) {
 	b.Helper()
 	b.Run("{{ $m.Name }}", func(b *testing.B) {
+{{- if $m.NeedsSampleWarning }}
+		b.Logf("{{ $m.Name }}: hot-path uses synthesized sample literals; declare //testkit:sample <Func>... and seed the factory with matching values, or the benchmark may measure the not-found / error path instead of the success path")
+{{- end }}
 		seededFactory := func() {{ $type }} {
 			impl := factory()
 			if cfg.prePopulate != nil {
