@@ -85,24 +85,40 @@ func (r Resolved) Render() string {
 // registers the import on [spec.Data.Tracker] so the rendered
 // expression's alias matches the rest of the file's imports.
 //
+// Either branch consults the tracker for the resolved package's
+// alias — local symbols get qualified ("basic.ErrNotFound") when
+// the output file lives in a different package from the source,
+// bare ("ErrNotFound") otherwise. The tracker's [AddPath] returns
+// "" for the local-to-output package, which the renderer treats as
+// "no qualifier needed."
+//
 // Returns a [Resolved] on success. Errors are returned with a
 // short message; consumers wrap them with their own directive-named
 // prefix.
 func Resolve(arg string, data *spec.Data, pkg *generator.Package) (Resolved, error) {
 	importPath, name, qualified := SplitQualified(arg)
 	if !qualified {
-		return resolveLocal(name, pkg)
+		return resolveLocal(name, data, pkg)
 	}
 	return resolveRemote(importPath, name, data)
 }
 
-// resolveLocal looks up name in pkg's top-level scope.
-func resolveLocal(name string, pkg *generator.Package) (Resolved, error) {
+// resolveLocal looks up name in pkg's top-level scope and consults
+// data.Tracker to render the appropriate alias. When the output
+// file lives in pkg itself, the tracker returns "" and the rendered
+// expression stays bare; when output is in a sibling package, the
+// tracker returns the source pkg's alias ("basic") and the rendered
+// expression carries it.
+func resolveLocal(name string, data *spec.Data, pkg *generator.Package) (Resolved, error) {
 	obj := pkg.Pkg.Scope().Lookup(name)
 	if obj == nil {
 		return Resolved{}, fmt.Errorf("symbol not found in package %s", pkg.Path())
 	}
-	return Resolved{Name: name, Obj: obj}, nil
+	var alias string
+	if data != nil && data.Tracker != nil {
+		alias = data.Tracker.AddPath(pkg.Path())
+	}
+	return Resolved{Alias: alias, Name: name, Obj: obj}, nil
 }
 
 // resolveRemote loads importPath via the shared loader, looks up

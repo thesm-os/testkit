@@ -7,6 +7,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 // ScanVars walks the package's exported package-level variables,
@@ -393,6 +394,164 @@ var DefaultConcreteTypes = []ConcreteType{
 	{Name: "float32", Type: types.Typ[types.Float32], Sample: func(string) string { return "1.5" }},
 	{Name: "complex64", Type: types.Typ[types.Complex64], Sample: func(string) string { return "complex(1, 2)" }},
 	{Name: "complex128", Type: types.Typ[types.Complex128], Sample: func(string) string { return "complex(1, 2)" }},
+}
+
+// IsBasicComparableKind reports whether kind is one of the basic
+// types whose non-zero samples drive a meaningful `!=` assertion in
+// generated independence-style subtests (Mutate / Clone for builder,
+// future suite/bench analogues).
+//
+// Excluded: untyped kinds (not reachable as field types), complex
+// (rare with `!=`-assertable samples), and UnsafePointer (samples
+// would be non-trivial). Strings, signed/unsigned integers,
+// booleans, and floats are in. types.Rune and types.Byte are
+// aliases for Int32 / Uint8 and are covered by the integer cases.
+func IsBasicComparableKind(kind types.BasicKind) bool {
+	switch kind {
+	case types.String,
+		types.Bool,
+		types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
+		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
+		types.Float32, types.Float64:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsBasicComparableTypeName reports whether typeName matches one of
+// the basic-comparable kinds named in [DefaultConcreteTypes]. Used
+// to propagate "this resolved-type-parameter became a basic-
+// comparable concrete" through generic-test rendering.
+func IsBasicComparableTypeName(typeName string) bool {
+	for _, c := range DefaultConcreteTypes {
+		if c.Name == typeName {
+			b, ok := c.Type.(*types.Basic)
+			if !ok {
+				return false
+			}
+			return IsBasicComparableKind(b.Kind())
+		}
+	}
+	return false
+}
+
+// SubstituteTypeParams returns s with every type-parameter name
+// replaced by its concrete instantiation per [ConcreteFor]. Empty
+// params slice (non-generic) returns s unchanged.
+//
+// Replacement honors Go identifier word boundaries: a type
+// parameter named "K" replaces the standalone token "K" (e.g.
+// "[K]any", "func(K)") but leaves "Key", "OnK", "Lookup", and
+// other identifiers containing "K" untouched. The boundary check
+// scans both characters around each match — a Go-identifier
+// character before or after disqualifies the match.
+func SubstituteTypeParams(s string, params []TypeParamInfo) string {
+	if len(params) == 0 {
+		return s
+	}
+	for i, p := range params {
+		s = replaceWord(s, p.Name, ConcreteFor(p, i).Name)
+	}
+	return s
+}
+
+// replaceWord replaces every occurrence of `old` in s with `new`
+// where the match starts and ends on Go-identifier word
+// boundaries. A character is part of a word when it is a letter,
+// digit, or underscore. Used by [SubstituteTypeParams] so single-
+// letter type parameter names ("K", "V") don't clobber identifiers
+// that happen to share the same prefix or suffix character.
+func replaceWord(s, oldString, newString string) string {
+	if oldString == "" || !strings.Contains(s, oldString) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	i := 0
+	for i < len(s) {
+		j := strings.Index(s[i:], oldString)
+		if j < 0 {
+			b.WriteString(s[i:])
+			break
+		}
+		j += i
+		// Boundary check: the character immediately before and
+		// after the match must NOT be a Go-identifier character.
+		startsOnBoundary := j == 0 || !isIdentChar(s[j-1])
+		endsOnBoundary := j+len(oldString) == len(s) ||
+			!isIdentChar(s[j+len(oldString)])
+		if startsOnBoundary && endsOnBoundary {
+			b.WriteString(s[i:j])
+			b.WriteString(newString)
+			i = j + len(oldString)
+			continue
+		}
+		b.WriteString(s[i : j+len(oldString)])
+		i = j + len(oldString)
+	}
+	return b.String()
+}
+
+// isIdentChar reports whether c is a Go-identifier byte (ASCII
+// letter, digit, or underscore). The check is byte-level — Unicode
+// identifier characters fall outside its scope, but type parameter
+// names in practice are ASCII (K, V, T, ...).
+func isIdentChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '_'
+}
+
+// BuildTypeParamMap maps each type parameter name to its concrete
+// instantiation chosen via [ConcreteFor]. Used by generators that
+// substitute type params directly (e.g. builder's per-field test
+// view) rather than via the string [SubstituteTypeParams] form.
+func BuildTypeParamMap(params []TypeParamInfo) map[string]ConcreteType {
+	m := make(map[string]ConcreteType, len(params))
+	for i, p := range params {
+		m[p.Name] = ConcreteFor(p, i)
+	}
+	return m
+}
+
+// ConcreteFor picks a concrete instantiation for one type parameter
+// at position idx. Walks [DefaultConcreteTypes] from the rotated
+// start so any `any` / `comparable`-constrained position gets a
+// distinct candidate, while narrow constraints (Numeric, ~int64,
+// etc.) fall through to the first satisfying candidate.
+//
+// Falls back to the round-robin candidate when no candidate
+// satisfies — better to render a possibly-wrong concrete type and
+// let the Go compiler complain than emit a placeholder the user
+// has to chase down.
+//
+// Used by every generator that auto-instantiates a generic type
+// (builder for struct tests, stub for interface auto-tests, …).
+func ConcreteFor(p TypeParamInfo, idx int) ConcreteType {
+	if ct := SelectConcreteType(p.Constraint, DefaultConcreteTypes, idx); ct != nil {
+		return *ct
+	}
+	n := len(DefaultConcreteTypes)
+	return DefaultConcreteTypes[((idx%n)+n)%n]
+}
+
+// TestTypeArgs renders the concrete-instantiation suffix a
+// generator emits in its auto-test (`[string]`, `[string, int]`,
+// `[int]` for `Stat[T Numeric]`). Each type-param position is
+// selected independently via [ConcreteFor] so constraint-driven
+// types win over position-driven defaults. Returns "" for
+// non-generic input (empty params slice).
+func TestTypeArgs(params []TypeParamInfo) string {
+	if len(params) == 0 {
+		return ""
+	}
+	names := make([]string, len(params))
+	for i, p := range params {
+		names[i] = ConcreteFor(p, i).Name
+	}
+	return "[" + strings.Join(names, ", ") + "]"
 }
 
 // SelectConcreteType picks the first candidate (starting at

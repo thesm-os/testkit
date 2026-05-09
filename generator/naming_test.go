@@ -64,6 +64,20 @@ func TestNaming(t *testing.T) {
 		}
 	})
 
+	t.Run("LowerFirst lowercases only the first ASCII rune", func(t *testing.T) {
+		t.Parallel()
+		cases := map[string]string{
+			"":          "",
+			"StoreStub": "storeStub",
+			"URL":       "uRL", // counterpart of Title — no initialism awareness
+			"already":   "already",
+			"_Hidden":   "_Hidden", // non-letter first char passes through
+		}
+		for in, want := range cases {
+			testkit.Equal(t, generator.LowerFirst(in), want, "LowerFirst("+in+")")
+		}
+	})
+
 	t.Run("SnakeCase splits CamelCase and kebab-case", func(t *testing.T) {
 		t.Parallel()
 		cases := map[string]string{

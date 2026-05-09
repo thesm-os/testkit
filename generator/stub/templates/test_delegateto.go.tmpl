@@ -1,0 +1,50 @@
+{{- /* Interface-level DelegateTo subtest. Configures the inner
+       stub's representative method via Returns(<sample>), wraps it
+       with DelegateTo on the outer stub, and verifies that:
+         - the outer's call lands on the inner (CallCount == 1), and
+         - the inner's configured return values bubble up through
+           the outer's dispatch unchanged.
+
+       Picks FirstNonSkipMethodWithAssertableResults — DelegateTo
+       wires every method identically, so one observable round-trip
+       proves the whole option. Falls back to FirstNonSkipMethod
+       when the interface has no assertable results (we can still
+       verify the count-forwarding contract). */ -}}
+{{- define "test-iface-delegateto" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- with $m := .FirstNonSkipMethodWithSampleableResults }}
+	t.Run("DelegateTo forwards calls and surfaces results", func(t *testing.T) {
+		t.Parallel()
+		inner := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		inner.On{{ $m.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($m.SampleResults $tracker) }})
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t, {{ $gq }}{{ $stub }}DelegateTo{{ $.TestTypeArgs }}(inner))
+{{- if $m.HasAssertableNonErrorResults }}
+		{{ $.Spec.SubstituteTypeParams $m.ResultNames }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- if $m.ReturnsError }}
+		testkit.NoError(t, err, "{{ $m.Name }}: DelegateTo must surface inner's nil error")
+{{- end }}
+		{{ $.Spec.SubstituteTypeParams ($m.SampleResultAsserts $tracker (printf "%s DelegateTo" $m.Name)) }}
+{{- else if $m.ReturnsError }}
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.NoError(t, err, "{{ $m.Name }}: DelegateTo must surface inner's nil error")
+{{- else }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.Equal(t, inner.On{{ $m.Name }}.CallCount(), 1, "{{ $m.Name }}: DelegateTo must forward to inner")
+	})
+{{- else }}{{ with $m := .FirstNonSkipMethod }}
+	t.Run("DelegateTo forwards to implementation", func(t *testing.T) {
+		t.Parallel()
+		inner := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t, {{ $gq }}{{ $stub }}DelegateTo{{ $.TestTypeArgs }}(inner))
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.Equal(t, inner.On{{ $m.Name }}.CallCount(), 1, "{{ $m.Name }}: DelegateTo must forward to inner")
+	})
+{{- end }}{{- end }}
+{{- end -}}

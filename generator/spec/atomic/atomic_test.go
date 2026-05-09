@@ -9,14 +9,23 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/directive"
 	"go.thesmos.sh/testkit/generator/spec"
-	_ "go.thesmos.sh/testkit/generator/spec/atomic" // self-registration
+	"go.thesmos.sh/testkit/generator/spec/atomic"
 )
 
-// Smoke: importing the package wires a consumer for directive.Atomic.
-// The package is a one-line marker (init() → marker.Register); this
-// test guards against accidental regression of that wiring.
-func TestRegistration(t *testing.T) {
+func TestAtomic(t *testing.T) {
 	t.Parallel()
-	testkit.True(t, len(spec.Consumers(directive.Atomic)) > 0,
-		"atomic consumer registered")
+
+	t.Run("importing the package registers a consumer", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, len(spec.Consumers(directive.Atomic)) > 0,
+			"atomic consumer registered")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, atomic.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.Atomic, struct{}{})
+		testkit.True(t, atomic.Has(&m), "present after Set")
+	})
 }

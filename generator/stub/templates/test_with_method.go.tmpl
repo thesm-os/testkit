@@ -1,0 +1,29 @@
+{{- /* Constructor-option subtest per non-skip method. Verifies
+       that With<Type><Method>(fn) wires fn as the per-method Func
+       at construction time — the call must run fn, not the
+       fallback. The closure flips a `called` flag the assertion
+       verifies. */ -}}
+{{- define "test-method-with-method" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $type := .Spec.Interface.Name -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+	t.Run("With{{ $type }}{{ $m.Name }} constructor option fires", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t, {{ $gq }}With{{ $type }}{{ $m.Name }}{{ $.TestTypeArgs }}(func({{ $.Spec.SubstituteTypeParams ($m.ParamList $tracker) }}){{ if $m.HasResults }} {{ $.Spec.SubstituteTypeParams ($m.ResultList $tracker) }}{{ end }} {
+			called = true
+{{- if $m.HasResults }}
+			return {{ $.Spec.SubstituteTypeParams ($m.ZeroResults $tracker) }}
+{{- end }}
+		}))
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.True(t, called, "{{ $m.Name }}: With{{ $type }}{{ $m.Name }} must wire the constructor func")
+	})
+{{ end }}{{ end -}}
+{{- end -}}

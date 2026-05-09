@@ -19,6 +19,38 @@ const (
 	iterSeq2Name   = "Seq2"
 )
 
+// DocText returns the method's doc comment with `//testkit:`
+// directive lines removed. The leading "// " from each remaining
+// line is stripped — callers re-prefix with their own comment
+// marker. Trailing whitespace and leading/trailing blank lines
+// are trimmed so the result drops cleanly into a doc-block context.
+//
+// Empty when the method carries no source doc.
+func (m *MethodInfo) DocText() string {
+	if m.Doc == "" {
+		return ""
+	}
+	var lines []string
+	for line := range strings.SplitSeq(m.Doc, "\n") {
+		trimmed := strings.TrimSpace(line)
+		bare := strings.TrimPrefix(trimmed, "//")
+		bare = strings.TrimSpace(bare)
+		if strings.HasPrefix(bare, "testkit:") {
+			continue
+		}
+		// Preserve the line's content stripped of the comment marker.
+		// "// foo" → "foo"; "//" → ""; "  // foo" → "foo".
+		lines = append(lines, bare)
+	}
+	for len(lines) > 0 && lines[0] == "" {
+		lines = lines[1:]
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return strings.Join(lines, "\n")
+}
+
 // HasContext reports whether the first parameter is context.Context.
 func (m *MethodInfo) HasContext() bool {
 	params := m.Signature.Params()

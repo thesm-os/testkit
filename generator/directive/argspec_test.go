@@ -28,6 +28,13 @@ func TestArgKind(t *testing.T) {
 			testkit.Equal(t, k.String(), want, "ArgKind String")
 		}
 	})
+
+	t.Run("String falls back to unknown for unrecognised kinds", func(t *testing.T) {
+		t.Parallel()
+		// Out-of-range value triggers the default branch.
+		testkit.Equal(t, directive.ArgKind(99).String(), "unknown",
+			"unrecognised kind → unknown")
+	})
 }
 
 func TestArgValidation(t *testing.T) {
@@ -84,5 +91,43 @@ func TestArgValidation(t *testing.T) {
 		d := directive.New("x", directive.InCategory(directive.Enrichment),
 			directive.Arg("names", directive.ArgIdent, directive.Required, directive.Multi))
 		testkit.Len(t, d.ValidateArgs([]string{"A", "B", "C"}, false), 0, "all valid")
+	})
+
+	t.Run("ArgString rejects empty values", func(t *testing.T) {
+		t.Parallel()
+		d := directive.New("x", directive.InCategory(directive.Enrichment),
+			directive.Arg("s", directive.ArgString, directive.Required))
+		errs := d.ValidateArgs([]string{""}, false)
+		testkit.True(t, len(errs) > 0, "empty string rejected")
+		testkit.Assert(t, errs[0].Error()).Contains("empty string", "diagnostic")
+	})
+
+	t.Run("ArgRange flags invalid upper bound", func(t *testing.T) {
+		t.Parallel()
+		// lo parses OK, hi fails — exercises the second ParseFloat branch.
+		d := directive.New("x", directive.InCategory(directive.Mixin),
+			directive.Arg("r", directive.ArgRange, directive.Required))
+		errs := d.ValidateArgs([]string{"0.0..bad"}, false)
+		testkit.True(t, len(errs) > 0, "non-numeric upper rejected")
+		testkit.Assert(t, errs[0].Error()).Contains("upper bound", "names the bad side")
+	})
+
+	t.Run("ArgKey behaves like ArgIdent (Go-identifier rules)", func(t *testing.T) {
+		t.Parallel()
+		d := directive.New("x", directive.InCategory(directive.Enrichment),
+			directive.Arg("k", directive.ArgKey, directive.Required))
+		testkit.Len(t, d.ValidateArgs([]string{"User"}, false), 0, "valid ident")
+		testkit.True(t, len(d.ValidateArgs([]string{"User-name"}, false)) > 0,
+			"hyphen rejected (isGoIdent default branch)")
+	})
+
+	t.Run("ArgIdent rejects empty values via isGoIdent", func(t *testing.T) {
+		t.Parallel()
+		// Surplus arg slot with empty value passes through to
+		// isGoIdent("") — exercises the empty-string early-return.
+		d := directive.New("x", directive.InCategory(directive.Enrichment),
+			directive.Arg("a", directive.ArgIdent, directive.Required, directive.Multi))
+		errs := d.ValidateArgs([]string{""}, false)
+		testkit.True(t, len(errs) > 0, "empty ident rejected")
 	})
 }

@@ -1,0 +1,40 @@
+{{- /* Func-override subtest per non-skip method. Verifies that
+       installing a Func() callback routes the next dispatch through
+       the user closure: the closure fires (called=true), and (when
+       the method returns an error) the surfaced error is nil — the
+       Func returned zero results. Generic methods reach this
+       template with type-param names rewritten to the test-time
+       concrete instantiation via Spec.SubstituteTypeParams.
+
+       Non-error result vars are discarded — asserting they equal
+       the ZeroResults Func returned is a tautology that adds noise
+       and breaks against non-comparable result types (functions,
+       channels). The default-path subtest already verifies the
+       zero-equals-zero contract for comparable types. */ -}}
+{{- define "test-method-func" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+	t.Run("{{ $m.Name }}/Func override fires", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.Func(func({{ $.Spec.SubstituteTypeParams ($m.ParamList $tracker) }}){{ if $m.HasResults }} {{ $.Spec.SubstituteTypeParams ($m.ResultList $tracker) }}{{ end }} {
+			called = true
+{{- if $m.HasResults }}
+			return {{ $.Spec.SubstituteTypeParams ($m.ZeroResults $tracker) }}
+{{- end }}
+		})
+{{- if $m.ReturnsError }}
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.NoError(t, err, "{{ $m.Name }}: Func returned nil error")
+{{- else if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.True(t, called, "{{ $m.Name }}: Func override must fire")
+	})
+{{ end }}{{ end -}}
+{{- end -}}

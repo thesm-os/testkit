@@ -1,0 +1,19 @@
+{{- /* FaultMiss subtest per non-skip method whose final result
+       is a non-error bool. Verifies the helper installs a zero-
+       valued fallback so dispatch surfaces (zero…, false) on the
+       next call. The trailing bool reads false; non-bool results
+       equal their zero literal where comparable. */ -}}
+{{- define "test-method-miss" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if and (not $m.Skip) $m.HasTrailingBool }}
+	t.Run("{{ $m.Name }}/FaultMiss surfaces zero+false", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.FaultMiss()
+		{{ $.Spec.SubstituteTypeParams $m.ResultNames }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		{{ $.Spec.SubstituteTypeParams ($m.ZeroResultAsserts $tracker (printf "%s FaultMiss" $m.Name)) }}
+	})
+{{ end }}{{ end -}}
+{{- end -}}

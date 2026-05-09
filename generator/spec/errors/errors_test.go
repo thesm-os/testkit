@@ -32,20 +32,22 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestErrors(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: sentinels resolved with bare and short names", func(t *testing.T) {
+	t.Run("consume resolves sentinels with bare and short names", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[errors.Payload](
-			methodByName(data, "Submit").Attachments, directive.Errors)
+		got, ok := errors.Get(methodByName(data, "Submit"))
 		testkit.True(t, ok, "payload attached")
 		testkit.Len(t, got.Sentinels, 2, "two sentinels resolved")
 		testkit.Equal(t, got.Sentinels[0].VarName, "ErrNotFound", "VarName")
 		testkit.Equal(t, got.Sentinels[0].ShortName, "NotFound", "ShortName strips Err")
-		testkit.Equal(t, got.Sentinels[0].Qualified, "ErrNotFound", "local: bare")
+		// Output is in workflowtest/, source is basic/ — local
+		// refs qualify with the source-pkg alias.
+		testkit.Equal(t, got.Sentinels[0].Qualified, "basic.ErrNotFound",
+			"source-qualified for sibling output pkg")
 		testkit.Equal(t, got.Sentinels[1].VarName, "ErrConflict", "second VarName")
 	})
 
@@ -95,5 +97,34 @@ func TestConsume(t *testing.T) {
 		}
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "non-var rejected")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := errors.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Len(t, got.Sentinels, 0, "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, errors.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.Errors, errors.Payload{})
+		testkit.True(t, errors.Has(&m), "present after Set")
+	})
+
+	t.Run("FaultReturn delegates to Method.FaultReturn with sentinel expr", func(t *testing.T) {
+		t.Parallel()
+		// Submit(ctx, Item) error — error-only result, so FaultReturn
+		// renders just the sentinel's qualified expression.
+		pkg, data := loadWorkflow(t)
+		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
+		submit := methodByName(data, "Submit")
+		payload, _ := errors.Get(submit)
+		got := errors.FaultReturn(submit, data.Tracker, payload.Sentinels[0])
+		testkit.Equal(t, got, "basic.ErrNotFound",
+			"error-only method renders sentinel expr alone")
 	})
 }

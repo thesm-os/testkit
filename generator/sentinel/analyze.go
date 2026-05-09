@@ -147,7 +147,7 @@ func buildErrorTypes(pkg *generator.Package, tracker *generator.ImportTracker, q
 // [generator.Options.WorkDir] so module resolution matches the local
 // build. Errors during peer loading bubble up as Analyze errors —
 // silently dropping a misconfigured directive would mask the very
-// bugs G24 is trying to catch.
+// bugs the cross-package non-overlap check is trying to catch.
 func buildCrossPackages(pkg *generator.Package, opts generator.Options) ([]CrossPackage, error) {
 	var imports []string
 	for _, d := range pkg.PackageDirectives() {

@@ -9,7 +9,11 @@ package atomic
 
 import (
 	"go.thesmos.sh/testkit/generator/directive"
+	"go.thesmos.sh/testkit/generator/spec"
 	"go.thesmos.sh/testkit/generator/spec/internal/marker"
 )
 
 func init() { marker.Register(directive.Atomic) }
+
+// Has reports whether the method carries //testkit:atomic.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.Atomic) }

@@ -63,6 +63,13 @@ type Descriptor struct {
 	// "experimental:<name>" prefix. Validation warns instead of
 	// erroring for experimental directives that have no consumer.
 	Experimental bool
+
+	// Consumers maps a generator name (`stub`, `suite`, `bench`,
+	// `model`) to a one-line description of what that generator
+	// emits in response to the directive. Populated via [Consumed]
+	// — generators surface this map in file headers so reviewers
+	// see, per directive, which generators it shapes and how.
+	Consumers map[string]string
 }
 
 // Option mutates a [Descriptor] during construction. Used as the
@@ -156,6 +163,21 @@ func ComposesWith(names ...string) Option {
 // "experimental:<name>" prefix.
 func Experimental() Option {
 	return func(d *Descriptor) { d.Experimental = true }
+}
+
+// Consumed records that the named generator (`stub`, `suite`,
+// `bench`, `model`) consumes the directive, with a one-line action
+// describing what gets emitted. Multiple [Consumed] calls register
+// multiple consumers — many directives shape more than one
+// generator (e.g. `errors` produces stub fault helpers AND suite
+// per-sentinel subtests).
+func Consumed(consumer, action string) Option {
+	return func(d *Descriptor) {
+		if d.Consumers == nil {
+			d.Consumers = make(map[string]string)
+		}
+		d.Consumers[consumer] = action
+	}
 }
 
 // validateDescriptor returns every invariant violation it finds. The

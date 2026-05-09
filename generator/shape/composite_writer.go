@@ -7,7 +7,7 @@ import "go.thesmos.sh/testkit/generator"
 
 // compositeWriterDetector matches `func(ctx?, K1, V) error` — two
 // non-ctx parameters and an error-only return. Models namespaced
-// stores, tagged caches, and two-key indexes (ANALYSIS.md G27).
+// stores, tagged caches, and two-key indexes.
 //
 // Three-or-more-key Writers route to MultiArgWriter (priority
 // 750) when ctx is present, or fall to Unknown without ctx.

@@ -3,6 +3,8 @@
 
 package basic
 
+//go:generate testkit stub -o storetest/store.gen.go Store
+
 import "context"
 
 // Item is the test value type.

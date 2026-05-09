@@ -1,0 +1,32 @@
+{{- /* Integration-only subtest per Skip() method. Verifies the
+       stub-skip contract: the dispatch returns zero values without
+       panicking and without an OnX recorder (the stub omits the
+       per-method MethodStub for skipped methods). The test exists
+       primarily to keep the integration-only path covered — the
+       method has no fault/return/recording surface to assert
+       against. */ -}}
+{{- define "test-method-integrationonly" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if $m.Skip }}
+	t.Run("{{ $m.Name }}/integration-only stub returns zero", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+{{- if $m.HasAssertableNonErrorResults }}
+		{{ $.Spec.SubstituteTypeParams $m.ResultNames }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- if $m.ReturnsError }}
+		testkit.NoError(t, err, "{{ $m.Name }}: integration-only stub must not error")
+{{- end }}
+		{{ $.Spec.SubstituteTypeParams ($m.ZeroResultAsserts $tracker (printf "%s integration-only" $m.Name)) }}
+{{- else if $m.ReturnsError }}
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.NoError(t, err, "{{ $m.Name }}: integration-only stub must not error")
+{{- else if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+	})
+{{ end }}{{ end -}}
+{{- end -}}

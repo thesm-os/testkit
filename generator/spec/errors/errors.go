@@ -60,6 +60,28 @@ func init() {
 	spec.RegisterConsumer(directive.Errors, consume)
 }
 
+// Get retrieves the resolved [Payload] for a method. Returns
+// (zero, false) when the method carries no //testkit:errors
+// directive. Wraps [spec.Get] so consumers don't repeat the
+// directive name.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.Errors)
+}
+
+// Has reports whether the method carries //testkit:errors.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.Errors) }
+
+// FaultReturn renders the trailing-error swap return list a
+// fault-helper emits when invoked: non-error results stay zero,
+// the error slot carries the sentinel's qualified expression.
+//
+// Wraps [spec.Method.FaultReturn] — kept here so consumers'
+// templates pull this from the errors package alongside the rest
+// of the directive's render surface.
+func FaultReturn(m *spec.Method, t *generator.ImportTracker, sentinel Sentinel) string {
+	return m.FaultReturn(t, sentinel.Qualified)
+}
+
 func consume(method *spec.Method, dir directive.Directive, data *spec.Data, pkg *generator.Package) error {
 	if len(dir.Args) == 0 {
 		return stderrors.New("errors: requires at least one sentinel name")

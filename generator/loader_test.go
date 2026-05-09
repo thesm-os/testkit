@@ -110,6 +110,15 @@ func TestLoader(t *testing.T) {
 		testkit.True(t, pkg.MethodsOn("DoesNotExist") == nil, "missing → nil")
 	})
 
+	t.Run("MethodsOn handles generic-instance pointer receivers", func(t *testing.T) {
+		t.Parallel()
+		// `*InMemoryHolder[V]` is a *ast.StarExpr whose X is an
+		// *ast.IndexExpr — covers recvName's generic-receiver branch.
+		pkg := loadFixture(t, "generics")
+		methods := pkg.MethodsOn("InMemoryHolder")
+		testkit.True(t, len(methods) > 0, "generic struct methods discovered")
+	})
+
 	t.Run("Interfaces and Structs list every named type", func(t *testing.T) {
 		t.Parallel()
 		pkg := loadBasic(t)
@@ -241,5 +250,52 @@ func TestLoader(t *testing.T) {
 		pkg := loadBasic(t)
 		// Status is an enum (named int) — not a struct.
 		testkit.Len(t, pkg.FieldDirectives("Status", "X"), 0, "non-struct → nil")
+	})
+
+	t.Run("Path and Name return empty when Pkg is nil", func(t *testing.T) {
+		t.Parallel()
+		var p generator.Package
+		testkit.Equal(t, p.Path(), "", "no Pkg → empty path")
+		testkit.Equal(t, p.Name(), "", "no Pkg → empty name")
+	})
+
+	t.Run("Var rejects non-variable lookups", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		_, err := pkg.Var("DoesNotExist")
+		testkit.True(t, err != nil, "missing var errors")
+		// Status is a type, not a var — Var must reject it.
+		_, err = pkg.Var("Status")
+		testkit.True(t, err != nil, "type-name rejected")
+		testkit.Assert(t, err.Error()).Contains("not a variable", "diagnostic")
+	})
+
+	t.Run("Const rejects non-constant lookups", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		_, err := pkg.Const("DoesNotExist")
+		testkit.True(t, err != nil, "missing const errors")
+		// ErrNotFound is a var, not a const.
+		_, err = pkg.Const("ErrNotFound")
+		testkit.True(t, err != nil, "var-name rejected")
+		testkit.Assert(t, err.Error()).Contains("not a constant", "diagnostic")
+	})
+
+	t.Run("Struct rejects non-type and non-named lookups", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		// ErrNotFound is a var, not a type.
+		_, err := pkg.Struct("ErrNotFound")
+		testkit.True(t, err != nil, "var-name rejected")
+		testkit.Assert(t, err.Error()).Contains("not a type", "diagnostic")
+	})
+
+	t.Run("Interface rejects non-type and non-interface lookups", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		// ErrNotFound is a var, not a type.
+		_, err := pkg.Interface("ErrNotFound")
+		testkit.True(t, err != nil, "var-name rejected")
+		testkit.Assert(t, err.Error()).Contains("not a type", "diagnostic")
 	})
 }

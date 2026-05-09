@@ -1,0 +1,22 @@
+{{- /* Interface-level WithRandSource subtest. Verifies that a
+       deterministic [rand.Source] (FixedRandSource) installed via
+       WithRandSource propagates to every per-method MethodStub by
+       installing a probability fault on a representative error-
+       returning method: with src returning 0.0 and probability 1.0,
+       the fault must fire on the first call. The subtest is only
+       emitted for interfaces with at least one error-returning
+       method — there's nothing to assert against otherwise. */ -}}
+{{- define "test-iface-randsource" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- with $m := .FirstErrorMethod }}
+	t.Run("WithRandSource propagates", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t, {{ $gq }}{{ $stub }}WithRandSource{{ $.TestTypeArgs }}(rand.FixedRandSource(0.0)))
+		s.On{{ $m.Name }}.FaultsWithProbability(1.0, errTest)
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.ErrorIs(t, err, errTest, "{{ $m.Name }}: probability=1.0 fault must fire under any source")
+	})
+{{- end }}
+{{- end -}}

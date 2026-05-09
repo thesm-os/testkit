@@ -1,0 +1,98 @@
+{{- /* Method dispatch partial: emits one func per interface method.
+       Skipped (integration-only) methods get a zero-return body;
+       active methods follow the canonical fault → fn → fallback →
+       FailUnexpected ordering with recording-AFTER-dispatch and the
+       fault error stamped into the recorded Call.
+
+       Each dispatch method preserves the source method's doc
+       comment (stripped of //testkit: directives) and adds a
+       short tail describing the dispatch contract. The reader
+       sees the original semantic + the stub's behavior in one
+       block. */ -}}
+{{- define "dispatch" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $type := .Spec.Interface.Name -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+{{ range $m := .Methods }}
+{{- if $m.Skip }}
+{{- if $m.DocText }}
+{{ range $line := splitLines $m.DocText }}// {{ $line }}
+{{ end -}}
+//
+{{ end -}}
+// {{ $m.Name }} is integration-only — the stub returns zero values
+// without recording. There is no On{{ $m.Name }} field; configuring
+// dispatch for {{ $m.Name }} requires editing the source directive.
+func (s *{{ $.StubName }}{{ $tpArgs }}) {{ $m.Name }}({{ $m.ParamList $tracker }}){{ if $m.HasResults }} {{ $m.ResultList $tracker }}{{ end }} {
+{{- if $m.HasResults }}
+	return {{ $m.ZeroResults $tracker }}
+{{- end }}
+}
+{{- else }}
+{{ if $m.DocText -}}
+{{ range $line := splitLines $m.DocText }}// {{ $line }}
+{{ end -}}
+//
+{{ end -}}
+// Dispatches via On{{ $m.Name }} through the standard chain
+// (fault → Func → fallback → FailUnexpectedCall) and records the
+// call before returning.
+{{- if $m.Deprecated }}
+//
+// Deprecated: use {{ $m.Deprecated }} instead.
+{{- end }}
+func (s *{{ $.StubName }}{{ $tpArgs }}) {{ $m.Name }}({{ $m.ParamList $tracker }}){{ if $m.HasResults }} {{ $m.ResultList $tracker }}{{ end }} {
+{{- if $m.Deprecated }}
+	if tb := s.On{{ $m.Name }}.TB(); tb != nil {
+		tb.Logf("{{ $type }}.{{ $m.Name }} is deprecated, use {{ $m.Deprecated }} instead")
+	}
+{{- end }}
+{{- if $m.OrderAfter }}
+	s.order.AssertAfter("{{ $m.Name }}", "{{ $m.OrderAfter }}")
+{{- end }}
+	s.On{{ $m.Name }}.SleepLatency()
+{{- if $.HasOrderConstraint }}
+	defer s.order.Record("{{ $m.Name }}")
+{{- end }}
+	call := {{ $m.QualCallType }}{ {{ $m.ParamFieldAssign $tracker }} }
+{{- if $m.ReturnsError }}
+	if fired, faultErr := s.On{{ $m.Name }}.ShouldFaultFor(call); fired {
+		call.{{ $m.ErrFieldName }} = faultErr
+		s.On{{ $m.Name }}.Record(call)
+		return {{ $m.FaultReturn $tracker "faultErr" }}
+	}
+{{- end }}
+	if s.On{{ $m.Name }}.fn != nil {
+{{- if $m.HasResults }}
+		{{ $m.ResultDecls $tracker }}
+		{{ $m.ResultNames }} = s.On{{ $m.Name }}.fn({{ $m.ParamNames }})
+{{- with $stamp := $m.CallResultStampVars $tracker }}
+		{{ $stamp }}
+{{- end }}
+		s.On{{ $m.Name }}.Record(call)
+		return {{ $m.ResultNames }}
+{{- else }}
+		s.On{{ $m.Name }}.fn({{ $m.ParamNames }})
+		s.On{{ $m.Name }}.Record(call)
+		return
+{{- end }}
+	}
+{{- if $m.HasResults }}
+	if s.On{{ $m.Name }}.fallback != nil {
+		f := s.On{{ $m.Name }}.fallback
+{{- with $stamp := $m.CallResultStampFallback $tracker }}
+		{{ $stamp }}
+{{- end }}
+		s.On{{ $m.Name }}.Record(call)
+		return {{ $m.ResultsFromFallback $tracker }}
+	}
+{{- end }}
+	s.On{{ $m.Name }}.FailUnexpectedCall(call)
+	s.On{{ $m.Name }}.Record(call)
+{{- if $m.HasResults }}
+	return {{ $m.ZeroResults $tracker }}
+{{- end }}
+}
+{{- end }}
+{{ end -}}
+{{- end -}}

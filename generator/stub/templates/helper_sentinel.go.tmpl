@@ -1,0 +1,27 @@
+{{- /* Per-sentinel fault helpers. Emitted per non-skip method that
+       carries //testkit:errors, one Fault<ShortName>() helper per
+       resolved sentinel.
+
+       Wrap-via discipline: when the method also carries
+       //testkit:wrapped-via <Target>, the helper's fault wraps both
+       the sentinel and the wrap target via fmt.Errorf("%w: %w",
+       ...). Consumers' errors.Is checks satisfy both — the wrap
+       target represents the umbrella error every method-emitted
+       error wraps. The bare runtime stub.MethodStub.Faults call
+       remains an escape hatch for callers that need an unwrapped
+       fault. */ -}}
+{{- define "helper-sentinel" -}}
+{{ range $m := .Methods }}{{ if not $m.Skip }}{{ range $sentinel := $m.Errors }}
+{{- $wrap := $m.WrappedVia }}
+// Fault{{ $sentinel.ShortName }} sets a one-shot fault returning {{ $sentinel.VarName }}
+{{- if $wrap }} wrapped via {{ $wrap.VarName }}{{ end }}.
+func (s *{{ $m.QualStubType }}) Fault{{ $sentinel.ShortName }}() *{{ $m.QualStubType }} {
+{{- if $wrap }}
+	s.Faults(fmt.Errorf("%w: %w", {{ $sentinel.Qualified }}, {{ $wrap.Qualified }}), 1)
+{{- else }}
+	s.Faults({{ $sentinel.Qualified }}, 1)
+{{- end }}
+	return s
+}
+{{ end }}{{ end }}{{ end -}}
+{{- end -}}

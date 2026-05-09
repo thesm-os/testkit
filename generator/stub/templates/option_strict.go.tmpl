@@ -1,0 +1,11 @@
+{{- /* Strict option partial: enables strict mode at construction
+       time. Strict propagation to per-method stubs lives in the
+       constructor body, not here. */ -}}
+{{- define "option-strict" -}}
+{{- $tpDecl := .Spec.TypeParamDecl -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+// {{ .StubName }}Strict enables strict mode — unconfigured methods fail the test.
+func {{ .StubName }}Strict{{ $tpDecl }}() {{ .StubName }}Option{{ $tpArgs }} {
+	return func(s *{{ .StubName }}{{ $tpArgs }}) { s.strict = true }
+}
+{{- end -}}

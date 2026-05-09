@@ -30,8 +30,7 @@
 //
 // # Shape catalog
 //
-// The shipped catalog covers the elite gap analysis (ANALYSIS.md
-// G26-G35). Twenty-one detectors plus an Unknown fallback:
+// Twenty-one detectors plus an Unknown fallback:
 //
 //	Streaming:  StreamReader, StreamConsumer
 //	Reading:    Reader, ReaderNoError, ReaderWithBool, Lookup,
@@ -45,14 +44,13 @@
 // # Ctx is optional
 //
 // Reader, Writer, Deleter, Aggregator detectors accept signatures
-// with or without ctx (ANALYSIS.md G29). PoisonAccessor remains
-// the canonical no-ctx error-only shape; Lifecycle requires ctx
-// to disambiguate from PoisonAccessor.
+// with or without ctx. PoisonAccessor remains the canonical no-ctx
+// error-only shape; Lifecycle requires ctx to disambiguate from
+// PoisonAccessor.
 //
 // # Auto-detected Mutator
 //
 // Mutator is detected from the signature `func(ctx?, V)` (void
 // return) without requiring //testkit:mutator. The directive
-// //testkit:not-mutator opts a method out of Mutator detection
-// (ANALYSIS.md G32).
+// //testkit:not-mutator opts a method out of Mutator detection.
 package shape

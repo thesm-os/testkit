@@ -1,0 +1,27 @@
+{{- /* Records-call-results subtest per non-skip method that has
+       at least one assertable non-error result. Verifies the
+       generated dispatch's CallResultStampFallback block stamps
+       each result onto the Call struct's per-result field after
+       Returns(...) provides them.
+
+       Iterator returns (iter.Seq / iter.Seq2) are skipped — the
+       result is a function value; the Yields helpers test that
+       path, and cmp.Diff would panic on the function comparison
+       anyway. */ -}}
+{{- define "test-method-call-results" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}
+{{- $iter := $m.IterReturn $tracker -}}
+{{- if and (not $m.Skip) $m.HasAssertableNonErrorResults (not $iter.IsSeq) (not $iter.IsSeq2) }}
+	t.Run("{{ $m.Name }}/records call results", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($m.SampleResults $tracker) }})
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		call := s.On{{ $m.Name }}.LastCall(t)
+		{{ $.Spec.SubstituteTypeParams ($m.ResultFieldAsserts $tracker (printf "%s records results" $m.Name) "call") }}
+	})
+{{ end }}{{ end -}}
+{{- end -}}

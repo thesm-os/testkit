@@ -7,7 +7,7 @@ import "go.thesmos.sh/testkit/generator"
 
 // multiReaderDetector matches `func(ctx?, K) (V1, V2, error)` —
 // one non-ctx parameter and two non-error results plus error.
-// Models "get the entity + metadata" idioms (ANALYSIS.md G26).
+// Models "get the entity + metadata" idioms.
 //
 // Three-or-more non-error results fall to Unknown — too rare to
 // type usefully.

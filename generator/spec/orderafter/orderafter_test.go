@@ -32,15 +32,14 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestOrderAfter(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: prerequisite method attached", func(t *testing.T) {
+	t.Run("consume attaches the prerequisite method", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[orderafter.Payload](
-			methodByName(data, "Read").Attachments, directive.OrderAfter)
+		got, ok := orderafter.Get(methodByName(data, "Read"))
 		testkit.True(t, ok, "payload attached")
 		testkit.Equal(t, got.Method, "Open", "method name")
 	})
@@ -64,5 +63,21 @@ func TestConsume(t *testing.T) {
 		}
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "no args rejected")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := orderafter.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Equal(t, got.Method, "", "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, orderafter.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.OrderAfter, orderafter.Payload{Method: "Open"})
+		testkit.True(t, orderafter.Has(&m), "present after Set")
 	})
 }

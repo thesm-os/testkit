@@ -12,13 +12,6 @@ import (
 	"go.thesmos.sh/testkit/generator/spec"
 )
 
-func loadFixture(t *testing.T, name string) *generator.Package {
-	t.Helper()
-	pkg, err := generator.NewLoader().Load("./../testdata/"+name, "")
-	testkit.NoError(t, err, "Load testdata/"+name)
-	return pkg
-}
-
 func TestAnalyze(t *testing.T) {
 	t.Parallel()
 

@@ -12,8 +12,7 @@ import (
 // pointerReaderDetector matches `func(ctx?, K) *V` — single
 // non-ctx parameter and a pointer-typed non-error result. Models
 // the nil-on-miss idiom common in lookup APIs that return
-// `*Item` instead of `(Item, error)` or `(Item, bool)`
-// (ANALYSIS.md G28).
+// `*Item` instead of `(Item, error)` or `(Item, bool)`.
 //
 // Fires above ReaderNoError so the pointer case gets the
 // dedicated AssertReturnsNilForMissing primitive instead of

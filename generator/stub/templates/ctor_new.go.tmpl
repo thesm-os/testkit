@@ -1,0 +1,39 @@
+{{- /* Constructor partial: New<Stub> creates the stub with one
+       *MethodStub per non-skip method, runs the option chain,
+       propagates strict-mode + the OrderTracker (when applicable),
+       and registers tb.Cleanup → Verify() for auto-verification. */ -}}
+{{- define "ctor-new" -}}
+{{- $type := .Spec.Interface.Name -}}
+{{- $tpDecl := .Spec.TypeParamDecl -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+// New{{ .StubName }} creates a stub. Pass tb for auto-verification at
+// test cleanup; pass nil for a pure stub.
+func New{{ .StubName }}{{ $tpDecl }}(tb testing.TB, opts ...{{ .StubName }}Option{{ $tpArgs }}) *{{ .StubName }}{{ $tpArgs }} {
+	s := &{{ .StubName }}{{ $tpArgs }}{
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+		On{{ $m.Name }}: &{{ $m.QualStubType }}{ MethodStub: stub.NewMethodStub[{{ $m.QualCallType }}](tb, "{{ $type }}.{{ $m.Name }}") },
+{{- end }}{{ end }}
+	}
+	for _, opt := range opts {
+		opt(s)
+	}
+	if s.strict {
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+		s.On{{ $m.Name }}.Strict()
+{{- end }}{{ end }}
+	}
+{{- if .HasOrderConstraint }}
+	s.order = stub.NewOrderTracker(tb, s.strict)
+{{- end }}
+	if tb != nil {
+		if _, isFuzz := tb.(*testing.F); !isFuzz {
+			tb.Cleanup(func() {
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+				s.On{{ $m.Name }}.Verify()
+{{- end }}{{ end }}
+			})
+		}
+	}
+	return s
+}
+{{- end -}}

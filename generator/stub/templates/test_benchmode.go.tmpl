@@ -1,0 +1,40 @@
+{{- /* BenchMode zero-allocation gate. Recording overhead is CI-
+       gated: any regression that pushes Record above 0 allocs in
+       BenchMode fails this test.
+
+       Strategy:
+         - Construct one stub in BenchMode (recording disabled).
+         - Configure Returns(<sample>) on every HasResults method
+           so dispatch hits the alloc-free fallback path rather
+           than the FailUnexpectedCall path (which would still be
+           a no-op under non-strict, but the explicit fallback is
+           the canonical bench shape).
+         - One subtest per non-skip method, each running
+           [testing.AllocsPerRun] against the dispatch and
+           asserting allocs == 0.
+       Per-method subtests give the failure message granularity
+       to point at the exact method that regressed. */ -}}
+{{- define "test-benchmode" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+
+func Test{{ $stub }}BenchModeZeroAlloc(t *testing.T) {
+	s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(nil, {{ $gq }}{{ $stub }}BenchMode{{ $.TestTypeArgs }}())
+{{- range $m := .Methods }}{{ if and (not $m.Skip) $m.HasResults }}
+	s.On{{ $m.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($m.SampleResults $tracker) }})
+{{- end }}{{ end }}
+{{ range $m := .Methods }}{{ if not $m.Skip }}
+	t.Run("{{ $m.Name }}", func(t *testing.T) {
+		allocs := testing.AllocsPerRun(100, func() {
+{{- if $m.HasResults }}
+			{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+			s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		})
+		testkit.Equal(t, allocs, 0.0, "{{ $m.Name }}: BenchMode dispatch must allocate zero per call")
+	})
+{{ end }}{{ end -}}
+}
+{{- end -}}

@@ -1,0 +1,13 @@
+{{- /* Compile-time interface-check partial: emits a `var _` guard
+       asserting the stub satisfies the source interface.
+
+       For non-generic interfaces, the guard names the interface
+       directly. For generic interfaces, the guard uses the
+       constraint-driven concrete instantiation [TestTypeArgs] so
+       a build catches signature drift without requiring the
+       consumer to write an explicit instantiation in their test
+       code. */ -}}
+{{- define "iface-check" -}}
+// Compile-time guard: {{ .StubName }}{{ if .Spec.IsGeneric }}{{ .TestTypeArgs }}{{ end }} satisfies {{ .QualifiedTypeForTest }}.
+var _ {{ .QualifiedTypeForTest }} = (*{{ .StubName }}{{ if .Spec.IsGeneric }}{{ .TestTypeArgs }}{{ end }})(nil)
+{{ end -}}

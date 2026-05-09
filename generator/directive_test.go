@@ -65,6 +65,87 @@ func TestParseDirectivesFromDoc(t *testing.T) {
 	})
 }
 
-// Compile-time guard: directive package is reachable from this test file.
-// Without this line `directive` would be unused if tests above were stubbed.
-var _ = directive.Errors
+func TestRenderMethodDirectives(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil when no method carries a directive", func(t *testing.T) {
+		t.Parallel()
+		methods := []MethodInfo{{Name: "Get"}, {Name: "Put"}}
+		testkit.True(t, RenderMethodDirectives(methods) == nil,
+			"empty directive set short-circuits")
+	})
+
+	t.Run("renders aligned method-prefixed lines with consumer annotation", func(t *testing.T) {
+		t.Parallel()
+		// `errors` is registered with Consumed("stub", "...").
+		methods := []MethodInfo{
+			{Name: "Get", Directives: []directive.Directive{
+				{Name: directive.Errors, Args: []string{"ErrNotFound"}},
+			}},
+			{Name: "Submit", Directives: []directive.Directive{
+				{Name: directive.Errors, Args: []string{"ErrConflict"}},
+			}},
+		}
+		got := RenderMethodDirectives(methods)
+		testkit.Len(t, got, 2, "one line per directive")
+		testkit.Assert(t, got[0]).
+			HasPrefix("Get:    //testkit:errors ErrNotFound", "name padded to widest").
+			Contains("[stub:", "consumer annotation present")
+		testkit.Assert(t, got[1]).HasPrefix("Submit: //testkit:errors ErrConflict",
+			"longest name fits without padding")
+	})
+
+	t.Run("omits annotation when descriptor declares no consumers", func(t *testing.T) {
+		t.Parallel()
+		// `cacheable` exists in DefaultRegistry but declares no
+		// Consumed(...) — line renders without the [..] suffix.
+		methods := []MethodInfo{
+			{Name: "Get", Directives: []directive.Directive{
+				{Name: directive.Cacheable},
+			}},
+		}
+		got := RenderMethodDirectives(methods)
+		testkit.Len(t, got, 1, "single line")
+		testkit.Assert(t, got[0]).
+			HasPrefix("Get: //testkit:cacheable", "directive name").
+			NotContains("[", "no consumer annotation")
+	})
+}
+
+func TestConsumerAnnotations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns nil for unknown directive", func(t *testing.T) {
+		t.Parallel()
+		got := consumerAnnotations(directive.DefaultRegistry(), "nonexistent")
+		testkit.True(t, got == nil, "unknown → nil")
+	})
+
+	t.Run("returns nil for directive without Consumers", func(t *testing.T) {
+		t.Parallel()
+		// `cacheable` is known but has no Consumed(...) entries.
+		got := consumerAnnotations(directive.DefaultRegistry(), directive.Cacheable)
+		testkit.True(t, got == nil, "no consumers → nil")
+	})
+
+	t.Run("preferred-order entries surface ahead of others", func(t *testing.T) {
+		t.Parallel()
+		// Custom registry exercises the rest path: a consumer key
+		// outside the preferred {stub,suite,bench,model} list must
+		// trail the preferred entries, sorted alphabetically.
+		r := directive.NewRegistry()
+		r.MustRegister(directive.New("custom", directive.InCategory(directive.Mixin),
+			directive.Consumed("zsim", "scenario hook"),
+			directive.Consumed("apex", "alpha hook"),
+			directive.Consumed("suite", "primary"),
+			directive.Consumed("stub", "fault hook"),
+		))
+		got := consumerAnnotations(r, "custom")
+		testkit.Len(t, got, 4, "four entries")
+		testkit.Equal(t, got[0], "stub: fault hook", "preferred[0] = stub")
+		testkit.Equal(t, got[1], "suite: primary", "preferred[1] = suite")
+		// "apex" sorts before "zsim" alphabetically among the rest.
+		testkit.Equal(t, got[2], "apex: alpha hook", "rest sorted alphabetically")
+		testkit.Equal(t, got[3], "zsim: scenario hook", "rest sorted alphabetically")
+	})
+}

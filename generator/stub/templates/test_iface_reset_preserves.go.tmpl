@@ -1,0 +1,74 @@
+{{- /* ResetCalls-preserves-config subtests. The runtime
+       MethodStub.Reset contract states that Func / Returns /
+       Faults configuration survives across ResetCalls — only
+       counters (recorder, fault counter, Times/AtLeast
+       expectations) rewind. The auto-test gates this contract per
+       behavior so a regression in any preservation slot fails
+       loudly with the offending name in the failure message.
+
+       Faults: install Faults(err, 1), invoke once (faults), reset,
+         invoke again (must still fault — strategy preserved).
+       Returns: install Returns(<sample>), invoke (matches),
+         reset, invoke (must still match).
+       Func: install Func that flips called, invoke (called=true),
+         reset called, invoke (must still flip — fn preserved). */ -}}
+{{- define "test-iface-reset-preserves" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- with $m := .FirstErrorMethod }}
+	t.Run("ResetCalls preserves Faults configuration", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.Faults(errTest, 1)
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.ErrorIs(t, err, errTest, "{{ $m.Name }}: pre-reset call must fault")
+		s.ResetCalls()
+		{{ $m.ErrCaptureLHS }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.ErrorIs(t, err, errTest, "{{ $m.Name }}: post-reset call must still fault — config preserved")
+	})
+{{- end }}
+{{- with $m := .FirstNonSkipMethodWithSampleableResults }}
+	t.Run("ResetCalls preserves Returns configuration", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.Returns({{ $.Spec.SubstituteTypeParams ($m.SampleResults $tracker) }})
+		{{ $.Spec.SubstituteTypeParams $m.ResultNames }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- if $m.ReturnsError }}
+		testkit.NoError(t, err, "{{ $m.Name }}: pre-reset Returns must surface nil error")
+{{- end }}
+		{{ $.Spec.SubstituteTypeParams ($m.SampleResultAsserts $tracker (printf "%s pre-reset Returns" $m.Name)) }}
+		s.ResetCalls()
+		{{ $.Spec.SubstituteTypeParams $m.ResultNames }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- if $m.ReturnsError }}
+		testkit.NoError(t, err, "{{ $m.Name }}: post-reset Returns must surface nil error — config preserved")
+{{- end }}
+		{{ $.Spec.SubstituteTypeParams ($m.SampleResultAsserts $tracker (printf "%s post-reset Returns" $m.Name)) }}
+	})
+{{- end }}
+{{- with $m := .FirstNonSkipMethod }}
+	t.Run("ResetCalls preserves Func configuration", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		var called int
+		s.On{{ $m.Name }}.Func(func({{ $.Spec.SubstituteTypeParams ($m.ParamList $tracker) }}){{ if $m.HasResults }} {{ $.Spec.SubstituteTypeParams ($m.ResultList $tracker) }}{{ end }} {
+			called++
+{{- if $m.HasResults }}
+			return {{ $.Spec.SubstituteTypeParams ($m.ZeroResults $tracker) }}
+{{- end }}
+		})
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		s.ResetCalls()
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.Equal(t, called, 2, "{{ $m.Name }}: Func must fire pre-reset AND post-reset — config preserved")
+	})
+{{- end }}
+{{- end -}}

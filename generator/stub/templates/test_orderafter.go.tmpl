@@ -1,0 +1,23 @@
+{{- /* Order-after subtest per //testkit:order-after method.
+       Strict mode fatals when the dependent method runs before its
+       prerequisite. The subtest stages a [testkit.FailableTB] to
+       capture the t.Fatalf without aborting the surrounding test
+       process — the failure is the whole assertion. */ -}}
+{{- define "test-method-orderafter" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if and (not $m.Skip) $m.OrderAfter }}
+	t.Run("{{ $m.Name }}/order-after {{ $m.OrderAfter }} enforced in strict mode", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(f, {{ $gq }}{{ $stub }}Strict{{ $.TestTypeArgs }}())
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		testkit.True(t, f.Failed(), "{{ $m.Name }}: out-of-order call must fatal in strict mode")
+	})
+{{ end }}{{ end -}}
+{{- end -}}

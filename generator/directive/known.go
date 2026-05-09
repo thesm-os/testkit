@@ -79,8 +79,13 @@ const (
 	// Cross-method invariants.
 	Cross = "cross"
 
-	// Sentinel cross-package non-overlap (ANALYSIS.md G24).
+	// Sentinel cross-package non-overlap.
 	SentinelNoOverlapWith = "sentinel-no-overlap-with"
+
+	// Builder per-field default (`//testkit:default "value"`). Field-
+	// scoped, consumed by the builder generator to seed Build() with
+	// a non-zero literal when no Defaults factory exists.
+	Default = "default"
 )
 
 // defaultDescriptors returns the canonical descriptor list, declared
@@ -97,12 +102,15 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("ErrName", ArgIdent, Required, Multi),
+			Consumed("stub", "Fault<Sentinel>() helper per name"),
 		),
 		New(WrappedVia,
 			Describe("error wrapping discipline"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("ErrName", ArgIdent, Required),
+			Requires(Errors),
+			Consumed("stub", "Fault<Sentinel> helpers wrap via target"),
 		),
 
 		// Behavioral properties (Mixin tier).
@@ -170,6 +178,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase5),
 			Arg("Replacement", ArgString, Required),
+			Consumed("stub", "tb.Logf in dispatch + // Deprecated: doc comment"),
 		),
 		New(Lease,
 			Describe("acquires resource, must release"),
@@ -180,6 +189,7 @@ func defaultDescriptors() []Descriptor {
 			Describe("opt out of stubbing"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
+			Consumed("stub", "skip dispatch (zero return, no record)"),
 		),
 
 		// Performance.
@@ -208,6 +218,7 @@ func defaultDescriptors() []Descriptor {
 			InPhase(Phase3),
 			Arg("N", ArgInt, Required),
 			Requires(Retryable),
+			Consumed("stub", "RetrySchedule(err) helper"),
 		),
 
 		// Causality & ordering.
@@ -222,6 +233,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Method", ArgKey, Required),
+			Consumed("stub", "AssertAfter check in dispatch (strict mode)"),
 		),
 
 		// Isolation.
@@ -230,6 +242,7 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Field", ArgIdent, Required),
+			Consumed("stub", "FaultForPartition / FaultForOtherPartitions helpers"),
 		),
 
 		// Input & validation.
@@ -343,6 +356,14 @@ func defaultDescriptors() []Descriptor {
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("ImportPath", ArgString, Required, Multi),
+		),
+
+		// Per-field default literal (builder).
+		New(Default,
+			Describe("seed value for a builder field when no Defaults factory exists"),
+			InCategory(Enrichment),
+			InPhase(Phase1),
+			Arg("Value", ArgString, Required),
 		),
 	}
 }

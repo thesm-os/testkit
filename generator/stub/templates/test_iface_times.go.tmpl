@@ -1,0 +1,47 @@
+{{- /* Times / TimesAtLeast cleanup-verification subtests. The
+       generator wires every per-method MethodStub into the
+       constructor's tb.Cleanup chain so [MethodStub.Verify] fires
+       at test end. The runtime contract: Times(n) flags an Errorf
+       when CallCount != n; TimesAtLeast(n) flags one when
+       CallCount < n. The auto-test stages a [testkit.FailableTB]
+       to catch the cleanup failure without aborting the
+       surrounding test, then runs the registered cleanups via
+       [testkit.FailableTB.RunCleanups].
+
+       Picks FirstNonSkipMethod — Times/TimesAtLeast wire
+       identically across methods; one observation proves the
+       hookup. */ -}}
+{{- define "test-iface-times" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- with $m := .FirstNonSkipMethod }}
+	t.Run("Times mismatch fails at cleanup", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(f)
+		s.On{{ $m.Name }}.Times(2)
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		f.RunCleanups()
+		testkit.True(t, f.Failed(), "{{ $m.Name }}: Times(2) with 1 call must fail at cleanup")
+	})
+
+	t.Run("TimesAtLeast mismatch fails at cleanup", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(f)
+		s.On{{ $m.Name }}.TimesAtLeast(3)
+{{- if $m.HasResults }}
+		{{ $m.BlankResults }} = s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- else }}
+		s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+{{- end }}
+		f.RunCleanups()
+		testkit.True(t, f.Failed(), "{{ $m.Name }}: TimesAtLeast(3) with 1 call must fail at cleanup")
+	})
+{{- end }}
+{{- end -}}

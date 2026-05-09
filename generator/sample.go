@@ -13,6 +13,91 @@ import (
 // whose only sensible non-zero is "no useful value here, default."
 const zeroNil = "nil"
 
+// SampleForConcreteType returns a sample literal for a rendered
+// concrete type name. Walks [DefaultConcreteTypes] for an exact
+// name match and returns that candidate's Sample(fieldName).
+// Falls through to a typed-zero-literal expression for unknown
+// names (slice / map / unfamiliar type) — slices unwrap to
+// `<sliceTypeStr>{<sample-of-elem>}`, others to `<typeName>{}`.
+//
+// Used by generators that resolve type-param names to concrete
+// types (via [SubstituteTypeParams]) and then need a sample
+// literal in the test view.
+func SampleForConcreteType(typeName, fieldName string) string {
+	for _, c := range DefaultConcreteTypes {
+		if c.Name == typeName {
+			return c.Sample(fieldName)
+		}
+	}
+	if elemType, ok := strings.CutPrefix(typeName, "[]"); ok {
+		return typeName + "{" + SampleForConcreteType(elemType, fieldName) + "}"
+	}
+	return typeName + "{}"
+}
+
+// ZeroParamExprs returns one zero-value Go expression per parameter,
+// with [context.Context] replaced by `t.Context()` so generated
+// auto-tests can call the stub directly:
+//
+//	sig: (ctx context.Context, key string)
+//	    → []string{"t.Context()", `""`}
+//	sig: (item Item, n int)
+//	    → []string{"Item{}", "0"}
+//	sig: (ctx context.Context, ids ...string)
+//	    → []string{"t.Context()"} (variadic last param drops, since `f()` is a valid zero call)
+//
+// Used by stub auto-tests + future suite/bench test templates that
+// need the smallest valid call expression for a method.
+func ZeroParamExprs(sig *types.Signature, t *ImportTracker) []string {
+	params := sig.Params()
+	n := params.Len()
+	if sig.Variadic() && n > 0 {
+		n--
+	}
+	out := make([]string, 0, n)
+	for i := range n {
+		p := params.At(i)
+		if i == 0 && IsContextType(p.Type()) {
+			out = append(out, "t.Context()")
+			continue
+		}
+		out = append(out, ZeroValueOf(p.Type(), t))
+	}
+	return out
+}
+
+// SampleParamExprs is the sample-value counterpart to
+// [ZeroParamExprs] — fills non-ctx params with [SampleValueOf]
+// rather than zero. The first (ctx) param still resolves to
+// `t.Context()`.
+//
+//	sig: (ctx context.Context, key string)
+//	    → []string{"t.Context()", `"test-key"`}
+//
+// Used by auto-tests verifying parameter recording (the values
+// land in the Call struct's params slice).
+func SampleParamExprs(sig *types.Signature, t *ImportTracker) []string {
+	params := sig.Params()
+	n := params.Len()
+	if sig.Variadic() && n > 0 {
+		n--
+	}
+	out := make([]string, 0, n)
+	for i := range n {
+		p := params.At(i)
+		if i == 0 && IsContextType(p.Type()) {
+			out = append(out, "t.Context()")
+			continue
+		}
+		name := p.Name()
+		if name == "" {
+			name = ParamName(i)
+		}
+		out = append(out, SampleValueOf(p.Type(), name, t))
+	}
+	return out
+}
+
 // SampleValueOf returns a non-zero Go literal for typ, suitable for
 // use in generated test assertions. The value is deterministic — same
 // type + same field name → same literal — and distinct from the zero
@@ -25,6 +110,17 @@ const zeroNil = "nil"
 // Used by sentinel (custom-error-type field samples) and by future
 // generators that need synthetic test inputs.
 func SampleValueOf(typ types.Type, fieldName string, tracker *ImportTracker) string {
+	if _, ok := typ.(*types.TypeParam); ok {
+		// Type parameters resolve to a concrete type only at the
+		// instantiation site. Render the universal zero idiom
+		// `*new(T)` so consumers' SubstituteTypeParams pass can
+		// rewrite "T" → concrete and produce a valid (zero) value
+		// for the resolved type. Sampling a non-zero literal is
+		// impossible without the concrete map; tests that need a
+		// non-zero value across generics should sample post-
+		// substitution via [SampleForConcreteType].
+		return "*new(" + TypeStr(typ, tracker) + ")"
+	}
 	if named, ok := typ.(*types.Named); ok {
 		qualifiedName := types.TypeString(typ, tracker.Qualifier())
 		switch st := named.Underlying().(type) {

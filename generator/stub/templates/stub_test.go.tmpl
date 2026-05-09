@@ -1,0 +1,25 @@
+{{- /*
+       Stub auto-test root template — composes the per-concern test
+       partials. Verifies STUB plumbing only (dispatch, recording,
+       fault helpers, options, ResetCalls). Cross-method contract
+       assertions belong in suite/bench/model.
+
+       Generic interfaces are exercised against the constraint-
+       driven concrete instantiation [TestTypeArgs] selected at
+       analyze time.
+
+       Output structure:
+         1. test-doc             — // Package X_test ... block
+         2. header               — package + imports
+         3. test-interface       — Test<Stub>(t) (composes per-method
+                                   + per-iface subtest partials)
+         4. test-benchmode       — Test<Stub>BenchModeZeroAlloc(t)
+                                   (top-level alloc gate)
+*/ -}}
+{{- define "stub-test" -}}
+{{ template "test-doc" . -}}
+{{ template "header" . }}
+{{ template "test-interface" . }}
+
+{{ template "test-benchmode" . -}}
+{{- end -}}

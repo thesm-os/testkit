@@ -1,0 +1,21 @@
+{{- /* FaultMiss helper partial: emitted per non-skip method whose
+       final result is a builtin bool and whose result list does not
+       carry an error (ReaderWithBool: `(V, bool)`; Lookup:
+       `(V0, V1, bool)`). The helper installs a zero-valued fallback
+       record so the dispatch surfaces the canonical "miss" outcome
+       — every non-bool result is its zero, the trailing bool is
+       false. Equivalent to Returns(<zeros>, false), provided as
+       sugar so consumers don't re-spell the zeros. */ -}}
+{{- define "helper-miss" -}}
+{{ range $m := .Methods }}{{ if and (not $m.Skip) $m.HasTrailingBool }}
+// FaultMiss configures the dispatch to surface the canonical "miss"
+// outcome for {{ $m.Name }}: zero values for every non-bool result
+// and false for the trailing bool. Equivalent to Returns with all
+// zeros.
+func (s *{{ $m.QualStubType }}) FaultMiss() *{{ $m.QualStubType }} {
+	var miss {{ $m.QualReturnType }}
+	s.fallback = &miss
+	return s
+}
+{{ end }}{{ end -}}
+{{- end -}}

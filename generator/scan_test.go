@@ -449,3 +449,188 @@ func TestErrorInterface(t *testing.T) {
 	testkit.Equal(t, iface.NumMethods(), 1, "one method")
 	testkit.Equal(t, iface.Method(0).Name(), "Error", "method is Error")
 }
+
+// anyConstraint returns a fresh `any` constraint (empty interface)
+// suitable as a TypeParamInfo.Constraint in concrete-selection tests.
+func anyConstraint() types.Type { return types.NewInterfaceType(nil, nil).Complete() }
+
+func TestConcreteFor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("any-constrained position rotates through DefaultConcreteTypes", func(t *testing.T) {
+		t.Parallel()
+		p := generator.TypeParamInfo{Name: "T", Constraint: anyConstraint()}
+		// Position 0 → string, position 1 → int (DefaultConcreteTypes order).
+		testkit.Equal(t, generator.ConcreteFor(p, 0).Name, "string", "position 0")
+		testkit.Equal(t, generator.ConcreteFor(p, 1).Name, "int", "position 1")
+	})
+
+	t.Run("unsatisfiable constraint falls through to round-robin", func(t *testing.T) {
+		t.Parallel()
+		// Build an interface with a method no basic type satisfies —
+		// this forces SelectConcreteType to return nil, and ConcreteFor
+		// falls through to the position-based round-robin pick.
+		fooSig := types.NewSignatureType(nil, nil, nil, nil, nil, false)
+		method := types.NewFunc(0, nil, "Foo", fooSig)
+		unsatisfiable := types.NewInterfaceType([]*types.Func{method}, nil).Complete()
+		p := generator.TypeParamInfo{Name: "T", Constraint: unsatisfiable}
+		// Position 1 → int (DefaultConcreteTypes order).
+		testkit.Equal(t, generator.ConcreteFor(p, 1).Name, "int",
+			"unsatisfiable constraint → round-robin fallback")
+	})
+}
+
+func TestTestTypeArgs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("renders [arg1, arg2] for multi-parameter generic", func(t *testing.T) {
+		t.Parallel()
+		params := []generator.TypeParamInfo{
+			{Name: "K", Constraint: anyConstraint()},
+			{Name: "V", Constraint: anyConstraint()},
+		}
+		testkit.Equal(t, generator.TestTypeArgs(params), "[string, int]",
+			"distinct samples per position")
+	})
+
+	t.Run("returns empty string for non-generic input", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, generator.TestTypeArgs(nil), "", "no params → empty")
+	})
+}
+
+func TestSubstituteTypeParams(t *testing.T) {
+	t.Parallel()
+
+	t.Run("replaces every type-param name with its concrete", func(t *testing.T) {
+		t.Parallel()
+		params := []generator.TypeParamInfo{
+			{Name: "K", Constraint: anyConstraint()},
+			{Name: "V", Constraint: anyConstraint()},
+		}
+		got := generator.SubstituteTypeParams("map[K]V", params)
+		testkit.Equal(t, got, "map[string]int", "K→string, V→int")
+	})
+
+	t.Run("non-generic input passes through unchanged", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, generator.SubstituteTypeParams("[]string", nil),
+			"[]string", "no params → identity")
+	})
+}
+
+func TestBuildTypeParamMap(t *testing.T) {
+	t.Parallel()
+	params := []generator.TypeParamInfo{
+		{Name: "K", Constraint: anyConstraint()},
+		{Name: "V", Constraint: anyConstraint()},
+	}
+	got := generator.BuildTypeParamMap(params)
+	testkit.Equal(t, got["K"].Name, "string", "K→string at position 0")
+	testkit.Equal(t, got["V"].Name, "int", "V→int at position 1")
+}
+
+func TestSignaturePredicateRejections(t *testing.T) {
+	t.Parallel()
+
+	const src = `package p
+import "encoding/json"
+type I interface {
+	NoArgs() bool                              // wrong arity for IsErrorBoolSig
+	NotErrorParam(s string) bool               // first param not error
+	NotBool(err error) string                  // result not bool
+	StringerWrongResult() int                  // result not string
+	StringerWithArg(s string) string           // wrong arity
+	MarshalNoErr() []byte                      // wrong arity for marshal
+	MarshalNotByteSlice() (string, error)      // first result not []byte
+	MarshalNotError() ([]byte, string)         // second result not error
+	UnmarshalNotByteSlice(s string) error      // param not []byte
+	UnmarshalNotError(b []byte) string         // result not error
+	UnmarshalWrongArity() error                // wrong arity for unmarshal
+}
+var _ = json.Marshaler(nil)
+`
+	iface, _ := loadIface(t, src, "I")
+
+	t.Run("IsErrorBoolSig rejects wrong-arity, wrong-param, wrong-result", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, generator.IsErrorBoolSig(methodSig(t, iface, "NoArgs")), "wrong arity")
+		testkit.False(t, generator.IsErrorBoolSig(methodSig(t, iface, "NotErrorParam")), "non-error param")
+		testkit.False(t, generator.IsErrorBoolSig(methodSig(t, iface, "NotBool")), "non-bool result")
+	})
+
+	t.Run("StringerSig rejects wrong arity and non-string result", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, generator.StringerSig(methodSig(t, iface, "StringerWithArg")), "non-zero params")
+		testkit.False(t, generator.StringerSig(methodSig(t, iface, "StringerWrongResult")), "non-string result")
+	})
+
+	t.Run("MarshalTextSig rejects shape mismatches", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, generator.MarshalTextSig(methodSig(t, iface, "MarshalNoErr")),
+			"wrong arity")
+		testkit.False(t, generator.MarshalTextSig(methodSig(t, iface, "MarshalNotByteSlice")),
+			"first result not []byte")
+		testkit.False(t, generator.MarshalTextSig(methodSig(t, iface, "MarshalNotError")),
+			"second result not error")
+	})
+
+	t.Run("UnmarshalTextSig rejects shape mismatches", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, generator.UnmarshalTextSig(methodSig(t, iface, "UnmarshalWrongArity")),
+			"wrong arity")
+		testkit.False(t, generator.UnmarshalTextSig(methodSig(t, iface, "UnmarshalNotByteSlice")),
+			"param not []byte")
+		testkit.False(t, generator.UnmarshalTextSig(methodSig(t, iface, "UnmarshalNotError")),
+			"result not error")
+	})
+}
+
+func TestIsBasicComparableKind(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts string, bool, integer family, floats", func(t *testing.T) {
+		t.Parallel()
+		for _, kind := range []types.BasicKind{
+			types.String, types.Bool, types.Int, types.Int64,
+			types.Uint8, types.Float32, types.Float64,
+		} {
+			testkit.True(t, generator.IsBasicComparableKind(kind),
+				"comparable kind accepted")
+		}
+	})
+
+	t.Run("rejects untyped, complex, and UnsafePointer", func(t *testing.T) {
+		t.Parallel()
+		for _, kind := range []types.BasicKind{
+			types.UntypedInt, types.Complex64, types.Complex128, types.UnsafePointer,
+		} {
+			testkit.False(t, generator.IsBasicComparableKind(kind),
+				"non-comparable kind rejected")
+		}
+	})
+}
+
+func TestIsBasicComparableTypeName(t *testing.T) {
+	t.Parallel()
+
+	t.Run("matches a basic-comparable name from DefaultConcreteTypes", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, generator.IsBasicComparableTypeName("string"), "string is in")
+		testkit.True(t, generator.IsBasicComparableTypeName("int64"), "int64 is in")
+	})
+
+	t.Run("rejects names not in DefaultConcreteTypes", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, generator.IsBasicComparableTypeName("Item"), "unknown name")
+		testkit.False(t, generator.IsBasicComparableTypeName(""), "empty name")
+	})
+
+	t.Run("rejects complex (in DefaultConcreteTypes but not basic-comparable)", func(t *testing.T) {
+		t.Parallel()
+		// complex64 is in DefaultConcreteTypes but its kind is excluded
+		// from IsBasicComparableKind — covers the non-comparable branch.
+		testkit.False(t, generator.IsBasicComparableTypeName("complex64"),
+			"complex kind rejected")
+	})
+}

@@ -1,21 +1,23 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// Package interfaces holds interface-method-signature variations
-// beyond the canonical Store in basic. Stub, suite, and bench
-// consume types from here to cover the long tail of method shapes:
+// Package interfaces holds the production-grade interface fixtures
+// every interface-conformance generator (stub, suite, bench, model)
+// consumes for shape-coverage testing.
 //
-//   - variadic methods
-//   - methods returning iterators (iter.Seq, iter.Seq2)
-//   - methods without a context.Context parameter
-//   - methods without an error return
-//   - methods with named returns
-//   - methods with multiple non-error returns
-//   - methods with no parameters
-//   - lifecycle methods (Close, Init)
-//   - mutator vs reader vs writer shape variants
+// Three interfaces, each with a paired in-memory companion:
 //
-// Each file declares one or two interfaces focused on a single
-// shape; tests scope by interface name (`stub VariadicFinder`,
-// `suite IterScanner`, etc.).
+//   - [AllShapes] / [InMemoryAllShapes]: one method per signature-tier
+//     shape from generator/shape's catalog (Reader through Unknown).
+//     Covers all 22 detectable shapes plus the Unknown fall-through.
+//   - [Directives] / [InMemoryDirectives]: full stub-relevant
+//     directive vocabulary (errors, integration-only, deprecated,
+//     retry-succeeds-on-attempt, partition, order-after, wrapped-via).
+//   - The generics counterparts live in testdata/generics/ifaces.go
+//     so generic-type fixtures stay grouped with the rest of the
+//     generic surface.
+//
+// Companion impls are deliberately minimal — map-backed where
+// stateful, return-zero where stateless — enough to thread
+// DelegateTo verification without re-implementing production logic.
 package interfaces

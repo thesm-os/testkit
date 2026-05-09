@@ -20,6 +20,24 @@ var commonInitialisms = map[string]bool{
 	"XMPP": true, "XSRF": true, "XSS": true, "YAML": true,
 }
 
+// LowerFirst returns s with the first ASCII letter lowercased.
+// Used by generators that derive unexported helper names from
+// exported ones — e.g. stub's per-method return-record type
+// "<lowerStub><Method>Return" stays unexported by convention.
+//
+//	LowerFirst("StoreStub") → "storeStub"
+//	LowerFirst("URL")       → "uRL" (no initialism awareness — counterpart of Title)
+//	LowerFirst("")          → ""
+func LowerFirst(s string) string {
+	if s == "" {
+		return ""
+	}
+	if c := s[0]; c >= 'A' && c <= 'Z' {
+		return string(c-'A'+'a') + s[1:]
+	}
+	return s
+}
+
 // Title returns s with the first rune title-cased, preserving Go-style
 // initialisms (ID, URL, HTTP, ...).
 //

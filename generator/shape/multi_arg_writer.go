@@ -6,7 +6,7 @@ package shape
 // multiArgWriterDetector matches `func(ctx, p1, p2, p3, ...) error`
 // where there are 3+ non-ctx parameters and an error return. It
 // gives ctx-respect coverage to method shapes with arity beyond
-// what CompositeWriter can model (ANALYSIS.md G35).
+// what CompositeWriter can model.
 //
 // Requires ctx — without it, the method has no cancellation
 // surface and falls to Unknown.

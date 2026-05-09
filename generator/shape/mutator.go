@@ -6,9 +6,8 @@ package shape
 import "go.thesmos.sh/testkit/generator/directive"
 
 // mutatorDetector matches `func(ctx?, V)` — exactly one non-ctx
-// parameter and a void return. Auto-detected from the signature
-// (ANALYSIS.md G32); the legacy //testkit:mutator directive is
-// optional confirmation.
+// parameter and a void return. Auto-detected from the signature;
+// the //testkit:mutator directive is optional confirmation.
 //
 // Two opt-out forms are honored:
 //

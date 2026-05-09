@@ -24,6 +24,13 @@ type pipelineData struct {
 	Methods []generator.MethodInfo
 }
 
+// skippableData implements [generator.SkippableData] so the
+// HasContent short-circuit branch in [generator.Pipeline.Run] is
+// reachable from tests.
+type skippableData struct{ empty bool }
+
+func (s *skippableData) HasContent() bool { return !s.empty }
+
 // newPipeline returns a Pipeline pre-wired with the embedded smoke
 // template. Tests override individual fields to exercise specific
 // behaviors without restating the boilerplate.
@@ -190,6 +197,157 @@ func TestPipeline(t *testing.T) {
 		pipe.PostEnrich = func(_ *pipelineData, _ *generator.Package) error { return want }
 		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
 		testkit.True(t, errors.Is(err, want), "PostEnrich error surfaces")
+	})
+
+	t.Run("Enrich error propagates and stops the pipeline", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		want := errors.New("enrich boom")
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		pipe.Enrich = func(_ *pipelineData, _ *generator.Package) error { return want }
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, errors.Is(err, want), "Enrich error surfaces")
+	})
+
+	t.Run("DirectiveValidator error halts before Enrich", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		want := errors.New("unknown directive")
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			iface, _ := pkg.Interface("Store")
+			return &pipelineData{Type: args[0], Methods: iface.Methods}, nil
+		}
+		pipe.Methods = func(d *pipelineData) []generator.MethodInfo { return d.Methods }
+		pipe.DirectiveValidator = func(_ []generator.MethodInfo) []error { return []error{want} }
+		enrichRan := false
+		pipe.Enrich = func(_ *pipelineData, _ *generator.Package) error {
+			enrichRan = true
+			return nil
+		}
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, errors.Is(err, want), "DirectiveValidator error surfaces")
+		testkit.False(t, enrichRan, "Enrich must not run after directive-validation error")
+	})
+
+	t.Run("CompositionValidator error halts the pipeline", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		want := errors.New("conflict")
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			iface, _ := pkg.Interface("Store")
+			return &pipelineData{Type: args[0], Methods: iface.Methods}, nil
+		}
+		pipe.Methods = func(d *pipelineData) []generator.MethodInfo { return d.Methods }
+		pipe.CompositionValidator = func(_ []directive.Directive, _ token.Position) error { return want }
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, errors.Is(err, want), "CompositionValidator error surfaces")
+	})
+
+	t.Run("SkippableData with no content short-circuits before render", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		pipe := generator.Pipeline[*skippableData]{
+			Name:      "skip",
+			Kind:      generator.KindInterface,
+			Templates: pipelineTmplFS,
+			Analyze: func(_ *generator.Package, _ []string, _ generator.Config, _ generator.Options) (*skippableData, error) {
+				return &skippableData{empty: true}, nil
+			},
+			Renderers: []generator.Renderer[*skippableData]{
+				{TemplateName: "smoke.go.tmpl", Path: func(o generator.Options) string { return o.Output }},
+			},
+		}
+		res, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.NoError(t, err, "skippable run succeeds")
+		testkit.Len(t, res.Files, 0, "no files emitted on empty content")
+	})
+
+	t.Run("Renderer.Transform reshapes data per output", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		pipe.Renderers = []generator.Renderer[*pipelineData]{
+			{
+				TemplateName: "smoke.go.tmpl",
+				Path:         func(o generator.Options) string { return o.Output },
+				Transform: func(d *pipelineData, _ generator.Options) *pipelineData {
+					return &pipelineData{Type: d.Type + "Transformed"}
+				},
+			},
+		}
+		res, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.NoError(t, err, "Run")
+		testkit.Assert(t, string(res.Files[0].Content)).
+			Contains("type StoreTransformed struct", "Transform's output reached the template")
+	})
+
+	t.Run("PostRender appends auxiliary files", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		pipe.PostRender = func(_ *pipelineData, _ generator.Options) ([]generator.OutputFile, error) {
+			return []generator.OutputFile{{Path: "wire.json", Content: []byte("{}")}}, nil
+		}
+		res, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.NoError(t, err, "Run")
+		testkit.Len(t, res.Files, 2, "primary + auxiliary")
+		testkit.Equal(t, res.Files[1].Path, "wire.json", "auxiliary path appended")
+	})
+
+	t.Run("PostRender error propagates", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		want := errors.New("post-render boom")
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		pipe.PostRender = func(_ *pipelineData, _ generator.Options) ([]generator.OutputFile, error) {
+			return nil, want
+		}
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, errors.Is(err, want), "PostRender error surfaces")
+	})
+
+	t.Run("template parse error surfaces with pipeline name", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		pipe := newPipeline()
+		// Pattern that matches no files → ParseFS errors.
+		pipe.TemplatePattern = "testdata/templates/does-not-exist.tmpl"
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, err != nil, "missing pattern errors")
+		testkit.Assert(t, err.Error()).Contains("parse templates for smoke", "pipeline-named diagnostic")
+	})
+
+	t.Run("renderer error surfaces with pipeline + template name", func(t *testing.T) {
+		t.Parallel()
+		pkg := loadBasic(t)
+		pipe := newPipeline()
+		pipe.Analyze = func(_ *generator.Package, args []string, _ generator.Config, _ generator.Options) (*pipelineData, error) {
+			return &pipelineData{Type: args[0]}, nil
+		}
+		pipe.Renderers = []generator.Renderer[*pipelineData]{
+			{TemplateName: "missing.tmpl", Path: func(o generator.Options) string { return o.Output }},
+		}
+		_, err := pipe.Run(pkg, []string{"Store"}, generator.DefaultConfig(), generator.Options{Output: "x.go"})
+		testkit.True(t, err != nil, "missing template name errors")
+		testkit.Assert(t, err.Error()).Contains("render smoke/missing.tmpl",
+			"diagnostic carries pipeline + template name")
 	})
 
 	t.Run("TemplateFuncs are available to templates", func(t *testing.T) {

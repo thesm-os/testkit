@@ -35,6 +35,15 @@ func init() {
 	spec.RegisterConsumer(directive.OrderAfter, consume)
 }
 
+// Get retrieves the resolved [Payload]. Returns (zero, false) when
+// the method carries no //testkit:order-after directive.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.OrderAfter)
+}
+
+// Has reports whether the method has an order-after constraint.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.OrderAfter) }
+
 func consume(method *spec.Method, dir directive.Directive, data *spec.Data, _ *generator.Package) error {
 	if err := resolver.RequireArgs(dir, 1); err != nil {
 		return fmt.Errorf("order-after: %w", err)

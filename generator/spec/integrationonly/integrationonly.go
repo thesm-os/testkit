@@ -10,7 +10,11 @@ package integrationonly
 
 import (
 	"go.thesmos.sh/testkit/generator/directive"
+	"go.thesmos.sh/testkit/generator/spec"
 	"go.thesmos.sh/testkit/generator/spec/internal/marker"
 )
 
 func init() { marker.Register(directive.IntegrationOnly) }
+
+// Has reports whether the method carries //testkit:integration-only.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.IntegrationOnly) }

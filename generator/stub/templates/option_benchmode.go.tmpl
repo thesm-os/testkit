@@ -1,0 +1,16 @@
+{{- /* BenchMode option partial: disables call recording on every
+       per-method stub. Use in benchmarks to avoid allocation
+       overhead from accumulated call logs (Func / Returns / Faults
+       still work). */ -}}
+{{- define "option-benchmode" -}}
+{{- $tpDecl := .Spec.TypeParamDecl -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+// {{ .StubName }}BenchMode disables call recording on all per-method stubs.
+func {{ .StubName }}BenchMode{{ $tpDecl }}() {{ .StubName }}Option{{ $tpArgs }} {
+	return func(s *{{ .StubName }}{{ $tpArgs }}) {
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+		s.On{{ $m.Name }}.BenchMode()
+{{- end }}{{ end }}
+	}
+}
+{{- end -}}

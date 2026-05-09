@@ -41,6 +41,15 @@ func init() {
 	spec.RegisterConsumer(directive.WrappedVia, consume)
 }
 
+// Get retrieves the resolved [Payload]. Returns (zero, false) when
+// the method carries no //testkit:wrapped-via directive.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.WrappedVia)
+}
+
+// Has reports whether the method has a wrapped-via directive.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.WrappedVia) }
+
 func consume(method *spec.Method, dir directive.Directive, data *spec.Data, pkg *generator.Package) error {
 	if err := resolver.RequireArgs(dir, 1); err != nil {
 		return fmt.Errorf("wrapped-via: %w", err)

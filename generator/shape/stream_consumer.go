@@ -9,7 +9,7 @@ import "go/types"
 // S is interface-typed (io.Reader, io.Writer, custom interface
 // params). Without this detector the same shape would be
 // misclassified as Reader, treating the interface-typed param as
-// a key (ANALYSIS.md G33).
+// a key.
 //
 // Detection requires ctx — naked interface-typed Reader signatures
 // are too ambiguous without it.

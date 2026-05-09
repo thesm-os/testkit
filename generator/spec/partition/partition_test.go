@@ -32,17 +32,16 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestPartition(t *testing.T) {
 	t.Parallel()
 
 	t.Run("resolves direct param name (param == directive arg)", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[partition.Payload](
-			methodByName(data, "ShardByKey").Attachments, directive.Partition)
+		got, ok := partition.Get(methodByName(data, "ShardByKey"))
 		testkit.True(t, ok, "payload attached")
-		testkit.Equal(t, got.FieldPath, "key", "direct param name")
+		testkit.Equal(t, got.FieldPath, "Key", "direct param name (Title-cased — matches Call struct field)")
 		testkit.Equal(t, got.FieldName, "key", "field name")
 		testkit.Equal(t, got.FieldType, "string", "type")
 	})
@@ -51,10 +50,9 @@ func TestConsume(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[partition.Payload](
-			methodByName(data, "Shard").Attachments, directive.Partition)
+		got, ok := partition.Get(methodByName(data, "Shard"))
 		testkit.True(t, ok, "payload attached")
-		testkit.Equal(t, got.FieldPath, "item.ID", "param.Field path")
+		testkit.Equal(t, got.FieldPath, "Item.ID", "param.Field path (Title-cased)")
 		testkit.Equal(t, got.FieldName, "ID", "field name")
 		testkit.Equal(t, got.FieldType, "string", "field type")
 	})
@@ -74,22 +72,20 @@ func TestConsume(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[partition.Payload](
-			methodByName(data, "ShardAnon").Attachments, directive.Partition)
+		got, ok := partition.Get(methodByName(data, "ShardAnon"))
 		testkit.True(t, ok, "payload attached")
 		// First non-ctx param (p1, string) is skipped; struct param
 		// p2 carries the field. Path uses synthesized pN names.
-		testkit.Equal(t, got.FieldPath, "p2.ID", "ParamName(2)+field")
+		testkit.Equal(t, got.FieldPath, "P2.ID", "ParamName(2)+field (Title-cased)")
 	})
 
 	t.Run("variadic method: trailing variadic excluded from walk", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[partition.Payload](
-			methodByName(data, "Batch").Attachments, directive.Partition)
+		got, ok := partition.Get(methodByName(data, "Batch"))
 		testkit.True(t, ok, "payload attached")
-		testkit.Equal(t, got.FieldPath, "tenant", "resolved against non-variadic param")
+		testkit.Equal(t, got.FieldPath, "Tenant", "resolved against non-variadic param (Title-cased)")
 	})
 
 	t.Run("rejects wrong arg count", func(t *testing.T) {
@@ -100,5 +96,22 @@ func TestConsume(t *testing.T) {
 		}
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "no args rejected")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := partition.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Equal(t, got.FieldPath, "", "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, partition.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.Partition,
+			partition.Payload{FieldPath: "key", FieldName: "key", FieldType: "string"})
+		testkit.True(t, partition.Has(&m), "present after Set")
 	})
 }

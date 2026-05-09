@@ -32,9 +32,9 @@
 // What sample is for:
 //
 //   - Smoke tests that need non-zero inputs to avoid panic on
-//     zero-value parameters (ANALYSIS.md G2: smoke→fail discipline).
+//     zero-value parameters (smoke→fail discipline).
 //   - Bench hot-paths that must measure the success path, not the
-//     zero-value error path (ANALYSIS.md G1).
+//     zero-value error path.
 package sample
 
 import (
@@ -64,6 +64,15 @@ type Payload struct {
 func init() {
 	spec.RegisterConsumer(directive.Sample, consume)
 }
+
+// Get retrieves the resolved [Payload]. Returns (zero, false) when
+// the method carries no //testkit:sample directive.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.Sample)
+}
+
+// Has reports whether the method has a sample directive.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.Sample) }
 
 // consume validates the directive's args against the method's
 // non-ctx params and attaches a [Payload] to the method.

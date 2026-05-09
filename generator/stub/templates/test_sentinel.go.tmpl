@@ -1,0 +1,28 @@
+{{- /* Sentinel-fault subtest per //testkit:errors entry. Each
+       sentinel emits a Fault<ShortName>() helper on the per-method
+       stub; the subtest verifies the helper installs the named
+       sentinel as the next dispatch's fault.
+
+       When the method also carries //testkit:wrapped-via, the test
+       asserts errors.Is succeeds for BOTH the sentinel AND the
+       wrap target — the wrapped-via contract requires both checks
+       to round-trip. */ -}}
+{{- define "test-method-sentinel" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if not $m.Skip }}
+{{- $wrap := $m.WrappedVia -}}
+{{- range $sentinel := $m.Errors }}
+	t.Run("{{ $m.Name }}/Fault{{ $sentinel.ShortName }} fires", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.Fault{{ $sentinel.ShortName }}()
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.ErrorIs(t, err, {{ $sentinel.Qualified }}, "{{ $m.Name }}: must return {{ $sentinel.Qualified }}")
+{{- if $wrap }}
+		testkit.ErrorIs(t, err, {{ $wrap.Qualified }}, "{{ $m.Name }}: wrapped-via {{ $wrap.Qualified }} must round-trip")
+{{- end }}
+	})
+{{ end }}{{ end }}{{ end -}}
+{{- end -}}

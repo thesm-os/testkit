@@ -6,7 +6,7 @@ package shape
 // readerNoErrorDetector matches `func(ctx?, K) V` — single
 // non-ctx parameter, one non-error result, no error return.
 // Models infallible lookups against in-memory state (caches,
-// gauges, stable mappings) (ANALYSIS.md G28).
+// gauges, stable mappings).
 //
 // PointerReader (priority 450) claims `*V` results first;
 // ReaderWithBool (priority 840) claims `(V, bool)` first.

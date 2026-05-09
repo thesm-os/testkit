@@ -30,11 +30,11 @@
 // returns an empty [generator.Result] when the package has no Err*
 // vars and no error types, otherwise it runs the standard pipeline.
 //
-// # Cross-package non-overlap (G24)
+// # Cross-package non-overlap
 //
-// ANALYSIS.md G24 calls for opt-in checks that sentinels in this
-// package don't accidentally match sentinels in another package via
-// errors.Is. The directive `//testkit:sentinel-no-overlap-with`
-// declares the additional packages to include in the matrix; the
-// generator emits per-pair non-overlap subtests when present.
+// The `//testkit:sentinel-no-overlap-with` directive declares
+// additional packages to include in the non-overlap matrix; the
+// generator emits per-pair subtests verifying that sentinels in
+// this package don't accidentally match sentinels in another
+// package via errors.Is.
 package sentinel

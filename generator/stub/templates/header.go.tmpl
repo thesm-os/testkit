@@ -1,0 +1,12 @@
+{{- /* File header partial: package decl + import block. Shared by
+       both the impl and auto-test renders so the import set stays
+       consistent across the two files. */ -}}
+{{- define "header" -}}
+package {{ .PackageName }}
+
+import (
+{{- range .Imports }}
+	{{ if .Alias }}{{ .Alias }} {{ end }}{{ printf "%q" .Path }}
+{{- end }}
+)
+{{ end -}}

@@ -64,12 +64,14 @@ func TestResolved_Render(t *testing.T) {
 func TestResolve(t *testing.T) {
 	t.Parallel()
 
-	t.Run("local symbol resolves and Obj is non-nil", func(t *testing.T) {
+	t.Run("local symbol resolves and qualifies via source alias", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadBasicData(t)
 		got, err := resolver.Resolve("SampleKey", data, pkg)
 		testkit.NoError(t, err, "Resolve")
-		testkit.Equal(t, got.Alias, "", "local has no alias")
+		// Output is samplertest/, source is basic/ — alias is the
+		// source pkg's base name.
+		testkit.Equal(t, got.Alias, "basic", "alias is source pkg base name")
 		testkit.Equal(t, got.Name, "SampleKey", "name preserved")
 		testkit.True(t, got.Obj != nil, "Obj resolved")
 	})

@@ -242,11 +242,17 @@ func (p *Pipeline[D]) Run(pkg *Package, args []string, cfg Config, opts Options)
 	}
 	sourceFile := SourceAttribution(positions)
 
+	var methodDirectives []string
+	if p.Methods != nil {
+		methodDirectives = RenderMethodDirectives(p.Methods(data))
+	}
+
 	header := Header{
 		Subcommand: p.Name,
 		Args:       p.Name + " " + strings.Join(args, " "),
 		SourceFile: sourceFile,
 		BuildTag:   opts.BuildTag,
+		Directives: methodDirectives,
 	}
 	if len(args) == 0 {
 		header.Args = p.Name

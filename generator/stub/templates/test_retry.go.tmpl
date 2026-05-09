@@ -1,0 +1,22 @@
+{{- /* Retry-schedule subtest per //testkit:retry-succeeds-on-attempt
+       method. RetrySchedule(err) installs (N-1) faults so the Nth
+       call is the first one that succeeds, exercising the resilience
+       contract the directive declares. */ -}}
+{{- define "test-method-retry" -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $stub := .StubName -}}
+{{- $gq := .GenQualifier -}}
+{{- range $m := .Methods }}{{ if and (not $m.Skip) $m.RetryN }}
+	t.Run("{{ $m.Name }}/RetrySchedule fails then succeeds", func(t *testing.T) {
+		t.Parallel()
+		s := {{ $gq }}New{{ $stub }}{{ $.TestTypeArgs }}(t)
+		s.On{{ $m.Name }}.RetrySchedule(errTest)
+		for i := 1; i < {{ $m.RetryN }}; i++ {
+			{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+			testkit.ErrorIs(t, err, errTest, "{{ $m.Name }}: pre-success attempt must fault")
+		}
+		{{ $m.ErrCaptureLHS }} := s.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.ZeroArgs $tracker) }})
+		testkit.NoError(t, err, "{{ $m.Name }}: attempt {{ $m.RetryN }} must succeed")
+	})
+{{ end }}{{ end -}}
+{{- end -}}

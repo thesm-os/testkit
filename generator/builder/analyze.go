@@ -6,11 +6,10 @@ package builder
 import (
 	"go/token"
 	"go/types"
-	"path/filepath"
 	"sort"
-	"strings"
 
 	"go.thesmos.sh/testkit/generator"
+	"go.thesmos.sh/testkit/generator/directive"
 )
 
 // Analyze produces a [Data] from the loaded package and the
@@ -73,11 +72,9 @@ func analyzeStruct(
 	qualifiedType := generator.QualifyType(qualifier, name) + typeParamArgs
 	testTypeArgs := ""
 	testQualifiedType := qualifiedType
-	var typeParamMap map[string]generator.ConcreteType
 	if isGeneric {
-		testTypeArgs = defaultTestTypeArgs(s.TypeParams)
+		testTypeArgs = generator.TestTypeArgs(s.TypeParams)
 		testQualifiedType = generator.QualifyType(qualifier, name) + testTypeArgs
-		typeParamMap = buildTypeParamMap(s.TypeParams)
 	}
 
 	sd := StructData{
@@ -99,7 +96,7 @@ func analyzeStruct(
 		if !f.Exported {
 			continue
 		}
-		fd := analyzeField(f, tracker, isGeneric, typeParamMap)
+		fd := analyzeField(f, tracker, isGeneric, s.TypeParams)
 		applyFieldDirective(pkg, name, &sd, &fd)
 		sd.Fields = append(sd.Fields, fd)
 	}
@@ -118,7 +115,7 @@ func analyzeStruct(
 // e.g. `*[]string` (pointer to slice).
 func analyzeField(
 	f *generator.FieldInfo, tracker *generator.ImportTracker,
-	isGeneric bool, typeParamMap map[string]generator.ConcreteType,
+	isGeneric bool, params []generator.TypeParamInfo,
 ) FieldData {
 	fd := FieldData{
 		Name:        f.Name,
@@ -149,24 +146,24 @@ func analyzeField(
 		// func, and chan kinds reach the Underlying() default
 		// branch and stay un-flagged, so generated subtests
 		// correctly skip them.
-		fd.IsBasicComparable = isComparableBasicKind(ut.Kind())
+		fd.IsBasicComparable = generator.IsBasicComparableKind(ut.Kind())
 	}
 	if _, ok := f.Type.(*types.Pointer); ok {
 		fd.IsPointer = true
 	}
-	if isGeneric && typeParamMap != nil {
-		fd.TestTypeStr = resolveTypeStr(fd.TypeStr, typeParamMap)
-		fd.TestSample = sampleForResolvedType(fd.TestTypeStr, fd.Name)
+	if isGeneric && len(params) > 0 {
+		fd.TestTypeStr = generator.SubstituteTypeParams(fd.TypeStr, params)
+		fd.TestSample = generator.SampleForConcreteType(fd.TestTypeStr, fd.Name)
 		// For generic map fields, map-key and map-val samples must
 		// resolve through the type-parameter map too — otherwise
 		// the generic test path emits `WithEntriesEntry(nil, nil)`
 		// against a `map[K]V` whose K/V are unresolved type
 		// parameters.
 		if fd.IsMap {
-			rk := resolveTypeStr(fd.MapKeyTypeStr, typeParamMap)
-			rv := resolveTypeStr(fd.MapValTypeStr, typeParamMap)
-			fd.TestMapKeySample = sampleForResolvedType(rk, "Key")
-			fd.TestMapValSample = sampleForResolvedType(rv, "Val")
+			rk := generator.SubstituteTypeParams(fd.MapKeyTypeStr, params)
+			rv := generator.SubstituteTypeParams(fd.MapValTypeStr, params)
+			fd.TestMapKeySample = generator.SampleForConcreteType(rk, "Key")
+			fd.TestMapValSample = generator.SampleForConcreteType(rv, "Val")
 		}
 		// A type-parameter-typed field whose test instantiation
 		// resolves to a basic-comparable concrete type IS basic-
@@ -175,201 +172,50 @@ func analyzeField(
 		// structs whose only "scalar" fields are type parameters
 		// (Pair[A, B any]) lose their Mutate / Clone subtests
 		// because FirstComparableField returns nil.
-		if !fd.IsBasicComparable && isResolvedBasicComparable(fd.TestTypeStr) {
+		if !fd.IsBasicComparable && generator.IsBasicComparableTypeName(fd.TestTypeStr) {
 			fd.IsBasicComparable = true
 		}
 	}
 	return fd
 }
 
-// applyFieldDirective walks the field's //testkit: directives and,
-// when a `default` directive is present and the struct doesn't
-// already use a factory, records the directive's argument as the
-// field's literal default. Field directives are skipped entirely
-// when HasDefaults is true — the factory wins.
+// applyFieldDirective records a `//testkit:default <value>` field
+// directive as the field's literal default. Skipped entirely when
+// HasDefaults is true — the factory wins.
 func applyFieldDirective(pkg *generator.Package, structName string, sd *StructData, fd *FieldData) {
 	if sd.HasDefaults {
 		return
 	}
-	for _, d := range pkg.FieldDirectives(structName, fd.Name) {
-		if d.Name == "default" && len(d.Args) > 0 {
-			fd.DefaultValue = d.Args[0]
-			sd.HasFieldDefaults = true
-		}
+	if d, ok := generator.FieldDirective(pkg, structName, fd.Name, directive.Default); ok && len(d.Args) > 0 {
+		fd.DefaultValue = d.Args[0]
+		sd.HasFieldDefaults = true
 	}
 }
 
 // resolveDefaultsFactory looks for a `<Type>Defaults() <Type>`
-// factory function. The lookup runs against the source package
-// first, then (if absent) the sibling output package — handling
-// the typical case where the factory lives next to the generated
-// builder.
+// factory function via [generator.LookupCompanionFunc] (source pkg
+// first, then sibling output pkg).
 //
-// When the factory lives in the source package but the output
-// lands in a sibling package, qualifier prefixes the call so the
-// emitted code references it cross-package; same-package matches
-// (sibling-pkg branch, or source==output) leave it bare.
-//
-// On first generation the output package may not exist yet; that's
-// not an error, just "no factory found". The function silently
-// falls through to the directive-based or zero-seed mechanisms.
+// When the factory lives in the source package, qualifier prefixes
+// the call so the emitted code references it cross-package; output-
+// pkg matches leave it bare since the impl lands in that same
+// package, and the test-view Transform prepends GenQualifier for the
+// external _test file.
 func resolveDefaultsFactory(
 	pkg *generator.Package, sd *StructData, qualifier string,
 	opts generator.Options,
 ) {
 	defaultsFunc := sd.Name + "Defaults"
 	check := generator.DefaultsFuncSig(sd.Name)
-	if generator.HasFunc(pkg, defaultsFunc, check) {
-		sd.HasDefaults = true
-		// Source-pkg factory: bake the source qualifier into the
-		// call expression so the impl renders correctly. Test view
-		// consumes the same form (the test pkg also imports source).
-		sd.DefaultsFunc = generator.QualifyType(qualifier, defaultsFunc)
+	found, fromOutput := generator.LookupCompanionFunc(pkg, opts, defaultsFunc, check)
+	if !found {
 		return
 	}
-	if outputPkg := tryLoadOutputPackage(opts); outputPkg != nil {
-		if generator.HasFunc(outputPkg, defaultsFunc, check) {
-			sd.HasDefaults = true
-			// Output-pkg factory: bare for impl (same package).
-			// Test view's Transform prepends GenQualifier so the
-			// test file's external _test pkg can reach it.
-			sd.DefaultsFunc = defaultsFunc
-			sd.DefaultsFromOutput = true
-		}
+	sd.HasDefaults = true
+	if fromOutput {
+		sd.DefaultsFunc = defaultsFunc
+		sd.DefaultsFromOutput = true
+		return
 	}
-}
-
-// tryLoadOutputPackage attempts to load the package the generator
-// emits into. Returns nil for any failure mode — package not yet
-// existing on first generation is the load-bearing case, not an
-// error to propagate.
-func tryLoadOutputPackage(opts generator.Options) *generator.Package {
-	if opts.Output == "" || opts.WorkDir == "" {
-		return nil
-	}
-	outputDir := filepath.Dir(opts.Output)
-	if outputDir == "." {
-		// Same directory as source — already covered by the
-		// source-pkg lookup; loading would be redundant.
-		return nil
-	}
-	loader := generator.NewLoader()
-	pkg, err := loader.Load(".", filepath.Join(opts.WorkDir, outputDir))
-	if err != nil {
-		return nil
-	}
-	return pkg
-}
-
-// concreteFor picks a concrete instantiation for one type
-// parameter at position idx. Constraint-aware: walks
-// [generator.DefaultConcreteTypes] from the rotated start so any
-// `any`/`comparable`-constrained position gets a distinct candidate
-// while narrow constraints (Numeric, ~int64, etc.) fall through to
-// the first satisfying candidate.
-//
-// Falls back to the round-robin candidate when no candidate
-// satisfies — better to render a possibly-wrong concrete type and
-// let the Go compiler complain than emit a placeholder the user
-// has to chase down.
-func concreteFor(p generator.TypeParamInfo, idx int) generator.ConcreteType {
-	if ct := generator.SelectConcreteType(p.Constraint, generator.DefaultConcreteTypes, idx); ct != nil {
-		return *ct
-	}
-	n := len(generator.DefaultConcreteTypes)
-	return generator.DefaultConcreteTypes[((idx%n)+n)%n]
-}
-
-// defaultTestTypeArgs renders the concrete-instantiation suffix
-// for the test file (e.g. `[string]`, `[string, int]`,
-// `[int]` for Stat[T Numeric]). Each position is selected
-// independently via [concreteFor] so constraint-driven types win
-// over position-driven defaults.
-func defaultTestTypeArgs(params []generator.TypeParamInfo) string {
-	names := make([]string, len(params))
-	for i, p := range params {
-		names[i] = concreteFor(p, i).Name
-	}
-	return "[" + strings.Join(names, ", ") + "]"
-}
-
-// buildTypeParamMap maps each type parameter name to the concrete
-// type chosen for it (used by [resolveTypeStr] to substitute "T"
-// → "string" / "K" → "int" when rendering field types in the
-// test view) plus the per-field Sample function so analyzeField
-// can produce constraint-correct sample literals.
-func buildTypeParamMap(params []generator.TypeParamInfo) map[string]generator.ConcreteType {
-	m := make(map[string]generator.ConcreteType, len(params))
-	for i, p := range params {
-		m[p.Name] = concreteFor(p, i)
-	}
-	return m
-}
-
-// resolveTypeStr replaces every type-parameter name in typeStr
-// with its concrete type. "T" → "string", "[]T" → "[]string",
-// "map[K]V" → "map[string]int" when paramMap maps {K:string,
-// V:int}. Naive textual replacement — adequate for built-in basic
-// names but won't survive a type parameter named "int" or similar
-// shadowing accident (rare; user error).
-func resolveTypeStr(typeStr string, paramMap map[string]generator.ConcreteType) string {
-	out := typeStr
-	for param, concrete := range paramMap {
-		out = strings.ReplaceAll(out, param, concrete.Name)
-	}
-	return out
-}
-
-// isResolvedBasicComparable reports whether typeStr names a known
-// basic-comparable concrete type (i.e. matches one of the names in
-// [generator.DefaultConcreteTypes]). Used by analyzeField to
-// propagate IsBasicComparable through type-parameter resolution.
-func isResolvedBasicComparable(typeStr string) bool {
-	for _, c := range generator.DefaultConcreteTypes {
-		if c.Name == typeStr {
-			return true
-		}
-	}
-	return false
-}
-
-// sampleForResolvedType produces a sample literal for the rendered
-// concrete typeStr. Walks [generator.DefaultConcreteTypes] for an
-// exact-name match and uses that candidate's Sample. Falls through
-// to a typed-zero-literal expression when the type isn't a known
-// basic (e.g. resolved to a slice/map of basics, or an unknown
-// custom name).
-func sampleForResolvedType(typeStr, fieldName string) string {
-	for _, c := range generator.DefaultConcreteTypes {
-		if c.Name == typeStr {
-			return c.Sample(fieldName)
-		}
-	}
-	if elemType, ok := strings.CutPrefix(typeStr, "[]"); ok {
-		return typeStr + "{" + sampleForResolvedType(elemType, fieldName) + "}"
-	}
-	return typeStr + "{}"
-}
-
-// isComparableBasicKind reports whether kind is one of the basic
-// types whose non-zero samples drive a meaningful `!=` assertion
-// in the generated Mutate / Clone independence subtests.
-//
-// Excluded: untyped kinds (not reachable as field types), complex
-// (rare as fixture fields with `!=`-assertable samples), and
-// UnsafePointer (samples would be non-trivial). Strings,
-// signed/unsigned integers, booleans, and floats are in.
-func isComparableBasicKind(kind types.BasicKind) bool {
-	switch kind {
-	case types.String,
-		types.Bool,
-		types.Int, types.Int8, types.Int16, types.Int32, types.Int64,
-		types.Uint, types.Uint8, types.Uint16, types.Uint32, types.Uint64, types.Uintptr,
-		types.Float32, types.Float64:
-		// types.Rune and types.Byte are aliases for Int32 / Uint8
-		// and are covered by the integer cases above.
-		return true
-	default:
-		return false
-	}
+	sd.DefaultsFunc = generator.QualifyType(qualifier, defaultsFunc)
 }

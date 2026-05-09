@@ -32,23 +32,21 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestDeprecated(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: replacement attached", func(t *testing.T) {
+	t.Run("consume attaches the replacement payload", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[deprecated.Payload](
-			methodByName(data, "Legacy").Attachments, directive.Deprecated)
+		got, ok := deprecated.Get(methodByName(data, "Legacy"))
 		testkit.True(t, ok, "deprecated payload attached")
 		testkit.Equal(t, got.Replacement, "Submit", "replacement name")
 	})
 
-	t.Run("rejects when arg count != 1", func(t *testing.T) {
+	t.Run("consume rejects arg count != 1", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
-		// Inject a malformed directive on Legacy.
 		m := methodByName(data, "Legacy")
 		m.Directives = []directive.Directive{
 			{Name: directive.Deprecated, Args: []string{"A", "B"}},
@@ -56,5 +54,21 @@ func TestConsume(t *testing.T) {
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "two args rejected")
 		testkit.Assert(t, err.Error()).Contains("expects 1 arg", "diagnostic")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := deprecated.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Equal(t, got.Replacement, "", "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, deprecated.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.Deprecated, deprecated.Payload{Replacement: "X"})
+		testkit.True(t, deprecated.Has(&m), "present after Set")
 	})
 }

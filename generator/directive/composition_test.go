@@ -89,6 +89,44 @@ func TestComposition(t *testing.T) {
 		testkit.True(t, err != nil, "conflict surfaces")
 	})
 
+	t.Run("explicit Implies entry surfaces as Redundant", func(t *testing.T) {
+		t.Parallel()
+		// Cacheable Implies Pure. Listing both directly is redundant.
+		issues := directive.Issues(makeDirs("cacheable", "pure"))
+		assertHasIssue(t, issues, directive.Redundant,
+			"Pure is implied by Cacheable")
+	})
+
+	t.Run("unknown directives are skipped without error", func(t *testing.T) {
+		t.Parallel()
+		// Unrecognised directive name takes the `desc, ok := ...; !ok`
+		// continue branch — no panic, no Issue produced.
+		issues := directive.Issues([]directive.Directive{{Name: "nonexistent-directive"}})
+		testkit.Len(t, issues, 0, "unknown directive contributes no issues")
+	})
+
+	t.Run("conflict pair canonicalises regardless of declarer order", func(t *testing.T) {
+		t.Parallel()
+		// Custom registry where the alphabetically-later directive ("z")
+		// declares the conflict. Iterating [z, a] calls pairKey("z", "a")
+		// → exercises the else branch (a > b).
+		r := directive.NewRegistry()
+		r.MustRegister(directive.New("a", directive.InCategory(directive.Mixin)))
+		r.MustRegister(directive.New("z", directive.InCategory(directive.Mixin),
+			directive.ConflictsWith("a")))
+		issues := r.Issues([]directive.Directive{{Name: "z"}, {Name: "a"}})
+		assertHasIssue(t, issues, directive.Conflict, "z↔a conflict reported")
+		// Pair is reported exactly once even though both directives are
+		// present — pairKey's canonical key dedupes.
+		count := 0
+		for _, iss := range issues {
+			if iss.Kind == directive.Conflict {
+				count++
+			}
+		}
+		testkit.Equal(t, count, 1, "single canonical conflict")
+	})
+
 	t.Run("ValidateComposition surfaces missing-required as error", func(t *testing.T) {
 		t.Parallel()
 		err := directive.ValidateComposition(makeDirs("retry-succeeds-on-attempt"), token.Position{})

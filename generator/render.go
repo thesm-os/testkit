@@ -40,6 +40,13 @@ type Header struct {
 	// BuildTag, when non-empty, emits a //go:build <tag> directive
 	// at the top of the file, before the generated-code header.
 	BuildTag string
+
+	// Directives lists every //testkit: directive on every method
+	// the generator consumed, one rendered source-form line per
+	// entry. The pipeline computes this via [RenderMethodDirectives]
+	// from the [Pipeline.Methods] hook. Empty when the underlying
+	// data has no directives.
+	Directives []string
 }
 
 // FuncMap returns the shared template function map. Every generator's
@@ -66,6 +73,7 @@ func FuncMap() template.FuncMap {
 		"sub":            func(a, b int) int { return a - b },
 		"add":            func(a, b int) int { return a + b },
 		"dict":           templateDict,
+		"splitLines":     func(s string) []string { return strings.Split(s, "\n") },
 	}
 }
 
@@ -130,6 +138,15 @@ func RenderTemplate(tmpl *template.Template, name string, data any, header Heade
 		fmt.Fprintf(&buf, sourceHeaderFmt, header.SourceFile+" (testkit "+header.Args+")")
 	case header.Args != "":
 		fmt.Fprintf(&buf, sourceHeaderFmt, "testkit "+header.Args)
+	}
+	if len(header.Directives) > 0 {
+		buf.WriteString("//\n")
+		buf.WriteString("// Directives:\n")
+		for _, d := range header.Directives {
+			buf.WriteString("//   ")
+			buf.WriteString(d)
+			buf.WriteByte('\n')
+		}
 	}
 	buf.WriteString("\n")
 

@@ -9,11 +9,23 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/directive"
 	"go.thesmos.sh/testkit/generator/spec"
-	_ "go.thesmos.sh/testkit/generator/spec/integrationonly" // self-registration
+	"go.thesmos.sh/testkit/generator/spec/integrationonly"
 )
 
-func TestRegistration(t *testing.T) {
+func TestIntegrationOnly(t *testing.T) {
 	t.Parallel()
-	testkit.True(t, len(spec.Consumers(directive.IntegrationOnly)) > 0,
-		"integration-only consumer registered")
+
+	t.Run("importing the package registers a consumer", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, len(spec.Consumers(directive.IntegrationOnly)) > 0,
+			"integration-only consumer registered")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, integrationonly.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.IntegrationOnly, struct{}{})
+		testkit.True(t, integrationonly.Has(&m), "present after Set")
+	})
 }

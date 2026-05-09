@@ -143,6 +143,37 @@ type I interface {
 		}
 	})
 
+	t.Run("DocText strips testkit directives, comment markers, boundary blanks", func(t *testing.T) {
+		t.Parallel()
+		// Doc with comment markers, a directive, leading + trailing blank lines.
+		mi := generator.MethodInfo{
+			Doc: "// Get fetches by key.\n//\n//testkit:errors ErrNotFound\n//\n// Returns ErrNotFound on miss.",
+		}
+		got := mi.DocText()
+		// Expect: directive line gone, "// " stripped, blanks at boundaries trimmed,
+		// internal blank between paragraphs preserved.
+		testkit.Equal(t, got,
+			"Get fetches by key.\n\n\nReturns ErrNotFound on miss.",
+			"directive line removed; boundary blanks trimmed")
+	})
+
+	t.Run("DocText returns empty for a doc-less method", func(t *testing.T) {
+		t.Parallel()
+		mi := generator.MethodInfo{Doc: ""}
+		testkit.Equal(t, mi.DocText(), "", "no doc → empty")
+	})
+
+	t.Run("DocText trims leading and trailing blank lines", func(t *testing.T) {
+		t.Parallel()
+		// Leading + trailing blanks (// only) must be removed; the
+		// internal content is preserved verbatim.
+		mi := generator.MethodInfo{
+			Doc: "//\n//\n// Body line.\n//\n//",
+		}
+		testkit.Equal(t, mi.DocText(), "Body line.",
+			"leading + trailing blanks stripped")
+	})
+
 	t.Run("MethodInfo helpers cover happy path", func(t *testing.T) {
 		t.Parallel()
 		const src = `

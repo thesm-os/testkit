@@ -99,6 +99,45 @@ func TestDescriptor(t *testing.T) {
 		testkit.True(t, len(errs) > 0, "extra arg flagged")
 	})
 
+	t.Run("New panics on empty Name", func(t *testing.T) {
+		t.Parallel()
+		assertPanic(t, func() {
+			directive.New("", directive.InCategory(directive.Enrichment))
+		}, "empty-name panic")
+	})
+
+	t.Run("New panics on duplicate Conflicts entries", func(t *testing.T) {
+		t.Parallel()
+		assertPanic(t, func() {
+			directive.New("x", directive.InCategory(directive.Mixin),
+				directive.ConflictsWith("a", "a"))
+		}, "duplicate Conflicts panic")
+	})
+
+	t.Run("New panics on duplicate Requires entries", func(t *testing.T) {
+		t.Parallel()
+		assertPanic(t, func() {
+			directive.New("x", directive.InCategory(directive.Mixin),
+				directive.Requires("a", "a"))
+		}, "duplicate Requires panic")
+	})
+
+	t.Run("New panics on duplicate Implies entries", func(t *testing.T) {
+		t.Parallel()
+		assertPanic(t, func() {
+			directive.New("x", directive.InCategory(directive.Mixin),
+				directive.Implies("a", "a"))
+		}, "duplicate Implies panic")
+	})
+
+	t.Run("New panics on self-implication", func(t *testing.T) {
+		t.Parallel()
+		assertPanic(t, func() {
+			directive.New("x", directive.InCategory(directive.Mixin),
+				directive.Implies("x"))
+		}, "self-implication panic")
+	})
+
 	t.Run("ComposesWith and Experimental options take effect", func(t *testing.T) {
 		t.Parallel()
 		d := directive.New("x",

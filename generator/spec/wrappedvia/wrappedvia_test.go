@@ -32,18 +32,19 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestWrappedVia(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: wrap target attached", func(t *testing.T) {
+	t.Run("consume attaches the wrap target", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[wrappedvia.Payload](
-			methodByName(data, "Wrap").Attachments, directive.WrappedVia)
+		got, ok := wrappedvia.Get(methodByName(data, "Wrap"))
 		testkit.True(t, ok, "payload attached")
 		testkit.Equal(t, got.VarName, "ErrForbidden", "VarName")
-		testkit.Equal(t, got.Qualified, "ErrForbidden", "local: bare")
+		// Output is in workflowtest/, source is basic/ — local
+		// refs qualify with the source-pkg alias.
+		testkit.Equal(t, got.Qualified, "basic.ErrForbidden", "source-qualified")
 	})
 
 	t.Run("rejects wrong arg count", func(t *testing.T) {
@@ -77,5 +78,22 @@ func TestConsume(t *testing.T) {
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "non-var rejected")
 		testkit.Assert(t, err.Error()).Contains("not a variable", "diagnostic")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := wrappedvia.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Equal(t, got.VarName, "", "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, wrappedvia.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.WrappedVia,
+			wrappedvia.Payload{VarName: "ErrX", Qualified: "p.ErrX"})
+		testkit.True(t, wrappedvia.Has(&m), "present after Set")
 	})
 }

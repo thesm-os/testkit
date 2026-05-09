@@ -5,8 +5,7 @@ package shape
 
 // voidLifecycleDetector matches `func()` and `func(ctx)` — no
 // non-ctx params, no return. Models `Reset()`, `Close()` (when
-// they don't return error), and parameterless lifecycle hooks
-// (ANALYSIS.md G31).
+// they don't return error), and parameterless lifecycle hooks.
 //
 // Fires above Mutator to claim no-arg void cases. Mutator requires
 // at least one non-ctx param.

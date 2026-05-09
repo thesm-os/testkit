@@ -32,15 +32,14 @@ func methodByName(data *spec.Data, name string) *spec.Method {
 	return nil
 }
 
-func TestConsume(t *testing.T) {
+func TestRetrySucceeds(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: positive integer attached", func(t *testing.T) {
+	t.Run("consume attaches the parsed attempt count", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadWorkflow(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
-		got, ok := spec.Get[retrysucceeds.Payload](
-			methodByName(data, "Retry").Attachments, directive.RetrySucceedsOnAttempt)
+		got, ok := retrysucceeds.Get(methodByName(data, "Retry"))
 		testkit.True(t, ok, "payload attached")
 		testkit.Equal(t, got.N, 3, "N parsed")
 	})
@@ -74,5 +73,21 @@ func TestConsume(t *testing.T) {
 		}
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "no args rejected")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := retrysucceeds.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Equal(t, got.N, 0, "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, retrysucceeds.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.RetrySucceedsOnAttempt, retrysucceeds.Payload{N: 2})
+		testkit.True(t, retrysucceeds.Has(&m), "present after Set")
 	})
 }

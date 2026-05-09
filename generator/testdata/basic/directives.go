@@ -42,8 +42,10 @@ type Workflow interface {
 	Legacy(ctx context.Context, item Item) error
 
 	// Retry succeeds on the third call; the stub fails the first
-	// two then returns the configured success.
+	// two then returns the configured success. Requires retryable
+	// per the composition rules.
 	//
+	//testkit:retryable
 	//testkit:retry-succeeds-on-attempt 3
 	Retry(ctx context.Context, key string) error
 

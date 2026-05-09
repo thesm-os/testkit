@@ -6,7 +6,7 @@ package shape
 // aggregatorDetector matches `func(ctx?) (T, error)` and the
 // no-error form `func(ctx?) T`. Zero non-ctx parameters, exactly
 // one non-error result. Models snapshot, count, summary, head
-// readouts (ANALYSIS.md G28-extended).
+// readouts.
 //
 // Requires ctx OR error so the no-ctx no-error case (`func() T`)
 // stays with [Pure] above. Predicate (priority 820) and

@@ -1,0 +1,9 @@
+{{- /* Option type alias partial: declares <Stub>Option as a
+       function type that mutates a *<Stub>. Every option-emitting
+       partial conforms to this type. */ -}}
+{{- define "option-type" -}}
+{{- $tpDecl := .Spec.TypeParamDecl -}}
+{{- $tpArgs := .Spec.TypeParamArgs -}}
+// {{ .StubName }}Option configures a [{{ .StubName }}] at construction time.
+type {{ .StubName }}Option{{ $tpDecl }} func(*{{ .StubName }}{{ $tpArgs }})
+{{- end -}}

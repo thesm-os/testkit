@@ -50,25 +50,25 @@ func setDirectives(data *spec.Data, methodName string, dirs ...directive.Directi
 // mustPayload retrieves the sample payload or fails the test.
 func mustPayload(t *testing.T, m spec.Method) sample.Payload {
 	t.Helper()
-	got, ok := spec.Get[sample.Payload](m.Attachments, directive.Sample)
+	got, ok := sample.Get(&m)
 	testkit.True(t, ok, "sample payload attached for "+m.Name)
 	return got
 }
 
-func TestConsume(t *testing.T) {
+func TestSample(t *testing.T) {
 	t.Parallel()
 
-	t.Run("happy path: per-param sample funcs attach to method", func(t *testing.T) {
+	t.Run("consume attaches per-param sample funcs", func(t *testing.T) {
 		t.Parallel()
 		pkg, data := loadSamplerData(t)
 		testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
 		byName := indexMethods(data.Methods)
-		// Lookup has one non-ctx param (key string) → one sample.
+		// Output is in samplertest/, source is in basic/ — local
+		// refs qualify with the source-pkg alias.
 		testkit.Equal(t, mustPayload(t, byName["Lookup"]).Calls,
-			[]string{"SampleKey"}, "Lookup sample call")
-		// Apply has two non-ctx params → two samples.
+			[]string{"basic.SampleKey"}, "Lookup sample call (source-qualified)")
 		testkit.Equal(t, mustPayload(t, byName["Apply"]).Calls,
-			[]string{"SampleKey", "SampleItem"}, "Apply sample calls")
+			[]string{"basic.SampleKey", "basic.SampleItem"}, "Apply sample calls")
 	})
 
 	t.Run("rejects when arg count != non-ctx param count", func(t *testing.T) {
@@ -121,5 +121,21 @@ func TestConsume(t *testing.T) {
 			directive.Directive{Name: directive.Sample, Args: []string{"go.thesmos.sh/does/not/exist.X"}})
 		err := spec.Enrich(data, pkg)
 		testkit.True(t, err != nil, "missing remote pkg must error")
+	})
+
+	t.Run("Get returns zero+false on absent attachment", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		got, ok := sample.Get(&m)
+		testkit.False(t, ok, "missing attachment")
+		testkit.Len(t, got.Calls, 0, "zero payload")
+	})
+
+	t.Run("Has reflects presence in Attachments", func(t *testing.T) {
+		t.Parallel()
+		var m spec.Method
+		testkit.False(t, sample.Has(&m), "absent without attachment")
+		spec.Set(&m.Attachments, directive.Sample, sample.Payload{Calls: []string{"f"}})
+		testkit.True(t, sample.Has(&m), "present after Set")
 	})
 }

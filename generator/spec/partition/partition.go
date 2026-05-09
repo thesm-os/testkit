@@ -46,11 +46,35 @@ type Payload struct {
 	// FieldType is the rendered Go type of the resolved field,
 	// qualified via the package's import tracker.
 	FieldType string
+
+	// ZeroKey is the rendered zero literal for [FieldType] — the
+	// value [generator.ZeroValueOf] produces for the resolved
+	// field's type. Auto-tests use it for `FaultForPartition(zero,
+	// ...)` against a method invoked with [spec.Method.ZeroArgs]
+	// (whose partition slot is also zero, so the predicate
+	// matches).
+	ZeroKey string
+
+	// SampleKey is a non-zero sample literal for [FieldType] —
+	// produced via [generator.SampleValueOf]. Auto-tests use it
+	// for `FaultForOtherPartitions(sample, ...)`: a method invoked
+	// with zero-args has a zero partition slot, which is != sample,
+	// so the non-matching predicate fires.
+	SampleKey string
 }
 
 func init() {
 	spec.RegisterConsumer(directive.Partition, consume)
 }
+
+// Get retrieves the resolved [Payload]. Returns (zero, false) when
+// the method carries no //testkit:partition directive.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.Partition)
+}
+
+// Has reports whether the method has a partition directive.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.Partition) }
 
 func consume(method *spec.Method, dir directive.Directive, data *spec.Data, _ *generator.Package) error {
 	if err := resolver.RequireArgs(dir, 1); err != nil {
@@ -74,9 +98,11 @@ func consume(method *spec.Method, dir directive.Directive, data *spec.Data, _ *g
 		}
 		if p.Name() == field {
 			spec.Set(&method.Attachments, directive.Partition, Payload{
-				FieldPath: field,
+				FieldPath: generator.Title(field),
 				FieldName: field,
 				FieldType: types.TypeString(p.Type(), data.Tracker.Qualifier()),
+				ZeroKey:   generator.ZeroValueOf(p.Type(), data.Tracker),
+				SampleKey: generator.SampleValueOf(p.Type(), field, data.Tracker),
 			})
 			return nil
 		}
@@ -100,9 +126,11 @@ func consume(method *spec.Method, dir directive.Directive, data *spec.Data, _ *g
 				continue
 			}
 			spec.Set(&method.Attachments, directive.Partition, Payload{
-				FieldPath: paramName + "." + field,
+				FieldPath: generator.Title(paramName) + "." + field,
 				FieldName: field,
 				FieldType: types.TypeString(f.Type(), data.Tracker.Qualifier()),
+				ZeroKey:   generator.ZeroValueOf(f.Type(), data.Tracker),
+				SampleKey: generator.SampleValueOf(f.Type(), field, data.Tracker),
 			})
 			return nil
 		}

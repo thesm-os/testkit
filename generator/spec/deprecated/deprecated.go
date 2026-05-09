@@ -33,6 +33,15 @@ func init() {
 	spec.RegisterConsumer(directive.Deprecated, consume)
 }
 
+// Get retrieves the resolved [Payload]. Returns (zero, false) when
+// the method carries no //testkit:deprecated directive.
+func Get(m *spec.Method) (Payload, bool) {
+	return spec.Get[Payload](m.Attachments, directive.Deprecated)
+}
+
+// Has reports whether the method is deprecated.
+func Has(m *spec.Method) bool { return spec.Has(m.Attachments, directive.Deprecated) }
+
 func consume(method *spec.Method, dir directive.Directive, _ *spec.Data, _ *generator.Package) error {
 	if err := resolver.RequireArgs(dir, 1); err != nil {
 		return fmt.Errorf("deprecated: %w", err)

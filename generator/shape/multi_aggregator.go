@@ -8,7 +8,7 @@ import "go.thesmos.sh/testkit/generator"
 // multiAggregatorDetector matches `func(ctx?) (V1, V2, error)` —
 // no non-ctx params, two non-error results plus error. Models
 // `Stats(ctx) (count, total, error)` and similar 2-tuple
-// aggregations (ANALYSIS.md G26).
+// aggregations.
 //
 // Requires ctx OR error to disambiguate from a hypothetical
 // no-ctx no-error 2-tuple Pure (which falls to Unknown).
