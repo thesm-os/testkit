@@ -69,6 +69,12 @@ func TestVoidLifecycle(t *testing.T) {
 			voidLifecycleCtx(t))
 	})
 
+	t.Run("RejectInvalidWith does not panic on invalid impl", func(t *testing.T) {
+		t.Parallel()
+		invalid := func() *resetter { return &resetter{corrupt: true} }
+		suite.AssertVoidLifecycleRejectInvalidWith[*resetter](invalid)(voidLifecycleCtx(t))
+	})
+
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertVoidLifecycleConcurrentSafe[*resetter](4, 50)(voidLifecycleCtx(t))

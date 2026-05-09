@@ -271,6 +271,31 @@ func TestAssertGoldenJSONField(t *testing.T) { //nolint:paralleltest // mutates 
 			"diagnostic explains the shape constraint")
 	})
 
+	t.Run("scrubbers applied to got before comparison", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"ts": "SCRUBBED_TS"}`), true)
+		testkit.False(t, f.Failed(), "seed")
+
+		f2 := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f2, "wire.json", "Status",
+			[]byte(`{"ts": "2026-05-09T10:00:00Z"}`), false, golden.ScrubTimestamps())
+		testkit.False(t, f2.Failed(), "scrubbed got must match stored golden")
+	})
+
+	t.Run("read error on directory-as-file fails", func(t *testing.T) { //nolint:paralleltest
+		t.Chdir(t.TempDir())
+		err := os.MkdirAll("wire.json/sub", 0o750)
+		testkit.NoError(t, err, "seed dir")
+
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, "wire.json", "Status",
+			[]byte(`{"A": 1}`), false)
+		testkit.True(t, f.Failed(), "read error must fail")
+		testkit.True(t, strings.Contains(f.Msg(), "read"), "must mention read error")
+	})
+
 	t.Run("update of non-object file body fails", func(t *testing.T) { //nolint:paralleltest
 		t.Chdir(t.TempDir())
 		err := os.WriteFile("wire.json", []byte(`[1, 2, 3]`), 0o644) //nolint:gosec

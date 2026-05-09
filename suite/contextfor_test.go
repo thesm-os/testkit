@@ -328,6 +328,22 @@ func TestPredicateContextFor(t *testing.T) {
 	testkit.True(t, d.called, "Call routed")
 }
 
+func TestMultiArgWriterVariadicContextFor(t *testing.T) {
+	t.Parallel()
+	ctx := suite.MultiArgWriterVariadicContextFor(t, dummyFactory,
+		func(_ context.Context, d *dummy, args ...any) error {
+			d.called = true
+			_ = args
+			return nil
+		},
+	)
+	testkit.True(t, ctx.T == t, "T wired")
+	d := ctx.Factory()
+	err := ctx.Call(t.Context(), d, "a", 1, true)
+	testkit.NoError(t, err, "Call")
+	testkit.True(t, d.called, "Call routed")
+}
+
 func TestPoisonAccessorContextFor(t *testing.T) {
 	t.Parallel()
 	ctx := suite.PoisonAccessorContextFor(t, dummyFactory,

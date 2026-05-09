@@ -88,4 +88,31 @@ func TestStreamConsumer(t *testing.T) {
 			func() io.Reader { return bytes.NewReader([]byte("hello")) }, 4, 50)(
 			streamConsumerCtx(t))
 	})
+
+	t.Run("SucceedsWithDefault reads default sample bytes", func(t *testing.T) {
+		t.Parallel()
+		// "test-data" is 9 bytes (the default sample)
+		suite.AssertStreamConsumerSucceedsWithDefault[*byteCounter, io.Reader, int](
+			9)(streamConsumerCtx(t))
+	})
+
+	t.Run("RespectsContextWithDefault surfaces ctx.Canceled", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.StreamConsumerContext[*byteCounter, io.Reader, int]{
+			T: t,
+			StreamConsumerBindings: bindings.StreamConsumerBindings[*byteCounter, io.Reader, int]{
+				Factory: func() *byteCounter { return &byteCounter{} },
+				Call: func(c context.Context, _ *byteCounter, _ io.Reader) (int, error) {
+					return 0, c.Err()
+				},
+			},
+		}
+		suite.AssertStreamConsumerRespectsContextWithDefault[*byteCounter, io.Reader, int]()(ctx)
+	})
+
+	t.Run("ConcurrentSafeWithDefault runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamConsumerConcurrentSafeWithDefault[*byteCounter, io.Reader, int](
+			4, 50)(streamConsumerCtx(t))
+	})
 }

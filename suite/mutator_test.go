@@ -71,6 +71,12 @@ func TestMutator(t *testing.T) {
 		suite.AssertMutatorRejectInvalid[*accumulator, int64](-1, check)(mutatorCtx(t))
 	})
 
+	t.Run("RejectInvalidWith does not panic on invalid impl", func(t *testing.T) {
+		t.Parallel()
+		invalid := func() *accumulator { return &accumulator{} }
+		suite.AssertMutatorRejectInvalidWith[*accumulator, int64](invalid, 1)(mutatorCtx(t))
+	})
+
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMutatorConcurrentSafe[*accumulator, int64](1, 4, 50)(mutatorCtx(t))

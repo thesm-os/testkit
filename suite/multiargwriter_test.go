@@ -86,3 +86,62 @@ func TestMultiArgWriter(t *testing.T) {
 			"k", "v", 1, 4, 50)(multiArgCtx(t))
 	})
 }
+
+func multiArgVariadicCtx(t *testing.T) suite.MultiArgWriterVariadicContext[*scheduler] {
+	t.Helper()
+	return suite.MultiArgWriterVariadicContext[*scheduler]{
+		T: t,
+		MultiArgWriterVariadicBindings: bindings.MultiArgWriterVariadicBindings[*scheduler]{
+			Factory: func() *scheduler { return &scheduler{} },
+			Call: func(ctx context.Context, s *scheduler, args ...any) error {
+				key, _ := args[0].(string)
+				value, _ := args[1].(string)
+				priority, _ := args[2].(int)
+				return s.Schedule(ctx, key, value, priority)
+			},
+		},
+	}
+}
+
+func TestMultiArgWriterVariadic(t *testing.T) {
+	t.Parallel()
+
+	t.Run("WriteSucceeds for valid args", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertMultiArgWriteSucceedsVariadic[*scheduler](
+			"k", "v", 1)(multiArgVariadicCtx(t))
+	})
+
+	t.Run("WriteRejectInvalid surfaces the sentinel", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertMultiArgWriteRejectInvalidVariadic[*scheduler](
+			errSchedInvalid, "k", "v", -1)(multiArgVariadicCtx(t))
+	})
+
+	t.Run("Idempotent succeeds on repeat write", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertMultiArgWriterIdempotentVariadic[*scheduler](
+			"k", "v", 1)(multiArgVariadicCtx(t))
+	})
+
+	t.Run("RespectsContext surfaces ctx.Canceled", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.MultiArgWriterVariadicContext[*scheduler]{
+			T: t,
+			MultiArgWriterVariadicBindings: bindings.MultiArgWriterVariadicBindings[*scheduler]{
+				Factory: func() *scheduler { return &scheduler{} },
+				Call: func(c context.Context, _ *scheduler, _ ...any) error {
+					return c.Err()
+				},
+			},
+		}
+		suite.AssertMultiArgWriterRespectsContextVariadic[*scheduler](
+			"k", "v", 1)(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertMultiArgWriterConcurrentSafeVariadic[*scheduler](
+			4, 50, "k", "v", 1)(multiArgVariadicCtx(t))
+	})
+}

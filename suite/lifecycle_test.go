@@ -104,6 +104,24 @@ func TestLifecycle(t *testing.T) {
 		suite.AssertLifecycleRejectInvalid[*lifecycle](invalid, errLifecycleInvalid)(ctx)
 	})
 
+	t.Run("RejectInvalidWith returns a non-nil error on invalid impl", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.LifecycleContext[*lifecycle]{
+			T: t,
+			LifecycleBindings: bindings.LifecycleBindings[*lifecycle]{
+				Factory: func() *lifecycle { return &lifecycle{} },
+				Call: func(_ context.Context, l *lifecycle) error {
+					if !l.opened {
+						return errors.New("not opened")
+					}
+					return nil
+				},
+			},
+		}
+		invalid := func() *lifecycle { return &lifecycle{} }
+		suite.AssertLifecycleRejectInvalidWith[*lifecycle](invalid)(ctx)
+	})
+
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertLifecycleConcurrentSafe[*lifecycle](4, 50)(lifecycleCtx(t))
