@@ -24,8 +24,6 @@
 package stub
 
 import (
-	"strings"
-
 	"go.thesmos.sh/testkit/generator"
 	"go.thesmos.sh/testkit/generator/spec"
 	"go.thesmos.sh/testkit/generator/spec/deprecated"
@@ -116,23 +114,11 @@ func (d *Data) FirstErrorMethod() *MethodView {
 	return nil
 }
 
-// QualifiedTypeForTest returns the source-package-qualified
-// interface reference suffixed with the test-time concrete
-// type-args. For non-generic interfaces it equals
-// [spec.Data.QualifiedType]. For generics it strips the type-
-// parameter-name suffix and appends [TestTypeArgs] — used by the
-// compile-time guard so a concrete instantiation of the stub
-// catches signature drift at build time.
-//
-//	non-generic:        "basic.Store"
-//	generic Cache[V]:   "generics.Cache[int]"      (V → int)
-//	KeyMap[K, V]:       "generics.KeyMap[string, int]"
+// QualifiedTypeForTest delegates to [spec.Data.QualifiedTypeForTest]
+// — the wrapper exists so templates can call .QualifiedTypeForTest
+// off the stub view without reaching through .Spec.
 func (d *Data) QualifiedTypeForTest() string {
-	if !d.Spec.IsGeneric {
-		return d.Spec.QualifiedType
-	}
-	base := strings.TrimSuffix(d.Spec.QualifiedType, d.Spec.TypeParamArgs)
-	return base + d.TestTypeArgs
+	return d.Spec.QualifiedTypeForTest()
 }
 
 // FirstNonSkipMethod returns the first non-skipped method — used by

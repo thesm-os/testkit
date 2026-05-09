@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"go.thesmos.sh/testkit/generator"
+	"go.thesmos.sh/testkit/generator/directive"
 	"go.thesmos.sh/testkit/generator/shape"
 )
 
@@ -140,6 +141,28 @@ type Method struct {
 	// Generators read via [Get]; consumers and emitters write via
 	// [Set].
 	Attachments map[string]any
+}
+
+// HasDirective reports whether the method's [Attachments] map
+// holds a payload for the named directive — i.e. the directive
+// fired during [Enrich] and a consumer attached its result. The
+// check is name-keyed and zero-allocation; generators use it as
+// a presence test when they don't need the typed payload (e.g.
+// `m.HasDirective(directive.IntegrationOnly)` is enough to gate
+// dispatch emission, while `errors.Get(m)` is needed to enumerate
+// the sentinels).
+func (m *Method) HasDirective(name string) bool {
+	_, ok := m.Attachments[name]
+	return ok
+}
+
+// IsIntegrationOnly reports whether the method carries
+// `//testkit:integration-only`. Generators emit no contract subtests
+// for these methods — the consumer's integration test owns those
+// invariants. Equivalent to `HasDirective(directive.IntegrationOnly)`
+// with a typed name.
+func (m *Method) IsIntegrationOnly() bool {
+	return m.HasDirective(directive.IntegrationOnly)
 }
 
 // NonCtxParamCount returns the number of parameters excluding a
@@ -932,4 +955,24 @@ func (m *Method) IterReturn(t *generator.ImportTracker) generator.IterSeqInfo {
 // without threading the slice through.
 func (d *Data) SubstituteTypeParams(s string) string {
 	return generator.SubstituteTypeParams(s, d.Interface.TypeParams)
+}
+
+// QualifiedTypeForTest returns the source-package-qualified
+// interface reference suffixed with the test-time concrete type-args.
+// Non-generic interfaces return [QualifiedType] unchanged. Generics
+// strip the type-parameter-name suffix and append the constraint-
+// driven concrete instantiation from [generator.TestTypeArgs] —
+// every test-emitting generator (stub auto-test, suite contract
+// driver, bench harness, model runner) needs the same form for
+// compile-time guards and concrete instantiation references.
+//
+//	non-generic:        "basic.Store"
+//	generic Cache[V]:   "generics.Cache[int]"
+//	KeyMap[K, V]:       "generics.KeyMap[string, int]"
+func (d *Data) QualifiedTypeForTest() string {
+	if !d.IsGeneric {
+		return d.QualifiedType
+	}
+	base := strings.TrimSuffix(d.QualifiedType, d.TypeParamArgs)
+	return base + generator.TestTypeArgs(d.Interface.TypeParams)
 }
