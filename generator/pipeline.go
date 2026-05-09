@@ -60,6 +60,25 @@ type Pipeline[D any] struct {
 	// this nil.
 	Enrich func(data D, pkg *Package) error
 
+	// PostEnrich runs after [Enrich] and after composition validation,
+	// for derivations that depend on the enriched directive payloads
+	// (e.g. model's RefBlockers, ChainInfo, time-aware metadata, or
+	// sim's scenario synthesis). Optional — most generators leave this
+	// nil and do everything in [Analyze]. The slot exists so a
+	// generator can split "build raw data" (Analyze) from "compute
+	// derivations over enriched data" (PostEnrich) without bolting a
+	// secondary call site into [Generator.Generate].
+	PostEnrich func(data D, pkg *Package) error
+
+	// TemplateFuncs returns a per-run [template.FuncMap] computed from
+	// the analyzed data. Optional — when set, the returned map is
+	// merged into the template set before parsing so templates can
+	// invoke data-aware funcs (e.g. model's writerGen, firstSentinel,
+	// keySamples — closures over the analyzed methods that templates
+	// invoke as plain funcs). Generators whose templates only need
+	// methods on the data root leave this nil.
+	TemplateFuncs func(data D) template.FuncMap
+
 	// Positions extracts source positions from the data model so the
 	// pipeline can compute the SourceFile attribution. Optional —
 	// pipelines without method-bearing data leave this nil.
@@ -193,12 +212,25 @@ func (p *Pipeline[D]) Run(pkg *Package, args []string, cfg Config, opts Options)
 		}
 	}
 
-	// 6. Parse templates.
+	// 5b. PostEnrich — derivations over the enriched data.
+	if p.PostEnrich != nil {
+		if postErr := p.PostEnrich(data, pkg); postErr != nil {
+			return nil, postErr
+		}
+	}
+
+	// 6. Parse templates. Data-dependent funcs (TemplateFuncs) merge
+	//    into the template set before parsing so templates can call
+	//    them by name.
 	pattern := p.TemplatePattern
 	if pattern == "" {
 		pattern = "templates/*.tmpl"
 	}
-	tmpl, err := NewTemplateSet().ParseFS(p.Templates, pattern)
+	tmplSet := NewTemplateSet()
+	if p.TemplateFuncs != nil {
+		tmplSet = tmplSet.Funcs(p.TemplateFuncs(data))
+	}
+	tmpl, err := tmplSet.ParseFS(p.Templates, pattern)
 	if err != nil {
 		return nil, fmt.Errorf("parse templates for %s: %w", p.Name, err)
 	}
