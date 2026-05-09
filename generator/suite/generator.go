@@ -62,10 +62,13 @@ func positionsFor(d *Data) []token.Position {
 // — the source-package types resolve through the test file's
 // alias (typically the source-pkg name itself).
 //
-// For generic interfaces, each MethodView's typeArgs is rewritten
-// from "[T]" (param names) to "[int]" (concrete) so any reference
-// the driver emits to per-method shape primitives renders the
-// concrete forms templates expect.
+// For generic interfaces, the driver is monomorphized: each
+// MethodView's typeArgs is rewritten from "[T]" (param names) to
+// "[int]" / "[string]" (concrete), and a substitute closure is
+// attached so every Shape* accessor returns the concrete type.
+// Without the substitute, the driver body would mix abstract V
+// against the concrete `Holder[string]` factory and fail to
+// compile.
 func asTestView(d *Data, _ generator.Options) *Data {
 	info := generator.BuildTestFileInfo(d.PackageName, d.Imports, generator.DefaultConfig(), d.ImplImportPath)
 	out := *d
@@ -74,10 +77,14 @@ func asTestView(d *Data, _ generator.Options) *Data {
 	out.GenQualifier = info.GenQualifier
 	if d.Spec.IsGeneric {
 		concrete := generator.TestTypeArgs(d.Spec.Interface.TypeParams)
+		substitute := func(s string) string {
+			return generator.SubstituteTypeParams(s, d.Spec.Interface.TypeParams)
+		}
 		out.Methods = make([]MethodView, len(d.Methods))
 		copy(out.Methods, d.Methods)
 		for i := range out.Methods {
 			out.Methods[i].typeArgs = concrete
+			out.Methods[i].substitute = substitute
 		}
 	}
 	return &out

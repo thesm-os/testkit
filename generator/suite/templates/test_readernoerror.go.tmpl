@@ -1,0 +1,21 @@
+{{- /* ReaderNoError-shape baseline body. Body-only partial. */ -}}
+{{- define "test-method-readernoerror" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $K := $m.ShapeKeyType -}}
+{{- $V := $m.ShapeValType -}}
+		sctx := suite.ReaderNoErrorContextFor[{{ $iface }}, {{ $K }}, {{ $V }}](t, factory,
+			func(ctx context.Context, impl {{ $iface }}, key {{ $K }}) {{ $V }} {
+{{- if $m.HasContext }}
+				return impl.{{ $m.Name }}(ctx, key)
+{{- else }}
+				return impl.{{ $m.Name }}(key)
+{{- end }}
+			})
+		suite.AssertReaderNoErrorReturnsForKey[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, {{ $m.SampleResultAt 0 $tracker }})(sctx)
+		suite.AssertReaderNoErrorRespectsContext[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }})(sctx)
+		suite.AssertReaderNoErrorConsistent[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 3)(sctx)
+		suite.AssertReaderNoErrorZeroOnUnknown[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.ZeroParamAt 0 $tracker }}, {{ $m.ZeroResultAt 0 $tracker }})(sctx)
+		suite.AssertReaderNoErrorConcurrentSafe[{{ $iface }}, {{ $K }}, {{ $V }}]({{ $m.SampleParamAt 0 $tracker }}, 4, 10)(sctx)
+{{- end -}}

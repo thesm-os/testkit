@@ -1,37 +1,26 @@
-{{- /* Per-method smoke subtest. The G2-compliant baseline contract:
-       constructing the impl + invoking the method with safe
-       arguments must not panic and must not silently skip on panic.
-       Methods marked //testkit:integration-only are excluded — the
-       consumer's integration test owns those.
+{{- /* Per-method smoke subtest body.
+       Body-only partial — invoked from `test-method` inside the
+       per-method t.Run. Receives:
+         .M       — the *MethodView
+         .Tracker — *generator.Tracker for sample/zero rendering
+         .Spec    — *spec.Data for SubstituteTypeParams
 
-       Argument shape:
-         - Leading context.Context resolves to t.Context()
-         - Other params resolve via [SampleArgs] (sample-driven when
-           //testkit:sample is present, zero-valued otherwise — the
-           subtle gradation lives in spec.Method).
-         - Variadic methods drop the trailing variadic (f() is a
-           valid zero call).
-
-       Result shape:
-         - HasResults methods discard via blank assignment.
-         - Void methods just call.
-
-       The smoke subtest fails the test on panic via testkit's
-       discipline — replacing the legacy t.Skipf-on-panic that
-       silently masked contract violations (G2). Methods whose
-       zero-value invocation legitimately panics must declare
-       `//testkit:sample` so the smoke uses a non-trivial input. */ -}}
+       Smoke fails the test on panic via testkit's discipline —
+       replacing the legacy t.Skipf-on-panic that silently masked
+       contract violations. Methods whose zero-value invocation
+       legitimately panics must declare //testkit:sample so the
+       smoke uses a non-trivial input. */ -}}
 {{- define "test-method-smoke" -}}
-{{- $tracker := .Spec.Tracker -}}
-{{- range $m := .Methods }}{{ if not $m.IsIntegrationOnly }}
-	t.Run("{{ $m.Name }}/smoke", func(t *testing.T) {
-		t.Parallel()
-		impl := factory()
+{{- $m := .M -}}
+{{- $tracker := .Tracker -}}
+{{- $spec := .Spec -}}
+		t.Run("smoke", func(t *testing.T) {
+			t.Parallel()
+			impl := factory()
 {{- if $m.HasResults }}
-		{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.SampleArgs $tracker) }})
+			{{ $m.BlankResults }} = impl.{{ $m.Name }}({{ $spec.SubstituteTypeParams ($m.SampleArgs $tracker) }})
 {{- else }}
-		impl.{{ $m.Name }}({{ $.Spec.SubstituteTypeParams ($m.SampleArgs $tracker) }})
+			impl.{{ $m.Name }}({{ $spec.SubstituteTypeParams ($m.SampleArgs $tracker) }})
 {{- end }}
-	})
-{{ end }}{{ end -}}
+		})
 {{- end -}}

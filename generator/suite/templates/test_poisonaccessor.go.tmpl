@@ -1,0 +1,16 @@
+{{- /* PoisonAccessor-shape baseline body. Body-only partial. */ -}}
+{{- define "test-method-poisonaccessor" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		sctx := suite.PoisonAccessorContextFor[{{ $iface }}](t, factory,
+			func(impl {{ $iface }}) error {
+				return impl.{{ $m.Name }}()
+			})
+		suite.AssertPoisonAccessorNilOnFresh[{{ $iface }}]()(sctx)
+		suite.AssertPoisonAccessorRespectsContext[{{ $iface }}]()(sctx)
+		suite.AssertPoisonAccessorConsistent[{{ $iface }}]()(sctx)
+		t.Run("rejects invalid (poisoned)", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertPoisonAccessorRejectInvalid requires consumer-supplied poisonedFactory + sentinel")
+		})
+		suite.AssertPoisonAccessorConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+{{- end -}}

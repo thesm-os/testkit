@@ -4,6 +4,7 @@
 package basic
 
 //go:generate testkit stub -o storetest/store.gen.go Store
+//go:generate testkit suite -o storetest/store_spec.gen_test.go Store
 
 import "context"
 

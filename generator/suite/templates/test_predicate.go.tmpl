@@ -1,0 +1,14 @@
+{{- /* Predicate-shape baseline body. Body-only partial. */ -}}
+{{- define "test-method-predicate" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		sctx := suite.PredicateContextFor[{{ $iface }}](t, factory,
+			func(impl {{ $iface }}) bool {
+				return impl.{{ $m.Name }}()
+			})
+		suite.AssertPredicateReturns[{{ $iface }}](true)(sctx)
+		suite.AssertPredicateRespectsContext[{{ $iface }}]()(sctx)
+		suite.AssertPredicateConsistent[{{ $iface }}](3)(sctx)
+		suite.AssertPredicateRejectInvalid[{{ $iface }}]()(sctx)
+		suite.AssertPredicateConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+{{- end -}}

@@ -42,8 +42,9 @@ func TestPointerReader(t *testing.T) {
 
 	t.Run("ReturnsForKey surfaces the dereferenced value", func(t *testing.T) {
 		t.Parallel()
+		want := "alpha"
 		suite.AssertPointerReaderReturnsForKey[*ptrStore, string, string](
-			"k1", "alpha")(pointerReaderCtx(t, data))
+			"k1", &want)(pointerReaderCtx(t, data))
 	})
 
 	t.Run("NilOnUnknown returns nil for missing keys", func(t *testing.T) {

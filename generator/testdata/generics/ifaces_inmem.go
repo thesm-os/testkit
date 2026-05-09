@@ -21,7 +21,11 @@ func NewInMemoryHolder[V any]() *InMemoryHolder[V] {
 }
 
 // Get implements [Holder].
-func (c *InMemoryHolder[V]) Get(_ context.Context, key string) (V, error) {
+func (c *InMemoryHolder[V]) Get(ctx context.Context, key string) (V, error) {
+	if err := ctx.Err(); err != nil {
+		var zero V
+		return zero, err
+	}
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	v, ok := c.items[key]
@@ -33,7 +37,10 @@ func (c *InMemoryHolder[V]) Get(_ context.Context, key string) (V, error) {
 }
 
 // Put implements [Holder].
-func (c *InMemoryHolder[V]) Put(_ context.Context, key string, value V) error {
+func (c *InMemoryHolder[V]) Put(ctx context.Context, key string, value V) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.items[key] = value
@@ -41,7 +48,10 @@ func (c *InMemoryHolder[V]) Put(_ context.Context, key string, value V) error {
 }
 
 // Delete implements [Holder].
-func (c *InMemoryHolder[V]) Delete(_ context.Context, key string) error {
+func (c *InMemoryHolder[V]) Delete(ctx context.Context, key string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.items, key)
@@ -60,7 +70,11 @@ func NewInMemoryKeyMap[K comparable, V any]() *InMemoryKeyMap[K, V] {
 }
 
 // Get implements [KeyMap].
-func (s *InMemoryKeyMap[K, V]) Get(_ context.Context, key K) (V, error) {
+func (s *InMemoryKeyMap[K, V]) Get(ctx context.Context, key K) (V, error) {
+	if err := ctx.Err(); err != nil {
+		var zero V
+		return zero, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	v, ok := s.items[key]
@@ -72,7 +86,10 @@ func (s *InMemoryKeyMap[K, V]) Get(_ context.Context, key K) (V, error) {
 }
 
 // Set implements [KeyMap].
-func (s *InMemoryKeyMap[K, V]) Set(_ context.Context, key K, value V) error {
+func (s *InMemoryKeyMap[K, V]) Set(ctx context.Context, key K, value V) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items[key] = value
@@ -91,7 +108,10 @@ func NewInMemoryTally[T Numeric]() *InMemoryTally[T] {
 }
 
 // Add implements [Tally].
-func (c *InMemoryTally[T]) Add(_ context.Context, key string, delta T) error {
+func (c *InMemoryTally[T]) Add(ctx context.Context, key string, delta T) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.totals[key] += delta
@@ -99,7 +119,11 @@ func (c *InMemoryTally[T]) Add(_ context.Context, key string, delta T) error {
 }
 
 // Total implements [Tally]. Returns the sum across all keys.
-func (c *InMemoryTally[T]) Total(_ context.Context) (T, error) {
+func (c *InMemoryTally[T]) Total(ctx context.Context) (T, error) {
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var sum T

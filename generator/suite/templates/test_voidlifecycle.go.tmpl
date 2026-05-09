@@ -1,0 +1,20 @@
+{{- /* VoidLifecycle-shape baseline body. Body-only partial. */ -}}
+{{- define "test-method-voidlifecycle" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+		sctx := suite.VoidLifecycleContextFor[{{ $iface }}](t, factory,
+			func(ctx context.Context, impl {{ $iface }}) {
+{{- if $m.HasContext }}
+				impl.{{ $m.Name }}(ctx)
+{{- else }}
+				impl.{{ $m.Name }}()
+{{- end }}
+			})
+		suite.AssertVoidLifecycleSucceeds[{{ $iface }}]()(sctx)
+		suite.AssertVoidLifecycleRespectsContext[{{ $iface }}]()(sctx)
+		suite.AssertVoidLifecycleIdempotent[{{ $iface }}]()(sctx)
+		t.Run("rejects invalid", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertVoidLifecycleRejectInvalid requires consumer-supplied invalidFactory + check")
+		})
+		suite.AssertVoidLifecycleConcurrentSafe[{{ $iface }}](4, 10)(sctx)
+{{- end -}}

@@ -7,12 +7,17 @@
        The single-impl driver runs every per-method subtest against
        one factory-produced impl. The multi-impl driver wraps it in
        a `t.Run(name, ...)` per [NamedFactory] — adding a new impl
-       is a one-line slice append on the consumer side. */ -}}
+       is a one-line slice append on the consumer side.
+
+       Generic interfaces are monomorphized in the test view: the
+       driver function is non-generic, the factory alias points at a
+       concrete instantiation (`generics.Holder[string]`), and every
+       per-method subtest references the same concrete type. The
+       consumer instantiates V at the import boundary and the
+       contract runs against that single instantiation. */ -}}
 {{- define "driver" -}}
 {{- $iface := .IfaceName -}}
-{{- $tpDecl := .Spec.TypeParamDecl -}}
-{{- $tpArgs := .Spec.TypeParamArgs -}}
-{{- $type := .Spec.QualifiedType -}}
+{{- $type := .QualifiedTypeForTest -}}
 {{- $factory := .FactoryTypeName -}}
 {{- $namedFactory := .NamedFactoryTypeName -}}
 {{- $driver := .DriverName -}}
@@ -22,14 +27,14 @@
 // by the contract driver. Each call must yield a fresh, independent
 // instance — the contract subtests reset state between runs by
 // asking the factory for a new impl.
-type {{ $factory }}{{ $tpDecl }} func() {{ $type }}
+type {{ $factory }} func() {{ $type }}
 
 // {{ $namedFactory }} pairs a human-readable name with a factory.
 // The multi-impl driver runs the contract once per named factory
 // with `t.Run(Name, ...)`; the name surfaces in test output.
-type {{ $namedFactory }}{{ $tpDecl }} struct {
+type {{ $namedFactory }} struct {
 	Name    string
-	Factory {{ $factory }}{{ $tpArgs }}
+	Factory {{ $factory }}
 }
 
 // {{ $driver }} runs the full {{ $iface }} contract against any
@@ -37,23 +42,23 @@ type {{ $namedFactory }}{{ $tpDecl }} struct {
 // fresh impl via the factory so per-test state isolation is the
 // caller's responsibility — the factory should return an
 // independently-state'd instance every call.
-func {{ $driver }}{{ $tpDecl }}(t *testing.T, factory {{ $factory }}{{ $tpArgs }}) {
+func {{ $driver }}(t *testing.T, factory {{ $factory }}) {
 	t.Helper()
 {{- if .HasErrorMethod }}
 	errTest := testkit.TestError("{{ $iface }}-contract")
 	_ = errTest
 {{- end }}
-{{ template "test-method-smoke" . }}
+{{ template "test-method" . }}
 }
 
 // {{ $across }} runs [{{ $driver }}] once per named factory under
 // `t.Run(Name, ...)`. New impls drop in via slice append.
-func {{ $across }}{{ $tpDecl }}(t *testing.T, factories ...{{ $namedFactory }}{{ $tpArgs }}) {
+func {{ $across }}(t *testing.T, factories ...{{ $namedFactory }}) {
 	t.Helper()
 	for _, nf := range factories {
 		t.Run(nf.Name, func(t *testing.T) {
 			t.Parallel()
-			{{ $driver }}{{ $tpArgs }}(t, nf.Factory)
+			{{ $driver }}(t, nf.Factory)
 		})
 	}
 }

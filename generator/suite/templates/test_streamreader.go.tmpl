@@ -1,0 +1,42 @@
+{{- /* StreamReader-shape baseline body. Body-only partial.
+
+       The runtime [suite.StreamContextFor] takes an
+       iter.Seq2[V, error] call closure. Methods that return
+       iter.Seq[V] (no error) are wrapped in an adapter that yields
+       (v, nil) so the same baseline assertions exercise both
+       single- and double-arity stream returns. */ -}}
+{{- define "test-method-streamreader" -}}
+{{- $m := .M -}}
+{{- $iface := .Iface -}}
+{{- $tracker := .Tracker -}}
+{{- $V := $m.ShapeIterValType -}}
+{{- $iter := $m.IterReturn $tracker -}}
+		sctx := suite.StreamContextFor[{{ $iface }}, {{ $V }}](t, factory,
+			func(ctx context.Context, impl {{ $iface }}) iter.Seq2[{{ $V }}, error] {
+{{- if $iter.IsSeq2 }}
+{{- if $m.HasContext }}
+				return impl.{{ $m.Name }}(ctx)
+{{- else }}
+				return impl.{{ $m.Name }}()
+{{- end }}
+{{- else }}
+{{- if $m.HasContext }}
+				seq := impl.{{ $m.Name }}(ctx)
+{{- else }}
+				seq := impl.{{ $m.Name }}()
+{{- end }}
+				return func(yield func({{ $V }}, error) bool) {
+					for v := range seq {
+						if !yield(v, nil) {
+							return
+						}
+					}
+				}
+{{- end }}
+			})
+		suite.AssertStreamCompletes[{{ $iface }}, {{ $V }}]()(sctx)
+		suite.AssertStreamRespectsContext[{{ $iface }}, {{ $V }}]()(sctx)
+		suite.AssertStreamReentrant[{{ $iface }}, {{ $V }}]()(sctx)
+		suite.AssertStreamRespectsBreak[{{ $iface }}, {{ $V }}]()(sctx)
+		suite.AssertStreamConcurrentSafe[{{ $iface }}, {{ $V }}](4)(sctx)
+{{- end -}}

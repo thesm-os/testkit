@@ -1,0 +1,64 @@
+{{- /* Per-method dispatcher.
+       For each non-skipped method, opens one t.Run("<Method>", ...)
+       block containing the smoke subtest and the shape-specific
+       baseline assertions. Test output groups every conformance
+       subtest under one path per method:
+         TestStoreContract/Get/smoke
+         TestStoreContract/Get/reader returns expected
+         TestStoreContract/Get/respects context
+       … rather than scattering smoke as a sibling group. */ -}}
+{{- define "test-method" -}}
+{{- $iface := .QualifiedTypeForTest -}}
+{{- $tracker := .Spec.Tracker -}}
+{{- $spec := .Spec -}}
+{{- range $m := .Methods }}
+{{- if not $m.IsIntegrationOnly }}
+	t.Run("{{ $m.Name }}", func(t *testing.T) {
+{{ template "test-method-smoke" (dict "M" $m "Tracker" $tracker "Spec" $spec) }}
+{{- $args := (dict "M" $m "Iface" $iface "Tracker" $tracker) -}}
+{{- if eq $m.ShapeName "Reader" }}
+{{ template "test-method-reader" $args }}
+{{- else if eq $m.ShapeName "ReaderNoError" }}
+{{ template "test-method-readernoerror" $args }}
+{{- else if eq $m.ShapeName "ReaderWithBool" }}
+{{ template "test-method-readerwithbool" $args }}
+{{- else if eq $m.ShapeName "Lookup" }}
+{{ template "test-method-lookup" $args }}
+{{- else if eq $m.ShapeName "PointerReader" }}
+{{ template "test-method-pointerreader" $args }}
+{{- else if eq $m.ShapeName "MultiReader" }}
+{{ template "test-method-multireader" $args }}
+{{- else if eq $m.ShapeName "BatchReader" }}
+{{ template "test-method-batchreader" $args }}
+{{- else if eq $m.ShapeName "Writer" }}
+{{ template "test-method-writer" $args }}
+{{- else if eq $m.ShapeName "CompositeWriter" }}
+{{ template "test-method-compositewriter" $args }}
+{{- else if eq $m.ShapeName "Mutator" }}
+{{ template "test-method-mutator" $args }}
+{{- else if eq $m.ShapeName "Deleter" }}
+{{ template "test-method-deleter" $args }}
+{{- else if eq $m.ShapeName "MultiArgWriter" }}
+{{ template "test-method-multiargwriter" $args }}
+{{- else if eq $m.ShapeName "Aggregator" }}
+{{ template "test-method-aggregator" $args }}
+{{- else if eq $m.ShapeName "MultiAggregator" }}
+{{ template "test-method-multiaggregator" $args }}
+{{- else if eq $m.ShapeName "StreamReader" }}
+{{ template "test-method-streamreader" $args }}
+{{- else if eq $m.ShapeName "StreamConsumer" }}
+{{ template "test-method-streamconsumer" $args }}
+{{- else if eq $m.ShapeName "Lifecycle" }}
+{{ template "test-method-lifecycle" $args }}
+{{- else if eq $m.ShapeName "VoidLifecycle" }}
+{{ template "test-method-voidlifecycle" $args }}
+{{- else if eq $m.ShapeName "Pure" }}
+{{ template "test-method-pure" $args }}
+{{- else if eq $m.ShapeName "Predicate" }}
+{{ template "test-method-predicate" $args }}
+{{- else if eq $m.ShapeName "PoisonAccessor" }}
+{{ template "test-method-poisonaccessor" $args }}
+{{- end }}
+	})
+{{ end }}{{ end -}}
+{{- end -}}

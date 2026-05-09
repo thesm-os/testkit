@@ -3,9 +3,12 @@
 
 package generics
 
-//go:generate testkit stub -o genericstest/holder.gen.go Holder
-//go:generate testkit stub -o genericstest/keymap.gen.go KeyMap
-//go:generate testkit stub -o genericstest/tally.gen.go Tally
+//go:generate testkit stub  -o genericstest/holder.gen.go      Holder
+//go:generate testkit stub  -o genericstest/keymap.gen.go      KeyMap
+//go:generate testkit stub  -o genericstest/tally.gen.go       Tally
+//go:generate testkit suite -o genericstest/holder_spec.gen_test.go Holder
+//go:generate testkit suite -o genericstest/keymap_spec.gen_test.go KeyMap
+//go:generate testkit suite -o genericstest/tally_spec.gen_test.go  Tally
 
 import (
 	"context"

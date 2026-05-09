@@ -11,6 +11,7 @@ import (
 	"go.thesmos.sh/testkit/generator"
 	"go.thesmos.sh/testkit/generator/shape"
 	"go.thesmos.sh/testkit/generator/spec"
+	_ "go.thesmos.sh/testkit/generator/spec/all" // registers directive consumers for Enrich tests
 )
 
 func TestData(t *testing.T) {
@@ -531,6 +532,126 @@ func TestMethodTemplateHelpers(t *testing.T) {
 		// Many(ctx, keys ...string) → variadic dropped; ctx remains.
 		testkit.Equal(t, byName["Many"].ZeroArgs(tracker), "t.Context()",
 			"variadic last param dropped")
+	})
+}
+
+func TestHasDirectiveAndIsIntegrationOnly(t *testing.T) {
+	t.Parallel()
+
+	// Analyze + Enrich so attachments are populated.
+	pkg := loadFixture(t, "interfaces")
+	data, err := spec.Analyze(pkg, []string{"Directives"},
+		generator.DefaultConfig(), generator.Options{Output: "test/x.gen.go"})
+	testkit.NoError(t, err, "Analyze")
+	testkit.NoError(t, spec.Enrich(data, pkg), "Enrich")
+	byName := make(map[string]*spec.Method, len(data.Methods))
+	for i := range data.Methods {
+		byName[data.Methods[i].Name] = &data.Methods[i]
+	}
+
+	t.Run("HasDirective true for attached directive", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, byName["Submit"].HasDirective("errors"),
+			"Submit has //testkit:errors")
+	})
+
+	t.Run("HasDirective false for absent directive", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, byName["Open"].HasDirective("errors"),
+			"Open has no //testkit:errors")
+	})
+
+	t.Run("IsIntegrationOnly true for Close", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, byName["Close"].IsIntegrationOnly(),
+			"Close is //testkit:integration-only")
+	})
+
+	t.Run("IsIntegrationOnly false for Open", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, byName["Open"].IsIntegrationOnly(),
+			"Open is not integration-only")
+	})
+}
+
+func TestSampleAndZeroAtMethods(t *testing.T) {
+	t.Parallel()
+
+	data, byName := analyzeFixture(t, "interfaces", "AllShapes")
+	tracker := data.Tracker
+
+	t.Run("SampleParamAt returns sample for valid index", func(t *testing.T) {
+		t.Parallel()
+		// Get(ctx, key string) → param 0 is key (string).
+		got := byName["Get"].SampleParamAt(0, tracker)
+		testkit.True(t, got != "", "string param gets a sample value")
+	})
+
+	t.Run("SampleParamAt returns empty for out-of-range", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, byName["Get"].SampleParamAt(99, tracker), "",
+			"out-of-range returns empty")
+		testkit.Equal(t, byName["Get"].SampleParamAt(-1, tracker), "",
+			"negative index returns empty")
+	})
+
+	t.Run("ZeroParamAt returns zero for valid index", func(t *testing.T) {
+		t.Parallel()
+		// Get(ctx, key string) → param 0 zero is `""`.
+		got := byName["Get"].ZeroParamAt(0, tracker)
+		testkit.True(t, got != "", "string zero is not empty")
+	})
+
+	t.Run("ZeroParamAt returns empty for out-of-range", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, byName["Get"].ZeroParamAt(99, tracker), "",
+			"out-of-range returns empty")
+	})
+
+	t.Run("SampleResultAt returns sample for valid index", func(t *testing.T) {
+		t.Parallel()
+		// Get(ctx, key) (Record, error) → result 0 is Record.
+		got := byName["Get"].SampleResultAt(0, tracker)
+		testkit.True(t, got != "", "Record result gets a sample")
+	})
+
+	t.Run("SampleResultAt returns empty for out-of-range", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, byName["Get"].SampleResultAt(99, tracker), "",
+			"out-of-range returns empty")
+	})
+
+	t.Run("ZeroResultAt returns zero for valid index", func(t *testing.T) {
+		t.Parallel()
+		got := byName["Get"].ZeroResultAt(0, tracker)
+		testkit.True(t, got != "", "Record zero is non-empty")
+	})
+
+	t.Run("ZeroResultAt returns empty for out-of-range", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, byName["Get"].ZeroResultAt(99, tracker), "",
+			"out-of-range returns empty")
+	})
+}
+
+func TestQualifiedTypeForTest(t *testing.T) {
+	t.Parallel()
+
+	t.Run("non-generic returns QualifiedType as-is", func(t *testing.T) {
+		t.Parallel()
+		data, _ := analyzeFixture(t, "basic", "Store")
+		testkit.Equal(t, data.QualifiedTypeForTest(), data.QualifiedType,
+			"non-generic identity")
+	})
+
+	t.Run("generic substitutes concrete type args", func(t *testing.T) {
+		t.Parallel()
+		data, _ := analyzeFixture(t, "generics", "Holder")
+		got := data.QualifiedTypeForTest()
+		testkit.True(t, got != data.QualifiedType,
+			"generic differs from raw QualifiedType")
+		testkit.NotContains(t, got, data.TypeParamArgs,
+			"type-param names replaced with concrete types")
 	})
 }
 

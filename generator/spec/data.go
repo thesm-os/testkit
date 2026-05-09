@@ -206,6 +206,76 @@ func (m *Method) HasNonErrorResults() bool {
 // parameter that isn't the leading context.
 func (m *Method) HasNonContextParam() bool { return m.NonCtxParamCount() > 0 }
 
+// ParamTypeAt returns the rendered Go type of the i-th non-ctx
+// parameter (0-indexed), qualified through the import tracker.
+// Generators emitting per-shape subtests use this when a shape's
+// detector doesn't populate Shape.KeyType / KeyType2 / ValType
+// (e.g. MultiArgWriter, where each param's role is positional only).
+// Empty when i is out of range.
+func (m *Method) ParamTypeAt(i int, t *generator.ImportTracker) string {
+	if i < 0 || i >= m.NonCtxParamCount() {
+		return ""
+	}
+	return generator.TypeStr(m.NonCtxParamAt(i), t)
+}
+
+// SampleParamAt returns the rendered sample literal for the i-th
+// non-ctx parameter (0-indexed). Generators emitting per-shape
+// subtests use this to populate the K/V/P slots a shape's assertion
+// primitives consume. The seed name for string samples is the
+// source param name when available (so a `key string` parameter
+// samples as "test-key", not "test-p0"). Empty when i is out of
+// range.
+func (m *Method) SampleParamAt(i int, t *generator.ImportTracker) string {
+	if i < 0 || i >= m.NonCtxParamCount() {
+		return ""
+	}
+	offset := 0
+	if m.HasContext() {
+		offset = 1
+	}
+	p := m.Signature.Params().At(offset + i)
+	name := p.Name()
+	if name == "" {
+		name = generator.ParamName(i)
+	}
+	return generator.SampleValueOf(p.Type(), name, t)
+}
+
+// ZeroParamAt returns the rendered zero literal for the i-th non-ctx
+// parameter. Used as the "unknown" key for RejectInvalid-style
+// assertions where the test calls with a value the impl is not
+// expected to recognize. Empty when i is out of range.
+func (m *Method) ZeroParamAt(i int, t *generator.ImportTracker) string {
+	if i < 0 || i >= m.NonCtxParamCount() {
+		return ""
+	}
+	return generator.ZeroValueOf(m.NonCtxParamAt(i), t)
+}
+
+// SampleResultAt returns the rendered sample literal for the i-th
+// result (0-indexed, raw position — the trailing error result is at
+// the last index). Used by per-shape subtests to populate the
+// expected-value slot of Returns-style assertions. Empty when i is
+// out of range.
+func (m *Method) SampleResultAt(i int, t *generator.ImportTracker) string {
+	results := m.Signature.Results()
+	if i < 0 || i >= results.Len() {
+		return ""
+	}
+	return generator.SampleValueOf(results.At(i).Type(), "Result", t)
+}
+
+// ZeroResultAt returns the rendered zero literal for the i-th
+// result. Empty when i is out of range.
+func (m *Method) ZeroResultAt(i int, t *generator.ImportTracker) string {
+	results := m.Signature.Results()
+	if i < 0 || i >= results.Len() {
+		return ""
+	}
+	return generator.ZeroValueOf(results.At(i).Type(), t)
+}
+
 // HasTrailingBool reports whether the method's final result is a
 // builtin bool that follows at least one non-bool result with no
 // error in the list — the ReaderWithBool `(V, bool)` and Lookup

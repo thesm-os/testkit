@@ -25,10 +25,13 @@ type PointerReaderContext[T any, K comparable, V any] struct {
 type PointerReaderAssertion[T any, K comparable, V any] func(PointerReaderContext[T, K, V])
 
 // AssertPointerReaderReturnsForKey calls the reader with a known key and
-// asserts the returned pointer is non-nil and points at the expected value.
+// asserts the returned pointer is non-nil and points at the expected
+// value. `want` is itself a pointer so the generator can pass through
+// the natural sample literal (`&V{...}`) without dereferencing — the
+// assertion compares dereferenced values internally.
 func AssertPointerReaderReturnsForKey[T any, K, V comparable](
 	key K,
-	want V,
+	want *V,
 ) PointerReaderAssertion[T, K, V] {
 	return func(ctx PointerReaderContext[T, K, V]) {
 		ctx.T.Run("returns for key", func(t *testing.T) {
@@ -36,8 +39,8 @@ func AssertPointerReaderReturnsForKey[T any, K, V comparable](
 			impl := ctx.Factory()
 			got := ctx.Call(t.Context(), impl, key)
 			testkit.True(t, got != nil, "reader must return non-nil pointer for known key")
-			if got != nil {
-				testkit.Equal(t, *got, want, "reader must return expected value")
+			if got != nil && want != nil {
+				testkit.Equal(t, *got, *want, "reader must return expected value")
 			}
 		})
 	}

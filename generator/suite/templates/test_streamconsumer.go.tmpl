@@ -1,0 +1,25 @@
+{{- /* StreamConsumer-shape baseline body. Body-only partial.
+
+       StreamConsumer takes an interface-typed stream parameter (e.g.
+       io.Reader); every baseline assertion needs a consumer-supplied
+       stream factory or sentinel — we cannot synthesize one. The
+       generated subtest documents that explicitly with one Skip per
+       baseline so the gap is visible in test output. */ -}}
+{{- define "test-method-streamconsumer" -}}
+{{- $m := .M -}}
+		t.Run("succeeds", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertStreamConsumerSucceeds requires a consumer-supplied stream + want value")
+		})
+		t.Run("respects context", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertStreamConsumerRespectsContext requires a consumer-supplied stream value")
+		})
+		t.Run("consistent", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertStreamConsumerConsistent requires a consumer-supplied stream factory")
+		})
+		t.Run("rejects invalid", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertStreamConsumerRejectInvalid requires a consumer-supplied invalid stream + sentinel")
+		})
+		t.Run("concurrent safe", func(t *testing.T) {
+			t.Skipf("{{ $m.Name }}: AssertStreamConsumerConcurrentSafe requires a consumer-supplied stream factory")
+		})
+{{- end -}}
