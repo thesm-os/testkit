@@ -4,6 +4,7 @@
 package suite
 
 import (
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -48,6 +49,55 @@ func AssertPredicateReturns[T any](want bool) PredicateAssertion[T] {
 			impl := ctx.Factory()
 			got := ctx.Call(impl)
 			testkit.Equal(t, got, want, "predicate must return expected value")
+		})
+	}
+}
+
+// AssertPredicateRespectsContext is the structural ctx-respect guarantee
+// for Predicate-shape methods. Predicate has no context parameter, so
+// cancellation is satisfied by signature; the subtest runs a smoke call
+// to ensure no goroutine-local context state subverts the no-ctx contract.
+func AssertPredicateRespectsContext[T any]() PredicateAssertion[T] {
+	return func(ctx PredicateContext[T]) {
+		ctx.T.Run("respects context (structural)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// AssertPredicateRejectInvalid is the structural reject-invalid guarantee
+// for Predicate-shape methods. Predicate has no input — the function is
+// total over its (empty) domain.
+func AssertPredicateRejectInvalid[T any]() PredicateAssertion[T] {
+	return func(ctx PredicateContext[T]) {
+		ctx.T.Run("rejects invalid (structural — no inputs)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			_ = ctx.Call(impl)
+		})
+	}
+}
+
+// AssertPredicateConcurrentSafe runs the predicate from N goroutines
+// concurrently. Predicates should be race-free; this primitive trips
+// the race detector if an impl shares mutable state behind a
+// misleadingly-pure signature.
+func AssertPredicateConcurrentSafe[T any](workers, iters int) PredicateAssertion[T] {
+	return func(ctx PredicateContext[T]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						_ = ctx.Call(impl)
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

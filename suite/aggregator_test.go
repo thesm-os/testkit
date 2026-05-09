@@ -30,20 +30,40 @@ func aggregatorCtx(t *testing.T, n int) suite.AggregatorContext[*itemCounter, in
 	}
 }
 
-func TestAssertAggregatorReturns(t *testing.T) {
+func TestAggregator(t *testing.T) {
 	t.Parallel()
-	ctx := aggregatorCtx(t, 42)
-	suite.AssertAggregatorReturns[*itemCounter, int](42)(ctx)
-}
 
-func TestAssertAggregatorBounded(t *testing.T) {
-	t.Parallel()
-	ctx := aggregatorCtx(t, 42)
-	suite.AssertAggregatorBounded[*itemCounter, int](0, 100)(ctx)
-}
+	t.Run("Returns surfaces the configured value", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertAggregatorReturns[*itemCounter, int](42)(aggregatorCtx(t, 42))
+	})
 
-func TestAssertAggregatorConsistent(t *testing.T) {
-	t.Parallel()
-	ctx := aggregatorCtx(t, 42)
-	suite.AssertAggregatorConsistent[*itemCounter, int](5)(ctx)
+	t.Run("Bounded asserts the value falls within the range", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertAggregatorBounded[*itemCounter, int](0, 100)(aggregatorCtx(t, 42))
+	})
+
+	t.Run("Consistent yields equal results across N calls", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertAggregatorConsistent[*itemCounter, int](5)(aggregatorCtx(t, 42))
+	})
+
+	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.AggregatorContext[*itemCounter, int]{
+			T: t,
+			AggregatorBindings: bindings.AggregatorBindings[*itemCounter, int]{
+				Factory: func() *itemCounter { return newItemCounter(0) },
+				Call: func(c context.Context, _ *itemCounter) (int, error) {
+					return 0, c.Err()
+				},
+			},
+		}
+		suite.AssertAggregatorRespectsContext[*itemCounter, int]()(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertAggregatorConcurrentSafe[*itemCounter, int](4, 50)(aggregatorCtx(t, 42))
+	})
 }

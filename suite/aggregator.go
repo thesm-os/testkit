@@ -5,6 +5,8 @@ package suite
 
 import (
 	"cmp"
+	"context"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -67,6 +69,43 @@ func AssertAggregatorConsistent[T any, R comparable](n int) AggregatorAssertion[
 				testkit.NoError(t, err, "call must not error")
 				testkit.Equal(t, got, first, "aggregator must be consistent")
 			}
+		})
+	}
+}
+
+// AssertAggregatorRespectsContext invokes the aggregator with an already-
+// cancelled context and asserts the impl returns context.Canceled.
+func AssertAggregatorRespectsContext[T, R any]() AggregatorAssertion[T, R] {
+	return func(ctx AggregatorContext[T, R]) {
+		ctx.T.Run("respects context", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, err := ctx.Call(cctx, impl)
+			testkit.ErrorIs(t, err, context.Canceled,
+				"aggregator must surface ctx.Canceled when called with a cancelled context")
+		})
+	}
+}
+
+// AssertAggregatorConcurrentSafe runs the aggregator from N goroutines
+// concurrently. The race detector finds data races when -race is enabled;
+// panics propagate.
+func AssertAggregatorConcurrentSafe[T, R any](workers, iters int) AggregatorAssertion[T, R] {
+	return func(ctx AggregatorContext[T, R]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						_, _ = ctx.Call(t.Context(), impl)
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

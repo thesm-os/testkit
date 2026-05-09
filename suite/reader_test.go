@@ -43,35 +43,53 @@ func readerCtx(t *testing.T, data map[string]string) suite.ReaderContext[*mapRea
 	}
 }
 
-func TestAssertReturnsForKey(t *testing.T) {
+func TestReader(t *testing.T) {
 	t.Parallel()
-	ctx := readerCtx(t, map[string]string{"a": "alpha"})
-	suite.AssertReturnsForKey[*mapReader, string, string]("a", "alpha")(ctx)
-}
 
-func TestAssertReturnsSentinel(t *testing.T) {
-	t.Parallel()
-	ctx := readerCtx(t, map[string]string{})
-	suite.AssertReturnsSentinel[*mapReader, string, string]("missing", errNotFound)(ctx)
-}
+	t.Run("ReturnsForKey surfaces the value for a known key", func(t *testing.T) {
+		t.Parallel()
+		ctx := readerCtx(t, map[string]string{"a": "alpha"})
+		suite.AssertReturnsForKey[*mapReader, string, string]("a", "alpha")(ctx)
+	})
 
-func TestAssertConsistentReads(t *testing.T) {
-	t.Parallel()
-	ctx := readerCtx(t, map[string]string{"x": "value"})
-	suite.AssertConsistentReads[*mapReader, string, string]("x", 5)(ctx)
-}
+	t.Run("ReturnsSentinel surfaces the configured error for unknown keys", func(t *testing.T) {
+		t.Parallel()
+		ctx := readerCtx(t, map[string]string{})
+		suite.AssertReturnsSentinel[*mapReader, string, string]("missing", errNotFound)(ctx)
+	})
 
-func TestAssertReadsAreNonMutating(t *testing.T) {
-	t.Parallel()
-	ctx := readerCtx(t, map[string]string{"x": "value"})
-	suite.AssertReadsAreNonMutating[*mapReader, string, string, int](
-		"x",
-		func(_ context.Context, r *mapReader) int { return len(r.data) },
-	)(ctx)
-}
+	t.Run("ConsistentReads yields equal values across N calls", func(t *testing.T) {
+		t.Parallel()
+		ctx := readerCtx(t, map[string]string{"x": "value"})
+		suite.AssertConsistentReads[*mapReader, string, string]("x", 5)(ctx)
+	})
 
-func TestAssertReaderConcurrentSafe(t *testing.T) {
-	t.Parallel()
-	ctx := readerCtx(t, map[string]string{"x": "value"})
-	suite.AssertReaderConcurrentSafe[*mapReader, string, string]("x", 4, 100)(ctx)
+	t.Run("ReadsAreNonMutating leaves observable state unchanged", func(t *testing.T) {
+		t.Parallel()
+		ctx := readerCtx(t, map[string]string{"x": "value"})
+		suite.AssertReadsAreNonMutating[*mapReader, string, string, int](
+			"x",
+			func(_ context.Context, r *mapReader) int { return len(r.data) },
+		)(ctx)
+	})
+
+	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.ReaderContext[*mapReader, string, string]{
+			T: t,
+			ReaderBindings: bindings.ReaderBindings[*mapReader, string, string]{
+				Factory: func() *mapReader { return newMapReader(map[string]string{"x": "value"}) },
+				Call: func(c context.Context, _ *mapReader, _ string) (string, error) {
+					return "", c.Err()
+				},
+			},
+		}
+		suite.AssertReaderRespectsContext[*mapReader, string, string]("x")(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		ctx := readerCtx(t, map[string]string{"x": "value"})
+		suite.AssertReaderConcurrentSafe[*mapReader, string, string]("x", 4, 100)(ctx)
+	})
 }

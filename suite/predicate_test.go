@@ -27,24 +27,36 @@ func predicateCtx(t *testing.T, v bool) suite.PredicateContext[*validator] {
 	}
 }
 
-func TestAssertPredicateConsistent(t *testing.T) {
-	t.Parallel()
-	ctx := predicateCtx(t, true)
-	suite.AssertPredicateConsistent[*validator](5)(ctx)
-}
-
-func TestAssertPredicateReturns(t *testing.T) {
+func TestPredicate(t *testing.T) {
 	t.Parallel()
 
-	t.Run("true", func(t *testing.T) {
+	t.Run("Returns surfaces the configured value (true)", func(t *testing.T) {
 		t.Parallel()
-		ctx := predicateCtx(t, true)
-		suite.AssertPredicateReturns[*validator](true)(ctx)
+		suite.AssertPredicateReturns[*validator](true)(predicateCtx(t, true))
 	})
 
-	t.Run("false", func(t *testing.T) {
+	t.Run("Returns surfaces the configured value (false)", func(t *testing.T) {
 		t.Parallel()
-		ctx := predicateCtx(t, false)
-		suite.AssertPredicateReturns[*validator](false)(ctx)
+		suite.AssertPredicateReturns[*validator](false)(predicateCtx(t, false))
+	})
+
+	t.Run("Consistent yields equal results across N calls", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPredicateConsistent[*validator](5)(predicateCtx(t, true))
+	})
+
+	t.Run("RespectsContext is a structural smoke (Predicate has no ctx)", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPredicateRespectsContext[*validator]()(predicateCtx(t, true))
+	})
+
+	t.Run("RejectInvalid is a structural smoke (Predicate has no input)", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPredicateRejectInvalid[*validator]()(predicateCtx(t, true))
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPredicateConcurrentSafe[*validator](4, 50)(predicateCtx(t, true))
 	})
 }

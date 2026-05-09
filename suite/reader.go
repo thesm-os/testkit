@@ -114,3 +114,23 @@ func AssertReaderConcurrentSafe[T any, K comparable, V any](
 		})
 	}
 }
+
+// AssertReaderRespectsContext invokes the reader with an already-cancelled
+// context and asserts the impl returns context.Canceled (or wraps it).
+// Closes ANALYSIS gap on Reader ctx-cancel coverage — every Reader-shape
+// method takes a context and is expected to honor cancellation by
+// returning the canceled error rather than blocking, retrying, or
+// returning data.
+func AssertReaderRespectsContext[T any, K comparable, V any](key K) ReaderAssertion[T, K, V] {
+	return func(ctx ReaderContext[T, K, V]) {
+		ctx.T.Run("respects context", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			_, err := ctx.Call(cctx, impl, key)
+			testkit.ErrorIs(t, err, context.Canceled,
+				"reader must surface ctx.Canceled when called with a cancelled context")
+		})
+	}
+}

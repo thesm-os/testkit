@@ -33,20 +33,48 @@ func readerWithBoolCtx(t *testing.T, data map[string]int64) suite.ReaderWithBool
 	}
 }
 
-func TestAssertReaderWithBoolReturns(t *testing.T) {
+func TestReaderWithBool(t *testing.T) {
 	t.Parallel()
-	ctx := readerWithBoolCtx(t, map[string]int64{"a": 10})
-	suite.AssertReaderWithBoolReturns[*boolMap, string, int64]("a", 10)(ctx)
-}
+	data := map[string]int64{"a": 10}
 
-func TestAssertReaderWithBoolMissing(t *testing.T) {
-	t.Parallel()
-	ctx := readerWithBoolCtx(t, map[string]int64{"a": 10})
-	suite.AssertReaderWithBoolMissing[*boolMap, string, int64]("nonexistent")(ctx)
-}
+	t.Run("Returns surfaces (value, true) for a known key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertReaderWithBoolReturns[*boolMap, string, int64](
+			"a", 10)(readerWithBoolCtx(t, data))
+	})
 
-func TestAssertReaderWithBoolConsistent(t *testing.T) {
-	t.Parallel()
-	ctx := readerWithBoolCtx(t, map[string]int64{"a": 10})
-	suite.AssertReaderWithBoolConsistent[*boolMap, string, int64]("a", 5)(ctx)
+	t.Run("Missing surfaces (zero, false) for an unknown key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertReaderWithBoolMissing[*boolMap, string, int64](
+			"nonexistent")(readerWithBoolCtx(t, data))
+	})
+
+	t.Run("Consistent yields equal (value, ok) across N calls", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertReaderWithBoolConsistent[*boolMap, string, int64](
+			"a", 5)(readerWithBoolCtx(t, data))
+	})
+
+	t.Run("RespectsContext surfaces (zero, false) under cancelled ctx", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.ReaderWithBoolContext[*boolMap, string, int64]{
+			T: t,
+			ReaderWithBoolBindings: bindings.ReaderWithBoolBindings[*boolMap, string, int64]{
+				Factory: func() *boolMap { return newBoolMap(data) },
+				Call: func(c context.Context, m *boolMap, k string) (int64, bool) {
+					if c.Err() != nil {
+						return 0, false
+					}
+					return m.Load(c, k)
+				},
+			},
+		}
+		suite.AssertReaderWithBoolRespectsContext[*boolMap, string, int64]("a")(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertReaderWithBoolConcurrentSafe[*boolMap, string, int64](
+			"a", 4, 50)(readerWithBoolCtx(t, data))
+	})
 }

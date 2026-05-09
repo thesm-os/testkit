@@ -46,14 +46,44 @@ func lookupCtx(t *testing.T) suite.LookupContext[*lookupMap, string, int64, meta
 	}
 }
 
-func TestAssertLookupReturns(t *testing.T) {
+func TestLookup(t *testing.T) {
 	t.Parallel()
-	ctx := lookupCtx(t)
-	suite.AssertLookupReturns[*lookupMap, string, int64, meta]("a", 10)(ctx)
-}
 
-func TestAssertLookupMissing(t *testing.T) {
-	t.Parallel()
-	ctx := lookupCtx(t)
-	suite.AssertLookupMissing[*lookupMap, string, int64, meta]("nonexistent")(ctx)
+	t.Run("Returns surfaces the value for a known key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertLookupReturns[*lookupMap, string, int64, meta]("a", 10)(lookupCtx(t))
+	})
+
+	t.Run("Missing surfaces ok=false for an unknown key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertLookupMissing[*lookupMap, string, int64, meta]("nonexistent")(lookupCtx(t))
+	})
+
+	t.Run("Consistent yields equal values across N calls", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertLookupConsistent[*lookupMap, string, int64, meta]("a", 4)(lookupCtx(t))
+	})
+
+	t.Run("RespectsContext surfaces ok=false on cancelled call", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.LookupContext[*lookupMap, string, int64, meta]{
+			T: t,
+			LookupBindings: bindings.LookupBindings[*lookupMap, string, int64, meta]{
+				Factory: newLookupMap,
+				Call: func(c context.Context, m *lookupMap, k string) (int64, meta, bool) {
+					if c.Err() != nil {
+						return 0, meta{}, false
+					}
+					return m.Inspect(c, k)
+				},
+			},
+		}
+		suite.AssertLookupRespectsContext[*lookupMap, string, int64, meta]("a")(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertLookupConcurrentSafe[*lookupMap, string, int64, meta](
+			"a", 4, 50)(lookupCtx(t))
+	})
 }

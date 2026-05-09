@@ -5,6 +5,7 @@ package suite
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -92,6 +93,65 @@ func AssertWriteOverwrite[T, V any, K comparable](
 			got, err := reader(t.Context(), impl, k)
 			testkit.NoError(t, err, "read-back must succeed")
 			testkit.Equal(t, got, second, "read-back must return second (overwritten) value")
+		})
+	}
+}
+
+// AssertWriterRespectsContext invokes the writer with an already-cancelled
+// context and asserts the impl returns context.Canceled.
+func AssertWriterRespectsContext[T, V any](sample V) WriterAssertion[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		ctx.T.Run("respects context", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			err := ctx.Call(cctx, impl, sample)
+			testkit.ErrorIs(t, err, context.Canceled,
+				"writer must surface ctx.Canceled when called with a cancelled context")
+		})
+	}
+}
+
+// AssertWriterIdempotent writes the same value twice and asserts both calls
+// succeed. The contract: writing the same value should be safe to repeat —
+// transient retries, at-least-once delivery, redrive — without altering
+// observable state beyond the first write's effect. Use with the Writer-
+// shape Idempotent baseline; pair with [AssertWriteIsObservable] to assert
+// the post-state matches across both writes.
+func AssertWriterIdempotent[T, V any](sample V) WriterAssertion[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		ctx.T.Run("idempotent", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			err := ctx.Call(t.Context(), impl, sample)
+			testkit.NoError(t, err, "first write must succeed")
+			err = ctx.Call(t.Context(), impl, sample)
+			testkit.NoError(t, err, "second write of same value must succeed (idempotent)")
+		})
+	}
+}
+
+// AssertWriterConcurrentSafe runs the writer from N goroutines concurrently
+// using the given sample value. The race detector finds data races when
+// -race is enabled; panics propagate.
+func AssertWriterConcurrentSafe[T, V any](
+	sample V,
+	workers, iters int,
+) WriterAssertion[T, V] {
+	return func(ctx WriterContext[T, V]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						_ = ctx.Call(t.Context(), impl, sample)
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

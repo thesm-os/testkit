@@ -35,50 +35,59 @@ func (s *kvStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
-func TestAssertReadAfterWrite(t *testing.T) {
-	t.Parallel()
-	ctx := suite.CrossContext[*kvStore]{T: t, CrossBindings: bindings.CrossBindings[*kvStore]{Factory: newKVStore}}
-	suite.AssertReadAfterWrite[*kvStore, string, entry](
-		entry{Key: "a", Value: "alpha"},
-		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(ctx context.Context, s *kvStore, k string) (entry, error) {
-			v, err := s.Get(ctx, k)
-			return entry{Key: k, Value: v}, err
-		},
-		func(e entry) string { return e.Key },
-	)(ctx)
+func crossCtx(t *testing.T) suite.CrossContext[*kvStore] {
+	t.Helper()
+	return suite.CrossContext[*kvStore]{
+		T:             t,
+		CrossBindings: bindings.CrossBindings[*kvStore]{Factory: newKVStore},
+	}
 }
 
-func TestAssertDeleteRemovesValue(t *testing.T) {
+func TestCross(t *testing.T) {
 	t.Parallel()
-	ctx := suite.CrossContext[*kvStore]{T: t, CrossBindings: bindings.CrossBindings[*kvStore]{Factory: newKVStore}}
-	suite.AssertDeleteRemovesValue[*kvStore, string, entry](
-		entry{Key: "a", Value: "alpha"},
-		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
-		func(ctx context.Context, s *kvStore, k string) (entry, error) {
-			v, err := s.Get(ctx, k)
-			return entry{Key: k, Value: v}, err
-		},
-		func(e entry) string { return e.Key },
-		errNotFound,
-	)(ctx)
-}
 
-func TestAssertStreamReflectsMutations(t *testing.T) {
-	t.Parallel()
-	ctx := suite.CrossContext[*kvStore]{T: t, CrossBindings: bindings.CrossBindings[*kvStore]{Factory: newKVStore}}
-	suite.AssertStreamReflectsMutations[*kvStore, string, entry](
-		[]entry{{Key: "a", Value: "alpha"}, {Key: "b", Value: "beta"}},
-		func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
-		func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
-		func(ctx context.Context, s *kvStore) []entry {
-			out := make([]entry, 0, len(s.data))
-			for k, v := range s.data {
-				out = append(out, entry{Key: k, Value: v})
-			}
-			return out
-		},
-		func(e entry) string { return e.Key },
-	)(ctx)
+	t.Run("ReadAfterWrite returns the just-written value", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertReadAfterWrite[*kvStore, string, entry](
+			entry{Key: "a", Value: "alpha"},
+			func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+			func(ctx context.Context, s *kvStore, k string) (entry, error) {
+				v, err := s.Get(ctx, k)
+				return entry{Key: k, Value: v}, err
+			},
+			func(e entry) string { return e.Key },
+		)(crossCtx(t))
+	})
+
+	t.Run("DeleteRemovesValue surfaces the sentinel after Delete", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertDeleteRemovesValue[*kvStore, string, entry](
+			entry{Key: "a", Value: "alpha"},
+			func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+			func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
+			func(ctx context.Context, s *kvStore, k string) (entry, error) {
+				v, err := s.Get(ctx, k)
+				return entry{Key: k, Value: v}, err
+			},
+			func(e entry) string { return e.Key },
+			errNotFound,
+		)(crossCtx(t))
+	})
+
+	t.Run("StreamReflectsMutations observes Put/Delete in subsequent stream", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamReflectsMutations[*kvStore, string, entry](
+			[]entry{{Key: "a", Value: "alpha"}, {Key: "b", Value: "beta"}},
+			func(ctx context.Context, s *kvStore, e entry) error { return s.Put(ctx, e.Key, e.Value) },
+			func(ctx context.Context, s *kvStore, k string) error { return s.Delete(ctx, k) },
+			func(_ context.Context, s *kvStore) []entry {
+				out := make([]entry, 0, len(s.data))
+				for k, v := range s.data {
+					out = append(out, entry{Key: k, Value: v})
+				}
+				return out
+			},
+			func(e entry) string { return e.Key },
+		)(crossCtx(t))
+	})
 }

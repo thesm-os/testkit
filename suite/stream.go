@@ -4,6 +4,8 @@
 package suite
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -111,6 +113,60 @@ func AssertStreamHasNoDuplicates[T, V any, K comparable](
 				}
 				seen[k] = true
 			}
+		})
+	}
+}
+
+// AssertStreamRespectsContext starts iteration, cancels the context after
+// the first yield, and asserts subsequent yields surface context.Canceled
+// (or terminate cleanly). A stream impl that ignores ctx mid-iteration is
+// a real bug class — the impl yields stale data after the caller has
+// signalled cancellation.
+func AssertStreamRespectsContext[T, V any]() StreamAssertion[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		ctx.T.Run("respects context (mid-stream)", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			seen := 0
+			for _, err := range ctx.Call(cctx, impl) {
+				if seen == 0 {
+					cancel()
+					seen++
+					continue
+				}
+				if err != nil {
+					testkit.ErrorIs(t, err, context.Canceled,
+						"stream must surface ctx.Canceled after mid-stream cancel")
+					return
+				}
+				seen++
+				if seen > 100 {
+					t.Fatalf("stream did not honor ctx-cancel within 100 yields")
+				}
+			}
+		})
+	}
+}
+
+// AssertStreamConcurrentSafe iterates the stream from N goroutines
+// concurrently. Stream impls that share state across iterators trip the
+// race detector under -race.
+func AssertStreamConcurrentSafe[T, V any](workers int) StreamAssertion[T, V] {
+	return func(ctx StreamContext[T, V]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for _, err := range ctx.Call(t.Context(), impl) {
+						_ = err
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

@@ -27,16 +27,38 @@ func pureCtx(t *testing.T) suite.PureContext[*counter, int] {
 	}
 }
 
-func TestAssertDeterministic(t *testing.T) {
+func TestPure(t *testing.T) {
 	t.Parallel()
-	ctx := pureCtx(t)
-	suite.AssertDeterministic[*counter, int](5)(ctx)
-}
 
-func TestAssertNoSideEffects(t *testing.T) {
-	t.Parallel()
-	ctx := pureCtx(t)
-	suite.AssertNoSideEffects[*counter, int, int](
-		func(c *counter) int { return c.n },
-	)(ctx)
+	t.Run("Returns surfaces the configured value", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPureReturns[*counter, int](42)(pureCtx(t))
+	})
+
+	t.Run("Deterministic yields equal results across N calls", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertDeterministic[*counter, int](5)(pureCtx(t))
+	})
+
+	t.Run("NoSideEffects observes no state change across the call", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertNoSideEffects[*counter, int, int](
+			func(c *counter) int { return c.n },
+		)(pureCtx(t))
+	})
+
+	t.Run("RespectsContext is a structural smoke (Pure has no ctx)", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPureRespectsContext[*counter, int]()(pureCtx(t))
+	})
+
+	t.Run("RejectInvalid is a structural smoke (Pure has no input)", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPureRejectInvalid[*counter, int]()(pureCtx(t))
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertPureConcurrentSafe[*counter, int](4, 50)(pureCtx(t))
+	})
 }

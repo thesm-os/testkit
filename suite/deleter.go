@@ -4,8 +4,10 @@
 package suite
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -65,6 +67,42 @@ func AssertDeleteReturnsNotFound[T any, K comparable](unknown K, sentinel error)
 			impl := ctx.Factory()
 			err := ctx.Call(t.Context(), impl, unknown)
 			testkit.ErrorIs(t, err, sentinel, "delete of unknown key must return sentinel")
+		})
+	}
+}
+
+// AssertDeleterRespectsContext invokes the deleter with an already-cancelled
+// context and asserts the impl returns context.Canceled.
+func AssertDeleterRespectsContext[T any, K comparable](key K) DeleterAssertion[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		ctx.T.Run("respects context", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			err := ctx.Call(cctx, impl, key)
+			testkit.ErrorIs(t, err, context.Canceled,
+				"deleter must surface ctx.Canceled when called with a cancelled context")
+		})
+	}
+}
+
+// AssertDeleterConcurrentSafe runs the deleter from N goroutines concurrently
+// using the given key.
+func AssertDeleterConcurrentSafe[T any, K comparable](key K, workers, iters int) DeleterAssertion[T, K] {
+	return func(ctx DeleterContext[T, K]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						_ = ctx.Call(t.Context(), impl, key)
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

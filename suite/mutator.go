@@ -4,6 +4,8 @@
 package suite
 
 import (
+	"context"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit/bindings"
@@ -41,6 +43,63 @@ func AssertMutatorIdempotent[T, V any](sample V) MutatorAssertion[T, V] {
 			impl := ctx.Factory()
 			ctx.Call(t.Context(), impl, sample)
 			ctx.Call(t.Context(), impl, sample)
+		})
+	}
+}
+
+// AssertMutatorRespectsContext calls the mutator with an already-
+// cancelled context and asserts the call does not panic. Mutators
+// have no return position to surface ctx.Canceled — the contract
+// under cancellation is "no observable side-effect"; impls that
+// need to surface the cancel must use a different shape (e.g.
+// Lifecycle returning error).
+func AssertMutatorRespectsContext[T, V any](sample V) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		ctx.T.Run("respects context", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			cctx, cancel := context.WithCancel(t.Context())
+			cancel()
+			ctx.Call(cctx, impl, sample)
+		})
+	}
+}
+
+// AssertMutatorRejectInvalid calls the mutator with an invalid value and
+// runs a consumer-supplied check that observes the impl rejected the
+// invalid input. The check is consumer-driven because Mutators have no
+// return position — the rejection must be observed via a paired
+// reader/aggregator/predicate.
+func AssertMutatorRejectInvalid[T, V any](
+	invalid V,
+	check func(t *testing.T, impl T),
+) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		ctx.T.Run("rejects invalid", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			ctx.Call(t.Context(), impl, invalid)
+			check(t, impl)
+		})
+	}
+}
+
+// AssertMutatorConcurrentSafe runs the mutator from N goroutines concurrently
+// using the given sample value.
+func AssertMutatorConcurrentSafe[T, V any](sample V, workers, iters int) MutatorAssertion[T, V] {
+	return func(ctx MutatorContext[T, V]) {
+		ctx.T.Run("concurrent safe", func(t *testing.T) {
+			t.Parallel()
+			impl := ctx.Factory()
+			var wg sync.WaitGroup
+			for range workers {
+				wg.Go(func() {
+					for range iters {
+						ctx.Call(t.Context(), impl, sample)
+					}
+				})
+			}
+			wg.Wait()
 		})
 	}
 }

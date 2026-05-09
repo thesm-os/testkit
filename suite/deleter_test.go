@@ -5,6 +5,7 @@ package suite_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit/bindings"
@@ -12,6 +13,7 @@ import (
 )
 
 type delStore struct {
+	mu   sync.Mutex
 	data map[string]bool
 }
 
@@ -20,6 +22,8 @@ func newDelStore() *delStore {
 }
 
 func (s *delStore) Delete(_ context.Context, key string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if !s.data[key] {
 		return errNotFound
 	}
@@ -40,23 +44,44 @@ func deleterCtx(t *testing.T) suite.DeleterContext[*delStore, string] {
 	}
 }
 
-func TestAssertDeleteSucceeds(t *testing.T) {
+func TestDeleter(t *testing.T) {
 	t.Parallel()
-	ctx := deleterCtx(t)
-	suite.AssertDeleteSucceeds[*delStore, string]("existing")(ctx)
-}
 
-func TestAssertDeleteIdempotent(t *testing.T) {
-	t.Parallel()
-	ctx := deleterCtx(t)
-	// Delete "existing" twice — first succeeds, second returns not-found.
-	// Idempotent checks same nil/non-nil outcome, so this tests the
-	// non-nil == non-nil path.
-	suite.AssertDeleteIdempotent[*delStore, string]("nonexistent")(ctx)
-}
+	t.Run("DeleteSucceeds for an existing key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertDeleteSucceeds[*delStore, string]("existing")(deleterCtx(t))
+	})
 
-func TestAssertDeleteReturnsNotFound(t *testing.T) {
-	t.Parallel()
-	ctx := deleterCtx(t)
-	suite.AssertDeleteReturnsNotFound[*delStore, string]("nonexistent", errNotFound)(ctx)
+	t.Run("DeleteIdempotent yields the same nil/non-nil outcome twice", func(t *testing.T) {
+		t.Parallel()
+		// "nonexistent" returns errNotFound twice — both calls observe
+		// the same non-nil error (idempotent under the same input).
+		suite.AssertDeleteIdempotent[*delStore, string]("nonexistent")(deleterCtx(t))
+	})
+
+	t.Run("DeleteReturnsNotFound surfaces the configured sentinel for unknown keys", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertDeleteReturnsNotFound[*delStore, string](
+			"nonexistent", errNotFound)(deleterCtx(t))
+	})
+
+	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
+		t.Parallel()
+		ctx := suite.DeleterContext[*delStore, string]{
+			T: t,
+			DeleterBindings: bindings.DeleterBindings[*delStore, string]{
+				Factory: newDelStore,
+				Call: func(c context.Context, _ *delStore, _ string) error {
+					return c.Err()
+				},
+			},
+		}
+		suite.AssertDeleterRespectsContext[*delStore, string]("existing")(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertDeleterConcurrentSafe[*delStore, string](
+			"nonexistent", 4, 50)(deleterCtx(t))
+	})
 }

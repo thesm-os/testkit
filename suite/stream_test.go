@@ -39,36 +39,70 @@ func streamCtx(t *testing.T, items []string) suite.StreamContext[*listStore, str
 	}
 }
 
-func TestAssertStreamCompletes(t *testing.T) {
+func TestStream(t *testing.T) {
 	t.Parallel()
-	ctx := streamCtx(t, []string{"a", "b", "c"})
-	suite.AssertStreamCompletes[*listStore, string]()(ctx)
-}
 
-func TestAssertStreamRespectsBreak(t *testing.T) {
-	t.Parallel()
-	ctx := streamCtx(t, []string{"a", "b", "c"})
-	suite.AssertStreamRespectsBreak[*listStore, string]()(ctx)
-}
+	t.Run("Completes drains every item with no terminal error", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamCompletes[*listStore, string]()(
+			streamCtx(t, []string{"a", "b", "c"}))
+	})
 
-func TestAssertStreamReentrant(t *testing.T) {
-	t.Parallel()
-	ctx := streamCtx(t, []string{"a", "b"})
-	suite.AssertStreamReentrant[*listStore, string]()(ctx)
-}
+	t.Run("RespectsBreak stops yielding when the consumer breaks", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamRespectsBreak[*listStore, string]()(
+			streamCtx(t, []string{"a", "b", "c"}))
+	})
 
-func TestAssertStreamYieldsInOrder(t *testing.T) {
-	t.Parallel()
-	ctx := streamCtx(t, []string{"a", "b", "c"})
-	suite.AssertStreamYieldsInOrder[*listStore, string](
-		func(a, b string) bool { return a < b },
-	)(ctx)
-}
+	t.Run("Reentrant supports multiple iterations of the same stream", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamReentrant[*listStore, string]()(
+			streamCtx(t, []string{"a", "b"}))
+	})
 
-func TestAssertStreamHasNoDuplicates(t *testing.T) {
-	t.Parallel()
-	ctx := streamCtx(t, []string{"a", "b", "c"})
-	suite.AssertStreamHasNoDuplicates[*listStore, string, string](
-		func(v string) string { return v },
-	)(ctx)
+	t.Run("YieldsInOrder asserts the consumer-supplied predicate across pairs", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamYieldsInOrder[*listStore, string](
+			func(a, b string) bool { return a < b },
+		)(streamCtx(t, []string{"a", "b", "c"}))
+	})
+
+	t.Run("HasNoDuplicates asserts no two items share the same key", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamHasNoDuplicates[*listStore, string, string](
+			func(v string) string { return v },
+		)(streamCtx(t, []string{"a", "b", "c"}))
+	})
+
+	t.Run("RespectsContext stops yielding after mid-stream cancel", func(t *testing.T) {
+		t.Parallel()
+		// listStore.List ignores ctx; wire a Call adapter that wraps
+		// the iterator with ctx.Err() polling between yields.
+		ctx := suite.StreamContext[*listStore, string]{
+			T: t,
+			StreamBindings: bindings.StreamBindings[*listStore, string]{
+				Factory: func() *listStore { return &listStore{items: []string{"a", "b", "c", "d"}} },
+				Call: func(c context.Context, s *listStore) iter.Seq2[string, error] {
+					return func(yield func(string, error) bool) {
+						for _, item := range s.items {
+							if err := c.Err(); err != nil {
+								yield("", err)
+								return
+							}
+							if !yield(item, nil) {
+								return
+							}
+						}
+					}
+				},
+			},
+		}
+		suite.AssertStreamRespectsContext[*listStore, string]()(ctx)
+	})
+
+	t.Run("ConcurrentSafe runs without races under N workers", func(t *testing.T) {
+		t.Parallel()
+		suite.AssertStreamConcurrentSafe[*listStore, string](4)(
+			streamCtx(t, []string{"a", "b", "c"}))
+	})
 }

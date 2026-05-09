@@ -97,3 +97,84 @@ type PoisonAccessorBindings[T any] struct {
 	Factory func() T
 	Call    func(T) error
 }
+
+// ReaderNoErrorBindings holds the reusable shape wiring for a
+// ReaderNoError-shaped method: func(ctx?, K) V — infallible
+// lookups against in-memory state (caches, gauges, stable mappings).
+// The Call adapter normalizes the "ctx? K → V" signature to a
+// uniform shape regardless of whether the method takes context.
+type ReaderNoErrorBindings[T any, K comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) V
+}
+
+// PointerReaderBindings holds the reusable shape wiring for a
+// PointerReader-shaped method: func(ctx?, K) *V — the nil-on-miss
+// idiom. The Call adapter returns the raw pointer; downstream
+// primitives compare against nil to detect misses.
+type PointerReaderBindings[T any, K comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) *V
+}
+
+// MultiReaderBindings holds the reusable shape wiring for a
+// MultiReader-shaped method: func(ctx?, K) (V1, V2, error) —
+// "get the entity + metadata" idioms.
+type MultiReaderBindings[T any, K comparable, V1, V2 any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K) (V1, V2, error)
+}
+
+// BatchReaderBindings holds the reusable shape wiring for a
+// BatchReader-shaped method: func(ctx?, ...K) ([]V, error). The
+// Call adapter passes the variadic key slice as a single []K.
+type BatchReaderBindings[T any, K comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, []K) ([]V, error)
+}
+
+// CompositeWriterBindings holds the reusable shape wiring for a
+// CompositeWriter-shaped method: func(ctx?, K1, V) error —
+// namespaced stores, tagged caches, two-key indexes.
+type CompositeWriterBindings[T any, K1 comparable, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, K1, V) error
+}
+
+// MultiArgWriterBindings holds the reusable shape wiring for a
+// MultiArgWriter-shaped method with 3 non-ctx params: func(ctx,
+// p1, p2, p3) error. Methods with 4+ non-ctx params use a
+// consumer-supplied plug-in primitive — the binding is intentionally
+// scoped to 3 since that's the Watcher / Subscribe / Schedule
+// pattern that actually appears in real interfaces.
+type MultiArgWriterBindings[T any, P1, P2, P3 any] struct {
+	Factory func() T
+	Call    func(context.Context, T, P1, P2, P3) error
+}
+
+// MultiAggregatorBindings holds the reusable shape wiring for a
+// MultiAggregator-shaped method: func(ctx?) (V1, V2, error) —
+// 2-tuple aggregations like Stats(ctx) (count, total, error).
+type MultiAggregatorBindings[T any, V1, V2 any] struct {
+	Factory func() T
+	Call    func(context.Context, T) (V1, V2, error)
+}
+
+// VoidLifecycleBindings holds the reusable shape wiring for a
+// VoidLifecycle-shaped method: func() or func(ctx) — Reset,
+// parameterless lifecycle hooks. The Call adapter accepts ctx
+// uniformly; impls without ctx parameters ignore the argument.
+type VoidLifecycleBindings[T any] struct {
+	Factory func() T
+	Call    func(context.Context, T)
+}
+
+// StreamConsumerBindings holds the reusable shape wiring for a
+// StreamConsumer-shaped method: func(ctx, S) (V, error) where S
+// is interface-typed. The Call adapter accepts the interface-typed
+// stream argument as `any`; downstream primitives type-assert as
+// needed.
+type StreamConsumerBindings[T, S, V any] struct {
+	Factory func() T
+	Call    func(context.Context, T, S) (V, error)
+}
