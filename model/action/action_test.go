@@ -462,6 +462,90 @@ func TestReaderWithBool(t *testing.T) {
 	})
 }
 
+func TestLookup(t *testing.T) {
+	t.Parallel()
+
+	t.Run("passes when ok and values match", func(t *testing.T) {
+		t.Parallel()
+		a := action.Lookup("Inspect", rapid.Just("k"),
+			func(_ *simpleStore, _ string) (string, int, bool) {
+				return "v", 42, true
+			},
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, &simpleStore{}, &simpleStore{})
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
+	})
+
+	t.Run("catches ok flag mismatch", func(t *testing.T) {
+		t.Parallel()
+		sut := &simpleStore{emptyF: func() bool { return true }}
+		ref := &simpleStore{}
+		a := action.Lookup("Inspect", rapid.Just("k"),
+			func(s *simpleStore, _ string) (string, int, bool) {
+				if s.emptyF != nil {
+					return "", 0, false
+				}
+				return "v", 42, true
+			},
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should catch ok mismatch")
+			}
+		})
+	})
+
+	t.Run("catches R1 value mismatch", func(t *testing.T) {
+		t.Parallel()
+		sut := &simpleStore{emptyF: func() bool { return true }}
+		ref := &simpleStore{}
+		a := action.Lookup("Inspect", rapid.Just("k"),
+			func(s *simpleStore, _ string) (string, int, bool) {
+				if s.emptyF != nil {
+					return "WRONG", 42, true
+				}
+				return "correct", 42, true
+			},
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("should catch R1 mismatch")
+			}
+		})
+	})
+}
+
+func TestUnknown(t *testing.T) {
+	t.Parallel()
+
+	t.Run("delegates to consumer run function", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		a := action.Unknown[*simpleStore]("Custom", func(_ *rapid.T, sut, ref *simpleStore) model.ActionResult {
+			called = true
+			return model.ActionResult{}
+		})
+		if a.Name != "Custom" {
+			t.Fatalf("expected name Custom, got %s", a.Name)
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, &simpleStore{}, &simpleStore{})
+			if result.Err != nil {
+				rt.Fatalf("unexpected: %v", result.Err)
+			}
+		})
+		if !called {
+			t.Fatal("consumer run function must be called")
+		}
+	})
+}
+
 func TestActionKind(t *testing.T) {
 	t.Parallel()
 

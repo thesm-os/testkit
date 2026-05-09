@@ -126,6 +126,34 @@ func TestConcurrentRecord(t *testing.T) {
 	}
 }
 
+func TestGlobalTimeline(t *testing.T) {
+	t.Parallel()
+	h := history.New[string, int]()
+	h.Record("a", 1)
+	h.Record("b", 2)
+	h.Record("a", 3)
+
+	tl := h.GlobalTimeline()
+	if len(tl) != 3 {
+		t.Fatalf("expected 3 entries in global timeline, got %d", len(tl))
+	}
+	// Entries appear in insertion order with monotonic indices.
+	if tl[0].Index != 0 || tl[0].PartKey != "a" || tl[0].Entry != 1 {
+		t.Fatalf("entry 0: expected {0, a, 1}, got %+v", tl[0])
+	}
+	if tl[1].Index != 1 || tl[1].PartKey != "b" || tl[1].Entry != 2 {
+		t.Fatalf("entry 1: expected {1, b, 2}, got %+v", tl[1])
+	}
+	if tl[2].Index != 2 || tl[2].PartKey != "a" || tl[2].Entry != 3 {
+		t.Fatalf("entry 2: expected {2, a, 3}, got %+v", tl[2])
+	}
+	// Defensive copy.
+	tl[0].Entry = 999
+	if h.GlobalTimeline()[0].Entry != 1 {
+		t.Fatal("GlobalTimeline must return defensive copy")
+	}
+}
+
 func TestDegenerateStructKey(t *testing.T) {
 	t.Parallel()
 	h := history.New[struct{}, int]()
