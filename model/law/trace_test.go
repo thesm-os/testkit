@@ -10,7 +10,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/model/law"
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 func TestAfterEvery(t *testing.T) {
@@ -25,7 +25,7 @@ func TestAfterEvery(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
 			if err != nil {
@@ -43,7 +43,7 @@ func TestAfterEvery(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
 			if err == nil {
@@ -61,7 +61,7 @@ func TestAfterEvery(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
 			if err != nil {
@@ -84,9 +84,9 @@ func TestEventuallyAfter(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Put"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Sync"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Sync"})
 
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
@@ -106,10 +106,10 @@ func TestEventuallyAfter(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Put"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
 
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
@@ -129,8 +129,8 @@ func TestEventuallyAfter(t *testing.T) {
 		}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
 
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
@@ -150,8 +150,8 @@ func TestNever(t *testing.T) {
 		l := &law.Never[int]{ActionName: "Panic"}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
 
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)
@@ -167,8 +167,8 @@ func TestNever(t *testing.T) {
 		l := &law.Never[int]{ActionName: "Panic"}
 		l.BindTrace(tr)
 
-		tr.Record(trace.Event{ClientID: -1, OpName: "Get"})
-		tr.Record(trace.Event{ClientID: -1, OpName: "Panic"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Panic"})
 
 		rapid.Check(t, func(rt *rapid.T) {
 			err := l.Check(rt, 0, 0)

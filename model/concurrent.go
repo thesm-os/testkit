@@ -14,7 +14,7 @@ import (
 	"github.com/anishathalye/porcupine"
 	"pgregory.net/rapid"
 
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // runConcurrent executes concurrent linearizability testing.
@@ -144,7 +144,7 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 				traceEvents[i] = trace.Event{
 					StartNs:  op.Call,
 					EndNs:    op.Return,
-					OpName:   input.Name,
+					Method:   input.Name,
 					ClientID: op.ClientId,
 					Inputs:   []any{input.Args},
 					Output:   op.Output.(OpOutput).Result,

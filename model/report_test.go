@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 //nolint:revive // test error strings are diagnostic, not user-facing
@@ -46,9 +46,9 @@ func TestFormatFailure(t *testing.T) {
 			StepReported: StepID{WorkerID: -1, Index: 5},
 			Err:          errors.New("key \"x\": SUT/ref disagree"),
 			Trace: []trace.Event{
-				{ClientID: -1, OpName: "Put", Inputs: []any{"item-a"}, Output: nil},
-				{ClientID: -1, OpName: "Put", Inputs: []any{"item-b"}, Output: nil},
-				{ClientID: -1, OpName: "Get", Inputs: []any{"x"}, Output: "old"},
+				{ClientID: -1, Method: "Put", Inputs: []any{"item-a"}, Output: nil},
+				{ClientID: -1, Method: "Put", Inputs: []any{"item-b"}, Output: nil},
+				{ClientID: -1, Method: "Get", Inputs: []any{"x"}, Output: "old"},
 			},
 		}
 		out := formatFailure(f)
@@ -74,8 +74,8 @@ func TestFormatFailure(t *testing.T) {
 			StepReported: StepID{WorkerID: -1, Index: 1},
 			Err:          errors.New("Verify: SUT err=chain integrity, ref err=<nil>"),
 			Trace: []trace.Event{
-				{ClientID: -1, OpName: "Append", Inputs: []any{"entry-1"}, Output: nil},
-				{ClientID: -1, OpName: "Verify", Inputs: nil, Output: nil, Err: errors.New("chain integrity")},
+				{ClientID: -1, Method: "Append", Inputs: []any{"entry-1"}, Output: nil},
+				{ClientID: -1, Method: "Verify", Inputs: nil, Output: nil, Err: errors.New("chain integrity")},
 			},
 		}
 		out := formatFailure(f)
@@ -118,7 +118,7 @@ func TestFormatFailure(t *testing.T) {
 			StepReported: StepID{WorkerID: -1, Index: 3},
 			Err:          errors.New("custom check failed"),
 			Trace: []trace.Event{
-				{ClientID: -1, OpName: "Put", Inputs: []any{"v"}, Output: nil},
+				{ClientID: -1, Method: "Put", Inputs: []any{"v"}, Output: nil},
 			},
 		}
 		out := formatFailure(f)

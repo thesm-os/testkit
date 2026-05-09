@@ -11,7 +11,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/model/law"
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // OpInput is recorded as porcupine.Operation.Input for concurrent
@@ -245,7 +245,7 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					iterTrace.Record(trace.Event{
 						StartNs:  startNs,
 						EndNs:    endNs,
-						OpName:   a.Name,
+						Method:   a.Name,
 						ClientID: -1, // sequential
 						Inputs:   inputs,
 						Output:   result.Output,

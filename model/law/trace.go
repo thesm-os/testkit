@@ -9,7 +9,7 @@ import (
 
 	"pgregory.net/rapid"
 
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // TraceBinder is implemented by laws that need access to the
@@ -56,7 +56,7 @@ func (l *AfterEvery[T]) Check(rt *rapid.T, sut, ref T) error {
 		return nil
 	}
 	last := events[len(events)-1]
-	if last.OpName != l.ActionName {
+	if last.Method != l.ActionName {
 		return nil
 	}
 	err := l.Predicate(rt, sut, ref)
@@ -110,11 +110,11 @@ func (l *EventuallyAfter[T]) Check(_ *rapid.T, _, _ T) error {
 	// that hasn't been followed by a response within WithinSteps.
 	lastTriggerIdx := -1
 	for i, v := range slices.Backward(events) {
-		if v.OpName == l.Trigger {
+		if v.Method == l.Trigger {
 			lastTriggerIdx = i
 			break
 		}
-		if v.OpName == l.Response {
+		if v.Method == l.Response {
 			// Response found before trigger — satisfied.
 			return nil
 		}
@@ -129,7 +129,7 @@ func (l *EventuallyAfter[T]) Check(_ *rapid.T, _, _ T) error {
 	}
 	// Check if response appeared between trigger and now.
 	for i := lastTriggerIdx + 1; i < len(events); i++ {
-		if events[i].OpName == l.Response {
+		if events[i].Method == l.Response {
 			return nil // satisfied
 		}
 	}
@@ -163,7 +163,7 @@ func (*Never[T]) REQID() string { return "" }
 func (l *Never[T]) Check(_ *rapid.T, _, _ T) error {
 	events := l.Trace.Snapshot()
 	for i, ev := range events {
-		if ev.OpName == l.ActionName {
+		if ev.Method == l.ActionName {
 			return fmt.Errorf("never(%s): forbidden action appeared at step %d", l.ActionName, i)
 		}
 	}

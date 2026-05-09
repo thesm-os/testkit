@@ -6,7 +6,7 @@ package model
 import (
 	"fmt"
 
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // FailureKind classifies a model-test failure for structured reporting.

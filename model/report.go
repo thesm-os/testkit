@@ -11,7 +11,7 @@ import (
 	"regexp"
 	"strings"
 
-	"go.thesmos.sh/testkit/model/trace"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // formatFailure produces the human-readable failure message for
@@ -80,9 +80,9 @@ func writeTrace(b *strings.Builder, events []trace.Event, failingStep int) {
 
 		var line string
 		if ev.Err != nil {
-			line = fmt.Sprintf("  [%s] %s(%s) -> err: %s", prefix, ev.OpName, inputStr, ev.Err.Error())
+			line = fmt.Sprintf("  [%s] %s(%s) -> err: %s", prefix, ev.Method, inputStr, ev.Err.Error())
 		} else {
-			line = fmt.Sprintf("  [%s] %s(%s) -> %s", prefix, ev.OpName, inputStr, outputStr)
+			line = fmt.Sprintf("  [%s] %s(%s) -> %s", prefix, ev.Method, inputStr, outputStr)
 		}
 
 		if i == failingStep {
