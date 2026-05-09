@@ -212,6 +212,44 @@ func TestFuncSig_Check(t *testing.T) {
 	})
 }
 
+func TestVarOfType(t *testing.T) {
+	t.Parallel()
+
+	t.Run("accepts var assignable to error", func(t *testing.T) {
+		t.Parallel()
+		pkg, _ := loadBasicData(t)
+		obj := pkg.Pkg.Scope().Lookup("ErrNotFound")
+		err := resolver.VarOfType(obj, resolver.ErrorType())
+		testkit.NoError(t, err, "ErrNotFound is assignable to error")
+	})
+
+	t.Run("rejects type (non-var)", func(t *testing.T) {
+		t.Parallel()
+		pkg, _ := loadBasicData(t)
+		obj := pkg.Pkg.Scope().Lookup("Item")
+		err := resolver.VarOfType(obj, resolver.ErrorType())
+		testkit.True(t, err != nil, "type rejected")
+		testkit.Assert(t, err.Error()).Contains("not a variable", "diagnostic")
+	})
+
+	t.Run("rejects var with non-assignable type", func(t *testing.T) {
+		t.Parallel()
+		// Build a synthetic *types.Var with type string. Not
+		// assignable to error.
+		v := types.NewVar(0, nil, "name", types.Typ[types.String])
+		err := resolver.VarOfType(v, resolver.ErrorType())
+		testkit.True(t, err != nil, "string-typed var rejected")
+		testkit.Assert(t, err.Error()).Contains("not assignable", "diagnostic")
+	})
+}
+
+func TestErrorType(t *testing.T) {
+	t.Parallel()
+	got := resolver.ErrorType()
+	testkit.True(t, got != nil, "non-nil error type")
+	testkit.Equal(t, got.String(), "error", "stringer is `error`")
+}
+
 func TestRequireArgs(t *testing.T) {
 	t.Parallel()
 

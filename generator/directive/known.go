@@ -337,7 +337,7 @@ func defaultDescriptors() []Descriptor {
 			Arg("Methods", ArgKey, Required, Multi),
 		),
 
-		// Sentinel cross-package non-overlap (ANALYSIS.md G24).
+		// Sentinel cross-package non-overlap.
 		New(SentinelNoOverlapWith,
 			Describe("declare additional packages to verify sentinel non-overlap with"),
 			InCategory(Enrichment),

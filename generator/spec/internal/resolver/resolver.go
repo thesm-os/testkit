@@ -211,3 +211,34 @@ func (s FuncSig) Check(obj types.Object) error {
 	}
 	return nil
 }
+
+// VarOfType validates obj is a [types.Var] (package-level variable
+// or constant) whose type is assignable to want. Used by consumers
+// that resolve sentinel error variables (errors, wrapped-via): the
+// arg references an exported var declared as a sentinel error.
+//
+// Assignability (not identity) lets `var ErrFoo = errors.New(...)`
+// resolve under want = the builtin error interface — *errors.errorString
+// is assignable to error, not identical to it.
+func VarOfType(obj types.Object, want types.Type) error {
+	v, ok := obj.(*types.Var)
+	if !ok {
+		// Package-level variables can also surface as
+		// *types.Const (rare) or other Object kinds. The
+		// canonical sentinel form is `var ErrX = ...` which
+		// produces *types.Var.
+		return fmt.Errorf("not a variable (got %T)", obj)
+	}
+	if !types.AssignableTo(v.Type(), want) {
+		return fmt.Errorf("type %s not assignable to %s",
+			types.TypeString(v.Type(), nil),
+			types.TypeString(want, nil))
+	}
+	return nil
+}
+
+// ErrorType returns the builtin `error` interface — the canonical
+// `want` for [VarOfType] when validating sentinel error variables.
+func ErrorType() types.Type {
+	return types.Universe.Lookup("error").Type()
+}

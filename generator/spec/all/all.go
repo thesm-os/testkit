@@ -17,10 +17,17 @@
 package all
 
 // Imports are alphabetized so goimports stays happy. Sorted by
-// pattern (A: markers, C: resolved-symbol) is documentation only;
-// see spec/doc.go for the taxonomy.
+// pattern (A: markers, B: simple-value, C: resolved-symbol) is
+// documentation only; see spec/doc.go for the taxonomy.
 import (
 	_ "go.thesmos.sh/testkit/generator/spec/atomic"
+	_ "go.thesmos.sh/testkit/generator/spec/deprecated"
+	_ "go.thesmos.sh/testkit/generator/spec/errors"
 	_ "go.thesmos.sh/testkit/generator/spec/idempotent"
+	_ "go.thesmos.sh/testkit/generator/spec/integrationonly"
+	_ "go.thesmos.sh/testkit/generator/spec/orderafter"
+	_ "go.thesmos.sh/testkit/generator/spec/partition"
+	_ "go.thesmos.sh/testkit/generator/spec/retrysucceeds"
 	_ "go.thesmos.sh/testkit/generator/spec/sample"
+	_ "go.thesmos.sh/testkit/generator/spec/wrappedvia"
 )

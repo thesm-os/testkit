@@ -23,6 +23,13 @@ func TestAllRegistersConsumers(t *testing.T) {
 		directive.Sample,
 		directive.Atomic,
 		directive.Idempotent,
+		directive.IntegrationOnly,
+		directive.Deprecated,
+		directive.RetrySucceedsOnAttempt,
+		directive.OrderAfter,
+		directive.Partition,
+		directive.Errors,
+		directive.WrappedVia,
 	}
 	for _, name := range wired {
 		t.Run(name, func(t *testing.T) {
