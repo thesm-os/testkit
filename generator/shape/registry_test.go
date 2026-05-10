@@ -14,10 +14,10 @@ import (
 func TestRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("DefaultRegistry contains all 21 shipped detectors", func(t *testing.T) {
+	t.Run("DefaultRegistry contains all 37 shipped detectors", func(t *testing.T) {
 		t.Parallel()
 		dets := shape.DefaultRegistry().Detectors()
-		testkit.Len(t, dets, 21, "shipped detector count")
+		testkit.Len(t, dets, 37, "shipped detector count")
 	})
 
 	t.Run("DefaultRegistry returns the same instance on repeated calls", func(t *testing.T) {
@@ -30,7 +30,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("NewRegistry produces a fresh registry equivalent to DefaultRegistry", func(t *testing.T) {
 		t.Parallel()
 		r := shape.NewRegistry()
-		testkit.Len(t, r.Detectors(), 21, "fresh registry has full detector set")
+		testkit.Len(t, r.Detectors(), 37, "fresh registry has full detector set")
 	})
 
 	t.Run("Detectors returns a defensive copy", func(t *testing.T) {
@@ -40,7 +40,7 @@ func TestRegistry(t *testing.T) {
 		// Truncate the returned slice — the registry's internal state must not change.
 		dets = dets[:0]
 		_ = dets
-		testkit.Len(t, r.Detectors(), 21, "mutating the returned slice does not affect the registry")
+		testkit.Len(t, r.Detectors(), 37, "mutating the returned slice does not affect the registry")
 	})
 }
 
@@ -117,5 +117,46 @@ import (
 type I interface { F(ctx context.Context) iter.Seq2[int, error] }
 `
 		testkit.Equal(t, classifyOne(t, src), "StreamReader", "iter.Seq2 wins outright")
+	})
+}
+
+func TestClassifyInterface(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns one Info per method aligned with input order", func(t *testing.T) {
+		t.Parallel()
+		const src = `package p
+import "context"
+type I interface {
+    Get(ctx context.Context, k string) (string, error)
+    Put(ctx context.Context, v string) error
+}
+`
+		got := classifyAllViaInterface(t, src, "I", nil)
+		testkit.Equal(t, got["Get"], "Reader", "Get is Reader")
+		testkit.Equal(t, got["Put"], "Writer", "Put is Writer")
+	})
+
+	t.Run("with no contract-tier override, pass 2 result equals pass 1", func(t *testing.T) {
+		t.Parallel()
+		const src = `package p
+type I interface { F(k string) (int, error) }
+`
+		got := classifyAllViaInterface(t, src, "I", nil)
+		testkit.Equal(t, got["F"], "Reader", "no contract-tier promotion → Reader stands")
+	})
+
+	t.Run("InterfaceContext.Shapes is populated with signature-tier results", func(t *testing.T) {
+		t.Parallel()
+		const src = `package p
+import "context"
+type I interface {
+    Get(ctx context.Context, k string) (string, error)
+    Save(ctx context.Context, v string) error
+}
+`
+		got := classifyAllViaInterface(t, src, "I", nil)
+		testkit.Equal(t, got["Get"], "Reader", "Get pre-classified as Reader")
+		testkit.Equal(t, got["Save"], "Writer", "Save pre-classified as Writer")
 	})
 }

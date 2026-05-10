@@ -73,6 +73,38 @@ type Signature struct {
 	// Iter is pre-detected iter.Seq[T] / iter.Seq2[V, error]
 	// info. Set when any result is an iter type.
 	Iter generator.IterSeqInfo
+
+	// Interface, when non-nil, gives the detector a view of the
+	// other methods on the same interface. Populated by
+	// [Registry.ClassifyInterface]; nil under the single-method
+	// [Registry.Classify] path. Contract- and composite-tier
+	// detectors require it; signature-tier detectors ignore it.
+	Interface *InterfaceContext
+}
+
+// InterfaceContext carries the multi-method view that contract- and
+// composite-tier detectors need: every method's MethodInfo (for
+// signature-shape lookup) plus the signature-tier classification of
+// each method (for sibling-shape validation) plus the per-method
+// directive list (for directive-payload resolution).
+//
+// Built by [Registry.ClassifyInterface] before the second pass that
+// runs the full detector cascade with sibling awareness.
+type InterfaceContext struct {
+	// Methods maps method name → MethodInfo for sibling-existence and
+	// signature inspection.
+	Methods map[string]generator.MethodInfo
+
+	// Shapes maps method name → signature-tier classification. Built
+	// in pass 1 of ClassifyInterface; contract-tier detectors look up
+	// siblings here to validate "the named sibling has shape X."
+	Shapes map[string]Info
+
+	// Directives maps method name → directives, supplied by the
+	// caller. Detectors use this to resolve cross-method directive
+	// payloads (e.g., `acquire <Release>` reads the `Release`
+	// method's directives).
+	Directives map[string][]directive.Directive
 }
 
 // ParseSignature builds a [Signature] view for one method.

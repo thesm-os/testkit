@@ -17,3 +17,17 @@ type LookupOutput struct {
 	R2 any
 	OK bool
 }
+
+// MultiReaderOutput packs the (V1, V2, error) return from a
+// MultiReader-shaped method for trace recording.
+type MultiReaderOutput struct {
+	V1 any
+	V2 any
+}
+
+// MultiAggregatorOutput packs the (V1, V2, error) return from a
+// MultiAggregator-shaped method for trace recording.
+type MultiAggregatorOutput struct {
+	V1 any
+	V2 any
+}

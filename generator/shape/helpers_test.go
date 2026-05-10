@@ -48,6 +48,32 @@ func classifyOne(t *testing.T, src string, dirs ...directive.Directive) string {
 	return classifyAll(t, src, "I", d)["F"]
 }
 
+// classifyAllViaInterface mirrors [classifyAll] but routes through
+// [shape.ClassifyInterface] so contract- and composite-tier detectors
+// see the InterfaceContext. Returns method-name → shape-name.
+func classifyAllViaInterface(
+	t *testing.T,
+	src, ifaceName string,
+	dirs map[string][]directive.Directive,
+) map[string]string {
+	t.Helper()
+	iface, _ := loadInterface(t, src, ifaceName)
+	tracker := generator.NewImportTracker("p")
+	methods := make([]generator.MethodInfo, 0, iface.NumMethods())
+	for m := range iface.Methods() {
+		methods = append(methods, generator.MethodInfo{
+			Name:      m.Name(),
+			Signature: m.Type().(*types.Signature),
+		})
+	}
+	infos := shape.ClassifyInterface(methods, tracker, dirs)
+	out := make(map[string]string, len(methods))
+	for i, m := range methods {
+		out[m.Name] = infos[i].Shape.String()
+	}
+	return out
+}
+
 // buildSig parses src as package "p", finds method "F" on interface
 // "I", and returns the [shape.Signature] view ready to pass to a
 // detector's Detect method directly.

@@ -45,6 +45,11 @@ func (r *Registry) Detectors() []Detector {
 // Classify walks the registered detectors in priority order. The
 // first matching detector wins; if none matches, the result has
 // Shape == [Unknown].
+//
+// This is the single-method entry point: [Signature.Interface] is
+// nil, so contract- and composite-tier detectors that need sibling
+// awareness will return false. Use [Registry.ClassifyInterface] for
+// interface-level analysis.
 func (r *Registry) Classify(m generator.MethodInfo, tracker *generator.ImportTracker, dirs []directive.Directive) Info {
 	sig := ParseSignature(m, tracker, dirs)
 	r.mu.RLock()
@@ -55,6 +60,57 @@ func (r *Registry) Classify(m generator.MethodInfo, tracker *generator.ImportTra
 		}
 	}
 	return Info{Shape: Unknown}
+}
+
+// ClassifyInterface classifies every method on an interface in two
+// passes so contract- and composite-tier detectors can validate
+// sibling shapes. Pass 1 runs the cascade against each method with
+// no [InterfaceContext] attached — every contract-/composite-tier
+// detector returns false (Signature.Interface is nil), so the result
+// is the signature-tier shape. Pass 2 runs the cascade again with
+// the InterfaceContext populated by pass 1, letting contract-/composite-
+// tier detectors fire and override the signature-tier result.
+//
+// Returned Infos align with the input methods slice index for index.
+// Methods whose name appears multiple times in dirs use the first
+// match; absent entries default to a nil directive slice.
+func (r *Registry) ClassifyInterface(
+	methods []generator.MethodInfo,
+	tracker *generator.ImportTracker,
+	dirs map[string][]directive.Directive,
+) []Info {
+	ctx := &InterfaceContext{
+		Methods:    make(map[string]generator.MethodInfo, len(methods)),
+		Shapes:     make(map[string]Info, len(methods)),
+		Directives: dirs,
+	}
+	for _, m := range methods {
+		ctx.Methods[m.Name] = m
+	}
+
+	// Pass 1: signature-tier classification (no Interface ctx).
+	for _, m := range methods {
+		ctx.Shapes[m.Name] = r.Classify(m, tracker, dirs[m.Name])
+	}
+
+	// Pass 2: full cascade with InterfaceContext attached. Contract-
+	// and composite-tier detectors gate on sig.Interface != nil and
+	// fire here, overriding the signature-tier shape when they match.
+	out := make([]Info, len(methods))
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for i, m := range methods {
+		sig := ParseSignature(m, tracker, dirs[m.Name])
+		sig.Interface = ctx
+		out[i] = Info{Shape: Unknown}
+		for _, d := range r.detectors {
+			if info, ok := d.Detect(sig); ok {
+				out[i] = info
+				break
+			}
+		}
+	}
+	return out
 }
 
 // NewRegistry returns a [Registry] populated with every shipped
@@ -100,6 +156,33 @@ func NewRegistry() *Registry {
 //	 200   Lifecycle         (ctx) error
 func defaultDetectors() []Detector {
 	return []Detector{
+		// Composite-tier (2000-2050). Multi-method shapes; intercept
+		// before contract- and signature-tier when the directive is
+		// present and the named siblings resolve on the same
+		// interface.
+		sagaDetector{},
+		twoPhaseDetector{},
+		cursorDetector{},
+		poolDetector{},
+
+		// Contract-tier (1502-1590). Sibling-aware; only fire under
+		// ClassifyInterface when the directive is present and (for
+		// detectors that require it) the named sibling resolves on
+		// the same interface.
+		transactionFuncDetector{},
+		getOrComputeDetector{},
+		casDetector{},
+		paginatorDetector{},
+		acquireLeaseDetector{},
+		persisterDetector{},
+		updaterDetector{},
+		upserterDetector{},
+		appenderDetector{},
+		watcherDetector{},
+		publisherDetector{},
+		subscriberDetector{},
+
+		// Signature-tier (200-1000).
 		streamReaderDetector{},
 		batchReaderDetector{},
 		streamConsumerDetector{},
@@ -143,4 +226,14 @@ func DefaultRegistry() *Registry {
 // Classify is a convenience wrapper around DefaultRegistry().Classify.
 func Classify(m generator.MethodInfo, tracker *generator.ImportTracker, dirs []directive.Directive) Info {
 	return DefaultRegistry().Classify(m, tracker, dirs)
+}
+
+// ClassifyInterface is a convenience wrapper around
+// [Registry.ClassifyInterface] on the default registry.
+func ClassifyInterface(
+	methods []generator.MethodInfo,
+	tracker *generator.ImportTracker,
+	dirs map[string][]directive.Directive,
+) []Info {
+	return DefaultRegistry().ClassifyInterface(methods, tracker, dirs)
 }

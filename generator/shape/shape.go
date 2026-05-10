@@ -46,6 +46,30 @@ const (
 	// Lifecycle shapes.
 	Lifecycle     // func(ctx) error — no other params
 	VoidLifecycle // func() — no params, no return
+
+	// Contract-tier shapes. Promoted from a signature-tier base when
+	// the interface structure (sibling methods, fields, directive
+	// payload) supports the contract. Each carries invariants beyond
+	// what the base shape implies.
+	Persister       // Writer-with-result whose key is fetched by a sibling Reader
+	Updater         // Writer/CompositeWriter that replaces by key
+	Upserter        // idempotent insert-or-update
+	CompareAndSwap  // Writer with version field; exactly-one-winner
+	Appender        // Writer that returns monotonic offsets
+	Watcher         // subscribes to changes triggered by a sibling
+	Paginator       // paginated reader with cursor field
+	GetOrCompute    // Reader with func(()V) arg, single-flight semantics
+	TransactionFunc // Lifecycle/Writer taking func(Tx) error
+	AcquireLease    // acquire paired with a release method
+	Publisher       // publishes to a sibling subscribe method
+	Subscriber      // channel-/callback-based subscriber
+
+	// Composite-tier shapes. Multi-method shapes spanning ≥2
+	// interface methods.
+	Pool     // Get/Put pair
+	Cursor   // Next/Close pair
+	TwoPhase // Begin/Commit/Rollback triad
+	Saga     // multi-step chain with compensation
 )
 
 // String returns the canonical name of the shape, as used in spec
@@ -94,6 +118,38 @@ func (s Shape) String() string {
 		return "Lifecycle"
 	case VoidLifecycle:
 		return "VoidLifecycle"
+	case Persister:
+		return "Persister"
+	case Updater:
+		return "Updater"
+	case Upserter:
+		return "Upserter"
+	case CompareAndSwap:
+		return "CompareAndSwap"
+	case Appender:
+		return "Appender"
+	case Watcher:
+		return "Watcher"
+	case Paginator:
+		return "Paginator"
+	case GetOrCompute:
+		return "GetOrCompute"
+	case TransactionFunc:
+		return "TransactionFunc"
+	case AcquireLease:
+		return "AcquireLease"
+	case Publisher:
+		return "Publisher"
+	case Subscriber:
+		return "Subscriber"
+	case Pool:
+		return "Pool"
+	case Cursor:
+		return "Cursor"
+	case TwoPhase:
+		return "TwoPhase"
+	case Saga:
+		return "Saga"
 	default:
 		return "Unknown"
 	}

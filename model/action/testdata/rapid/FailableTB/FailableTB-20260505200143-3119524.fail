@@ -1,6 +1,0 @@
-# 2026/05/05 20:01:43.177590 [FailableTB] [rapid] draw Append_entry: action_test.entry{ID:"mismatch", Data:"data"}
-# 2026/05/05 20:01:43.177613 [FailableTB] Append: SUT err=injected error, ref err=<nil>
-#
-v0.4.8#8069401749534919602
-0x0
-0x0

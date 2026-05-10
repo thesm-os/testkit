@@ -76,4 +76,29 @@ const (
 
 	// Ctx + error-only fallbacks last.
 	PriorityLifecycle = 200
+
+	// Composite-tier band: multi-method shapes claim before any
+	// signature-tier or contract-tier detection. Saga at the top —
+	// directive-required, intercepts before the auto-detected ones.
+	PriorityCompositeSaga     = 2050
+	PriorityCompositeTwoPhase = 2030
+	PriorityCompositeCursor   = 2010
+	PriorityCompositePool     = 2000
+
+	// Contract-tier band: directive-promoted or structurally-derived
+	// single-method contracts. Each fires after composite-tier and
+	// before signature-tier, allowing a directive on a Reader/Writer
+	// to elevate it to a contract-tier shape with stronger invariants.
+	PriorityContractTransactionFunc = 1590
+	PriorityContractGetOrCompute    = 1580
+	PriorityContractCAS             = 1570
+	PriorityContractPaginator       = 1560
+	PriorityContractAcquireLease    = 1550
+	PriorityContractPersister       = 1540
+	PriorityContractUpdater         = 1530
+	PriorityContractUpserter        = 1520
+	PriorityContractAppender        = 1510
+	PriorityContractWatcher         = 1505
+	PriorityContractPublisher       = 1503
+	PriorityContractSubscriber      = 1502
 )
