@@ -105,7 +105,8 @@ func TestChainVerify(t *testing.T) {
 
 	t.Run("both valid chains pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.ChainVerify("Verify",
+		a := action.ChainVerify(
+			"Verify",
 			func(ctx context.Context, impl chainIface) error {
 				return impl.Verify(ctx)
 			},
@@ -126,7 +127,8 @@ func TestChainVerify(t *testing.T) {
 
 	t.Run("catches SUT/ref error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.ChainVerify("Verify",
+		a := action.ChainVerify(
+			"Verify",
 			func(ctx context.Context, impl chainIface) error {
 				return impl.Verify(ctx)
 			},
@@ -152,7 +154,8 @@ func TestChainReplay(t *testing.T) {
 		hist := history.New[struct{}, entry]()
 		hist.Record(struct{}{}, entry{ID: "1"})
 
-		a := action.ChainReplay("Replay", hist,
+		a := action.ChainReplay(
+			"Replay", hist,
 			func(ctx context.Context, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
 				return impl.Replay(ctx)
 			},
@@ -176,7 +179,8 @@ func TestChainReplay(t *testing.T) {
 		hist := history.New[struct{}, entry]()
 		hist.Record(struct{}{}, entry{ID: "1"})
 
-		a := action.ChainReplay("Replay", hist,
+		a := action.ChainReplay(
+			"Replay", hist,
 			func(ctx context.Context, impl chainIface, _ struct{}) iter.Seq2[entry, error] {
 				return impl.Replay(ctx)
 			},

@@ -35,7 +35,8 @@ func TestReader(t *testing.T) {
 
 	t.Run("passes when SUT and ref agree", func(t *testing.T) {
 		t.Parallel()
-		a := action.Reader("Get", rapid.Just("k"),
+		a := action.Reader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) (string, error) {
 				return s.getF("k")
 			},
@@ -52,7 +53,8 @@ func TestReader(t *testing.T) {
 
 	t.Run("catches value mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Reader("Get", rapid.Just("k"),
+		a := action.Reader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) (string, error) {
 				return s.getF("k")
 			},
@@ -69,7 +71,8 @@ func TestReader(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Reader("Get", rapid.Just("k"),
+		a := action.Reader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) (string, error) {
 				return s.getF("k")
 			},
@@ -90,7 +93,8 @@ func TestWriter(t *testing.T) {
 
 	t.Run("passes when both succeed", func(t *testing.T) {
 		t.Parallel()
-		a := action.Writer("Put", rapid.Just("v"),
+		a := action.Writer(
+			"Put", rapid.Just("v"),
 			func(_ context.Context, s *simpleStore, _ string) error { return s.putF("v") },
 		)
 		sut := &simpleStore{putF: func(_ string) error { return nil }}
@@ -105,7 +109,8 @@ func TestWriter(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Writer("Put", rapid.Just("v"),
+		a := action.Writer(
+			"Put", rapid.Just("v"),
 			func(_ context.Context, s *simpleStore, _ string) error { return s.putF("v") },
 		)
 		sut := &simpleStore{putF: func(_ string) error { return errBroken }}
@@ -124,7 +129,8 @@ func TestDeleter(t *testing.T) {
 
 	t.Run("passes when both succeed", func(t *testing.T) {
 		t.Parallel()
-		a := action.Deleter("Delete", rapid.Just("k"),
+		a := action.Deleter(
+			"Delete", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) error { return s.delF("k") },
 		)
 		sut := &simpleStore{delF: func(_ string) error { return nil }}
@@ -139,7 +145,8 @@ func TestDeleter(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Deleter("Delete", rapid.Just("k"),
+		a := action.Deleter(
+			"Delete", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) error { return s.delF("k") },
 		)
 		sut := &simpleStore{delF: func(_ string) error { return errBroken }}
@@ -158,7 +165,8 @@ func TestAggregator(t *testing.T) {
 
 	t.Run("passes when values match", func(t *testing.T) {
 		t.Parallel()
-		a := action.Aggregator("Count",
+		a := action.Aggregator(
+			"Count",
 			func(_ context.Context, s *simpleStore) (int, error) { return s.countF() },
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 5, nil }}
@@ -173,7 +181,8 @@ func TestAggregator(t *testing.T) {
 
 	t.Run("catches value mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Aggregator("Count",
+		a := action.Aggregator(
+			"Count",
 			func(_ context.Context, s *simpleStore) (int, error) { return s.countF() },
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 3, nil }}
@@ -188,7 +197,8 @@ func TestAggregator(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Aggregator("Count",
+		a := action.Aggregator(
+			"Count",
 			func(_ context.Context, s *simpleStore) (int, error) { return s.countF() },
 		)
 		sut := &simpleStore{countF: func() (int, error) { return 0, errBroken }}
@@ -207,7 +217,8 @@ func TestLifecycle(t *testing.T) {
 
 	t.Run("passes when both succeed", func(t *testing.T) {
 		t.Parallel()
-		a := action.Lifecycle("Close",
+		a := action.Lifecycle(
+			"Close",
 			func(_ context.Context, s *simpleStore) error { return s.closeF() },
 		)
 		sut := &simpleStore{closeF: func() error { return nil }}
@@ -222,7 +233,8 @@ func TestLifecycle(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Lifecycle("Close",
+		a := action.Lifecycle(
+			"Close",
 			func(_ context.Context, s *simpleStore) error { return s.closeF() },
 		)
 		sut := &simpleStore{closeF: func() error { return errBroken }}
@@ -301,7 +313,8 @@ func TestStream(t *testing.T) {
 
 	t.Run("passes when items match", func(t *testing.T) {
 		t.Parallel()
-		a := action.Stream("List",
+		a := action.Stream(
+			"List",
 			func(_ context.Context, s *simpleStore) ([]string, error) { return s.listF() },
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"a", "b"}, nil }}
@@ -316,7 +329,8 @@ func TestStream(t *testing.T) {
 
 	t.Run("order insensitive", func(t *testing.T) {
 		t.Parallel()
-		a := action.Stream("List",
+		a := action.Stream(
+			"List",
 			func(_ context.Context, s *simpleStore) ([]string, error) { return s.listF() },
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"b", "a"}, nil }}
@@ -331,7 +345,8 @@ func TestStream(t *testing.T) {
 
 	t.Run("catches item mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Stream("List",
+		a := action.Stream(
+			"List",
 			func(_ context.Context, s *simpleStore) ([]string, error) { return s.listF() },
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return []string{"x"}, nil }}
@@ -346,7 +361,8 @@ func TestStream(t *testing.T) {
 
 	t.Run("catches error mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.Stream("List",
+		a := action.Stream(
+			"List",
 			func(_ context.Context, s *simpleStore) ([]string, error) { return s.listF() },
 		)
 		sut := &simpleStore{listF: func() ([]string, error) { return nil, errBroken }}
@@ -396,7 +412,8 @@ func TestMutator(t *testing.T) {
 	t.Run("calls both SUT and ref", func(t *testing.T) {
 		t.Parallel()
 		var sutCalled, refCalled bool
-		a := action.Mutator("Mutate", rapid.Just("v"),
+		a := action.Mutator(
+			"Mutate", rapid.Just("v"),
 			func(_ context.Context, s *simpleStore, _ string) { s.mutateF("v") },
 		)
 		sut := &simpleStore{mutateF: func(_ string) { sutCalled = true }}
@@ -430,7 +447,8 @@ func TestReaderWithBool(t *testing.T) {
 
 	t.Run("passes when ok and values match", func(t *testing.T) {
 		t.Parallel()
-		a := action.ReaderWithBool("Get", rapid.Just("k"),
+		a := action.ReaderWithBool(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, bool) { return "v", true },
 		)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -443,7 +461,8 @@ func TestReaderWithBool(t *testing.T) {
 
 	t.Run("catches ok flag mismatch", func(t *testing.T) {
 		t.Parallel()
-		a := action.ReaderWithBool("Get", rapid.Just("k"),
+		a := action.ReaderWithBool(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, s *simpleStore, _ string) (string, bool) {
 				if s.emptyF != nil {
 					return "", false // SUT returns not-found
@@ -467,7 +486,8 @@ func TestLookup(t *testing.T) {
 
 	t.Run("passes when ok and values match", func(t *testing.T) {
 		t.Parallel()
-		a := action.Lookup("Inspect", rapid.Just("k"),
+		a := action.Lookup(
+			"Inspect", rapid.Just("k"),
 			func(_ *simpleStore, _ string) (string, int, bool) {
 				return "v", 42, true
 			},
@@ -484,7 +504,8 @@ func TestLookup(t *testing.T) {
 		t.Parallel()
 		sut := &simpleStore{emptyF: func() bool { return true }}
 		ref := &simpleStore{}
-		a := action.Lookup("Inspect", rapid.Just("k"),
+		a := action.Lookup(
+			"Inspect", rapid.Just("k"),
 			func(s *simpleStore, _ string) (string, int, bool) {
 				if s.emptyF != nil {
 					return "", 0, false
@@ -504,7 +525,8 @@ func TestLookup(t *testing.T) {
 		t.Parallel()
 		sut := &simpleStore{emptyF: func() bool { return true }}
 		ref := &simpleStore{}
-		a := action.Lookup("Inspect", rapid.Just("k"),
+		a := action.Lookup(
+			"Inspect", rapid.Just("k"),
 			func(s *simpleStore, _ string) (string, int, bool) {
 				if s.emptyF != nil {
 					return "WRONG", 42, true
@@ -551,7 +573,8 @@ func TestActionKind(t *testing.T) {
 
 	t.Run("Reader sets FailureSemantic", func(t *testing.T) {
 		t.Parallel()
-		a := action.Reader("Get", rapid.Just("k"),
+		a := action.Reader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, error) { return "", nil },
 		)
 		if a.Kind != model.FailureSemantic {
@@ -561,7 +584,8 @@ func TestActionKind(t *testing.T) {
 
 	t.Run("ChainAppend sets FailureStructural", func(t *testing.T) {
 		t.Parallel()
-		a := action.ChainAppend("Append", rapid.Just("entry"),
+		a := action.ChainAppend(
+			"Append", rapid.Just("entry"),
 			func(_ context.Context, _ *simpleStore, _ string) error { return nil },
 		)
 		if a.Kind != model.FailureStructural {

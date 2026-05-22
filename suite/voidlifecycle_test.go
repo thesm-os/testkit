@@ -66,7 +66,8 @@ func TestVoidLifecycle(t *testing.T) {
 			testkit.False(t, r.corrupt, "Reset must clear the corrupt flag")
 		}
 		suite.AssertVoidLifecycleRejectInvalid[*resetter](invalidFactory, check)(
-			voidLifecycleCtx(t))
+			voidLifecycleCtx(t),
+		)
 	})
 
 	t.Run("RejectInvalidWith does not panic on invalid impl", func(t *testing.T) {

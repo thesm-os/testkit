@@ -17,7 +17,8 @@ func TestPool(t *testing.T) {
 
 	t.Run("matching get/put pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.Pool("Pool",
+		a := action.Pool(
+			"Pool",
 			func(_ context.Context, _ *simpleStore) (string, error) { return "r", nil },
 			func(_ context.Context, _ *simpleStore, _ string) error { return nil },
 		)
@@ -32,7 +33,8 @@ func TestPool(t *testing.T) {
 	t.Run("get error mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.Pool("Pool",
+		a := action.Pool(
+			"Pool",
 			func(_ context.Context, _ *simpleStore) (string, error) {
 				i++
 				if i%2 == 1 {
@@ -57,7 +59,8 @@ func TestCursor(t *testing.T) {
 	t.Run("drains both sides equally", func(t *testing.T) {
 		t.Parallel()
 		nextCalls := 0
-		a := action.Cursor("Cursor",
+		a := action.Cursor(
+			"Cursor",
 			func(_ context.Context, _ *simpleStore) (string, bool, error) {
 				nextCalls++
 				if nextCalls%4 == 0 {
@@ -78,7 +81,8 @@ func TestCursor(t *testing.T) {
 
 	t.Run("infinite next hits the limit", func(t *testing.T) {
 		t.Parallel()
-		a := action.Cursor("Cursor",
+		a := action.Cursor(
+			"Cursor",
 			func(_ context.Context, _ *simpleStore) (string, bool, error) { return "v", true, nil },
 			func(_ context.Context, _ *simpleStore) error { return nil },
 			3,
@@ -97,7 +101,8 @@ func TestTwoPhase(t *testing.T) {
 
 	t.Run("matching outcomes pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.TwoPhase("TwoPhase",
+		a := action.TwoPhase(
+			"TwoPhase",
 			func(_ context.Context, _ *simpleStore) (struct{}, error) { return struct{}{}, nil },
 			func(_ context.Context, _ *simpleStore, _ struct{}) error { return nil },
 			func(_ context.Context, _ *simpleStore, _ struct{}) error { return nil },
@@ -113,7 +118,8 @@ func TestTwoPhase(t *testing.T) {
 	t.Run("begin error mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.TwoPhase("TwoPhase",
+		a := action.TwoPhase(
+			"TwoPhase",
 			func(_ context.Context, _ *simpleStore) (struct{}, error) {
 				i++
 				if i%2 == 1 {
@@ -138,7 +144,8 @@ func TestSaga(t *testing.T) {
 
 	t.Run("all steps succeed → no error", func(t *testing.T) {
 		t.Parallel()
-		a := action.Saga("Order",
+		a := action.Saga(
+			"Order",
 			[]func(context.Context, *simpleStore) error{
 				func(_ context.Context, _ *simpleStore) error { return nil },
 				func(_ context.Context, _ *simpleStore) error { return nil },
@@ -167,7 +174,8 @@ func TestSaga(t *testing.T) {
 			return nil
 		}
 		ok := func(_ context.Context, _ *simpleStore) error { return nil }
-		a := action.Saga("Order",
+		a := action.Saga(
+			"Order",
 			[]func(context.Context, *simpleStore) error{failOnSUT, ok},
 			[]func(context.Context, *simpleStore) error{ok, ok},
 		)

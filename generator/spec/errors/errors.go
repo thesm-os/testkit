@@ -103,7 +103,8 @@ func consume(method *spec.Method, dir directive.Directive, data *spec.Data, pkg 
 			if existing.ShortName == short {
 				return fmt.Errorf(
 					"errors: %s and %s both produce Fault%s",
-					existing.VarName, r.Name, short)
+					existing.VarName, r.Name, short,
+				)
 			}
 		}
 		out = append(out, Sentinel{

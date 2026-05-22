@@ -31,7 +31,8 @@ func WriteResult(result *Result, workDir string, check bool) error {
 				if os.IsNotExist(err) {
 					diffs = append(diffs, fmt.Sprintf(
 						"--- %s (does not exist)\n+++ %s (generated)\n(new file)",
-						f.Path, f.Path))
+						f.Path, f.Path,
+					))
 					continue
 				}
 				return fmt.Errorf("read %s: %w", f.Path, err)

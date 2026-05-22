@@ -53,7 +53,8 @@ func TestAssertOrderAfter(t *testing.T) {
 	}
 	factory := func() *ordered { return &ordered{} }
 
-	fn := suite.AssertOrderAfter("Open",
+	fn := suite.AssertOrderAfter(
+		"Open",
 		func(_ context.Context, o *ordered) error {
 			o.mu.Lock()
 			defer o.mu.Unlock()
@@ -185,7 +186,8 @@ func TestAssertTimeoutWithin(t *testing.T) {
 
 func TestAssertSideEffectObservable(t *testing.T) {
 	t.Parallel()
-	fn := suite.AssertSideEffectObservable("count",
+	fn := suite.AssertSideEffectObservable(
+		"count",
 		func(_ context.Context, d *directive) any {
 			d.mu.Lock()
 			defer d.mu.Unlock()
@@ -237,7 +239,8 @@ func TestAssertScopeAuthRequired(t *testing.T) {
 	type scopeKey struct{}
 	unauthorized := errors.New("unauthorized")
 
-	fn := suite.AssertScopeAuthRequired("admin",
+	fn := suite.AssertScopeAuthRequired(
+		"admin",
 		func(scope string) context.Context {
 			//nolint:usetesting // scopeContext is not a test helper; it builds a context with auth data
 			return context.WithValue(context.Background(), scopeKey{}, scope)

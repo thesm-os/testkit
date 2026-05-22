@@ -137,7 +137,8 @@ type I interface { F(ctx context.Context, k string) (int, error) }
 	// Reader-shape signature. Throw a bunch of non-shape-affecting
 	// directives at it and confirm classification is unchanged.
 	noDirs := classifyOne(t, src)
-	withDirs := classifyOne(t, src,
+	withDirs := classifyOne(
+		t, src,
 		directive.Directive{Name: directive.Atomic},
 		directive.Directive{Name: directive.Idempotent},
 		directive.Directive{Name: directive.Cacheable},

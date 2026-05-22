@@ -6,6 +6,7 @@ package linearize
 import (
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/anishathalye/porcupine"
 	"github.com/google/go-cmp/cmp"
@@ -50,7 +51,7 @@ func KV[K comparable, V any](sentinel error) porcupine.Model {
 				keys = append(keys, k)
 			}
 			// Stable order for deterministic checking.
-			sortStrings(keys)
+			sort.Strings(keys)
 			result := make([][]porcupine.Operation, 0, len(keys))
 			for _, k := range keys {
 				result = append(result, m[k])
@@ -66,7 +67,7 @@ func KV[K comparable, V any](sentinel error) porcupine.Model {
 			out := output.(model.OpOutput)
 
 			switch inp.Name {
-			case "Get":
+			case OpGet:
 				r := out.Result.(ReaderResult[V])
 				if !s.present {
 					if sentinel == nil {
@@ -76,10 +77,10 @@ func KV[K comparable, V any](sentinel error) porcupine.Model {
 				}
 				return r.Err == nil && cmp.Equal(r.Value, s.value), s
 
-			case "Put":
+			case OpPut:
 				return true, kvState[V]{present: true, value: inp.Args.(V)}
 
-			case "Delete":
+			case OpDelete:
 				return true, kvState[V]{present: false, value: zeroV}
 
 			default:
@@ -109,14 +110,5 @@ func KV[K comparable, V any](sentinel error) porcupine.Model {
 			}
 			return fmt.Sprintf("%v", s.value)
 		},
-	}
-}
-
-// sortStrings sorts a string slice in place.
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
 	}
 }

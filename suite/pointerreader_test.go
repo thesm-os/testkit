@@ -44,19 +44,22 @@ func TestPointerReader(t *testing.T) {
 		t.Parallel()
 		want := "alpha"
 		suite.AssertPointerReaderReturnsForKey[*ptrStore, string, string](
-			"k1", &want)(pointerReaderCtx(t, data))
+			"k1", &want,
+		)(pointerReaderCtx(t, data))
 	})
 
 	t.Run("NilOnUnknown returns nil for missing keys", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertPointerReaderNilOnUnknown[*ptrStore, string, string](
-			"missing")(pointerReaderCtx(t, data))
+			"missing",
+		)(pointerReaderCtx(t, data))
 	})
 
 	t.Run("Consistent yields equal values across N calls", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertPointerReaderConsistent[*ptrStore, string, string](
-			"k1", 4)(pointerReaderCtx(t, data))
+			"k1", 4,
+		)(pointerReaderCtx(t, data))
 	})
 
 	t.Run("RespectsContext surfaces nil under cancelled ctx", func(t *testing.T) {
@@ -79,7 +82,8 @@ func TestPointerReader(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertPointerReaderConcurrentSafe[*ptrStore, string, string](
-			"k1", 4, 50)(pointerReaderCtx(t, data))
+			"k1", 4, 50,
+		)(pointerReaderCtx(t, data))
 	})
 }
 
@@ -100,5 +104,6 @@ func TestAssertPointerReaderBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertPointerReaderBaseline[*ptrStore, string, string](
-		"k1", &want, "missing")(ctx)
+		"k1", &want, "missing",
+	)(ctx)
 }

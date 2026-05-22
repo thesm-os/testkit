@@ -38,31 +38,36 @@ func TestReaderNoError(t *testing.T) {
 	t.Run("ReturnsForKey surfaces the value", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderNoErrorReturnsForKey[*cache, string, string](
-			"k1", "alpha")(readerNoErrorCtx(t, data))
+			"k1", "alpha",
+		)(readerNoErrorCtx(t, data))
 	})
 
 	t.Run("Consistent yields equal values across N calls", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderNoErrorConsistent[*cache, string, string](
-			"k1", 4)(readerNoErrorCtx(t, data))
+			"k1", 4,
+		)(readerNoErrorCtx(t, data))
 	})
 
 	t.Run("ZeroOnUnknown returns the zero value for missing keys", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderNoErrorZeroOnUnknown[*cache, string, string](
-			"missing", "")(readerNoErrorCtx(t, data))
+			"missing", "",
+		)(readerNoErrorCtx(t, data))
 	})
 
 	t.Run("RespectsContext is a panic-free smoke", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderNoErrorRespectsContext[*cache, string, string](
-			"k1")(readerNoErrorCtx(t, data))
+			"k1",
+		)(readerNoErrorCtx(t, data))
 	})
 
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderNoErrorConcurrentSafe[*cache, string, string](
-			"k1", 4, 50)(readerNoErrorCtx(t, data))
+			"k1", 4, 50,
+		)(readerNoErrorCtx(t, data))
 	})
 }
 
@@ -70,5 +75,6 @@ func TestAssertReaderNoErrorBaseline(t *testing.T) {
 	t.Parallel()
 	data := map[string]string{"k1": "alpha"}
 	suite.AssertReaderNoErrorBaseline[*cache, string, string](
-		"k1", "alpha", "missing", "")(readerNoErrorCtx(t, data))
+		"k1", "alpha", "missing", "",
+	)(readerNoErrorCtx(t, data))
 }

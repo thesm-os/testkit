@@ -50,21 +50,24 @@ func TestBatchReader(t *testing.T) {
 		t.Parallel()
 		ctx := batchReaderCtx(t, map[string]string{"a": "alpha", "b": "beta"})
 		suite.AssertBatchReaderReturnsAll[*batchStore, string, string](
-			[]string{"a", "b"}, []string{"alpha", "beta"})(ctx)
+			[]string{"a", "b"}, []string{"alpha", "beta"},
+		)(ctx)
 	})
 
 	t.Run("ReturnsSentinel surfaces the configured error for unknown keys", func(t *testing.T) {
 		t.Parallel()
 		ctx := batchReaderCtx(t, map[string]string{"a": "alpha"})
 		suite.AssertBatchReaderReturnsSentinel[*batchStore, string, string](
-			[]string{"a", "missing"}, errBatchUnknown)(ctx)
+			[]string{"a", "missing"}, errBatchUnknown,
+		)(ctx)
 	})
 
 	t.Run("Consistent yields equal-length slices across N calls", func(t *testing.T) {
 		t.Parallel()
 		ctx := batchReaderCtx(t, map[string]string{"a": "alpha", "b": "beta"})
 		suite.AssertBatchReaderConsistent[*batchStore, string, string](
-			[]string{"a", "b"}, 4)(ctx)
+			[]string{"a", "b"}, 4,
+		)(ctx)
 	})
 
 	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
@@ -90,7 +93,8 @@ func TestBatchReader(t *testing.T) {
 		t.Parallel()
 		ctx := batchReaderCtx(t, map[string]string{"a": "alpha", "b": "beta"})
 		suite.AssertBatchReaderConcurrentSafe[*batchStore, string, string](
-			[]string{"a", "b"}, 4, 50)(ctx)
+			[]string{"a", "b"}, 4, 50,
+		)(ctx)
 	})
 }
 
@@ -110,5 +114,6 @@ func TestAssertBatchReaderBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertBatchReaderBaseline[*batchStore, string, string](
-		[]string{"a", "b"}, []string{"alpha", "beta"})(ctx)
+		[]string{"a", "b"}, []string{"alpha", "beta"},
+	)(ctx)
 }

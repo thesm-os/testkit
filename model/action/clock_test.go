@@ -22,7 +22,8 @@ func TestAdvanceClock(t *testing.T) {
 		sutClk := clock.NewTestClock(origin)
 		refClk := clock.NewTestClock(origin)
 
-		a := action.AdvanceClock[string]("AdvanceClock",
+		a := action.AdvanceClock[string](
+			"AdvanceClock",
 			func() (*clock.TestClock, *clock.TestClock) { return sutClk, refClk },
 			time.Hour,
 		)
@@ -45,7 +46,8 @@ func TestAdvanceClock(t *testing.T) {
 		sutClk := clock.NewTestClock(origin)
 		refClk := clock.NewTestClock(origin)
 
-		a := action.AdvanceClock[string]("AdvanceClock",
+		a := action.AdvanceClock[string](
+			"AdvanceClock",
 			func() (*clock.TestClock, *clock.TestClock) { return sutClk, refClk },
 			time.Minute,
 		)
@@ -63,7 +65,8 @@ func TestAdvanceClock(t *testing.T) {
 
 	t.Run("nil clocks are safe", func(t *testing.T) {
 		t.Parallel()
-		a := action.AdvanceClock[string]("AdvanceClock",
+		a := action.AdvanceClock[string](
+			"AdvanceClock",
 			func() (*clock.TestClock, *clock.TestClock) { return nil, nil },
 			time.Hour,
 		)

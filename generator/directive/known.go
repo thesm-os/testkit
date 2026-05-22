@@ -219,7 +219,8 @@ func defaultDescriptors() []Descriptor {
 				"AssertReturnsSentinel/AssertWriteRejectInvalid drives the per-shape sentinel-return assertion",
 			),
 		),
-		New(WrappedVia,
+		New(
+			WrappedVia,
 			Describe("error wrapping discipline"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
@@ -230,13 +231,15 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Behavioral properties (Mixin tier).
-		New(Idempotent,
+		New(
+			Idempotent,
 			Describe("repeated calls produce same result"),
 			InCategory(Mixin),
 			InPhase(Phase1),
 			Consumed("suite", "AssertIdempotentSecondCall subtest"),
 		),
-		New(Pure,
+		New(
+			Pure,
 			Describe("no side effects"),
 			InCategory(Mixin),
 			InPhase(Phase1),
@@ -244,14 +247,16 @@ func defaultDescriptors() []Descriptor {
 			Implies(Idempotent),
 			Consumed("suite", "AssertPureImplIndependent cross-impl agreement subtest"),
 		),
-		New(Cacheable,
+		New(
+			Cacheable,
 			Describe("deterministic function of inputs"),
 			InCategory(Mixin),
 			InPhase(Phase3),
 			Implies(Pure),
 			Consumed("suite", "AssertCacheableRepeatedReads three-call equality subtest"),
 		),
-		New(Monotonic,
+		New(
+			Monotonic,
 			Describe("ordered results"),
 			InCategory(Mixin),
 			InPhase(Phase3),
@@ -259,26 +264,30 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Safety (Mixin tier).
-		New(Concurrent,
+		New(
+			Concurrent,
 			Describe("safe for parallel access"),
 			InCategory(Mixin),
 			InPhase(Phase1),
 			ConflictsWith(ConcurrentReaders),
 			Consumed("suite", "AssertConcurrentStrict 16×25 fanout subtest"),
 		),
-		New(ConcurrentReaders,
+		New(
+			ConcurrentReaders,
 			Describe("parallel reads, serialised writes"),
 			InCategory(Mixin),
 			InPhase(Phase3),
 			Consumed("suite", "AssertConcurrentReadersParallel 32-reader fanout subtest"),
 		),
-		New(NilSafe,
+		New(
+			NilSafe,
 			Describe("zero/nil inputs do not panic"),
 			InCategory(Mixin),
 			InPhase(Phase1),
 			Consumed("suite", "AssertNilSafeNoPanic subtest"),
 		),
-		New(Atomic,
+		New(
+			Atomic,
 			Describe("all-or-nothing"),
 			InCategory(Mixin),
 			InPhase(Phase3),
@@ -287,19 +296,22 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Context & lifecycle.
-		New(Ctx,
+		New(
+			Ctx,
 			Describe("respects context cancellation"),
 			InCategory(Mixin),
 			InPhase(Phase1),
 		),
-		New(Timeout,
+		New(
+			Timeout,
 			Describe("must complete within deadline"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("duration", ArgDuration, Required),
 			Consumed("suite", "AssertTimeoutWithin deadline-bound subtest"),
 		),
-		New(Deprecated,
+		New(
+			Deprecated,
 			Describe("method is deprecated"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
@@ -307,14 +319,16 @@ func defaultDescriptors() []Descriptor {
 			Consumed("stub", "tb.Logf in dispatch + // Deprecated: doc comment"),
 			Consumed("suite", "AssertDeprecatedSmoke subtest"),
 		),
-		New(Lease,
+		New(
+			Lease,
 			Describe("acquires resource, must release via the named method"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Release", ArgIdent, Required),
 			Consumed("suite", "AssertLeaseAcquireRelease pair-method subtest"),
 		),
-		New(IntegrationOnly,
+		New(
+			IntegrationOnly,
 			Describe("opt out of stubbing"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
@@ -323,19 +337,22 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Performance.
-		New(Allocs,
+		New(
+			Allocs,
 			Describe("allocation ceiling"),
 			InCategory(Enrichment),
 			InPhase(Phase2),
 			Arg("N", ArgInt, Required),
 		),
-		New(Latency,
+		New(
+			Latency,
 			Describe("latency ceiling"),
 			InCategory(Enrichment),
 			InPhase(Phase2),
 			Arg("duration", ArgDuration, Required),
 		),
-		New(Percentiles,
+		New(
+			Percentiles,
 			Describe("per-percentile latency ceilings"),
 			InCategory(Enrichment),
 			InPhase(Phase2),
@@ -343,13 +360,15 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Resilience.
-		New(Retryable,
+		New(
+			Retryable,
 			Describe("safe to retry"),
 			InCategory(Mixin),
 			InPhase(Phase3),
 			Consumed("stub", "required companion of retry-succeeds-on-attempt"),
 		),
-		New(RetrySucceedsOnAttempt,
+		New(
+			RetrySucceedsOnAttempt,
 			Describe("transient-failure recovery"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
@@ -360,14 +379,16 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Causality & ordering.
-		New(SideEffect,
+		New(
+			SideEffect,
 			Describe("causal relationship"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Method", ArgKey, Required),
 			Consumed("suite", "AssertSideEffectObservable paired-method subtest"),
 		),
-		New(OrderAfter,
+		New(
+			OrderAfter,
 			Describe("call ordering constraint"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
@@ -377,7 +398,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Isolation.
-		New(Partition,
+		New(
+			Partition,
 			Describe("per-key isolation; in chain mode, the chain partitions by this field"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
@@ -388,14 +410,16 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Input & validation.
-		New(Validates,
+		New(
+			Validates,
 			Describe("input validation"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Field", ArgIdent, Required),
 			Consumed("suite", "AssertValidatesZeroInput zero-value rejection subtest"),
 		),
-		New(Bounded,
+		New(
+			Bounded,
 			Describe("return value bounds"),
 			InCategory(Mixin),
 			InPhase(Phase3),
@@ -404,7 +428,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Properties & invariants.
-		New(Invariant,
+		New(
+			Invariant,
 			Describe("post-call property"),
 			InCategory(Documentation),
 			InPhase(Phase4),
@@ -412,19 +437,22 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Testing & observability.
-		New(Fuzz,
+		New(
+			Fuzz,
 			Describe("generate fuzz target"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
-		New(Hooks,
+		New(
+			Hooks,
 			Describe("fires callbacks"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
 			Arg("HookName", ArgIdent, Required, Multi),
 			Consumed("suite", "AssertHooksFire registry-driven subtest"),
 		),
-		New(Req,
+		New(
+			Req,
 			Describe("requirement traceability"),
 			InCategory(Documentation),
 			InPhase(Phase1),
@@ -432,7 +460,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Consistency.
-		New(Eventually,
+		New(
+			Eventually,
 			Describe("eventual consistency under merge; suite polls for convergence within the window"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
@@ -445,7 +474,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Authorization.
-		New(Scope,
+		New(
+			Scope,
 			Describe("requires authorization"),
 			InCategory(Enrichment),
 			InPhase(Phase5),
@@ -454,7 +484,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Iteration.
-		New(Pagination,
+		New(
+			Pagination,
 			Describe("paginated results with the named cursor field"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
@@ -464,22 +495,26 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Shape hints.
-		New(Deleter,
+		New(
+			Deleter,
 			Describe("marks method as delete-by-key shape"),
 			InCategory(SignatureHint),
 			InPhase(Phase1),
 		),
-		New(Mutator,
+		New(
+			Mutator,
 			Describe("explicit Mutator marker (auto-detected from signature)"),
 			InCategory(SignatureHint),
 			InPhase(Phase1),
 		),
-		New(NotMutator,
+		New(
+			NotMutator,
 			Describe("opt-out of Mutator auto-detection"),
 			InCategory(SignatureHint),
 			InPhase(Phase1),
 		),
-		New(KeyField,
+		New(
+			KeyField,
 			Describe("key extraction field for reference synthesis"),
 			InCategory(SignatureHint),
 			InPhase(Phase1),
@@ -487,7 +522,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Smoke + bench input replacement.
-		New(Sample,
+		New(
+			Sample,
 			Describe("sample builder functions for non-context parameters"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
@@ -496,42 +532,48 @@ func defaultDescriptors() []Descriptor {
 
 		// Cross-method invariants — one descriptor per invariant; the
 		// suite emits a paired-method contract subtest per directive.
-		New(Cross,
+		New(
+			Cross,
 			Describe("generic cross-method invariant declaration (escape hatch)"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
 			Arg("name", ArgIdent, Required),
 			Arg("Methods", ArgKey, Required, Multi),
 		),
-		New(ReadAfterWrite,
+		New(
+			ReadAfterWrite,
 			Describe("after this writer, the named reader returns the written value"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("suite", "AssertReadAfterWriteByKey paired write+read subtest"),
 		),
-		New(DeleteRemoves,
+		New(
+			DeleteRemoves,
 			Describe("after this deleter, the named reader returns the not-found sentinel"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("suite", "AssertDeleteRemovesByKey paired delete+read subtest"),
 		),
-		New(StreamReflectsMutations,
+		New(
+			StreamReflectsMutations,
 			Describe("after this writer, the named stream method yields the written value"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Stream", ArgIdent, Required),
 			Consumed("suite", "AssertStreamReflectsValueWritten paired write+drain subtest"),
 		),
-		New(LifecycleAfterClose,
+		New(
+			LifecycleAfterClose,
 			Describe("after this close, the named reader returns the closed sentinel"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("suite", "AssertLifecycleAfterCloseReflective paired close+read subtest"),
 		),
-		New(CRDTMerge,
+		New(
+			CRDTMerge,
 			Describe("two impls applying operations in opposite orders converge to equal state"),
 			InCategory(Enrichment),
 			InPhase(Phase3),
@@ -540,7 +582,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Sentinel cross-package non-overlap.
-		New(SentinelNoOverlapWith,
+		New(
+			SentinelNoOverlapWith,
 			Describe("declare additional packages to verify sentinel non-overlap with"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
@@ -548,7 +591,8 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Per-field default literal (builder).
-		New(Default,
+		New(
+			Default,
 			Describe("seed value for a builder field when no Defaults factory exists"),
 			InCategory(Enrichment),
 			InPhase(Phase1),
@@ -558,51 +602,59 @@ func defaultDescriptors() []Descriptor {
 		// Chain mode. Carrier method appends to a chain; consumers
 		// emit hash-chain integrity, replay determinism, and
 		// causality-respecting laws.
-		New(NonDeterministic,
+		New(
+			NonDeterministic,
 			Describe("output is non-deterministic; suppress determinism laws"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Consumed("model", "suppresses AUTO-PURE-DETERMINISTIC / AUTO-PREDICATE-CONSISTENT"),
 		),
-		New(TimeAware,
+		New(
+			TimeAware,
 			Describe("interface depends on the test clock; emit clock-factory option"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Consumed("model", "emits StoreModelClockFactory + advance actions + AUTO-TTL-EXPIRY law"),
 		),
-		New(Appends,
+		New(
+			Appends,
 			Describe("writer-class carrier of an append-only chain"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Consumed("model", "emits AUTO-APPEND-ONLY-GROWS + AUTO-HASH-CHAIN-INTEGRITY"),
 		),
-		New(Replays,
+		New(
+			Replays,
 			Describe("StreamReader carrier replays the appended chain"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Consumed("model", "emits AUTO-APPEND-ONLY-NO-DROPS + AUTO-REPLAY-DETERMINISTIC"),
 		),
-		New(Verifies,
+		New(
+			Verifies,
 			Describe("Lifecycle/PoisonAccessor that checks chain integrity"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Consumed("model", "binds AUTO-HASH-CHAIN-INTEGRITY-VIA-VERIFY"),
 		),
-		New(EntryID,
+		New(
+			EntryID,
 			Describe("entry identifier for replay causality"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Field", ArgIdent, Required),
 			Requires(Replays, DependsOn),
 		),
-		New(DependsOn,
+		New(
+			DependsOn,
 			Describe("predecessor reference for replay causality"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Field", ArgIdent, Required),
 			Requires(Replays, EntryID),
 		),
-		New(Hash,
+		New(
+			Hash,
 			Describe("explicit hash function for the append-only chain"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
@@ -613,74 +665,85 @@ func defaultDescriptors() []Descriptor {
 		// Contract-tier promotions. Each names a sibling method or
 		// field whose existence the codegen-time validator resolves;
 		// mismatch is a hard error.
-		New(Persister,
+		New(
+			Persister,
 			Describe("Writer-with-result promoted to Persister: retrievable by returned ID"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("model", "emits AUTO-PERSISTER-RETRIEVABLE"),
 		),
-		New(Updater,
+		New(
+			Updater,
 			Describe("Writer/CompositeWriter promoted to Updater: replaces by key"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("model", "emits AUTO-UPDATER-REPLACES"),
 		),
-		New(Upserter,
+		New(
+			Upserter,
 			Describe("idempotent insert-or-update"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Reader", ArgIdent, Required),
 			Consumed("model", "emits AUTO-UPSERTER-IDEMPOTENT"),
 		),
-		New(CAS,
+		New(
+			CAS,
 			Describe("compare-and-swap with version field; exactly-one-winner under concurrency"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("VersionField", ArgIdent, Required),
 			Consumed("model", "emits AUTO-CAS-ATOMIC-ONE-WINNER + selects linearize.CASCell"),
 		),
-		New(Appender,
+		New(
+			Appender,
 			Describe("Writer that returns monotonic offsets; gap-free append"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Consumed("model", "emits AUTO-APPENDER-MONOTONIC-OFFSETS"),
 		),
-		New(Watcher,
+		New(
+			Watcher,
 			Describe("subscribes to changes triggered by the named method"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Trigger", ArgIdent, Required),
 			Consumed("model", "emits AUTO-WATCHER-RETURNS-ON-CHANGE"),
 		),
-		New(Singleflight,
+		New(
+			Singleflight,
 			Describe("N concurrent same-key calls invoke the supplied func once"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Consumed("model", "emits AUTO-SINGLEFLIGHT-COALESCES"),
 		),
-		New(Transaction,
+		New(
+			Transaction,
 			Describe("transactional func: rollback on error, no mid-tx visibility"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Consumed("model", "emits AUTO-TRANSACTION-ROLLBACK + AUTO-TRANSACTION-NO-MID-TX-VISIBILITY"),
 		),
-		New(Acquire,
+		New(
+			Acquire,
 			Describe("lease/lock acquire paired with the named release method"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Release", ArgIdent, Required),
 			Consumed("model", "emits AUTO-LEASE-RELEASED-ON-CANCEL + AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS"),
 		),
-		New(Publisher,
+		New(
+			Publisher,
 			Describe("publishes to subscribers reached via the named subscribe method"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Subscribe", ArgIdent, Required),
 			Consumed("model", "emits AUTO-PUBLISHER-DELIVERS"),
 		),
-		New(Subscribe,
+		New(
+			Subscribe,
 			Describe("channel- or callback-based subscriber paired with a Publisher"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
@@ -688,21 +751,24 @@ func defaultDescriptors() []Descriptor {
 
 		// Composite-tier promotions. Multi-method shapes where the
 		// directive names the paired method(s).
-		New(Pool,
+		New(
+			Pool,
 			Describe("Get/Put pair: leak-free, balanced, double-put rejected"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Put", ArgIdent, Required),
 			Consumed("model", "emits AUTO-POOL-LEAK-FREE + AUTO-POOL-BALANCED"),
 		),
-		New(Cursor,
+		New(
+			Cursor,
 			Describe("Next/Close pair: close idempotent, next-after-close → sentinel"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
 			Arg("Close", ArgIdent, Required),
 			Consumed("model", "emits AUTO-CURSOR-CLOSE-IDEMPOTENT + AUTO-CURSOR-NEXT-AFTER-CLOSE"),
 		),
-		New(TwoPhase,
+		New(
+			TwoPhase,
 			Describe("Begin returning a Tx with paired Commit/Rollback methods"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
@@ -710,7 +776,8 @@ func defaultDescriptors() []Descriptor {
 			Arg("Rollback", ArgIdent, Required),
 			Consumed("model", "emits AUTO-TWO-PHASE-MUTEX + AUTO-TWO-PHASE-ROLLBACK-AFTER-COMMIT"),
 		),
-		New(Saga,
+		New(
+			Saga,
 			Describe("multi-step chain with full compensation on partial failure"),
 			InCategory(ContractTier),
 			InPhase(Phase4),
@@ -721,121 +788,143 @@ func defaultDescriptors() []Descriptor {
 		// Mixin axis. Additional mixins; the existing atomic/idempotent/
 		// monotonic/pure/nilsafe/cacheable/concurrent/bounded mixins
 		// are registered above.
-		New(Commutative,
+		New(
+			Commutative,
 			Describe("operation order does not affect final state"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Associative,
+		New(
+			Associative,
 			Describe("operation grouping does not affect final state"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Permutation,
+		New(
+			Permutation,
 			Describe("output is a permutation of input"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Windowed,
+		New(
+			Windowed,
 			Describe("rolling-window state across the named duration"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Duration", ArgDuration, Required),
 		),
-		New(CASAtomic,
+		New(
+			CASAtomic,
 			Describe("Writer with version field; promotes to CompareAndSwap"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("VersionField", ArgIdent, Required),
 		),
-		New(PointInTime,
+		New(
+			PointInTime,
 			Describe("Reader returns snapshot semantics; reads see the moment, not now"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(LeakFree,
+		New(
+			LeakFree,
 			Describe("no goroutine or FD leaks across cycles"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(TamperEvident,
+		New(
+			TamperEvident,
 			Describe("post-write detection of modification"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(ConstantTime,
+		New(
+			ConstantTime,
 			Describe("no timing side channels"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Delivery,
+		New(
+			Delivery,
 			Describe("Publisher delivery guarantee selector"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Mode", ArgEnum, Required, OneOf("at-least-once", "at-most-once", "exactly-once")),
 		),
-		New(DefaultOnError,
+		New(
+			DefaultOnError,
 			Describe("Reader returns the supplied default expression on error; never panics"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("DefaultExpr", ArgString, Required),
 		),
-		New(ValidTransitionOnly,
+		New(
+			ValidTransitionOnly,
 			Describe("Mutator/Writer respects a state-machine constraint on the named field"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Field", ArgIdent, Required),
 		),
-		New(OverMatchAcceptable,
+		New(
+			OverMatchAcceptable,
 			Describe("stream may yield extra elements; missing elements fail"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(XSSSafe,
+		New(
+			XSSSafe,
 			Describe("input is sanitized for HTML output"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(InjectionSafe,
+		New(
+			InjectionSafe,
 			Describe("input is parameterized for SQL/shell"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(TotalOver,
+		New(
+			TotalOver,
 			Describe("Pure/Aggregator defined for every input in the named domain"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Domain", ArgIdent, Required),
 		),
-		New(PaginationResumable,
+		New(
+			PaginationResumable,
 			Describe("Paginator resumable from any cursor"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Roundtrip,
+		New(
+			Roundtrip,
 			Describe("Inverse(F(x)) == x"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Inverse", ArgIdent, Required),
 		),
-		New(LossyRoundtrip,
+		New(
+			LossyRoundtrip,
 			Describe("F(Inverse(F(x))) == F(x)"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Inverse", ArgIdent, Required),
 		),
-		New(StableOrder,
+		New(
+			StableOrder,
 			Describe("output order preserves input order"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 		),
-		New(Sticky,
+		New(
+			Sticky,
 			Describe("first-call result caches on the named key"),
 			InCategory(Mixin),
 			InPhase(Phase4),
 			Arg("Key", ArgIdent, Required),
 		),
-		New(Conservative,
+		New(
+			Conservative,
 			Describe("Mutator+Aggregator pair preserves a sum-of-Field invariant"),
 			InCategory(Mixin),
 			InPhase(Phase4),
@@ -847,66 +936,77 @@ func defaultDescriptors() []Descriptor {
 		// interface level; per-client guarantees (read-your-writes,
 		// monotonic-reads, monotonic-writes, writes-follow-reads)
 		// compose with any of the others.
-		New(Linearizable,
+		New(
+			Linearizable,
 			Describe("explicit linearizability assertion (default for mutation shapes)"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			ConflictsWith(Eventually, Causal, SnapshotIsolation),
 		),
-		New(Causal,
+		New(
+			Causal,
 			Describe("non-linearizable orderings allowed if causally consistent"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			ConflictsWith(Linearizable, Eventually, SnapshotIsolation),
 		),
-		New(SnapshotIsolation,
+		New(
+			SnapshotIsolation,
 			Describe("no mid-tx visibility; rejects G0/G1/G2 anomalies"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			ConflictsWith(Linearizable, Eventually, Causal),
 		),
-		New(ReadYourWrites,
+		New(
+			ReadYourWrites,
 			Describe("per-client read-your-writes guarantee"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
-		New(MonotonicReads,
+		New(
+			MonotonicReads,
 			Describe("per-client monotonic-reads guarantee"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
-		New(MonotonicWrites,
+		New(
+			MonotonicWrites,
 			Describe("per-client monotonic-writes guarantee"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
-		New(WritesFollowReads,
+		New(
+			WritesFollowReads,
 			Describe("per-client writes-follow-reads guarantee"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
 
 		// Action distribution & precondition.
-		New(Bias,
+		New(
+			Bias,
 			Describe("property-engine command-distribution weight for this method"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Weight", ArgString, Required),
 		),
-		New(Precondition,
+		New(
+			Precondition,
 			Describe("Go boolean expression that must hold for the action to fire"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Expr", ArgString, Required),
 		),
-		New(Expensive,
+		New(
+			Expensive,
 			Describe("law fires on a sampled subset of iterations"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 		),
 
 		// Fault-injection control.
-		New(FaultWindowOf,
+		New(
+			FaultWindowOf,
 			Describe("inject faults during execution of the named method, not before/after"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
@@ -914,20 +1014,23 @@ func defaultDescriptors() []Descriptor {
 		),
 
 		// Model-internal.
-		New(Reference,
+		New(
+			Reference,
 			Describe("override reference primitive selection"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("PkgPathName", ArgString, Required),
 		),
-		New(DomainGen,
+		New(
+			DomainGen,
 			Describe("register a domain-typed generator"),
 			InCategory(Enrichment),
 			InPhase(Phase4),
 			Arg("Type", ArgIdent, Required),
 			Arg("Func", ArgIdent, Required),
 		),
-		New(Clock,
+		New(
+			Clock,
 			Describe("declare an additional named TestClock (e.g., wall, logical)"),
 			InCategory(Enrichment),
 			InPhase(Phase4),

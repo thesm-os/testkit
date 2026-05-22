@@ -134,7 +134,8 @@ func TestConsumerAnnotations(t *testing.T) {
 		// outside the preferred {stub,suite,bench,model} list must
 		// trail the preferred entries, sorted alphabetically.
 		r := directive.NewRegistry()
-		r.MustRegister(directive.New("custom", directive.InCategory(directive.Mixin),
+		r.MustRegister(directive.New(
+			"custom", directive.InCategory(directive.Mixin),
 			directive.Consumed("zsim", "scenario hook"),
 			directive.Consumed("apex", "alpha hook"),
 			directive.Consumed("suite", "primary"),

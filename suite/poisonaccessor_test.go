@@ -52,7 +52,8 @@ func TestPoisonAccessor(t *testing.T) {
 		t.Parallel()
 		poisoned := func() *healthChecker { return &healthChecker{err: errPoisoned} }
 		suite.AssertPoisonAccessorRejectInvalid[*healthChecker](poisoned, errPoisoned)(
-			poisonAccessorCtx(t))
+			poisonAccessorCtx(t),
+		)
 	})
 
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {

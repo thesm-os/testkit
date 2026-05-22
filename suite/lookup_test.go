@@ -84,7 +84,8 @@ func TestLookup(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertLookupConcurrentSafe[*lookupMap, string, int64, meta](
-			"a", 4, 50)(lookupCtx(t))
+			"a", 4, 50,
+		)(lookupCtx(t))
 	})
 }
 
@@ -103,5 +104,6 @@ func TestAssertLookupBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertLookupBaseline[*lookupMap, string, int64, meta](
-		"a", 10, "missing")(ctx)
+		"a", 10, "missing",
+	)(ctx)
 }

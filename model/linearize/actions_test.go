@@ -20,7 +20,8 @@ func newKV() *kvStore { return &kvStore{data: make(map[string]string)} }
 
 func TestConcurrentReader(t *testing.T) {
 	t.Parallel()
-	a := linearize.ConcurrentReader("Get",
+	a := linearize.ConcurrentReader(
+		"Get",
 		rapid.Just("k"),
 		func(_ context.Context, s *kvStore, k string) (string, error) {
 			v, ok := s.data[k]
@@ -50,7 +51,8 @@ func TestConcurrentReader(t *testing.T) {
 
 func TestConcurrentReaderWithBool(t *testing.T) {
 	t.Parallel()
-	a := linearize.ConcurrentReaderWithBool("Load",
+	a := linearize.ConcurrentReaderWithBool(
+		"Load",
 		rapid.Just("k"),
 		func(_ context.Context, s *kvStore, k string) (string, bool) {
 			v, ok := s.data[k]
@@ -73,7 +75,8 @@ func TestConcurrentReaderWithBool(t *testing.T) {
 
 func TestConcurrentWriter(t *testing.T) {
 	t.Parallel()
-	a := linearize.ConcurrentWriter("Put",
+	a := linearize.ConcurrentWriter(
+		"Put",
 		rapid.Just("val"),
 		func(_ context.Context, s *kvStore, v string) error {
 			s.data[v] = v
@@ -101,7 +104,8 @@ func TestConcurrentWriter(t *testing.T) {
 
 func TestConcurrentDeleter(t *testing.T) {
 	t.Parallel()
-	a := linearize.ConcurrentDeleter("Delete",
+	a := linearize.ConcurrentDeleter(
+		"Delete",
 		rapid.Just("k"),
 		func(_ context.Context, s *kvStore, k string) error {
 			delete(s.data, k)
@@ -124,7 +128,8 @@ func TestConcurrentDeleter(t *testing.T) {
 
 func TestConcurrentLookup(t *testing.T) {
 	t.Parallel()
-	a := linearize.ConcurrentLookup("Inspect",
+	a := linearize.ConcurrentLookup(
+		"Inspect",
 		rapid.Just("k"),
 		func(s *kvStore, k string) (string, int, bool) {
 			v, ok := s.data[k]

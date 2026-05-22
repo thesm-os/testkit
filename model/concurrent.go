@@ -130,7 +130,8 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 			return
 		}
 		result, info := porcupine.CheckOperationsVerbose(
-			cc.Model, history, cc.Timeout)
+			cc.Model, history, cc.Timeout,
+		)
 		switch result {
 		case porcupine.Ok:
 			// Linearizable — pass.

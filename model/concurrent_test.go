@@ -17,7 +17,8 @@ import (
 func TestConcurrentLinearizable(t *testing.T) {
 	t.Parallel()
 	// Correct mutex-guarded store must be linearizable under concurrent access.
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithConcurrent(model.ConcurrentConfig[storeIface]{
 			Workers:      4,
@@ -40,7 +41,8 @@ func TestConcurrentNotLinearizable(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		model.Assert(ft,
+		model.Assert(
+			ft,
 			func() storeIface { return newNonLinearizableStore() },
 			model.WithConcurrent(model.ConcurrentConfig[storeIface]{
 				Workers:      4,

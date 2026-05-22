@@ -15,7 +15,8 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New constructs a valid descriptor", func(t *testing.T) {
 		t.Parallel()
-		d := directive.New("conservative",
+		d := directive.New(
+			"conservative",
 			directive.Describe("sum invariant"),
 			directive.InCategory(directive.Mixin),
 			directive.InPhase(directive.Phase3),
@@ -31,15 +32,16 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on missing category", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("x", directive.Describe("no category"))
 		}, "missing-category panic")
 	})
 
 	t.Run("New panics when Multi is not on the last arg", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
-			directive.New("x",
+		testkit.Panics(t, func() {
+			directive.New(
+				"x",
 				directive.InCategory(directive.Enrichment),
 				directive.Arg("a", directive.ArgIdent, directive.Multi),
 				directive.Arg("b", directive.ArgIdent),
@@ -49,8 +51,9 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on self-conflict", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
-			directive.New("x",
+		testkit.Panics(t, func() {
+			directive.New(
+				"x",
 				directive.InCategory(directive.Mixin),
 				directive.ConflictsWith("x"),
 			)
@@ -59,8 +62,9 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on ArgEnum without values", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
-			directive.New("x",
+		testkit.Panics(t, func() {
+			directive.New(
+				"x",
 				directive.InCategory(directive.Enrichment),
 				directive.Arg("a", directive.ArgEnum),
 			)
@@ -101,14 +105,14 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on empty Name", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("", directive.InCategory(directive.Enrichment))
 		}, "empty-name panic")
 	})
 
 	t.Run("New panics on duplicate Conflicts entries", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("x", directive.InCategory(directive.Mixin),
 				directive.ConflictsWith("a", "a"))
 		}, "duplicate Conflicts panic")
@@ -116,7 +120,7 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on duplicate Requires entries", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("x", directive.InCategory(directive.Mixin),
 				directive.Requires("a", "a"))
 		}, "duplicate Requires panic")
@@ -124,7 +128,7 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on duplicate Implies entries", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("x", directive.InCategory(directive.Mixin),
 				directive.Implies("a", "a"))
 		}, "duplicate Implies panic")
@@ -132,7 +136,7 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("New panics on self-implication", func(t *testing.T) {
 		t.Parallel()
-		assertPanic(t, func() {
+		testkit.Panics(t, func() {
 			directive.New("x", directive.InCategory(directive.Mixin),
 				directive.Implies("x"))
 		}, "self-implication panic")
@@ -140,7 +144,8 @@ func TestDescriptor(t *testing.T) {
 
 	t.Run("ComposesWith and Experimental options take effect", func(t *testing.T) {
 		t.Parallel()
-		d := directive.New("x",
+		d := directive.New(
+			"x",
 			directive.InCategory(directive.Mixin),
 			directive.ComposesWith("y", "z"),
 			directive.Experimental(),
@@ -148,15 +153,4 @@ func TestDescriptor(t *testing.T) {
 		testkit.Len(t, d.ComposesWith, 2, "ComposesWith populated")
 		testkit.True(t, d.Experimental, "Experimental flag set")
 	})
-}
-
-// assertPanic invokes fn and fails the test if fn doesn't panic.
-func assertPanic(t *testing.T, fn func(), msg string) {
-	t.Helper()
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("expected panic: %s", msg)
-		}
-	}()
-	fn()
 }

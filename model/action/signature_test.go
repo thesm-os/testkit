@@ -21,7 +21,8 @@ func TestReaderNoError(t *testing.T) {
 
 	t.Run("passes when SUT and ref agree", func(t *testing.T) {
 		t.Parallel()
-		a := action.ReaderNoError("Get", rapid.Just("k"),
+		a := action.ReaderNoError(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) string { return "v" },
 		)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -35,7 +36,8 @@ func TestReaderNoError(t *testing.T) {
 	t.Run("catches value mismatch", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.ReaderNoError("Get", rapid.Just("k"),
+		a := action.ReaderNoError(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) string {
 				i++
 				if i%2 == 1 {
@@ -58,7 +60,8 @@ func TestPointerReader(t *testing.T) {
 
 	t.Run("both nil → no diff", func(t *testing.T) {
 		t.Parallel()
-		a := action.PointerReader("Get", rapid.Just("k"),
+		a := action.PointerReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) *string { return nil },
 		)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -73,7 +76,8 @@ func TestPointerReader(t *testing.T) {
 		t.Parallel()
 		i := 0
 		v := "x"
-		a := action.PointerReader("Get", rapid.Just("k"),
+		a := action.PointerReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) *string {
 				i++
 				if i%2 == 1 {
@@ -94,7 +98,8 @@ func TestPointerReader(t *testing.T) {
 		t.Parallel()
 		i := 0
 		x, y := "sut", "ref"
-		a := action.PointerReader("Get", rapid.Just("k"),
+		a := action.PointerReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) *string {
 				i++
 				if i%2 == 1 {
@@ -117,7 +122,8 @@ func TestMultiReader(t *testing.T) {
 
 	t.Run("both error agree", func(t *testing.T) {
 		t.Parallel()
-		a := action.MultiReader("Get", rapid.Just("k"),
+		a := action.MultiReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, int, error) {
 				return "", 0, errBroken
 			},
@@ -133,7 +139,8 @@ func TestMultiReader(t *testing.T) {
 	t.Run("V1 mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.MultiReader("Get", rapid.Just("k"),
+		a := action.MultiReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, int, error) {
 				i++
 				if i%2 == 1 {
@@ -153,7 +160,8 @@ func TestMultiReader(t *testing.T) {
 	t.Run("V2 mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.MultiReader("Get", rapid.Just("k"),
+		a := action.MultiReader(
+			"Get", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, _ string) (string, int, error) {
 				i++
 				if i%2 == 1 {
@@ -176,7 +184,8 @@ func TestBatchReader(t *testing.T) {
 
 	t.Run("agreeing batches pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.BatchReader("List", rapid.Just("k"),
+		a := action.BatchReader(
+			"List", rapid.Just("k"),
 			func(_ context.Context, _ *simpleStore, ks ...string) ([]string, error) {
 				return ks, nil
 			},
@@ -195,7 +204,8 @@ func TestCompositeWriter(t *testing.T) {
 
 	t.Run("matching errors pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.CompositeWriter("Set", rapid.Just("k"), rapid.Just("v"),
+		a := action.CompositeWriter(
+			"Set", rapid.Just("k"), rapid.Just("v"),
 			func(_ context.Context, _ *simpleStore, _, _ string) error { return nil },
 		)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -209,7 +219,8 @@ func TestCompositeWriter(t *testing.T) {
 	t.Run("mismatched errors flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.CompositeWriter("Set", rapid.Just("k"), rapid.Just("v"),
+		a := action.CompositeWriter(
+			"Set", rapid.Just("k"), rapid.Just("v"),
 			func(_ context.Context, _ *simpleStore, _, _ string) error {
 				i++
 				if i%2 == 1 {
@@ -232,7 +243,8 @@ func TestMultiArgWriter(t *testing.T) {
 
 	t.Run("matching errors pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.MultiArgWriter("Op",
+		a := action.MultiArgWriter(
+			"Op",
 			rapid.Just([]any{"a", 1, true}),
 			func(_ context.Context, _ *simpleStore, _ []any) error { return nil },
 		)
@@ -250,7 +262,8 @@ func TestMultiAggregator(t *testing.T) {
 
 	t.Run("agreeing values pass", func(t *testing.T) {
 		t.Parallel()
-		a := action.MultiAggregator("Stats",
+		a := action.MultiAggregator(
+			"Stats",
 			func(_ context.Context, _ *simpleStore) (int, int, error) { return 1, 2, nil },
 		)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -264,7 +277,8 @@ func TestMultiAggregator(t *testing.T) {
 	t.Run("V1 mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.MultiAggregator("Stats",
+		a := action.MultiAggregator(
+			"Stats",
 			func(_ context.Context, _ *simpleStore) (int, int, error) {
 				i++
 				if i%2 == 1 {
@@ -284,7 +298,8 @@ func TestMultiAggregator(t *testing.T) {
 	t.Run("error mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.MultiAggregator("Stats",
+		a := action.MultiAggregator(
+			"Stats",
 			func(_ context.Context, _ *simpleStore) (int, int, error) {
 				i++
 				if i%2 == 1 {
@@ -307,7 +322,8 @@ func TestStreamConsumer(t *testing.T) {
 
 	t.Run("consume reads stream and agrees", func(t *testing.T) {
 		t.Parallel()
-		a := action.StreamConsumer("ReadAll",
+		a := action.StreamConsumer(
+			"ReadAll",
 			func() io.Reader { return strings.NewReader("hello") },
 			func(_ context.Context, _ *simpleStore, r io.Reader) (string, error) {
 				b, err := io.ReadAll(r)
@@ -328,7 +344,8 @@ func TestStreamConsumer(t *testing.T) {
 	t.Run("error mismatch flagged", func(t *testing.T) {
 		t.Parallel()
 		i := 0
-		a := action.StreamConsumer("ReadAll",
+		a := action.StreamConsumer(
+			"ReadAll",
 			func() io.Reader { return strings.NewReader("hello") },
 			func(_ context.Context, _ *simpleStore, r io.Reader) (string, error) {
 				_, _ = io.ReadAll(r)
@@ -354,7 +371,8 @@ func TestVoidLifecycle(t *testing.T) {
 	t.Run("calls both SUT and ref", func(t *testing.T) {
 		t.Parallel()
 		var sutCalls, refCalls int
-		a := action.VoidLifecycle("Reset",
+		a := action.VoidLifecycle(
+			"Reset",
 			func(_ context.Context, s *simpleStore) {
 				if s == nil {
 					return
@@ -363,7 +381,8 @@ func TestVoidLifecycle(t *testing.T) {
 		)
 		_ = a
 		// Re-bind to capture which arg is which by using identity counters.
-		a = action.VoidLifecycle("Reset",
+		a = action.VoidLifecycle(
+			"Reset",
 			func(_ context.Context, s *simpleStore) {
 				if s.getF == nil {
 					sutCalls++

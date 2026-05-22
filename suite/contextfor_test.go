@@ -19,7 +19,8 @@ func dummyFactory() *dummy { return &dummy{} }
 
 func TestReaderContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.ReaderContextFor(t, dummyFactory,
+	ctx := suite.ReaderContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) (int, error) {
 			d.called = true
 			return 42, nil
@@ -36,7 +37,8 @@ func TestReaderContextFor(t *testing.T) {
 
 func TestReaderNoErrorContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.ReaderNoErrorContextFor(t, dummyFactory,
+	ctx := suite.ReaderNoErrorContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) int {
 			d.called = true
 			return 7
@@ -51,7 +53,8 @@ func TestReaderNoErrorContextFor(t *testing.T) {
 
 func TestReaderWithBoolContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.ReaderWithBoolContextFor(t, dummyFactory,
+	ctx := suite.ReaderWithBoolContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) (int, bool) {
 			d.called = true
 			return 1, true
@@ -67,7 +70,8 @@ func TestReaderWithBoolContextFor(t *testing.T) {
 
 func TestLookupContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.LookupContextFor(t, dummyFactory,
+	ctx := suite.LookupContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) (int, string, bool) {
 			d.called = true
 			return 1, "meta", true
@@ -84,7 +88,8 @@ func TestLookupContextFor(t *testing.T) {
 
 func TestPointerReaderContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.PointerReaderContextFor(t, dummyFactory,
+	ctx := suite.PointerReaderContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) *int {
 			d.called = true
 			v := 99
@@ -100,7 +105,8 @@ func TestPointerReaderContextFor(t *testing.T) {
 
 func TestMultiReaderContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.MultiReaderContextFor(t, dummyFactory,
+	ctx := suite.MultiReaderContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) (int, string, error) {
 			d.called = true
 			return 1, "two", nil
@@ -117,7 +123,8 @@ func TestMultiReaderContextFor(t *testing.T) {
 
 func TestBatchReaderContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.BatchReaderContextFor(t, dummyFactory,
+	ctx := suite.BatchReaderContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, keys []string) ([]int, error) {
 			d.called = true
 			out := make([]int, len(keys))
@@ -137,7 +144,8 @@ func TestBatchReaderContextFor(t *testing.T) {
 
 func TestWriterContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.WriterContextFor(t, dummyFactory,
+	ctx := suite.WriterContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) error {
 			d.called = true
 			return nil
@@ -151,7 +159,8 @@ func TestWriterContextFor(t *testing.T) {
 
 func TestCompositeWriterContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.CompositeWriterContextFor(t, dummyFactory,
+	ctx := suite.CompositeWriterContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string, _ int) error {
 			d.called = true
 			return nil
@@ -165,7 +174,8 @@ func TestCompositeWriterContextFor(t *testing.T) {
 
 func TestMutatorContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.MutatorContextFor(t, dummyFactory,
+	ctx := suite.MutatorContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) {
 			d.called = true
 		},
@@ -178,7 +188,8 @@ func TestMutatorContextFor(t *testing.T) {
 
 func TestDeleterContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.DeleterContextFor(t, dummyFactory,
+	ctx := suite.DeleterContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) error {
 			d.called = true
 			return nil
@@ -192,7 +203,8 @@ func TestDeleterContextFor(t *testing.T) {
 
 func TestMultiArgWriterContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.MultiArgWriterContextFor(t, dummyFactory,
+	ctx := suite.MultiArgWriterContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string, _ int, _ bool) error {
 			d.called = true
 			return nil
@@ -206,7 +218,8 @@ func TestMultiArgWriterContextFor(t *testing.T) {
 
 func TestAggregatorContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.AggregatorContextFor(t, dummyFactory,
+	ctx := suite.AggregatorContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy) (int, error) {
 			d.called = true
 			return 5, nil
@@ -222,7 +235,8 @@ func TestAggregatorContextFor(t *testing.T) {
 
 func TestMultiAggregatorContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.MultiAggregatorContextFor(t, dummyFactory,
+	ctx := suite.MultiAggregatorContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy) (int, string, error) {
 			d.called = true
 			return 3, "ok", nil
@@ -239,7 +253,8 @@ func TestMultiAggregatorContextFor(t *testing.T) {
 
 func TestStreamContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.StreamContextFor(t, dummyFactory,
+	ctx := suite.StreamContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy) iter.Seq2[int, error] {
 			d.called = true
 			return func(yield func(int, error) bool) {
@@ -259,7 +274,8 @@ func TestStreamContextFor(t *testing.T) {
 
 func TestStreamConsumerContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.StreamConsumerContextFor(t, dummyFactory,
+	ctx := suite.StreamConsumerContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, _ string) (int, error) {
 			d.called = true
 			return 10, nil
@@ -275,7 +291,8 @@ func TestStreamConsumerContextFor(t *testing.T) {
 
 func TestLifecycleContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.LifecycleContextFor(t, dummyFactory,
+	ctx := suite.LifecycleContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy) error {
 			d.called = true
 			return nil
@@ -289,7 +306,8 @@ func TestLifecycleContextFor(t *testing.T) {
 
 func TestVoidLifecycleContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.VoidLifecycleContextFor(t, dummyFactory,
+	ctx := suite.VoidLifecycleContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy) {
 			d.called = true
 		},
@@ -302,7 +320,8 @@ func TestVoidLifecycleContextFor(t *testing.T) {
 
 func TestPureContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.PureContextFor(t, dummyFactory,
+	ctx := suite.PureContextFor(
+		t, dummyFactory,
 		func(d *dummy) string {
 			d.called = true
 			return "pure"
@@ -316,7 +335,8 @@ func TestPureContextFor(t *testing.T) {
 
 func TestPredicateContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.PredicateContextFor(t, dummyFactory,
+	ctx := suite.PredicateContextFor(
+		t, dummyFactory,
 		func(d *dummy) bool {
 			d.called = true
 			return true
@@ -330,7 +350,8 @@ func TestPredicateContextFor(t *testing.T) {
 
 func TestMultiArgWriterVariadicContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.MultiArgWriterVariadicContextFor(t, dummyFactory,
+	ctx := suite.MultiArgWriterVariadicContextFor(
+		t, dummyFactory,
 		func(_ context.Context, d *dummy, args ...any) error {
 			d.called = true
 			_ = args
@@ -346,7 +367,8 @@ func TestMultiArgWriterVariadicContextFor(t *testing.T) {
 
 func TestPoisonAccessorContextFor(t *testing.T) {
 	t.Parallel()
-	ctx := suite.PoisonAccessorContextFor(t, dummyFactory,
+	ctx := suite.PoisonAccessorContextFor(
+		t, dummyFactory,
 		func(d *dummy) error {
 			d.called = true
 			return nil

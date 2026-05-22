@@ -127,7 +127,8 @@ func resolveLocal(name string, data *spec.Data, pkg *generator.Package) (Resolve
 func resolveRemote(importPath, name string, data *spec.Data) (Resolved, error) {
 	if data.Loader == nil {
 		return Resolved{}, errors.New(
-			"resolver: cross-package reference requires Data.Loader (set by spec.Analyze)")
+			"resolver: cross-package reference requires Data.Loader (set by spec.Analyze)",
+		)
 	}
 	remote, err := data.Loader.Load(importPath, "")
 	if err != nil {

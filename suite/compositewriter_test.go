@@ -51,19 +51,22 @@ func TestCompositeWriter(t *testing.T) {
 	t.Run("WriteSucceeds for valid (k, v) pair", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertCompositeWriteSucceeds[*compositeStore, string, string](
-			"k1", "value")(compositeWriterCtx(t))
+			"k1", "value",
+		)(compositeWriterCtx(t))
 	})
 
 	t.Run("WriteRejectInvalid surfaces the sentinel", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertCompositeWriteRejectInvalid[*compositeStore, string, string](
-			"k1", "INVALID", errCompInvalid)(compositeWriterCtx(t))
+			"k1", "INVALID", errCompInvalid,
+		)(compositeWriterCtx(t))
 	})
 
 	t.Run("Idempotent succeeds on repeat write of same pair", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertCompositeWriterIdempotent[*compositeStore, string, string](
-			"k1", "value")(compositeWriterCtx(t))
+			"k1", "value",
+		)(compositeWriterCtx(t))
 	})
 
 	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
@@ -78,13 +81,15 @@ func TestCompositeWriter(t *testing.T) {
 			},
 		}
 		suite.AssertCompositeWriterRespectsContext[*compositeStore, string, string](
-			"k1", "v")(ctx)
+			"k1", "v",
+		)(ctx)
 	})
 
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertCompositeWriterConcurrentSafe[*compositeStore, string, string](
-			"k1", "value", 4, 50)(compositeWriterCtx(t))
+			"k1", "value", 4, 50,
+		)(compositeWriterCtx(t))
 	})
 }
 
@@ -103,5 +108,6 @@ func TestAssertCompositeWriterBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertCompositeWriterBaseline[*compositeStore, string, string](
-		"k1", "v1")(ctx)
+		"k1", "v1",
+	)(ctx)
 }

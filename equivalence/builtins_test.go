@@ -146,7 +146,8 @@ func TestRegexFields(t *testing.T) {
 	t.Run("both values matching the pattern are equal", func(t *testing.T) {
 		t.Parallel()
 		c := equivalence.NewChain().Add(equivalence.RegexFields(
-			reflect.TypeFor[token](), []string{"Value"}, `^[a-f0-9]{16}$`))
+			reflect.TypeFor[token](), []string{"Value"}, `^[a-f0-9]{16}$`,
+		))
 		a := token{Value: "deadbeefcafebabe"}
 		b := token{Value: "0123456789abcdef"}
 		testkit.True(t, c.Equal(a, b), "both match pattern")
@@ -155,7 +156,8 @@ func TestRegexFields(t *testing.T) {
 	t.Run("non-matching values diverge", func(t *testing.T) {
 		t.Parallel()
 		c := equivalence.NewChain().Add(equivalence.RegexFields(
-			reflect.TypeFor[token](), []string{"Value"}, `^[a-f0-9]{16}$`))
+			reflect.TypeFor[token](), []string{"Value"}, `^[a-f0-9]{16}$`,
+		))
 		a := token{Value: "deadbeefcafebabe"}
 		b := token{Value: "not-hex"}
 		testkit.False(t, c.Equal(a, b), "second doesn't match")

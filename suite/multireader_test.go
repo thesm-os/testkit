@@ -51,19 +51,22 @@ func TestMultiReader(t *testing.T) {
 	t.Run("ReturnsForKey surfaces both values", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMultiReaderReturnsForKey[*entityStore, string, string, string](
-			"k1", "alpha", "v1")(multiReaderCtx(t, data))
+			"k1", "alpha", "v1",
+		)(multiReaderCtx(t, data))
 	})
 
 	t.Run("ReturnsSentinel surfaces the configured error for unknown key", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMultiReaderReturnsSentinel[*entityStore, string, string, string](
-			"missing", errEntityMissing)(multiReaderCtx(t, data))
+			"missing", errEntityMissing,
+		)(multiReaderCtx(t, data))
 	})
 
 	t.Run("Consistent yields equal pairs across N calls", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMultiReaderConsistent[*entityStore, string, string, string](
-			"k1", 4)(multiReaderCtx(t, data))
+			"k1", 4,
+		)(multiReaderCtx(t, data))
 	})
 
 	t.Run("RespectsContext surfaces ctx.Canceled", func(t *testing.T) {
@@ -83,7 +86,8 @@ func TestMultiReader(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertMultiReaderConcurrentSafe[*entityStore, string, string, string](
-			"k1", 4, 50)(multiReaderCtx(t, data))
+			"k1", 4, 50,
+		)(multiReaderCtx(t, data))
 	})
 }
 
@@ -103,5 +107,6 @@ func TestAssertMultiReaderBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertMultiReaderBaseline[*entityStore, string, string, string](
-		"k1", "alpha", "v1")(ctx)
+		"k1", "alpha", "v1",
+	)(ctx)
 }

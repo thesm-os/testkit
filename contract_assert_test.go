@@ -161,7 +161,8 @@ func TestAssertPure(t *testing.T) {
 	t.Run("passes when state unchanged", func(t *testing.T) {
 		t.Parallel()
 		state := []string{"a", "b"}
-		testkit.AssertPure(t,
+		testkit.AssertPure(
+			t,
 			func() []string { return append([]string{}, state...) },
 			func() { _ = len(state) }, // read-only
 		)
@@ -171,7 +172,8 @@ func TestAssertPure(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB()
 		state := []string{"a", "b"}
-		testkit.AssertPure(f,
+		testkit.AssertPure(
+			f,
 			func() []string { return append([]string{}, state...) },
 			func() { state = append(state, "c") }, // mutation
 		)

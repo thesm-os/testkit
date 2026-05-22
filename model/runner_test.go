@@ -115,7 +115,8 @@ func storeCount(ctx context.Context, s storeIface) (int, error)          { retur
 func TestRunnerWithActionHelpers(t *testing.T) {
 	t.Parallel()
 
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -131,7 +132,8 @@ func TestRunnerWithRefMap(t *testing.T) {
 	t.Parallel()
 
 	// Tier 0 pattern: refmap.MapStore as the reference.
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface {
 			return refmap.NewMapStore(itemKey, errNotFound)
@@ -155,7 +157,8 @@ func TestRunnerWithLaws(t *testing.T) {
 		return s.Count(rt.Context())
 	}
 
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -369,7 +372,8 @@ func TestRegistryCoverage(t *testing.T) {
 
 func TestOptionWithLaw(t *testing.T) {
 	t.Parallel()
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -387,7 +391,8 @@ func TestOptionWithLaw(t *testing.T) {
 
 func TestOptionWithLawREQ(t *testing.T) {
 	t.Parallel()
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -406,7 +411,8 @@ func TestOptionWithLawREQ(t *testing.T) {
 func TestOptionWithCleanup(t *testing.T) {
 	t.Parallel()
 	cleaned := false
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -422,7 +428,8 @@ func TestOptionWithCleanup(t *testing.T) {
 func TestOptionWithHistoryReset(t *testing.T) {
 	t.Parallel()
 	resetCount := 0
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -443,7 +450,8 @@ func TestOptionSkipLaw(t *testing.T) {
 	r.Add(law.CountEqualsReference[storeIface, int]{
 		Count: func(rt *rapid.T, s storeIface) (int, error) { return s.Count(rt.Context()) },
 	})
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -462,7 +470,8 @@ func TestOptionSkipLaw(t *testing.T) {
 func TestOptionWithoutTrace(t *testing.T) {
 	t.Parallel()
 	// Just verify the option doesn't panic and the runner completes.
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(
@@ -474,7 +483,8 @@ func TestOptionWithoutTrace(t *testing.T) {
 
 func TestOptionWithArtifactDir(t *testing.T) {
 	t.Parallel()
-	model.Assert(t,
+	model.Assert(
+		t,
 		func() storeIface { return newStore() },
 		model.WithReference(func() storeIface { return newStore() }),
 		model.WithActions(

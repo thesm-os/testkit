@@ -107,7 +107,8 @@ func TestResolve(t *testing.T) {
 		pkg, data := loadBasicData(t)
 		_, err := resolver.Resolve(
 			"go.thesmos.sh/testkit/generator/testdata/storage.DoesNotExist",
-			data, pkg)
+			data, pkg,
+		)
 		testkit.True(t, err != nil, "missing remote symbol errors")
 	})
 
@@ -117,7 +118,8 @@ func TestResolve(t *testing.T) {
 		data.Loader = nil
 		_, err := resolver.Resolve(
 			"go.thesmos.sh/testkit/generator/testdata/storage.SampleKey",
-			data, pkg)
+			data, pkg,
+		)
 		testkit.True(t, err != nil, "nil Loader rejected")
 		testkit.Assert(t, err.Error()).Contains("Loader", "diagnostic mentions Loader")
 	})

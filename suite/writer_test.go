@@ -62,7 +62,8 @@ func TestWriter(t *testing.T) {
 	t.Run("WriteSucceeds for a valid sample", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertWriteSucceeds[*mapWriter, entry](
-			entry{Key: "a", Value: "alpha"})(writerCtx(t))
+			entry{Key: "a", Value: "alpha"},
+		)(writerCtx(t))
 	})
 
 	t.Run("WriteIsObservable surfaces the value via the paired reader", func(t *testing.T) {
@@ -120,19 +121,22 @@ func TestWriter(t *testing.T) {
 			},
 		}
 		suite.AssertWriterRespectsContext[*mapWriter, entry](
-			entry{Key: "a", Value: "alpha"})(ctx)
+			entry{Key: "a", Value: "alpha"},
+		)(ctx)
 	})
 
 	t.Run("Idempotent succeeds on repeat write of the same value", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertWriterIdempotent[*mapWriter, entry](
-			entry{Key: "a", Value: "alpha"})(writerCtx(t))
+			entry{Key: "a", Value: "alpha"},
+		)(writerCtx(t))
 	})
 
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertWriterConcurrentSafe[*mapWriter, entry](
-			entry{Key: "a", Value: "alpha"}, 4, 50)(writerCtx(t))
+			entry{Key: "a", Value: "alpha"}, 4, 50,
+		)(writerCtx(t))
 	})
 }
 
@@ -151,5 +155,6 @@ func TestAssertWriterBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertWriterBaseline[*mapWriter, entry](
-		entry{Key: "a", Value: "alpha"})(ctx)
+		entry{Key: "a", Value: "alpha"},
+	)(ctx)
 }

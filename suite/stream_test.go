@@ -45,19 +45,22 @@ func TestStream(t *testing.T) {
 	t.Run("Completes drains every item with no terminal error", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertStreamCompletes[*listStore, string]()(
-			streamCtx(t, []string{"a", "b", "c"}))
+			streamCtx(t, []string{"a", "b", "c"}),
+		)
 	})
 
 	t.Run("RespectsBreak stops yielding when the consumer breaks", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertStreamRespectsBreak[*listStore, string]()(
-			streamCtx(t, []string{"a", "b", "c"}))
+			streamCtx(t, []string{"a", "b", "c"}),
+		)
 	})
 
 	t.Run("Reentrant supports multiple iterations of the same stream", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertStreamReentrant[*listStore, string]()(
-			streamCtx(t, []string{"a", "b"}))
+			streamCtx(t, []string{"a", "b"}),
+		)
 	})
 
 	t.Run("YieldsInOrder asserts the consumer-supplied predicate across pairs", func(t *testing.T) {
@@ -103,12 +106,14 @@ func TestStream(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races under N workers", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertStreamConcurrentSafe[*listStore, string](4)(
-			streamCtx(t, []string{"a", "b", "c"}))
+			streamCtx(t, []string{"a", "b", "c"}),
+		)
 	})
 }
 
 func TestAssertStreamBaseline(t *testing.T) {
 	t.Parallel()
 	suite.AssertStreamBaseline[*listStore, string]()(
-		streamCtx(t, []string{"a", "b", "c"}))
+		streamCtx(t, []string{"a", "b", "c"}),
+	)
 }

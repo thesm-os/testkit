@@ -63,7 +63,8 @@ func TestDeleter(t *testing.T) {
 	t.Run("DeleteReturnsNotFound surfaces the configured sentinel for unknown keys", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertDeleteReturnsNotFound[*delStore, string](
-			"nonexistent", errNotFound)(deleterCtx(t))
+			"nonexistent", errNotFound,
+		)(deleterCtx(t))
 	})
 
 	t.Run("RespectsContext surfaces ctx.Canceled on cancelled call", func(t *testing.T) {
@@ -83,7 +84,8 @@ func TestDeleter(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertDeleterConcurrentSafe[*delStore, string](
-			"nonexistent", 4, 50)(deleterCtx(t))
+			"nonexistent", 4, 50,
+		)(deleterCtx(t))
 	})
 }
 

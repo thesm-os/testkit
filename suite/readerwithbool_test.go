@@ -40,19 +40,22 @@ func TestReaderWithBool(t *testing.T) {
 	t.Run("Returns surfaces (value, true) for a known key", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderWithBoolReturns[*boolMap, string, int64](
-			"a", 10)(readerWithBoolCtx(t, data))
+			"a", 10,
+		)(readerWithBoolCtx(t, data))
 	})
 
 	t.Run("Missing surfaces (zero, false) for an unknown key", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderWithBoolMissing[*boolMap, string, int64](
-			"nonexistent")(readerWithBoolCtx(t, data))
+			"nonexistent",
+		)(readerWithBoolCtx(t, data))
 	})
 
 	t.Run("Consistent yields equal (value, ok) across N calls", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderWithBoolConsistent[*boolMap, string, int64](
-			"a", 5)(readerWithBoolCtx(t, data))
+			"a", 5,
+		)(readerWithBoolCtx(t, data))
 	})
 
 	t.Run("RespectsContext surfaces (zero, false) under cancelled ctx", func(t *testing.T) {
@@ -75,7 +78,8 @@ func TestReaderWithBool(t *testing.T) {
 	t.Run("ConcurrentSafe runs without races", func(t *testing.T) {
 		t.Parallel()
 		suite.AssertReaderWithBoolConcurrentSafe[*boolMap, string, int64](
-			"a", 4, 50)(readerWithBoolCtx(t, data))
+			"a", 4, 50,
+		)(readerWithBoolCtx(t, data))
 	})
 }
 
@@ -95,5 +99,6 @@ func TestAssertReaderWithBoolBaseline(t *testing.T) {
 		},
 	}
 	suite.AssertReaderWithBoolBaseline[*boolMap, string, int64](
-		"a", 10, "missing")(ctx)
+		"a", 10, "missing",
+	)(ctx)
 }
