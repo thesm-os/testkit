@@ -15,12 +15,31 @@ import (
 )
 
 // formatFailure produces the human-readable failure message for
-// terminal and CI output. The format varies by Kind per the spec.
+// terminal and CI output. The format varies by Kind per the spec:
+// after the [kind]-prefixed header, a per-kind reporter adds
+// kind-specific context (structural callout, semantic divergence
+// framing, invariant citation, or goroutine stacks for liveness).
+// Trace dump and artifact paths render last when present.
 func formatFailure(f *Failure) string {
 	var b strings.Builder
 
 	// Header: [kind] or [REQ kind]
 	writeHeader(&b, f)
+
+	// Per-kind context (Structural / Semantic / Invariant /
+	// Liveness). Unclassified kinds skip the dispatch.
+	switch f.Kind {
+	case FailureStructural:
+		writeStructural(&b, f)
+	case FailureSemantic:
+		writeSemantic(&b, f)
+	case FailureInvariant:
+		writeInvariant(&b, f)
+	case FailureLiveness:
+		writeLiveness(&b, f)
+	case FailureUnclassified:
+		// no per-kind framing; header + trace + artifacts only.
+	}
 
 	// Trace dump (Kind-gated; only present when f.Trace is non-nil).
 	if len(f.Trace) > 0 {

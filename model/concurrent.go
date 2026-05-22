@@ -160,7 +160,10 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 				Trace: traceEvents,
 			}
 			if vizPath != "" {
-				f.ArtifactPaths = []string{"viz: " + vizPath}
+				f.ArtifactPaths = append(f.ArtifactPaths, "viz: "+vizPath)
+			}
+			if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
+				f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
 			}
 			rt.Fatalf("%s", formatFailure(f))
 		case porcupine.Unknown:

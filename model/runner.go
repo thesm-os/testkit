@@ -264,6 +264,9 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					if shouldAttachTrace(a.Kind) {
 						f.Trace = iterTrace.Snapshot()
 					}
+					if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
+						f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
+					}
 					rt.Fatalf("%s", formatFailure(f))
 				}
 				step++
@@ -291,6 +294,9 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					}
 					if shouldAttachTrace(FailureInvariant) && !cfg.DisableTrace {
 						f.Trace = iterTrace.Snapshot()
+					}
+					if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
+						f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
 					}
 					rt.Fatalf("%s", formatFailure(f))
 				}

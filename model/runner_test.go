@@ -5,12 +5,17 @@ package model_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/failure"
 	"go.thesmos.sh/testkit/model"
 	"go.thesmos.sh/testkit/model/action"
 	"go.thesmos.sh/testkit/model/law"
@@ -518,4 +523,46 @@ func TestRun(t *testing.T) {
 			action.Writer("Put", itemGen, storePut),
 		},
 	})
+}
+
+func TestFailureEmitsClassifiedJSON(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	ft := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		model.Assert(
+			ft,
+			func() storeIface { return &brokenGetStore{store: *newStore()} },
+			model.WithReference(func() storeIface { return newStore() }),
+			model.WithActions(
+				action.Writer("Put", itemGen, storePut),
+			),
+			model.WithLaw(law.ReadAfterWrite[storeIface, string, item]{
+				Read: func(rt *rapid.T, s storeIface, k string) (item, error) {
+					return s.Get(rt.Context(), k)
+				},
+				Keys: rapid.Just("a"),
+			}),
+			model.WithArtifactDir[storeIface](dir),
+		)
+	}()
+	<-done
+
+	if !ft.Failed() {
+		t.Fatal("brokenGetStore must trip ReadAfterWrite")
+	}
+	matches, err := filepath.Glob(filepath.Join(dir, "failure-*.json"))
+	testkit.NoError(t, err, "glob")
+	if len(matches) == 0 {
+		t.Fatalf("expected at least one classified-Failure JSON in %s", dir)
+	}
+	body, err := os.ReadFile(matches[0])
+	testkit.NoError(t, err, "read JSON")
+	var uf failure.Failure
+	testkit.NoError(t, json.Unmarshal(body, &uf), "unmarshal")
+	testkit.Equal(t, uf.Generator, "model", "generator tag")
+	testkit.Equal(t, uf.Kind, failure.KindInvariant, "kind")
 }
