@@ -44,6 +44,14 @@ type Config[T any] struct {
 	// Negative depths are treated as 0.
 	Depth int
 
+	// Commands caps the number of distinct actions the engine
+	// considers at each step (breadth bound). When Commands > 0
+	// and Commands < len(actions), only the first Commands entries
+	// in the actions slice are explored. Zero or larger-than-len
+	// disables the cap. Used to shrink the state space when the
+	// consumer wants BMC over a subset of the action vocabulary.
+	Commands int
+
 	// StateHash returns a string fingerprint of state for
 	// equivalence pruning. When two reached states hash equal, the
 	// engine skips re-exploring the second. nil disables pruning
@@ -97,6 +105,9 @@ func (o Outcome[T]) Violated() bool {
 func Run[T any](initial T, actions []Action[T], invariants []Invariant[T], cfg Config[T]) Outcome[T] {
 	if cfg.Depth < 0 {
 		cfg.Depth = 0
+	}
+	if cfg.Commands > 0 && cfg.Commands < len(actions) {
+		actions = actions[:cfg.Commands]
 	}
 	visited := map[string]struct{}{}
 	pruned := 0

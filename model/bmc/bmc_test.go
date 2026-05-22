@@ -199,6 +199,53 @@ func TestDepthZero(t *testing.T) {
 	})
 }
 
+func TestCommandsBound(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Commands caps the action set considered", func(t *testing.T) {
+		t.Parallel()
+		// Two actions; Commands=1 should only consider Inc, never Dec.
+		// Without the cap, the unguarded-Dec planted bug surfaces;
+		// with Commands=1, Dec is skipped entirely so no violation.
+		out := bmc.Run(
+			counterState{n: 0},
+			[]bmc.Action[counterState]{incAction(), decAction()},
+			[]bmc.Invariant[counterState]{nonNegative()},
+			bmc.Config[counterState]{
+				Depth:    4,
+				Commands: 1,
+				StateHash: func(s counterState) string {
+					return strconv.Itoa(s.n)
+				},
+			},
+		)
+		testkit.False(t, out.Violated(), "Dec dropped by Commands=1")
+		testkit.True(t, out.Explored >= 4, "Inc-only chain explored")
+	})
+
+	t.Run("Commands ≥ len(actions) is a no-op", func(t *testing.T) {
+		t.Parallel()
+		out := bmc.Run(
+			counterState{n: 0},
+			[]bmc.Action[counterState]{incAction(), decAction()},
+			[]bmc.Invariant[counterState]{nonNegative()},
+			bmc.Config[counterState]{Depth: 2, Commands: 99},
+		)
+		testkit.True(t, out.Violated(), "all actions still in play")
+	})
+
+	t.Run("Commands == 0 is a no-op (disabled)", func(t *testing.T) {
+		t.Parallel()
+		out := bmc.Run(
+			counterState{n: 0},
+			[]bmc.Action[counterState]{incAction(), decAction()},
+			[]bmc.Invariant[counterState]{nonNegative()},
+			bmc.Config[counterState]{Depth: 2, Commands: 0},
+		)
+		testkit.True(t, out.Violated(), "zero means disabled")
+	})
+}
+
 func TestErrorf(t *testing.T) {
 	t.Parallel()
 
