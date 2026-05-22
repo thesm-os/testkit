@@ -52,3 +52,170 @@ func sortByString[V any](s []V) {
 		return fmt.Sprint(s[i]) < fmt.Sprint(s[j])
 	})
 }
+
+// StreamCompletion verifies a Stream-class method terminates within
+// a finite consumer-supplied limit. Auto-emitted for every
+// StreamReader (limit defaults to 10000 in the runner).
+type StreamCompletion[T any, V any] struct {
+	Drain func(*rapid.T, T) ([]V, error)
+	Limit int
+}
+
+// ID returns the stable identifier for this law.
+func (StreamCompletion[T, V]) ID() string { return "AUTO-STREAM-COMPLETION" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamCompletion[T, V]) REQID() string { return "" }
+
+// Check verifies the drain produced fewer than Limit items.
+func (l StreamCompletion[T, V]) Check(rt *rapid.T, sut, _ T) error {
+	items, err := l.Drain(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	limit := l.Limit
+	if limit <= 0 {
+		limit = 10000
+	}
+	if len(items) >= limit {
+		return fmt.Errorf("StreamCompletion: drain reached limit %d without terminating", limit)
+	}
+	return nil
+}
+
+// StreamNoDuplicates verifies a Stream-class method emits each
+// element at most once per drain (under the consumer-supplied
+// hash function). Auto-emitted for Streams whose contract excludes
+// duplicates (Paginator, set-typed Stream, etc.).
+type StreamNoDuplicates[T any, V any, H comparable] struct {
+	Drain func(*rapid.T, T) ([]V, error)
+	Hash  func(V) H
+}
+
+// ID returns the stable identifier for this law.
+func (StreamNoDuplicates[T, V, H]) ID() string { return "AUTO-STREAM-NO-DUPLICATES" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamNoDuplicates[T, V, H]) REQID() string { return "" }
+
+// Check verifies no element hash appears twice.
+func (l StreamNoDuplicates[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
+	items, err := l.Drain(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	seen := make(map[H]struct{}, len(items))
+	for i, v := range items {
+		h := l.Hash(v)
+		if _, dup := seen[h]; dup {
+			return fmt.Errorf("StreamNoDuplicates: element %d duplicates an earlier value (hash=%v)", i, h)
+		}
+		seen[h] = struct{}{}
+	}
+	return nil
+}
+
+// StreamStableOrder verifies a Stream-class method emits elements
+// in an order consistent with the consumer-supplied total order
+// (e.g., insertion order, key-ascending). Auto-emitted for Streams
+// carrying //testkit:stable-order.
+type StreamStableOrder[T any, V any] struct {
+	Drain func(*rapid.T, T) ([]V, error)
+	Less  func(a, b V) bool
+}
+
+// ID returns the stable identifier for this law.
+func (StreamStableOrder[T, V]) ID() string { return "AUTO-STREAM-STABLE-ORDER" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamStableOrder[T, V]) REQID() string { return "" }
+
+// Check verifies the drained order is sorted by Less.
+func (l StreamStableOrder[T, V]) Check(rt *rapid.T, sut, _ T) error {
+	items, err := l.Drain(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	for i := 1; i < len(items); i++ {
+		if l.Less(items[i], items[i-1]) {
+			return fmt.Errorf("StreamStableOrder: element %d precedes %d in order", i, i-1)
+		}
+	}
+	return nil
+}
+
+// StreamPermutation verifies a Stream's drain is a permutation of
+// the consumer-supplied expected multiset. Auto-emitted for Streams
+// carrying //testkit:permutation.
+type StreamPermutation[T any, V any, H comparable] struct {
+	Drain    func(*rapid.T, T) ([]V, error)
+	Expected func(*rapid.T, T) []V
+	Hash     func(V) H
+}
+
+// ID returns the stable identifier for this law.
+func (StreamPermutation[T, V, H]) ID() string { return "AUTO-STREAM-PERMUTATION" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamPermutation[T, V, H]) REQID() string { return "" }
+
+// Check verifies got is a permutation of expected (by hash).
+func (l StreamPermutation[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
+	got, err := l.Drain(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	expected := l.Expected(rt, sut)
+	if len(got) != len(expected) {
+		return fmt.Errorf("StreamPermutation: drained %d items, expected %d", len(got), len(expected))
+	}
+	gotH := make([]H, len(got))
+	for i, v := range got {
+		gotH[i] = l.Hash(v)
+	}
+	expH := make([]H, len(expected))
+	for i, v := range expected {
+		expH[i] = l.Hash(v)
+	}
+	sort.Slice(gotH, func(i, j int) bool { return fmt.Sprint(gotH[i]) < fmt.Sprint(gotH[j]) })
+	sort.Slice(expH, func(i, j int) bool { return fmt.Sprint(expH[i]) < fmt.Sprint(expH[j]) })
+	for i := range gotH {
+		if gotH[i] != expH[i] {
+			return fmt.Errorf("StreamPermutation: sorted-hash mismatch at %d: got=%v expected=%v", i, gotH[i], expH[i])
+		}
+	}
+	return nil
+}
+
+// StreamOverMatch verifies the SUT's stream drain is a superset of
+// the consumer-supplied required-elements set. Auto-emitted for
+// Streams carrying //testkit:over-match-acceptable.
+type StreamOverMatch[T any, V any, H comparable] struct {
+	Drain    func(*rapid.T, T) ([]V, error)
+	Required func(*rapid.T, T) []V
+	Hash     func(V) H
+}
+
+// ID returns the stable identifier for this law.
+func (StreamOverMatch[T, V, H]) ID() string { return "AUTO-STREAM-OVER-MATCH" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamOverMatch[T, V, H]) REQID() string { return "" }
+
+// Check verifies the drain contains every required element.
+func (l StreamOverMatch[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
+	got, err := l.Drain(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	seen := make(map[H]struct{}, len(got))
+	for _, v := range got {
+		seen[l.Hash(v)] = struct{}{}
+	}
+	for _, want := range l.Required(rt, sut) {
+		if _, ok := seen[l.Hash(want)]; !ok {
+			return fmt.Errorf("StreamOverMatch: required element %v missing from drain", want)
+		}
+	}
+	return nil
+}

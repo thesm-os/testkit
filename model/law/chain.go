@@ -242,7 +242,8 @@ func (l ReplayRespectsCausality[T, K, Entry]) Check(rt *rapid.T, sut, _ T) error
 					return fmt.Errorf(
 						"ReplayRespectsCausality[%v]: entry %s depends on %s"+
 							" which is missing or appears later in replay",
-						partKey, l.EntryID(e), dep)
+						partKey, l.EntryID(e), dep,
+					)
 				}
 			}
 			seen[l.EntryID(e)] = true

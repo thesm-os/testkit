@@ -119,7 +119,8 @@ func (l DeleteReturnsNotFound[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 		//nolint:errorlint // diagnostic message, not wrapping
 		return fmt.Errorf(
 			"DeleteReturnsNotFound: key %v: ref returned sentinel %v but SUT returned %v",
-			k, l.Sentinel, sutErr)
+			k, l.Sentinel, sutErr,
+		)
 	}
 	return nil
 }
