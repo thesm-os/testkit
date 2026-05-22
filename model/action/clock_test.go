@@ -11,6 +11,7 @@ import (
 
 	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/model/action"
+	"go.thesmos.sh/testkit/model/timeaware"
 )
 
 func TestAdvanceClock(t *testing.T) {
@@ -73,5 +74,56 @@ func TestAdvanceClock(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			a.Run(rt, "sut", "ref") // must not panic
 		})
+	})
+}
+
+func TestAdvanceClockSynced(t *testing.T) {
+	t.Parallel()
+
+	t.Run("nil barrier degrades to plain advance", func(t *testing.T) {
+		t.Parallel()
+		sutClk := clock.NewTestClock(time.Unix(0, 0))
+		refClk := clock.NewTestClock(time.Unix(0, 0))
+		clocks := func() (*clock.TestClock, *clock.TestClock) { return sutClk, refClk }
+		a := action.AdvanceClockSynced[string]("AdvanceClock", clocks, time.Second, nil)
+		rapid.Check(t, func(rt *rapid.T) {
+			a.Run(rt, "sut", "ref")
+		})
+	})
+
+	t.Run("barrier blocks advance while ops are in-flight", func(t *testing.T) {
+		t.Parallel()
+		sutClk := clock.NewTestClock(time.Unix(0, 0))
+		refClk := clock.NewTestClock(time.Unix(0, 0))
+		clocks := func() (*clock.TestClock, *clock.TestClock) { return sutClk, refClk }
+		barrier := timeaware.NewBarrier()
+		a := action.AdvanceClockSynced[string]("AdvanceClock", clocks, time.Hour, barrier)
+
+		// Hold a fake op for ~5ms; advance must block until release.
+		release := barrier.Op()
+		baseSUT := sutClk.Now()
+		advanceDone := make(chan struct{})
+		go func() {
+			rapid.Check(t, func(rt *rapid.T) {
+				a.Run(rt, "sut", "ref")
+			})
+			close(advanceDone)
+		}()
+		time.Sleep(5 * time.Millisecond)
+		select {
+		case <-advanceDone:
+			t.Fatal("advance ran while op was in-flight")
+		default:
+		}
+		// Clock has not moved while op holds.
+		if sutClk.Now() != baseSUT {
+			t.Fatal("sut clock advanced before release")
+		}
+		release()
+		select {
+		case <-advanceDone:
+		case <-time.After(time.Second):
+			t.Fatal("advance did not complete after release")
+		}
 	})
 }

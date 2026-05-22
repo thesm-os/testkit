@@ -71,8 +71,8 @@ func Resolve(r *Registry, typ reflect.Type) (hint any, name string, needsHint bo
 // kind) has at least one unexported field. Caller verifies the
 // kind precondition.
 func hasUnexportedField(typ reflect.Type) bool {
-	for i := range typ.NumField() {
-		if !typ.Field(i).IsExported() {
+	for f := range typ.Fields() {
+		if !f.IsExported() {
 			return true
 		}
 	}
