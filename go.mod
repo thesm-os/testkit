@@ -7,6 +7,10 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
+	go.thesmos.sh/eidos v1.2.0
+	go.thesmos.sh/eidos/backend/golang v1.2.0
+	go.thesmos.sh/eidos/cli v1.2.0
+	go.thesmos.sh/eidos/frontend/golang v1.2.0
 	golang.org/x/tools v0.45.0
 	pgregory.net/rapid v1.3.0
 )
@@ -14,6 +18,7 @@ require (
 require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/goccy/go-yaml v1.19.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
