@@ -16,6 +16,10 @@ import (
 	"go.thesmos.sh/eidos/core/diag"
 	frontendgolang "go.thesmos.sh/eidos/frontend/golang"
 	"go.thesmos.sh/eidos/plugin"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 )
 
 // eidosBrand drives the generated header marker, config file
@@ -167,8 +171,23 @@ func setConfigOn(cmd eidosCmd, cfg *eidoscli.Config) {
 // testkitPlugins returns the static plugin universe. Generator
 // plugins are added here as they're implemented.
 func testkitPlugins() []plugin.Plugin {
+	shapes := shape.New().
+		Detectors(detectors.All()...).
+		Contracts(contracts.All()...).
+		Mixins(mixins.All()...)
+
 	return []plugin.Plugin{
+		// Frontend — parse Go source into the store.
 		frontendgolang.New(),
+
+		// Annotators — detect shapes, resolve contracts, validate.
+		shapes,
+		shapes.Resolver(),
+		shapes.Validator(),
+
+		// TODO: add testkit generator plugins (stub, suite, bench).
+
+		// Backend — render emit graph to Go source.
 		golang.New(),
 	}
 }
