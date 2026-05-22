@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/failure"
+	"go.thesmos.sh/testkit/trace"
 )
 
 // modelKindToFailureKind maps a model-package FailureKind to the
@@ -71,6 +73,74 @@ func emitClassifiedJSON(rt rapid.TB, override string, f *Failure) string {
 		return ""
 	}
 	return path
+}
+
+// emitPerClientJSON splits a multi-client failure into per-client
+// classified-Failure JSONs alongside the aggregate. The aggregate
+// (already written by [emitClassifiedJSON]) covers the cross-client
+// view; the per-client files filter the trace to one ClientID each
+// so per-client downstream tooling (e.g., per-client REQ coverage)
+// has a focused artifact.
+//
+// No-op when fewer than two distinct non-sequential ClientIDs appear
+// in the trace; sequential (ClientID == -1) events never produce a
+// per-client file. Returned paths are appended to f.ArtifactPaths by
+// the caller.
+func emitPerClientJSON(rt rapid.TB, override string, f *Failure) []string {
+	dir := ResolveArtifactDir(override)
+	if dir == "" {
+		return nil
+	}
+	clients := distinctClients(f.Trace)
+	if len(clients) < 2 {
+		return nil
+	}
+	seed := sanitizeForFilename(rt.Name())
+	paths := make([]string, 0, len(clients))
+	for _, id := range clients {
+		clientF := *f // shallow copy
+		clientF.Trace = filterTraceByClient(f.Trace, id)
+		clientSeed := fmt.Sprintf("%s-client%d", seed, id)
+		path, err := WriteClassifiedFailure(dir, clientSeed, &clientF)
+		if err != nil {
+			rt.Logf("failed to write per-client failure for client %d: %v", id, err)
+			continue
+		}
+		paths = append(paths, path)
+	}
+	return paths
+}
+
+// distinctClients returns the sorted set of non-sequential ClientIDs
+// observed in the trace. Sequential events (ClientID == -1) are
+// excluded — only multi-client concurrent traces participate.
+func distinctClients(events []trace.Event) []int {
+	seen := make(map[int]struct{})
+	for _, ev := range events {
+		if ev.ClientID < 0 {
+			continue
+		}
+		seen[ev.ClientID] = struct{}{}
+	}
+	ids := make([]int, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	return ids
+}
+
+// filterTraceByClient returns the subset of events emitted by the
+// named client. Used by [emitPerClientJSON] to scope each per-client
+// failure to that client's observations.
+func filterTraceByClient(events []trace.Event, clientID int) []trace.Event {
+	out := make([]trace.Event, 0, len(events))
+	for _, ev := range events {
+		if ev.ClientID == clientID {
+			out = append(out, ev)
+		}
+	}
+	return out
 }
 
 // WriteClassifiedFailure persists the unified-failure JSON

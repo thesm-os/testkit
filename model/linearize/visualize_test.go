@@ -24,7 +24,7 @@ func TestVisualizeOnFailure(t *testing.T) {
 		testkit.Equal(t, got, "", "empty dir → empty path")
 	})
 
-	t.Run("populated dir writes the HTML file at <dir>/<seed>.html", func(t *testing.T) {
+	t.Run("populated dir writes the HTML at <dir>/linearizability-<seed>.html", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		m := linearize.Counter()
@@ -35,7 +35,7 @@ func TestVisualizeOnFailure(t *testing.T) {
 		}
 		_, info := porcupine.CheckOperationsVerbose(m, history, 0)
 		got := linearize.VisualizeOnFailure(t, m, info, dir, "abc")
-		testkit.Equal(t, got, filepath.Join(dir, "abc.html"), "path returned")
+		testkit.Equal(t, got, filepath.Join(dir, "linearizability-abc.html"), "path returned")
 		if _, err := os.Stat(got); err != nil {
 			t.Fatalf("expected file: %v", err)
 		}

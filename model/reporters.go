@@ -33,19 +33,26 @@ func writeStructural(b *strings.Builder, f *Failure) {
 
 // writeSemantic adds SUT-vs-reference divergence framing. The
 // actual cmp.Diff lives in f.Err; this reporter cites the law (or
-// action) and notes the divergence.
+// action) and notes the divergence. When a Porcupine linearizability
+// visualization is attached, it surfaces the path as the primary
+// debugging artifact.
 func writeSemantic(b *strings.Builder, f *Failure) {
 	source := "action"
 	if f.LawID != "" {
 		source = f.LawID
 	}
 	fmt.Fprintf(b, "  semantic: SUT vs reference disagreement (%s)\n", source) //nolint:forbidigo // strings.Builder
+	for _, p := range f.ArtifactPaths {
+		if path, ok := strings.CutPrefix(p, "viz: "); ok {
+			fmt.Fprintf(b, "    porcupine: %s\n", path) //nolint:forbidigo // strings.Builder
+		}
+	}
 }
 
 // writeInvariant adds law-violation context: cite the law ID + REQ
-// + diagnostic. Most of this is already in the header; this
-// reporter adds the "law fired" framing for kind-specific tooling
-// that reads per-kind sections.
+// then the state at violation when the runner captured one. The
+// header already carries the law's err message; this reporter adds
+// the structured snapshot for per-kind tooling that reads sections.
 func writeInvariant(b *strings.Builder, f *Failure) {
 	switch {
 	case f.LawID != "" && f.REQID != "":
@@ -55,22 +62,85 @@ func writeInvariant(b *strings.Builder, f *Failure) {
 	default:
 		fmt.Fprintln(b, "  invariant: unspecified law fired") //nolint:forbidigo // strings.Builder
 	}
+	if f.SUTState != "" {
+		fmt.Fprintf(b, "    sut: %s\n", f.SUTState) //nolint:forbidigo // strings.Builder
+	}
+	if f.RefState != "" {
+		fmt.Fprintf(b, "    ref: %s\n", f.RefState) //nolint:forbidigo // strings.Builder
+	}
 }
 
 // writeLiveness adds goroutine stacks for deadlock / no-progress
 // diagnoses. The full runtime.Stack output is captured at format
 // time so the snapshot reflects the goroutine state at failure-
 // report time. The stack is bounded to liveStackBufBytes to keep
-// the report readable.
+// the report readable. A "suspected blocker:" line cites the first
+// goroutine in a known blocking state when one is detected.
 func writeLiveness(b *strings.Builder, _ *Failure) {
 	//nolint:forbidigo // strings.Builder
 	fmt.Fprintln(b, "  liveness: deadlock or no-progress detected; goroutine stacks follow")
 	buf := make([]byte, liveStackBufBytes)
 	n := runtime.Stack(buf, true /* all goroutines */)
 	stack := string(buf[:n])
+	if id, state := suspectedBlocker(stack); id != "" {
+		fmt.Fprintf(b, "    suspected blocker: goroutine %s [%s]\n", id, state) //nolint:forbidigo // strings.Builder
+	}
 	for line := range strings.SplitSeq(strings.TrimRight(stack, "\n"), "\n") {
 		fmt.Fprintf(b, "    %s\n", line) //nolint:forbidigo // strings.Builder
 	}
+}
+
+// suspectedBlocker scans a runtime.Stack-formatted dump for the
+// first goroutine header in a blocking state. The dump's goroutine
+// headers look like `goroutine 47 [chan receive]:`; blocking states
+// are the ones that imply waiting on a synchronization primitive.
+// Returns goroutine ID and trimmed state, or empty strings if no
+// blocked goroutine is found.
+func suspectedBlocker(stack string) (id, state string) {
+	for line := range strings.SplitSeq(stack, "\n") {
+		if !strings.HasPrefix(line, "goroutine ") {
+			continue
+		}
+		open := strings.IndexByte(line, '[')
+		closeIdx := strings.LastIndexByte(line, ']')
+		if open < 0 || closeIdx <= open {
+			continue
+		}
+		st := line[open+1 : closeIdx]
+		// "chan receive, 5 minutes" → match the leading word.
+		head := st
+		if c := strings.IndexByte(head, ','); c >= 0 {
+			head = head[:c]
+		}
+		if !isBlockingState(head) {
+			continue
+		}
+		idEnd := strings.IndexByte(line[len("goroutine "):], ' ')
+		if idEnd < 0 {
+			continue
+		}
+		return line[len("goroutine "):][:idEnd], st
+	}
+	return "", ""
+}
+
+// stateChanReceive is the runtime goroutine state for a channel
+// receive — the canonical deadlock signature. Named so test fixtures
+// and the matcher reference one literal.
+const stateChanReceive = "chan receive"
+
+// isBlockingState reports whether a Go-runtime goroutine state is
+// one that implies waiting on a synchronization primitive (and is
+// therefore worth flagging as a deadlock candidate). Running,
+// runnable, and syscall states are excluded; they're not waits.
+func isBlockingState(s string) bool {
+	switch s {
+	case stateChanReceive, "chan send", "select",
+		"semacquire", "sync.Cond.Wait", "sync.WaitGroup.Wait",
+		"IO wait", "sleep":
+		return true
+	}
+	return false
 }
 
 // liveStackBufBytes caps the goroutine-stack capture so a runaway

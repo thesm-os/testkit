@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/failure"
+	"go.thesmos.sh/testkit/trace"
 )
 
 func TestModelKindToFailureKind(t *testing.T) {
@@ -107,5 +108,94 @@ func TestWriteClassifiedFailure(t *testing.T) {
 		testkit.NoError(t, err, "mkdir + write")
 		_, statErr := os.Stat(path)
 		testkit.NoError(t, statErr, "file exists at nested path")
+	})
+}
+
+func TestDistinctClients(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns sorted unique non-sequential client ids", func(t *testing.T) {
+		t.Parallel()
+		got := distinctClients([]trace.Event{
+			{ClientID: 2}, {ClientID: 0}, {ClientID: 2}, {ClientID: 1}, {ClientID: 0},
+		})
+		testkit.Equal(t, len(got), 3, "three distinct clients")
+		testkit.Equal(t, got[0], 0, "sorted ascending")
+		testkit.Equal(t, got[1], 1, "")
+		testkit.Equal(t, got[2], 2, "")
+	})
+
+	t.Run("excludes sequential ClientID -1", func(t *testing.T) {
+		t.Parallel()
+		got := distinctClients([]trace.Event{{ClientID: -1}, {ClientID: -1}})
+		testkit.Equal(t, len(got), 0, "no multi-client view for sequential trace")
+	})
+
+	t.Run("mixed sequential and concurrent skips the sequential", func(t *testing.T) {
+		t.Parallel()
+		got := distinctClients([]trace.Event{{ClientID: -1}, {ClientID: 0}, {ClientID: 1}})
+		testkit.Equal(t, len(got), 2, "two concurrent clients")
+	})
+}
+
+func TestFilterTraceByClient(t *testing.T) {
+	t.Parallel()
+
+	events := []trace.Event{
+		{ClientID: 0, Method: "A"},
+		{ClientID: 1, Method: "B"},
+		{ClientID: 0, Method: "C"},
+		{ClientID: 2, Method: "D"},
+	}
+	got := filterTraceByClient(events, 0)
+	testkit.Equal(t, len(got), 2, "two events for client 0")
+	testkit.Equal(t, got[0].Method, "A", "first preserved")
+	testkit.Equal(t, got[1].Method, "C", "second preserved")
+}
+
+func TestEmitPerClientJSON(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no-op for sequential trace", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithName("seq")
+		f := &Failure{Kind: FailureSemantic, Trace: []trace.Event{{ClientID: -1}}}
+		got := emitPerClientJSON(ft, t.TempDir(), f)
+		testkit.Equal(t, len(got), 0, "sequential trace produces no per-client files")
+	})
+
+	t.Run("no-op for single-client trace", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithName("one")
+		f := &Failure{Kind: FailureSemantic, Trace: []trace.Event{{ClientID: 0}, {ClientID: 0}}}
+		got := emitPerClientJSON(ft, t.TempDir(), f)
+		testkit.Equal(t, len(got), 0, "one client is not multi-client")
+	})
+
+	t.Run("writes one JSON per client for multi-client trace", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		ft := testkit.NewFailableTB().WithName("multi")
+		f := &Failure{
+			Kind: FailureSemantic,
+			Err:  errors.New("non-linearizable"),
+			Trace: []trace.Event{
+				{ClientID: 0, Method: "Get"},
+				{ClientID: 1, Method: "Put"},
+				{ClientID: 0, Method: "Delete"},
+				{ClientID: 1, Method: "Get"},
+			},
+		}
+		got := emitPerClientJSON(ft, dir, f)
+		testkit.Equal(t, len(got), 2, "two per-client files")
+		testkit.True(t, strings.HasSuffix(got[0], "failure-multi-client0.json"), "client0 filename")
+		testkit.True(t, strings.HasSuffix(got[1], "failure-multi-client1.json"), "client1 filename")
+
+		// Per-client JSON should carry only that client's events.
+		body, readErr := os.ReadFile(got[0])
+		testkit.NoError(t, readErr, "read client0 JSON")
+		var uf failure.Failure
+		testkit.NoError(t, json.Unmarshal(body, &uf), "valid JSON")
+		testkit.Equal(t, uf.Details["trace_events"].(float64), 2.0, "two events for client0")
 	})
 }

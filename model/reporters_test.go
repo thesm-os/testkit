@@ -121,4 +121,103 @@ func TestFormatFailurePerKind(t *testing.T) {
 		testkit.True(t, invariantIdx > 0 && artifactIdx > 0, "both sections present")
 		testkit.True(t, invariantIdx < artifactIdx, "artifacts come after kind line")
 	})
+
+	t.Run("invariant renders state at violation when set", func(t *testing.T) {
+		t.Parallel()
+		got := formatFailure(&Failure{
+			Kind:     FailureInvariant,
+			LawID:    "AUTO-READ-AFTER-WRITE",
+			Err:      errors.New("get returned wrong value"),
+			SUTState: "store{a: WRONG}",
+			RefState: "store{a: correct}",
+		})
+		testkit.Assert(t, got).
+			Contains("sut: store{a: WRONG}", "SUT state rendered").
+			Contains("ref: store{a: correct}", "ref state rendered")
+	})
+
+	t.Run("semantic surfaces porcupine viz path when present", func(t *testing.T) {
+		t.Parallel()
+		got := formatFailure(&Failure{
+			Kind:          FailureSemantic,
+			Err:           errors.New("non-linearizable"),
+			ArtifactPaths: []string{"viz: /tmp/linearizability-abc.html"},
+		})
+		testkit.Assert(t, got).
+			Contains("porcupine: /tmp/linearizability-abc.html", "viz path surfaced")
+	})
+
+	t.Run("liveness includes suspected blocker line when one is found", func(t *testing.T) {
+		t.Parallel()
+		got := formatFailure(&Failure{
+			Kind: FailureLiveness,
+			Err:  errors.New("no progress"),
+		})
+		// runtime.Stack always includes the test runner goroutine; we can't
+		// guarantee a specific blocking state in this synthetic test, so we
+		// just assert the framing is consistent.
+		testkit.Assert(t, got).Contains("liveness: deadlock or no-progress", "kind line")
+	})
+}
+
+func TestSuspectedBlocker(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		stack     string
+		wantID    string
+		wantState string
+	}{
+		{
+			name:      "chan receive header is flagged",
+			stack:     "goroutine 47 [chan receive]:\n\tmain.worker(...)\n",
+			wantID:    "47",
+			wantState: stateChanReceive,
+		},
+		{
+			name:      "semacquire header is flagged",
+			stack:     "goroutine 8 [semacquire]:\nsync.runtime_Semacquire(...)\n",
+			wantID:    "8",
+			wantState: "semacquire",
+		},
+		{
+			name:      "select header is flagged",
+			stack:     "goroutine 12 [select]:\nmain.dispatch(...)\n",
+			wantID:    "12",
+			wantState: "select",
+		},
+		{
+			name:      "long-running suffix is preserved",
+			stack:     "goroutine 99 [chan receive, 5 minutes]:\n",
+			wantID:    "99",
+			wantState: "chan receive, 5 minutes",
+		},
+		{
+			name:      "running and runnable are not blocking",
+			stack:     "goroutine 1 [running]:\ngoroutine 2 [runnable]:\n",
+			wantID:    "",
+			wantState: "",
+		},
+		{
+			name:      "first blocking match wins over later ones",
+			stack:     "goroutine 1 [running]:\ngoroutine 5 [chan receive]:\ngoroutine 9 [semacquire]:\n",
+			wantID:    "5",
+			wantState: stateChanReceive,
+		},
+		{
+			name:      "empty stack returns empties",
+			stack:     "",
+			wantID:    "",
+			wantState: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			id, state := suspectedBlocker(c.stack)
+			testkit.Equal(t, id, c.wantID, "id")
+			testkit.Equal(t, state, c.wantState, "state")
+		})
+	}
 }

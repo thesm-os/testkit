@@ -5,6 +5,7 @@ package model
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/anishathalye/porcupine"
@@ -291,6 +292,8 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 						StepRan:      StepID{WorkerID: -1, Index: step},
 						StepReported: StepID{WorkerID: -1, Index: step},
 						Err:          err,
+						SUTState:     fmt.Sprintf("%+v", sut),
+						RefState:     fmt.Sprintf("%+v", ref),
 					}
 					if shouldAttachTrace(FailureInvariant) && !cfg.DisableTrace {
 						f.Trace = iterTrace.Snapshot()

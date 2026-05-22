@@ -20,10 +20,13 @@ const (
 	FailureUnclassified FailureKind = iota
 
 	// FailureStructural indicates a structural violation (chain hash
-	// mismatch, ordering violation, linearizability).
+	// mismatch, ordering violation). Linearizability mismatches are
+	// classified as [FailureSemantic] — the SUT diverged from the
+	// linearizable reference model.
 	FailureStructural
 
-	// FailureSemantic indicates a SUT vs reference mismatch.
+	// FailureSemantic indicates a SUT vs reference mismatch,
+	// including non-linearizable concurrent histories.
 	FailureSemantic
 
 	// FailureInvariant indicates a cross-shape law violation.
@@ -67,6 +70,14 @@ type Failure struct { //nolint:errname // Failure is the established name; renam
 	Err           error  // canonical structured error
 	Trace         []trace.Event
 	ArtifactPaths []string
+
+	// SUTState and RefState are snapshots captured at the failure
+	// point, rendered via fmt.Sprintf("%+v", ...). Populated by the
+	// runner for invariant violations so reporters can show the
+	// state at violation alongside the law's diff. Empty for kinds
+	// that don't carry per-step state (Structural, Liveness).
+	SUTState string
+	RefState string
 }
 
 // Error implements the error interface.

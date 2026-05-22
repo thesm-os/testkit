@@ -152,7 +152,8 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 				}
 			}
 			f := &Failure{
-				Kind:         FailureStructural,
+				// SUT vs linearizable-reference mismatch is semantic.
+				Kind:         FailureSemantic,
 				StepRan:      StepID{WorkerID: -1, Index: 0},
 				StepReported: StepID{WorkerID: -1, Index: 0},
 				Err: fmt.Errorf("history is not linearizable (%d ops, %d workers)",
@@ -165,6 +166,9 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 			if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
 				f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
 			}
+			for _, p := range emitPerClientJSON(rt, cfg.ArtifactDir, f) {
+				f.ArtifactPaths = append(f.ArtifactPaths, "json: "+p)
+			}
 			rt.Fatalf("%s", formatFailure(f))
 		case porcupine.Unknown:
 			rt.Logf("linearizability check timed out (%v) — treating as warning",
@@ -174,21 +178,29 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 }
 
 // writeVisualization writes a Porcupine visualization HTML file to
-// the configured artifact directory. Returns the path, or empty
+// the configured artifact directory. Returns the path or empty
 // string on write failure (logged via rt.Logf). The path is reported
-// via rt.Logf — the surrounding [Fatalf] message folds the path
-// into the failure context, so this helper does not itself mark the
-// test as failed.
+// via rt.Logf so the surrounding [Fatalf] message folds the path
+// into the failure context.
+//
+// Naming follows the spec convention linearizability-<seed>.html
+// where seed is the sanitized rapid test name. The parallel public
+// helper [linearize.VisualizeOnFailure] writes the same shape for
+// consumers driving Porcupine outside the runner; both writers
+// share the naming convention so artifacts collected from either
+// path are interchangeable for CI tooling.
 func writeVisualization(rt rapid.TB, m porcupine.Model, info porcupine.LinearizationInfo, artifactDir string) string {
-	err := os.MkdirAll(artifactDir, 0o750) //nolint:gosec // test artifacts
-	if err != nil {
+	if artifactDir == "" {
+		return ""
+	}
+	if err := os.MkdirAll(artifactDir, 0o750); err != nil { //nolint:gosec // test artifacts
 		rt.Logf("failed to create artifact dir: %v", err)
 		return ""
 	}
-	filename := sanitizeForFilename(rt.Name()) + "-linearizability.html"
+	seed := sanitizeForFilename(rt.Name())
+	filename := "linearizability-" + seed + ".html"
 	path := filepath.Join(artifactDir, filename)
-	err = porcupine.VisualizePath(m, info, path)
-	if err != nil {
+	if err := porcupine.VisualizePath(m, info, path); err != nil {
 		rt.Logf("failed to write artifact: %v", err)
 		return ""
 	}
