@@ -186,10 +186,10 @@ func Consumed(consumer, action string) Option {
 func validateDescriptor(d *Descriptor) []error {
 	var errs []error
 	if d.Name == "" {
-		errs = append(errs, errors.New("name is required"))
+		errs = append(errs, errors.New("directive: name is required"))
 	}
 	if d.Category == CategoryUnspecified {
-		errs = append(errs, errors.New("category is required (use directive.InCategory(...))"))
+		errs = append(errs, errors.New("directive: category is required (use directive.InCategory(...))"))
 	}
 	for i, a := range d.Args {
 		if a.Multi && i != len(d.Args)-1 {

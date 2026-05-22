@@ -10,7 +10,7 @@ import (
 )
 
 // ErrNotFound is the sentinel returned for unknown keys.
-var ErrNotFound = errors.New("nestedmap/cache: not found")
+var ErrNotFound = errors.New("nestedmap: not found")
 
 // inmem is the [MapCache] companion. Returns a fresh map clone per
 // Get so consistent-reads sees equal-but-distinct map instances

@@ -9,7 +9,7 @@ import (
 )
 
 // ErrNotFound is the sentinel returned for unknown keys.
-var ErrNotFound = errors.New("pointer/cache: not found")
+var ErrNotFound = errors.New("pointer: not found")
 
 // inmem is the [ContainerCache] companion. The framework's pointer-
 // to-struct sample is `&Container[int]{Value: 42}`; the in-mem

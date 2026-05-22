@@ -9,7 +9,7 @@ import (
 )
 
 // ErrNotFound is the sentinel returned for unknown keys.
-var ErrNotFound = errors.New("nestedgeneric/cache: not found")
+var ErrNotFound = errors.New("nestedgeneric: not found")
 
 // inmem is the [PageCache] companion. The framework's Page[Item]
 // sample populates Cursor (the first basic-typed field) with

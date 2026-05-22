@@ -43,7 +43,7 @@ func DefaultHash[Entry any]() HashFunc[Entry] {
 
 // ErrChainIntegrity is returned by [AppendOnly.Verify] when the
 // hash chain is broken.
-var ErrChainIntegrity = errors.New("chain integrity violation")
+var ErrChainIntegrity = errors.New("refchain: chain integrity violation")
 
 // AppendOnly is a generic in-memory append-only chain with hash
 // linkage. Thread-safe via mutex.

@@ -24,7 +24,7 @@ import (
 func runGenerator(g generator.Generator, outputKey string, args []string) error {
 	output := viper.GetString(outputKey)
 	if output == "" {
-		return errors.New("-o flag is required")
+		return errors.New("cli: -o flag is required")
 	}
 
 	workDir := WorkDir()

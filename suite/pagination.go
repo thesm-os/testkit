@@ -96,7 +96,7 @@ func paginationFields(page any, cursorField string) (reflect.Value, any, error) 
 	}
 	items := v.FieldByName("Items")
 	if !items.IsValid() {
-		return reflect.Value{}, nil, errors.New("page struct missing Items field")
+		return reflect.Value{}, nil, errors.New("suite: page struct missing Items field")
 	}
 	if items.Kind() != reflect.Slice {
 		return reflect.Value{}, nil, fmt.Errorf("items field is %s, want slice", items.Kind())

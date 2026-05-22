@@ -127,7 +127,7 @@ func resolveLocal(name string, data *spec.Data, pkg *generator.Package) (Resolve
 func resolveRemote(importPath, name string, data *spec.Data) (Resolved, error) {
 	if data.Loader == nil {
 		return Resolved{}, errors.New(
-			"cross-package reference requires Data.Loader (set by spec.Analyze)")
+			"resolver: cross-package reference requires Data.Loader (set by spec.Analyze)")
 	}
 	remote, err := data.Loader.Load(importPath, "")
 	if err != nil {
@@ -199,13 +199,13 @@ func (s FuncSig) Check(obj types.Object) error {
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return errors.New("not a signature")
+		return errors.New("resolver: not a signature")
 	}
 	if sig.Variadic() != s.Variadic {
 		if s.Variadic {
-			return errors.New("must be variadic")
+			return errors.New("resolver: must be variadic")
 		}
-		return errors.New("must not be variadic")
+		return errors.New("resolver: must not be variadic")
 	}
 	if got := sig.Params().Len(); got != len(s.Params) {
 		return fmt.Errorf("expects %d param(s), got %d", len(s.Params), got)

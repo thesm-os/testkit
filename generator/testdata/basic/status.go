@@ -82,7 +82,7 @@ func (s Status) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary decodes a single byte back into a Status.
 func (s *Status) UnmarshalBinary(data []byte) error {
 	if len(data) != 1 {
-		return errors.New("Status.UnmarshalBinary: expected exactly 1 byte")
+		return errors.New("basic: Status.UnmarshalBinary: expected exactly 1 byte")
 	}
 	*s = Status(data[0])
 	return nil

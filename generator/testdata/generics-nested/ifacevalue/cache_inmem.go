@@ -10,7 +10,7 @@ import (
 )
 
 // ErrNotFound is the sentinel returned for unknown keys.
-var ErrNotFound = errors.New("ifacevalue/cache: not found")
+var ErrNotFound = errors.New("ifacevalue: not found")
 
 // inmem is the [ReaderCache] companion. The framework's io.Reader
 // sample falls back to nil (interface types have no non-zero

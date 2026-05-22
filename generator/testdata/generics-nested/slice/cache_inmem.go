@@ -9,7 +9,7 @@ import (
 )
 
 // ErrNotFound is the sentinel returned for unknown keys.
-var ErrNotFound = errors.New("slice/cache: not found")
+var ErrNotFound = errors.New("slice: not found")
 
 // inmem is the [ByteCache] companion. Stable returns: the same key
 // always yields the same slice instance, so the suite's "consistent

@@ -100,6 +100,7 @@ linters:
             - go.thesmos.sh/testkit
             - go.thesmos.sh/testkit/cmd
             - go.thesmos.sh/testkit/generator
+            - go.thesmos.sh/eidos
             - github.com/google/go-cmp
             - github.com/spf13/cobra
             - github.com/spf13/viper
