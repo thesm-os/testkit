@@ -7,10 +7,10 @@ require (
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
-	go.thesmos.sh/eidos v1.2.0
+	go.thesmos.sh/eidos v1.3.0
 	go.thesmos.sh/eidos/backend/golang v1.2.0
 	go.thesmos.sh/eidos/cli v1.2.0
-	go.thesmos.sh/eidos/frontend/golang v1.2.0
+	go.thesmos.sh/eidos/frontend/golang v1.3.0
 	golang.org/x/tools v0.45.0
 	pgregory.net/rapid v1.3.0
 )
