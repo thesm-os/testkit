@@ -45,8 +45,8 @@ github.com/stretchr/testify v1.11.1 h1:7s2iGBzp5EwR7/aIZr8ao5+dra3wiQyKjjFuvgVKu
 github.com/stretchr/testify v1.11.1/go.mod h1:wZwfW3scLgRK+23gO65QZefKpKQRnfz6sD981Nm4B6U=
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
-go.thesmos.sh/eidos v1.2.0 h1:1mEg7A05owToSsZYAQ4FupuAwmWPUfL/MHdnYAX+Hy0=
-go.thesmos.sh/eidos v1.2.0/go.mod h1:9wEqiy2rG8zJ/9r0ehG+8k6apyFjvSMYWux1m75X0/U=
+go.thesmos.sh/eidos v1.3.0 h1:bGcSZoA4DFflQ1rq1E35+AXK3L0rqEqlsbi4NDg+qxw=
+go.thesmos.sh/eidos v1.3.0/go.mod h1:9wEqiy2rG8zJ/9r0ehG+8k6apyFjvSMYWux1m75X0/U=
 go.thesmos.sh/eidos/backend/golang v1.2.0 h1:rZAMuWtGAORtZHRkSwRHATK2XmlmWuuQ1fx1VrZSHaE=
 go.thesmos.sh/eidos/backend/golang v1.2.0/go.mod h1:iSN1mkTf6DXrGLZYaXSE11NxEaKfYVmjdvorXaMtH+8=
 go.thesmos.sh/eidos/cli v1.2.0 h1:2oQda46F5xnzy/nfIY2XsUuoOsIBn0Adx1zgmqcV+vE=
