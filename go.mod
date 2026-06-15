@@ -11,7 +11,7 @@ require (
 	go.thesmos.sh/eidos/backend/golang v1.2.0
 	go.thesmos.sh/eidos/cli v1.2.0
 	go.thesmos.sh/eidos/frontend/golang v1.2.0
-	golang.org/x/tools v0.45.0
+	golang.org/x/tools v0.46.0
 	pgregory.net/rapid v1.3.0
 )
 
@@ -28,8 +28,8 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/mod v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/mod v0.37.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
 )
