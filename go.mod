@@ -3,7 +3,7 @@ module go.thesmos.sh/testkit
 go 1.26.2
 
 require (
-	github.com/anishathalye/porcupine v1.1.0
+	github.com/anishathalye/porcupine v1.3.0
 	github.com/google/go-cmp v0.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
