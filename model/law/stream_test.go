@@ -270,3 +270,92 @@ func TestStreamOverMatch(t *testing.T) {
 		})
 	})
 }
+
+// snapStore is a keyed store whose stream either reflects live state
+// or (when stale is set) a snapshot frozen at construction — the bug
+// where mutations never show up in the streamed view.
+type snapStore struct {
+	live  map[string]string
+	snap  map[string]string
+	stale bool
+}
+
+func newSnapStore(stale bool) *snapStore {
+	return &snapStore{live: map[string]string{}, snap: map[string]string{}, stale: stale}
+}
+
+func (s *snapStore) put(v string) error {
+	s.live[v] = v
+	return nil
+}
+
+func (s *snapStore) del(v string) error {
+	delete(s.live, v)
+	return nil
+}
+
+func (s *snapStore) stream() ([]string, error) {
+	src := s.live
+	if s.stale {
+		src = s.snap
+	}
+	out := make([]string, 0, len(src))
+	for v := range src {
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+func TestStreamReflectsMutations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("live stream reflects puts and deletes", func(t *testing.T) {
+		t.Parallel()
+		l := law.StreamReflectsMutations[*snapStore, string, string]{
+			Put:    func(_ *rapid.T, s *snapStore, v string) error { return s.put(v) },
+			Delete: func(_ *rapid.T, s *snapStore, v string) error { return s.del(v) },
+			Drain:  func(_ *rapid.T, s *snapStore) ([]string, error) { return s.stream() },
+			Values: rapid.SampledFrom([]string{"a", "b", "c"}),
+			Hash:   func(v string) string { return v },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newSnapStore(false)
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("stale-snapshot stream is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.StreamReflectsMutations[*snapStore, string, string]{
+			Put:    func(_ *rapid.T, s *snapStore, v string) error { return s.put(v) },
+			Delete: func(_ *rapid.T, s *snapStore, v string) error { return s.del(v) },
+			Drain:  func(_ *rapid.T, s *snapStore) ([]string, error) { return s.stream() },
+			Values: rapid.SampledFrom([]string{"a", "b", "c"}),
+			Hash:   func(v string) string { return v },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newSnapStore(true)
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("expected stale stream to be caught")
+			}
+		})
+	})
+
+	t.Run("delete omitted checks only the put direction", func(t *testing.T) {
+		t.Parallel()
+		l := law.StreamReflectsMutations[*snapStore, string, string]{
+			Put:    func(_ *rapid.T, s *snapStore, v string) error { return s.put(v) },
+			Drain:  func(_ *rapid.T, s *snapStore) ([]string, error) { return s.stream() },
+			Values: rapid.SampledFrom([]string{"a", "b"}),
+			Hash:   func(v string) string { return v },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newSnapStore(false)
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+}

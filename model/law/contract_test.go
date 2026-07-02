@@ -6,7 +6,9 @@ package law_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 
@@ -15,7 +17,10 @@ import (
 	"go.thesmos.sh/testkit/model/refcas"
 	"go.thesmos.sh/testkit/model/refcursor"
 	"go.thesmos.sh/testkit/model/reflease"
+	"go.thesmos.sh/testkit/model/refpaginator"
 	"go.thesmos.sh/testkit/model/refpool"
+	"go.thesmos.sh/testkit/model/refpubsub"
+	"go.thesmos.sh/testkit/model/reftxn"
 )
 
 func TestAppenderMonotonicOffsets(t *testing.T) {
@@ -316,6 +321,525 @@ func TestTransactionRollbackOnError(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, s, s); err != nil {
 				rt.Fatal(err)
+			}
+		})
+	})
+}
+
+func TestPaginatorNoDuplicates(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CursorTable walk emits each element exactly once", func(t *testing.T) {
+		t.Parallel()
+		tab := refpaginator.NewCursorTable[int, int](func(a, b int) bool { return a < b })
+		for i := range 10 {
+			_ = tab.Put(t.Context(), i, i)
+		}
+		l := law.PaginatorNoDuplicates[*refpaginator.CursorTable[int, int], int, int, int]{
+			Page: func(rt *rapid.T, s *refpaginator.CursorTable[int, int], cur int) ([]int, int, bool) {
+				items, next, _ := s.Page(rt.Context(), cur, 3)
+				return items, next, next != 0
+			},
+			Start:    0,
+			KeyOf:    func(v int) int { return v },
+			MaxPages: 100,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, tab, tab); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("paginator that re-emits the boundary element is caught", func(t *testing.T) {
+		t.Parallel()
+		data := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		// BUG: next cursor steps back one, re-emitting the last element
+		// of each page as the first of the next.
+		buggy := func(_ *rapid.T, _ struct{}, cur int) ([]int, int, bool) {
+			if cur >= len(data) {
+				return nil, 0, false
+			}
+			end := min(cur+3, len(data))
+			next := end - 1
+			return data[cur:end], next, end < len(data)
+		}
+		l := law.PaginatorNoDuplicates[struct{}, int, int, int]{
+			Page:     buggy,
+			Start:    0,
+			KeyOf:    func(v int) int { return v },
+			MaxPages: 100,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, struct{}{}, struct{}{}); err == nil {
+				rt.Fatal("expected duplicate-key detection across pages")
+			}
+		})
+	})
+}
+
+// badPaginator advances an internal offset on each Page call and
+// ignores the cursor it is handed — so it walks forward correctly
+// once but cannot resume from a mid-stream cursor.
+type badPaginator struct {
+	data []int
+	off  int
+}
+
+func TestPaginatorResumable(t *testing.T) {
+	t.Parallel()
+
+	t.Run("CursorTable resume equals the full-walk suffix", func(t *testing.T) {
+		t.Parallel()
+		tab := refpaginator.NewCursorTable[int, int](func(a, b int) bool { return a < b })
+		for i := range 10 {
+			_ = tab.Put(t.Context(), i, i)
+		}
+		l := law.PaginatorResumable[*refpaginator.CursorTable[int, int], int, int]{
+			Page: func(rt *rapid.T, s *refpaginator.CursorTable[int, int], cur int) ([]int, int, bool) {
+				items, next, _ := s.Page(rt.Context(), cur, 3)
+				return items, next, next != 0
+			},
+			Start:    0,
+			MaxPages: 100,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, tab, tab); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("paginator that ignores the resume cursor is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.PaginatorResumable[*badPaginator, int, int]{
+			Page: func(_ *rapid.T, s *badPaginator, _ int) ([]int, int, bool) {
+				if s.off >= len(s.data) {
+					return nil, 0, false
+				}
+				end := min(s.off+3, len(s.data))
+				page := s.data[s.off:end]
+				s.off = end // BUG: advances internal state, ignores the cursor
+				return page, end, end < len(s.data)
+			},
+			Start:    0,
+			MaxPages: 100,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &badPaginator{data: []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}}
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("expected non-resumable paginator to be caught")
+			}
+		})
+	})
+}
+
+func TestPublisherDelivers(t *testing.T) {
+	t.Parallel()
+
+	t.Run("at-least-once broker reaches every subscriber", func(t *testing.T) {
+		t.Parallel()
+		l := law.PublisherDelivers[*refpubsub.AtLeastOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int]) (int, error) {
+				return s.Subscribe(rt.Context())
+			},
+			Publish: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], m int) error {
+				return s.Publish(rt.Context(), m)
+			},
+			Drain: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], sub int) ([]int, error) {
+				return s.Drain(rt.Context(), sub)
+			},
+			Messages:    rapid.Int(),
+			Subscribers: 3,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewAtLeastOnce[int]()
+			if err := l.Check(rt, b, b); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("broker that drops everything is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.PublisherDelivers[*refpubsub.AtMostOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.AtMostOnce[int]) (int, error) {
+				return s.Subscribe(rt.Context())
+			},
+			Publish: func(rt *rapid.T, s *refpubsub.AtMostOnce[int], m int) error {
+				return s.Publish(rt.Context(), m)
+			},
+			Drain: func(rt *rapid.T, s *refpubsub.AtMostOnce[int], sub int) ([]int, error) {
+				msgs, _, err := s.Drain(rt.Context(), sub)
+				return msgs, err
+			},
+			Messages:    rapid.Int(),
+			Subscribers: 3,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewAtMostOnce[int](0) // capacity 0 → drops all
+			if err := l.Check(rt, b, b); err == nil {
+				rt.Fatal("expected non-delivery to be caught")
+			}
+		})
+	})
+}
+
+func TestPublisherDeliveryBound(t *testing.T) {
+	t.Parallel()
+
+	t.Run("at-least-once: redelivered message counts >= 1", func(t *testing.T) {
+		t.Parallel()
+		l := law.PublisherDeliveryBound[*refpubsub.AtLeastOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
+			Publish:   func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) },
+			Redeliver: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], m int) { _ = s.Publish(rt.Context(), m) },
+			Drain: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], sub int) ([]int, error) {
+				return s.Drain(rt.Context(), sub)
+			},
+			Messages: rapid.Int(),
+			Mode:     law.DeliveryAtLeastOnce,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewAtLeastOnce[int]()
+			if err := l.Check(rt, b, b); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("at-most-once: single publish counts <= 1", func(t *testing.T) {
+		t.Parallel()
+		l := law.PublisherDeliveryBound[*refpubsub.AtMostOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.AtMostOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
+			Publish:   func(rt *rapid.T, s *refpubsub.AtMostOnce[int], m int) error { return s.Publish(rt.Context(), m) },
+			Drain: func(rt *rapid.T, s *refpubsub.AtMostOnce[int], sub int) ([]int, error) {
+				msgs, _, err := s.Drain(rt.Context(), sub)
+				return msgs, err
+			},
+			Messages: rapid.Int(),
+			Mode:     law.DeliveryAtMostOnce,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewAtMostOnce[int](4)
+			if err := l.Check(rt, b, b); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("exactly-once: replay of same id counts == 1", func(t *testing.T) {
+		t.Parallel()
+		var lastID int64
+		l := law.PublisherDeliveryBound[*refpubsub.ExactlyOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.ExactlyOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
+			Publish: func(rt *rapid.T, s *refpubsub.ExactlyOnce[int], m int) error {
+				id, err := s.Publish(rt.Context(), m)
+				lastID = id
+				return err
+			},
+			Redeliver: func(rt *rapid.T, s *refpubsub.ExactlyOnce[int], m int) { _ = s.Replay(rt.Context(), lastID, m) },
+			Drain: func(rt *rapid.T, s *refpubsub.ExactlyOnce[int], sub int) ([]int, error) {
+				return s.Drain(rt.Context(), sub)
+			},
+			Messages: rapid.Int(),
+			Mode:     law.DeliveryExactlyOnce,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewExactlyOnce[int]()
+			if err := l.Check(rt, b, b); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("exactly-once mode catches a broker that duplicates", func(t *testing.T) {
+		t.Parallel()
+		l := law.PublisherDeliveryBound[*refpubsub.AtLeastOnce[int], int, int]{
+			Subscribe: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
+			Publish:   func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) },
+			Redeliver: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], m int) { _ = s.Publish(rt.Context(), m) }, // duplicates
+			Drain: func(rt *rapid.T, s *refpubsub.AtLeastOnce[int], sub int) ([]int, error) {
+				return s.Drain(rt.Context(), sub)
+			},
+			Messages: rapid.Int(),
+			Mode:     law.DeliveryExactlyOnce, // but broker duplicates → must fire
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			b := refpubsub.NewAtLeastOnce[int]()
+			if err := l.Check(rt, b, b); err == nil {
+				rt.Fatal("expected exactly-once violation under duplicating broker")
+			}
+		})
+	})
+}
+
+// leakyTxStore is a broken "transactional" store whose tx writes
+// land in the shared map immediately — no isolation.
+type (
+	leakyTxStore struct{ data map[string]int }
+	leakyTx      struct{ store *leakyTxStore }
+)
+
+func TestTransactionNoMidTxVisibility(t *testing.T) {
+	t.Parallel()
+
+	t.Run("snapshot-isolation hides uncommitted writes", func(t *testing.T) {
+		t.Parallel()
+		errNF := errors.New("not found")
+		l := law.TransactionNoMidTxVisibility[*reftxn.SnapshotIsolation[string, int], *reftxn.Tx[string, int], string, int]{
+			Begin: func(rt *rapid.T, s *reftxn.SnapshotIsolation[string, int]) (*reftxn.Tx[string, int], error) {
+				return s.Begin(rt.Context())
+			},
+			TxPut: func(rt *rapid.T, tx *reftxn.Tx[string, int], k string, v int) error {
+				return tx.Put(rt.Context(), k, v)
+			},
+			TxRollback: func(rt *rapid.T, tx *reftxn.Tx[string, int]) error { return tx.Rollback(rt.Context()) },
+			Read: func(rt *rapid.T, s *reftxn.SnapshotIsolation[string, int], k string) (int, error) {
+				return s.Get(rt.Context(), k)
+			},
+			Keys:   rapid.SampledFrom([]string{"a", "b"}),
+			Values: rapid.Int(),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := reftxn.NewSnapshotIsolation[string, int](errNF)
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("store that leaks uncommitted writes is caught", func(t *testing.T) {
+		t.Parallel()
+		errNF := errors.New("not found")
+		l := law.TransactionNoMidTxVisibility[*leakyTxStore, *leakyTx, string, int]{
+			Begin:      func(_ *rapid.T, s *leakyTxStore) (*leakyTx, error) { return &leakyTx{store: s}, nil },
+			TxPut:      func(_ *rapid.T, tx *leakyTx, k string, v int) error { tx.store.data[k] = v; return nil }, // BUG: writes through
+			TxRollback: func(_ *rapid.T, _ *leakyTx) error { return nil },
+			Read: func(_ *rapid.T, s *leakyTxStore, k string) (int, error) {
+				v, ok := s.data[k]
+				if !ok {
+					return 0, errNF
+				}
+				return v, nil
+			},
+			Keys:   rapid.SampledFrom([]string{"a", "b"}),
+			Values: rapid.Int(),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &leakyTxStore{data: make(map[string]int)}
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("expected mid-tx visibility to be caught")
+			}
+		})
+	})
+}
+
+// looseTx is a broken two-phase transaction: both Commit and
+// Rollback always succeed, violating the commit-XOR-rollback mutex.
+type looseTx struct{}
+
+func TestTwoPhaseCommitOrRollback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("snapshot-isolation tx commits XOR rolls back", func(t *testing.T) {
+		t.Parallel()
+		l := law.TwoPhaseCommitOrRollback[*reftxn.SnapshotIsolation[string, int], *reftxn.Tx[string, int]]{
+			Begin: func(rt *rapid.T, s *reftxn.SnapshotIsolation[string, int]) (*reftxn.Tx[string, int], error) {
+				return s.Begin(rt.Context())
+			},
+			Commit: func(rt *rapid.T, _ *reftxn.SnapshotIsolation[string, int], tx *reftxn.Tx[string, int]) error {
+				return tx.Commit(rt.Context())
+			},
+			Rollback: func(rt *rapid.T, _ *reftxn.SnapshotIsolation[string, int], tx *reftxn.Tx[string, int]) error {
+				return tx.Rollback(rt.Context())
+			},
+			Closed: reftxn.ErrTxClosed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := reftxn.NewSnapshotIsolation[string, int](errors.New("nf"))
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("tx that allows both commit and rollback is caught", func(t *testing.T) {
+		t.Parallel()
+		errClosed := errors.New("closed")
+		l := law.TwoPhaseCommitOrRollback[struct{}, *looseTx]{
+			Begin:    func(_ *rapid.T, _ struct{}) (*looseTx, error) { return &looseTx{}, nil },
+			Commit:   func(_ *rapid.T, _ struct{}, _ *looseTx) error { return nil },
+			Rollback: func(_ *rapid.T, _ struct{}, _ *looseTx) error { return nil }, // BUG: no mutex
+			Closed:   errClosed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, struct{}{}, struct{}{}); err == nil {
+				rt.Fatal("expected commit/rollback mutex violation")
+			}
+		})
+	})
+}
+
+var errLeaseHeld = errors.New("lease held")
+
+// ctxLease is a context-bound lease fixture. When honorCancel is
+// set it releases a key the moment the acquiring context is
+// cancelled; otherwise it ignores cancellation entirely (the bug).
+type ctxLease struct {
+	mu          sync.Mutex
+	held        map[string]bool
+	honorCancel bool
+}
+
+func newCtxLease(honor bool) *ctxLease {
+	return &ctxLease{held: map[string]bool{}, honorCancel: honor}
+}
+
+func (l *ctxLease) acquire(ctx context.Context, k string) error {
+	l.mu.Lock()
+	if l.held[k] {
+		l.mu.Unlock()
+		return errLeaseHeld
+	}
+	l.held[k] = true
+	l.mu.Unlock()
+	if l.honorCancel {
+		go func() {
+			<-ctx.Done()
+			l.mu.Lock()
+			delete(l.held, k)
+			l.mu.Unlock()
+		}()
+	}
+	return nil
+}
+
+func (l *ctxLease) free(k string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return !l.held[k]
+}
+
+func TestLeaseReleasedOnCancel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("lease that honors cancel is released", func(t *testing.T) {
+		t.Parallel()
+		l := law.LeaseReleasedOnCancel[*ctxLease, string]{
+			Acquire: func(ctx context.Context, s *ctxLease, k string) error { return s.acquire(ctx, k) },
+			Free:    func(_ *rapid.T, s *ctxLease, k string) bool { return s.free(k) },
+			Keys:    rapid.SampledFrom([]string{"a", "b"}),
+			Timeout: time.Second,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newCtxLease(true)
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("lease that ignores cancel is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.LeaseReleasedOnCancel[*ctxLease, string]{
+			Acquire: func(ctx context.Context, s *ctxLease, k string) error { return s.acquire(ctx, k) },
+			Free:    func(_ *rapid.T, s *ctxLease, k string) bool { return s.free(k) },
+			Keys:    rapid.SampledFrom([]string{"a", "b"}),
+			Timeout: 5 * time.Millisecond,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newCtxLease(false)
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("expected lease-not-released-on-cancel to be caught")
+			}
+		})
+	})
+}
+
+// watchable is a minimal change-notification fixture. watch returns
+// a buffered channel registered for a key; mutate fans a value out
+// to every channel watching that key — unless silent is set, the
+// bug in which mutations are observed by nobody.
+type watchable struct {
+	mu     sync.Mutex
+	subs   map[string][]chan int
+	silent bool
+}
+
+func newWatchable(silent bool) *watchable {
+	return &watchable{subs: map[string][]chan int{}, silent: silent}
+}
+
+func (w *watchable) watch(k string) chan int {
+	ch := make(chan int, 4)
+	w.mu.Lock()
+	w.subs[k] = append(w.subs[k], ch)
+	w.mu.Unlock()
+	return ch
+}
+
+func (w *watchable) mutate(k string, v int) {
+	if w.silent {
+		return
+	}
+	w.mu.Lock()
+	chs := append([]chan int(nil), w.subs[k]...)
+	w.mu.Unlock()
+	for _, ch := range chs {
+		select {
+		case ch <- v:
+		default:
+		}
+	}
+}
+
+func nextWatch(ch chan int, timeout time.Duration) (int, bool) {
+	select {
+	case v := <-ch:
+		return v, true
+	case <-time.After(timeout):
+		return 0, false
+	}
+}
+
+func TestWatcherReturnsOnChange(t *testing.T) {
+	t.Parallel()
+
+	t.Run("watch established before a change observes it", func(t *testing.T) {
+		t.Parallel()
+		l := law.WatcherReturnsOnChange[*watchable, chan int, string, int]{
+			Watch:   func(_ *rapid.T, s *watchable, k string) (chan int, error) { return s.watch(k), nil },
+			Mutate:  func(_ *rapid.T, s *watchable, k string, v int) error { s.mutate(k, v); return nil },
+			Next:    nextWatch,
+			Stop:    func(_ chan int) {},
+			Keys:    rapid.SampledFrom([]string{"a", "b"}),
+			Values:  rapid.Int(),
+			Timeout: time.Second,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newWatchable(false)
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("watcher that never fires is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.WatcherReturnsOnChange[*watchable, chan int, string, int]{
+			Watch:   func(_ *rapid.T, s *watchable, k string) (chan int, error) { return s.watch(k), nil },
+			Mutate:  func(_ *rapid.T, s *watchable, k string, v int) error { s.mutate(k, v); return nil },
+			Next:    nextWatch,
+			Stop:    func(_ chan int) {},
+			Keys:    rapid.SampledFrom([]string{"a", "b"}),
+			Values:  rapid.Int(),
+			Timeout: 10 * time.Millisecond,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newWatchable(true) // silent
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("expected non-firing watcher to be caught")
 			}
 		})
 	})

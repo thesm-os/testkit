@@ -5,6 +5,8 @@ package law_test
 
 import (
 	"errors"
+	"slices"
+	"strconv"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -229,6 +231,91 @@ func TestCountEqualsReferenceCheck(t *testing.T) {
 			ref := newKV()
 			if err := l.Check(rt, sut, ref); err == nil {
 				rt.Fatal("should catch count error")
+			}
+		})
+	})
+}
+
+// gset is a grow-only-set CRDT: merge is set union, so replicas
+// converge regardless of merge direction. When lossy is set, merge
+// ignores the source — the bug where replicas never converge.
+type gset struct {
+	elems map[string]struct{}
+	lossy bool
+}
+
+func newGSet(lossy bool) *gset {
+	return &gset{elems: map[string]struct{}{}, lossy: lossy}
+}
+
+func (s *gset) add(v string) error {
+	s.elems[v] = struct{}{}
+	return nil
+}
+
+func (s *gset) merge(src *gset) error {
+	if s.lossy {
+		return nil // BUG: discards the source replica's elements
+	}
+	for v := range src.elems {
+		s.elems[v] = struct{}{}
+	}
+	return nil
+}
+
+func (s *gset) sorted() []string {
+	out := make([]string, 0, len(s.elems))
+	for v := range s.elems {
+		out = append(out, v)
+	}
+	slices.Sort(out)
+	return out
+}
+
+func TestCRDTMerge(t *testing.T) {
+	t.Parallel()
+
+	t.Run("g-set replicas converge under bidirectional merge", func(t *testing.T) {
+		t.Parallel()
+		l := law.CRDTMerge[*gset, string, []string]{
+			Factory: func() *gset { return newGSet(false) },
+			Write:   func(_ *rapid.T, s *gset, v string) error { return s.add(v) },
+			Merge:   func(_ *rapid.T, dst, src *gset) error { return dst.merge(src) },
+			Values:  rapid.SampledFrom([]string{"a", "b", "c", "d"}),
+			Observe: func(_ *rapid.T, s *gset) []string { return s.sorted() },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, newGSet(false), newGSet(false)); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("merge that drops the source replica is caught", func(t *testing.T) {
+		t.Parallel()
+		// Distinct values per draw: with a lossy (no-op) merge, any
+		// split of unique values leaves the replicas divergent, so
+		// the law must fire on every iteration. Sampled values could
+		// route the same value to both replicas and converge by
+		// accident.
+		seq := 0
+		unique := rapid.Custom(func(rt *rapid.T) string {
+			// rapid requires Custom generators to consume bitstream
+			// data; the value itself comes from the counter.
+			rapid.Bool().Draw(rt, "pad")
+			seq++
+			return strconv.Itoa(seq)
+		})
+		l := law.CRDTMerge[*gset, string, []string]{
+			Factory: func() *gset { return newGSet(true) },
+			Write:   func(_ *rapid.T, s *gset, v string) error { return s.add(v) },
+			Merge:   func(_ *rapid.T, dst, src *gset) error { return dst.merge(src) },
+			Values:  unique,
+			Observe: func(_ *rapid.T, s *gset) []string { return s.sorted() },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, newGSet(true), newGSet(true)); err == nil {
+				rt.Fatal("expected non-converging merge to be caught")
 			}
 		})
 	})

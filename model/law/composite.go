@@ -148,6 +148,53 @@ func (l TwoPhaseNoRollbackAfterCommit[T, Tx]) Check(rt *rapid.T, sut, _ T) error
 	return nil
 }
 
+// TwoPhaseCommitOrRollback verifies the commit-XOR-rollback mutex:
+// once a transaction reaches a terminal state via Commit or
+// Rollback, the other terminal operation must fail with the closed
+// sentinel. Auto-emitted for methods carrying
+// //testkit:two-phase <Commit> <Rollback>.
+//
+// rapid draws which terminal operation runs first, so both
+// orderings — commit-then-rollback and rollback-then-commit — are
+// exercised. The first terminal operation must succeed; the second
+// must return Closed. (The narrower [TwoPhaseNoRollbackAfterCommit]
+// covers only the commit-then-rollback direction.)
+type TwoPhaseCommitOrRollback[T any, Tx any] struct {
+	Begin    func(*rapid.T, T) (Tx, error)
+	Commit   func(*rapid.T, T, Tx) error
+	Rollback func(*rapid.T, T, Tx) error
+	Closed   error
+}
+
+// ID returns the stable identifier for this law.
+func (TwoPhaseCommitOrRollback[T, Tx]) ID() string { return "AUTO-TWO-PHASE-MUTEX" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (TwoPhaseCommitOrRollback[T, Tx]) REQID() string { return "" }
+
+// Check begins a transaction, runs one terminal operation (drawn by
+// rapid), and asserts the other terminal operation is then rejected
+// with the closed sentinel.
+func (l TwoPhaseCommitOrRollback[T, Tx]) Check(rt *rapid.T, sut, _ T) error {
+	tx, beginErr := l.Begin(rt, sut)
+	if beginErr != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	first, second, firstName, secondName := l.Commit, l.Rollback, "commit", "rollback"
+	if rapid.Bool().Draw(rt, "TwoPhaseCommitOrRollback_rollbackFirst") {
+		first, second, firstName, secondName = l.Rollback, l.Commit, "rollback", "commit"
+	}
+	if err := first(rt, sut, tx); err != nil {
+		return nil //nolint:nilerr // first terminal op failed; law vacuously holds
+	}
+	err := second(rt, sut, tx)
+	if !errors.Is(err, l.Closed) {
+		return fmt.Errorf("TwoPhaseCommitOrRollback: %s after %s returned %v (want closed=%v)",
+			secondName, firstName, err, l.Closed)
+	}
+	return nil
+}
+
 // SagaFullCompensation verifies that when a saga step fails the
 // observable state at the end of Run equals the pre-Run snapshot
 // (compensation undid every prior committed step). Auto-emitted

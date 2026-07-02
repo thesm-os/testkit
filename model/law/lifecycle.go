@@ -5,6 +5,8 @@
 package law
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"runtime"
 
@@ -90,6 +92,38 @@ func (l LeakFree[T]) Check(rt *rapid.T, sut, _ T) error {
 	return nil
 }
 
+// LifecycleRespectsContext verifies that a Lifecycle method invoked
+// with an already-cancelled context returns a context error instead
+// of proceeding. Auto-emitted for Lifecycle methods taking a context.
+//
+// The law calls Op with a pre-cancelled context and requires the
+// result to satisfy errors.Is(err, context.Canceled). An
+// implementation that ignores the context and returns success fails.
+type LifecycleRespectsContext[T any] struct {
+	Op func(ctx context.Context, sut T) error
+}
+
+// ID returns the stable identifier for this law.
+func (LifecycleRespectsContext[T]) ID() string { return "AUTO-LIFECYCLE-RESPECTS-CONTEXT" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (LifecycleRespectsContext[T]) REQID() string { return "" }
+
+// Check invokes Op with a cancelled context and verifies it reports
+// the cancellation.
+func (l LifecycleRespectsContext[T]) Check(rt *rapid.T, sut, _ T) error {
+	ctx, cancel := context.WithCancel(rt.Context())
+	cancel()
+	err := l.Op(ctx, sut)
+	if !errors.Is(err, context.Canceled) {
+		return fmt.Errorf(
+			"LifecycleRespectsContext: op with cancelled context returned %v (want context.Canceled)",
+			err,
+		)
+	}
+	return nil
+}
+
 // PoisonNilOnFresh verifies a PoisonAccessor returns nil on a
 // freshly-constructed impl. Auto-emitted for PoisonAccessor
 // methods.
@@ -133,6 +167,79 @@ func (l PoisonIdempotentRead[T]) Check(rt *rapid.T, sut, _ T) error {
 	b := l.Probe(rt, sut)
 	if (a == nil) != (b == nil) {
 		return fmt.Errorf("PoisonIdempotentRead: first=%v, second=%v", a, b)
+	}
+	return nil
+}
+
+// PoisonConsistent verifies that a poison condition is sticky: once
+// the accessor reports poison, it keeps reporting it across
+// subsequent reads rather than spontaneously healing. Auto-emitted
+// for PoisonAccessor methods.
+//
+// Poison induces the condition; Probe reads it. The law establishes
+// poison, confirms it took (a nil probe means the induction was a
+// no-op and the law holds vacuously), then probes Reads more times
+// (default 3) and fails if any returns nil. Distinct from
+// [PoisonIdempotentRead], which checks read purity rather than
+// stickiness after a poisoning event.
+type PoisonConsistent[T any] struct {
+	Poison func(*rapid.T, T)
+	Probe  func(*rapid.T, T) error
+	Reads  int
+}
+
+// ID returns the stable identifier for this law.
+func (PoisonConsistent[T]) ID() string { return "AUTO-POISON-CONSISTENT" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (PoisonConsistent[T]) REQID() string { return "" }
+
+// Check induces poison and verifies it persists across follow-up
+// probes.
+func (l PoisonConsistent[T]) Check(rt *rapid.T, sut, _ T) error {
+	l.Poison(rt, sut)
+	if l.Probe(rt, sut) == nil {
+		return nil // poisoning was a no-op; nothing to hold consistent
+	}
+	n := l.Reads
+	if n <= 0 {
+		n = 3
+	}
+	for i := range n {
+		if err := l.Probe(rt, sut); err == nil {
+			return fmt.Errorf("PoisonConsistent: poison healed spontaneously (probe %d after poison returned nil)", i+1)
+		}
+	}
+	return nil
+}
+
+// LifecycleAfterCloseSentinel verifies that once the lifecycle's
+// Close has run, the paired method rejects further use with the
+// configured sentinel error. Auto-emitted for the
+// //testkit:lifecycle-after-close <Reader> directive. (The cursor
+// composite has its own narrower variant,
+// [CursorNextAfterCloseSentinel].)
+type LifecycleAfterCloseSentinel[T any] struct {
+	Close    func(*rapid.T, T) error
+	Op       func(*rapid.T, T) error
+	Sentinel error
+}
+
+// ID returns the stable identifier for this law.
+func (LifecycleAfterCloseSentinel[T]) ID() string { return "AUTO-LIFECYCLE-AFTER-CLOSE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (LifecycleAfterCloseSentinel[T]) REQID() string { return "" }
+
+// Check closes the SUT and verifies the paired method returns the
+// sentinel afterwards.
+func (l LifecycleAfterCloseSentinel[T]) Check(rt *rapid.T, sut, _ T) error {
+	if err := l.Close(rt, sut); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	err := l.Op(rt, sut)
+	if !errors.Is(err, l.Sentinel) {
+		return fmt.Errorf("LifecycleAfterCloseSentinel: op after close returned %v (want %v)", err, l.Sentinel)
 	}
 	return nil
 }

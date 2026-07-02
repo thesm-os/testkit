@@ -6,6 +6,7 @@ package law
 
 import (
 	"fmt"
+	"time"
 
 	"pgregory.net/rapid"
 )
@@ -105,6 +106,60 @@ func (l Conservative[T, V]) Check(rt *rapid.T, sut, _ T) error {
 	after := l.Sum(rt, sut)
 	if before != after {
 		return fmt.Errorf("conservative law: value %v: sum changed %d → %d", v, before, after)
+	}
+	return nil
+}
+
+// Windowed verifies that a rolling-window aggregator only reflects
+// events within its trailing window: an increment counts immediately
+// but decays once the clock advances past the window. Auto-emitted
+// for Aggregator/Mutator methods carrying //testkit:windowed
+// <Duration>.
+//
+// Advance moves the aggregator's injected clock forward. The law
+// records the count for a key, increments it (which must raise the
+// count), advances past Window, and asserts the count drops — a
+// counter that never expires entries keeps the increment and fails.
+type Windowed[T any, K comparable] struct {
+	Incr    func(rt *rapid.T, sut T, k K) error
+	Count   func(rt *rapid.T, sut T, k K) (int, error)
+	Advance func(d time.Duration)
+	Keys    *rapid.Generator[K]
+	Window  time.Duration
+}
+
+// ID returns the stable identifier for this law.
+func (Windowed[T, K]) ID() string { return "AUTO-WINDOWED" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (Windowed[T, K]) REQID() string { return "" }
+
+// Check increments a key, confirms the count rose, advances past the
+// window, and confirms the increment decayed.
+func (l Windowed[T, K]) Check(rt *rapid.T, sut, _ T) error {
+	k := l.Keys.Draw(rt, "Windowed_key")
+	before, err := l.Count(rt, sut, k)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if incErr := l.Incr(rt, sut, k); incErr != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	within, err := l.Count(rt, sut, k)
+	if err != nil {
+		return fmt.Errorf("windowed law: key %v: count after increment errored: %v", k, err)
+	}
+	if within < before+1 {
+		return fmt.Errorf("windowed law: key %v: increment not reflected in count (%d → %d)", k, before, within)
+	}
+	l.Advance(l.Window + time.Nanosecond)
+	after, err := l.Count(rt, sut, k)
+	if err != nil {
+		return fmt.Errorf("windowed law: key %v: count after advance errored: %v", k, err)
+	}
+	if after >= within {
+		return fmt.Errorf("windowed law: key %v: count did not decay after advancing past the window (%d → %d)",
+			k, within, after)
 	}
 	return nil
 }

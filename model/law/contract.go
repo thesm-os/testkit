@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
@@ -320,6 +322,458 @@ func (l LeaseDoubleAcquireBlocks[T, K]) Check(rt *rapid.T, sut, _ T) error {
 	if !errors.Is(err, l.Held) {
 		return fmt.Errorf("LeaseDoubleAcquireBlocks: key %v: second acquire returned %v (want held=%v)",
 			k, err, l.Held)
+	}
+	return nil
+}
+
+// PaginatorNoDuplicates verifies that a full walk of a paginated
+// reader emits every element at most once — no element key appears
+// in two pages. Auto-emitted for methods carrying
+// //testkit:paginator <Cursor>.
+//
+// Page returns one page of items, the cursor to fetch the next page,
+// and whether more pages remain. The walk starts at Start and
+// follows the returned cursors until Page reports no more pages, or
+// until MaxPages is reached — a safety bound so a paginator that
+// never signals termination fails the law instead of looping
+// forever. MaxPages ≤ 0 defaults to 1000.
+type PaginatorNoDuplicates[T any, V any, K comparable, C any] struct {
+	Page     func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
+	Start    C
+	KeyOf    func(V) K
+	MaxPages int
+}
+
+// ID returns the stable identifier for this law.
+func (PaginatorNoDuplicates[T, V, K, C]) ID() string { return "AUTO-PAGINATOR-NO-DUPLICATES" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (PaginatorNoDuplicates[T, V, K, C]) REQID() string { return "" }
+
+// Check walks every page from Start and fails if any element key is
+// observed in two distinct pages, or if the walk fails to terminate
+// within MaxPages.
+func (l PaginatorNoDuplicates[T, V, K, C]) Check(rt *rapid.T, sut, _ T) error {
+	maxPages := l.MaxPages
+	if maxPages <= 0 {
+		maxPages = 1000
+	}
+	seen := make(map[K]struct{})
+	cursor := l.Start
+	for range maxPages {
+		items, next, more := l.Page(rt, sut, cursor)
+		for _, it := range items {
+			k := l.KeyOf(it)
+			if _, dup := seen[k]; dup {
+				return fmt.Errorf("PaginatorNoDuplicates: key %v appeared in two pages", k)
+			}
+			seen[k] = struct{}{}
+		}
+		if !more {
+			return nil
+		}
+		cursor = next
+	}
+	return fmt.Errorf("PaginatorNoDuplicates: walk did not terminate within %d pages", maxPages)
+}
+
+// PaginatorResumable verifies that resuming a walk from any cursor
+// observed mid-stream yields exactly the suffix the full walk would
+// have produced from that point. Auto-emitted for Paginator methods
+// carrying the //testkit:pagination-resumable mixin.
+//
+// Page has the same shape as in [PaginatorNoDuplicates]. The law
+// walks once from Start recording the cursor that began each page,
+// picks one of those cursors via rapid, re-walks from it, and
+// asserts the resumed items equal the corresponding suffix of the
+// first walk. MaxPages ≤ 0 defaults to 1000.
+type PaginatorResumable[T any, V any, C any] struct {
+	Page     func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
+	Start    C
+	MaxPages int
+}
+
+// ID returns the stable identifier for this law.
+func (PaginatorResumable[T, V, C]) ID() string { return "AUTO-PAGINATOR-RESUMABLE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (PaginatorResumable[T, V, C]) REQID() string { return "" }
+
+// walk pages from the given cursor, returning the per-page items and
+// the cursor that began each page. Bounded by maxPages.
+func (l PaginatorResumable[T, V, C]) walk(rt *rapid.T, sut T, from C, maxPages int) (pages [][]V, starts []C) {
+	cursor := from
+	for range maxPages {
+		starts = append(starts, cursor)
+		items, next, more := l.Page(rt, sut, cursor)
+		pages = append(pages, items)
+		if !more {
+			break
+		}
+		cursor = next
+	}
+	return pages, starts
+}
+
+// Check walks fully, resumes from a drawn page-start cursor, and
+// compares the resumed items against the full-walk suffix.
+func (l PaginatorResumable[T, V, C]) Check(rt *rapid.T, sut, _ T) error {
+	maxPages := l.MaxPages
+	if maxPages <= 0 {
+		maxPages = 1000
+	}
+	full, starts := l.walk(rt, sut, l.Start, maxPages)
+	i := rapid.IntRange(0, len(starts)-1).Draw(rt, "PaginatorResumable_page")
+	resumed, _ := l.walk(rt, sut, starts[i], maxPages)
+	want := slices.Concat(full[i:]...)
+	got := slices.Concat(resumed...)
+	if diff := cmp.Diff(want, got); diff != "" {
+		return fmt.Errorf(
+			"PaginatorResumable: resume from page %d diverged from full-walk suffix (-want +got):\n%s",
+			i,
+			diff,
+		)
+	}
+	return nil
+}
+
+// PublisherDelivers verifies that a message published after N
+// subscribers have registered reaches every one of them. Auto-
+// emitted for methods carrying //testkit:publisher <Subscribe>.
+//
+// Subscribe registers a subscriber and returns its handle; Publish
+// broadcasts a message; Drain returns the messages a subscriber has
+// received. The law subscribes Subscribers handles (default 3),
+// publishes one drawn message, and asserts each subscriber drained
+// it at least once.
+type PublisherDelivers[T any, M comparable, Sub any] struct {
+	Subscribe   func(rt *rapid.T, sut T) (Sub, error)
+	Publish     func(rt *rapid.T, sut T, msg M) error
+	Drain       func(rt *rapid.T, sut T, sub Sub) ([]M, error)
+	Messages    *rapid.Generator[M]
+	Subscribers int
+}
+
+// ID returns the stable identifier for this law.
+func (PublisherDelivers[T, M, Sub]) ID() string { return "AUTO-PUBLISHER-DELIVERS" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (PublisherDelivers[T, M, Sub]) REQID() string { return "" }
+
+// Check subscribes N handles, publishes one message, and verifies
+// every subscriber received it.
+func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
+	n := l.Subscribers
+	if n <= 0 {
+		n = 3
+	}
+	subs := make([]Sub, n)
+	for i := range n {
+		s, err := l.Subscribe(rt, sut)
+		if err != nil {
+			return nil //nolint:nilerr // precondition failed; law vacuously holds
+		}
+		subs[i] = s
+	}
+	msg := l.Messages.Draw(rt, "PublisherDelivers_msg")
+	if err := l.Publish(rt, sut, msg); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	for i, sub := range subs {
+		got, err := l.Drain(rt, sut, sub)
+		if err != nil {
+			return fmt.Errorf("PublisherDelivers: subscriber %d: Drain errored: %v", i, err)
+		}
+		if !slices.Contains(got, msg) {
+			return fmt.Errorf("PublisherDelivers: subscriber %d did not receive published message %v", i, msg)
+		}
+	}
+	return nil
+}
+
+// DeliveryMode selects the per-message delivery guarantee a
+// [PublisherDeliveryBound] enforces, mirroring the
+// //testkit:delivery <mode> directive argument.
+type DeliveryMode int
+
+const (
+	// DeliveryAtLeastOnce requires each subscriber to receive a
+	// published message one or more times (duplicates permitted).
+	DeliveryAtLeastOnce DeliveryMode = iota
+	// DeliveryAtMostOnce requires each subscriber to receive a
+	// published message zero or one times (loss permitted, duplicates
+	// forbidden).
+	DeliveryAtMostOnce
+	// DeliveryExactlyOnce requires each subscriber to receive a
+	// published message exactly once even across a redelivery.
+	DeliveryExactlyOnce
+)
+
+// PublisherDeliveryBound verifies the per-subscriber delivery count
+// of a published message against the bound implied by Mode. Auto-
+// emitted for Publisher methods carrying //testkit:delivery <mode>;
+// the law ID is the per-mode variant.
+//
+// The law publishes one message, optionally triggers a redelivery
+// via Redeliver (re-publish for at-least-once, replay for
+// exactly-once; nil to skip), then counts how many copies each
+// subscriber drained and checks the count against Mode.
+type PublisherDeliveryBound[T any, M comparable, Sub any] struct {
+	Subscribe   func(rt *rapid.T, sut T) (Sub, error)
+	Publish     func(rt *rapid.T, sut T, msg M) error
+	Redeliver   func(rt *rapid.T, sut T, msg M)
+	Drain       func(rt *rapid.T, sut T, sub Sub) ([]M, error)
+	Messages    *rapid.Generator[M]
+	Mode        DeliveryMode
+	Subscribers int
+}
+
+// ID returns the per-mode stable identifier for this law.
+func (l PublisherDeliveryBound[T, M, Sub]) ID() string {
+	switch l.Mode {
+	case DeliveryAtLeastOnce:
+		return "AUTO-PUBLISHER-AT-LEAST-ONCE"
+	case DeliveryAtMostOnce:
+		return "AUTO-PUBLISHER-AT-MOST-ONCE"
+	case DeliveryExactlyOnce:
+		return "AUTO-PUBLISHER-EXACTLY-ONCE"
+	default:
+		return "AUTO-PUBLISHER-DELIVERY"
+	}
+}
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (PublisherDeliveryBound[T, M, Sub]) REQID() string { return "" }
+
+// Check publishes one message (with an optional redelivery) and
+// verifies each subscriber's delivery count respects Mode.
+func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
+	n := l.Subscribers
+	if n <= 0 {
+		n = 3
+	}
+	subs := make([]Sub, n)
+	for i := range n {
+		s, err := l.Subscribe(rt, sut)
+		if err != nil {
+			return nil //nolint:nilerr // precondition failed; law vacuously holds
+		}
+		subs[i] = s
+	}
+	msg := l.Messages.Draw(rt, "PublisherDeliveryBound_msg")
+	if err := l.Publish(rt, sut, msg); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if l.Redeliver != nil {
+		l.Redeliver(rt, sut, msg)
+	}
+	for i, sub := range subs {
+		got, err := l.Drain(rt, sut, sub)
+		if err != nil {
+			return fmt.Errorf("PublisherDeliveryBound: subscriber %d: Drain errored: %v", i, err)
+		}
+		count := 0
+		for _, x := range got {
+			if x == msg {
+				count++
+			}
+		}
+		if err := checkDeliveryBound(l.Mode, count); err != nil {
+			return fmt.Errorf("PublisherDeliveryBound: subscriber %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// checkDeliveryBound reports whether a per-subscriber delivery count
+// satisfies the named mode's bound.
+func checkDeliveryBound(mode DeliveryMode, count int) error {
+	switch mode {
+	case DeliveryAtLeastOnce:
+		if count < 1 {
+			return fmt.Errorf("at-least-once: message delivered %d times (want ≥1)", count)
+		}
+	case DeliveryAtMostOnce:
+		if count > 1 {
+			return fmt.Errorf("at-most-once: message delivered %d times (want ≤1)", count)
+		}
+	case DeliveryExactlyOnce:
+		if count != 1 {
+			return fmt.Errorf("exactly-once: message delivered %d times (want 1)", count)
+		}
+	}
+	return nil
+}
+
+// TransactionNoMidTxVisibility verifies that a write buffered inside
+// an open transaction is invisible to an outside reader until the
+// transaction commits. Auto-emitted for TransactionFunc methods with
+// a paired Reader.
+//
+// The law records an outside read of a key, opens a transaction and
+// buffers a write to that key, reads the key again from outside
+// (which must observe the pre-transaction state), then rolls the
+// transaction back. A store that leaks the uncommitted write changes
+// the key's observable presence or value mid-transaction and fails.
+type TransactionNoMidTxVisibility[T any, Tx any, K comparable, V any] struct {
+	Begin      func(rt *rapid.T, sut T) (Tx, error)
+	TxPut      func(rt *rapid.T, tx Tx, k K, v V) error
+	TxRollback func(rt *rapid.T, tx Tx) error
+	Read       func(rt *rapid.T, sut T, k K) (V, error)
+	Keys       *rapid.Generator[K]
+	Values     *rapid.Generator[V]
+}
+
+// ID returns the stable identifier for this law.
+func (TransactionNoMidTxVisibility[T, Tx, K, V]) ID() string {
+	return "AUTO-TRANSACTION-NO-MID-TX-VISIBILITY"
+}
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (TransactionNoMidTxVisibility[T, Tx, K, V]) REQID() string { return "" }
+
+// Check verifies an outside read taken during an open transaction
+// matches the read taken before the transaction began.
+func (l TransactionNoMidTxVisibility[T, Tx, K, V]) Check(rt *rapid.T, sut, _ T) error {
+	k := l.Keys.Draw(rt, "TransactionNoMidTxVisibility_key")
+	v := l.Values.Draw(rt, "TransactionNoMidTxVisibility_value")
+
+	before, beforeErr := l.Read(rt, sut, k)
+	tx, err := l.Begin(rt, sut)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if putErr := l.TxPut(rt, tx, k, v); putErr != nil {
+		_ = l.TxRollback(rt, tx)
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	mid, midErr := l.Read(rt, sut, k)
+	_ = l.TxRollback(rt, tx)
+
+	if (beforeErr == nil) != (midErr == nil) {
+		return fmt.Errorf(
+			"TransactionNoMidTxVisibility: key %v: uncommitted write changed presence (before=%v, mid=%v)",
+			k,
+			beforeErr,
+			midErr,
+		)
+	}
+	if beforeErr == nil {
+		if diff := cmp.Diff(before, mid); diff != "" {
+			return fmt.Errorf(
+				"TransactionNoMidTxVisibility: key %v: uncommitted write visible to outside read (-before +mid):\n%s",
+				k,
+				diff,
+			)
+		}
+	}
+	return nil
+}
+
+// LeaseReleasedOnCancel verifies that a lease acquired under a
+// context is released once that context is cancelled — modelling the
+// "release on cancel/panic" half of the AcquireLease contract. Auto-
+// emitted for methods carrying //testkit:acquire <Release>.
+//
+// Acquire takes the governing context directly (not [rapid.T]): the
+// law creates a cancellable context, acquires the key under it,
+// cancels it, then polls Free until the lease frees or Timeout
+// elapses. Release is typically asynchronous (a goroutine observing
+// ctx.Done()), so the poll tolerates a brief propagation delay; a
+// correct implementation frees within microseconds, while one that
+// ignores cancellation never frees and fails at the deadline.
+// Timeout ≤ 0 defaults to one second.
+type LeaseReleasedOnCancel[T any, K comparable] struct {
+	Acquire func(ctx context.Context, sut T, k K) error
+	Free    func(rt *rapid.T, sut T, k K) bool
+	Keys    *rapid.Generator[K]
+	Timeout time.Duration
+}
+
+// ID returns the stable identifier for this law.
+func (LeaseReleasedOnCancel[T, K]) ID() string { return "AUTO-LEASE-RELEASED-ON-CANCEL" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (LeaseReleasedOnCancel[T, K]) REQID() string { return "" }
+
+// Check acquires a key under a fresh context, cancels it, and
+// verifies the lease becomes free within Timeout.
+func (l LeaseReleasedOnCancel[T, K]) Check(rt *rapid.T, sut, _ T) error {
+	k := l.Keys.Draw(rt, "LeaseReleasedOnCancel_key")
+	ctx, cancel := context.WithCancel(rt.Context())
+	if err := l.Acquire(ctx, sut, k); err != nil {
+		cancel()
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if l.Free(rt, sut, k) {
+		cancel()
+		return fmt.Errorf("LeaseReleasedOnCancel: key %v reported free immediately after acquire", k)
+	}
+	cancel()
+	timeout := l.Timeout
+	if timeout <= 0 {
+		timeout = time.Second
+	}
+	deadline := time.Now().Add(timeout)
+	for {
+		if l.Free(rt, sut, k) {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf(
+				"LeaseReleasedOnCancel: key %v not released within %v of context cancellation",
+				k,
+				timeout,
+			)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// WatcherReturnsOnChange verifies that a watch established before a
+// mutation observes that mutation. Auto-emitted for methods carrying
+// //testkit:watcher <Trigger>.
+//
+// Watch establishes a watch on a key and returns a handle; Mutate
+// changes the key; Next blocks for the watch's next event up to the
+// given timeout, reporting ok=false on timeout; Stop tears the watch
+// down. The law watches a key, mutates it, and asserts the watch
+// fired. Timeout ≤ 0 defaults to one second.
+type WatcherReturnsOnChange[T any, W any, K comparable, V any] struct {
+	Watch   func(rt *rapid.T, sut T, k K) (W, error)
+	Mutate  func(rt *rapid.T, sut T, k K, v V) error
+	Next    func(w W, timeout time.Duration) (V, bool)
+	Stop    func(w W)
+	Keys    *rapid.Generator[K]
+	Values  *rapid.Generator[V]
+	Timeout time.Duration
+}
+
+// ID returns the stable identifier for this law.
+func (WatcherReturnsOnChange[T, W, K, V]) ID() string { return "AUTO-WATCHER-RETURNS-ON-CHANGE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (WatcherReturnsOnChange[T, W, K, V]) REQID() string { return "" }
+
+// Check establishes a watch, mutates the watched key, and verifies
+// the watch fires within Timeout.
+func (l WatcherReturnsOnChange[T, W, K, V]) Check(rt *rapid.T, sut, _ T) error {
+	k := l.Keys.Draw(rt, "WatcherReturnsOnChange_key")
+	v := l.Values.Draw(rt, "WatcherReturnsOnChange_value")
+	w, err := l.Watch(rt, sut, k)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	defer l.Stop(w)
+	if mErr := l.Mutate(rt, sut, k, v); mErr != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	timeout := l.Timeout
+	if timeout <= 0 {
+		timeout = time.Second
+	}
+	if _, ok := l.Next(w, timeout); !ok {
+		return fmt.Errorf("WatcherReturnsOnChange: key %v: watch did not fire within %v of a change", k, timeout)
 	}
 	return nil
 }

@@ -219,3 +219,73 @@ func (l StreamOverMatch[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	}
 	return nil
 }
+
+// StreamReflectsMutations verifies a Stream-class method reflects
+// prior mutations: an item written via Put appears in the next
+// drain, and (when Delete is supplied) a deleted item disappears
+// from it. Auto-emitted for the
+// //testkit:stream-reflects-mutations <Stream> directive.
+//
+// Delete may be nil for interfaces without a deleter; the law then
+// checks only the put direction. A stream serving a stale snapshot
+// fails on the first put.
+type StreamReflectsMutations[T any, V any, H comparable] struct {
+	Put    func(*rapid.T, T, V) error
+	Delete func(*rapid.T, T, V) error
+	Drain  func(*rapid.T, T) ([]V, error)
+	Values *rapid.Generator[V]
+	Hash   func(V) H
+}
+
+// ID returns the stable identifier for this law.
+func (StreamReflectsMutations[T, V, H]) ID() string { return "AUTO-STREAM-REFLECTS-MUTATIONS" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (StreamReflectsMutations[T, V, H]) REQID() string { return "" }
+
+// contains reports whether a drain of the stream includes the hash
+// of v.
+func (l StreamReflectsMutations[T, V, H]) contains(rt *rapid.T, sut T, v V) (bool, error) {
+	items, err := l.Drain(rt, sut)
+	if err != nil {
+		return false, err
+	}
+	h := l.Hash(v)
+	for _, it := range items {
+		if l.Hash(it) == h {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// Check puts a value and verifies the stream contains it; when
+// Delete is supplied, deletes it and verifies the stream no longer
+// does.
+func (l StreamReflectsMutations[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
+	v := l.Values.Draw(rt, "StreamReflectsMutations_value")
+	if err := l.Put(rt, sut, v); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	found, err := l.contains(rt, sut, v)
+	if err != nil {
+		return fmt.Errorf("StreamReflectsMutations: drain after put errored: %w", err)
+	}
+	if !found {
+		return fmt.Errorf("StreamReflectsMutations: value %v not in stream after put", v)
+	}
+	if l.Delete == nil {
+		return nil
+	}
+	if delErr := l.Delete(rt, sut, v); delErr != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	found, err = l.contains(rt, sut, v)
+	if err != nil {
+		return fmt.Errorf("StreamReflectsMutations: drain after delete errored: %w", err)
+	}
+	if found {
+		return fmt.Errorf("StreamReflectsMutations: value %v still in stream after delete", v)
+	}
+	return nil
+}

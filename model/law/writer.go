@@ -5,11 +5,18 @@
 package law
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
 )
+
+// defaultXSSTokens are literal tag-openers a correct HTML escaper
+// converts (the leading '<' becomes "&lt;"), so their survival in
+// rendered output signals unescaped, script-capable markup.
+var defaultXSSTokens = []string{"<script", "<img", "<svg", "<iframe"}
 
 // IdempotentWrite verifies that the second Write of an identical
 // value is observably equivalent to the first — repeated writes
@@ -48,6 +55,188 @@ func (l IdempotentWrite[T, V, Obs]) Check(rt *rapid.T, sut, _ T) error {
 	after := l.Observe(rt, sut)
 	if diff := cmp.Diff(before, after); diff != "" {
 		return fmt.Errorf("IdempotentWrite: value %v: second write changed state (-before +after):\n%s", v, diff)
+	}
+	return nil
+}
+
+// WriteObservable verifies that a value written via Write is
+// retrievable through the paired Reader under the value's key — the
+// most basic writer contract. Auto-emitted for Writer-class methods
+// with a paired Reader.
+//
+// KeyOf extracts the lookup key from the written value; Read fetches
+// it back. A write that is silently dropped, or a read that returns
+// a divergent value, fails the law.
+type WriteObservable[T any, V any, K comparable] struct {
+	Write  func(*rapid.T, T, V) error
+	Read   func(*rapid.T, T, K) (V, error)
+	Values *rapid.Generator[V]
+	KeyOf  func(V) K
+}
+
+// ID returns the stable identifier for this law.
+func (WriteObservable[T, V, K]) ID() string { return "AUTO-WRITE-OBSERVABLE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (WriteObservable[T, V, K]) REQID() string { return "" }
+
+// Check writes a value and verifies the paired reader returns it
+// under the value's key.
+func (l WriteObservable[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
+	v := l.Values.Draw(rt, "WriteObservable_value")
+	if err := l.Write(rt, sut, v); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	got, err := l.Read(rt, sut, l.KeyOf(v))
+	if err != nil {
+		return fmt.Errorf("WriteObservable: value %v: not observable via read: %v", v, err)
+	}
+	if diff := cmp.Diff(v, got); diff != "" {
+		return fmt.Errorf("WriteObservable: value %v: written value not observable (-write +read):\n%s", v, diff)
+	}
+	return nil
+}
+
+// TamperEvident verifies that out-of-band modification of stored
+// data is detectable after the fact: Verify passes on freshly
+// written data and fails once the store is tampered with. Auto-
+// emitted for Writer/Appender methods carrying
+// //testkit:tamper-evident.
+//
+// Tamper corrupts the store's backing state without going through
+// Write, returning false when tampering is not applicable (e.g., an
+// empty store) so the law skips rather than false-fails. A store
+// with no integrity mechanism passes Verify even after tampering and
+// fails the law.
+type TamperEvident[T any, V any] struct {
+	Write  func(*rapid.T, T, V) error
+	Tamper func(*rapid.T, T) bool
+	Verify func(*rapid.T, T) error
+	Values *rapid.Generator[V]
+}
+
+// ID returns the stable identifier for this law.
+func (TamperEvident[T, V]) ID() string { return "AUTO-TAMPER-EVIDENT" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (TamperEvident[T, V]) REQID() string { return "" }
+
+// Check writes a value, confirms Verify passes, tampers, and
+// confirms Verify then detects the modification.
+func (l TamperEvident[T, V]) Check(rt *rapid.T, sut, _ T) error {
+	v := l.Values.Draw(rt, "TamperEvident_value")
+	if err := l.Write(rt, sut, v); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if err := l.Verify(rt, sut); err != nil {
+		return fmt.Errorf("TamperEvident: Verify failed on intact data: %v", err)
+	}
+	if !l.Tamper(rt, sut) {
+		return nil // tampering not applicable; nothing to detect
+	}
+	if err := l.Verify(rt, sut); err == nil {
+		return errors.New("TamperEvident: Verify did not detect tampering")
+	}
+	return nil
+}
+
+// XSSSafe verifies that markup passed through Render is neutralized:
+// no script-capable tag-opener survives in the rendered output.
+// Auto-emitted for Writer/Mutator methods carrying
+// //testkit:xss-safe.
+//
+// Render stores a payload and returns its HTML-rendered form. The
+// law draws XSS vectors and fails if any token in Dangerous (default
+// [defaultXSSTokens]) appears verbatim in the output — a correct
+// escaper converts the leading '<' so the tag-opener cannot appear.
+type XSSSafe[T any] struct {
+	Render    func(rt *rapid.T, sut T, raw string) (string, error)
+	Payloads  *rapid.Generator[string]
+	Dangerous []string
+}
+
+// ID returns the stable identifier for this law.
+func (XSSSafe[T]) ID() string { return "AUTO-XSS-SAFE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (XSSSafe[T]) REQID() string { return "" }
+
+// Check renders an XSS vector and fails if a dangerous tag-opener
+// survives unescaped in the output.
+func (l XSSSafe[T]) Check(rt *rapid.T, sut, _ T) error {
+	raw := l.Payloads.Draw(rt, "XSSSafe_payload")
+	out, err := l.Render(rt, sut, raw)
+	if err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	danger := l.Dangerous
+	if len(danger) == 0 {
+		danger = defaultXSSTokens
+	}
+	low := strings.ToLower(out)
+	for _, tok := range danger {
+		if strings.Contains(low, tok) {
+			return fmt.Errorf("XSSSafe: rendered output contains unescaped %q (from vector %q): %q", tok, raw, out)
+		}
+	}
+	return nil
+}
+
+// InjectionSafe verifies that a payload carrying SQL/shell
+// metacharacters is treated as literal data: it round-trips through
+// storage unchanged, and a separately-stored canary value is not
+// disturbed by it. Auto-emitted for Writer/Mutator methods carrying
+// //testkit:injection-safe.
+//
+// The law seeds CanaryKey with CanaryValue, stores an injection
+// vector under a distinct key, then asserts both that the vector
+// loads back verbatim (parameterization preserved it) and that the
+// canary is intact (the injection did not break out to affect other
+// data). A store that concatenates input into a command corrupts one
+// or the other and fails.
+type InjectionSafe[T any] struct {
+	Store       func(rt *rapid.T, sut T, key, value string) error
+	Load        func(rt *rapid.T, sut T, key string) (string, error)
+	Payloads    *rapid.Generator[string]
+	CanaryKey   string
+	CanaryValue string
+}
+
+// ID returns the stable identifier for this law.
+func (InjectionSafe[T]) ID() string { return "AUTO-INJECTION-SAFE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (InjectionSafe[T]) REQID() string { return "" }
+
+// Check stores a canary and an injection vector, then verifies the
+// vector round-trips verbatim and the canary is undisturbed.
+func (l InjectionSafe[T]) Check(rt *rapid.T, sut, _ T) error {
+	const target = "injectionsafe_target"
+	if err := l.Store(rt, sut, l.CanaryKey, l.CanaryValue); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	payload := l.Payloads.Draw(rt, "InjectionSafe_payload")
+	if err := l.Store(rt, sut, target, payload); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	got, err := l.Load(rt, sut, target)
+	if err != nil {
+		return fmt.Errorf("InjectionSafe: payload not retrievable: %v", err)
+	}
+	if got != payload {
+		return fmt.Errorf("InjectionSafe: payload altered in storage (want %q, got %q)", payload, got)
+	}
+	canary, err := l.Load(rt, sut, l.CanaryKey)
+	if err != nil {
+		return fmt.Errorf("InjectionSafe: canary lost after storing payload %q: %v", payload, err)
+	}
+	if canary != l.CanaryValue {
+		return fmt.Errorf(
+			"InjectionSafe: payload %q corrupted canary (want %q, got %q)",
+			payload,
+			l.CanaryValue,
+			canary,
+		)
 	}
 	return nil
 }

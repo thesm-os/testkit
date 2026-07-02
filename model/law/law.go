@@ -151,3 +151,66 @@ func (l CountEqualsReference[T, R]) Check(rt *rapid.T, sut, ref T) error {
 	}
 	return nil
 }
+
+// CRDTMerge verifies the convergence contract of a state-based CRDT
+// merge: two replicas receiving disjoint slices of the same write
+// stream converge to the same observable state after a bidirectional
+// merge, and re-merging is idempotent. Auto-emitted for the
+// //testkit:crdt-merge <Other> directive; runs under AcrossImpls
+// with two replica factories.
+//
+// The law constructs two fresh replicas via Factory, routes each
+// drawn value to one of them (rapid picks the split), merges A←B
+// then B←A, and compares Observe on both. Observe must be
+// deterministic (e.g., sorted keys) for the comparison to be
+// meaningful.
+type CRDTMerge[T any, V any, Obs any] struct {
+	Factory func() T
+	Write   func(*rapid.T, T, V) error
+	Merge   func(rt *rapid.T, dst, src T) error
+	Values  *rapid.Generator[V]
+	Observe func(*rapid.T, T) Obs
+}
+
+// ID returns the stable identifier for this law.
+func (CRDTMerge[T, V, Obs]) ID() string { return "AUTO-CRDT-MERGE" }
+
+// REQID returns an empty string (auto-derived laws have no REQ tag).
+func (CRDTMerge[T, V, Obs]) REQID() string { return "" }
+
+// Check splits writes across two replicas, merges both directions,
+// and verifies convergence plus idempotent re-merge.
+func (l CRDTMerge[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
+	a := l.Factory()
+	b := l.Factory()
+	n := rapid.IntRange(1, 6).Draw(rt, "CRDTMerge_writes")
+	for i := range n {
+		v := l.Values.Draw(rt, fmt.Sprintf("CRDTMerge_v%d", i))
+		dst := a
+		if rapid.Bool().Draw(rt, fmt.Sprintf("CRDTMerge_toB%d", i)) {
+			dst = b
+		}
+		if err := l.Write(rt, dst, v); err != nil {
+			return nil //nolint:nilerr // precondition failed; law vacuously holds
+		}
+	}
+	if err := l.Merge(rt, a, b); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if err := l.Merge(rt, b, a); err != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	obsA := l.Observe(rt, a)
+	obsB := l.Observe(rt, b)
+	if diff := cmp.Diff(obsA, obsB); diff != "" {
+		return fmt.Errorf("CRDTMerge: replicas did not converge after bidirectional merge (-a +b):\n%s", diff)
+	}
+	if err := l.Merge(rt, a, b); err != nil {
+		return fmt.Errorf("CRDTMerge: re-merge errored: %w", err)
+	}
+	again := l.Observe(rt, a)
+	if diff := cmp.Diff(obsA, again); diff != "" {
+		return fmt.Errorf("CRDTMerge: re-merge was not idempotent (-before +after):\n%s", diff)
+	}
+	return nil
+}

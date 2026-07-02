@@ -5,11 +5,14 @@ package law_test
 
 import (
 	"errors"
+	"sync"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/model/law"
+	"go.thesmos.sh/testkit/model/refwindow"
 )
 
 type aggSUT struct {
@@ -124,6 +127,67 @@ func TestConservative(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, s, s); err == nil {
 				rt.Fatal("expected sum drift")
+			}
+		})
+	})
+}
+
+// stickyCounter is a broken windowed counter: it counts increments
+// but never decays them, ignoring the window entirely.
+type stickyCounter struct {
+	n map[string]int
+}
+
+func (c *stickyCounter) incr(k string) error {
+	if c.n == nil {
+		c.n = make(map[string]int)
+	}
+	c.n[k]++
+	return nil
+}
+
+func (c *stickyCounter) count(k string) (int, error) { return c.n[k], nil }
+
+func TestWindowed(t *testing.T) {
+	t.Parallel()
+
+	window := 10 * time.Second
+
+	t.Run("rolling counter decays increments past the window", func(t *testing.T) {
+		t.Parallel()
+		l := law.Windowed[*refwindow.RollingCounter[string], string]{
+			Incr: func(rt *rapid.T, c *refwindow.RollingCounter[string], k string) error { return c.Incr(rt.Context(), k) },
+			Count: func(rt *rapid.T, c *refwindow.RollingCounter[string], k string) (int, error) {
+				return c.Count(rt.Context(), k)
+			},
+			Keys:   rapid.SampledFrom([]string{"a", "b"}),
+			Window: window,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			var mu sync.Mutex
+			nowT := time.Unix(0, 0)
+			now := func() time.Time { mu.Lock(); defer mu.Unlock(); return nowT }
+			l.Advance = func(d time.Duration) { mu.Lock(); nowT = nowT.Add(d); mu.Unlock() }
+			c := refwindow.NewRollingCounter[string](window, now)
+			if err := l.Check(rt, c, c); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
+
+	t.Run("counter that never decays is caught", func(t *testing.T) {
+		t.Parallel()
+		l := law.Windowed[*stickyCounter, string]{
+			Incr:    func(_ *rapid.T, c *stickyCounter, k string) error { return c.incr(k) },
+			Count:   func(_ *rapid.T, c *stickyCounter, k string) (int, error) { return c.count(k) },
+			Advance: func(time.Duration) {}, // sticky counter has no clock
+			Keys:    rapid.SampledFrom([]string{"a", "b"}),
+			Window:  window,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			c := &stickyCounter{}
+			if err := l.Check(rt, c, c); err == nil {
+				rt.Fatal("expected non-decaying counter to be caught")
 			}
 		})
 	})
