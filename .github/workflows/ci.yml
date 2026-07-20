@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make vet
@@ -32,7 +32,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make check-tidy
@@ -43,7 +43,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: actions/cache@v5
@@ -61,7 +61,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: make test-race
@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - uses: actions/cache@v5
