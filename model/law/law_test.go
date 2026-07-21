@@ -236,6 +236,21 @@ func TestCountEqualsReferenceCheck(t *testing.T) {
 	})
 }
 
+// uniqueStringGen returns a generator producing a distinct string on
+// every draw. Negative tests for convergence laws need this: with
+// sampled values, rapid can route the same value everywhere and a
+// broken merge/sync converges by accident.
+func uniqueStringGen() *rapid.Generator[string] {
+	seq := 0
+	return rapid.Custom(func(rt *rapid.T) string {
+		// rapid requires Custom generators to consume bitstream
+		// data; the value itself comes from the counter.
+		rapid.Bool().Draw(rt, "pad")
+		seq++
+		return strconv.Itoa(seq)
+	})
+}
+
 // gset is a grow-only-set CRDT: merge is set union, so replicas
 // converge regardless of merge direction. When lossy is set, merge
 // ignores the source — the bug where replicas never converge.
@@ -298,19 +313,11 @@ func TestCRDTMerge(t *testing.T) {
 		// the law must fire on every iteration. Sampled values could
 		// route the same value to both replicas and converge by
 		// accident.
-		seq := 0
-		unique := rapid.Custom(func(rt *rapid.T) string {
-			// rapid requires Custom generators to consume bitstream
-			// data; the value itself comes from the counter.
-			rapid.Bool().Draw(rt, "pad")
-			seq++
-			return strconv.Itoa(seq)
-		})
 		l := law.CRDTMerge[*gset, string, []string]{
 			Factory: func() *gset { return newGSet(true) },
 			Write:   func(_ *rapid.T, s *gset, v string) error { return s.add(v) },
 			Merge:   func(_ *rapid.T, dst, src *gset) error { return dst.merge(src) },
-			Values:  unique,
+			Values:  uniqueStringGen(),
 			Observe: func(_ *rapid.T, s *gset) []string { return s.sorted() },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
