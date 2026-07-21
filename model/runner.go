@@ -11,6 +11,7 @@ import (
 	"github.com/anishathalye/porcupine"
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/coverage"
 	"go.thesmos.sh/testkit/model/law"
 	"go.thesmos.sh/testkit/trace"
 )
@@ -132,6 +133,24 @@ type Config[T any] struct {
 	// 2. .testkit.yml artifacts.dir
 	// 3. Fallback: .testkit/artifacts/
 	ArtifactDir string
+
+	// StateHash hashes T's observable state for state-space coverage.
+	// Set via [WithStateHash]. When nil, state-space coverage is not
+	// tracked. Applied to the reference model each iteration when a
+	// RefFactory is set (the canonical deterministic state), otherwise
+	// to the SUT.
+	StateHash func(T) uint64
+
+	// SaturationThreshold is the number of consecutive iterations
+	// without a new state after which the state space is reported
+	// saturated. Zero uses the default. Set via
+	// [WithSaturationThreshold].
+	SaturationThreshold int
+
+	// Coverage, when non-nil, receives the run's coverage signals —
+	// state-space metrics and the REQ-to-law matrix — accumulated
+	// across iterations. Set via [WithCoverageSink].
+	Coverage *coverage.ComponentCoverage
 }
 
 // Run executes a model-based test. For each rapid iteration, it
@@ -191,6 +210,17 @@ func Property[T any](sutFactory func() T, opts ...Option[T]) func(*rapid.T) {
 func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 	if cfg.Laws == nil {
 		cfg.Laws = NewRegistry[T]()
+	}
+
+	// Coverage accumulators persist across rapid iterations (the
+	// returned closure is called once per iteration). The REQ-to-law
+	// matrix is static; the state-space tracker grows per iteration.
+	var tracker *stateSpaceTracker
+	if cfg.Coverage != nil {
+		cfg.Coverage.REQToLaw = buildREQToLaw(cfg.Laws)
+		if cfg.StateHash != nil {
+			tracker = newStateSpaceTracker(cfg.SaturationThreshold)
+		}
 	}
 
 	return func(rt *rapid.T) {
@@ -307,6 +337,17 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 		}
 
 		rt.Repeat(actionMap)
+
+		// State-space coverage: hash the end-of-iteration state and
+		// fold it into the run's exploration footprint. Prefer the
+		// reference model (deterministic, canonical) when present.
+		if tracker != nil {
+			subject := sut
+			if cfg.RefFactory != nil {
+				subject = ref
+			}
+			cfg.Coverage.StateSpace = tracker.observe(cfg.StateHash(subject))
+		}
 	}
 }
 
@@ -367,6 +408,29 @@ func WithHistoryReset[T any](reset func()) Option[T] {
 	return func(c *Config[T]) {
 		c.HistoryResetters = append(c.HistoryResetters, reset)
 	}
+}
+
+// WithStateHash enables state-space coverage tracking. The runner
+// hashes the end-of-iteration state (the reference model when a
+// reference is set, otherwise the SUT) and accumulates the
+// exploration footprint into the [WithCoverageSink] sink. No-op
+// without a sink.
+func WithStateHash[T any](hash func(T) uint64) Option[T] {
+	return func(c *Config[T]) { c.StateHash = hash }
+}
+
+// WithSaturationThreshold sets how many consecutive iterations
+// without a new state mark the state space saturated. Zero uses the
+// default.
+func WithSaturationThreshold[T any](n int) Option[T] {
+	return func(c *Config[T]) { c.SaturationThreshold = n }
+}
+
+// WithCoverageSink directs the run's coverage signals — state-space
+// metrics and the REQ-to-law matrix — into sink. The sink is filled
+// in place across iterations; read it after the run returns.
+func WithCoverageSink[T any](sink *coverage.ComponentCoverage) Option[T] {
+	return func(c *Config[T]) { c.Coverage = sink }
 }
 
 // SkipLaw removes an auto-derived law by ID.
