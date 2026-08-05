@@ -10,6 +10,7 @@
 // would never be picked up.
 //
 //testkit:sentinel prefix=store
+//testkit:sentinel-no-overlap-with go.thesmos.sh/testkit/conformance/corpus/errors/neighbour
 package store
 
 import (

@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: MIT
 
 // Package lifecycleafterclose is the mixin-axis fixture for the lifecycleafterclose mixin, which
-// declares that calls after teardown report the closed sentinel.
+// declares that every call after teardown reports the closed sentinel.
 //
-// Both methods have an identical signature and only one carries the
-// directive. Holding the shape constant makes the directive the only
-// variable, so any difference in generated output is attributable to it and
-// to nothing else — and Plain proves the mixin is opt-in rather than inferred
-// from the signature.
+// The interface carries whatever methods the law needs to be stateable.
+// A mixin whose law spans two calls cannot be hosted by a single method:
+// there would be nothing to compare against, and the generated subtest
+// would pass by having nothing to check.
 //
-// There is no negated form here: eidos declares the mixin directive
-// DenyNegation, because a mixin is opt-in and there is nothing to suppress.
+// There is no negated form here. eidos declares the mixin directive
+// DenyNegation, because a mixin is opt-in and deleting the directive is
+// the suppression (docs/adr/0016).
 package lifecycleafterclose
 
 import (
@@ -19,17 +19,16 @@ import (
 	"errors"
 )
 
-// ErrNotFound is the miss sentinel both methods report.
-var ErrNotFound = errors.New("lifecycleafterclose: not found")
-
-// Value is the payload the fixture reads.
-type Value struct{ Key, Body string }
+// ErrClosed is what operations report after teardown.
+var ErrClosed = errors.New("lifecycleafterclose: closed")
 
 // Mixed is the fixture interface.
 type Mixed interface {
+	// Close is the teardown the law measures from.
 	//testkit:mixin lifecycleafterclose
-	Declared(ctx context.Context, key string) (Value, error)
+	Close(ctx context.Context) error
 
-	// Plain carries no directive, so it must stamp nothing.
-	Plain(ctx context.Context, key string) (Value, error)
+	// Work must report [ErrClosed] once Close has run. Without an operation
+	// to reject, closure is unobservable.
+	Work(ctx context.Context) error
 }

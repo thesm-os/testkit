@@ -2,34 +2,32 @@
 // SPDX-License-Identifier: MIT
 
 // Package eventually is the mixin-axis fixture for the eventually mixin, which
-// declares that the effect becomes visible after a quiet period, not immediately.
+// declares that the effect becomes visible after a quiet period rather than immediately.
 //
-// Both methods have an identical signature and only one carries the
-// directive. Holding the shape constant makes the directive the only
-// variable, so any difference in generated output is attributable to it and
-// to nothing else — and Plain proves the mixin is opt-in rather than inferred
-// from the signature.
+// The interface carries whatever methods the law needs to be stateable.
+// A mixin whose law spans two calls cannot be hosted by a single method:
+// there would be nothing to compare against, and the generated subtest
+// would pass by having nothing to check.
 //
-// There is no negated form here: eidos declares the mixin directive
-// DenyNegation, because a mixin is opt-in and there is nothing to suppress.
+// There is no negated form here. eidos declares the mixin directive
+// DenyNegation, because a mixin is opt-in and deleting the directive is
+// the suppression (docs/adr/0016).
 package eventually
 
 import (
 	"context"
-	"errors"
 )
-
-// ErrNotFound is the miss sentinel both methods report.
-var ErrNotFound = errors.New("eventually: not found")
-
-// Value is the payload the fixture reads.
-type Value struct{ Key, Body string }
 
 // Mixed is the fixture interface.
 type Mixed interface {
+	// Publish is not observable on return. The law is that it becomes so,
+	// which needs a settle step and a read to observe after it.
 	//testkit:mixin eventually
-	Declared(ctx context.Context, key string) (Value, error)
+	Publish(ctx context.Context, item string) error
 
-	// Plain carries no directive, so it must stamp nothing.
-	Plain(ctx context.Context, key string) (Value, error)
+	// Settle advances the quiet window the law waits out.
+	Settle(ctx context.Context) error
+
+	// Items observes the eventual state.
+	Items(ctx context.Context) ([]string, error)
 }

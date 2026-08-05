@@ -21,7 +21,7 @@ The generator emits two constructors per type:
 
 | Constructor | Seed |
 |-------------|------|
-| `New<Type>()` | Either zero values, or `<Type>Defaults()` from the test package, or directive defaults — see "Defaults" below |
+| `New<Type>()` | Either zero values, or `<Type>Defaults()` from the source package, or directive defaults — see "Defaults" below |
 | `New<Type>From(v)` | Caller-supplied value |
 
 ## What is generated
@@ -116,12 +116,12 @@ func (b *ItemBuilder) Clone() *ItemBuilder
 
 ### 1. `<Type>Defaults()` companion function
 
-If a function `<Type>Defaults() <Type>` exists in the **test** package (e.g. `RequestDefaults` in `package defaultstest`), the generator uses it as the seed:
+If a function `<Type>Defaults() <Type>` exists in the **source** package alongside the type, the generator uses it as the seed. The name carries the type because a package declaring several types needs one companion each, and a bare `Defaults` collides on the second:
 
 ```go
-// defaultstest/defaults.go — hand-written
-func RequestDefaults() defaults.Request {
-    return defaults.Request{
+// defaults/defaults.go — hand-written, beside the type
+func RequestDefaults() Request {
+    return Request{
         RunID: "test-run-id",
         Token: 42,
         Data:  []byte("test-data"),
@@ -132,7 +132,7 @@ func RequestDefaults() defaults.Request {
 ```go
 // defaultstest/builders.gen.go — generated
 func NewRequest() *RequestBuilder {
-    return &RequestBuilder{v: RequestDefaults()}  // seed from companion
+    return &RequestBuilder{v: defaults.RequestDefaults()}  // seed from companion
 }
 ```
 
@@ -252,7 +252,7 @@ A typical domain object generates its builder into a `<pkg>test/` sub-package. T
 | `types.go` | Developer | The source file containing the struct definition. |
 | `*_builder.gen.go` | Generator | The fluent builder implementation (DO NOT EDIT). |
 | `*_builder.gen_test.go` | Generator | The self-verifying test suite for the builder itself (DO NOT EDIT). |
-| `defaults.go` | Developer | Hand-written `func <Type>Defaults() <Type>` factories. |
+| `defaults.go` | Developer | Hand-written `func <Type>Defaults() <Type>` factories, in the source package beside the type. |
 
 ## See also
 

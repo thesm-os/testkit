@@ -20,6 +20,18 @@ fuzz/
 # regression. Only ignore rapid/ at the repo root (build artifacts).
 !/testdata/rapid/
 !**/testdata/rapid/
+
+# ...except those written by a stand-in TB. Negative tests drive a rapid
+# property that is *meant* to fail, inside a testkit.FailableTB that captures
+# the failure instead of propagating it. rapid still writes a failfile, named
+# for the TB, on every green run — and replaying one only reproduces a failure
+# the test asked for. They carry no regression value, regenerate under a new
+# timestamped name each run, and have been committed by accident before.
+#
+# The directory is named for the TB, so this only catches stand-ins left at the
+# default name. A negative rapid test using WithName writes elsewhere and needs
+# its own entry — or, better, should not rename the TB.
+**/testdata/rapid/FailableTB/
 coverage.txt
 coverage.html
 profile.out

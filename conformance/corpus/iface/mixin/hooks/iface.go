@@ -4,32 +4,27 @@
 // Package hooks is the mixin-axis fixture for the hooks mixin, which
 // declares that the method fires registered callbacks as part of its work.
 //
-// Both methods have an identical signature and only one carries the
-// directive. Holding the shape constant makes the directive the only
-// variable, so any difference in generated output is attributable to it and
-// to nothing else — and Plain proves the mixin is opt-in rather than inferred
-// from the signature.
+// The interface carries whatever methods the law needs to be stateable.
+// A mixin whose law spans two calls cannot be hosted by a single method:
+// there would be nothing to compare against, and the generated subtest
+// would pass by having nothing to check.
 //
-// There is no negated form here: eidos declares the mixin directive
-// DenyNegation, because a mixin is opt-in and there is nothing to suppress.
+// There is no negated form here. eidos declares the mixin directive
+// DenyNegation, because a mixin is opt-in and deleting the directive is
+// the suppression (docs/adr/0016).
 package hooks
 
 import (
 	"context"
-	"errors"
 )
-
-// ErrNotFound is the miss sentinel both methods report.
-var ErrNotFound = errors.New("hooks: not found")
-
-// Value is the payload the fixture reads.
-type Value struct{ Key, Body string }
 
 // Mixed is the fixture interface.
 type Mixed interface {
+	// Fire invokes whatever OnEvent registered. Without a registration
+	// method there is no way to observe that it did.
 	//testkit:mixin hooks
-	Declared(ctx context.Context, key string) (Value, error)
+	Fire(ctx context.Context, event string) error
 
-	// Plain carries no directive, so it must stamp nothing.
-	Plain(ctx context.Context, key string) (Value, error)
+	// OnEvent registers the callback Fire invokes.
+	OnEvent(fn func(event string))
 }
