@@ -29,6 +29,8 @@ Each conformance generator targets a tier. Lower tiers run in seconds; higher ti
 
 `stub` provides the runtime primitives the conformance tiers compose with — recording, fault injection, gating, virtual clocks, strict-mode dispatch. `sim` is the subsystem-level harness Tier 5 generators (`chaos`, `replay`) run on top of.
 
+What each tier can and cannot see, and when to reach for the next one: [Conformance tiers](docs/explanation/conformance-tiers.md).
+
 ## Generators
 
 Each generator emits both the artifact and the tests that exercise it. testkit's catalogue covers 14 generators. None are in the tree today — see [Status](#status); the table is what the eidos-based rebuild targets.
@@ -199,7 +201,7 @@ rec.WaitForN(t, 3, 5*time.Second)
 gate := rec.NewGate()
 ```
 
-Full reference: [docs/testkit/primitives/](docs/testkit/primitives/README.md).
+Full reference: [docs/reference/primitives/](docs/reference/primitives/README.md).
 
 ## Quick start
 
@@ -288,9 +290,9 @@ Both are at 100% statement coverage.
 
 The code generator is being rebuilt on [eidos](https://go.thesmos.sh/eidos) and is **not currently in the tree** — the hand-rolled `generator/`, `cmd/`, and `harness/` packages were removed rather than ported. The generator table above is the target catalogue, not shipped code. Until the tool module lands there is no `testkit` binary and no `//go:generate` workflow.
 
-Directive vocabulary and generated-file layout may change until the V1 cut. Consumers should pin and regenerate on upgrade.
+Directive vocabulary and generated-file layout may change until `v1.0.0`. Consumers should pin and regenerate on upgrade.
 
-V1 commits to:
+`v1.0.0` commits to ([ADR-0002](docs/adr/0002-support-external-consumers-under-semver.md)):
 
 - Stable directive vocabulary and composition rules.
 - Stable generated-file layout and naming conventions.
@@ -313,12 +315,17 @@ module and none of the engine's dependencies.
 
 ## Documentation
 
-- [Primitives](docs/testkit/primitives/README.md) — assertions, recording, fault injection, benchmarking, golden files, polling.
-- [Generators](docs/testkit/generators/README.md) — per-generator semantics, output, injection points.
-- [Configuration](docs/testkit/configuration.md) — `.testkit.yaml` reference.
-- [Layout](docs/testkit/layout.md) — test package directory structure and file roles.
-- [Linter config](docs/testkit/golangci.md) — copy-pasteable `.golangci.yml` for testkit consumers.
-- [Adoption](docs/testkit/adoption.md) — incremental adoption guide.
+Start at [docs/](docs/README.md).
+
+- [RFC-0001](docs/rfc/0001-testkit-as-a-generator-platform.md) — what the platform is and how it is shaped.
+- [Architecture decisions](docs/adr/README.md) — why each piece is the way it is.
+- [Primitives](docs/reference/primitives/README.md) — assertions, recording, fault injection, benchmarking, golden files, polling.
+- [Generators](docs/reference/generators/README.md) — per-generator semantics, output, injection points.
+- [Conformance tiers](docs/explanation/conformance-tiers.md) — what each tier proves and when to reach for it.
+- [Configuration](docs/reference/configuration.md) — `.testkit.yaml` reference.
+- [Layout](docs/reference/layout.md) — test package directory structure and file roles.
+- [Linter config](docs/reference/golangci.md) — copy-pasteable `.golangci.yml` for testkit consumers.
+- [Adoption](docs/how-to/adoption.md) — incremental adoption guide.
 
 ## License
 
