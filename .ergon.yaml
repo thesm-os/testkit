@@ -70,6 +70,19 @@ lint:
     # Directories (repository-relative) the walker recurses into.
     # `[.]` covers the entire tree.
     target_dirs: ["."]
+    excludes:
+      # errors/noprefix proves the sentinel generator's prefix=off branch: its
+      # sentinels must genuinely lack the prefix, or the fixture cannot detect
+      # a generator that parses the directive and ignores it.
+      #
+      # Scoped to that one package rather than the whole corpus. Every other
+      # fixture's sentinels do follow the convention and are worth checking —
+      # they are the examples a consumer copies — and a corpus-wide exemption
+      # would have hidden a typo in any of them. The run prints the exempted
+      # count, which is how the wider version announced itself as excluding 93
+      # files to permit two deliberate violations.
+      - path: conformance/corpus/errors/noprefix/...
+        reason: proves prefix=off suppression; unprefixed sentinels are the fixture
 
 # markdown — markdownlint-cli2 invocation shared by `ergon fmt`
 # (auto-fix mode) and `ergon lint md` (reporting only)
@@ -200,6 +213,15 @@ checks:
     - label: unreachable-until-run-command
       func_glob: "runVersion"
       file_glob: "cmd/testkit/cmds/version.go"
+    # Annotate builds its pipeline from a plugin set fixed at compile time —
+    # one frontend, one annotator, one backend. eidos's Build only fails on
+    # structural faults in that set (duplicate names, wrong role counts), so
+    # the error arm cannot be reached without making the set a parameter,
+    # which would widen the API for no reason but coverage. ADR-0004 fixes the
+    # annotator set, so it will not grow.
+    - label: fixed-plugin-set
+      func_glob: "Annotate"
+      file_glob: "conformance/gate/annotate.go"
 
   # Example:
   #   skips:

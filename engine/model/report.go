@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"go.thesmos.sh/testkit/core/brand"
 	"go.thesmos.sh/testkit/core/trace"
 )
 
@@ -219,8 +220,12 @@ func findModuleRoot() string {
 	if err != nil {
 		return ""
 	}
-	// First pass: look for the project config.
-	if found := walkUpFor(dir, ".testkit.yaml"); found != "" {
+	// First pass: look for the project config. The name comes from
+	// [brand.ConfigFile] rather than a literal, because this walk and the
+	// CLI's config discovery have to agree — when they drifted apart before,
+	// the anchor silently failed and artifacts scattered per sub-module
+	// instead of failing loudly.
+	if found := walkUpFor(dir, brand.ConfigFile); found != "" {
 		return found
 	}
 	// Fallback: look for go.mod (for projects without a config file).

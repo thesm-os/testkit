@@ -10,18 +10,15 @@
 // rather than as a directive that was misread.
 package pointerreader
 
-import (
-	"context"
-	"errors"
-)
-
-// ErrNotFound is the miss sentinel this fixture's reads report.
-var ErrNotFound = errors.New("pointerreader: not found")
+import "context"
 
 // Value is the payload the fixture reads.
 type Value struct{ Key, Body string }
 
 // PointerReader is the fixture interface.
 type PointerReader interface {
-	Find(ctx context.Context, key string) (*Value, error)
+	// Find returns exactly one value, and that value is the pointer. Adding an
+	// error return takes the method out of this shape entirely — it becomes an
+	// ordinary reader, because nil no longer has to carry the miss.
+	Find(ctx context.Context, key string) *Value
 }

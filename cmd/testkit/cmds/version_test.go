@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"go.thesmos.sh/eidos/cli"
+
+	"go.thesmos.sh/testkit/core/brand"
 )
 
 // The binary reports the generator set so an operator can confirm which
@@ -47,8 +49,8 @@ func TestVersionJSONCarriesBuildStamp(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &doc); err != nil {
 		t.Fatalf("JSON output must parse as a document (%v):\n%s", err, stdout)
 	}
-	if doc["brand"] != brand {
-		t.Errorf("expected brand %q in the document, got %v", brand, doc["brand"])
+	if doc["brand"] != brand.Name {
+		t.Errorf("expected brand %q in the document, got %v", brand.Name, doc["brand"])
 	}
 	if doc[buildKey] != "dev" {
 		t.Errorf("expected an unstamped build to report %q, got %v", "dev", doc[buildKey])

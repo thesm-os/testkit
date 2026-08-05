@@ -16,6 +16,8 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.thesmos.sh/eidos/cli"
+
+	"go.thesmos.sh/testkit/core/brand"
 )
 
 // runRoot drives the shared rootCmd with args and returns stdout, stderr, and
@@ -123,7 +125,7 @@ func TestExitCodeBridge(t *testing.T) {
 //
 //nolint:paralleltest // t.Chdir cannot be used from a parallel test
 func TestLoadConfigResolution(t *testing.T) {
-	env, err := cli.NewEnv(brand)
+	env, err := cli.NewEnv(brand.Name)
 	if err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -164,7 +166,7 @@ func TestLoadConfigResolution(t *testing.T) {
 
 	t.Run("no config anywhere falls back to defaults", func(t *testing.T) { //nolint:paralleltest // t.Chdir
 		t.Chdir(t.TempDir())
-		bare, err := cli.NewEnv(brand)
+		bare, err := cli.NewEnv(brand.Name)
 		if err != nil {
 			t.Fatalf("setup: %v", err)
 		}
@@ -194,8 +196,8 @@ func TestNewEnv(t *testing.T) {
 		if err != nil {
 			t.Fatalf("newEnv: %v", err)
 		}
-		if env.Brand != brand {
-			t.Fatalf("expected brand %q, got %q", brand, env.Brand)
+		if env.Brand != brand.Name {
+			t.Fatalf("expected brand %q, got %q", brand.Name, env.Brand)
 		}
 		if env.Stdout != &out || env.Stderr != &errOut {
 			t.Fatal("IO must come from the cobra command, not the process")

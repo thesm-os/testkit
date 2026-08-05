@@ -44,18 +44,13 @@ import (
 	"go.thesmos.sh/eidos/plugin"
 
 	"go.thesmos.sh/testkit/cmd/internal/version"
+	"go.thesmos.sh/testkit/core/brand"
 )
-
-// brand is the identity this binary advertises to eidos. It drives the header
-// and footer markers rendered into generated files, the project-local
-// `.testkit/` state directory, and the `.testkit.yaml` config filename
-// (docs/adr/0009).
-const brand = "testkit"
 
 // rootCmd is the top-level `testkit` command. Subcommand files register
 // themselves against it from init().
 var rootCmd = &cobra.Command{
-	Use:   brand,
+	Use:   brand.Name,
 	Short: "Generate test doubles, suites, and benchmarks from Go types",
 	Long: "testkit reads your interfaces and types, generates the test doubles, \n" +
 		"builders, fixtures, conformance suites, and benchmarks you would \n" +
@@ -73,7 +68,7 @@ var cfgPath string
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgPath, cli.FlagConfig, "",
-		"path to the config file (default: nearest .testkit.yaml)")
+		"path to the config file (default: nearest "+brand.ConfigFile+")")
 }
 
 // Execute runs the command tree and returns the process exit code.
@@ -93,7 +88,7 @@ func Execute() int {
 	if ok := asExitCode(err, &ec); ok {
 		return ec.code
 	}
-	fmt.Fprintf(rootCmd.ErrOrStderr(), "%s: %v\n", brand, err)
+	fmt.Fprintf(rootCmd.ErrOrStderr(), "%s: %v\n", brand.Name, err)
 	return cli.ExitUserError
 }
 
@@ -126,7 +121,7 @@ func asExitCode(err error, target *exitCodeError) bool {
 // newEnv builds the eidos environment for one invocation, routing IO through
 // cobra so tests can capture output.
 func newEnv(cmd *cobra.Command) (*cli.Env, error) {
-	env, err := cli.NewEnv(brand)
+	env, err := cli.NewEnv(brand.Name)
 	if err != nil {
 		return nil, fmt.Errorf("cmds: environment unavailable: %w", err)
 	}

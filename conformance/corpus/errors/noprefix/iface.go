@@ -9,17 +9,14 @@
 // with the suppression branch never generated, because the directive name
 // appears either way.
 //
-// The sentinels here should not carry a package prefix — with the subtest
-// suppressed they would be legal, and a generator that ignored prefix=off
-// would fail against them, which is how the fixture would prove suppression
-// took effect rather than merely being requested.
+// The sentinels here deliberately carry no package prefix. That is what makes
+// the fixture able to detect a failure rather than merely exercise a path: with
+// the subtest suppressed they are legal, and a generator that parsed prefix=off
+// and ignored it would emit the assertion and fail against them.
 //
-// They carry one anyway. The repository's own `lint error-prefix` recurses
-// from the root and has no exclusion mechanism, so it flags the unprefixed
-// form and there is no way to exempt a fixture corpus from it. Filed upstream
-// as ergon ISSUE-DRAFT-errorprefix-needs-exclusions; until that lands this
-// fixture exercises the directive without being able to detect a generator
-// that parses it and does nothing.
+// The repository's own `lint error-prefix` would flag them, correctly by its
+// own rules. The corpus is exempted from it in .ergon.yaml, because a fixture
+// corpus contains violating patterns on purpose.
 //
 //testkit:sentinel prefix=off
 package noprefix
@@ -27,10 +24,9 @@ package noprefix
 import "errors"
 
 var (
-	// ErrRetry carries the prefix only to satisfy the repository's lint. The
-	// directive above says the generated assertion must not require it.
-	ErrRetry = errors.New("noprefix: retry the operation")
+	// ErrRetry has no "noprefix: " prefix, and must not be required to.
+	ErrRetry = errors.New("retry the operation")
 
 	// ErrGiveUp likewise.
-	ErrGiveUp = errors.New("noprefix: no attempts remain")
+	ErrGiveUp = errors.New("no attempts remain")
 )
