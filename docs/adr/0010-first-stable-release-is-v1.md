@@ -40,7 +40,8 @@ The restructure releases as `v1.0.0`, succeeding `v0.10.0`. It is the first
 stable release, not a second major version.
 
 Module paths stay unsuffixed: `go.thesmos.sh/testkit`,
-`go.thesmos.sh/testkit/engine`, `go.thesmos.sh/testkit/tool`.
+`go.thesmos.sh/testkit/engine`, `go.thesmos.sh/testkit/generator`, and
+`go.thesmos.sh/testkit/cmd`.
 
 The design-era version names are retired. Documents and commit messages describe
 what changed, not which internal generation it belonged to.

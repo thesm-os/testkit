@@ -45,24 +45,27 @@ the code generator's dependency graph along with it.
 
 ## Shape
 
-### Three published modules, split by what a consumer pays for
+### Four published modules, split by what a consumer pays for
 
 | Module | Contains | Dependency cost |
 |---|---|---|
 | `go.thesmos.sh/testkit` | Runtime primitives — assertions, stubs, recording, fault injection, clocks, golden files, polling | go-cmp |
 | `go.thesmos.sh/testkit/engine` | Model checking — property runner, law library, linearizability models, reference implementations, bounded model checking | + rapid, porcupine |
-| `go.thesmos.sh/testkit/tool` | The CLI and the fourteen generator plugins | + eidos |
+| `go.thesmos.sh/testkit/generator` | The generators, one package each | + eidos |
+| `go.thesmos.sh/testkit/cmd` | The binary | + eidos, cobra |
 
 A consumer who wants assertions and stubs takes the first and none of the rest.
-A consumer who wants generated conformance suites takes the tool at build time
-and ships nothing extra at runtime. The split is enforced by module boundaries
+A consumer who wants generated conformance suites installs the binary at build
+time and ships nothing extra at runtime. A consumer embedding the generators in
+a binary of their own takes `generator` without the CLI. The split is enforced by module boundaries
 rather than by convention, so it cannot erode.
 
 A fourth module, `conformance`, is unpublished: it holds the generated corpus
 that proves the generators work. Unpublished modules cost no tags.
 
-See [ADR-0005](../adr/0005-split-into-published-modules.md) and
-[ADR-0006](../adr/0006-tag-published-modules-in-lockstep.md).
+See [ADR-0005](../adr/0005-split-into-published-modules.md),
+[ADR-0006](../adr/0006-tag-published-modules-in-lockstep.md), and
+[ADR-0014](../adr/0014-split-the-cli-from-the-generator-module.md).
 
 ### One boundary with eidos
 
@@ -124,6 +127,7 @@ that were rejected and the trade-offs accepted.
 | [0011](../adr/0011-collapse-ref-packages.md) | Collapse the reference-implementation packages |
 | [0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md) | Generate per-shape helpers into the consumer |
 | [0013](../adr/0013-defer-codec-pkgdoc-and-smoke.md) | Defer codec, pkgdoc, and smoke |
+| [0014](../adr/0014-split-the-cli-from-the-generator-module.md) | Split the CLI from the generator module |
 
 ## Execution
 
@@ -145,7 +149,8 @@ far above the similarity threshold.
 | Drive both modules to their coverage gates — runtime 99.6%, engine 96.3% at its lowest package | Done — `aa91066` |
 | Record the design as RFC and ADRs | Done — `1adfd52` |
 | Audit the eidos classifications against what the catalogue needs | Done — [the classification map](../internal/classification-map.md) |
-| Stand up the `tool` and `conformance` modules | Not started |
+| Stand up the `generator` and `cmd` modules | Done — `ee57412` |
+| Stand up the `conformance` module | Not started |
 | Port the generator plugins | Not started |
 
 ## Open questions

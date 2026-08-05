@@ -143,7 +143,7 @@ jobs:
         with:
           go-version: "1.23"
       - name: Install testkit
-        run: go install go.thesmos.sh/testkit/tool/cmd/testkit@latest
+        run: go install go.thesmos.sh/testkit/cmd/testkit@latest
 
       - name: Structural checks
         run: |

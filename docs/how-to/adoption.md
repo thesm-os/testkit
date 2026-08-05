@@ -35,7 +35,7 @@ func TestSomething(t *testing.T) {
 > Steps 1 and 3 onward describe the target workflow.
 
 ```bash
-go install go.thesmos.sh/testkit/tool/cmd/testkit@latest
+go install go.thesmos.sh/testkit/cmd/testkit@latest
 ```
 
 Verify:

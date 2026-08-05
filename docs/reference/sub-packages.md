@@ -5,8 +5,9 @@ Optional sub-packages with isolated dependencies. Each sub-package is a separate
 > **Status: not implemented.** None of the modules below exist in the tree.
 > They are a design sketch retained for reference. The modules that do ship are
 > `go.thesmos.sh/testkit`, `go.thesmos.sh/testkit/engine`, and
-> `go.thesmos.sh/testkit/tool` — see
-> [ADR-0005](../adr/0005-split-into-published-modules.md).
+> `go.thesmos.sh/testkit/generator`, and `go.thesmos.sh/testkit/cmd` — see
+> [ADR-0005](../adr/0005-split-into-published-modules.md) and
+> [ADR-0014](../adr/0014-split-the-cli-from-the-generator-module.md).
 
 ## testkit/container
 
