@@ -1,0 +1,4 @@
+go.thesmos.sh/eidos v1.3.3 h1:JBmpTM+txw69Ck00DeJ3yrtjOzmW4HW8xRaSBEvrTkk=
+go.thesmos.sh/eidos v1.3.3/go.mod h1:hafUOhbpdIaExBAuwnvHfA92BYgjLWcgEa4PwVs6PO8=
+go.thesmos.sh/eidos/plugins v1.5.1 h1:0mdiV2KRo3nQkR5+K21GjqWcmUypqLMK7s1rabwM3/4=
+go.thesmos.sh/eidos/plugins v1.5.1/go.mod h1:QGRB3r3LILtn14P6ZznNZYVTpSXntlg2XfxgbvEY5Vk=

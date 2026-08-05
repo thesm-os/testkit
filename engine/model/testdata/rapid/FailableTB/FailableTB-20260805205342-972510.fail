@@ -1,0 +1,46 @@
+# 2026/08/05 20:53:42.725572 [FailableTB] [rapid] draw action: "Put"
+# 2026/08/05 20:53:42.725575 [FailableTB] [rapid] draw Put_value: model_test.item{ID:"a", Name:"aaa"}
+# 2026/08/05 20:53:42.725577 [FailableTB] [rapid] draw action: "Get"
+# 2026/08/05 20:53:42.725577 [FailableTB] [rapid] draw Get_key: "a"
+# 2026/08/05 20:53:42.725632 [FailableTB] [semantic] at step 1: Get(a): SUT/ref disagree:
+#   model_test.item{
+#   	ID:   "a",
+# - 	Name: "aaa",
+# + 	Name: "WRONG",
+#   }
+# 
+#   semantic: SUT vs reference disagreement (action)
+#   [step 0] Put({ID:a Name:aaa}) -> <nil>
+#   [step 1] Get("a") -> err: Get(a): SUT/ref disagree:
+#   model_test.item{
+#   	ID:   "a",
+# - 	Name: "aaa",
+# + 	Name: "WRONG",
+#   }
+#    <-- FAILED
+#   json: /tmp/TestRunnerActionAndLawDispatcha_diverging_action_fails_with_its2298614656/001/failure-FailableTB.json
+# 
+v0.4.8#13413479394290139197
+0x1084210842108
+0x0
+0x1
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x0
+0x0
+0x0

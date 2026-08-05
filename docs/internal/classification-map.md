@@ -130,7 +130,8 @@ general-purpose codegen substrate.
 The upstream vocabulary moves. Counts in prose go stale; the commands do not.
 
 ```bash
-# eidos, per axis
+# eidos, per axis. Check for a newer version first:
+#   go list -m -f '{{.Version}}' go.thesmos.sh/eidos/plugins@latest
 for a in detectors contracts mixins; do
   printf '%s: ' "$a"
   ls ../eidos/plugins/annotator/shape/$a | grep -v '\.go$' | grep -v internal | tr '\n' ' '
@@ -141,9 +142,3 @@ done
 git ls-tree -d --name-only 9e3622f:generator/spec
 git ls-tree --name-only 9e3622f:generator/shape
 ```
-
-Audited 2026-08-05 against eidos at 20 detectors, 24 contracts, 28 mixins. The
-design that produced [ADR-0004](../adr/0004-consume-only-the-annotator-plugin.md)
-was written against 19 / 24 / 29, so one detector was added and one mixin removed
-while it was being written. That drift is the reason this document names commands
-rather than totals.

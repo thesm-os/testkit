@@ -5,6 +5,7 @@ go 1.26.5
 use (
 	.
 	./cmd
+	./conformance
 	./engine
 	./generator
 )

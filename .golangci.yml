@@ -86,6 +86,7 @@ linters:
             - "!**/engine/**"
             - "!**/generator/**"
             - "!**/cmd/**"
+            - "!**/conformance/**"
           allow:
             - $gostd
             - go.thesmos.sh/testkit
@@ -115,6 +116,17 @@ linters:
             - go.thesmos.sh/testkit
             - go.thesmos.sh/eidos
             - github.com/google/go-cmp
+        # The conformance tier is the corpus and the gate that checks it. It
+        # reads eidos's classification registries directly, because coverage is
+        # measured against them rather than declared in a manifest.
+        conformance:
+          list-mode: strict
+          files:
+            - "**/conformance/**"
+          allow:
+            - $gostd
+            - go.thesmos.sh/testkit
+            - go.thesmos.sh/eidos
         # The cmd tier is the binary: the generator set plus the CLI framework.
         # It is the only tier permitted to import cobra.
         cmd:
@@ -238,6 +250,15 @@ linters:
       # fmt.Sprintf for error messages, and fmt.Errorf. When
       # golangci-lint runs from inside gen/, paths are just filenames.
       - path: '(render|write|output|loader|method|directive|errors|imports)\.go'
+        linters: [forbidigo]
+
+      # forbidigo's fmt.Print* rule targets console output. Rendering into a
+      # strings.Builder is not that, and staticcheck's QF1012 actively
+      # requires fmt.Fprintf over WriteString(fmt.Sprintf(...)) — so the two
+      # linters disagree unless the buffer-writing case is excluded. The path
+      # is unanchored because golangci-lint runs per module, so it sees
+      # `gate/coverage.go` rather than the repo-relative path.
+      - path: 'gate/coverage\.go'
         linters: [forbidigo]
 
       # fieldalignment is noise for a test infrastructure library —

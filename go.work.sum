@@ -1,2 +1,3 @@
-go.thesmos.sh/eidos v1.3.2/go.mod h1:hafUOhbpdIaExBAuwnvHfA92BYgjLWcgEa4PwVs6PO8=
+go.thesmos.sh/eidos/eidostest v1.3.0/go.mod h1:DMTWJl/FhEdu+aKIZXQDYYbx0/Yyfrn7Vm37/ZVlxQA=
+go.thesmos.sh/eidos/eidostest v1.3.2/go.mod h1:WgIvC8xICpJ1vE6jtRjQ+SPy1ocPgmRo6dQbRmkiyqU=
 go.thesmos.sh/testkit v0.10.0/go.mod h1:dkDWLbVV1I6La+iXpc3b7HzbrxZ77EX4c6vr6AdeJfw=

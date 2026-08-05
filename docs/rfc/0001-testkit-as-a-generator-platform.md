@@ -99,8 +99,8 @@ rest are in scope.
 
 Directive vocabulary is shared across the catalogue and namespaced to `testkit`.
 Directives take the neutral form with an axis qualifier, so several properties
-batch onto one line
-([ADR-0008](../adr/0008-neutral-directive-form-with-axis-qualifier.md)):
+batch onto one line, and there is no negated form
+([ADR-0016](../adr/0016-directives-are-positive-only.md)):
 
 ```go
 //testkit:mixin idempotent concurrent-safe
@@ -128,6 +128,8 @@ that were rejected and the trade-offs accepted.
 | [0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md) | Generate per-shape helpers into the consumer |
 | [0013](../adr/0013-defer-codec-pkgdoc-and-smoke.md) | Defer codec, pkgdoc, and smoke |
 | [0014](../adr/0014-split-the-cli-from-the-generator-module.md) | Split the CLI from the generator module |
+| [0015](../adr/0015-subtest-names-carry-the-classification.md) | Subtest names carry the classification |
+| [0016](../adr/0016-directives-are-positive-only.md) | Directives are positive-only |
 
 ## Execution
 
@@ -150,7 +152,7 @@ far above the similarity threshold.
 | Record the design as RFC and ADRs | Done — `1adfd52` |
 | Audit the eidos classifications against what the catalogue needs | Done — [the classification map](../internal/classification-map.md) |
 | Stand up the `generator` and `cmd` modules | Done — `ee57412` |
-| Stand up the `conformance` module | Not started |
+| Stand up the `conformance` module and its gate | In progress |
 | Port the generator plugins | Not started |
 
 ## Open questions

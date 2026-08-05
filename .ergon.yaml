@@ -156,7 +156,14 @@ checks:
 
   # Path globs both gates ignore. `reason` is human-facing so
   # reviewers can challenge new excludes on PR.
-  excludes: []
+  excludes:
+    # The corpus is generator input, not library code. Its declarations exist
+    # to be read by a generator, and the coverage that matters is the generated
+    # tests exercising the generated output — which land beside each fixture
+    # once the generators do. Gating the fixtures themselves would demand
+    # hand-written tests for the very thing being generated.
+    - path: conformance/corpus/...
+      reason: generator input; covered by generated tests, not hand-written ones
   # Example:
   #   excludes:
   #     - path: "**/*_test.go"
