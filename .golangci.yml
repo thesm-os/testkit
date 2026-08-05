@@ -84,6 +84,8 @@ linters:
           list-mode: strict
           files:
             - "!**/engine/**"
+            - "!**/generator/**"
+            - "!**/cmd/**"
           allow:
             - $gostd
             - go.thesmos.sh/testkit
@@ -100,6 +102,30 @@ linters:
             - github.com/google/go-cmp
             - github.com/anishathalye/porcupine
             - pgregory.net/rapid
+        # The generator tier owns the codegen substrate. eidos stays here and
+        # in the cmd tier: an import from runtime or engine would put a
+        # build-time dependency into a consumer's runtime module graph, which
+        # is what the module split exists to prevent (docs/adr/0005).
+        generator:
+          list-mode: strict
+          files:
+            - "**/generator/**"
+          allow:
+            - $gostd
+            - go.thesmos.sh/testkit
+            - go.thesmos.sh/eidos
+            - github.com/google/go-cmp
+        # The cmd tier is the binary: the generator set plus the CLI framework.
+        # It is the only tier permitted to import cobra.
+        cmd:
+          list-mode: strict
+          files:
+            - "**/cmd/**"
+          allow:
+            - $gostd
+            - go.thesmos.sh/testkit
+            - go.thesmos.sh/eidos
+            - github.com/spf13/cobra
     forbidigo:
       analyze-types: true
       forbid:

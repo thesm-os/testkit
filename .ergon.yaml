@@ -178,6 +178,22 @@ checks:
     - label: unreachable-network-failure
       func_glob: "FreePort"
       file_glob: "helpers.go"
+    # main is two statements — build the command tree, hand its exit code to
+    # os.Exit — and neither is reachable from a test without spawning a
+    # process. Everything it delegates to is covered directly; see
+    # cmd/testkit/cmds/root_test.go, which drives Execute itself.
+    - label: process-entry-point
+      func_glob: "main"
+      file_glob: "cmd/testkit/main.go"
+    # runVersion flushes whatever a failing kernel rendered before carrying its
+    # exit code out. VersionCommand is the only kernel wired so far and its one
+    # failure writes to stderr, so the flush always sees an empty buffer and
+    # its write-error arm is unreachable. Remove this entry when `run` lands —
+    # that kernel renders to stdout and can fail mid-render.
+    - label: unreachable-until-run-command
+      func_glob: "runVersion"
+      file_glob: "cmd/testkit/cmds/version.go"
+
   # Example:
   #   skips:
   #     - label: suite
