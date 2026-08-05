@@ -5,7 +5,9 @@ project_name: testkit
 
 before:
   hooks:
-    - go vet ./cmd/...
+    # The runtime module. The tool module is vetted by its own build once it
+    # lands; there is no cmd/ tree at the repo root any more.
+    - go vet ./...
 
 builds:
   # The CLI lives in the tool module. Until that module lands this build
@@ -26,9 +28,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X go.thesmos.sh/testkit/cmd/internal/version.buildVersion={{.Version}}
-      - -X go.thesmos.sh/testkit/cmd/internal/version.buildCommit={{.Commit}}
-      - -X go.thesmos.sh/testkit/cmd/internal/version.buildDate={{.CommitDate}}
+      - -X go.thesmos.sh/testkit/tool/internal/version.buildVersion={{.Version}}
+      - -X go.thesmos.sh/testkit/tool/internal/version.buildCommit={{.Commit}}
+      - -X go.thesmos.sh/testkit/tool/internal/version.buildDate={{.CommitDate}}
     hooks:
       post:
         - cmd: sh -c 'case "{{ .Target }}" in linux_*|windows_amd64_*) exec upx --best --lzma "{{ .Path }}" ;; esac'

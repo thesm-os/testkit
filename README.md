@@ -31,7 +31,7 @@ Each conformance generator targets a tier. Lower tiers run in seconds; higher ti
 
 ## Generators
 
-Each generator emits both the artifact and the tests that exercise it. testkit's roadmap covers 14 generators; six ship today and the remaining eight are documented as planned.
+Each generator emits both the artifact and the tests that exercise it. testkit's catalogue covers 14 generators. None are in the tree today — see [Status](#status); the table is what the eidos-based rebuild targets.
 
 | Generator                  | Tier        | What it produces | Injection point |
 |----------------------------|-------------|------------------|-----------------|
@@ -54,7 +54,7 @@ Each generator emits both the artifact and the tests that exercise it. testkit's
 
 Conformance generators are driven by `//testkit:` directives on interface methods. Directives are machine-readable, grep-able, and validated at codegen time — unknown directives error, conflicting combinations error, redundant pairs warn.
 
-The matrix below covers every directive shipped in `generator/directive/known.go`, grouped by intent. Columns reflect the **shipped** consumers (`stub`, `suite`, `bench`, `builder`, `sentinel`); the planned generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `smoke`, `codec`, `pkgdoc`) document their planned directive surface in their own doc files. `enum` is directive-free.
+The matrix below is the directive vocabulary the rebuild targets, grouped by intent. Columns name the consuming generator; `enum` is directive-free. Per-generator directive surfaces are documented in the individual generator doc files.
 
 ### Error & return contract
 
@@ -201,25 +201,16 @@ gate := rec.NewGate()
 
 Full reference: [docs/testkit/primitives/](docs/testkit/primitives/README.md).
 
-## Validators
-
-Static CI checks. No test execution required; pure code and config analysis. testkit ships 18 validators across four categories.
-
-- **Structural** — proto-sync, migration chain, depguard, wire freshness, error prefix, skip expiry.
-- **Test quality** — assertion-free tests, test naming, `time.Sleep` detection, orphaned test doubles, parallel safety, contract-benchmark completeness.
-- **Quality gates** — benchmark contracts, benchmark regression vs baseline, per-layer coverage thresholds, per-layer mutation thresholds.
-- **Compliance** — audit-doc completeness, REQ-to-test traceability.
-
-Full reference: [docs/testkit/validators/](docs/testkit/validators/README.md).
-
 ## Quick start
 
 ```bash
-go install go.thesmos.sh/testkit/cmd/testkit@latest
 go get go.thesmos.sh/testkit@latest
+go get go.thesmos.sh/testkit/engine@latest   # model-checking engine, optional
 ```
 
-Add directives to the package that owns the types:
+The runtime primitives are usable directly today. The generator workflow below
+describes the target state and does not run yet — there is no `testkit` binary
+in the tree. Add directives to the package that owns the types:
 
 ```go
 // store/generate.go
@@ -288,7 +279,16 @@ check-compliance:
 
 ## Status
 
-Pre-1.0. The runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers) and the generator engine (`generator/`) are stable. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining eight (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `smoke`, `codec`, `pkgdoc`) are designed and documented but not yet implemented. Generator vocabulary and directive semantics may change in minor versions until the V1 cut. Consumers should pin and regenerate on upgrade.
+Pre-1.0, mid-restructure. Two modules ship today:
+
+- **`go.thesmos.sh/testkit`** — the runtime primitives (`MethodStub[T]`, `Recorder[T]`, `FaultInjector`, `StartContract`, shape-typed assertion and bench contexts, golden-file helpers, virtual clocks, seeded randomness, polling). Depends on go-cmp alone.
+- **`go.thesmos.sh/testkit/engine`** — the model-checking engine: property runner, law library, linearizability models, reference implementations, bounded model checking, failure classification and artifact emission.
+
+Both are at 100% statement coverage.
+
+The code generator is being rebuilt on [eidos](https://go.thesmos.sh/eidos) and is **not currently in the tree** — the hand-rolled `generator/`, `cmd/`, and `harness/` packages were removed rather than ported. The generator table above is the target catalogue, not shipped code. Until the tool module lands there is no `testkit` binary and no `//go:generate` workflow.
+
+Directive vocabulary and generated-file layout may change until the V1 cut. Consumers should pin and regenerate on upgrade.
 
 V1 commits to:
 
@@ -299,26 +299,23 @@ V1 commits to:
 
 ## Dependencies
 
-Core `testkit` package:
+`go.thesmos.sh/testkit` — the runtime module, one dependency:
 
 - [`github.com/google/go-cmp`](https://github.com/google/go-cmp) — structural diffs for assertions.
-- [`pgregory.net/rapid`](https://pgregory.net/rapid) — property-based generators for `model` and stub stream helpers.
 
-Optional sub-packages with isolated dependencies:
+`go.thesmos.sh/testkit/engine` — the model-checking engine, which adds:
 
-| Package              | Adds                              |
-|----------------------|-----------------------------------|
-| `testkit/container`  | `testcontainers-go`               |
-| `testkit/httptest`   | stdlib only                       |
-| `testkit/oteltest`   | `go.opentelemetry.io/otel/sdk`    |
-| `testkit/clitest`    | stdlib only                       |
+- [`pgregory.net/rapid`](https://pgregory.net/rapid) — property-based generation and shrinking.
+- [`github.com/anishathalye/porcupine`](https://github.com/anishathalye/porcupine) — linearizability checking.
+
+Consumers who only want assertions, stubs, and fault injection take the runtime
+module and none of the engine's dependencies.
 
 ## Documentation
 
 - [Primitives](docs/testkit/primitives/README.md) — assertions, recording, fault injection, benchmarking, golden files, polling.
 - [Generators](docs/testkit/generators/README.md) — per-generator semantics, output, injection points.
-- [Validators](docs/testkit/validators/README.md) — 18 CI checks.
-- [Configuration](docs/testkit/configuration.md) — `.testkit.yml` reference.
+- [Configuration](docs/testkit/configuration.md) — `.testkit.yaml` reference.
 - [Layout](docs/testkit/layout.md) — test package directory structure and file roles.
 - [Linter config](docs/testkit/golangci.md) — copy-pasteable `.golangci.yml` for testkit consumers.
 - [Adoption](docs/testkit/adoption.md) — incremental adoption guide.
