@@ -1,5 +1,14 @@
 # Shape Classification
 
+> **Status: superseded in mechanism, retained for vocabulary.** The priority
+> registry described below lived in `generator/shape`, which has been removed.
+> Classification now comes from eidos's `shape` annotator, which uses three
+> orthogonal axes rather than a first-match-wins cascade — so nothing is
+> shadowed by priority. The shape *names* and the laws attached to them carry
+> over; the architecture section does not. See
+> [the classification map](../../internal/classification-map.md) for the mapping and
+> [ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md) for why.
+
 Shape classification is the analytical engine of the `testkit` generators. The `generator/shape` package uses signature-driven analysis to categorize Go interface methods into **21 canonical Shapes**. Downstream generators (`suite`, `bench`, `model`) use this classification to automatically apply the correct mathematical laws, performance budgets, and state-machine transitions without requiring you to write custom test logic.
 
 ## Architecture: The Priority Registry

@@ -23,8 +23,8 @@ code.
 
 That put the shape vocabulary into a published API. And the shape vocabulary is
 not testkit's to fix: it comes from eidos's annotator
-([ADR-0004](0004-consume-only-the-annotator-plugin.md)), where nineteen
-detectors, twenty-four contracts, and twenty-nine mixins are actively
+([ADR-0004](0004-consume-only-the-annotator-plugin.md)), where twenty
+detectors, twenty-four contracts, and twenty-eight mixins are actively
 maintained. Upstream adds a mixin and the published surface grows; upstream
 renames one and the published surface breaks.
 
@@ -79,6 +79,12 @@ binary, undoing [ADR-0005](0005-split-into-published-modules.md).
 
 - Generated files get substantially larger, and the same helper is emitted into
   every package that needs it. Duplication is the direct cost of this decision.
+- Within a package, deduplication is mandatory rather than merely desirable. Two
+  interfaces in one package that share a shape must emit that shape's helper
+  exactly once or the package does not compile. That forces an emit kind which
+  aggregates per package rather than per source file, and it has to be designed
+  in from the start: retrofitting it means reworking the emit model for `suite`
+  and `bench` together.
 - A bug in a shape helper is fixed by regenerating every consumer, not by
   upgrading a dependency. Consumers who do not regenerate keep the bug.
 - Generated output is read by humans during review, and more of it means more to

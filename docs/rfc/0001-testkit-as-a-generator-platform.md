@@ -31,9 +31,10 @@ Three things were wrong with that.
 machinery that walks a Go package and writes a file is a means. Every hour spent
 on slot topology was an hour not spent on a generator.
 
-**The pipeline was already owned elsewhere.** Shape classification — nineteen
-detectors, twenty-four contracts, twenty-nine mixins, seventy classifications in
-total — exists in [eidos](https://go.thesmos.sh/eidos) and is maintained there.
+**The pipeline was already owned elsewhere.** Shape classification — twenty
+detectors, twenty-four contracts, twenty-eight mixins, seventy-two
+classifications in total — exists in [eidos](https://go.thesmos.sh/eidos) and is
+maintained there.
 testkit reimplemented thirty-nine of forty-four of those packages. Two
 independent implementations of the same classification vocabulary is not
 redundancy, it is drift waiting to happen.
@@ -73,14 +74,16 @@ The boundary is narrow and deliberate: testkit consumes `plugins/annotator` and
 nothing else. It writes no annotators of its own, and it adopts none of eidos's
 generators — not even the three whose names collide.
 See [ADR-0003](../adr/0003-adopt-eidos-as-the-codegen-substrate.md) and
-[ADR-0004](../adr/0004-consume-only-the-annotator-plugin.md).
+[ADR-0004](../adr/0004-consume-only-the-annotator-plugin.md), and
+[the classification map](../internal/classification-map.md) for the audit that
+confirmed the vocabulary maps across without gaps.
 
 ```
 Go source
     │
     ▼
 eidos frontend ──► eidos annotators ──► testkit plugins ──► eidos backend ──► sink
-                   (shape: 70                (14 generators)
+                   (shape: 72                (14 generators)
                     classifications)
 ```
 
@@ -124,8 +127,10 @@ that were rejected and the trade-offs accepted.
 
 ## Execution
 
-The restructure is a sequence of individually-buildable commits on `main`, not a
-cleared tree and not an orphan branch. Roughly 44,000 lines move unchanged, so
+The restructure is a sequence of individually-buildable commits on the `v2`
+branch, not a cleared tree and not an orphan branch. The branch name is a
+working label; the release it produces is `v1.0.0`
+([ADR-0010](../adr/0010-first-stable-release-is-v1.md)). Roughly 44,000 lines move unchanged, so
 starting fresh would mean restoring most of them immediately; an orphan branch
 additionally breaks goreleaser's `.PreviousTag`, the release tooling, and
 `git bisect`.
@@ -137,17 +142,18 @@ far above the similarity threshold.
 | Step | State |
 |---|---|
 | Split the runtime and engine modules; delete the hand-rolled pipeline | Done — `09b3e8b` |
-| Drive both modules to full statement coverage | Done — `aa91066` |
-| Record the design as RFC and ADRs | In progress |
-| Audit the seventy eidos classifications against what the catalogue needs | Not started |
+| Drive both modules to their coverage gates — runtime 99.6%, engine 96.3% at its lowest package | Done — `aa91066` |
+| Record the design as RFC and ADRs | Done — `1adfd52` |
+| Audit the eidos classifications against what the catalogue needs | Done — [the classification map](../internal/classification-map.md) |
 | Stand up the `tool` and `conformance` modules | Not started |
 | Port the generator plugins | Not started |
 
 ## Open questions
 
-- **Directive schema ownership.** The exact split between directive schemas that
-  survive as testkit's own and parser machinery that eidos already provides is
-  an output of the classification audit, not an input to it.
+- **Directive schema ownership.** The classification audit settles the
+  vocabulary but not the schemas. Which directive definitions survive as
+  testkit's own, and which are parser machinery eidos already provides, is a
+  second audit over the deleted `generator/directive` tree.
 - **`core/registry`.** The plugin registry's shape is unfixed. It is the
   smallest self-contained unit left and is contract-gated on its own.
 - **Simulation.** `sim` and the tier-5 generators built on it (`chaos`,

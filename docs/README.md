@@ -23,6 +23,11 @@ works.
 |---|---|
 | What the platform is and how it is shaped | [RFCs](rfc/README.md) |
 | Why a specific thing is the way it is | [Architecture decisions](adr/README.md) |
+| How the restructure maps old to new | [Port notes](internal/) |
+
+`internal/` holds working notes for the restructure — audits, mapping tables,
+porting inventories. They are contributor material with a shelf life, not
+reference documentation, and they get deleted when the work they describe lands.
 
 Documents under `rfc/` and `adr/` are numbered and never renumbered. Rejected,
 withdrawn, and superseded records stay on disk — they are the record of why not.

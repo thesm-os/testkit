@@ -32,10 +32,10 @@ artifact plus its proof; that property is the product, and it is not what
 eidos's generators do.
 
 Annotation is the opposite case. The `shape` annotator's three orthogonal axes —
-nineteen detectors, twenty-four contracts, twenty-nine mixins — produce seventy
-classifications, all of which the CLI already registers via `.All()`. testkit's
-own classification packages reimplemented thirty-nine of forty-four equivalents,
-and the audited gaps close upstream.
+twenty detectors, twenty-four contracts, twenty-eight mixins — produce
+seventy-two classifications, all of which the CLI already registers via
+`.All()`. testkit's own classification packages reimplemented thirty-nine of
+forty-four equivalents, and the audited gaps close upstream.
 
 ## Decision
 
@@ -54,8 +54,9 @@ testkit's output. Closing the gap would mean either pushing testkit's directive
 vocabulary upstream — making eidos carry testing concerns it has no reason to —
 or forking the three, which is adoption in name only.
 
-**Write testkit-specific annotators alongside eidos's.** Rejected: seventy of
-seventy-five classifications already exist upstream and are already registered.
+**Write testkit-specific annotators alongside eidos's.** Rejected: forty-one of
+testkit's forty-four classification packages already exist upstream and are
+already registered.
 Writing more would recreate the drift that
 [ADR-0003](0003-adopt-eidos-as-the-codegen-substrate.md) exists to end. The three
 testkit-only classifications become upstream contributions or configuration, not
