@@ -1,0 +1,14 @@
+# testkit dogfoods its own configuration format: project conventions for
+# testkit's own generated code.
+#
+# Quality gates (coverage, mutation, lint policies) are not configured here —
+# ergon owns them and reads .ergon.yaml. A duplicate block in this file was
+# read by nothing.
+
+output:
+  test_package_suffix: test
+  generated_suffix: .gen.go
+  test_package_style: external
+
+artifacts:
+  dir: .testkit/artifacts

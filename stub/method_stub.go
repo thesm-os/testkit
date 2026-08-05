@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/fault"
 	"go.thesmos.sh/testkit/rand"
 )
 
@@ -25,7 +25,7 @@ import (
 type MethodStub[C any] struct {
 	*Recorder[C]
 
-	fault   testkit.Fault[C]
+	fault   fault.Fault[C]
 	clock   clock.Clock
 	rand    rand.Source
 	latency time.Duration
@@ -67,14 +67,14 @@ func (s *MethodStub[C]) IsStrict() bool {
 // For more advanced fault patterns, see [MethodStub.SetFault] which accepts
 // any [Fault] strategy.
 func (s *MethodStub[C]) Faults(err error, failEveryN int) *MethodStub[C] {
-	s.fault = testkit.NewCountedFault[C](err, failEveryN)
+	s.fault = fault.NewCountedFault[C](err, failEveryN)
 	return s
 }
 
 // SetFault configures an arbitrary fault strategy on this method. Use this
 // for advanced patterns (predicate-based, probabilistic, time-windowed, or
 // composed faults). For simple counter-based faults, prefer [MethodStub.Faults].
-func (s *MethodStub[C]) SetFault(f testkit.Fault[C]) *MethodStub[C] {
+func (s *MethodStub[C]) SetFault(f fault.Fault[C]) *MethodStub[C] {
 	s.fault = f
 	return s
 }
@@ -83,9 +83,9 @@ func (s *MethodStub[C]) SetFault(f testkit.Fault[C]) *MethodStub[C] {
 // pred returns true for the call struct AND the counter fires (every nth
 // matching call). Use n=1 to fire on every matching call.
 func (s *MethodStub[C]) FaultsWhen(pred func(C) bool, err error, n int) *MethodStub[C] {
-	s.fault = testkit.And[C](
-		testkit.NewPredicateFault[C](err, pred),
-		testkit.NewCountedFault[C](err, n),
+	s.fault = fault.And[C](
+		fault.NewPredicateFault[C](err, pred),
+		fault.NewCountedFault[C](err, n),
 	)
 	return s
 }
@@ -98,7 +98,7 @@ func (s *MethodStub[C]) FaultsWithProbability(p float64, err error) *MethodStub[
 	if src == nil {
 		src = rand.DefaultRandSource()
 	}
-	s.fault = testkit.NewProbabilityFault[C](err, p, src)
+	s.fault = fault.NewProbabilityFault[C](err, p, src)
 	return s
 }
 
@@ -106,7 +106,7 @@ func (s *MethodStub[C]) FaultsWithProbability(p float64, err error) *MethodStub[
 // reaches the given deadline. Uses the configured [Clock] (or real time
 // if none set).
 func (s *MethodStub[C]) FaultsUntil(deadline time.Time, err error) *MethodStub[C] {
-	s.fault = testkit.NewWindowedFault[C](err, deadline)
+	s.fault = fault.NewWindowedFault[C](err, deadline)
 	return s
 }
 
@@ -114,8 +114,8 @@ func (s *MethodStub[C]) FaultsUntil(deadline time.Time, err error) *MethodStub[C
 // duration from now. "Now" is determined by the configured [Clock] (or
 // real time if none set).
 func (s *MethodStub[C]) FaultsFor(d time.Duration, err error) *MethodStub[C] {
-	now := testkit.ClockNow(s.clock)
-	s.fault = testkit.NewWindowedFault[C](err, now.Add(d))
+	now := fault.ClockNow(s.clock)
+	s.fault = fault.NewWindowedFault[C](err, now.Add(d))
 	return s
 }
 

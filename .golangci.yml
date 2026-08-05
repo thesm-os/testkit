@@ -76,88 +76,30 @@ linters:
 
     depguard:
       rules:
-        core:
+        # The runtime tier is the module every consumer imports. It stays
+        # go-cmp-only: rapid and porcupine belong to the engine module, and an
+        # import here would drag them into every consumer's module graph,
+        # which is the coupling the module split exists to remove.
+        runtime:
           list-mode: strict
           files:
-            - "!**/cmd/**"
-            - "!**/generator/**"
-            - "!**/container/**"
-            - "!**/httptest/**"
-            - "!**/oteltest/**"
-            - "!**/clitest/**"
+            - "!**/engine/**"
+          allow:
+            - $gostd
+            - go.thesmos.sh/testkit
+            - github.com/google/go-cmp
+        # The engine tier owns the heavy verification dependencies. Nothing
+        # else in the workspace may import them.
+        engine:
+          list-mode: strict
+          files:
+            - "**/engine/**"
           allow:
             - $gostd
             - go.thesmos.sh/testkit
             - github.com/google/go-cmp
             - github.com/anishathalye/porcupine
             - pgregory.net/rapid
-        cmd:
-          list-mode: strict
-          files:
-            - "**/cmd/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/cmd
-            - go.thesmos.sh/testkit/generator
-            - go.thesmos.sh/eidos
-            - github.com/google/go-cmp
-            - github.com/spf13/cobra
-            - github.com/spf13/viper
-        generator:
-          list-mode: lax
-          files:
-            - "**/generator/**"
-          deny:
-            - pkg: go.thesmos.sh/testkit/cmd
-              desc: "generator must not import cmd"
-            - pkg: go.thesmos.sh/testkit/container
-              desc: "generator must not import sub-packages"
-            - pkg: go.thesmos.sh/testkit/httptest
-              desc: "generator must not import sub-packages"
-            - pkg: go.thesmos.sh/testkit/oteltest
-              desc: "generator must not import sub-packages"
-            - pkg: go.thesmos.sh/testkit/clitest
-              desc: "generator must not import sub-packages"
-        container:
-          list-mode: strict
-          files:
-            - "**/container/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/container
-            - github.com/google/go-cmp
-            - github.com/testcontainers/testcontainers-go
-        httptest:
-          list-mode: strict
-          files:
-            - "**/httptest/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/httptest
-            - github.com/google/go-cmp
-        oteltest:
-          list-mode: strict
-          files:
-            - "**/oteltest/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/oteltest
-            - github.com/google/go-cmp
-            - go.opentelemetry.io/otel
-        clitest:
-          list-mode: strict
-          files:
-            - "**/clitest/**"
-          allow:
-            - $gostd
-            - go.thesmos.sh/testkit
-            - go.thesmos.sh/testkit/clitest
-            - github.com/google/go-cmp
-
     forbidigo:
       analyze-types: true
       forbid:
