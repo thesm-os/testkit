@@ -9,6 +9,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/fault"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
@@ -372,5 +373,49 @@ func TestMethodStubName(t *testing.T) {
 		t.Parallel()
 		stub := stub.NewMethodStub[sampleCall](nil, "Svc.Do")
 		testkit.True(t, stub.TB() == nil, "must return nil")
+	})
+}
+
+// SetFault is the escape hatch for strategies Faults cannot express — the
+// composed, predicate and time-windowed cases a generated stub cannot know
+// about at codegen time.
+func TestMethodStubSetFault(t *testing.T) {
+	t.Parallel()
+
+	t.Run("installs an arbitrary strategy", func(t *testing.T) {
+		t.Parallel()
+		errBoom := testkit.TestError("boom")
+		s := stub.NewMethodStub[sampleCall](nil, "Svc.Do")
+		s.SetFault(fault.NewPredicateFault(errBoom, func(c sampleCall) bool {
+			return c.Arg == "poison"
+		}))
+
+		fired, err := s.ShouldFaultFor(sampleCall{Arg: "ok"})
+		testkit.False(t, fired, "non-matching call must not fault")
+		testkit.NoError(t, err, "non-matching call must not error")
+
+		fired, err = s.ShouldFaultFor(sampleCall{Arg: "poison"})
+		testkit.True(t, fired, "matching call must fault")
+		testkit.ErrorIs(t, err, errBoom, "must surface the configured error")
+	})
+
+	t.Run("returns the stub for chaining", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewMethodStub[sampleCall](nil, "Svc.Do")
+		got := s.SetFault(fault.NewPredicateFault(
+			testkit.TestError("x"), func(sampleCall) bool { return false },
+		))
+		testkit.True(t, got == s, "must return the receiver for chaining")
+	})
+
+	t.Run("replaces a previously configured fault", func(t *testing.T) {
+		t.Parallel()
+		s := stub.NewMethodStub[sampleCall](nil, "Svc.Do")
+		s.Faults(testkit.TestError("counted"), 1) // would fire on every call
+		s.SetFault(fault.NewPredicateFault(
+			testkit.TestError("pred"), func(sampleCall) bool { return false },
+		))
+		fired, _ := s.ShouldFaultFor(sampleCall{})
+		testkit.False(t, fired, "SetFault must replace, not compose")
 	})
 }

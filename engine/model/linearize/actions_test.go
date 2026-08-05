@@ -70,6 +70,12 @@ func TestConcurrentReaderWithBool(t *testing.T) {
 		if r.OK {
 			t.Fatal("expected ok=false on empty store")
 		}
+		// The partition key routes the op into a per-key sub-history;
+		// without it every op would land in one partition and the
+		// check would serialize.
+		if got := a.PartitionKey(input); got != "k" {
+			rt.Fatalf("the drawn key must be the partition key, got %q", got)
+		}
 	})
 }
 
@@ -146,6 +152,12 @@ func TestConcurrentLookup(t *testing.T) {
 		r := result.(linearize.LookupResult[string, int])
 		if r.OK {
 			t.Fatal("expected ok=false on empty store")
+		}
+		// The partition key routes the op into a per-key sub-history;
+		// without it every op would land in one partition and the
+		// check would serialize.
+		if got := a.PartitionKey(input); got != "k" {
+			rt.Fatalf("the drawn key must be the partition key, got %q", got)
 		}
 	})
 }

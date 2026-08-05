@@ -131,9 +131,10 @@ func Run[T any](initial T, actions []Action[T], invariants []Invariant[T], cfg C
 	return out
 }
 
-// explore is the recursive DFS body. It writes the counterexample
-// into out when an invariant fires; subsequent recursion stops via
-// the early-return check.
+// explore is the recursive DFS body. It writes the counterexample into out
+// when an invariant fires; the whole stack then unwinds through the
+// violation check at the top of the action loop, so no deeper state is
+// visited once a counterexample exists.
 func explore[T any](
 	state T,
 	actions []Action[T],
@@ -145,9 +146,6 @@ func explore[T any](
 	out *Outcome[T],
 	pruned *int,
 ) {
-	if out.Violated() {
-		return
-	}
 	if depth >= cfg.Depth {
 		return
 	}

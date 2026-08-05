@@ -91,6 +91,20 @@ func TestAdvanceClockSynced(t *testing.T) {
 		})
 	})
 
+	// Sequential-mode subjects have no clocks to advance; the action must
+	// no-op rather than the runner having to branch around it.
+	t.Run("absent clocks make the action a no-op", func(t *testing.T) {
+		t.Parallel()
+		clocks := func() (*clock.TestClock, *clock.TestClock) { return nil, nil }
+		a := action.AdvanceClockSynced[string]("AdvanceClock", clocks, time.Second, timeaware.NewBarrier())
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, "sut", "ref")
+			if result.Err != nil {
+				rt.Fatalf("a clockless subject is not a failure: %v", result.Err)
+			}
+		})
+	})
+
 	t.Run("barrier blocks advance while ops are in-flight", func(t *testing.T) {
 		t.Parallel()
 		sutClk := clock.NewTestClock(time.Unix(0, 0))

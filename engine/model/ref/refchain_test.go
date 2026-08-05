@@ -124,4 +124,13 @@ func TestPartitionedAppendOnly(t *testing.T) {
 			t.Fatalf("expected empty, got %v", entries)
 		}
 	})
+
+	// Err mirrors the single-partition chain: a reference is correct by
+	// construction and never latches a poisoned state.
+	t.Run("Err reports healthy", func(t *testing.T) {
+		t.Parallel()
+		if err := p.Err(); err != nil {
+			t.Fatalf("a reference chain never poisons, got: %v", err)
+		}
+	})
 }

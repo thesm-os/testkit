@@ -192,6 +192,29 @@ func TestContains(t *testing.T) {
 			t.Fatalf("should pass, got: %s", f.Msg())
 		}
 	})
+
+	t.Run("slice missing element fails", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Contains(f, []string{"a", "b"}, "z", "must contain")
+		if !f.Failed() {
+			t.Fatal("should fail for absent element")
+		}
+	})
+
+	// A haystack with no containment rule is a caller mistake, not a failed
+	// assertion, so the diagnostic names the offending type.
+	t.Run("unsupported haystack reports the type", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Contains(f, 42, 4, "must contain")
+		if !f.Failed() {
+			t.Fatal("should fail for an unsupported haystack")
+		}
+		if msg := f.Msg(); !strings.Contains(msg, "not supported") || !strings.Contains(msg, "int") {
+			t.Fatalf("message must name the unsupported type, got: %s", msg)
+		}
+	})
 }
 
 func TestNotContains(t *testing.T) {
@@ -212,6 +235,18 @@ func TestNotContains(t *testing.T) {
 		testkit.NotContains(f, "hello world", "world", "must not contain")
 		if !f.Failed() {
 			t.Fatal("should fail for contained substring")
+		}
+	})
+
+	t.Run("unsupported haystack reports the type", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.NotContains(f, 42, 4, "must not contain")
+		if !f.Failed() {
+			t.Fatal("should fail for an unsupported haystack")
+		}
+		if msg := f.Msg(); !strings.Contains(msg, "not supported") || !strings.Contains(msg, "int") {
+			t.Fatalf("message must name the unsupported type, got: %s", msg)
 		}
 	})
 }

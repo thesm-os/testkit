@@ -130,7 +130,7 @@ type Config[T any] struct {
 	// ArtifactDir overrides the directory for failure artifacts
 	// (Porcupine HTML, goroutine stacks). Resolved via:
 	// 1. This field (WithArtifactDir option)
-	// 2. .testkit.yml artifacts.dir
+	// 2. .testkit.yaml artifacts.dir
 	// 3. Fallback: .testkit/artifacts/
 	ArtifactDir string
 
@@ -450,7 +450,7 @@ func WithoutTrace[T any]() Option[T] {
 }
 
 // WithArtifactDir sets the directory for failure artifacts. Overrides
-// the .testkit.yml artifacts.dir setting and the default .testkit/artifacts/.
+// the .testkit.yaml artifacts.dir setting and the default .testkit/artifacts/.
 func WithArtifactDir[T any](dir string) Option[T] {
 	return func(c *Config[T]) { c.ArtifactDir = dir }
 }

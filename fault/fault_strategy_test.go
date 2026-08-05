@@ -332,3 +332,35 @@ func TestOrFault(t *testing.T) {
 		testkit.False(t, f1, "call 1 after reset must not fire")
 	})
 }
+
+// Reset exists on every strategy so a caller can rewind a stub without knowing
+// which strategy backs it. Only counter-based strategies have state to clear;
+// the rest must accept the call and stay armed.
+func TestResetIsANoOpForStatelessStrategies(t *testing.T) {
+	t.Parallel()
+
+	t.Run("probability fault stays armed", func(t *testing.T) {
+		t.Parallel()
+		f := fault.NewProbabilityFault[string](errors.New("boom"), 1.0, rand.FixedRandSource(0.999))
+		f.Reset()
+		fired, _ := f.ShouldFire("", nil)
+		testkit.True(t, fired, "p=1.0 must still fire after Reset")
+	})
+
+	t.Run("windowed fault keeps its deadline", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		f := fault.NewWindowedFault[string](errors.New("boom"), time.Unix(100, 0))
+		f.Reset()
+		fired, _ := f.ShouldFire("", clk)
+		testkit.True(t, fired, "must still fire before the deadline after Reset")
+	})
+
+	t.Run("predicate fault keeps its predicate", func(t *testing.T) {
+		t.Parallel()
+		f := fault.NewPredicateFault(errors.New("boom"), func(v string) bool { return v == "hit" })
+		f.Reset()
+		fired, _ := f.ShouldFire("hit", nil)
+		testkit.True(t, fired, "must still match the predicate after Reset")
+	})
+}

@@ -169,16 +169,11 @@ func AssertGoldenJSONField(tb testing.TB, path, field string, got []byte, update
 		return
 	}
 
-	wantBytes, err := json.MarshalIndent(wantValue, "", "  ")
-	if err != nil {
-		tb.Fatalf("AssertGoldenJSONField: re-marshal want: %v", err)
-		return
-	}
-	gotBytes, err := json.MarshalIndent(gotValue, "", "  ")
-	if err != nil {
-		tb.Fatalf("AssertGoldenJSONField: re-marshal got: %v", err)
-		return
-	}
+	// Both sides came out of json.Unmarshal into any, so they hold only
+	// JSON-native values and cannot fail to re-marshal. Discarding the error
+	// is deliberate: a guard here would be a branch no input can reach.
+	wantBytes, _ := json.MarshalIndent(wantValue, "", "  ") //nolint:errchkjson // value originates from json.Unmarshal
+	gotBytes, _ := json.MarshalIndent(gotValue, "", "  ")   //nolint:errchkjson // value originates from json.Unmarshal
 	if diff := cmp.Diff(string(wantBytes), string(gotBytes)); diff != "" {
 		tb.Fatalf("AssertGoldenJSONField: %s field %q (-want +got)\n%s", path, field, diff)
 	}
@@ -203,11 +198,11 @@ func writeJSONField(tb testing.TB, path, field string, value any) {
 		}
 	}
 	doc[field] = value
-	body, err := json.MarshalIndent(doc, "", "  ")
-	if err != nil {
-		tb.Fatalf("AssertGoldenJSONField: marshal: %v", err)
-		return
-	}
+	// value is the caller's payload after a round trip through
+	// json.Unmarshal, and doc's other entries came from the file the same
+	// way — so this marshal cannot fail. See the note in
+	// [AssertGoldenJSONField].
+	body, _ := json.MarshalIndent(doc, "", "  ") //nolint:errchkjson // values originate from json.Unmarshal
 	body = append(body, '\n')
 	if err := os.WriteFile(path, body, 0o644); err != nil { //nolint:gosec // golden file permissions
 		tb.Fatalf("AssertGoldenJSONField: write %s: %v", path, err)

@@ -6,6 +6,7 @@ package testkit_test
 import (
 	"errors"
 	"os"
+	"strings"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -118,6 +119,32 @@ func TestTempFile(t *testing.T) {
 			t.Fatalf("unexpected content: %q", data)
 		}
 	})
+}
+
+// tempDirTB gives a FailableTB the one method TempFile needs beyond the
+// embedded nil interface, so a write failure can be observed instead of
+// aborting the test that provokes it.
+type tempDirTB struct {
+	*testkit.FailableTB
+	dir string
+}
+
+func (d tempDirTB) TempDir() string { return d.dir }
+
+func TestTempFileWriteFailure(t *testing.T) {
+	t.Parallel()
+
+	// A name carrying a directory component that does not exist is the
+	// cheapest honest write failure — no permission games, no root needed.
+	tb := tempDirTB{FailableTB: testkit.NewFailableTB(), dir: t.TempDir()}
+	testkit.TempFile(tb, "missing-dir/config.json", []byte("{}"))
+
+	if !tb.Failed() {
+		t.Fatal("a write into a nonexistent directory must fail the test")
+	}
+	if got := tb.Msg(); !strings.Contains(got, "TempFile: write missing-dir/config.json") {
+		t.Fatalf("the diagnostic must name the file, got: %q", got)
+	}
 }
 
 func TestFreePort(t *testing.T) {

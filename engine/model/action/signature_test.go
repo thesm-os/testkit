@@ -13,6 +13,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/engine/model"
 	"go.thesmos.sh/testkit/engine/model/action"
 )
 
@@ -401,6 +402,141 @@ func TestVoidLifecycle(t *testing.T) {
 		})
 		if sutCalls == 0 || refCalls == 0 {
 			t.Fatalf("expected both sides called: sut=%d ref=%d", sutCalls, refCalls)
+		}
+	})
+}
+
+// Every signature action is a differential comparison, so the arm that matters
+// is the one where the subject and the reference disagree on whether the call
+// succeeded at all. Agreement — including agreeing to fail — is not a finding.
+func TestSignatureActionErrorDivergence(t *testing.T) {
+	t.Parallel()
+
+	type sig struct{ err error }
+	firstErr := func(t *testing.T, a model.Action[*sig], sut, ref sig) error {
+		t.Helper()
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			s, r := sut, ref
+			if res := a.Run(rt, &s, &r); got == nil {
+				got = res.Err
+			}
+		})
+		return got
+	}
+	boom := errors.New("unavailable")
+
+	t.Run("MultiReader", func(t *testing.T) {
+		t.Parallel()
+		a := action.MultiReader("Get", rapid.Just("k"),
+			func(_ context.Context, s *sig, _ string) (int, int, error) { return 0, 0, s.err })
+		if firstErr(t, a, sig{err: boom}, sig{}) == nil {
+			t.Fatal("one side failing is a divergence")
+		}
+		if firstErr(t, a, sig{err: boom}, sig{err: boom}) != nil {
+			t.Fatal("both sides failing is not a divergence")
+		}
+	})
+
+	t.Run("BatchReader", func(t *testing.T) {
+		t.Parallel()
+		a := action.BatchReader("GetAll", rapid.Just("k"),
+			func(_ context.Context, s *sig, _ ...string) ([]int, error) { return nil, s.err })
+		if firstErr(t, a, sig{err: boom}, sig{}) == nil {
+			t.Fatal("one side failing is a divergence")
+		}
+	})
+
+	t.Run("MultiArgWriter", func(t *testing.T) {
+		t.Parallel()
+		a := action.MultiArgWriter("Put", rapid.Just([]any{1, "x"}),
+			func(_ context.Context, s *sig, _ []any) error { return s.err })
+		if firstErr(t, a, sig{err: boom}, sig{}) == nil {
+			t.Fatal("one side failing is a divergence")
+		}
+	})
+
+	t.Run("MultiAggregator", func(t *testing.T) {
+		t.Parallel()
+		a := action.MultiAggregator("Stats",
+			func(_ context.Context, s *sig) (int, int, error) { return 0, 0, s.err })
+		if firstErr(t, a, sig{err: boom}, sig{}) == nil {
+			t.Fatal("one side failing is a divergence")
+		}
+	})
+
+	t.Run("StreamConsumer", func(t *testing.T) {
+		t.Parallel()
+		a := action.StreamConsumer("Consume",
+			func() int { return 1 },
+			func(_ context.Context, s *sig, _ int) (int, error) { return 0, s.err })
+		if firstErr(t, a, sig{err: boom}, sig{}) == nil {
+			t.Fatal("one side failing is a divergence")
+		}
+	})
+}
+
+// A multi-value reader must be compared on every return value: agreeing on the
+// first and diverging on the second is still a divergence, and a comparison
+// that stopped at V1 would miss it.
+func TestMultiValueActionsCompareEveryReturn(t *testing.T) {
+	t.Parallel()
+
+	type pair struct{ a, b int }
+	firstErr := func(t *testing.T, act model.Action[*pair], sut, ref pair) error {
+		t.Helper()
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			s, r := sut, ref
+			if res := act.Run(rt, &s, &r); got == nil {
+				got = res.Err
+			}
+		})
+		return got
+	}
+
+	t.Run("MultiReader flags a second-value divergence", func(t *testing.T) {
+		t.Parallel()
+		act := action.MultiReader("Get", rapid.Just("k"),
+			func(_ context.Context, p *pair, _ string) (int, int, error) { return p.a, p.b, nil })
+		err := firstErr(t, act, pair{a: 1, b: 2}, pair{a: 1, b: 9})
+		if err == nil || !strings.Contains(err.Error(), "V2") {
+			t.Fatalf("a divergence in the second value must be reported, got: %v", err)
+		}
+	})
+
+	t.Run("MultiAggregator flags a second-value divergence", func(t *testing.T) {
+		t.Parallel()
+		act := action.MultiAggregator("Stats",
+			func(_ context.Context, p *pair) (int, int, error) { return p.a, p.b, nil })
+		err := firstErr(t, act, pair{a: 1, b: 2}, pair{a: 1, b: 9})
+		if err == nil || !strings.Contains(err.Error(), "V2") {
+			t.Fatalf("a divergence in the second value must be reported, got: %v", err)
+		}
+	})
+
+	// Batch and stream shapes carry a slice-valued result, where a
+	// same-length-different-contents divergence is the easiest one to miss.
+	t.Run("BatchReader flags a payload divergence", func(t *testing.T) {
+		t.Parallel()
+		act := action.BatchReader("GetAll", rapid.Just("k"),
+			func(_ context.Context, p *pair, keys ...string) ([]int, error) {
+				return []int{p.a, p.b * len(keys)}, nil
+			})
+		err := firstErr(t, act, pair{a: 1, b: 2}, pair{a: 1, b: 9})
+		if err == nil || !strings.Contains(err.Error(), "disagree") {
+			t.Fatalf("a divergent batch payload must be reported, got: %v", err)
+		}
+	})
+
+	t.Run("StreamConsumer flags a payload divergence", func(t *testing.T) {
+		t.Parallel()
+		act := action.StreamConsumer("Consume",
+			func() int { return 3 },
+			func(_ context.Context, p *pair, in int) (int, error) { return p.b * in, nil })
+		err := firstErr(t, act, pair{a: 1, b: 2}, pair{a: 1, b: 9})
+		if err == nil || !strings.Contains(err.Error(), "disagree") {
+			t.Fatalf("a divergent stream result must be reported, got: %v", err)
 		}
 	})
 }

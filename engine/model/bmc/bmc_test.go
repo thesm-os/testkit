@@ -106,6 +106,43 @@ func TestRunSurfacesPlantedBug(t *testing.T) {
 		testkit.True(t, out.Violated(), "initial-state violation surfaced")
 		testkit.Equal(t, len(out.Counterexample), 0, "no actions yet")
 	})
+
+	// Once a counterexample exists the search must stop, not keep exploring
+	// the siblings of the violating branch. Putting the violating action
+	// before another one makes the abandoned sibling observable: a search
+	// that carried on would explore — and count — states beyond it.
+	t.Run("the search abandons siblings of the violating branch", func(t *testing.T) {
+		t.Parallel()
+		down := bmc.Action[counterState]{
+			Name:  "Down",
+			Apply: func(s counterState) (counterState, error) { return counterState{n: s.n - 1}, nil },
+		}
+		up := bmc.Action[counterState]{
+			Name:  "Up",
+			Apply: func(s counterState) (counterState, error) { return counterState{n: s.n + 1}, nil },
+		}
+		atLeastMinusOne := bmc.Invariant[counterState]{
+			Name: "at-least-minus-one",
+			Check: func(s counterState) error {
+				if s.n < -1 {
+					return bmc.Errorf("counter %d fell below -1", s.n)
+				}
+				return nil
+			},
+		}
+
+		out := bmc.Run(
+			counterState{n: 0},
+			[]bmc.Action[counterState]{down, up},
+			[]bmc.Invariant[counterState]{atLeastMinusOne},
+			bmc.Config[counterState]{Depth: 4},
+		)
+		testkit.True(t, out.Violated(), "two Downs must breach the floor")
+		testkit.Equal(t, out.Counterexample, []string{"Down", "Down"}, "shortest sequence")
+		// Depth 4 over two actions would reach 30 states if the search ran
+		// to completion; stopping at the first counterexample must not.
+		testkit.True(t, out.Explored < 10, "the search stopped at the counterexample")
+	})
 }
 
 func TestStateEquivalencePruning(t *testing.T) {

@@ -53,7 +53,6 @@ type AppendOnly[Entry any] struct {
 	entries []Entry
 	hashes  []ChainHash
 	hash    ChainHashFunc[Entry]
-	err     error
 }
 
 // NewAppendOnly creates an [AppendOnly] chain. If hash is nil, [DefaultChainHash]
@@ -69,9 +68,6 @@ func NewAppendOnly[Entry any](hash ChainHashFunc[Entry]) *AppendOnly[Entry] {
 func (c *AppendOnly[Entry]) Append(_ context.Context, e Entry) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.err != nil {
-		return c.err
-	}
 	var prev ChainHash
 	if len(c.hashes) > 0 {
 		prev = c.hashes[len(c.hashes)-1]
@@ -113,12 +109,17 @@ func (c *AppendOnly[Entry]) Verify(_ context.Context) error {
 	return nil
 }
 
-// Err returns the poison error, or nil if healthy.
-func (c *AppendOnly[Entry]) Err() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.err
-}
+// Err always reports healthy, and that is the contract rather than a stub.
+//
+// A reference implementation is correct by construction, so it never latches a
+// poisoned state. The method exists so the reference can stand opposite a
+// PoisonAccessor-shaped subject in [action.PoisonCheck], which compares the two
+// error states: a subject that poisons while the oracle does not is exactly the
+// divergence that check exists to surface.
+//
+// Integrity failures the chain can actually detect are reported by [Verify],
+// which recomputes the hash chain rather than reading a latched flag.
+func (*AppendOnly[Entry]) Err() error { return nil }
 
 // Len returns the number of entries in the chain.
 func (c *AppendOnly[Entry]) Len() int {

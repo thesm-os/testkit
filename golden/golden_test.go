@@ -417,3 +417,148 @@ func writeGolden(t *testing.T, name string, content []byte) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 }
+
+// The filesystem error paths are the ones a passing run never touches, and
+// they are exactly where a silent failure would be worst — a golden that
+// cannot be written must fail loudly, not appear to update.
+func TestGoldenFilesystemFailures(t *testing.T) { //nolint:paralleltest // golden file tests touch the filesystem
+	// A regular file where a directory needs to be: MkdirAll and WriteFile
+	// both fail against it.
+	blockedDir := func(t *testing.T) string {
+		t.Helper()
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		return filepath.Join(blocker, "sub", "golden.txt")
+	}
+
+	t.Run("AssertGoldenAt reports an unmakeable directory", func(t *testing.T) { //nolint:paralleltest // filesystem
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f, blockedDir(t), []byte("x"), true)
+		if !f.Failed() {
+			t.Fatal("an un-creatable directory must fail the assertion")
+		}
+		if !strings.Contains(f.Msg(), "mkdir") {
+			t.Fatalf("the diagnostic must name the failed step, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("AssertGoldenAt reports an unwritable file", func(t *testing.T) { //nolint:paralleltest // filesystem
+		dir := t.TempDir()
+		path := filepath.Join(dir, "sub")
+		if err := os.MkdirAll(path, 0o750); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		// path is a directory, so WriteFile against it fails.
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f, path, []byte("x"), true)
+		if !f.Failed() {
+			t.Fatal("writing over a directory must fail the assertion")
+		}
+	})
+
+	//nolint:paralleltest // filesystem
+	t.Run("AssertGoldenAt distinguishes missing from unreadable", func(t *testing.T) {
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f, filepath.Join(t.TempDir(), "absent.txt"), []byte("x"), false)
+		if !f.Failed() {
+			t.Fatal("a missing golden must fail")
+		}
+		if !strings.Contains(f.Msg(), "-update") {
+			t.Fatalf("a missing golden must tell the reader how to create it, got: %s", f.Msg())
+		}
+
+		// A directory read as a file is present but unreadable, which is a
+		// different diagnostic.
+		dir := t.TempDir()
+		f2 := testkit.NewFailableTB()
+		golden.AssertGoldenAt(f2, dir, []byte("x"), false)
+		if !f2.Failed() {
+			t.Fatal("an unreadable golden must fail")
+		}
+		if strings.Contains(f2.Msg(), "-update") {
+			t.Fatalf("an unreadable golden is not a missing one, got: %s", f2.Msg())
+		}
+	})
+
+	//nolint:paralleltest // filesystem
+	t.Run(
+		"AssertGoldenJSONField reports an unmakeable directory",
+		func(t *testing.T) {
+			f := testkit.NewFailableTB()
+			golden.AssertGoldenJSONField(f, blockedDir(t), "field", []byte(`{"a":1}`), true)
+			if !f.Failed() {
+				t.Fatal("an un-creatable directory must fail the assertion")
+			}
+		},
+	)
+
+	t.Run("AssertGoldenJSONField rejects a non-object golden", func(t *testing.T) { //nolint:paralleltest // filesystem
+		path := filepath.Join(t.TempDir(), "g.json")
+		if err := os.WriteFile(path, []byte(`["not an object"]`), 0o600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, path, "field", []byte(`{"a":1}`), true)
+		if !f.Failed() {
+			t.Fatal("a golden that is not a JSON object must fail")
+		}
+	})
+
+	// Updating one field must not disturb its siblings — that is the whole
+	// reason writeJSONField reads before it writes.
+	t.Run("AssertGoldenJSONField preserves sibling fields", func(t *testing.T) { //nolint:paralleltest // filesystem
+		path := filepath.Join(t.TempDir(), "g.json")
+		if err := os.WriteFile(path, []byte(`{"keep":"me"}`), 0o600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, path, "added", []byte(`{"a":1}`), true)
+		if f.Failed() {
+			t.Fatalf("the update must succeed: %s", f.Msg())
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if !strings.Contains(string(body), `"keep"`) {
+			t.Fatalf("sibling fields must survive an update, got: %s", body)
+		}
+		if !strings.Contains(string(body), `"added"`) {
+			t.Fatalf("the updated field must be present, got: %s", body)
+		}
+	})
+
+	t.Run("AssertGoldenJSONField reports a missing field", func(t *testing.T) { //nolint:paralleltest // filesystem
+		path := filepath.Join(t.TempDir(), "g.json")
+		if err := os.WriteFile(path, []byte(`{"other":1}`), 0o600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, path, "absent", []byte(`{"a":1}`), false)
+		if !f.Failed() {
+			t.Fatal("a golden missing the requested field must fail")
+		}
+		if !strings.Contains(f.Msg(), "-update") {
+			t.Fatalf("the diagnostic must say how to add it, got: %s", f.Msg())
+		}
+	})
+
+	// mkdir succeeds when the parent already exists, so an existing
+	// *directory* at the golden path is the only way past it to the write.
+	t.Run("AssertGoldenJSONField reports an unwritable golden", func(t *testing.T) { //nolint:paralleltest // filesystem
+		path := filepath.Join(t.TempDir(), "g.json")
+		if err := os.MkdirAll(path, 0o750); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		f := testkit.NewFailableTB()
+		golden.AssertGoldenJSONField(f, path, "field", []byte(`{"a":1}`), true)
+		if !f.Failed() {
+			t.Fatal("a golden path that cannot be written must fail the assertion")
+		}
+		if !strings.Contains(f.Msg(), "write") {
+			t.Fatalf("the diagnostic must name the failed step, got: %s", f.Msg())
+		}
+	})
+}

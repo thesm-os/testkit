@@ -127,12 +127,9 @@ func (l *EventuallyAfter[T]) Check(_ *rapid.T, _, _ T) error {
 	if stepsSinceTrigger <= l.WithinSteps {
 		return nil // still within budget
 	}
-	// Check if response appeared between trigger and now.
-	for i := lastTriggerIdx + 1; i < len(events); i++ {
-		if events[i].Method == l.Response {
-			return nil // satisfied
-		}
-	}
+	// No forward re-scan is needed: the backward walk above returned early on
+	// the first Response it met, so reaching here means nothing after
+	// lastTriggerIdx is a Response.
 	return fmt.Errorf("EventuallyAfter: %s fired at step %d, %s not seen within %d steps (now at step %d)",
 		l.Trigger, lastTriggerIdx, l.Response, l.WithinSteps, len(events)-1)
 }

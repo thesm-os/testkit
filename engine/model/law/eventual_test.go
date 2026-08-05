@@ -4,7 +4,9 @@
 package law_test
 
 import (
+	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -173,5 +175,159 @@ func TestEventualConvergence(t *testing.T) {
 				rt.Fatal("expected data-losing sync to be caught")
 			}
 		})
+	})
+}
+
+// CheckEventualConvergence compares each post-sync replica against the join of
+// the pre-sync states. Convergence on *less* than that join is the subtle
+// failure: every replica agrees, but writes were lost on the way.
+func TestCheckEventualConvergenceBranches(t *testing.T) {
+	t.Parallel()
+
+	union := func(a, b []int) []int {
+		seen := map[int]bool{}
+		var outv []int
+		for _, s := range [][]int{a, b} {
+			for _, v := range s {
+				if !seen[v] {
+					seen[v] = true
+					outv = append(outv, v)
+				}
+			}
+		}
+		slices.Sort(outv)
+		return outv
+	}
+
+	t.Run("mismatched replica counts are reported", func(t *testing.T) {
+		t.Parallel()
+		err := law.CheckEventualConvergence([][]int{{1}}, [][]int{{1}, {1}}, union, nil)
+		if err == nil {
+			t.Fatal("differing pre and post replica counts cannot be compared")
+		}
+		if !strings.Contains(err.Error(), "pre-sync") {
+			t.Fatalf("the diagnostic must name the mismatch, got: %v", err)
+		}
+	})
+
+	t.Run("no replicas converges trivially", func(t *testing.T) {
+		t.Parallel()
+		if err := law.CheckEventualConvergence(nil, nil, union, nil); err != nil {
+			t.Fatalf("an empty replica set cannot diverge: %v", err)
+		}
+	})
+
+	t.Run("converging on the join passes", func(t *testing.T) {
+		t.Parallel()
+		pre := [][]int{{1}, {2}}
+		post := [][]int{{1, 2}, {1, 2}}
+		if err := law.CheckEventualConvergence(pre, post, union, nil); err != nil {
+			t.Fatalf("replicas holding the join have converged: %v", err)
+		}
+	})
+
+	// Agreeing on a subset of the join is the lost-write case.
+	t.Run("converging on less than the join is a violation", func(t *testing.T) {
+		t.Parallel()
+		pre := [][]int{{1}, {2}}
+		post := [][]int{{1}, {1}} // agreed, but 2 was dropped
+		err := law.CheckEventualConvergence(pre, post, union, nil)
+		if err == nil {
+			t.Fatal("agreement that loses a write is not convergence")
+		}
+		if !strings.Contains(err.Error(), "replica 0") {
+			t.Fatalf("the diagnostic must identify the replica, got: %v", err)
+		}
+	})
+
+	// A supplied equality replaces the diff-based comparison, which changes
+	// the diagnostic but not the verdict.
+	t.Run("a supplied equality is used instead of cmp", func(t *testing.T) {
+		t.Parallel()
+		pre := [][]int{{1}, {2}}
+		post := [][]int{{9}, {9}}
+		lenient := func(a, b []int) bool { return true }
+		if err := law.CheckEventualConvergence(pre, post, union, lenient); err != nil {
+			t.Fatalf("a permissive equality must accept: %v", err)
+		}
+		strict := slices.Equal[[]int]
+		err := law.CheckEventualConvergence(pre, post, union, strict)
+		if err == nil {
+			t.Fatal("a strict equality must reject divergent replicas")
+		}
+		if strings.Contains(err.Error(), "-join +replica") {
+			t.Fatalf("a supplied equality skips the cmp diff, got: %v", err)
+		}
+	})
+}
+
+func TestEventualConvergencePreconditions(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("refused")
+
+	t.Run("a refused replica write is a precondition", func(t *testing.T) {
+		t.Parallel()
+		l := law.EventualConvergence[*syncReplica, string, []string]{
+			Factory:  func() *syncReplica { return newSyncReplica(false) },
+			Replicas: 3,
+			Write:    func(*rapid.T, *syncReplica, string) error { return boom },
+			Values:   rapid.SampledFrom([]string{"a", "b", "c"}),
+			Sync:     func(_ *rapid.T, rs []*syncReplica) error { unionSync(rs); return nil },
+			Snapshot: func(_ *rapid.T, r *syncReplica) []string { return r.snapshot() },
+			Merge:    mergeSorted,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a refused write is a precondition: %v", err)
+			}
+		})
+	})
+
+	// Anti-entropy that declines to run leaves nothing to converge; the law
+	// must not read that as divergence.
+	t.Run("a refused Sync is a precondition", func(t *testing.T) {
+		t.Parallel()
+		l := law.EventualConvergence[*syncReplica, string, []string]{
+			Factory:  func() *syncReplica { return newSyncReplica(false) },
+			Replicas: 3,
+			Write:    func(_ *rapid.T, r *syncReplica, v string) error { r.write(v); return nil },
+			Values:   rapid.SampledFrom([]string{"a", "b", "c"}),
+			Sync:     func(*rapid.T, []*syncReplica) error { return boom },
+			Snapshot: func(_ *rapid.T, r *syncReplica) []string { return r.snapshot() },
+			Merge:    mergeSorted,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a refused Sync is a precondition: %v", err)
+			}
+		})
+	})
+
+	// Replicas defaults to 3 rather than 0, or the law would sync an empty
+	// replica set and pass unconditionally.
+	t.Run("a non-positive replica count falls back to the default", func(t *testing.T) {
+		t.Parallel()
+		var widest int
+		l := law.EventualConvergence[*syncReplica, string, []string]{
+			Factory: func() *syncReplica { return newSyncReplica(false) },
+			Write:   func(_ *rapid.T, r *syncReplica, v string) error { r.write(v); return nil },
+			Values:  rapid.SampledFrom([]string{"a", "b", "c"}),
+			Sync: func(_ *rapid.T, rs []*syncReplica) error {
+				widest = max(widest, len(rs))
+				unionSync(rs)
+				return nil
+			},
+			Snapshot: func(_ *rapid.T, r *syncReplica) []string { return r.snapshot() },
+			Merge:    mergeSorted,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("converging replicas must pass: %v", err)
+			}
+		})
+		if widest != 3 {
+			t.Fatalf("Replicas=0 must fall back to 3, saw %d", widest)
+		}
 	})
 }

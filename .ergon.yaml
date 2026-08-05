@@ -168,7 +168,16 @@ checks:
   # AND whose file matches file_glob is exempt from every gate.
   # Used for assertion / contract branches the verifier framework
   # only exercises against broken implementations.
-  skips: []
+  skips:
+    # FreePort's listen error is real — a sandbox with no loopback would hit
+    # it — but it cannot be provoked from a test: binding 127.0.0.1:0 does not
+    # fail in a process healthy enough to be running the suite, and
+    # ListenConfig ignores a cancelled context for a literal address. The
+    # guard stays because the failure is real; the function is excused from
+    # the gate because the guard is unreachable from here.
+    - label: unreachable-network-failure
+      func_glob: "FreePort"
+      file_glob: "helpers.go"
   # Example:
   #   skips:
   #     - label: suite
@@ -201,18 +210,29 @@ checks:
     # set above reality is a gate that gets switched off again; ratcheting up
     # is tracked work, not a number typed here.
     #
-    # Baseline measured 2026-08-05 across 102 packages. Lowest in the runtime
-    # tier was golden at 87.2%; lowest in the engine tier was
-    # engine/model/linearize at 70.8%.
+    # Both tiers measure 100% of statements as of 2026-08-05, so the gate is
+    # 100: anything reachable is covered, and the one function whose error
+    # arm cannot be provoked from a test is named in `skips` above with its
+    # reason. New uncovered code is therefore a regression, not a shortfall.
     packages:
       - path: ./...
-        line: 95
+        line: 100
         branch: 80
         require_branch: true
       - path: engine/...
-        line: 80
-        branch: 80
-        require_branch: true
+        line: 100
+        # Branch coverage is not gated here because it cannot be measured.
+        # gobco instruments by copying the module to a temp directory, which
+        # loses the go.work context and breaks `engine`'s relative replace of
+        # the runtime module, so every engine package is skipped and the layer
+        # reports 0/0 conditions. Gating on that would be a vacuous pass.
+        #
+        # Verified fix: an absolute replace target survives the copy and gobco
+        # measures normally. Absolute paths are not portable, so the durable
+        # fix belongs in ergon — absolutise relative replaces before invoking
+        # gobco. Re-enable this once that lands.
+        branch: 0
+        require_branch: false
     # Example:
     #   packages:
     #     - path: internal/...

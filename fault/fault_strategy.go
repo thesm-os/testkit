@@ -30,6 +30,19 @@ type Fault[C any] interface {
 	Reset()
 }
 
+// stateless supplies the no-op Reset shared by strategies that hold no counter
+// state.
+//
+// [Fault.Reset]'s contract is "rewind counters, keep configuration". A strategy
+// whose decision comes entirely from its configuration — a probability, a
+// deadline, a predicate — has nothing to rewind, so Reset exists only to
+// satisfy the interface. Embedding one implementation states that intent once
+// instead of repeating an empty body per strategy.
+type stateless struct{}
+
+// Reset is a no-op: the embedding strategy holds no counter to rewind.
+func (stateless) Reset() {}
+
 // CountedFault fires on every Nth call, regardless of the call value or clock.
 // This is the strategy behind [MethodStub.Faults].
 type CountedFault[C any] struct {
@@ -102,6 +115,7 @@ func (f *RetryFault[C]) Reset() {
 // [RandSource] to generate random numbers. This is the strategy behind
 // [MethodStub.FaultsWithProbability].
 type ProbabilityFault[C any] struct {
+	stateless
 	err error
 	p   float64
 	src rand.Source
@@ -123,14 +137,12 @@ func (f *ProbabilityFault[C]) ShouldFire(_ C, _ clock.Clock) (bool, error) {
 	return false, nil
 }
 
-// Reset is a no-op — probabilistic faults have no counter state.
-func (*ProbabilityFault[C]) Reset() {}
-
 // WindowedFault fires until the clock advances past a deadline. This is the
 // strategy behind [MethodStub.FaultsUntil] and [MethodStub.FaultsFor].
 // The deadline is set at construction and never modified — no synchronization
 // needed.
 type WindowedFault[C any] struct {
+	stateless
 	err      error
 	deadline time.Time
 }
@@ -151,12 +163,10 @@ func (f *WindowedFault[C]) ShouldFire(_ C, clock clock.Clock) (bool, error) {
 	return false, nil
 }
 
-// Reset is a no-op — the deadline is the configuration, not a counter.
-func (*WindowedFault[C]) Reset() {}
-
 // PredicateFault fires when a predicate returns true for the call value.
 // This is the strategy behind [MethodStub.FaultsWhen].
 type PredicateFault[C any] struct {
+	stateless
 	err  error
 	pred func(C) bool
 }
@@ -174,9 +184,6 @@ func (f *PredicateFault[C]) ShouldFire(call C, _ clock.Clock) (bool, error) {
 	}
 	return false, nil
 }
-
-// Reset is a no-op — predicates have no mutable state.
-func (*PredicateFault[C]) Reset() {}
 
 // AndFault composes multiple [Fault] strategies with AND semantics — the
 // fault fires only when ALL inner strategies fire. The error from the first

@@ -69,6 +69,22 @@ func TestAfterEvery(t *testing.T) {
 			}
 		})
 	})
+
+	// The law runs after every action, including the very first one, when the
+	// trace is still empty and there is no "last event" to inspect.
+	t.Run("an empty trace has no last action to check", func(t *testing.T) {
+		t.Parallel()
+		l := &law.AfterEvery[int]{
+			ActionName: "Put",
+			Predicate:  func(*rapid.T, int, int) error { return errors.New("should not fire") },
+		}
+		l.BindTrace(trace.New())
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("nothing has run yet: %v", err)
+			}
+		})
+	})
 }
 
 func TestEventuallyAfter(t *testing.T) {
@@ -136,6 +152,28 @@ func TestEventuallyAfter(t *testing.T) {
 			err := l.Check(rt, 0, 0)
 			if err != nil {
 				rt.Fatalf("unexpected: %v", err)
+			}
+		})
+	})
+
+	// A trigger still inside its step budget is not yet a violation — the
+	// response is allowed to arrive on a later action.
+	t.Run("a trigger still within budget is not yet a violation", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		l := &law.EventuallyAfter[int]{
+			Trigger:     "Put",
+			Response:    "Sync",
+			WithinSteps: 3,
+		}
+		l.BindTrace(tr)
+
+		tr.Record(trace.Event{ClientID: -1, Method: "Put"})
+		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
+
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("one step into a three-step budget: %v", err)
 			}
 		})
 	})

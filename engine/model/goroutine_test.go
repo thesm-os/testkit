@@ -4,8 +4,10 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const sampleStack = `goroutine 1 [running]:
@@ -40,6 +42,20 @@ func TestSplitGoroutineStacks(t *testing.T) {
 			if _, ok := stacks[expected]; !ok {
 				t.Fatalf("missing goroutine ID %d", expected)
 			}
+		}
+	})
+
+	// Anything before the first "goroutine " header is preamble, not a
+	// section: a dump that has been trimmed at the front must not be read as
+	// an unnamed goroutine.
+	t.Run("leading text that is not a header is discarded", func(t *testing.T) {
+		t.Parallel()
+		stacks := splitGoroutineStacks([]byte("truncated preamble\ngoroutine 7 [running]:\nmain.f()\n"))
+		if len(stacks) != 1 {
+			t.Fatalf("expected only the real section, got %d", len(stacks))
+		}
+		if _, ok := stacks[7]; !ok {
+			t.Fatal("the section after the preamble must survive")
 		}
 	})
 }
@@ -84,4 +100,36 @@ func TestExtractStacksForIDs(t *testing.T) {
 			t.Fatalf("should not contain rapid frames: %s", out)
 		}
 	})
+}
+
+// leakReport captures what CheckGoroutineLeaks says without failing the test.
+type leakReport struct {
+	name   string
+	errorf []string
+}
+
+func (*leakReport) Helper()                     {}
+func (r *leakReport) Name() string              { return r.name }
+func (r *leakReport) Errorf(f string, a ...any) { r.errorf = append(r.errorf, fmt.Sprintf(f, a...)) }
+func (*leakReport) Logf(string, ...any)         {}
+
+// A goroutine that is genuinely still running but whose frames are all
+// framework code is noise, not a leak. This test lives in the internal
+// package precisely so its own goroutine looks like framework code — the
+// package prefix is on the filter list.
+//
+//nolint:paralleltest // goroutine leak detection requires exclusive goroutine control
+func TestCheckGoroutineLeaksFiltersFrameworkOnlyLeaks(t *testing.T) {
+	block := make(chan struct{})
+	t.Cleanup(func() { close(block) })
+
+	r := &leakReport{name: "framework-only"}
+	CheckGoroutineLeaks(r, "", func() {
+		go func() { <-block }() // still parked when the check samples
+		time.Sleep(20 * time.Millisecond)
+	})
+
+	if len(r.errorf) != 0 {
+		t.Fatalf("a framework-only goroutine must not be reported: %v", r.errorf)
+	}
 }

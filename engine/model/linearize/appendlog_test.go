@@ -10,6 +10,7 @@ import (
 	"github.com/anishathalye/porcupine"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/engine/model"
 	"go.thesmos.sh/testkit/engine/model/linearize"
 )
 
@@ -70,5 +71,92 @@ func TestAppendLog(t *testing.T) {
 		}
 		testkit.False(t, porcupine.CheckOperations(m, history),
 			"wrong Len should be rejected")
+	})
+}
+
+// A log's offsets are its contract: Append must return the index it wrote at,
+// so an implementation that returns a running total or a timestamp is a real
+// defect. These drive that plus the mis-typed and out-of-range arms.
+func TestAppendLogModelBranches(t *testing.T) {
+	t.Parallel()
+
+	m := linearize.AppendLog[string]()
+	in := func(name string, args any) model.OpInput { return model.OpInput{Name: name, Args: args} }
+	out := func(r any) model.OpOutput { return model.OpOutput{Result: r} }
+
+	t.Run("Append must return the index it wrote at", func(t *testing.T) {
+		t.Parallel()
+		ok, next := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		testkit.True(t, ok, "the first append lands at offset 0")
+		ok, _ = m.Step(next, in("Append", "b"), out(int64(1)))
+		testkit.True(t, ok, "the second append lands at offset 1")
+
+		ok, _ = m.Step(next, in("Append", "b"), out(int64(7)))
+		testkit.False(t, ok, "an offset that is not the current length is wrong")
+	})
+
+	t.Run("Append rejects mis-typed args and results", func(t *testing.T) {
+		t.Parallel()
+		ok, _ := m.Step(m.Init(), in("Append", 42), out(int64(0)))
+		testkit.False(t, ok, "the value must match the log's element type")
+		ok, _ = m.Step(m.Init(), in("Append", "a"), out("zero"))
+		testkit.False(t, ok, "the offset must be an int64")
+	})
+
+	t.Run("At returns the element at an in-range index", func(t *testing.T) {
+		t.Parallel()
+		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		ok, _ := m.Step(one, in("At", int64(0)), out(linearize.ReaderResult[string]{Value: "a"}))
+		testkit.True(t, ok, "index 0 holds the first appended value")
+		ok, _ = m.Step(one, in("At", int64(0)), out(linearize.ReaderResult[string]{Value: "z"}))
+		testkit.False(t, ok, "a different value at that index is wrong")
+	})
+
+	// Out-of-range reads must error rather than return a zero value, at both
+	// ends — a negative index is as invalid as one past the end.
+	t.Run("At out of range must error", func(t *testing.T) {
+		t.Parallel()
+		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		for _, idx := range []int64{-1, 5} {
+			ok, _ := m.Step(one, in("At", idx), out(linearize.ReaderResult[string]{Err: errors.New("range")}))
+			testkit.True(t, ok, "an out-of-range read errors")
+			ok, _ = m.Step(one, in("At", idx), out(linearize.ReaderResult[string]{Value: "a"}))
+			testkit.False(t, ok, "an out-of-range read must not succeed")
+		}
+	})
+
+	t.Run("At rejects mis-typed args and results", func(t *testing.T) {
+		t.Parallel()
+		ok, _ := m.Step(m.Init(), in("At", "zero"), out(linearize.ReaderResult[string]{}))
+		testkit.False(t, ok, "the index must be an int64")
+		ok, _ = m.Step(m.Init(), in("At", int64(0)), out("nonsense"))
+		testkit.False(t, ok, "the result must be a ReaderResult")
+	})
+
+	t.Run("Len reports the element count", func(t *testing.T) {
+		t.Parallel()
+		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		ok, _ := m.Step(one, in("Len", nil), out(int64(1)))
+		testkit.True(t, ok, "one element means length 1")
+		ok, _ = m.Step(one, in("Len", nil), out(int64(9)))
+		testkit.False(t, ok, "a wrong length is rejected")
+		ok, _ = m.Step(one, in("Len", nil), out("one"))
+		testkit.False(t, ok, "the length must be an int64")
+	})
+
+	t.Run("an unknown operation is rejected", func(t *testing.T) {
+		t.Parallel()
+		ok, _ := m.Step(m.Init(), in("Truncate", nil), out(int64(0)))
+		testkit.False(t, ok, "an unmodelled operation cannot be accepted")
+	})
+
+	t.Run("state helpers", func(t *testing.T) {
+		t.Parallel()
+		empty := m.Init()
+		_, one := m.Step(empty, in("Append", "a"), out(int64(0)))
+		testkit.True(t, m.Equal(empty, m.Init()), "two empty logs are equal")
+		testkit.False(t, m.Equal(empty, one), "contents are the state")
+		testkit.Equal(t, m.DescribeState(one), "len=1", "renders the length")
+		testkit.Contains(t, m.DescribeOperation(in("Append", "a"), out(int64(0))), "Append", "names the operation")
 	})
 }

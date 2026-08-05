@@ -106,4 +106,31 @@ func TestExactlyOnce(t *testing.T) {
 		got, _ := b.Drain(t.Context(), late)
 		testkit.Equal(t, got, []string{"caught"}, "late only sees post-subscribe")
 	})
+
+	// The exactly-once guarantee lives in Replay: a subscriber already
+	// holding the ID must not receive it a second time.
+	t.Run("Replay skips subscribers that already saw the ID", func(t *testing.T) {
+		t.Parallel()
+		b := ref.NewExactlyOnce[string]()
+		seenSub, err := b.Subscribe(t.Context())
+		testkit.NoError(t, err, "subscribe")
+
+		id, err := b.Publish(t.Context(), "m")
+		testkit.NoError(t, err, "publish")
+
+		// A subscriber that joined after the publish has not seen the ID,
+		// so the same Replay must deliver to it and skip the first.
+		lateSub, err := b.Subscribe(t.Context())
+		testkit.NoError(t, err, "late subscribe")
+
+		testkit.NoError(t, b.Replay(t.Context(), id, "m"), "replay")
+
+		got, err := b.Drain(t.Context(), seenSub)
+		testkit.NoError(t, err, "drain seen")
+		testkit.Equal(t, got, []string{"m"}, "the original subscriber keeps exactly one copy")
+
+		late, err := b.Drain(t.Context(), lateSub)
+		testkit.NoError(t, err, "drain late")
+		testkit.Equal(t, late, []string{"m"}, "the late subscriber receives the replay once")
+	})
 }

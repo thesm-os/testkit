@@ -57,4 +57,30 @@ func TestDeadlineRespecting(t *testing.T) {
 		// for the duration of the test (rapid suite isolation handles
 		// this naturally).
 	})
+
+	// AwaitFor ≤ 0 must not mean "wait no time at all", which would flag
+	// every compliant Op as ignoring its deadline.
+	t.Run("a non-positive await window falls back to the default", func(t *testing.T) {
+		t.Parallel()
+		l := timeaware.DeadlineRespecting[struct{}]{
+			Op: func(ctx context.Context, _ struct{}) error {
+				<-ctx.Done()
+				return ctx.Err()
+			},
+			Deadline: 50 * time.Millisecond,
+			Advance:  func(time.Duration) {},
+		}
+		if err := l.Check(nil, struct{}{}, struct{}{}); err != nil {
+			t.Fatalf("a compliant Op must pass under the default window: %v", err)
+		}
+	})
+
+	// The law's identity is load-bearing: the runner keys skips, ran/fired
+	// counters and REQ traceability off it.
+	t.Run("the law identifies itself", func(t *testing.T) {
+		t.Parallel()
+		var l timeaware.DeadlineRespecting[struct{}]
+		testkit.Equal(t, l.ID(), "AUTO-DEADLINE-RESPECTING", "stable law ID")
+		testkit.Equal(t, l.REQID(), "", "auto-derived laws carry no REQ tag")
+	})
 }

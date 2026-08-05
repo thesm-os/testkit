@@ -79,18 +79,10 @@ func (p *PartitionedAppendOnly[K, Entry]) Verify(ctx context.Context) error {
 	return nil
 }
 
-// Err returns the first poisoned partition's error (deterministic order), or nil.
-func (p *PartitionedAppendOnly[K, Entry]) Err() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	for _, k := range p.sortedKeys() {
-		err := p.chains[k].Err()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// Err always reports healthy, mirroring [AppendOnly.Err]: every partition is a
+// reference chain, and a reference is correct by construction. Per-partition
+// integrity is reported by [PartitionedAppendOnly.Verify].
+func (*PartitionedAppendOnly[K, Entry]) Err() error { return nil }
 
 // sortedKeys returns partition keys in deterministic order. Must be
 // called under p.mu.

@@ -80,11 +80,10 @@ func Lookup[T any](r *Registry) (*rapid.Generator[T], bool) {
 	if !ok {
 		return nil, false
 	}
-	hint, ok := h.(Hint[T])
-	if !ok {
-		return nil, false
-	}
-	return hint.Generator, true
+	// Register is the only writer and it keys every entry by
+	// reflect.TypeFor[T](), so the stored value's type is determined by the
+	// key. A mismatch would be a corrupted registry, not a lookup miss.
+	return h.(Hint[T]).Generator, true
 }
 
 // LookupByType returns the registered hint as an opaque [any] when

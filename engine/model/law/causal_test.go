@@ -103,6 +103,24 @@ func TestCheckCausalOrder(t *testing.T) {
 			t.Fatal("expected own-write causal violation")
 		}
 	})
+
+	// A version no write in the trace produced still enters the client's cut,
+	// or the session would be free to read backwards from it afterwards.
+	t.Run("a read of an unwritten version still raises the cut", func(t *testing.T) {
+		t.Parallel()
+		if err := law.CheckCausalOrder([]law.ClientEvent[string]{
+			cev(1, false, "z", 3), // no write of z@3 appears anywhere
+		}, hb); err != nil {
+			t.Fatalf("reading a version nobody wrote is not itself a violation: %v", err)
+		}
+
+		if err := law.CheckCausalOrder([]law.ClientEvent[string]{
+			cev(1, false, "z", 3),
+			cev(1, false, "z", 1), // went backwards from the unwritten version
+		}, hb); err == nil {
+			t.Fatal("the unwritten version must have entered the cut")
+		}
+	})
 }
 
 func TestCausalOrdering(t *testing.T) {
@@ -146,6 +164,28 @@ func TestCausalOrdering(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, struct{}{}, struct{}{}); err != nil {
 				rt.Fatal(err)
+			}
+		})
+	})
+
+	// A trace carries every recorded event, not just the ones this law can
+	// interpret; unclassifiable events must be skipped, not misread as reads.
+	t.Run("events Classify rejects are skipped", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(wr(1, "x", 1))
+		tr.Record(trace.Event{ClientID: 1, Method: "Ping"}) // no key, no version
+		tr.Record(wr(1, "y", 1))
+		tr.Record(rd(2, "y", 1))
+		tr.Record(rd(2, "x", 0)) // violation, reachable only if Ping was skipped
+		l := &law.CausalOrdering[struct{}, string]{
+			Classify:      clientClassify,
+			HappensBefore: hb,
+		}
+		l.BindTrace(tr)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, struct{}{}, struct{}{}); err == nil {
+				rt.Fatal("an uninterpretable event must not mask the violation after it")
 			}
 		})
 	})

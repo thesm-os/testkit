@@ -288,3 +288,122 @@ func TestTestClock(t *testing.T) {
 		}
 	})
 }
+
+// A virtual clock that dropped unfired waiters would silently lose scheduled
+// work — the exact failure mode a test clock exists to prevent.
+func TestTestClockWaiterLifecycle(t *testing.T) {
+	t.Parallel()
+
+	t.Run("advancing past one deadline leaves later waiters armed", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		soon := clk.After(1 * time.Second)
+		later := clk.After(10 * time.Second)
+
+		clk.Advance(2 * time.Second)
+
+		select {
+		case <-soon:
+		default:
+			t.Fatal("the elapsed waiter must have fired")
+		}
+		select {
+		case <-later:
+			t.Fatal("the future waiter must not have fired")
+		default:
+		}
+	})
+
+	t.Run("a retained waiter still fires once its deadline passes", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		later := clk.After(10 * time.Second)
+
+		clk.Advance(2 * time.Second)
+		clk.Advance(10 * time.Second)
+
+		select {
+		case <-later:
+		default:
+			t.Fatal("the retained waiter must fire after its deadline")
+		}
+	})
+}
+
+// Reset re-arms a timer against the current virtual now. A future deadline
+// goes back on the waiter list; a past one fires immediately.
+func TestTestTimerReset(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports whether the timer was pending", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		timer := clk.NewTimer(1 * time.Second)
+		testkit.True(t, timer.Reset(5*time.Second), "a pending timer reports active")
+	})
+
+	t.Run("a future deadline does not fire early", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		timer := clk.NewTimer(1 * time.Second)
+		timer.Reset(5 * time.Second)
+
+		clk.Advance(2 * time.Second)
+		select {
+		case <-timer.C():
+			t.Fatal("must not fire before the new deadline")
+		default:
+		}
+	})
+
+	t.Run("a future deadline fires once reached", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		timer := clk.NewTimer(1 * time.Second)
+		timer.Reset(5 * time.Second)
+
+		clk.Advance(6 * time.Second)
+		select {
+		case <-timer.C():
+		default:
+			t.Fatal("must fire once the new deadline passes")
+		}
+	})
+
+	// Reset on a fired-but-undrained timer must discard the stale value.
+	// The channel is buffered to one, so leaving it full would deadlock the
+	// next fire() while the clock lock is held.
+	t.Run("a stale buffered fire is discarded", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		timer := clk.NewTimer(1 * time.Second)
+		clk.Advance(2 * time.Second) // fires; nobody reads C()
+
+		testkit.False(t, timer.Reset(5*time.Second), "a fired timer is no longer pending")
+		select {
+		case <-timer.C():
+			t.Fatal("the stale value must be drained, not delivered")
+		default:
+		}
+
+		clk.Advance(6 * time.Second)
+		select {
+		case <-timer.C():
+		default:
+			t.Fatal("the reset timer must still fire on its new deadline")
+		}
+	})
+
+	t.Run("a non-positive deadline fires immediately", func(t *testing.T) {
+		t.Parallel()
+		clk := clock.NewTestClock(time.Unix(0, 0))
+		timer := clk.NewTimer(1 * time.Second)
+		timer.Reset(0)
+
+		select {
+		case <-timer.C():
+		default:
+			t.Fatal("Reset(0) leaves the deadline at now, which is already reached")
+		}
+	})
+}

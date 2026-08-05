@@ -18,12 +18,12 @@ func TestFormatFailurePerKind(t *testing.T) {
 		t.Parallel()
 		got := formatFailure(&Failure{
 			Kind:  FailureStructural,
-			LawID: "AUTO-HASH-CHAIN-INTEGRITY",
+			LawID: "AUTO-HASH-CHAIN-INTEGRITY-VERIFY",
 			Err:   errors.New("hash mismatch at entry 3"),
 		})
 		testkit.Assert(t, got).
 			Contains("[structural]", "kind header").
-			Contains("structural: AUTO-HASH-CHAIN-INTEGRITY", "per-kind line").
+			Contains("structural: AUTO-HASH-CHAIN-INTEGRITY-VERIFY", "per-kind line").
 			Contains("hash mismatch at entry 3", "error preserved")
 	})
 
@@ -208,6 +208,23 @@ func TestSuspectedBlocker(t *testing.T) {
 		{
 			name:      "empty stack returns empties",
 			stack:     "",
+			wantID:    "",
+			wantState: "",
+		},
+		{
+			// A truncated dump can end mid-header. Without brackets there is
+			// no state to read, so the line is skipped rather than guessed at.
+			name:      "a header with no state bracket is skipped",
+			stack:     "goroutine 3\ngoroutine 7 [chan receive]:\n",
+			wantID:    "7",
+			wantState: stateChanReceive,
+		},
+		{
+			// The ID is read up to the first space. A header with no space
+			// after the prefix has no delimited ID, so it is skipped even
+			// though its state is a blocking one.
+			name:      "a blocking header with no delimited ID is skipped",
+			stack:     "goroutine 5[select]:\n",
 			wantID:    "",
 			wantState: "",
 		},

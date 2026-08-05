@@ -57,4 +57,14 @@ func TestPureScheduler(t *testing.T) {
 		testkit.NoError(t, err, "empty")
 		testkit.Equal(t, len(out), 0, "empty result")
 	})
+
+	// With a single root the initial ready set never needs sorting; two
+	// independent roots are what make the tie-break observable at the start.
+	t.Run("independent roots are ordered by less", func(t *testing.T) {
+		t.Parallel()
+		s := ref.NewPureScheduler[string, string](stringLess, identity)
+		out, err := s.Schedule([]string{"c", "a", "b"}, nil)
+		testkit.NoError(t, err, "schedule")
+		testkit.Equal(t, out, []string{"a", "b", "c"}, "roots sort among themselves")
+	})
 }

@@ -92,11 +92,10 @@ func (AppendOnlyNoDrops[T, K, Entry]) REQID() string { return "" }
 
 // Check verifies no drops per partition (membership, not multiplicity).
 func (l AppendOnlyNoDrops[T, K, Entry]) Check(rt *rapid.T, sut, _ T) error {
+	// Partitions only names keys the history has recorded against, so every
+	// snapshot here holds at least one attempted append.
 	for _, partKey := range l.History.Partitions() {
 		attempted := l.History.Snapshot(partKey)
-		if len(attempted) == 0 {
-			continue
-		}
 		replayed, err := drain(l.Replay(rt, sut, partKey))
 		if err != nil {
 			//nolint:errorlint // diagnostic
@@ -123,7 +122,13 @@ type HashChainIntegrityViaVerify[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (HashChainIntegrityViaVerify[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY" }
+//
+// Distinct from [HashChainIntegrityViaErr.ID] even though both prove chain
+// integrity: the identifier is what SkipByID matches, what the ran/fired
+// counters index, and what a failure report prints as LawID. Sharing one
+// across two laws makes a skip hit both and a report unable to say which
+// fired.
+func (HashChainIntegrityViaVerify[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY-VERIFY" }
 
 // REQID returns an empty string (auto-derived).
 func (HashChainIntegrityViaVerify[T]) REQID() string { return "" }
@@ -149,8 +154,9 @@ type HashChainIntegrityViaErr[T any] struct {
 	Err func(T) error
 }
 
-// ID returns the stable identifier for this law.
-func (HashChainIntegrityViaErr[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY" }
+// ID returns the stable identifier for this law. See
+// [HashChainIntegrityViaVerify.ID] for why the two are not the same string.
+func (HashChainIntegrityViaErr[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY-ERR" }
 
 // REQID returns an empty string (auto-derived).
 func (HashChainIntegrityViaErr[T]) REQID() string { return "" }

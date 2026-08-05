@@ -102,4 +102,27 @@ func TestCompensatingSaga(t *testing.T) {
 		testkit.True(t, errors.Is(err, errStepBoom), "step error joined")
 		testkit.True(t, errors.Is(err, errCompBoom), "compensation error joined")
 	})
+
+	// A step with nothing to undo is legitimate — compensation must step over
+	// it rather than counting it as a compensation failure.
+	t.Run("a step without a compensator is skipped during rollback", func(t *testing.T) {
+		t.Parallel()
+		s := newSubject()
+		saga := ref.NewCompensatingSaga([]ref.SagaStep[*subject]{
+			stepRecord("a"),
+			{
+				Name: "b",
+				Run:  func(_ context.Context, s *subject) error { s.record("run-b"); return nil },
+			},
+			{
+				Name: "c",
+				Run:  func(context.Context, *subject) error { return errStepBoom },
+			},
+		})
+
+		err := saga.Run(t.Context(), s)
+		testkit.ErrorIs(t, err, errStepBoom, "the failing step surfaces")
+		testkit.Equal(t, s.trace, []string{"run-a", "run-b", "comp-a"},
+			"b has no compensator, so rollback goes straight to a")
+	})
 }

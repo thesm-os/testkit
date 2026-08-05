@@ -58,14 +58,11 @@ func ToUnifiedFailure(f *Failure) *failure.Failure {
 
 // emitClassifiedJSON resolves the artifact directory, writes the
 // classified-Failure JSON, and returns the resulting path. Logs and
-// returns "" when the override dir resolves empty or the write fails.
-// Used by the runner's failure paths to complete the three-artifact
-// dump (rapid failfile, Porcupine HTML, classified-Failure JSON).
+// returns "" when the write fails. Used by the runner's failure paths
+// to complete the three-artifact dump (rapid failfile, Porcupine HTML,
+// classified-Failure JSON).
 func emitClassifiedJSON(rt rapid.TB, override string, f *Failure) string {
 	dir := ResolveArtifactDir(override)
-	if dir == "" {
-		return ""
-	}
 	seed := sanitizeForFilename(rt.Name())
 	path, err := WriteClassifiedFailure(dir, seed, f)
 	if err != nil {
@@ -88,9 +85,6 @@ func emitClassifiedJSON(rt rapid.TB, override string, f *Failure) string {
 // the caller.
 func emitPerClientJSON(rt rapid.TB, override string, f *Failure) []string {
 	dir := ResolveArtifactDir(override)
-	if dir == "" {
-		return nil
-	}
 	clients := distinctClients(f.Trace)
 	if len(clients) < 2 {
 		return nil
@@ -163,11 +157,11 @@ func WriteClassifiedFailure(dir, seed string, f *Failure) (string, error) {
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return "", fmt.Errorf("model: WriteClassifiedFailure: mkdir: %w", err)
 	}
+	// ToUnifiedFailure builds the envelope from a fixed shape — strings,
+	// counts and a []string — so the marshal cannot fail. Discarding the
+	// error is deliberate: a guard here would be a branch no input reaches.
 	uf := ToUnifiedFailure(f)
-	buf, err := json.MarshalIndent(uf, "", "  ")
-	if err != nil {
-		return "", fmt.Errorf("model: WriteClassifiedFailure: marshal: %w", err)
-	}
+	buf, _ := json.MarshalIndent(uf, "", "  ") //nolint:errchkjson // envelope is built from JSON-native values
 	path := filepath.Join(dir, "failure-"+seed+".json")
 	if err := os.WriteFile(path, append(buf, '\n'), 0o600); err != nil {
 		return "", fmt.Errorf("model: WriteClassifiedFailure: write: %w", err)

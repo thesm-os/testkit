@@ -8,6 +8,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/engine/model"
@@ -479,6 +480,29 @@ func TestReaderWithBool(t *testing.T) {
 			}
 		})
 	})
+
+	// Agreeing on "found" while disagreeing on the value is the subtler
+	// divergence, and the one a bare ok-flag check would wave through.
+	t.Run("catches value mismatch when both report found", func(t *testing.T) {
+		t.Parallel()
+		sut := &simpleStore{emptyF: func() bool { return true }} // marker
+		ref := &simpleStore{}
+		a := action.ReaderWithBool(
+			"Get", rapid.Just("k"),
+			func(_ context.Context, s *simpleStore, _ string) (string, bool) {
+				if s.emptyF != nil {
+					return "WRONG", true
+				}
+				return "correct", true
+			},
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			result := a.Run(rt, sut, ref)
+			if result.Err == nil {
+				rt.Fatal("agreeing on ok is not agreeing on the value")
+			}
+		})
+	})
 }
 
 func TestLookup(t *testing.T) {
@@ -517,6 +541,45 @@ func TestLookup(t *testing.T) {
 			result := a.Run(rt, sut, ref)
 			if result.Err == nil {
 				rt.Fatal("should catch ok mismatch")
+			}
+		})
+	})
+
+	// R2 is only compared when the caller supplies options, because an
+	// uncomparable second return would otherwise panic cmp.Diff.
+	t.Run("R2 is compared only when cmpOpts are supplied", func(t *testing.T) {
+		t.Parallel()
+		sut := &simpleStore{emptyF: func() bool { return true }}
+		ref := &simpleStore{}
+		lookup := func(s *simpleStore, _ string) (string, int, bool) {
+			if s.emptyF != nil {
+				return "v", 1, true
+			}
+			return "v", 2, true
+		}
+
+		silent := action.Lookup("Inspect", rapid.Just("k"), lookup)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := silent.Run(rt, sut, ref).Err; err != nil {
+				rt.Fatalf("without cmpOpts R2 is not inspected: %v", err)
+			}
+		})
+
+		checked := action.Lookup("Inspect", rapid.Just("k"), lookup, cmp.AllowUnexported())
+		rapid.Check(t, func(rt *rapid.T) {
+			if checked.Run(rt, sut, ref).Err == nil {
+				rt.Fatal("with cmpOpts a divergent R2 must be reported")
+			}
+		})
+
+		agreeing := action.Lookup(
+			"Inspect", rapid.Just("k"),
+			func(*simpleStore, string) (string, int, bool) { return "v", 7, true },
+			cmp.AllowUnexported(),
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := agreeing.Run(rt, sut, ref).Err; err != nil {
+				rt.Fatalf("a matching R2 must pass the comparison: %v", err)
 			}
 		})
 	})

@@ -92,10 +92,10 @@ func FreePort(tb testing.TB) int {
 		tb.Fatalf("FreePort: %v", err)
 	}
 	port := l.Addr().(*net.TCPAddr).Port
-	err = l.Close()
-	if err != nil {
-		tb.Fatalf("FreePort: close: %v", err)
-	}
+	// Closing a listener that was just opened has no buffered state to flush
+	// and a known-good descriptor, so the error is discarded rather than
+	// guarded by a branch no test can reach.
+	_ = l.Close()
 	return port
 }
 

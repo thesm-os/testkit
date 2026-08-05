@@ -4,6 +4,7 @@
 package stub_test
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -441,6 +442,34 @@ func TestRecorderClockAwareWaiting(t *testing.T) {
 	})
 }
 
+// The virtual timer exists so a waiter parked on the cond variable still
+// wakes when the *clock* passes the deadline — real time never moves here.
+func TestRecorderVirtualTimerFires(t *testing.T) {
+	t.Parallel()
+
+	clk := clock.NewTestClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	rec := stub.NewRecorder[string]()
+	rec.WithClock(clk)
+
+	ft := testkit.NewFailableTB()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		rec.WaitForN(ft, 1, 10*time.Second)
+	}()
+
+	// Only advance once the waiter is parked; advancing first would leave
+	// WaitForN to observe an already-expired deadline and never arm a timer.
+	clk.AwaitWaiters(1)
+	clk.Advance(11 * time.Second)
+	<-done
+
+	testkit.True(t, ft.Failed(), "a deadline the clock has passed must time the wait out")
+	if got := ft.Msg(); !strings.Contains(got, "timed out waiting for 1 calls") {
+		t.Fatalf("the diagnostic must name the shortfall, got: %q", got)
+	}
+}
+
 func TestRecorder_concurrent_safety(t *testing.T) {
 	t.Parallel()
 
@@ -455,5 +484,25 @@ func TestRecorder_concurrent_safety(t *testing.T) {
 		}
 		wg.Wait()
 		testkit.Equal(t, rec.CallCount(), 100, "must record all concurrent calls")
+	})
+}
+
+// IsBenchMode lets generated benchmark harnesses confirm recording is off
+// before entering a hot loop, since a recording stub would allocate per call
+// and make the measurement meaningless.
+func TestRecorderIsBenchMode(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports false by default", func(t *testing.T) {
+		t.Parallel()
+		rec := stub.NewRecorder[string]()
+		testkit.False(t, rec.IsBenchMode(), "recording must be on by default")
+	})
+
+	t.Run("reports true once BenchMode is set", func(t *testing.T) {
+		t.Parallel()
+		rec := stub.NewRecorder[string]()
+		rec.BenchMode()
+		testkit.True(t, rec.IsBenchMode(), "must report bench mode after BenchMode")
 	})
 }

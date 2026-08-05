@@ -75,6 +75,20 @@ func TestSnapshotIsolationG0(t *testing.T) {
 			}
 		})
 	})
+
+	// Two committed transactions installing the same version of the same key
+	// leave the per-key version order with a tie, which the comparator has to
+	// resolve without inventing an edge in either direction.
+	t.Run("two writers at the same version leave no ww edge between them", func(t *testing.T) {
+		t.Parallel()
+		txns := []law.Txn[string]{
+			{ID: 1, Writes: []law.TxnOp[string]{top("x", 1)}},
+			{ID: 2, Writes: []law.TxnOp[string]{top("x", 1)}},
+		}
+		if err := law.CheckSIG0(txns); err != nil {
+			t.Fatalf("a version tie is not a write cycle: %v", err)
+		}
+	})
 }
 
 func TestSnapshotIsolationG1(t *testing.T) {

@@ -67,3 +67,28 @@ func TestOrderTracker(t *testing.T) {
 		testkit.False(t, ot.Called("Open"), "must be cleared after Reset")
 	})
 }
+
+// String is a debugging aid: when an ordering assertion fails, the tracker's
+// contents are what tell the reader which calls actually arrived.
+func TestOrderTrackerString(t *testing.T) {
+	t.Parallel()
+
+	t.Run("names every recorded method", func(t *testing.T) {
+		t.Parallel()
+		// strict=true: Record is a documented no-op in lenient mode, so a
+		// lenient tracker has nothing to render.
+		ot := stub.NewOrderTracker(t, true)
+		ot.Record("Open")
+		ot.Record("Close")
+		got := ot.String()
+		testkit.HasPrefix(t, got, "OrderTracker{", "must be identifiable in a dump")
+		testkit.Contains(t, got, "Open", "must name recorded methods")
+		testkit.Contains(t, got, "Close", "must name recorded methods")
+	})
+
+	t.Run("renders empty when nothing recorded", func(t *testing.T) {
+		t.Parallel()
+		ot := stub.NewOrderTracker(t, true)
+		testkit.HasPrefix(t, ot.String(), "OrderTracker{", "must render without panicking")
+	})
+}

@@ -69,4 +69,39 @@ func TestSnapshotIsolation(t *testing.T) {
 		err = tx.Rollback(t.Context())
 		testkit.True(t, errors.Is(err, ref.ErrTxClosed), "rollback after close errors")
 	})
+
+	// Read-your-own-writes is the buffer's reason to exist: a value written
+	// inside the transaction must be visible to that transaction alone.
+	t.Run("a transaction reads its own uncommitted write", func(t *testing.T) {
+		t.Parallel()
+		s := ref.NewSnapshotIsolation[string, int](errNotFound)
+		tx, err := s.Begin(t.Context())
+		testkit.NoError(t, err, "begin")
+
+		testkit.NoError(t, tx.Put(t.Context(), "k", 7), "put")
+
+		got, err := tx.Get(t.Context(), "k")
+		testkit.NoError(t, err, "the buffer answers before the snapshot")
+		testkit.Equal(t, got, 7, "the transaction sees its own write")
+
+		_, err = s.Get(t.Context(), "k")
+		testkit.ErrorIs(t, err, errNotFound, "the store sees nothing until commit")
+	})
+
+	// With nothing buffered, a read falls through to the snapshot taken at
+	// Begin — the isolation the type is named for.
+	t.Run("a transaction reads committed state from its snapshot", func(t *testing.T) {
+		t.Parallel()
+		s := ref.NewSnapshotIsolation[string, int](errNotFound)
+		seed, err := s.Begin(t.Context())
+		testkit.NoError(t, err, "begin")
+		testkit.NoError(t, seed.Put(t.Context(), "k", 1), "put")
+		testkit.NoError(t, seed.Commit(t.Context()), "commit")
+
+		tx, err := s.Begin(t.Context())
+		testkit.NoError(t, err, "begin")
+		got, err := tx.Get(t.Context(), "k")
+		testkit.NoError(t, err, "the snapshot answers when the buffer does not")
+		testkit.Equal(t, got, 1, "committed value visible through the snapshot")
+	})
 }

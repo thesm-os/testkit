@@ -103,6 +103,28 @@ func TestWriteWitness(t *testing.T) {
 		_, statErr := os.Stat(path)
 		testkit.NoError(t, statErr, "file exists")
 	})
+
+	// The witness is written from a failure path, so a filesystem problem has
+	// to surface as an error rather than a panic or a silent no-op.
+	t.Run("an unmakeable directory errors", func(t *testing.T) {
+		t.Parallel()
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		testkit.NoError(t, os.WriteFile(blocker, []byte("x"), 0o600), "setup")
+		_, err := shrinker.WriteWitness(filepath.Join(blocker, "sub"), "seed", w)
+		testkit.True(t, err != nil, "a directory that cannot be created is an error")
+		testkit.Assert(t, err.Error()).Contains("mkdir", "the failed step is named")
+	})
+
+	t.Run("an unwritable target errors", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		// A directory standing where the file belongs gets past mkdir and
+		// fails at the write.
+		testkit.NoError(t, os.MkdirAll(filepath.Join(dir, "witness-seed.txt"), 0o750), "setup")
+		_, err := shrinker.WriteWitness(dir, "seed", w)
+		testkit.True(t, err != nil, "a target that cannot be written is an error")
+		testkit.Assert(t, err.Error()).Contains("write", "the failed step is named")
+	})
 }
 
 func TestWitnessFromCausalHull(t *testing.T) {

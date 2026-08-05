@@ -5,6 +5,7 @@ package law_test
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -252,6 +253,140 @@ func TestSagaFullCompensation(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, s, s); err != nil {
 				rt.Fatal(err)
+			}
+		})
+	})
+}
+
+// The composite laws all assert that a resource, once finalised, rejects
+// further use with a specific sentinel. A subject that refuses the *setup*
+// has failed a precondition; one that accepts it and then allows the
+// forbidden follow-up has violated the law.
+func TestCompositeLawPreconditionsAndSentinels(t *testing.T) {
+	t.Parallel()
+
+	closed := errors.New("closed")
+
+	t.Run("CursorNextAfterCloseSentinel holds vacuously when Close is refused", func(t *testing.T) {
+		t.Parallel()
+		l := law.CursorNextAfterCloseSentinel[int, string]{
+			Close:    func(*rapid.T, int) error { return errors.New("busy") },
+			Next:     func(*rapid.T, int) (string, bool, error) { return "", false, closed },
+			Sentinel: closed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a cursor that cannot be closed is a precondition: %v", err)
+			}
+		})
+	})
+
+	t.Run("CursorNextAfterCloseSentinel flags a cursor that keeps yielding", func(t *testing.T) {
+		t.Parallel()
+		l := law.CursorNextAfterCloseSentinel[int, string]{
+			Close:    func(*rapid.T, int) error { return nil },
+			Next:     func(*rapid.T, int) (string, bool, error) { return "still here", true, nil },
+			Sentinel: closed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err == nil {
+				rt.Fatal("a closed cursor must not keep producing values")
+			}
+		})
+	})
+
+	t.Run("TwoPhaseNoRollbackAfterCommit separates its preconditions", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			noBegin := law.TwoPhaseNoRollbackAfterCommit[int, int]{
+				Begin:    func(*rapid.T, int) (int, error) { return 0, errors.New("no tx") },
+				Commit:   func(*rapid.T, int, int) error { return nil },
+				Rollback: func(*rapid.T, int, int) error { return closed },
+				Closed:   closed,
+			}
+			if err := noBegin.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a refused Begin is a precondition: %v", err)
+			}
+
+			noCommit := noBegin
+			noCommit.Begin = func(*rapid.T, int) (int, error) { return 0, nil }
+			noCommit.Commit = func(*rapid.T, int, int) error { return errors.New("conflict") }
+			if err := noCommit.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a refused Commit is a precondition: %v", err)
+			}
+		})
+	})
+
+	t.Run("TwoPhaseNoRollbackAfterCommit flags an accepted rollback", func(t *testing.T) {
+		t.Parallel()
+		l := law.TwoPhaseNoRollbackAfterCommit[int, int]{
+			Begin:    func(*rapid.T, int) (int, error) { return 0, nil },
+			Commit:   func(*rapid.T, int, int) error { return nil },
+			Rollback: func(*rapid.T, int, int) error { return nil }, // wrongly succeeds
+			Closed:   closed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err == nil {
+				rt.Fatal("rolling back a committed transaction must be rejected")
+			}
+		})
+	})
+
+	// Which terminal operation runs first is drawn, so the law must reject the
+	// *other* one whichever way the draw went — and the diagnostic has to name
+	// the pair correctly.
+	t.Run("TwoPhaseCommitOrRollback rejects the second terminal operation", func(t *testing.T) {
+		t.Parallel()
+		l := law.TwoPhaseCommitOrRollback[int, int]{
+			Begin:    func(*rapid.T, int) (int, error) { return 0, nil },
+			Commit:   func(*rapid.T, int, int) error { return nil },
+			Rollback: func(*rapid.T, int, int) error { return nil }, // neither closes the tx
+			Closed:   closed,
+		}
+		seen := map[string]bool{}
+		rapid.Check(t, func(rt *rapid.T) {
+			err := l.Check(rt, 0, 0)
+			if err == nil {
+				rt.Fatal("a transaction must accept only one terminal operation")
+			}
+			switch {
+			case strings.Contains(err.Error(), "commit after rollback"):
+				seen["commit-after-rollback"] = true
+			case strings.Contains(err.Error(), "rollback after commit"):
+				seen["rollback-after-commit"] = true
+			}
+		})
+		if len(seen) < 2 {
+			t.Fatalf("both draw orders must be exercised, saw %v", seen)
+		}
+	})
+
+	t.Run("TwoPhaseCommitOrRollback holds vacuously when the first op fails", func(t *testing.T) {
+		t.Parallel()
+		l := law.TwoPhaseCommitOrRollback[int, int]{
+			Begin:    func(*rapid.T, int) (int, error) { return 0, nil },
+			Commit:   func(*rapid.T, int, int) error { return errors.New("conflict") },
+			Rollback: func(*rapid.T, int, int) error { return errors.New("conflict") },
+			Closed:   closed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a failed first terminal op is a precondition: %v", err)
+			}
+		})
+	})
+
+	t.Run("TwoPhaseCommitOrRollback holds vacuously when Begin is refused", func(t *testing.T) {
+		t.Parallel()
+		l := law.TwoPhaseCommitOrRollback[int, int]{
+			Begin:    func(*rapid.T, int) (int, error) { return 0, errors.New("no transactions") },
+			Commit:   func(*rapid.T, int, int) error { return nil },
+			Rollback: func(*rapid.T, int, int) error { return nil },
+			Closed:   closed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a subject that cannot begin a transaction is a precondition: %v", err)
 			}
 		})
 	})

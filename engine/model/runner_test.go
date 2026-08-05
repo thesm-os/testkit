@@ -9,16 +9,19 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/core/coverage"
 	"go.thesmos.sh/testkit/core/failure"
 	"go.thesmos.sh/testkit/engine/model"
 	"go.thesmos.sh/testkit/engine/model/action"
 	"go.thesmos.sh/testkit/engine/model/law"
+	"go.thesmos.sh/testkit/engine/model/linearize"
 	"go.thesmos.sh/testkit/engine/model/ref"
 )
 
@@ -565,4 +568,239 @@ func TestFailureEmitsClassifiedJSON(t *testing.T) {
 	testkit.NoError(t, json.Unmarshal(body, &uf), "unmarshal")
 	testkit.Equal(t, uf.Generator, "model", "generator tag")
 	testkit.Equal(t, uf.Kind, failure.KindInvariant, "kind")
+}
+
+// The runner has three dispatch paths the law-failure tests never reach: a
+// diverging *action* (as opposed to a law), a law that wants the per-iteration
+// trace bound to it, and a law that wants the step index. Each is a distinct
+// branch in the property body.
+func TestRunnerActionAndLawDispatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a diverging action fails with its own kind and artifact", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			model.Assert(
+				ft,
+				func() storeIface { return &brokenGetStore{store: *newStore()} },
+				model.WithReference(func() storeIface { return newStore() }),
+				model.WithActions(
+					action.Writer("Put", itemGen, storePut),
+					// Get diverges: the broken subject answers differently
+					// from the reference, and the action itself reports it.
+					action.Reader("Get", rapid.Just("a"), storeGet),
+				),
+				model.WithArtifactDir[storeIface](dir),
+			)
+		}()
+		<-done
+
+		if !ft.Failed() {
+			t.Fatal("a diverging Get must be reported by the action, not only by a law")
+		}
+		matches, err := filepath.Glob(filepath.Join(dir, "failure-*.json"))
+		testkit.NoError(t, err, "glob")
+		if len(matches) == 0 {
+			t.Fatalf("an action failure must dump its classified JSON in %s", dir)
+		}
+		body, err := os.ReadFile(matches[0])
+		testkit.NoError(t, err, "read JSON")
+		var uf failure.Failure
+		testkit.NoError(t, json.Unmarshal(body, &uf), "unmarshal")
+		testkit.Equal(t, uf.Kind, failure.KindSemantic, "an action divergence is semantic")
+		if uf.Details["law_id"] != "" {
+			t.Fatalf("no law fired, so none should be named: %v", uf.Details["law_id"])
+		}
+	})
+
+	// A trace combinator is inert until the runner hands it the iteration's
+	// trace; without the bind it would inspect a nil buffer.
+	t.Run("a trace-binding law receives the iteration trace", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		var seen int
+		go func() {
+			defer close(done)
+			model.Assert(
+				ft,
+				func() storeIface { return newStore() },
+				model.WithReference(func() storeIface { return newStore() }),
+				model.WithActions(action.Writer("Put", itemGen, storePut)),
+				model.WithLaw(&law.AfterEvery[storeIface]{
+					ActionName: "Put",
+					Predicate: func(*rapid.T, storeIface, storeIface) error {
+						seen++
+						return nil
+					},
+				}),
+			)
+		}()
+		<-done
+
+		if ft.Failed() {
+			t.Fatalf("a satisfied combinator must not fail: %s", ft.Msg())
+		}
+		if seen == 0 {
+			t.Fatal("the predicate never ran, so the trace was never bound")
+		}
+	})
+
+	// A stateful law is called through CheckWithStep so it can tell the
+	// first action of an iteration from a later one.
+	t.Run("a stateful law receives the step index", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		steps := make(chan int, 1024)
+		go func() {
+			defer close(done)
+			model.Assert(
+				ft,
+				func() storeIface { return newStore() },
+				model.WithReference(func() storeIface { return newStore() }),
+				model.WithActions(action.Writer("Put", itemGen, storePut)),
+				model.WithLaw(&stepRecordingLaw{steps: steps}),
+			)
+		}()
+		<-done
+
+		if ft.Failed() {
+			t.Fatalf("the recording law never fails: %s", ft.Msg())
+		}
+		close(steps)
+		var sawZero, sawLater bool
+		for s := range steps {
+			switch {
+			case s == 0:
+				sawZero = true
+			case s > 0:
+				sawLater = true
+			}
+		}
+		if !sawZero || !sawLater {
+			t.Fatalf("the law must see the step advance (zero=%v later=%v)", sawZero, sawLater)
+		}
+	})
+}
+
+// stepRecordingLaw records the step index the runner supplies. It exists to
+// prove the StatefulLaw dispatch is taken rather than the plain Check.
+type stepRecordingLaw struct {
+	steps chan int
+}
+
+func (*stepRecordingLaw) ID() string    { return "TEST-STEP-RECORDING" }
+func (*stepRecordingLaw) REQID() string { return "" }
+
+func (l *stepRecordingLaw) Check(rt *rapid.T, sut, ref storeIface) error {
+	return l.CheckWithStep(rt, sut, ref, -1)
+}
+
+func (l *stepRecordingLaw) CheckWithStep(_ *rapid.T, _, _ storeIface, step int) error {
+	select {
+	case l.steps <- step:
+	default: // the channel is only a sample; a full one is not a failure
+	}
+	return nil
+}
+
+// A misconfigured run must fail loudly at the point of misuse rather than
+// quietly doing nothing — a runner with no subject or no actions would
+// otherwise pass every property vacuously.
+func TestRunnerConfigValidation(t *testing.T) {
+	t.Parallel()
+
+	runToFailure := func(t *testing.T, fn func(*testkit.FailableTB)) *testkit.FailableTB {
+		t.Helper()
+		ft := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			fn(ft)
+		}()
+		<-done
+		return ft
+	}
+
+	t.Run("a missing SUT factory is rejected", func(t *testing.T) {
+		t.Parallel()
+		ft := runToFailure(t, func(ft *testkit.FailableTB) {
+			model.Assert(ft, (func() storeIface)(nil),
+				model.WithActions(action.Reader("Get", keyGen, storeGet)))
+		})
+		if !ft.Failed() {
+			t.Fatal("a run with no subject must fail")
+		}
+		if !strings.Contains(ft.Msg(), "SUTFactory") {
+			t.Fatalf("the diagnostic must name what is missing, got: %s", ft.Msg())
+		}
+	})
+
+	t.Run("a run with no actions is rejected", func(t *testing.T) {
+		t.Parallel()
+		ft := runToFailure(t, func(ft *testkit.FailableTB) {
+			model.Assert(ft, func() storeIface { return newStore() })
+		})
+		if !ft.Failed() {
+			t.Fatal("a run with no actions must fail")
+		}
+		if !strings.Contains(ft.Msg(), "Action") {
+			t.Fatalf("the diagnostic must name what is missing, got: %s", ft.Msg())
+		}
+	})
+
+	// Laws compare SUT against a reference after each action; the concurrent
+	// runner has neither a reference nor an after-every-action boundary, so
+	// combining them is rejected rather than silently dropping the laws.
+	t.Run("laws combined with concurrent are rejected", func(t *testing.T) {
+		t.Parallel()
+		ft := runToFailure(t, func(ft *testkit.FailableTB) {
+			model.Assert(ft, func() storeIface { return newStore() },
+				model.WithLaw[storeIface](law.PureDeterminism[storeIface, item]{
+					Call: func(rt *rapid.T, s storeIface) item {
+						v, _ := storeGet(rt.Context(), s, "k")
+						return v
+					},
+				}),
+				model.WithConcurrent(model.ConcurrentConfig[storeIface]{
+					Model: linearize.KV[string, item](errNotFound),
+					Actions: []model.ConcurrentAction[storeIface]{
+						linearize.ConcurrentReader("Get", keyGen, storeGet),
+					},
+				}),
+			)
+		})
+		if !ft.Failed() {
+			t.Fatal("laws plus concurrent must be rejected, not silently dropped")
+		}
+		if !strings.Contains(ft.Msg(), "Laws are unsupported with Concurrent") {
+			t.Fatalf("the diagnostic must explain the incompatibility, got: %s", ft.Msg())
+		}
+	})
+}
+
+// WithSaturationThreshold is a plain setter, but it gates whether the runner
+// tracks the state space at all — a zero threshold selects the default rather
+// than disabling tracking.
+func TestWithSaturationThreshold(t *testing.T) {
+	t.Parallel()
+
+	var cov coverage.ComponentCoverage
+	model.Assert(
+		t,
+		func() storeIface { return newStore() },
+		model.WithReference(func() storeIface { return newStore() }),
+		model.WithActions(action.Reader("Get", keyGen, storeGet)),
+		model.WithSaturationThreshold[storeIface](5),
+		model.WithStateHash[storeIface](hashStore),
+		model.WithCoverageSink[storeIface](&cov),
+	)
+	if cov.StateSpace.Explored < 1 {
+		t.Fatal("a configured state hash must produce state-space coverage")
+	}
 }

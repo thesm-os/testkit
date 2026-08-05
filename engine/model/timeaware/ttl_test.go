@@ -5,6 +5,7 @@ package timeaware_test
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -116,5 +117,116 @@ func TestTTLExpiryAfterAdvance(t *testing.T) {
 				rt.Fatal("expected expiry violation")
 			}
 		})
+	})
+}
+
+// TTL expiry has three outcomes the law must keep apart: a refused write is a
+// precondition, an entry unreadable *before* the advance means the subject
+// never stored it, and an entry still readable *after* the advance is the
+// expiry failure.
+func TestTTLExpiryAfterAdvanceBranches(t *testing.T) {
+	t.Parallel()
+
+	notFound := errors.New("not found")
+	type store struct {
+		data    map[string]string
+		putErr  error
+		expired bool
+		noStore bool
+	}
+	mk := func(s *store, ttl time.Duration) timeaware.TTLExpiryAfterAdvance[*store, string, string] {
+		return timeaware.TTLExpiryAfterAdvance[*store, string, string]{
+			Put: func(_ *rapid.T, x *store, k, v string) error {
+				if x.putErr != nil {
+					return x.putErr
+				}
+				if !x.noStore {
+					x.data[k] = v
+				}
+				return nil
+			},
+			Read: func(_ *rapid.T, x *store, k string) (string, error) {
+				if x.expired {
+					return "", notFound
+				}
+				v, ok := x.data[k]
+				if !ok {
+					return "", notFound
+				}
+				return v, nil
+			},
+			Keys:     rapid.Just("k"),
+			Values:   rapid.Just("v"),
+			TTL:      ttl,
+			NotFound: notFound,
+			Advance:  func(time.Duration) { s.expired = true },
+		}
+	}
+	fresh := func() *store { return &store{data: map[string]string{}} }
+
+	t.Run("an entry that expires passes", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := fresh()
+			if err := mk(s, time.Second).Check(rt, s, s); err != nil {
+				rt.Fatalf("an entry that expires on schedule must pass: %v", err)
+			}
+		})
+	})
+
+	t.Run("a refused Put holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := fresh()
+			s.putErr = errors.New("read-only")
+			if err := mk(s, time.Second).Check(rt, s, s); err != nil {
+				rt.Fatalf("a refused write is a precondition: %v", err)
+			}
+		})
+	})
+
+	// A store that accepted the write but cannot read it back has a bug that
+	// has nothing to do with TTL, and the law says so rather than blaming
+	// expiry.
+	t.Run("an entry unreadable before the advance is a violation", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := fresh()
+			s.noStore = true
+			err := mk(s, time.Second).Check(rt, s, s)
+			if err == nil {
+				rt.Fatal("a stored entry must be readable before its TTL elapses")
+			}
+			if !strings.Contains(err.Error(), "pre-advance") {
+				rt.Fatalf("the diagnostic must locate the failure, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("an entry that outlives its TTL is a violation", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := fresh()
+			l := mk(s, time.Second)
+			l.Advance = func(time.Duration) {} // clock moves, entry does not expire
+			err := l.Check(rt, s, s)
+			if err == nil {
+				rt.Fatal("an entry readable past its TTL is a violation")
+			}
+			if !strings.Contains(err.Error(), "post-advance") {
+				rt.Fatalf("the diagnostic must locate the failure, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("identity", func(t *testing.T) {
+		t.Parallel()
+		var l timeaware.TTLExpiryAfterAdvance[*store, string, string]
+		if l.ID() != "AUTO-TTL-EXPIRY" {
+			t.Fatalf("unexpected law ID %q", l.ID())
+		}
+		if l.REQID() != "" {
+			t.Fatalf("auto-derived laws carry no REQ tag, got %q", l.REQID())
+		}
 	})
 }

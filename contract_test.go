@@ -130,4 +130,26 @@ func TestContract(t *testing.T) {
 		c.End()
 		testkit.False(t, b.failed, "generous ceiling must pass")
 	})
+
+	// The alloc ceiling is the whole point of the contract: a loop body that
+	// allocates on every iteration must not slip past AllocsMax(0).
+	t.Run("alloc violation fatals", func(t *testing.T) {
+		t.Parallel()
+		b := newStubBench(64)
+		c := testkit.StartContract(b).AllocsMax(0)
+		for c.Loop() {
+			// The sink defeats escape analysis, so the allocation is real
+			// and lands in MemStats.Mallocs.
+			allocSink = make([]byte, 64) //nolint:gosec // forcing an allocation is the point
+		}
+		c.End()
+		testkit.True(t, b.failed, "an allocating loop must violate AllocsMax(0)")
+		if !strings.Contains(b.msg, "allocation contract violated") {
+			t.Fatalf("the diagnostic must name the ceiling, got: %s", b.msg)
+		}
+	})
 }
+
+// allocSink keeps loop-body allocations alive so escape analysis cannot
+// stack-allocate them out of the benchmark's MemStats delta.
+var allocSink []byte

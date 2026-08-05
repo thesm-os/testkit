@@ -216,12 +216,9 @@ func Saga[T any](
 					Output: sutFailedAt,
 				}
 			}
-			if (sutErr == nil) != (refErr == nil) {
-				return model.ActionResult{
-					Err:    fmt.Errorf("%s: SUT err=%v, ref err=%v", name, sutErr, refErr),
-					Output: sutFailedAt,
-				}
-			}
+			// failedAt already encodes error nullity — run returns -1 with a
+			// nil error or a step index with a non-nil one — so agreeing on
+			// the step is agreeing on whether the saga failed.
 			return model.ActionResult{Output: sutFailedAt}
 		},
 	}

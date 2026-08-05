@@ -199,3 +199,109 @@ func TestEmitPerClientJSON(t *testing.T) {
 		testkit.Equal(t, uf.Details["trace_events"].(float64), 2.0, "two events for client0")
 	})
 }
+
+// The artifact writers must never turn a test failure into a worse one: when
+// the directory cannot be written, they log and return empty rather than
+// erroring out of the failure path they were called from.
+func TestClassifiedJSONWriteFailures(t *testing.T) {
+	t.Parallel()
+
+	// A regular file where a directory belongs makes MkdirAll fail.
+	blocked := func(t *testing.T) string {
+		t.Helper()
+		blocker := filepath.Join(t.TempDir(), "blocker")
+		if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		return filepath.Join(blocker, "sub")
+	}
+
+	t.Run("WriteClassifiedFailure rejects an empty dir", func(t *testing.T) {
+		t.Parallel()
+		_, err := WriteClassifiedFailure("", "seed", &Failure{Kind: FailureSemantic})
+		if err == nil {
+			t.Fatal("an empty directory is a caller error, not a silent no-op")
+		}
+	})
+
+	t.Run("WriteClassifiedFailure defaults an empty seed", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		path, err := WriteClassifiedFailure(dir, "", &Failure{Kind: FailureSemantic})
+		if err != nil {
+			t.Fatalf("an unnamed failure must still be written: %v", err)
+		}
+		if !strings.Contains(filepath.Base(path), "classified") {
+			t.Fatalf("the default seed must appear in the filename, got %s", path)
+		}
+	})
+
+	t.Run("WriteClassifiedFailure reports an unmakeable dir", func(t *testing.T) {
+		t.Parallel()
+		if _, err := WriteClassifiedFailure(blocked(t), "seed", &Failure{}); err == nil {
+			t.Fatal("an un-creatable directory must be reported")
+		}
+	})
+
+	t.Run("emitClassifiedJSON logs and returns empty on write failure", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithName("emit")
+		got := emitClassifiedJSON(ft, blocked(t), &Failure{Kind: FailureSemantic})
+		if got != "" {
+			t.Fatalf("a failed write must yield no path, got %s", got)
+		}
+		if len(ft.Logs()) == 0 {
+			t.Fatal("the failure must be logged rather than swallowed")
+		}
+		if ft.Failed() {
+			t.Fatal("an artifact write failure must not fail the test itself")
+		}
+	})
+
+	t.Run("emitClassifiedJSON returns the path on success", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithName("ok")
+		got := emitClassifiedJSON(ft, t.TempDir(), &Failure{Kind: FailureSemantic})
+		if got == "" {
+			t.Fatal("a successful write must return its path")
+		}
+	})
+
+	// One unwritable client must not abort the others: a partial artifact set
+	// is more useful than none.
+	t.Run("emitPerClientJSON logs per-client write failures", func(t *testing.T) {
+		t.Parallel()
+		ft := testkit.NewFailableTB().WithName("multi")
+		f := &Failure{
+			Kind: FailureSemantic,
+			Trace: []trace.Event{
+				{ClientID: 0, Method: "Get"},
+				{ClientID: 1, Method: "Put"},
+			},
+		}
+		got := emitPerClientJSON(ft, blocked(t), f)
+		if len(got) != 0 {
+			t.Fatalf("no per-client file can be written into an unmakeable dir, got %v", got)
+		}
+		if len(ft.Logs()) == 0 {
+			t.Fatal("each failed per-client write must be logged")
+		}
+	})
+
+	// mkdir succeeds when the parent exists, so an existing directory at the
+	// target path is the only way to reach the write itself.
+	t.Run("WriteClassifiedFailure reports an unwritable target", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(dir, "failure-taken.json"), 0o750); err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		_, err := WriteClassifiedFailure(dir, "taken", &Failure{Kind: FailureSemantic})
+		if err == nil {
+			t.Fatal("a target that cannot be written must be reported")
+		}
+		if !strings.Contains(err.Error(), "write") {
+			t.Fatalf("the diagnostic must name the failed step, got: %v", err)
+		}
+	})
+}

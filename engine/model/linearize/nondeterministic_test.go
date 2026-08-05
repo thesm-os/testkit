@@ -66,4 +66,25 @@ func TestNondeterministicModel(t *testing.T) {
 		testkit.False(t, porcupine.CheckOperations(nd, history),
 			"unmarked input strict-checks via inner")
 	})
+
+	// Porcupine models may carry inputs of any shape. When the input is not
+	// a testkit OpInput there is no fault marker to read, so the wrapper must
+	// step aside rather than assert its way into a panic.
+	t.Run("a foreign input shape delegates to inner", func(t *testing.T) {
+		t.Parallel()
+		var seen any
+		inner := porcupine.Model{
+			Init: func() any { return 0 },
+			Step: func(state, input, _ any) (bool, any) {
+				seen = input
+				return true, state
+			},
+		}
+		nd := linearize.NondeterministicModel(inner)
+
+		ok, next := nd.Step(0, "raw-input", nil)
+		testkit.True(t, ok, "the inner model's verdict stands")
+		testkit.Equal(t, next, 0, "the inner model's state stands")
+		testkit.Equal(t, seen, any("raw-input"), "the input reaches inner untouched")
+	})
 }

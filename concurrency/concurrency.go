@@ -75,7 +75,7 @@ func GoroutineLeak(tb testing.TB) func() {
 // and with [CaptureGoroutineStacks] when callers need per-goroutine
 // stack text (e.g. framework-frame filtering, artifact emission).
 func CaptureGoroutineIDs() map[uint64]struct{} {
-	return parseGoroutineIDs(CaptureGoroutineStacks())
+	return ParseGoroutineIDs(CaptureGoroutineStacks())
 }
 
 // CaptureGoroutineStacks returns runtime.Stack output for every
@@ -86,13 +86,29 @@ func CaptureGoroutineIDs() map[uint64]struct{} {
 // At the cap the output is suffixed with "... TRUNCATED" so callers
 // can detect (and warn about) truncated captures.
 func CaptureGoroutineStacks() []byte {
-	buf := make([]byte, 1<<20) // 1MB
+	return captureStacks(func(b []byte) int { return runtime.Stack(b, true) })
+}
+
+const (
+	initialStackBuf = 1 << 20 // 1MB
+	maxStackBuf     = 8 << 20 // 8MB
+)
+
+// captureStacks is the grow-to-fit loop behind [CaptureGoroutineStacks], with
+// the dump call injected. Reaching the growth and truncation arms for real
+// would mean parking tens of thousands of goroutines — several hundred MB of
+// stacks — so the loop is separated from the runtime call that feeds it.
+//
+// dump must behave like [runtime.Stack]: fill the buffer and return the byte
+// count, where a count equal to the buffer length means the dump was clipped.
+func captureStacks(dump func([]byte) int) []byte {
+	buf := make([]byte, initialStackBuf)
 	for {
-		n := runtime.Stack(buf, true)
+		n := dump(buf)
 		if n < len(buf) {
 			return buf[:n]
 		}
-		if len(buf) >= 8<<20 { // 8MB cap
+		if len(buf) >= maxStackBuf {
 			return append(buf[:n], "\n... TRUNCATED\n"...)
 		}
 		buf = make([]byte, len(buf)*2)
@@ -112,8 +128,16 @@ func DiffGoroutineIDs(before, after map[uint64]struct{}) []uint64 {
 	return leaked
 }
 
-// parseGoroutineIDs extracts goroutine IDs from runtime.Stack output.
-func parseGoroutineIDs(stack []byte) map[uint64]struct{} {
+// ParseGoroutineIDs extracts goroutine IDs from runtime.Stack output.
+//
+// [CaptureGoroutineIDs] is the usual entry point — it captures and parses in
+// one step. Use this directly when you already hold a stack dump: one captured
+// earlier, read from a crash artifact, or narrowed to a subset of goroutines.
+//
+// Lines that are not parseable as a goroutine header are skipped rather than
+// reported, so a truncated or interleaved dump yields the IDs it does contain
+// instead of an error.
+func ParseGoroutineIDs(stack []byte) map[uint64]struct{} {
 	ids := make(map[uint64]struct{})
 	for line := range strings.SplitSeq(string(stack), "\n") {
 		if !strings.HasPrefix(line, "goroutine ") {

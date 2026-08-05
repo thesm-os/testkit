@@ -189,11 +189,13 @@ const defaultArtifactDir = ".testkit/artifacts"
 //  1. Explicit override (from [WithArtifactDir] option) — used as-is.
 //  2. Fallback: `<module-root>/.testkit/artifacts/`.
 //
-// Paths resolve relative to the module root (where .testkit.yml or
+// Paths resolve relative to the module root (where .testkit.yaml or
 // go.mod lives), not the package dir (where `go test` runs). This
-// matches .testkit.yml which lives at the module root.
+// matches .testkit.yaml which lives at the module root.
 //
-// Exported so generator-emitted code can resolve consistently.
+// Exported so generator-emitted code can resolve consistently. The result is
+// never empty: with no override and no discoverable root it falls back to the
+// relative default, so callers never have to handle "nowhere to write".
 func ResolveArtifactDir(override string) string {
 	if override != "" {
 		return override
@@ -205,19 +207,22 @@ func ResolveArtifactDir(override string) string {
 	return defaultArtifactDir
 }
 
-// findModuleRoot walks up from CWD looking for .testkit.yml (the
-// project root config). Falls back to go.mod if .testkit.yml isn't
-// found. In multi-module workspaces, .testkit.yml is the stable
-// anchor — go.mod exists at every sub-module level.
+// findModuleRoot walks up from CWD looking for .testkit.yaml (the
+// project root config). Falls back to go.mod if it isn't found.
+//
+// In a multi-module workspace the config file is the stable anchor and go.mod
+// is not: every sub-module has its own go.mod, so the fallback resolves to the
+// sub-module root rather than the project root, and artifacts scatter one
+// directory per module instead of collecting at the top.
 func findModuleRoot() string {
 	dir, err := os.Getwd()
 	if err != nil {
 		return ""
 	}
-	// First pass: look for .testkit.yml (project root).
-	if found := walkUpFor(dir, ".testkit.yml"); found != "" {
+	// First pass: look for the project config.
+	if found := walkUpFor(dir, ".testkit.yaml"); found != "" {
 		return found
 	}
-	// Fallback: look for go.mod (for projects without .testkit.yml).
+	// Fallback: look for go.mod (for projects without a config file).
 	return walkUpFor(dir, "go.mod")
 }

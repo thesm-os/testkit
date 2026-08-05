@@ -168,3 +168,139 @@ func TestWritesFollowReads(t *testing.T) {
 		})
 	})
 }
+
+// unclassified is an event no classifier recognises. Every per-client law must
+// skip it rather than treat it as a read or a write — a trace carries more
+// than the operations any one guarantee cares about.
+func unclassified(client int) trace.Event {
+	return trace.Event{ClientID: client, Method: "ping"}
+}
+
+func TestPerClientLawsSkipUnclassifiedEvents(t *testing.T) {
+	t.Parallel()
+
+	build := func() *trace.Trace {
+		tr := trace.New()
+		tr.Record(unclassified(1))
+		tr.Record(rd(1, "a", 1))
+		tr.Record(unclassified(1))
+		tr.Record(wr(1, "a", 2))
+		tr.Record(unclassified(2))
+		return tr
+	}
+
+	t.Run("MonotonicReads", func(t *testing.T) {
+		t.Parallel()
+		l := &law.MonotonicReads[any, string]{Classify: clientClassify, Trace: build()}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("unrecognised events must be skipped: %v", err)
+		}
+	})
+
+	t.Run("ReadYourWrites", func(t *testing.T) {
+		t.Parallel()
+		l := &law.ReadYourWrites[any, string]{Classify: clientClassify, Trace: build()}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("unrecognised events must be skipped: %v", err)
+		}
+	})
+
+	t.Run("MonotonicWrites", func(t *testing.T) {
+		t.Parallel()
+		l := &law.MonotonicWrites[any, string]{Classify: clientClassify, Trace: build()}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("unrecognised events must be skipped: %v", err)
+		}
+	})
+
+	t.Run("WritesFollowReads", func(t *testing.T) {
+		t.Parallel()
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: build()}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("unrecognised events must be skipped: %v", err)
+		}
+	})
+}
+
+// Each per-client law watches one half of the trace and must ignore the other:
+// MonotonicReads says nothing about writes, MonotonicWrites nothing about
+// reads. A law that inspected both would fire on traces it has no opinion on.
+func TestPerClientLawsIgnoreTheOtherOperation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("MonotonicReads ignores descending writes", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(wr(1, "a", 9))
+		tr.Record(wr(1, "a", 2)) // would violate MonotonicWrites
+		l := &law.MonotonicReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("MonotonicReads has no opinion on writes: %v", err)
+		}
+	})
+
+	t.Run("MonotonicWrites ignores descending reads", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(rd(1, "a", 2)) // would violate MonotonicReads
+		l := &law.MonotonicWrites[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("MonotonicWrites has no opinion on reads: %v", err)
+		}
+	})
+
+	// Both laws are scoped per (client, key): the same key seen by a different
+	// client, or a different key on the same client, carries no constraint.
+	t.Run("violations do not cross client or key boundaries", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(rd(2, "a", 2)) // different client
+		tr.Record(rd(1, "b", 1)) // different key
+		l := &law.MonotonicReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("per-(client,key) scoping must isolate these: %v", err)
+		}
+	})
+}
+
+// WritesFollowReads is deliberately key-agnostic: it tracks the highest
+// version a client has read across all keys, so a write below that mark fails
+// even when it targets a key the client never read.
+func TestWritesFollowReadsIsKeyAgnostic(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a write below a read on another key is flagged", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(wr(1, "b", 3))
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err == nil {
+			t.Fatal("a write older than any prior read must be flagged")
+		}
+	})
+
+	t.Run("a write before any read is unconstrained", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(wr(1, "a", 1))
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("a client that has read nothing cannot violate this law: %v", err)
+		}
+	})
+
+	t.Run("the read watermark only ever rises", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(rd(1, "a", 4)) // lower read must not lower the watermark
+		tr.Record(wr(1, "a", 5))
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err == nil {
+			t.Fatal("a later lower read must not reset the watermark")
+		}
+	})
+}

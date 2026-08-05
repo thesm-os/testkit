@@ -6,6 +6,8 @@ package law_test
 import (
 	"errors"
 	"html"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -422,6 +424,567 @@ func TestInjectionSafe(t *testing.T) {
 			s := &injStore{vulnerable: true}
 			if err := l.Check(rt, s, s); err == nil {
 				rt.Fatal("expected injection breakout to be caught")
+			}
+		})
+	})
+}
+
+// kvStore is a minimal string→string store for driving the writer laws'
+// precondition and violation branches.
+type kvStore struct {
+	data     map[string]string
+	writeErr error
+	readErr  error
+	tampered bool
+}
+
+func newKVStore() *kvStore { return &kvStore{data: map[string]string{}} }
+
+func (s *kvStore) put(k, v string) error {
+	if s.writeErr != nil {
+		return s.writeErr
+	}
+	s.data[k] = v
+	return nil
+}
+
+func (s *kvStore) get(k string) (string, error) {
+	if s.readErr != nil {
+		return "", s.readErr
+	}
+	v, ok := s.data[k]
+	if !ok {
+		return "", errors.New("not found")
+	}
+	return v, nil
+}
+
+func TestWriteObservablePreconditionsAndViolations(t *testing.T) {
+	t.Parallel()
+
+	mk := func(s *kvStore, read func(*rapid.T, *kvStore, string) (string, error)) law.WriteObservable[*kvStore, string, string] {
+		return law.WriteObservable[*kvStore, string, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v[:1], v) },
+			Read:   read,
+			Values: rapid.Just("ab"),
+			KeyOf:  func(v string) string { return v[:1] },
+		}
+	}
+	okRead := func(_ *rapid.T, st *kvStore, k string) (string, error) { return st.get(k) }
+
+	t.Run("a refused write holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		s.writeErr = errors.New("read-only")
+		l := mk(s, okRead)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
+			}
+		})
+	})
+
+	t.Run("a written value that cannot be read is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(s, func(*rapid.T, *kvStore, string) (string, error) {
+			return "", errors.New("gone")
+		})
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("an unreadable write is a violation")
+			}
+		})
+	})
+
+	t.Run("a read returning a different value is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(s, func(*rapid.T, *kvStore, string) (string, error) { return "other", nil })
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a mismatched read is a violation")
+			}
+		})
+	})
+}
+
+func TestTamperEvidentPreconditionsAndViolations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a refused write holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		s.writeErr = errors.New("read-only")
+		l := law.TamperEvident[*kvStore, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Tamper: func(*rapid.T, *kvStore) bool { return true },
+			Verify: func(*rapid.T, *kvStore) error { return nil },
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
+			}
+		})
+	})
+
+	t.Run("Verify failing on intact data is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.TamperEvident[*kvStore, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Tamper: func(*rapid.T, *kvStore) bool { return true },
+			Verify: func(*rapid.T, *kvStore) error { return errors.New("corrupt") },
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("Verify failing before any tampering is a violation")
+			}
+		})
+	})
+
+	// Tamper returning false means the subject cannot be corrupted in a
+	// meaningful way — an empty store, say — so there is nothing to detect and
+	// the law must skip rather than fail.
+	t.Run("inapplicable tampering holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.TamperEvident[*kvStore, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Tamper: func(*rapid.T, *kvStore) bool { return false },
+			Verify: func(*rapid.T, *kvStore) error { return nil },
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("inapplicable tampering must skip, not fail: %v", err)
+			}
+		})
+	})
+
+	t.Run("a store with no integrity mechanism is flagged", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.TamperEvident[*kvStore, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Tamper: func(_ *rapid.T, st *kvStore) bool { st.tampered = true; return true },
+			Verify: func(*rapid.T, *kvStore) error { return nil }, // never detects
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a store that verifies clean after tampering is a violation")
+			}
+		})
+	})
+
+	t.Run("a store that detects tampering passes", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.TamperEvident[*kvStore, string]{
+			Write:  func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Tamper: func(_ *rapid.T, st *kvStore) bool { st.tampered = true; return true },
+			Verify: func(_ *rapid.T, st *kvStore) error {
+				if st.tampered {
+					return errors.New("integrity violation")
+				}
+				return nil
+			},
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s.tampered = false
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a store that detects tampering must pass: %v", err)
+			}
+		})
+	})
+}
+
+// InjectionSafe stores a canary alongside a hostile payload and checks the
+// payload came back byte-identical and left the canary intact. Both a mangled
+// payload and a damaged canary are violations; a store that refuses either
+// write has simply failed a precondition.
+func TestInjectionSafePreconditionsAndViolations(t *testing.T) {
+	t.Parallel()
+
+	mk := func(
+		store func(*rapid.T, *kvStore, string, string) error,
+		load func(*rapid.T, *kvStore, string) (string, error),
+	) law.InjectionSafe[*kvStore] {
+		return law.InjectionSafe[*kvStore]{
+			Store: store, Load: load,
+			CanaryKey:   "canary",
+			CanaryValue: "intact",
+			Payloads:    rapid.Just("'; DROP TABLE users; --"),
+		}
+	}
+	okStore := func(_ *rapid.T, s *kvStore, k, v string) error { return s.put(k, v) }
+	okLoad := func(_ *rapid.T, s *kvStore, k string) (string, error) { return s.get(k) }
+
+	t.Run("a refused write holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		s.writeErr = errors.New("read-only")
+		l := mk(okStore, okLoad)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
+			}
+		})
+	})
+
+	t.Run("an unretrievable payload is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(okStore, func(_ *rapid.T, st *kvStore, k string) (string, error) {
+			if k == "canary" {
+				return st.get(k)
+			}
+			return "", errors.New("gone")
+		})
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a payload that cannot be read back is a violation")
+			}
+		})
+	})
+
+	t.Run("a payload altered in storage is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(func(_ *rapid.T, st *kvStore, k, v string) error {
+			return st.put(k, strings.ReplaceAll(v, "'", "")) // naive sanitiser
+		}, okLoad)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("silently rewriting the stored payload is a violation")
+			}
+		})
+	})
+
+	t.Run("a lost canary is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(okStore, func(_ *rapid.T, st *kvStore, k string) (string, error) {
+			if k == "canary" {
+				return "", errors.New("canary gone")
+			}
+			return st.get(k)
+		})
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a canary lost after storing the payload is a violation")
+			}
+		})
+	})
+
+	t.Run("a corrupted canary is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(okStore, func(_ *rapid.T, st *kvStore, k string) (string, error) {
+			if k == "canary" {
+				return "clobbered", nil
+			}
+			return st.get(k)
+		})
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a payload that changes the canary's value is a violation")
+			}
+		})
+	})
+
+	t.Run("a faithful store passes", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := mk(okStore, okLoad)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a store that round-trips payloads must pass: %v", err)
+			}
+		})
+	})
+}
+
+// AtomicWrite only has something to say about failed writes: a successful
+// write is expected to mutate state, and its correctness is another law's
+// business. The interesting case is an error that left a partial mutation
+// behind.
+func TestAtomicWriteBranches(t *testing.T) {
+	t.Parallel()
+
+	observe := func(_ *rapid.T, s *kvStore) int { return len(s.data) }
+
+	t.Run("a successful write is not the law's concern", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.AtomicWrite[*kvStore, string, int]{
+			Write:   func(_ *rapid.T, st *kvStore, v string) error { return st.put(v, v) },
+			Values:  rapid.Just("v"),
+			Observe: observe,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a successful write must be skipped, not judged: %v", err)
+			}
+		})
+	})
+
+	t.Run("an errored write that changed nothing passes", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.AtomicWrite[*kvStore, string, int]{
+			Write:   func(*rapid.T, *kvStore, string) error { return errors.New("rejected") },
+			Values:  rapid.Just("v"),
+			Observe: observe,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a clean rejection must pass: %v", err)
+			}
+		})
+	})
+
+	t.Run("an errored write that mutated state is a violation", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		n := 0
+		l := law.AtomicWrite[*kvStore, string, int]{
+			Write: func(_ *rapid.T, st *kvStore, v string) error {
+				// A unique key every call, so the partial mutation is always
+				// observable — a wrapping key would stop growing the store and
+				// the law would rightly see no change.
+				n++
+				st.data[v+strconv.Itoa(n)] = v // partial mutation, then fail
+				return errors.New("rejected after writing")
+			},
+			Values:  rapid.Just("v"),
+			Observe: observe,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a failed write that left a mutation behind is a violation")
+			}
+		})
+	})
+}
+
+func TestCommutativeWriteBranches(t *testing.T) {
+	t.Parallel()
+
+	observe := func(_ *rapid.T, s *kvStore) string { return s.data["log"] }
+	vals := rapid.SampledFrom([]string{"a", "b"})
+
+	t.Run("order-independent writes pass", func(t *testing.T) {
+		t.Parallel()
+		l := law.CommutativeWrite[*kvStore, string, string]{
+			Factory: newKVStore,
+			Write: func(_ *rapid.T, st *kvStore, v string) error {
+				st.data["log"] += v
+				// Sort so the observation cannot depend on arrival order.
+				b := []byte(st.data["log"])
+				slices.Sort(b)
+				st.data["log"] = string(b)
+				return nil
+			},
+			Values:  vals,
+			Observe: observe,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("commutative writes must pass: %v", err)
+			}
+		})
+	})
+
+	t.Run("order-dependent writes are flagged", func(t *testing.T) {
+		t.Parallel()
+		l := law.CommutativeWrite[*kvStore, string, string]{
+			Factory: newKVStore,
+			Write: func(_ *rapid.T, st *kvStore, v string) error {
+				st.data["log"] += v // append order is observable
+				return nil
+			},
+			Values:  vals,
+			Observe: observe,
+		}
+		// rapid draws both values from the same generator, so it will
+		// sometimes draw a pair where a == b — and there, order genuinely
+		// does not matter and the law is right to pass. The assertion is
+		// therefore that a distinct pair is caught at least once, not that
+		// every draw fails.
+		flagged := false
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				flagged = true
+			}
+		})
+		if !flagged {
+			t.Fatal("append-order-sensitive writes must be flagged for a distinct pair")
+		}
+	})
+
+	t.Run("a refused write holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		for _, nth := range []int{1, 2, 3, 4} {
+			rapid.Check(t, func(rt *rapid.T) {
+				fail := failOnNth(nth)
+				l := law.CommutativeWrite[*kvStore, string, string]{
+					Factory: newKVStore,
+					Write: func(_ *rapid.T, st *kvStore, v string) error {
+						if err := fail(); err != nil {
+							return err
+						}
+						st.data["log"] += v
+						return nil
+					},
+					Values:  rapid.Just("a"),
+					Observe: observe,
+				}
+				if err := l.Check(rt, nil, nil); err != nil {
+					rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
+				}
+			})
+		}
+	})
+}
+
+func TestXSSSafeBranches(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a refused render holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.XSSSafe[*kvStore]{
+			Render:   func(*rapid.T, *kvStore, string) (string, error) { return "", errors.New("no") },
+			Payloads: xssVectors,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("a refused render is a precondition, not a violation: %v", err)
+			}
+		})
+	})
+
+	// An explicit Dangerous list replaces the built-in token set, so a
+	// renderer that escapes the defaults still fails against a custom token.
+	t.Run("a custom Dangerous list overrides the defaults", func(t *testing.T) {
+		t.Parallel()
+		s := newKVStore()
+		l := law.XSSSafe[*kvStore]{
+			Render: func(_ *rapid.T, _ *kvStore, raw string) (string, error) {
+				return html.EscapeString(raw) + "<custom>", nil
+			},
+			Payloads:  xssVectors,
+			Dangerous: []string{"<custom>"},
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("a token from the custom list must be flagged")
+			}
+		})
+	})
+}
+
+// Every law splits its inputs into preconditions — a refused operation says
+// nothing about the property — and violations. These cover the arms the
+// happy-path tests never reach.
+func TestWriterLawPreconditionsAndViolations(t *testing.T) {
+	t.Parallel()
+
+	boom := errors.New("refused")
+
+	t.Run("IdempotentWrite holds vacuously when the first write is refused", func(t *testing.T) {
+		t.Parallel()
+		l := law.IdempotentWrite[*wkv, string, string]{
+			Write:   func(*rapid.T, *wkv, string) error { return boom },
+			Values:  rapid.Just("v"),
+			Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+				rt.Fatalf("a refused first write is a precondition: %v", err)
+			}
+		})
+	})
+
+	// The second write is different: the first one succeeded, so refusing the
+	// repeat is the subject contradicting itself, not declining the input.
+	t.Run("IdempotentWrite flags a refused repeat", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			calls := 0
+			l := law.IdempotentWrite[*wkv, string, string]{
+				Write: func(rt *rapid.T, w *wkv, v string) error {
+					calls++
+					if calls > 1 {
+						return boom
+					}
+					return w.put(rt, v)
+				},
+				Values:  rapid.Just("v"),
+				Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+			}
+			if err := l.Check(rt, &wkv{}, &wkv{}); err == nil {
+				rt.Fatal("repeating an accepted write must not error")
+			}
+		})
+	})
+
+	t.Run("InjectionSafe holds vacuously when the payload is refused", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			store := map[string]string{}
+			l := law.InjectionSafe[*wkv]{
+				Store: func(_ *rapid.T, _ *wkv, key, value string) error {
+					if key != "canary" {
+						return boom
+					}
+					store[key] = value
+					return nil
+				},
+				Load:        func(_ *rapid.T, _ *wkv, key string) (string, error) { return store[key], nil },
+				Payloads:    xssVectors,
+				CanaryKey:   "canary",
+				CanaryValue: "intact",
+			}
+			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+				rt.Fatalf("a store that refuses the payload is a precondition: %v", err)
+			}
+		})
+	})
+
+	t.Run("ValidTransition holds vacuously when the write is refused", func(t *testing.T) {
+		t.Parallel()
+		l := law.ValidTransition[*wkv, string, string]{
+			Write:   func(*rapid.T, *wkv, string) error { return boom },
+			Values:  rapid.Just("v"),
+			Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+			Allowed: func(string, string) bool { return false },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+				rt.Fatalf("a refused write is a precondition: %v", err)
+			}
+		})
+	})
+
+	// A write that changes nothing is not a transition, so the predicate is
+	// never consulted — even one that rejects everything.
+	t.Run("ValidTransition ignores a write that does not move the state", func(t *testing.T) {
+		t.Parallel()
+		l := law.ValidTransition[*wkv, string, string]{
+			Write:   func(*rapid.T, *wkv, string) error { return nil },
+			Values:  rapid.Just("v"),
+			Observe: func(*rapid.T, *wkv) string { return "steady" },
+			Allowed: func(string, string) bool { return false },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+				rt.Fatalf("an unchanged state is not a transition: %v", err)
 			}
 		})
 	})

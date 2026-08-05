@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"go.thesmos.sh/testkit"
 )
@@ -101,6 +102,27 @@ func TestFailingReader(t *testing.T) {
 		}
 		_, err := r.Read(make([]byte, 10))
 		testkit.ErrorIs(t, err, io.ErrClosedPipe, "must fail immediately")
+	})
+
+	// A source that hands back one byte at a time keeps the reader short of
+	// BeforeFail across several calls — the arm where it must stay silent.
+	t.Run("stays silent while short of BeforeFail", func(t *testing.T) {
+		t.Parallel()
+		r := &testkit.FailingReader{
+			Source:     iotest.OneByteReader(strings.NewReader("hello")),
+			BeforeFail: 5,
+			Err:        io.ErrClosedPipe,
+		}
+		buf := make([]byte, 10)
+		for i := range 4 {
+			n, err := r.Read(buf)
+			testkit.Equal(t, n, 1, "a one-byte source yields one byte per call")
+			if err != nil {
+				t.Fatalf("read %d is still short of BeforeFail: %v", i, err)
+			}
+		}
+		_, err := r.Read(buf)
+		testkit.ErrorIs(t, err, io.ErrClosedPipe, "the fifth byte reaches BeforeFail")
 	})
 
 	t.Run("propagates source error", func(t *testing.T) {

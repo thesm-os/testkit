@@ -5,6 +5,7 @@ package concurrency_test
 
 import (
 	"context"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -155,5 +156,35 @@ func TestDiffGoroutineIDs(t *testing.T) {
 		// 2 and 3 disappeared; not "leaked" — diff returns nothing.
 		testkit.Len(t, concurrency.DiffGoroutineIDs(before, after), 0,
 			"diff is asymmetric: only after-minus-before")
+	})
+}
+
+// The stack parser runs over whatever runtime.Stack produced, so it must skip
+// anything it cannot interpret rather than panic or record a bogus id. Real
+// runtime output never contains these shapes, which is why they are exercised
+// against a hand-built stack.
+func TestParseGoroutineIDsSkipsMalformedLines(t *testing.T) {
+	t.Parallel()
+
+	t.Run("truncated header without an id", func(t *testing.T) {
+		t.Parallel()
+		ids := concurrency.ParseGoroutineIDs([]byte("goroutine \nmain.main()\n"))
+		testkit.Equal(t, len(ids), 0, "a header with no id must be skipped")
+	})
+
+	t.Run("non-numeric id", func(t *testing.T) {
+		t.Parallel()
+		ids := concurrency.ParseGoroutineIDs([]byte("goroutine abc [running]:\n"))
+		testkit.Equal(t, len(ids), 0, "an unparseable id must be skipped")
+	})
+
+	t.Run("malformed lines do not hide valid ones", func(t *testing.T) {
+		t.Parallel()
+		lines := []string{"goroutine ", "goroutine abc [running]:", "goroutine 7 [running]:"}
+		ids := concurrency.ParseGoroutineIDs([]byte(strings.Join(lines, "\n") + "\n"))
+		testkit.Equal(t, len(ids), 1, "the one valid id must survive")
+		if _, ok := ids[7]; !ok {
+			t.Fatalf("expected goroutine 7 to be parsed, got %v", ids)
+		}
 	})
 }

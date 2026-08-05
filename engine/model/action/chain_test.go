@@ -199,3 +199,119 @@ func TestChainReplay(t *testing.T) {
 		})
 	})
 }
+
+// ChainAppend and ChainReplay are differential actions: their job is to notice
+// the subject and the reference disagreeing. Agreement — including agreeing to
+// fail — is not a finding.
+func TestChainActionDivergence(t *testing.T) {
+	t.Parallel()
+
+	type chainBox struct{ appendErr, replayErr error }
+
+	t.Run("ChainAppend reports an append divergence", func(t *testing.T) {
+		t.Parallel()
+		a := action.ChainAppend("Append", rapid.Just("e"),
+			func(_ context.Context, b *chainBox, _ string) error { return b.appendErr },
+		)
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &chainBox{appendErr: errors.New("full")}, &chainBox{})
+			if got == nil {
+				got = res.Err
+			}
+		})
+		if got == nil {
+			t.Fatal("one side refusing an append is a divergence")
+		}
+	})
+
+	t.Run("ChainAppend accepts agreement, including shared failure", func(t *testing.T) {
+		t.Parallel()
+		boom := errors.New("full")
+		a := action.ChainAppend("Append", rapid.Just("e"),
+			func(_ context.Context, b *chainBox, _ string) error { return b.appendErr },
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			if res := a.Run(rt, &chainBox{appendErr: boom}, &chainBox{appendErr: boom}); res.Err != nil {
+				rt.Fatalf("both sides refusing is not a divergence: %v", res.Err)
+			}
+			if res := a.Run(rt, &chainBox{}, &chainBox{}); res.Err != nil {
+				rt.Fatalf("both sides accepting is not a divergence: %v", res.Err)
+			}
+		})
+	})
+
+	// With nothing appended there is no partition to sample, so the action
+	// must return cleanly rather than draw from an empty set.
+	t.Run("ChainReplay is a no-op on an empty history", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[string, string]()
+		a := action.ChainReplay("Replay", hist,
+			func(_ context.Context, _ *chainBox, _ string) iter.Seq2[string, error] {
+				t.Error("replay must not run without a partition")
+				return func(func(string, error) bool) {}
+			},
+		)
+		rapid.Check(t, func(rt *rapid.T) {
+			if res := a.Run(rt, &chainBox{}, &chainBox{}); res.Err != nil {
+				rt.Fatalf("an empty history has nothing to replay: %v", res.Err)
+			}
+		})
+	})
+
+	t.Run("ChainReplay reports a replay-error divergence", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[string, string]()
+		hist.Record("p", "e")
+		a := action.ChainReplay("Replay", hist,
+			func(_ context.Context, b *chainBox, _ string) iter.Seq2[string, error] {
+				return func(yield func(string, error) bool) {
+					if b.replayErr != nil {
+						yield("", b.replayErr)
+						return
+					}
+					yield("e", nil)
+				}
+			},
+		)
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &chainBox{replayErr: errors.New("io")}, &chainBox{})
+			if got == nil {
+				got = res.Err
+			}
+		})
+		if got == nil {
+			t.Fatal("one side failing to replay is a divergence")
+		}
+	})
+
+	// drainSeq2 stops at the first error and returns what it had, so a
+	// partially-yielded stream still reports its prefix alongside the failure.
+	t.Run("ChainReplay reports differing contents", func(t *testing.T) {
+		t.Parallel()
+		hist := history.New[string, string]()
+		hist.Record("p", "e")
+		a := action.ChainReplay("Replay", hist,
+			func(_ context.Context, b *chainBox, _ string) iter.Seq2[string, error] {
+				return func(yield func(string, error) bool) {
+					if b.replayErr != nil { // reused as a "differs" flag
+						yield("different", nil)
+						return
+					}
+					yield("e", nil)
+				}
+			},
+		)
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &chainBox{replayErr: errors.New("x")}, &chainBox{})
+			if got == nil {
+				got = res.Err
+			}
+		})
+		if got == nil {
+			t.Fatal("differing replayed contents is a divergence")
+		}
+	})
+}

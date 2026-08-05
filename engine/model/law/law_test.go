@@ -7,6 +7,7 @@ import (
 	"errors"
 	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -325,5 +326,163 @@ func TestCRDTMerge(t *testing.T) {
 				rt.Fatal("expected non-converging merge to be caught")
 			}
 		})
+	})
+}
+
+// A CRDT must converge under bidirectional merge and stay put on re-merge.
+// Those are two distinct properties — a set-union merge satisfies both, a
+// last-write-wins merge that keeps mutating does not.
+func TestCRDTMergeBranches(t *testing.T) {
+	t.Parallel()
+
+	type replica struct{ items map[string]bool }
+	newReplica := func() *replica { return &replica{items: map[string]bool{}} }
+	write := func(_ *rapid.T, r *replica, v string) error { r.items[v] = true; return nil }
+	observe := func(_ *rapid.T, r *replica) []string {
+		out := make([]string, 0, len(r.items))
+		for k := range r.items {
+			out = append(out, k)
+		}
+		slices.Sort(out)
+		return out
+	}
+	unionMerge := func(_ *rapid.T, dst, src *replica) error {
+		for k := range src.items {
+			dst.items[k] = true
+		}
+		return nil
+	}
+
+	mk := func(merge func(*rapid.T, *replica, *replica) error) law.CRDTMerge[*replica, string, []string] {
+		return law.CRDTMerge[*replica, string, []string]{
+			Factory: newReplica,
+			Write:   write,
+			Merge:   merge,
+			Observe: observe,
+			Values:  rapid.SampledFrom([]string{"a", "b", "c"}),
+		}
+	}
+
+	t.Run("a union merge converges and is idempotent", func(t *testing.T) {
+		t.Parallel()
+		l := mk(unionMerge)
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("set union is a lattice join: %v", err)
+			}
+		})
+	})
+
+	t.Run("a refused write holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		l := mk(unionMerge)
+		l.Write = func(*rapid.T, *replica, string) error { return errors.New("read-only") }
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a refused write is a precondition: %v", err)
+			}
+		})
+	})
+
+	// The two merge directions are separate calls, so a subject that accepts
+	// A←B and refuses B←A still leaves the law with nothing to compare.
+	t.Run("a refused reverse merge holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		merges := 0
+		l := mk(func(rt *rapid.T, dst, src *replica) error {
+			merges++
+			if merges%2 == 0 {
+				return errors.New("no reverse merge")
+			}
+			return unionMerge(rt, dst, src)
+		})
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a refused reverse merge is a precondition: %v", err)
+			}
+		})
+	})
+
+	// The third merge is the idempotence probe. Both replicas already agree
+	// by then, so refusing it is the subject contradicting itself.
+	t.Run("a refused re-merge is a violation", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			merges := 0
+			l := mk(func(rt *rapid.T, dst, src *replica) error {
+				merges++
+				if merges > 2 {
+					return errors.New("no re-merge")
+				}
+				return unionMerge(rt, dst, src)
+			})
+			err := l.Check(rt, nil, nil)
+			if err == nil || !strings.Contains(err.Error(), "re-merge errored") {
+				rt.Fatalf("a merge that stops working must be reported, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("a refused merge holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		l := mk(func(*rapid.T, *replica, *replica) error { return errors.New("no merge") })
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a refused merge is a precondition: %v", err)
+			}
+		})
+	})
+
+	// A merge that only copies one way leaves the replicas disagreeing after
+	// the bidirectional pass, which is the convergence failure.
+	t.Run("a one-way merge fails to converge", func(t *testing.T) {
+		t.Parallel()
+		var first bool
+		l := mk(func(_ *rapid.T, dst, src *replica) error {
+			if !first { // only the first direction actually merges
+				first = true
+				for k := range src.items {
+					dst.items[k] = true
+				}
+			}
+			return nil
+		})
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			first = false
+			if err := l.Check(rt, nil, nil); got == nil {
+				got = err
+			}
+		})
+		if got == nil {
+			t.Fatal("replicas that do not converge are a violation")
+		}
+	})
+
+	// Converging and then drifting on re-merge is a separate defect: the merge
+	// is not idempotent even though the first pass agreed.
+	t.Run("a non-idempotent re-merge is flagged", func(t *testing.T) {
+		t.Parallel()
+		merges := 0
+		l := mk(func(_ *rapid.T, dst, src *replica) error {
+			merges++
+			for k := range src.items {
+				dst.items[k] = true
+			}
+			if merges > 2 { // the re-merge mutates
+				dst.items["drift"] = true
+			}
+			return nil
+		})
+		var got error
+		rapid.Check(t, func(rt *rapid.T) {
+			merges = 0
+			if err := l.Check(rt, nil, nil); got == nil {
+				got = err
+			}
+		})
+		if got == nil {
+			t.Fatal("a merge that keeps changing state is not idempotent")
+		}
 	})
 }

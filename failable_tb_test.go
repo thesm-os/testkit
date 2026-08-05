@@ -210,6 +210,27 @@ func TestFailableTB(t *testing.T) {
 		}
 	})
 
+	t.Run("WithGoexit terminates goroutine on Fatalf", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.Fatalf("boom %d", 7)
+			f.Logf("unreachable")
+		}()
+		<-done
+		if !f.Failed() {
+			t.Fatal("should be failed after Fatalf with Goexit")
+		}
+		if got := f.Msg(); got != "boom 7" {
+			t.Fatalf("the formatted message must be recorded, got: %q", got)
+		}
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after Fatalf with Goexit")
+		}
+	})
+
 	t.Run("WithGoexit terminates goroutine on FailNow", func(t *testing.T) {
 		t.Parallel()
 		f := testkit.NewFailableTB().WithGoexit()
@@ -263,6 +284,86 @@ func TestFailableTB(t *testing.T) {
 		f := testkit.NewFailableTB()
 		if f.TempDir() != "" {
 			t.Fatal("TempDir should return empty string")
+		}
+	})
+}
+
+// Skip, Skipf and SkipNow are deliberately no-ops: a FailableTB records
+// assertion outcomes, and a skipped subject is neither a pass nor a failure.
+// Under WithGoexit they still terminate the goroutine, matching the control
+// flow testing.T gives a real skip.
+func TestFailableTBSkip(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Skip is a no-op without Goexit", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.Skip("not applicable")
+		if f.Failed() {
+			t.Fatal("Skip must not mark the subject failed")
+		}
+	})
+
+	t.Run("Skipf is a no-op without Goexit", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.Skipf("not applicable: %d", 1)
+		if f.Failed() {
+			t.Fatal("Skipf must not mark the subject failed")
+		}
+	})
+
+	t.Run("SkipNow is a no-op without Goexit", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.SkipNow()
+		if f.Failed() {
+			t.Fatal("SkipNow must not mark the subject failed")
+		}
+	})
+
+	t.Run("WithGoexit terminates the goroutine on Skip", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.Skip("stop here")
+			f.Logf("unreachable")
+		}()
+		<-done
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after Skip with Goexit")
+		}
+	})
+
+	t.Run("WithGoexit terminates the goroutine on Skipf", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.Skipf("stop: %d", 1)
+			f.Logf("unreachable")
+		}()
+		<-done
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after Skipf with Goexit")
+		}
+	})
+
+	t.Run("WithGoexit terminates the goroutine on SkipNow", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithGoexit()
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			f.SkipNow()
+			f.Logf("unreachable")
+		}()
+		<-done
+		if len(f.Logs()) != 0 {
+			t.Fatal("unreachable code ran after SkipNow with Goexit")
 		}
 	})
 }

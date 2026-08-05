@@ -676,3 +676,56 @@ func TestAssertion_chaining(t *testing.T) {
 		}
 	})
 }
+
+// The string assertions accept string or []byte and fatal on anything else.
+// A wrong-type subject is a caller mistake, so the diagnostic names the type
+// rather than silently reporting a failed comparison.
+func TestAssertionStringAssertionsRejectNonStrings(t *testing.T) {
+	t.Parallel()
+
+	t.Run("HasSuffix fatals and names the type", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, 42).HasSuffix("x", "suffix check")
+		if !f.Failed() {
+			t.Fatal("should fail for a non-string subject")
+		}
+		msg := f.Msg()
+		if !strings.Contains(msg, "requires string or []byte") || !strings.Contains(msg, "int") {
+			t.Fatalf("message must name the offending type, got: %s", msg)
+		}
+	})
+
+	t.Run("HasSuffix accepts []byte", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert(f, []byte("payload.json")).HasSuffix(".json", "suffix check")
+		if f.Failed() {
+			t.Fatalf("should pass for []byte, got: %s", f.Msg())
+		}
+	})
+}
+
+// A literal nil interface has no reflect.Value to inspect, so IsNil must
+// short-circuit before reflection rather than fall through to the kind switch.
+func TestAssertionIsNilOnUntypedNil(t *testing.T) {
+	t.Parallel()
+
+	t.Run("untyped nil is nil", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert[any](f, nil).IsNil("must be nil")
+		if f.Failed() {
+			t.Fatalf("untyped nil must satisfy IsNil, got: %s", f.Msg())
+		}
+	})
+
+	t.Run("untyped nil fails IsNotNil", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		testkit.Assert[any](f, nil).IsNotNil("must not be nil")
+		if !f.Failed() {
+			t.Fatal("untyped nil must fail IsNotNil")
+		}
+	})
+}
