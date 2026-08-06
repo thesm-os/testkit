@@ -32,6 +32,10 @@ func runRoot(t *testing.T, args ...string) (stdout, stderr string, code int) {
 
 	cfgPath = ""
 	versionKernel.Config = cli.VersionConfig{}
+	// Both kernels are package-level and retain per-invocation state, so a
+	// second run in the same process would otherwise inherit the first's —
+	// including a context the first run's signal handler already cancelled.
+	*runKernel = cli.RunCommand{}
 
 	var out, errOut strings.Builder
 	rootCmd.SetOut(&out)

@@ -10,13 +10,23 @@ package embedded
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrUnreachable is the sentinel [Base] reports, declared here so a fault
+// helper generated onto a double of an embedding interface has something to
+// qualify against.
+var ErrUnreachable = errors.New("embedded: unreachable")
 
 // Base is embedded into [Composed].
 //
 //testkit:out embeddedtest/ pkg=embeddedtest
 //testkit:stub
 type Base interface {
+	// Ping carries a fault directive so an embedding interface's double is
+	// checked for helpers generated from a method it never declared. A
+	// contributor reading only the declarations would silently skip this.
+	//testkit:fault ErrUnreachable
 	Ping(ctx context.Context) error
 }
 

@@ -281,6 +281,14 @@ type Method struct {
 	// from the orderafter mixin's `fn` parameter. Empty when unconstrained.
 	OrderAfter string
 
+	// Source is the method this was projected from.
+	//
+	// Carried so a contributing generator can read the method's own metadata
+	// without re-deriving the interface's method set: after flattening, that
+	// set is not the interface's declared methods, and a contributor walking
+	// the declarations would miss everything an embedded interface added.
+	Source *node.Method
+
 	// From names the embedded interface that contributed this method, empty
 	// for one the source declared directly.
 	//
@@ -898,6 +906,7 @@ func methodsOf(iface *node.Interface, full []sourceMethod) []Method {
 		named := signature.NamedReturnsUsable(m)
 		out = append(out, Method{
 			Name:                m.Name,
+			Source:              m,
 			From:                sm.From,
 			CallType:            iface.Name + m.Name + "Call",
 			StubType:            iface.Name + m.Name + "Stub",

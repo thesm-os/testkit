@@ -8,11 +8,14 @@ import (
 	"testing"
 
 	backendgolang "go.thesmos.sh/eidos/backend/golang"
+	"go.thesmos.sh/eidos/core/diag"
 	"go.thesmos.sh/eidos/core/position"
 	"go.thesmos.sh/eidos/eidostest/pipelinetest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/plugin"
 	"go.thesmos.sh/eidos/sdk"
+	"go.thesmos.sh/eidos/store"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/internal/fault"
@@ -37,6 +40,13 @@ func TestGenerateWithoutAHost(t *testing.T) {
 	t.Run("writes no file when the interface declares no double", func(t *testing.T) {
 		t.Parallel()
 		render(t, faulted(t, false)).AssertFileCount(0)
+	})
+
+	t.Run("skips an unhosted interface beside a hosted one", func(t *testing.T) {
+		t.Parallel()
+		// A run generally doubles some interfaces and not others, so the walk
+		// has to pass over an unhosted one rather than stop at it.
+		render(t, mixedHosting(t)).AssertFileCount(2)
 	})
 
 	t.Run("reports no diagnostic when it declines to contribute", func(t *testing.T) {
@@ -206,6 +216,45 @@ func TestSetOutputPackages(t *testing.T) {
 	})
 }
 
+// Swallowing a failed append reads downstream as a method nobody configured
+// rather than as a fault, and the helpers are this plugin's whole output.
+func TestGenerateReportsAFailedAppend(t *testing.T) {
+	t.Parallel()
+
+	s := storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrNotFound")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+
+	// The host has to queue first, or there is nothing to contribute against.
+	// Freezing afterwards provokes the failure from outside the pipeline,
+	// standing in for the real cause — an append arriving after Layout has
+	// closed the graph.
+	sink := diag.New()
+	f := fault.New()
+	// The stamps are this plugin's own annotator pass; without it the
+	// directive is present and the metadata it drives is not.
+	if err := f.Annotate(&plugin.AnnotatorContext{Store: s, Reader: store.NewReader(s), Diag: sink}); err != nil {
+		t.Fatalf("Annotate: %v", err)
+	}
+	ctx := &plugin.GeneratorContext{Store: s, Reader: store.NewReader(s), Diag: sink}
+	if err := stub.New().Generate(ctx); err != nil {
+		t.Fatalf("host Generate: %v", err)
+	}
+	s.Emit().Freeze()
+
+	err := f.Generate(ctx)
+
+	testkit.Error(t, err, "a failed append must surface")
+	testkit.Contains(t, err.Error(), fault.Name, "the error must name the plugin")
+}
+
 // render drives both plugins and the Go backend over pkg through a synthetic
 // pipeline, so routing, slot materialisation, and rendering all participate.
 //
@@ -222,6 +271,30 @@ func render(t *testing.T, pkg *node.Package) *pipelinetest.Pipeline {
 		WithBackend(backendgolang.New()).
 		Build().
 		Run()
+}
+
+// mixedHosting returns a package holding one interface that requests a double
+// and one that carries fault configuration without requesting one.
+func mixedHosting(t *testing.T) *node.Package {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Unhosted", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(position.At("storepkg/store.go", 1, 1))
+			i.Method("Drop", func(m *storefixture.MethodBuilder) {
+				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrGone")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(position.At("storepkg/store.go", 1, 1))
+			i.Directive(storefixture.Directive("stub"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrNotFound")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		PackageNode()
 }
 
 // faulted returns a store whose Get carries every fault key at once, with the

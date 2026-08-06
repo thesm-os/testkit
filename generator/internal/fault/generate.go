@@ -214,8 +214,13 @@ func doublesByOrigin(ctx *sdk.GeneratorContext) map[node.Node]*stub.Stub {
 	return out
 }
 
-// methodsOf projects every method of iface that both the double carries and
-// the source configured a fault for.
+// methodsOf projects every method the double carries that the source
+// configured a fault for.
+//
+// Driven off the double's method set rather than the interface's declarations,
+// because after flattening the two differ: a method an embedded interface
+// contributed is carried by the double and absent from the declarations, and
+// walking the declarations would silently skip its fault configuration.
 //
 // A method configuring nothing is dropped rather than emitted empty: the
 // helpers are the whole contribution, and a method with none would otherwise
@@ -223,18 +228,10 @@ func doublesByOrigin(ctx *sdk.GeneratorContext) map[node.Node]*stub.Stub {
 func methodsOf(ctx *sdk.GeneratorContext, iface *node.Interface, double *stub.Stub) []Method {
 	// Indexed rather than ranged by value: stub.Method is wide enough that
 	// copying one per iteration is measurable, and nothing here needs a copy.
-	carried := make(map[string]int, len(double.Methods))
+	out := make([]Method, 0, len(double.Methods))
 	for i := range double.Methods {
-		carried[double.Methods[i].Name] = i
-	}
-
-	out := make([]Method, 0, len(iface.Methods))
-	for _, m := range iface.Methods {
-		i, doubled := carried[m.Name]
-		if !doubled {
-			continue
-		}
 		host := double.Methods[i]
+		m := host.Source
 		projected := Method{
 			Method:    host,
 			Sentinels: sentinelsOf(iface, m),

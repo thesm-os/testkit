@@ -679,9 +679,13 @@ func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *
 	t.Helper()
 	dir := storefixture.Directive("stub")
 	maps.Copy(dir.KV, kv)
+	// A routing directive sits alongside the plugin's own on every real
+	// interface, so the witness read has to pass over one it does not own.
+	routing := storefixture.Directive("out", storefixture.Arg("storetest/"))
 	return storefixture.New().
 		Package("storepkg", "example.com/storepkg").
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(routing)
 			i.Directive(dir)
 			i.TypeParam("K", bound(kBound))
 			i.TypeParam("V", bound(vBound))
@@ -820,6 +824,99 @@ func unionTermFixture(t *testing.T) *store.Store {
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
+		}).
+		Build()
+}
+
+// The embed walk has three arms nothing in the corpus reaches, each of which
+// would corrupt a method set rather than fail loudly if it were wrong.
+func TestFlattenEdges(t *testing.T) {
+	t.Parallel()
+
+	t.Run("terminates on a cyclic embed graph", func(t *testing.T) {
+		t.Parallel()
+		// Illegal in Go and unreachable from a real frontend, so the guard is
+		// checked against a hand-built graph — a malformed one should cost a
+		// diagnostic rather than the process.
+		pending := generate(t, stub.New(), cyclicFixture(t))
+		testkit.Len(t, pending, 2, "a cycle still yields the double and its companion")
+	})
+
+	t.Run("carries an unresolved embed up through a nested one", func(t *testing.T) {
+		t.Parallel()
+		// The failure is two levels down; a walk that only reported its own
+		// level would emit a double missing a method it never knew about.
+		pending := generate(t, stub.New(), nestedMissingFixture(t))
+		testkit.Len(t, pending, 0, "an embed's own unresolved embed blocks the double")
+	})
+
+	t.Run("takes an overlapping method once", func(t *testing.T) {
+		t.Parallel()
+		// Go admits two embeds declaring the same method only where the
+		// signatures agree, so the second arrival is the same method and a
+		// double declaring it twice would not compile.
+		double, _ := split(t, generate(t, stub.New(), overlappingFixture(t)))
+		testkit.Len(t, double.Methods, 1, "an overlapping method is carried once")
+	})
+}
+
+// cyclicFixture returns two interfaces embedding each other.
+func cyclicFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("A", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Named("B"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("B", func(i *storefixture.InterfaceBuilder) {
+			i.Embed(storefixture.Named("A"))
+		}).
+		Build()
+}
+
+// nestedMissingFixture returns an interface whose embed embeds something the
+// store does not hold.
+func nestedMissingFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Middle", func(i *storefixture.InterfaceBuilder) {
+			i.Embed(storefixture.Named("Missing"))
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("Outer", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Named("Middle"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// overlappingFixture returns an interface embedding two that declare the same
+// method.
+func overlappingFixture(t *testing.T) *store.Store {
+	t.Helper()
+	shared := func(i *storefixture.InterfaceBuilder) {
+		i.Method("Close", func(m *storefixture.MethodBuilder) {
+			m.Return(storefixture.Named("error"))
+		})
+	}
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Left", shared).
+		Interface("Right", shared).
+		Interface("Both", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Named("Left"))
+			i.Embed(storefixture.Named("Right"))
 		}).
 		Build()
 }
