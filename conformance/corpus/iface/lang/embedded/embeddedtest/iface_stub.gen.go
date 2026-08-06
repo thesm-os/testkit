@@ -136,6 +136,14 @@ type BaseStub struct {
 	strict bool
 }
 
+// Compile-time proof that BaseStub satisfies Base.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ embedded.Base = (*BaseStub)(nil)
+
 // NewBaseStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -335,6 +343,14 @@ type CloserStub struct {
 	strict bool
 }
 
+// Compile-time proof that CloserStub satisfies Closer.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ embedded.Closer = (*CloserStub)(nil)
+
 // NewCloserStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -414,6 +430,26 @@ func (s *CloserStub) Close(ctx context.Context) error {
 	return r.Err
 }
 
+// ComposedPingCall records one invocation of Composed.Ping.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ComposedPingCall struct {
+	Ctx context.Context
+	Err error
+}
+
+// ComposedCloseCall records one invocation of Composed.Close.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ComposedCloseCall struct {
+	Ctx context.Context
+	Err error
+}
+
 // ComposedGetCall records one invocation of Composed.Get.
 //
 // Fields take their names from the source signature — parameters and named
@@ -427,6 +463,70 @@ type ComposedGetCall struct {
 }
 
 // --- Per-method configuration ---
+
+// ComposedPingStub controls how the double answers Ping and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ComposedPingStub struct {
+	*stub.MethodStub[ComposedPingCall]
+
+	fn       func(context.Context) error
+	fallback *ComposedPingReturn
+}
+
+// ComposedPingReturn holds the fixed answer configured through Returns.
+type ComposedPingReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Ping. A Func
+// override and an injected fault both take precedence over it.
+func (s *ComposedPingStub) Returns(err error) *ComposedPingStub {
+	s.fallback = &ComposedPingReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Ping, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ComposedPingStub) Func(fn func(context.Context) error) *ComposedPingStub {
+	s.fn = fn
+	return s
+}
+
+// ComposedCloseStub controls how the double answers Close and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ComposedCloseStub struct {
+	*stub.MethodStub[ComposedCloseCall]
+
+	fn       func(context.Context) error
+	fallback *ComposedCloseReturn
+}
+
+// ComposedCloseReturn holds the fixed answer configured through Returns.
+type ComposedCloseReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Close. A Func
+// override and an injected fault both take precedence over it.
+func (s *ComposedCloseStub) Returns(err error) *ComposedCloseStub {
+	s.fallback = &ComposedCloseReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Close, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ComposedCloseStub) Func(fn func(context.Context) error) *ComposedCloseStub {
+	s.fn = fn
+	return s
+}
 
 // ComposedGetStub controls how the double answers Get and records
 // what it was asked.
@@ -480,6 +580,8 @@ func ComposedStubStrict() ComposedStubOption {
 // production type, which is the point of conformance testing.
 func ComposedStubDelegateTo(impl embedded.Composed) ComposedStubOption {
 	return func(s *ComposedStub) {
+		s.OnPing.Func(impl.Ping)
+		s.OnClose.Func(impl.Close)
 		s.OnGet.Func(impl.Get)
 	}
 }
@@ -516,6 +618,20 @@ func ComposedStubBenchMode() ComposedStubOption {
 	}
 }
 
+// WithComposedPing sets Ping's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithComposedPing(fn func(context.Context) error) ComposedStubOption {
+	return func(s *ComposedStub) { s.OnPing.Func(fn) }
+}
+
+// WithComposedClose sets Close's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithComposedClose(fn func(context.Context) error) ComposedStubOption {
+	return func(s *ComposedStub) { s.OnClose.Func(fn) }
+}
+
 // WithComposedGet sets Get's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -528,7 +644,11 @@ func WithComposedGet(fn func(context.Context, string) (string, error)) ComposedS
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type ComposedStub struct {
-	OnGet *ComposedGetStub
+	// OnPing configures Ping, contributed by Base.
+	OnPing *ComposedPingStub
+	// OnClose configures Close, contributed by Closer.
+	OnClose *ComposedCloseStub
+	OnGet   *ComposedGetStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -536,6 +656,14 @@ type ComposedStub struct {
 	all    []stub.Configurable
 	strict bool
 }
+
+// Compile-time proof that ComposedStub satisfies Composed.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ embedded.Composed = (*ComposedStub)(nil)
 
 // NewComposedStub returns a double bound to tb.
 //
@@ -545,9 +673,13 @@ type ComposedStub struct {
 // and non-test callers want.
 func NewComposedStub(tb testing.TB, opts ...ComposedStubOption) *ComposedStub {
 	s := &ComposedStub{
-		OnGet: &ComposedGetStub{MethodStub: stub.NewMethodStub[ComposedGetCall](tb, "Composed.Get")},
+		OnPing:  &ComposedPingStub{MethodStub: stub.NewMethodStub[ComposedPingCall](tb, "Composed.Ping")},
+		OnClose: &ComposedCloseStub{MethodStub: stub.NewMethodStub[ComposedCloseCall](tb, "Composed.Close")},
+		OnGet:   &ComposedGetStub{MethodStub: stub.NewMethodStub[ComposedGetCall](tb, "Composed.Get")},
 	}
 	s.all = []stub.Configurable{
+		s.OnPing.MethodStub,
+		s.OnClose.MethodStub,
 		s.OnGet.MethodStub,
 	}
 	for _, opt := range opts {
@@ -587,6 +719,70 @@ func (s *ComposedStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *ComposedPingStub) invoke(ctx context.Context) func() ComposedPingReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ComposedPingReturn {
+		r0 := s.fn(ctx)
+		return ComposedPingReturn{Err: r0}
+	}
+}
+
+// Ping records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ComposedStub) Ping(ctx context.Context) error {
+	call := ComposedPingCall{Ctx: ctx}
+	r := stub.Answer(s.OnPing.MethodStub, &call, stub.Arms[ComposedPingCall, ComposedPingReturn]{
+		Invoke:   s.OnPing.invoke(ctx),
+		Fallback: s.OnPing.fallback,
+		Fault:    func(err error) ComposedPingReturn { return ComposedPingReturn{Err: err} },
+		Stamp: func(c *ComposedPingCall, r ComposedPingReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *ComposedCloseStub) invoke(ctx context.Context) func() ComposedCloseReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ComposedCloseReturn {
+		r0 := s.fn(ctx)
+		return ComposedCloseReturn{Err: r0}
+	}
+}
+
+// Close records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ComposedStub) Close(ctx context.Context) error {
+	call := ComposedCloseCall{Ctx: ctx}
+	r := stub.Answer(s.OnClose.MethodStub, &call, stub.Arms[ComposedCloseCall, ComposedCloseReturn]{
+		Invoke:   s.OnClose.invoke(ctx),
+		Fallback: s.OnClose.fallback,
+		Fault:    func(err error) ComposedCloseReturn { return ComposedCloseReturn{Err: err} },
+		Stamp: func(c *ComposedCloseCall, r ComposedCloseReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *ComposedGetStub) invoke(ctx context.Context, key string) func() ComposedGetReturn {
 	if s.fn == nil {
 		return nil
@@ -618,4 +814,4 @@ func (s *ComposedStub) Get(ctx context.Context, key string) (string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a5c87d3d64ab1af87cd565223645279da920555bccedcdf9b80f357c7a26b1ac
+// testkit:provenance 280f59fa5723d7f7e07116e16e734b98b8a3bd2e73d5793fa91d89f50b8b2a7a

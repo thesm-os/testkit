@@ -134,6 +134,14 @@ type PoisonAccessorStub struct {
 	strict bool
 }
 
+// Compile-time proof that PoisonAccessorStub satisfies PoisonAccessor.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ poisonaccessor.PoisonAccessor = (*PoisonAccessorStub)(nil)
+
 // NewPoisonAccessorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -214,4 +222,4 @@ func (s *PoisonAccessorStub) Err() error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8af04bc431a46def1f4418b3e66119a620cd27fabc00e7dc7cc7bb14f89f1a4c
+// testkit:provenance 65a4ded9075145b0a5e80c65323b2b16225952ccc5688a765625a6c205867680

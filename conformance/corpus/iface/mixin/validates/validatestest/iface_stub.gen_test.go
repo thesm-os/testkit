@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ validates.Mixed = (*validatestest.MixedStub)(nil)
-
 // mixedStubStoreSubject binds Store into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -495,4 +490,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 548f17c8265b07b704f31f58fb1ea04738d50da82bb02f911e97280c846acdb3
+// testkit:provenance 92e54adef8bcf78d635425e26e775855666a4b12c7691096bf2b98078260c8bd

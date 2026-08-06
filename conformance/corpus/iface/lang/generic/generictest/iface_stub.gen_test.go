@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/generic"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/generic/generictest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that StoreStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ generic.Store[string, int] = (*generictest.StoreStub[string, int])(nil)
 
 // storeStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -402,4 +396,4 @@ func TestStoreStubOptions(t *testing.T) { storeStubOptionChecks[string, int](t) 
 func TestStoreStubDelegateTo(t *testing.T) { storeStubDelegationChecks[string, int](t) }
 
 // testkit: end of generated content.
-// testkit:provenance d703fa49fd97a7903d48faddafdd9c5d2d8dfe2218d4b1cea0798f2e96b2ca56
+// testkit:provenance 0ac09125ce7e91b857193c8655ab497971555e84860244688cc47c88b4bd699c

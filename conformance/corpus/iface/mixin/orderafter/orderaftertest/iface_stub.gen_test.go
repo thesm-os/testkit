@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/orderafter"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/orderafter/orderaftertest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ orderafter.Mixed = (*orderaftertest.MixedStub)(nil)
 
 // mixedStubCommitSubject binds Commit into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -349,4 +343,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c063733a849f82e787583be8ea863ac69ad23005eee3840767717a9956ad7313
+// testkit:provenance 33921b4d552e0c65826459dbd355f2757a4e1ac85a02178ddb879f4eebd895d8

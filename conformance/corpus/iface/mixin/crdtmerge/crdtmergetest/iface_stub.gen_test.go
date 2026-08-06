@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ReplicaStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ crdtmerge.Replica = (*crdtmergetest.ReplicaStub)(nil)
-
 // replicaStubItemsSubject binds Items into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -214,11 +209,6 @@ func TestReplicaStubDelegateTo(t *testing.T) {
 		testkit.ErrorIs(t, r1, want, "Items must surface the wrapped answer")
 	})
 }
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ crdtmerge.Mixed = (*crdtmergetest.MixedStub)(nil)
 
 // mixedStubMergeSubject binds Merge into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -691,4 +681,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2476939e0be3d10eedb851bdb2e4105f4195bfeb4ca97611118a18470a9fa185
+// testkit:provenance 12ea944e0fa29eaa0fe12683a5fe2a21231506b57f8e239a1eec6d97307de31c

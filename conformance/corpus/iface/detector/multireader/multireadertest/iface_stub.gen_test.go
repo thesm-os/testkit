@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that MultiReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ multireader.MultiReader = (*multireadertest.MultiReaderStub)(nil)
-
 // multiReaderStubGetWithMetaSubject binds GetWithMeta into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -234,4 +229,4 @@ func TestMultiReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9a664d6475d1d645a6a6616e686f8bcb1fbe39cca527fd9f40308f0384ad10a0
+// testkit:provenance 8db0563f8fc322ab4493663411392a0f0058aad81a2d8889ef6a6f2b64e4c8e5

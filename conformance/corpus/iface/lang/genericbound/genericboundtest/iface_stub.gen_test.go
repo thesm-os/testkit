@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that RankedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ genericbound.Ranked[int, genericbound.Score] = (*genericboundtest.RankedStub[int, genericbound.Score])(nil)
-
 // rankedStubRankSubject binds Rank into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -380,4 +375,4 @@ func TestRankedStubOptions(t *testing.T) { rankedStubOptionChecks[int, genericbo
 func TestRankedStubDelegateTo(t *testing.T) { rankedStubDelegationChecks[int, genericbound.Score](t) }
 
 // testkit: end of generated content.
-// testkit:provenance 26ace13aac07b66514b5be585f23e00f361e41ed59633608a8a4a452e2725836
+// testkit:provenance 4c5d3217179d8c87c7300d2170df415534fd1e01387d077bc057a9afe462d1ad

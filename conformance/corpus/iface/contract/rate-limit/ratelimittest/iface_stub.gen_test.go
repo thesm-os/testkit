@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	ratelimit "go.thesmos.sh/testkit/conformance/corpus/iface/contract/rate-limit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/rate-limit/ratelimittest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ ratelimit.Contract = (*ratelimittest.ContractStub)(nil)
 
 // contractStubRunSubject binds Run into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 79a08d888b5443877c0b01093cb9cf6f45f76f542bbfb83aa6f451c489e30ac9
+// testkit:provenance cb70d47ec223eec9bb4e68318a11ab3dcdaf1657314d59b0662141d877b7b5e1

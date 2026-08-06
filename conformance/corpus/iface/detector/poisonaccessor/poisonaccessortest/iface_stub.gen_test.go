@@ -12,16 +12,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/poisonaccessor"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/poisonaccessor/poisonaccessortest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that PoisonAccessorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ poisonaccessor.PoisonAccessor = (*poisonaccessortest.PoisonAccessorStub)(nil)
 
 // poisonAccessorStubErrSubject binds Err into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -197,4 +191,4 @@ func TestPoisonAccessorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4518a73e5d1cc08b2b178a98686132ad4d3cce90ced18af6d18c10236dae91fe
+// testkit:provenance a2d147b228ced321b8a5ba4e719f56b4bc605281693d689d6deb7515f3c13dfb

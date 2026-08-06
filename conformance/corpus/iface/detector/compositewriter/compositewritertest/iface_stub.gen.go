@@ -139,6 +139,14 @@ type CompositeWriterStub struct {
 	strict bool
 }
 
+// Compile-time proof that CompositeWriterStub satisfies CompositeWriter.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ compositewriter.CompositeWriter = (*CompositeWriterStub)(nil)
+
 // NewCompositeWriterStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -220,4 +228,4 @@ func (s *CompositeWriterStub) Store(ctx context.Context, v compositewriter.Value
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0d8ed04e421b215fbaec9f55e8244d9edd3e3204b8c7c1480957c84f0e64b413
+// testkit:provenance 94e538230328127b9cb909a8d61716e8e784c55f336b04ce98c64ea03a65a65d

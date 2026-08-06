@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that PaginatedReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ paginatedreader.PaginatedReader = (*paginatedreadertest.PaginatedReaderStub)(nil)
-
 // paginatedReaderStubPageSubject binds Page into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -234,4 +229,4 @@ func TestPaginatedReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2855073aa59a612e99179f9bf716a75c74bd6df5010d5547c80fc83ebafcdef9
+// testkit:provenance b732ff95b471b1ca8644b65e499b98226a51056a6e65dffe72295184f31f8972

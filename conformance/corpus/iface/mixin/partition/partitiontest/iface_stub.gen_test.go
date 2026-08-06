@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/partition"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/partition/partitiontest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ partition.Mixed = (*partitiontest.MixedStub)(nil)
 
 // mixedStubPutSubject binds Put into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -442,4 +436,4 @@ func TestMixedStubPutFaults(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5124d7e247748966d09b82977f789671217dd7420e4ea84d191ef3ae3133ad62
+// testkit:provenance ecde4c74028401d3a5a31904e586aad1747e73c6a02919de122de6c0f8f39e7a

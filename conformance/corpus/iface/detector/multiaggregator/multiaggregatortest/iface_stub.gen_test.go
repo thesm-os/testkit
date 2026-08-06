@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiaggregator"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiaggregator/multiaggregatortest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MultiAggregatorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ multiaggregator.MultiAggregator = (*multiaggregatortest.MultiAggregatorStub)(nil)
 
 // multiAggregatorStubStatsSubject binds Stats into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestMultiAggregatorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance abd367804d833f19bc0c073db80654f0940ab811d84ff153f875f9e6462c7b26
+// testkit:provenance 86266793d8c44b168ac9b89949280061621b9b3d822166c079459cac129cd8c1

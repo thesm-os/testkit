@@ -189,6 +189,14 @@ type LeasedWriterStub struct {
 	strict bool
 }
 
+// Compile-time proof that LeasedWriterStub satisfies LeasedWriter.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ leasedidempotentwriter.LeasedWriter = (*LeasedWriterStub)(nil)
+
 // NewLeasedWriterStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -303,4 +311,4 @@ func (s *LeasedWriterStub) Release(ctx context.Context, key string) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c38411c43b16bb2e352d3c28637318511cc4a0db8eb01f27b6d178dbea2ec0e7
+// testkit:provenance d27fc1d37af7f28f223587415b4d8d95b3fa7674287e9ca268fa45c4642ffce3

@@ -175,6 +175,14 @@ type StreamReaderStub struct {
 	strict bool
 }
 
+// Compile-time proof that StreamReaderStub satisfies StreamReader.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ streamreader.StreamReader = (*StreamReaderStub)(nil)
+
 // NewStreamReaderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -254,4 +262,4 @@ func (s *StreamReaderStub) List(ctx context.Context) iter.Seq2[streamreader.Valu
 }
 
 // testkit: end of generated content.
-// testkit:provenance ae59194edb736cc19db7c022522b891a1873c42f3d284d93441d68fd9bec0c23
+// testkit:provenance f3741908509af94735ef11bfd9c8367eaca5117320964c3cf5abeec208094935

@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/namedreturns"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/namedreturns/namedreturnstest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ServiceStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ namedreturns.Service = (*namedreturnstest.ServiceStub)(nil)
 
 // serviceStubNamedSubject binds Named into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -518,4 +512,4 @@ func TestServiceStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 18b2f07964b97e523b0f40fdaf7fffa181819cb10f6b767a909564f0afdf549a
+// testkit:provenance f624dc173011929be07b85741ee078dc6690718461d214aa7524460dade98b2b

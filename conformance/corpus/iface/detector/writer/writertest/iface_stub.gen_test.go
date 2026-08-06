@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that WriterStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ writer.Writer = (*writertest.WriterStub)(nil)
-
 // writerStubPutSubject binds Put into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -222,4 +217,4 @@ func TestWriterStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 23b7ab1987dcfedd4669d0d9f6393caedf5f190da76a3d7b5f12439c4a6450f1
+// testkit:provenance ebbd77366308080023d75854ed010ea64866c15b25fda477c2701ddca0e3e472

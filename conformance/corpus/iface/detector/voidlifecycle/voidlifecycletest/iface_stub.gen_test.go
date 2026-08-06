@@ -11,16 +11,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/voidlifecycle"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/voidlifecycle/voidlifecycletest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that VoidLifecycleStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ voidlifecycle.VoidLifecycle = (*voidlifecycletest.VoidLifecycleStub)(nil)
 
 // voidLifecycleStubStopSubject binds Stop into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -151,4 +145,4 @@ func TestVoidLifecycleStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7232c51e070d13dc8d8ff3825e49eaddd13291b9180445725e90a8b8af123996
+// testkit:provenance 5c1c07bfa164afe3c67c172ca3f5d7575af0c0b9e86038d33428a656b34c4465

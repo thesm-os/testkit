@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	txwithretry "go.thesmos.sh/testkit/conformance/corpus/iface/composite/tx-with-retry"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/composite/tx-with-retry/txwithretrytest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that TxWithRetryStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ txwithretry.TxWithRetry = (*txwithretrytest.TxWithRetryStub)(nil)
 
 // txWithRetryStubBeginSubject binds Begin into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -466,4 +460,4 @@ func TestTxWithRetryStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f18e8c6d6a605d37f3e6ddad37c50ed0d8e0e370d70a2b941fa6ec5037224c87
+// testkit:provenance 8a7a0ac5fd507eec531cb03ba577cd9ac34c2147f2e78a5545903fa8b56fbc3c

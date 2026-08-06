@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	circuitbreaker "go.thesmos.sh/testkit/conformance/corpus/iface/contract/circuit-breaker"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/circuit-breaker/circuitbreakertest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ circuitbreaker.Contract = (*circuitbreakertest.ContractStub)(nil)
 
 // contractStubRunSubject binds Run into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 57ecaa3eaf9d72631547775287bf577f384003526d8695d08035c8e1d8d38cdb
+// testkit:provenance 0e6a8c34e0109589077347217637532c4e2709b8cf22730adbb1765f098de513

@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/timeout"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/timeout/timeouttest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ timeout.Mixed = (*timeouttest.MixedStub)(nil)
 
 // mixedStubSlowSubject binds Slow into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 64403391fa6048ccfccfe41314a909c4ed9f3f06e0274fb09aa08deecd694542
+// testkit:provenance 194341f58306fc742ecdec7da6a18bebb599e5aef29c95d06ebd683f4a4b38df

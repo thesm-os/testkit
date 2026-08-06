@@ -140,6 +140,14 @@ type MultiAggregatorStub struct {
 	strict bool
 }
 
+// Compile-time proof that MultiAggregatorStub satisfies MultiAggregator.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ multiaggregator.MultiAggregator = (*MultiAggregatorStub)(nil)
+
 // NewMultiAggregatorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -222,4 +230,4 @@ func (s *MultiAggregatorStub) Stats(ctx context.Context) (int, int, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 04e3090f0b816b5233ca9c594bf5492302ae6f741922564eee38a66668910f13
+// testkit:provenance a32c7c0f0efe30500683f637b3993516d05179b7846da4eabf212cbdfe507611

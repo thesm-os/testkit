@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/deleteremoves"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/deleteremoves/deleteremovestest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ deleteremoves.Mixed = (*deleteremovestest.MixedStub)(nil)
 
 // mixedStubDeleteSubject binds Delete into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -517,4 +511,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5b1c9b8a7ffda38235b4471963890e4907ca5d3c788fb8fdb0c5cab5dd0acb2c
+// testkit:provenance c12e05bd652e3a9e2b8f2ca86fcf541d3a4955aa35c2150635afe3185f60cd58

@@ -253,6 +253,14 @@ type WideStub struct {
 	strict bool
 }
 
+// Compile-time proof that WideStub satisfies Wide.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ multireturn.Wide = (*WideStub)(nil)
+
 // NewWideStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -405,4 +413,4 @@ func (s *WideStub) NoError(ctx context.Context, id string) (string, int) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance afce375b294d4765d6947d4084efa493bdef47e5e1b046989078b0336919efc8
+// testkit:provenance ca88a12c626875cfeeeccaeec1573bf8085dfdada6ef9487761ef65d75cb3f4b

@@ -247,6 +247,14 @@ type ServiceStub struct {
 	strict bool
 }
 
+// Compile-time proof that ServiceStub satisfies Service.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ namedreturns.Service = (*ServiceStub)(nil)
+
 // NewServiceStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -398,4 +406,4 @@ func (s *ServiceStub) PartiallyNamed(ctx context.Context, id string) (string, er
 }
 
 // testkit: end of generated content.
-// testkit:provenance a9b8bc446bf1212b8b3c80d95bc2d3f7237f167dad3c52304b877161b0d516af
+// testkit:provenance 589ce508bd74409322b34bfc4f3bd44ec1b047da44cd8c5a00c50cad29a8083c

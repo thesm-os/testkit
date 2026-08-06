@@ -6,6 +6,7 @@ package stub
 import (
 	"fmt"
 	"io/fs"
+	"path"
 	"slices"
 	"strings"
 	"text/template"
@@ -280,6 +281,15 @@ type Method struct {
 	// from the orderafter mixin's `fn` parameter. Empty when unconstrained.
 	OrderAfter string
 
+	// From names the embedded interface that contributed this method, empty
+	// for one the source declared directly.
+	//
+	// Carried so the generated field says where it came from: a flattened
+	// method set reads as if every method were declared on the interface, and
+	// a double that grows because an embedded interface gained a method would
+	// otherwise offer nothing to explain the change.
+	From string
+
 	// Mixins are the opt-in behavioural laws the source attached through
 	// `//testkit:mixin <name>`, in the order they were written.
 	//
@@ -361,6 +371,12 @@ type Stub struct {
 	// generated identifier that names one of the double's own types has to
 	// carry it, since a generic type cannot be referenced bare.
 	TypeArgs string
+
+	// Witnesses are the concrete types the compile-time guard instantiates a
+	// generic double at, in parameter order. Empty for a non-generic double,
+	// and for one whose constraints admit no witness — the latter gets no
+	// guard, because there is no way to name the types it would hold at.
+	Witnesses []emit.Ref
 
 	// Complete reports whether the double carries every method its source
 	// declares. An integration-only method is dropped, and a double missing a
@@ -507,7 +523,18 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 		typeName := iface.Name + p.suffix()
-		methods := methodsOf(iface)
+		full, resolved := flatten(ctx, iface)
+		if !resolved {
+			// Nothing is emitted for an interface whose method set could not be
+			// completed. A double missing a method does not satisfy the
+			// interface it doubles, so it cannot be passed anywhere that
+			// interface is expected — which is the whole of what a double is
+			// for. Recording faithfully is worth nothing if nothing can accept
+			// it, so the diagnostic raised during the walk stands alone rather
+			// than accompanying an artefact that cannot be used.
+			continue
+		}
+		methods := methodsOf(iface, full)
 
 		// Measured after projection rather than on the source method set: an
 		// interface whose every method is integration-only has methods but
@@ -542,7 +569,8 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Methods:    methods,
 				TypeParams: typeParamsOf(iface),
 				TypeArgs:   typeArgsOf(iface),
-				Complete:   complete(iface, methods),
+				Witnesses:  witnesses,
+				Complete:   len(methods) == len(full),
 			},
 			&Tests{
 				BaseEmit:   testBase,
@@ -556,7 +584,7 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				TypeParams: typeParamsOf(iface),
 				Witnesses:  witnesses,
 				Generic:    len(iface.TypeParams) > 0 && len(witnesses) == 0,
-				Complete:   complete(iface, methods),
+				Complete:   len(methods) == len(full),
 			},
 		} {
 			prov := c.Provenance(string(value.Kind()) + "." + iface.Name)
@@ -687,20 +715,6 @@ func plural(n int) string {
 	return "s"
 }
 
-// complete reports whether the double carries every method its source
-// declares, which is what decides whether the compile-time interface assertion
-// is emitted.
-//
-// An embedded interface fails it outright. The projection reads only the
-// directly declared methods, so a double for an interface that embeds another
-// is missing whatever the embedded one contributed — and asserting that it
-// satisfies the interface would fail in the consumer's compiler rather than
-// here. Flattening embedded method sets is the fix; until then the double is
-// honestly partial rather than confidently wrong.
-func complete(iface *node.Interface, methods []Method) bool {
-	return len(iface.Embeds) == 0 && len(methods) == len(iface.Methods)
-}
-
 // typeParamsOf lifts the interface's type-parameter list into the emit form
 // `renderTypeParams` consumes.
 //
@@ -768,12 +782,147 @@ func doubled(m *node.Method) bool {
 	return !slices.Contains(shape.Mixins(m.Meta()), MixinIntegrationOnly)
 }
 
+// sourceMethod pairs a source method with the embedded interface that
+// contributed it, so the projection can say where a flattened method came
+// from without re-walking the embed graph.
+type sourceMethod struct {
+	Method *node.Method
+
+	// From is the contributing interface's name, empty for a method the
+	// interface declared itself.
+	From string
+}
+
+// flatten returns iface's full source method set and whether every embed
+// resolved.
+//
+// Embedded methods come first, depth-first in the order the source embeds
+// them, then the interface's own — which is how the source reads, and what
+// keeps the generated field order stable as an embed gains a method.
+//
+// # Why flatten rather than compose
+//
+// A double could embed the doubles of the interfaces its source embeds, which
+// would mirror the source exactly. It cannot: an embedded interface need not
+// carry `//testkit:stub`, so its double may not exist. Embedding is a fact
+// about the source rather than an opt-in, so the method set is copied.
+//
+// # Hazards
+//
+// Resolution is against the interfaces this run loaded, so the result depends
+// on the invocation and not only on the source: a run over one package cannot
+// see an embed declared in another. The difference is always toward a smaller
+// double rather than a wrong one, and every unresolved embed is warned about
+// by name — but a narrower invocation does produce a different file from the
+// same source, which is the cost of resolving embeds at all.
+func flatten(ctx *sdk.GeneratorContext, iface *node.Interface) ([]sourceMethod, bool) {
+	byQName := make(map[string]*node.Interface)
+	for _, candidate := range ctx.Reader.Interfaces().Slice() {
+		byQName[candidate.QName()] = candidate
+	}
+	var (
+		out     []sourceMethod
+		seen    = make(map[string]struct{})
+		visited = make(map[string]struct{})
+	)
+	resolved := collect(ctx, iface, "", byQName, seen, visited, &out)
+	return out, resolved
+}
+
+// collect appends host's method set to out, recursing into its embeds first.
+//
+// from names the interface the caller is collecting on behalf of, so a method
+// reached through a chain of embeds is attributed to the embed the source
+// actually wrote rather than to whichever interface declared it.
+func collect(
+	ctx *sdk.GeneratorContext,
+	host *node.Interface,
+	from string,
+	byQName map[string]*node.Interface,
+	seen, visited map[string]struct{},
+	out *[]sourceMethod,
+) bool {
+	// Guards a cycle. Illegal in Go and unreachable from a real frontend, but
+	// a malformed graph should fail to terminate the walk rather than the run.
+	if _, looping := visited[host.QName()]; looping {
+		return true
+	}
+	visited[host.QName()] = struct{}{}
+
+	resolved := true
+	for _, embed := range host.Embeds {
+		// A union term in type-set position is not an interface and carries no
+		// methods. Such a type is never a stub target, so it is skipped rather
+		// than reported.
+		if embed.Type == nil || embed.Type.Name == "" {
+			continue
+		}
+		written := embedName(embed.Type)
+		if len(embed.Type.TypeArgs) > 0 {
+			ctx.Diag.Errorf(embed.Pos(),
+				"%s: interface %q embeds the generic %q; its methods name that "+
+					"interface's type parameters rather than this one's, which "+
+					"flattening does not substitute",
+				Name, host.QName(), written)
+			resolved = false
+			continue
+		}
+		// An embed with no package is declared alongside its embedder, which
+		// is what the frontend records for an in-package reference.
+		pkg := embed.Type.Package
+		if pkg == "" {
+			pkg = host.Package
+		}
+		target, known := byQName[pkg+"."+embed.Type.Name]
+		if !known {
+			ctx.Diag.Warnf(embed.Pos(),
+				"%s: interface %q embeds %q, which this run did not load, so its "+
+					"method set cannot be completed; no double is generated, "+
+					"because one missing a method cannot stand in for the "+
+					"interface it doubles",
+				Name, host.QName(), written)
+			resolved = false
+			continue
+		}
+		attributed := from
+		if attributed == "" {
+			attributed = embed.Type.Name
+		}
+		if !collect(ctx, target, attributed, byQName, seen, visited, out) {
+			resolved = false
+		}
+	}
+
+	for _, m := range host.Methods {
+		// Go admits overlapping embedded method sets only where the signatures
+		// agree, so a repeat is the same method reached twice and the first
+		// arrival is as good as any.
+		if _, dup := seen[m.Name]; dup {
+			continue
+		}
+		seen[m.Name] = struct{}{}
+		*out = append(*out, sourceMethod{Method: m, From: from})
+	}
+	return resolved
+}
+
+// embedName spells an embed the way the source wrote it, so a diagnostic names
+// something the author can find. A cross-package embed reads as `io.Closer`
+// rather than as the bare `Closer` the reference carries.
+func embedName(t *node.TypeRef) string {
+	if t.Package == "" {
+		return t.Name
+	}
+	return path.Base(t.Package) + "." + t.Name
+}
+
 // methodsOf lifts every method a double carries into the rendered form both
 // outputs share. Free function rather than a method: the lifting depends only
 // on the source signature and the annotator's stamps, not on plugin options.
-func methodsOf(iface *node.Interface) []Method {
-	out := make([]Method, 0, len(iface.Methods))
-	for _, m := range iface.Methods {
+func methodsOf(iface *node.Interface, full []sourceMethod) []Method {
+	out := make([]Method, 0, len(full))
+	for _, sm := range full {
+		m := sm.Method
 		if !doubled(m) {
 			continue
 		}
@@ -781,6 +930,7 @@ func methodsOf(iface *node.Interface) []Method {
 		named := signature.NamedReturnsUsable(m)
 		out = append(out, Method{
 			Name:                m.Name,
+			From:                sm.From,
 			CallType:            iface.Name + m.Name + "Call",
 			StubType:            iface.Name + m.Name + "Stub",
 			ReturnType:          iface.Name + m.Name + "Return",

@@ -138,6 +138,14 @@ type ReplicaStub struct {
 	strict bool
 }
 
+// Compile-time proof that ReplicaStub satisfies Replica.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ crdtmerge.Replica = (*ReplicaStub)(nil)
+
 // NewReplicaStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -444,6 +452,14 @@ type MixedStub struct {
 	strict bool
 }
 
+// Compile-time proof that MixedStub satisfies Mixed.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ crdtmerge.Mixed = (*MixedStub)(nil)
+
 // NewMixedStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -593,4 +609,4 @@ func (s *MixedStub) Items(ctx context.Context) ([]string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e22d32952b780320ae28a3c66187804b9fa4623c3bccdcaaf35f343bb657a85b
+// testkit:provenance 3b9f58e06e1429f698d4944b1f965d8ce7dbf7100a80155f869b60cd2d1f93cf

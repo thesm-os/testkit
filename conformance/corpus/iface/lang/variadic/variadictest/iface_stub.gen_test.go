@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/variadic"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/variadic/variadictest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that FinderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ variadic.Finder = (*variadictest.FinderStub)(nil)
 
 // finderStubFindSubject binds Find into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -384,4 +378,4 @@ func TestFinderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c499bdd3f5b8a83d2dab2240e7d4a3ff8b79c3b44eb43af7d1655f3d0541c813
+// testkit:provenance 8d48a2504d3354b85d5bd290aa36bde878ce85237771d1b7c3b6015ee2592b0e

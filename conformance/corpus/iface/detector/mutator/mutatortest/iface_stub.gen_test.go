@@ -12,16 +12,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/mutator"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/mutator/mutatortest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MutatorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ mutator.Mutator = (*mutatortest.MutatorStub)(nil)
 
 // mutatorStubTouchSubject binds Touch into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -166,4 +160,4 @@ func TestMutatorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a625d322d6d8dfed5dbb7124264a54b2bd2631e92c9eec64f4f2198c6a7c4e9d
+// testkit:provenance cdfa39826028bc622f405c591e7cac67b825f9889df4c02aadd2617351e91c95

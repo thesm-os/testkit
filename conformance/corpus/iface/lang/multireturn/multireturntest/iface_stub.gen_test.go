@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/multireturn"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/multireturn/multireturntest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that WideStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ multireturn.Wide = (*multireturntest.WideStub)(nil)
 
 // wideStubQuadSubject binds Quad into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -500,4 +494,4 @@ func TestWideStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 64d6da8b08b836db6d0dce2725f73854997f4ccf667df554b64c08befce18576
+// testkit:provenance e0a6a4b0bcf7172f71a35bb636f9b0820648bbfb0f97cc4d388899dfa744b8df

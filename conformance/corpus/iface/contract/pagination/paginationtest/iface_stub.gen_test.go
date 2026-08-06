@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ pagination.Contract = (*paginationtest.ContractStub)(nil)
-
 // contractStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -228,4 +223,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a662da86c6eae5c6abcc8c919118a0f7b006e009440a50c9c66ccd309918c216
+// testkit:provenance 8a9231256b0262e854c95712bfaa07f5e84c577876f3d6cfc7e20fdc0c9c2f5a

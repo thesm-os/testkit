@@ -123,6 +123,14 @@ type MutatorStub struct {
 	strict bool
 }
 
+// Compile-time proof that MutatorStub satisfies Mutator.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ mutator.Mutator = (*MutatorStub)(nil)
+
 // NewMutatorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -197,4 +205,4 @@ func (s *MutatorStub) Touch(ctx context.Context, key string) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9e5da526399ed29850673d80ca180a1282eae7cd438c67ddcbeace6c238fa22c
+// testkit:provenance 89b79ee64c4b4064cd023347a216a19096864f608e6000b205a8e84294ace472

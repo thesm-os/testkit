@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ ifmatch.Contract = (*ifmatchtest.ContractStub)(nil)
-
 // contractStubPutSubject binds Put into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -222,4 +217,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6f040db81f6d0c1a0bd8ee835710037a72a4aa6364bdf2de21baccdddca18d7a
+// testkit:provenance e7002d3c7baf7bea53a739e90c35cb628ba4b5c2469fb466f3af268d3413fa58

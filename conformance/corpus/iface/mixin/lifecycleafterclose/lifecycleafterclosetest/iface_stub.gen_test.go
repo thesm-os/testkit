@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/lifecycleafterclose"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/lifecycleafterclose/lifecycleafterclosetest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ lifecycleafterclose.Mixed = (*lifecycleafterclosetest.MixedStub)(nil)
 
 // mixedStubCloseSubject binds Close into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -338,4 +332,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance bbf497fb288a615ea731073cd252e4c89fa40cfbf68d7199a4a2ca7ef41d96e4
+// testkit:provenance b29ae1ea7220e048a2648c8de14104046b1f67b44b5a6b44527712df30494a83

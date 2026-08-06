@@ -137,6 +137,14 @@ type ReaderNoErrorStub struct {
 	strict bool
 }
 
+// Compile-time proof that ReaderNoErrorStub satisfies ReaderNoError.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ readernoerror.ReaderNoError = (*ReaderNoErrorStub)(nil)
+
 // NewReaderNoErrorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -216,4 +224,4 @@ func (s *ReaderNoErrorStub) Lookup(ctx context.Context, key string) readernoerro
 }
 
 // testkit: end of generated content.
-// testkit:provenance 061c6256b72357dfcbcb719838ad77b93af8836ad073228d82581fb8ed346720
+// testkit:provenance 0f939b332158a397e354fa05efbbed9cbbabba421ed8d4e36a77d26591dd16ae

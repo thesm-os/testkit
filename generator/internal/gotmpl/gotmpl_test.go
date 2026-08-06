@@ -146,6 +146,33 @@ func TestLists(t *testing.T) {
 	})
 }
 
+// Forwarding a variadic parameter without its ellipsis passes the slice as a
+// single element, which type-checks and silently records one argument where
+// the caller passed several.
+func TestVariadic(t *testing.T) {
+	t.Parallel()
+
+	t.Run("spreads a variadic tail in an argument list", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gotmpl.Args(variadic()), "ctx, keys...", "the tail is spread")
+	})
+
+	t.Run("spreads a variadic tail in a positional argument list", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gotmpl.IdentArgs("a", variadic()), "a0, a1...", "the tail is spread")
+	})
+
+	t.Run("leaves a fixed list alone", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gotmpl.IdentArgs("a", params()), "a0, a1", "nothing variadic, nothing spread")
+	})
+
+	t.Run("renders an empty list as nothing", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, gotmpl.IdentArgs("a", nil), "", "no parameters render nothing")
+	})
+}
+
 // Fails is the one list that reads the projection rather than only reshaping
 // it, and reading it wrong produces a check that compiles and asserts nothing.
 func TestFails(t *testing.T) {
@@ -223,6 +250,14 @@ func params() []signature.Param {
 	return []signature.Param{
 		{Name: "ctx", Field: "Ctx"},
 		{Name: "id", Field: "ID"},
+	}
+}
+
+// variadic is the projection of `(ctx context.Context, keys ...string)`.
+func variadic() []signature.Param {
+	return []signature.Param{
+		{Name: "ctx", Field: "Ctx"},
+		{Name: "keys", Field: "Keys", Variadic: true},
 	}
 }
 

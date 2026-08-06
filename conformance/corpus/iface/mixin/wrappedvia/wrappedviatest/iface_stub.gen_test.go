@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/wrappedvia"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/wrappedvia/wrappedviatest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ wrappedvia.Mixed = (*wrappedviatest.MixedStub)(nil)
 
 // mixedStubOpenSubject binds Open into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -350,4 +344,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5c77f04134eac68971ea48a4008fc29982b83583b6e1e27343eab773f2ae18cb
+// testkit:provenance ea944c902e25da12c3777cb5f924eeddbb64d551e19f8580417a764b46049e75

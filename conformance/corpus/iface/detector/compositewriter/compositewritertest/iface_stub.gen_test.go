@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that CompositeWriterStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ compositewriter.CompositeWriter = (*compositewritertest.CompositeWriterStub)(nil)
-
 // compositeWriterStubStoreSubject binds Store into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -228,4 +223,4 @@ func TestCompositeWriterStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 01ff260ef2bcd6ab8edf915a2f1889d159972baaa46863364f1ac70f7d486ca7
+// testkit:provenance da3277bac41596a014a1bda1cb89f810f69a4c85c4d4e67094bba19359720dca

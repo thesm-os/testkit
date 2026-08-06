@@ -226,6 +226,14 @@ type CalculatorStub struct {
 	strict bool
 }
 
+// Compile-time proof that CalculatorStub satisfies Calculator.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ nocontext.Calculator = (*CalculatorStub)(nil)
+
 // NewCalculatorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -368,4 +376,4 @@ func (s *CalculatorStub) Reset() {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5df5c8665a5b7fa6f8cc76f74cffd96353faaa674609ccccb2a6f4309f57e8ea
+// testkit:provenance 7def3a8cb127c94e2d4872039b7d2032af42057bfece08772f6a5dfb902f4c02

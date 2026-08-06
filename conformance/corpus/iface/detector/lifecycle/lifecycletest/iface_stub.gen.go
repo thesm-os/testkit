@@ -136,6 +136,14 @@ type LifecycleStub struct {
 	strict bool
 }
 
+// Compile-time proof that LifecycleStub satisfies Lifecycle.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ lifecycle.Lifecycle = (*LifecycleStub)(nil)
+
 // NewLifecycleStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -216,4 +224,4 @@ func (s *LifecycleStub) Close(ctx context.Context) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7679304f12df6742d1ac3be23e055aa743da076dc7b58b5545933b3f14391931
+// testkit:provenance 6cc13d0dfc192a6ce11a2765417066d9b4a7af75e29d01953907b856c031b854

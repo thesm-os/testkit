@@ -139,6 +139,14 @@ type BatchReaderStub struct {
 	strict bool
 }
 
+// Compile-time proof that BatchReaderStub satisfies BatchReader.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ batchreader.BatchReader = (*BatchReaderStub)(nil)
+
 // NewBatchReaderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -220,4 +228,4 @@ func (s *BatchReaderStub) GetAll(ctx context.Context, keys ...string) ([]batchre
 }
 
 // testkit: end of generated content.
-// testkit:provenance b31a2f78f72978444e1d88e1ff417ecfdb23d16c89afa77f6a9428c4a321dfd0
+// testkit:provenance 62b6978e99939ea03286dc1ddb18aa7cbc6d1057995bb819e550d7d70437c2a7

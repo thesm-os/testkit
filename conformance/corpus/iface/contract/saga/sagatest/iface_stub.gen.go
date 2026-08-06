@@ -189,6 +189,14 @@ type ContractStub struct {
 	strict bool
 }
 
+// Compile-time proof that ContractStub satisfies Contract.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ saga.Contract = (*ContractStub)(nil)
+
 // NewContractStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -303,4 +311,4 @@ func (s *ContractStub) Compensate(ctx context.Context, v saga.Value) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 86fbd1f488bf494aa63b06bc9d40c88b3cc34813cf21decee0d81d64cbc39ecd
+// testkit:provenance f3642a29a7c44b8bbf0c0df570eee0c11d1604f0ecc872f7941b83ef3e527fb5

@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	batchedmixins "go.thesmos.sh/testkit/conformance/corpus/iface/composite/batched-mixins"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/composite/batched-mixins/batchedmixinstest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that BatchedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ batchedmixins.Batched = (*batchedmixinstest.BatchedStub)(nil)
 
 // batchedStubPutSubject binds Put into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -513,4 +507,4 @@ func TestBatchedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance fcb45f70cc3aa4928713f2769387a137d9ba866fdd296b4371079f827f3d1753
+// testkit:provenance 50d19ff434d1d4656a68e92e9dae492c785f16a6729992f6a39939db9affafba

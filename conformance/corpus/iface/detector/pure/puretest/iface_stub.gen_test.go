@@ -11,16 +11,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/pure"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/pure/puretest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that PureStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ pure.Pure = (*puretest.PureStub)(nil)
 
 // pureStubDescribeSubject binds Describe into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -182,4 +176,4 @@ func TestPureStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4db0294a2647e483065732f60beeac648516df28dccec9488325e82ccee809de
+// testkit:provenance 2ec958cf49e4fea2578ea0a6c7bc27ffbd569e1c26e8095afdadc75c66606654

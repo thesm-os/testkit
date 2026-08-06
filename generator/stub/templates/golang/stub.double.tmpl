@@ -164,6 +164,9 @@ func With{{ $iface }}{{ $m.Name }}{{ renderTypeParams $.TypeParams }}(fn func({{
 // method returns its zero value and records the call.
 type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 {{- range .Methods }}
+{{- if .From }}
+	// {{ .OnField }} configures {{ .Name }}, contributed by {{ .From }}.
+{{- end }}
 	{{ .OnField }} *{{ .StubType }}{{ $.TypeArgs }}
 {{- end }}
 
@@ -178,6 +181,21 @@ type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 	strict bool
 }
 
+{{ if and .Complete (or (not .TypeParams) .Witnesses) }}
+// Compile-time proof that {{ $stub }} satisfies {{ $iface }}.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+{{- if .Witnesses }}
+//
+// A generic double is asserted at one instantiation. It never branches on its
+// type parameters, so satisfying the interface at these types means satisfying
+// it at every type the constraints admit.
+{{- end }}
+var _ {{ renderExpr .IfaceRef }}{{ template "stub.doublewitness" . }} = (*{{ $stub }}{{ template "stub.doublewitness" . }})(nil)
+{{ end }}
 // New{{ $stub }} returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -354,4 +372,10 @@ v{{ if .IteratorSecond }}, {{ if .IteratorYieldsError }}nil{{ else }}v{{ end }}{
        after the internal capture locals. */ -}}
 {{- define "stub.returnparams" -}}
 {{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ camel $r.Field }} {{ renderType $r.Type }}{{ end }}
+{{- end -}}
+
+{{- /* The concrete instantiation the compile-time guard uses — `[string, int]`,
+       or nothing at all for a non-generic double. */ -}}
+{{- define "stub.doublewitness" -}}
+{{- if .Witnesses }}[{{ range $i, $w := .Witnesses }}{{ if $i }}, {{ end }}{{ renderType $w }}{{ end }}]{{ end }}
 {{- end -}}

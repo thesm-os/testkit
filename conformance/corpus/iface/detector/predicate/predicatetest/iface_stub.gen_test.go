@@ -11,16 +11,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/predicate"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/predicate/predicatetest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that PredicateStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ predicate.Predicate = (*predicatetest.PredicateStub)(nil)
 
 // predicateStubIsEmptySubject binds IsEmpty into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -182,4 +176,4 @@ func TestPredicateStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d277febfefa1236d342454c598e33a67f2848c581ed32cb6f764cb7324bd791a
+// testkit:provenance a7a8ecd31fca90b7731f146dc631bda00f7ad1ed98fd88eb4f67fa049ba6a097

@@ -17,11 +17,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that LookupStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ lookup.Lookup = (*lookuptest.LookupStub)(nil)
-
 // lookupStubInspectSubject binds Inspect into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -204,4 +199,4 @@ func TestLookupStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9d888c9d318972a989b095fdbe23e21cf168ce4a6bfa1ba5cc2c4f3ec557eeab
+// testkit:provenance a9d3b5436d7f4af264002006b08a524ee4d90f0de014e3d89bf98d570d1fbdd4

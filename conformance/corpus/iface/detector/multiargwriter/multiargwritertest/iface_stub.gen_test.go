@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiargwriter"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiargwriter/multiargwritertest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MultiArgWriterStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ multiargwriter.MultiArgWriter = (*multiargwritertest.MultiArgWriterStub)(nil)
 
 // multiArgWriterStubSetSubject binds Set into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -234,4 +228,4 @@ func TestMultiArgWriterStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4553ca612c364ff19718e62161d826227c6fb2b5f0fd3e3b4b11dfa3609f69f1
+// testkit:provenance 784bd59b59afdbb3412670d03ff1b696b95e363c1f700aadc25c275c0962eadb

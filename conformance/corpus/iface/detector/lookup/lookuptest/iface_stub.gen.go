@@ -139,6 +139,14 @@ type LookupStub struct {
 	strict bool
 }
 
+// Compile-time proof that LookupStub satisfies Lookup.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ lookup.Lookup = (*LookupStub)(nil)
+
 // NewLookupStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -220,4 +228,4 @@ func (s *LookupStub) Inspect(key string) (lookup.Value, lookup.Meta, bool) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e56fe0a70b27348d28e8d08d4621ed0acac074ad6367437f188538461d2c25a6
+// testkit:provenance 6888c624dda1bf997a4309e46b0f65cc352075d0cb24fbeaab7b4a7ab1869182

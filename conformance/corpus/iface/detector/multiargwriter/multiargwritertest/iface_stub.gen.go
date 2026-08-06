@@ -138,6 +138,14 @@ type MultiArgWriterStub struct {
 	strict bool
 }
 
+// Compile-time proof that MultiArgWriterStub satisfies MultiArgWriter.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ multiargwriter.MultiArgWriter = (*MultiArgWriterStub)(nil)
+
 // NewMultiArgWriterStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -218,4 +226,4 @@ func (s *MultiArgWriterStub) Set(ctx context.Context, key string, body string) e
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2c0d154d915b784a30eeec1821aa858777c0278b1646bdd27c77f77cee97e0ad
+// testkit:provenance 0c7618a0f3ab3b0bef25bbb2efe47f33d273be71e380d62fcac22365a6667fd9

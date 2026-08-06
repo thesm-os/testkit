@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ reader.Reader = (*readertest.ReaderStub)(nil)
-
 // readerStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -228,4 +223,4 @@ func TestReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 51596c8feaed922a047e00ff2aac7fa9a920f7ef4fffc310b5ef57979f88e258
+// testkit:provenance 903d7283fe0f4a3c0aef6d19ac1b9e96b58e52b7a340f4dda35de0fedd285988

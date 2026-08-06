@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that StreamReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ streamreader.StreamReader = (*streamreadertest.StreamReaderStub)(nil)
-
 // streamReaderStubListSubject binds List into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -268,4 +263,4 @@ func TestStreamReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3a154e8520f1308c5100b930cf0712178f3eb9df3d4007e8c20ab1d0ee83dce5
+// testkit:provenance 0178eacf12536b9390e4098f0ae633bbb6b1b5863b264d9d0d24a332c5ef4aa9

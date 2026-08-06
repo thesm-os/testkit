@@ -195,6 +195,14 @@ type MixedStub struct {
 	strict bool
 }
 
+// Compile-time proof that MixedStub satisfies Mixed.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ partition.Mixed = (*MixedStub)(nil)
+
 // NewMixedStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -340,4 +348,4 @@ func (s *MixedPutStub) FaultForOtherPartitions(key string, err error, n int) *Mi
 }
 
 // testkit: end of generated content.
-// testkit:provenance 30181b23fbb79ff3a101f8bf50a6c1a0fc748c0ef7bbc7a2767158892aa764f3
+// testkit:provenance be9994799e6f9b19d29d3cb08a40e308bae8a9b33d5992905ac43983955ccf0a

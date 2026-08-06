@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/cacheable"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/cacheable/cacheabletest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ cacheable.Mixed = (*cacheabletest.MixedStub)(nil)
 
 // mixedStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -228,4 +222,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c66d74e984ff95033c56d30850a4b5cd109c2c9e50cd66dc9769c2634233c5c0
+// testkit:provenance 94eac2982dc03a94c4490c2e5d3d5454c4907cef145214d9e953f61b582e35ef

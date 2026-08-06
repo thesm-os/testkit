@@ -18,11 +18,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that StoreStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ storepkg.Store = (*storepkg.StoreStub)(nil)
-
 // storeStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -422,4 +417,4 @@ func TestStoreStubDelegateTo(t *testing.T) {
 }
 
 // eidos: end of generated content.
-// eidos:provenance f1e29b830b81a23c2624c11caad449cd5e39b144611d01af88d8a9dda99bcfbb
+// eidos:provenance ced5de3b9ed59aa17331a48fdf7b987c511b16b40c021f0a49deb62d6a47e4a5

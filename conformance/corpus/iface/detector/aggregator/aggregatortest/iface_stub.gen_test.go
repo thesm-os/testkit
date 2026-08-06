@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/aggregator"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/aggregator/aggregatortest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that AggregatorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ aggregator.Aggregator = (*aggregatortest.AggregatorStub)(nil)
 
 // aggregatorStubCountSubject binds Count into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -216,4 +210,4 @@ func TestAggregatorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3425d7e804dafe00a9d9408a1d1045df4fb9bf2cde61636e284552c84f4efd3d
+// testkit:provenance 3ecd408e676a1156bd8e41b48c04ab7cf7194e043774e57eb8e3cddf04a0ae3b

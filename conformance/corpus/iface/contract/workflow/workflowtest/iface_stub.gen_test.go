@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/workflow"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/workflow/workflowtest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ workflow.Contract = (*workflowtest.ContractStub)(nil)
 
 // contractStubRunSubject binds Run into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 112d196e6a68b60e67ea210350c9babb261145648403727813a5de8783c78d25
+// testkit:provenance 7db140622c1b3b2d6c610007180ab59793ce3884b5832cfb06c9b18a6dd8209f

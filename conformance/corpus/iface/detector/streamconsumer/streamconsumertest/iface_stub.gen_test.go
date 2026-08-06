@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that SourceStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ streamconsumer.Source = (*streamconsumertest.SourceStub)(nil)
-
 // sourceStubNextSubject binds Next into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -220,11 +215,6 @@ func TestSourceStubDelegateTo(t *testing.T) {
 		testkit.ErrorIs(t, r2, want, "Next must surface the wrapped answer")
 	})
 }
-
-// Compile-time proof that StreamConsumerStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ streamconsumer.StreamConsumer = (*streamconsumertest.StreamConsumerStub)(nil)
 
 // streamConsumerStubIngestSubject binds Ingest into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -430,4 +420,4 @@ func TestStreamConsumerStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ca64a20fc5a367d7270051ca6b665f3b8face8a719465a2fff030008039cf650
+// testkit:provenance 54b5ecaf1102436c9a7445a783e4a514d9589ee345dc76a72ef388910b345104

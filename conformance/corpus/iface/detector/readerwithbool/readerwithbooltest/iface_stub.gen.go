@@ -139,6 +139,14 @@ type ReaderWithBoolStub struct {
 	strict bool
 }
 
+// Compile-time proof that ReaderWithBoolStub satisfies ReaderWithBool.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ readerwithbool.ReaderWithBool = (*ReaderWithBoolStub)(nil)
+
 // NewReaderWithBoolStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -219,4 +227,4 @@ func (s *ReaderWithBoolStub) Load(ctx context.Context, key string) (readerwithbo
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2e642b2644b8fe6a5233a4564df16573c079658d88edc21239faac31178c9c4d
+// testkit:provenance 71de8b5a3d0b2cc21e65fdfb4ae43b48beb6cca4294d0b74f97f94ea35d47876

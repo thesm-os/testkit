@@ -226,6 +226,14 @@ type StoreStub struct {
 	strict bool
 }
 
+// Compile-time proof that StoreStub satisfies Store.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ Store = (*StoreStub)(nil)
+
 // NewStoreStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -370,4 +378,4 @@ func (s *StoreStub) Close() {
 }
 
 // eidos: end of generated content.
-// eidos:provenance 5d7990ae194fd787f89b1862192a1f08c4f4f7b8041ea4553ed8c31b823b99bd
+// eidos:provenance 2436e39ada1ece9bcd7bd08dec9d9a565e2ae85f3273b7221224fec2978167ff

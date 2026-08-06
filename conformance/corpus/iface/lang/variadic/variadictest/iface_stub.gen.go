@@ -194,6 +194,14 @@ type FinderStub struct {
 	strict bool
 }
 
+// Compile-time proof that FinderStub satisfies Finder.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ variadic.Finder = (*FinderStub)(nil)
+
 // NewFinderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -310,4 +318,4 @@ func (s *FinderStub) FindWithLimit(ctx context.Context, limit int, keys ...strin
 }
 
 // testkit: end of generated content.
-// testkit:provenance 819bbde7b4fe92dd494813f0e1da184ecbacd27432a607507ea1761920322ecc
+// testkit:provenance 315ca4b656e5874489beb28e1e5fda00c2328231cad60c066f7118de3b8144cc

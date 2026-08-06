@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect/sideeffecttest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ sideeffect.Mixed = (*sideeffecttest.MixedStub)(nil)
 
 // mixedStubTouchSubject binds Touch into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -367,4 +361,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1e0be4519f3d5874472f059643b52c8e6b6c895a0e2823970ce1f659571a839f
+// testkit:provenance 91ff168a8ee790d5ae8e2aed502a9040d2bb3257a17e45aea580c229301fa9a7

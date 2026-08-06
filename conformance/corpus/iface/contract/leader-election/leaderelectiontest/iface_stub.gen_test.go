@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	leaderelection "go.thesmos.sh/testkit/conformance/corpus/iface/contract/leader-election"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/leader-election/leaderelectiontest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ leaderelection.Contract = (*leaderelectiontest.ContractStub)(nil)
 
 // contractStubCampaignSubject binds Campaign into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -450,4 +444,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4ea9b7c0484f9d6f34e36f1e7a7a5661a7abe671663109dee9463d8eca29c4ca
+// testkit:provenance 8e8c33111ce7a30bd183e31894f083a6d8d4874ec9eb473694b2ac49957ffd19

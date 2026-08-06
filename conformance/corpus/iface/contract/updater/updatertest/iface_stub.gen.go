@@ -191,6 +191,14 @@ type ContractStub struct {
 	strict bool
 }
 
+// Compile-time proof that ContractStub satisfies Contract.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ updater.Contract = (*ContractStub)(nil)
+
 // NewContractStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -306,4 +314,4 @@ func (s *ContractStub) Get(ctx context.Context, key string) (updater.Value, erro
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0878185ef3c3e55bd817561b497ec432e1ac0845969ae84ccee42083abcbea26
+// testkit:provenance a2071da7fd26e6f4cf263978724b1829c8e03b3802ef2b2bb093345fe822f710

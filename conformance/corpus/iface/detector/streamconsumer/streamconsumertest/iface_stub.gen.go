@@ -140,6 +140,14 @@ type SourceStub struct {
 	strict bool
 }
 
+// Compile-time proof that SourceStub satisfies Source.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ streamconsumer.Source = (*SourceStub)(nil)
+
 // NewSourceStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -344,6 +352,14 @@ type StreamConsumerStub struct {
 	strict bool
 }
 
+// Compile-time proof that StreamConsumerStub satisfies StreamConsumer.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ streamconsumer.StreamConsumer = (*StreamConsumerStub)(nil)
+
 // NewStreamConsumerStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -425,4 +441,4 @@ func (s *StreamConsumerStub) Ingest(ctx context.Context, src streamconsumer.Sour
 }
 
 // testkit: end of generated content.
-// testkit:provenance 367cbc38242c067b9f5c5197cb508d04163778ea8aa8b5118320ad2e3285ea6c
+// testkit:provenance 4f785c886f49aa1ca47b3a4219568079a970d409f0b88b5e266eaaf156d58f0e

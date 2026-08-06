@@ -134,6 +134,14 @@ type PredicateStub struct {
 	strict bool
 }
 
+// Compile-time proof that PredicateStub satisfies Predicate.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ predicate.Predicate = (*PredicateStub)(nil)
+
 // NewPredicateStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -213,4 +221,4 @@ func (s *PredicateStub) IsEmpty() bool {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 98558f383008151f6578b754f44884b317c006455415edd6e96b4157f6a67c68
+// testkit:provenance 292a11a7e5d704ad26ecc927d1ae1814f9e747e5e77a695e2290b8733ea8d24c

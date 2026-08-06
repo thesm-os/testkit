@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/deprecated"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/deprecated/deprecatedtest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ deprecated.Mixed = (*deprecatedtest.MixedStub)(nil)
 
 // mixedStubOldSubject binds Old into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -373,4 +367,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 007e6f73ed1215bfb00508e73543db26e25560593bbea57d7afb319ea8e42a43
+// testkit:provenance 1882be1943d4188a19279b1cc33ab5a9dbbb81c66d4547b85ba06adf4a90ef29

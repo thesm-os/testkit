@@ -137,6 +137,14 @@ type ContractStub struct {
 	strict bool
 }
 
+// Compile-time proof that ContractStub satisfies Contract.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ workflow.Contract = (*ContractStub)(nil)
+
 // NewContractStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -217,4 +225,4 @@ func (s *ContractStub) Run(ctx context.Context, key string) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ce35b02168ef20d74c49c50ef73abb3d9dce620f281ccdca30859daf56d2c1b9
+// testkit:provenance 8f5b68ffb960a875930892d4aae21778687f0442d00024711284ff08ed625aaa

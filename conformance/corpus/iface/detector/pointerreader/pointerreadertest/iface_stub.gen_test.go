@@ -18,11 +18,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that PointerReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ pointerreader.PointerReader = (*pointerreadertest.PointerReaderStub)(nil)
-
 // pointerReaderStubFindSubject binds Find into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -203,4 +198,4 @@ func TestPointerReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0d15862d0ee7a2b49871a46eacd9767d8dde808dd9cb43d8d8d731ed4219dfc9
+// testkit:provenance d367bead18fc7e00fbf5c73310df5fe292f9db81a6062c0f27826410eec74ca0

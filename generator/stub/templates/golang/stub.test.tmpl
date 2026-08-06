@@ -28,12 +28,6 @@
 // Skipped: {{ $stub }} is generic — instantiate it with concrete types and
 // write the checks in the consuming package.
 {{- else }}
-{{ if .Complete -}}
-// Compile-time proof that {{ $stub }} satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ {{ renderExpr .IfaceRef }}{{ template "stub.witness" $ }} = (*{{ renderExpr .StubRef }}{{ template "stub.witness" $ }})(nil)
-{{- end }}
 {{ range $m := .Methods }}
 // {{ camel $stub }}{{ $m.Name }}Subject binds {{ $m.Name }} into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to

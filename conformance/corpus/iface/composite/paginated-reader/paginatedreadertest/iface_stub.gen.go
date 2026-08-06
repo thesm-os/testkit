@@ -141,6 +141,14 @@ type PaginatedReaderStub struct {
 	strict bool
 }
 
+// Compile-time proof that PaginatedReaderStub satisfies PaginatedReader.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ paginatedreader.PaginatedReader = (*PaginatedReaderStub)(nil)
+
 // NewPaginatedReaderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -223,4 +231,4 @@ func (s *PaginatedReaderStub) Page(ctx context.Context, cursor int) (items []pag
 }
 
 // testkit: end of generated content.
-// testkit:provenance 324a2f0cbeab84f90b1d846ca91c584b04feede15c585272a1a19a0764ef903f
+// testkit:provenance a6a696e8295bb2d9368d7ea6bbb4a4caba53560e69c6c10ac130491c3f590713

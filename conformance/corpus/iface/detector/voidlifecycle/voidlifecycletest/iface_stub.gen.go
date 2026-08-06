@@ -120,6 +120,14 @@ type VoidLifecycleStub struct {
 	strict bool
 }
 
+// Compile-time proof that VoidLifecycleStub satisfies VoidLifecycle.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ voidlifecycle.VoidLifecycle = (*VoidLifecycleStub)(nil)
+
 // NewVoidLifecycleStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -194,4 +202,4 @@ func (s *VoidLifecycleStub) Stop() {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 85151b8b21cc95a57c9fd01f6483165cbac0f0b8e45fa7dc4e95c445ba915d49
+// testkit:provenance 80c4ee56b6946717097239e36c17f8e90efb5864fc2a118f9c034aae9eec7de8

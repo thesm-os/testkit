@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/lifecycle"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/lifecycle/lifecycletest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that LifecycleStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ lifecycle.Lifecycle = (*lifecycletest.LifecycleStub)(nil)
 
 // lifecycleStubCloseSubject binds Close into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -210,4 +204,4 @@ func TestLifecycleStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 49f30d3a37ed1658d3e79c2e327856769576aaefa3d953fef08d31abfdc0ae3e
+// testkit:provenance 2e3111f4b46119ea6f0b5f10108086093d8faa0bd1591c9e560f93ac5044fb9f

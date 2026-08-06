@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/retrysucceeds"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/retrysucceeds/retrysucceedstest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ retrysucceeds.Mixed = (*retrysucceedstest.MixedStub)(nil)
 
 // mixedStubCallSubject binds Call into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -384,4 +378,4 @@ func TestMixedStubCallFaults(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 93a6671017a5d10bbfcb4fd57692f2759389b4b4908b0843a2f4d8ce2fbf3462
+// testkit:provenance dcdc43cacac60414058531fd7046584320493ce4e721f5664f69e45f1b7a473b

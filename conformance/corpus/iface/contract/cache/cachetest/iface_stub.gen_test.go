@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ cache.Contract = (*cachetest.ContractStub)(nil)
-
 // contractStubLookupSubject binds Lookup into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -373,4 +368,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance abe783c0f3916ef86a4ef162c27d23a51d4bdffa46657d4471c7434596ce7d5a
+// testkit:provenance f0020de6ebfc006b20f84cdaa928b58997fe5f91f7312f232f9abf0e145d1c1d

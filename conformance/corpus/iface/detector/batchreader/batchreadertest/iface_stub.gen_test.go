@@ -19,11 +19,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that BatchReaderStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ batchreader.BatchReader = (*batchreadertest.BatchReaderStub)(nil)
-
 // batchReaderStubGetAllSubject binds GetAll into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -228,4 +223,4 @@ func TestBatchReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0074dbc7c5e68fd84b3984f1366c2a9c2c6bea9c456fc41a14c7ca9f3ba47e57
+// testkit:provenance d743e487a29999dfd1c4b383cb511ff091c6e1bde4a2b8125fcaf85d357d7a06

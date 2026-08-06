@@ -190,6 +190,18 @@ type RankedStub[K genericbound.Ordered, V any] struct {
 	strict bool
 }
 
+// Compile-time proof that RankedStub satisfies Ranked.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+//
+// A generic double is asserted at one instantiation. It never branches on its
+// type parameters, so satisfying the interface at these types means satisfying
+// it at every type the constraints admit.
+var _ genericbound.Ranked[int, genericbound.Score] = (*RankedStub[int, genericbound.Score])(nil)
+
 // NewRankedStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -305,4 +317,4 @@ func (s *RankedStub[K, V]) Reset(ctx context.Context) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ab17cb55fb93a3b4e05c4f2525637415a82a7592618d1d96b640cb0dbc8f6762
+// testkit:provenance 88fd18de0bc7341cc7c0b500e3fc1c5578792e2ddc6699fe83fda4d184cd9859

@@ -137,6 +137,14 @@ type WriterStub struct {
 	strict bool
 }
 
+// Compile-time proof that WriterStub satisfies Writer.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ writer.Writer = (*WriterStub)(nil)
+
 // NewWriterStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -217,4 +225,4 @@ func (s *WriterStub) Put(ctx context.Context, v writer.Value) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance bd8e78dde4a8f608fffd41b26b881d9daceed85779e02a491a978761c63f0298
+// testkit:provenance e3007611e7390255a5974356653cf4cee2df0d812fbce2b61e5f667cc0c541a9

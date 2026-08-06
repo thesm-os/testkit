@@ -192,6 +192,18 @@ type StoreStub[K comparable, V any] struct {
 	strict bool
 }
 
+// Compile-time proof that StoreStub satisfies Store.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+//
+// A generic double is asserted at one instantiation. It never branches on its
+// type parameters, so satisfying the interface at these types means satisfying
+// it at every type the constraints admit.
+var _ generic.Store[string, int] = (*StoreStub[string, int])(nil)
+
 // NewStoreStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -307,4 +319,4 @@ func (s *StoreStub[K, V]) Put(ctx context.Context, key K, value V) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 85df239f365b64f196707934f13dd0afc8b33f3ddc42edef81886da0fd216465
+// testkit:provenance 44d96f2bba22d27f57fc14dd350a96eb1091b0b9e985fbfc5a9f0e02bdc3662d

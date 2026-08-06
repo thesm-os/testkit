@@ -141,6 +141,14 @@ type MultiReaderStub struct {
 	strict bool
 }
 
+// Compile-time proof that MultiReaderStub satisfies MultiReader.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ multireader.MultiReader = (*MultiReaderStub)(nil)
+
 // NewMultiReaderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -223,4 +231,4 @@ func (s *MultiReaderStub) GetWithMeta(ctx context.Context, key string) (multirea
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0d548e7b2d91c709feaed23eb60a5f321ef6102aabb417b9926d1875aaf4a0c2
+// testkit:provenance 570bd1b2199ebb9be72ac03a2e4e2b546cfb66c073764de00fd297cf0eaddbc9

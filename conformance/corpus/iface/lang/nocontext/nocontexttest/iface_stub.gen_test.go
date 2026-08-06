@@ -12,16 +12,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/nocontext"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/nocontext/nocontexttest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that CalculatorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ nocontext.Calculator = (*nocontexttest.CalculatorStub)(nil)
 
 // calculatorStubAddSubject binds Add into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -420,4 +414,4 @@ func TestCalculatorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 53d4388aeb5e6cdc234f4cf30fb6ebefffd8231a55d22f2746f35da4c95e1fbd
+// testkit:provenance 1d59ab47bbd153d1911456bf528b86726b4a35f4178b74d63728488cc5a8be90

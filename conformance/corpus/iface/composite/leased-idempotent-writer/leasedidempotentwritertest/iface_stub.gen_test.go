@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	leasedidempotentwriter "go.thesmos.sh/testkit/conformance/corpus/iface/composite/leased-idempotent-writer"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/composite/leased-idempotent-writer/leasedidempotentwritertest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that LeasedWriterStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ leasedidempotentwriter.LeasedWriter = (*leasedidempotentwritertest.LeasedWriterStub)(nil)
 
 // leasedWriterStubAcquireSubject binds Acquire into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -361,4 +355,4 @@ func TestLeasedWriterStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f74a638fa1c6260f6bf9bfdee0c161237370e78fe0e2ba603fcd271d0bdc271f
+// testkit:provenance 2b0ceb680537904f47c9b0bb0b4b7279e15725e49dd94b5110c0818887addf81

@@ -14,16 +14,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/streamreflectsmutations"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/streamreflectsmutations/streamreflectsmutationstest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ streamreflectsmutations.Mixed = (*streamreflectsmutationstest.MixedStub)(nil)
 
 // mixedStubStreamSubject binds Stream into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -408,4 +402,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8aad6e22703ae392c3d9f32e76df515c9eb8b583312daf35a6cefb25aecbca8e
+// testkit:provenance f587800380c3891212ea392f56e4e7064eaa9e71896527e798ef39c043e6078a

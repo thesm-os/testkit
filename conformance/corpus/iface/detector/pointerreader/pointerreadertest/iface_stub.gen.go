@@ -137,6 +137,14 @@ type PointerReaderStub struct {
 	strict bool
 }
 
+// Compile-time proof that PointerReaderStub satisfies PointerReader.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ pointerreader.PointerReader = (*PointerReaderStub)(nil)
+
 // NewPointerReaderStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -216,4 +224,4 @@ func (s *PointerReaderStub) Find(ctx context.Context, key string) *pointerreader
 }
 
 // testkit: end of generated content.
-// testkit:provenance df55468337af995aaf1634a1dff91a9a03dbe3a9d592d4f8da66e5584df374e6
+// testkit:provenance b34670b03a8164190d92e995aba957866f93f6f2b43c6828d897648a562a969b

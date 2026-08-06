@@ -18,11 +18,6 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// Compile-time proof that ReaderNoErrorStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ readernoerror.ReaderNoError = (*readernoerrortest.ReaderNoErrorStub)(nil)
-
 // readerNoErrorStubLookupSubject binds Lookup into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -203,4 +198,4 @@ func TestReaderNoErrorStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ab6c397ab52fa5ed39a298e474265ecfec99b05fed93594700940da440ce494d
+// testkit:provenance 698de19cfb9d361cdc2686cdabd3c3bbba10f60a1706df7b25210a5b78a7c3ff

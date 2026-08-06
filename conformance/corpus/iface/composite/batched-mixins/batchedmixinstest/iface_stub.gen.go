@@ -245,6 +245,14 @@ type BatchedStub struct {
 	strict bool
 }
 
+// Compile-time proof that BatchedStub satisfies Batched.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ batchedmixins.Batched = (*BatchedStub)(nil)
+
 // NewBatchedStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -395,4 +403,4 @@ func (s *BatchedStub) List(ctx context.Context) ([]string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d0a45e0f269c9ea4d4b76532811cf81df691b901b50e2b471667c8bf33fb1885
+// testkit:provenance e5748fce4f56b701019093e8b586490b936abd7219375f056e0c4840f6685b4d

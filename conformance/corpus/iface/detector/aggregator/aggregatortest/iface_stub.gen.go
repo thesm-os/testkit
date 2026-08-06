@@ -138,6 +138,14 @@ type AggregatorStub struct {
 	strict bool
 }
 
+// Compile-time proof that AggregatorStub satisfies Aggregator.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ aggregator.Aggregator = (*AggregatorStub)(nil)
+
 // NewAggregatorStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -219,4 +227,4 @@ func (s *AggregatorStub) Count(ctx context.Context) (int, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 02461f6f08b1160b8965fa11567910b4136df205ddb45561bf1fe8319570094c
+// testkit:provenance 5d1ef9aee64f54f9b0b692ad6f913486e61a06f446bc9cd0a2d84eda3e8e35f4

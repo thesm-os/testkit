@@ -134,6 +134,14 @@ type PureStub struct {
 	strict bool
 }
 
+// Compile-time proof that PureStub satisfies Pure.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ pure.Pure = (*PureStub)(nil)
+
 // NewPureStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -213,4 +221,4 @@ func (s *PureStub) Describe() string {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d67b307d0316c783f22f95dec6aec6c5d34d7b4eead753fa59e469f59730128d
+// testkit:provenance bd0b4ad656926f2789ebd5b845d533c0e4c435d07200fc72adcf02d5a31411c7

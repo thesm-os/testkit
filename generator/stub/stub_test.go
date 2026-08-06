@@ -727,3 +727,237 @@ func renderRef(t *testing.T, r emit.Ref) string {
 		return ""
 	}
 }
+
+// An interface's method set includes whatever it embeds, and a double missing
+// one of those methods does not satisfy the interface it doubles — so what is
+// under test here is a resolution failure producing no artefact rather than a
+// partial one.
+func TestFlatten(t *testing.T) {
+	t.Parallel()
+
+	t.Run("carries an embedded interface's methods", func(t *testing.T) {
+		t.Parallel()
+		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
+		testkit.Len(t, double.Methods, 2, "the double carries the embedded method and its own")
+	})
+
+	t.Run("orders embedded methods before declared ones", func(t *testing.T) {
+		t.Parallel()
+		// Source order, so the generated fields stay put as an embedded
+		// interface gains a method.
+		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
+		testkit.Equal(t, double.Methods[0].Name, "Ping", "the embed contributes first")
+		testkit.Equal(t, double.Methods[1].Name, "Get", "the declared method follows")
+	})
+
+	t.Run("attributes an embedded method to the interface that carried it", func(t *testing.T) {
+		t.Parallel()
+		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
+		testkit.Equal(t, double.Methods[0].From, "Base", "the generated field says where it came from")
+		testkit.Equal(t, double.Methods[1].From, "", "a declared method is attributed to nothing")
+	})
+
+	t.Run("asserts the interface once the method set is whole", func(t *testing.T) {
+		t.Parallel()
+		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
+		testkit.True(t, double.Complete, "a flattened double satisfies its interface")
+	})
+
+	t.Run("emits nothing when an embed cannot be resolved", func(t *testing.T) {
+		t.Parallel()
+		// A double missing a method cannot be passed anywhere the interface is
+		// expected, so there is no useful partial result to emit.
+		pending := generate(t, stub.New(), embeddedFixture(t, "Missing"))
+		testkit.Len(t, pending, 0, "an unresolvable embed produces no double")
+	})
+
+	t.Run("warns with the embed spelled as the source wrote it", func(t *testing.T) {
+		t.Parallel()
+		diags := generateDiagnostics(t, stub.New(), embeddedFixture(t, "Missing"))
+		testkit.Len(t, diags, 1, "an unresolvable embed is reported once")
+		testkit.Contains(t, diags[0].Message, "Missing", "the diagnostic names the embed")
+	})
+
+	t.Run("does not fail the run for an unresolvable embed", func(t *testing.T) {
+		t.Parallel()
+		// Every other interface in the same run still generates, so one
+		// unreachable dependency does not cost a project its doubles.
+		diags := generateDiagnostics(t, stub.New(), embeddedFixture(t, "Missing"))
+		testkit.Equal(t, diags[0].Severity, diag.Warn,
+			"an unreachable embed is a warning, not a failure")
+	})
+}
+
+// A diagnostic naming a bare `Closer` sends the author looking in the wrong
+// package, so an embed is spelled the way the source wrote it.
+func TestFlattenForeignEmbed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("qualifies an embed from another package", func(t *testing.T) {
+		t.Parallel()
+		diags := generateDiagnostics(t, stub.New(), foreignEmbedFixture(t))
+		testkit.Len(t, diags, 1, "an unreachable embed is reported once")
+		testkit.Contains(t, diags[0].Message, `"io.Closer"`,
+			"the diagnostic spells the embed as the source wrote it")
+	})
+
+	t.Run("skips a union term carrying no name", func(t *testing.T) {
+		t.Parallel()
+		// A type-set term sits in the same list as an embedded interface and
+		// contributes no methods. Such a type is never a stub target, so it is
+		// passed over rather than reported.
+		diags := generateDiagnostics(t, stub.New(), unionTermFixture(t))
+		testkit.Len(t, diags, 0, "a type-set term is not an unresolved embed")
+	})
+}
+
+// foreignEmbedFixture returns an interface embedding one from another package.
+func foreignEmbedFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Stream", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.PkgNamed("io", "Closer"))
+			i.Method("Read", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// unionTermFixture returns an interface whose embed list holds a term with no
+// name, as a type set does.
+func unionTermFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Termed", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Slice(storefixture.Named("byte")))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// A generic embed's methods name the embedded interface's type parameters, not
+// the embedder's, and flattening copies signatures without substituting them.
+func TestFlattenGenericEmbed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("refuses an embed carrying type arguments", func(t *testing.T) {
+		t.Parallel()
+		diags := generateDiagnostics(t, stub.New(), genericEmbedFixture(t))
+		testkit.Len(t, diags, 1, "a generic embed is reported once")
+		testkit.Equal(t, diags[0].Severity, diag.Error,
+			"a substitution the projection cannot do is an error, not a warning")
+	})
+
+	t.Run("emits nothing for it", func(t *testing.T) {
+		t.Parallel()
+		pending := generate(t, stub.New(), genericEmbedFixture(t))
+		testkit.Len(t, pending, 0, "a refused embed produces no double")
+	})
+}
+
+// The witness palette runs out before an interface's type parameters do only
+// at an arity nothing sane reaches, but running off the end would index out of
+// range rather than decline.
+func TestWitnessPaletteExhausted(t *testing.T) {
+	t.Parallel()
+
+	t.Run("declines an interface with more parameters than witnesses", func(t *testing.T) {
+		t.Parallel()
+		_, tests := split(t, generate(t, stub.New(), wideGenericFixture(t)))
+		testkit.True(t, tests.Generic, "an arity past the palette leaves a note")
+	})
+}
+
+// Generic is what the companion branches on, and it answers for the double
+// rather than for the companion that reads it.
+func TestStubGeneric(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports a parameterised double", func(t *testing.T) {
+		t.Parallel()
+		double, _ := split(t, generate(t, stub.New(), genericFixture(t, "comparable", "any", nil)))
+		testkit.True(t, double.Generic(), "a double carrying type parameters is generic")
+	})
+
+	t.Run("reports a plain double", func(t *testing.T) {
+		t.Parallel()
+		double, _ := split(t, generate(t, stub.New(), storeFixture(t)))
+		testkit.False(t, double.Generic(), "a double with no type parameters is not")
+	})
+}
+
+// genericEmbedFixture returns an interface embedding a generic one at an
+// instantiation, which is the shape flattening cannot carry.
+func genericEmbedFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Base", func(i *storefixture.InterfaceBuilder) {
+			i.TypeParam("K", bound("any"))
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(instantiated("Base", "string"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// instantiated builds a reference to a generic type at one type argument.
+func instantiated(name, arg string) *node.TypeRef {
+	ref := storefixture.Named(name)
+	ref.TypeArgs = []*node.TypeRef{storefixture.Named(arg)}
+	return ref
+}
+
+// wideGenericFixture returns an interface with more type parameters than the
+// witness palette holds.
+func wideGenericFixture(t *testing.T) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Wide", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			for _, n := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"} {
+				i.TypeParam(n, bound("any"))
+			}
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// embeddedFixture returns a store whose Composed interface embeds embedName
+// and declares one method of its own. Naming an interface the store does not
+// hold exercises the unresolvable path.
+func embeddedFixture(t *testing.T, embedName string) *store.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Base", func(i *storefixture.InterfaceBuilder) {
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Named(embedName))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}

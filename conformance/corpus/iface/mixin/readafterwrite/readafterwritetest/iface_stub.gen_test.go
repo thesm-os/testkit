@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/readafterwrite"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/readafterwrite/readafterwritetest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that MixedStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ readafterwrite.Mixed = (*readafterwritetest.MixedStub)(nil)
 
 // mixedStubReadSubject binds Read into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -378,4 +372,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3058bed23e81adc2639d8e14564ded59b5e1794411e816835c52d78ec30dcbd8
+// testkit:provenance 10ffdf72ea826a790678e1568db5a2f59d627f266d0d1ccd56ff061b78d8dc5e

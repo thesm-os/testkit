@@ -13,16 +13,10 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
-	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/singleflight"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/singleflight/singleflighttest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
-
-// Compile-time proof that ContractStub satisfies the interface it doubles.
-// A drifted signature fails here rather than at the first test that assigns
-// the double.
-var _ singleflight.Contract = (*singleflighttest.ContractStub)(nil)
 
 // contractStubRunSubject binds Run into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -222,4 +216,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance df8db7d1d382bff2cccc1687abddc56148138a0f26b0109661d7d522c42aa8eb
+// testkit:provenance 59a68f710109f01b36d4d18c62d45b3097bfeb93f5b94b08a9fe763f97802586

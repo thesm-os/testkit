@@ -238,6 +238,14 @@ type TxWithRetryStub struct {
 	strict bool
 }
 
+// Compile-time proof that TxWithRetryStub satisfies TxWithRetry.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ txwithretry.TxWithRetry = (*TxWithRetryStub)(nil)
+
 // NewTxWithRetryStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -386,4 +394,4 @@ func (s *TxWithRetryStub) Rollback(ctx context.Context) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 30489562d483488743a84dd4e7b79bc322c0a8fbcff32c26b81ee225d7a8906b
+// testkit:provenance 127a416a02d61646f293a9387926edb0e81fe54fe450d41a199327a225203f3c

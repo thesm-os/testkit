@@ -241,6 +241,14 @@ type MixedStub struct {
 	strict bool
 }
 
+// Compile-time proof that MixedStub satisfies Mixed.
+//
+// It lives here rather than in the companion so a drifted signature fails
+// `go build` rather than waiting for a test run — the double is unusable the
+// moment it stops satisfying the interface, and that is worth learning at the
+// earliest point it can be known.
+var _ eventually.Mixed = (*MixedStub)(nil)
+
 // NewMixedStub returns a double bound to tb.
 //
 // Passing tb registers a cleanup that verifies every method's call-count
@@ -390,4 +398,4 @@ func (s *MixedStub) Items(ctx context.Context) ([]string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 35963386d095bc1664f6edc77c7098efb05460461975c194f90420ffebeceac8
+// testkit:provenance a518e1316c6bc2419351cf2ea97277352c5a40b776c3aa5a9b84d745de5a94aa
