@@ -25,3 +25,4 @@ For the shape these decisions add up to, read
 | [0014](0014-split-the-cli-from-the-generator-module.md) | Split the CLI from the generator module | Accepted |
 | [0015](0015-subtest-names-carry-the-classification.md) | Subtest names carry the classification | Accepted |
 | [0016](0016-directives-are-positive-only.md) | Directives are positive-only | Accepted |
+| [0017](0017-every-classification-owes-an-assertion.md) | Every classification owes an assertion | Accepted |

@@ -47,6 +47,22 @@ import (
 // through unchanged makes the result depend on which directory `go test` was
 // invoked from.
 func Annotate(ctx context.Context, root string, patterns ...string) (map[string][]string, error) {
+	pipe, err := run(ctx, root, patterns...)
+	if err != nil {
+		return nil, err
+	}
+	return collect(pipe), nil
+}
+
+// run builds the annotation pipeline and drives it over the corpus, returning
+// the pipeline so a caller can read the store it populated.
+//
+// Separate from [Annotate] because coverage is not the only thing worth
+// measuring: [Resolution] reads the same store for a different property, and
+// two constructions of this pipeline would be free to disagree about which
+// annotators are registered — which is exactly the class of defect it exists to
+// surface.
+func run(ctx context.Context, root string, patterns ...string) (*pipeline.Pipeline, error) {
 	// filepath.Join treats "..." as an ordinary path element, so a recursive
 	// pattern survives the join unchanged.
 	scoped := make([]string, len(patterns))
@@ -80,7 +96,7 @@ func Annotate(ctx context.Context, root string, patterns ...string) (map[string]
 		return nil, fmt.Errorf("gate: run annotation pipeline: %w", err)
 	}
 
-	return collect(pipe), nil
+	return pipe, nil
 }
 
 // collect reads the stamped classifications off every callable in the store.

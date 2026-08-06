@@ -18,6 +18,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/internal/nodes"
 	"go.thesmos.sh/testkit/generator/internal/signature"
 	"go.thesmos.sh/testkit/generator/internal/witness"
 )
@@ -704,7 +705,9 @@ func orderAfter(m *node.Method) string {
 		return ""
 	}
 	name, _ := shape.MixinParamKey(MixinOrderAfter, MixinOrderAfterParam).Get(m.Meta())
-	return name
+	// The resolver rewrites the stamp into a qualified name; the double calls
+	// the prerequisite on itself, so only the method identifier is usable.
+	return nodes.LocalName(name)
 }
 
 // sourceMethod pairs a source method with the embedded interface that

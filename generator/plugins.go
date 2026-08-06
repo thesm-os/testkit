@@ -23,6 +23,11 @@ import (
 // Annotator returns the shape annotator configured with every classification
 // eidos registers.
 //
+// The concrete type is returned rather than [plugin.Annotator] because the
+// classifier is only half of the shape plugin: [shape.Plugin.Resolver] builds
+// its refinement-bucket companion from the same registrations, and that method
+// is not on the interface. [Annotators] registers both.
+//
 // It is defined here rather than at each call site because two things
 // configure it — the CLI that generates, and the conformance gate that
 // measures what the corpus stamps — and those must agree. A gate measuring a
@@ -34,7 +39,7 @@ import (
 // classification vocabulary (docs/adr/0004), so a classification added
 // upstream is available the moment the dependency moves — and the gate starts
 // asking for a fixture in the same build.
-func Annotator() plugin.Annotator {
+func Annotator() *shape.Plugin {
 	return shape.New().
 		Detectors(detectors.All()...).
 		Contracts(contracts.All()...).
@@ -42,14 +47,29 @@ func Annotator() plugin.Annotator {
 }
 
 // Annotators returns every annotator a run registers: eidos's shape
-// classifier and testkit's own.
+// classifier, its contract resolver, and testkit's own.
 //
-// Both are needed wherever source is read, not only where code is generated.
+// All are needed wherever source is read, not only where code is generated.
 // An annotator owns its directive schema, so a pipeline missing one rejects
 // the directives it declares as unknown — which is why the conformance gate
 // takes this set rather than [Annotator] alone.
+//
+// The resolver is the classifier's companion and shares its registrations. It
+// runs one priority bucket later and is what turns a contract's partner
+// reference from the name the author wrote into a qualified one, back-stamps
+// the membership onto that partner so both sides of a protocol carry it, and
+// reports a role or a partner that resolves to nothing. Registering the
+// classifier alone leaves all three undone, and silently: the declaring side
+// still stamps the contract, so a coverage gate counting stamped
+// classifications sees nothing wrong.
 func Annotators() []plugin.Annotator {
-	return []plugin.Annotator{Annotator(), defaults.New(), fault.New()}
+	classifier := Annotator()
+	return []plugin.Annotator{
+		classifier,
+		classifier.Resolver(),
+		defaults.New(),
+		fault.New(),
+	}
 }
 
 // Generators returns the generator plugins this build carries.

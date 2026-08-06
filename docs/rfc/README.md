@@ -10,3 +10,4 @@ Numbered, never renumbered. Withdrawn and superseded RFCs stay on disk.
 | # | Title | Status |
 |---|---|---|
 | [0001](0001-testkit-as-a-generator-platform.md) | testkit as a generator platform | Draft |
+| [0002](0002-the-suite-generator.md) | The suite generator | Draft |

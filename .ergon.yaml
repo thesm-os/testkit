@@ -237,14 +237,14 @@ checks:
     - label: assertion-failure-arms
       func_glob: "assertFailed"
       file_glob: "stub/behaviour.go"
-    # Annotate builds its pipeline from a plugin set fixed at compile time —
-    # one frontend, one annotator, one backend. eidos's Build only fails on
-    # structural faults in that set (duplicate names, wrong role counts), so
-    # the error arm cannot be reached without making the set a parameter,
-    # which would widen the API for no reason but coverage. ADR-0004 fixes the
-    # annotator set, so it will not grow.
+    # run builds its pipeline from a plugin set fixed at compile time — one
+    # frontend, the annotators generator.Annotators returns, one backend.
+    # eidos's Build only fails on structural faults in that set (duplicate
+    # names, wrong role counts), so the error arm cannot be reached without
+    # making the set a parameter, which would widen the API for no reason but
+    # coverage. ADR-0004 fixes the annotator set, so it will not grow.
     - label: fixed-plugin-set
-      func_glob: "Annotate"
+      func_glob: "run"
       file_glob: "conformance/gate/annotate.go"
 
   # Example:

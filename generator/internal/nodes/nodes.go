@@ -16,6 +16,8 @@
 package nodes
 
 import (
+	"strings"
+
 	"go.thesmos.sh/eidos/core/meta"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
@@ -115,6 +117,27 @@ func EmbedName(t *node.TypeRef) (name string, pointer bool) {
 	default:
 		return t.Name, false
 	}
+}
+
+// LocalName returns the trailing identifier of a possibly-qualified callable
+// name, which is what a generator needs to compose a call on a subject it
+// already holds.
+//
+// eidos's shape resolver rewrites every sibling reference a directive names — a
+// contract's partner, a mixin's `fn` — from the identifier the author wrote
+// into the qualified `<pkg-path>.<Type>.<Method>` form the store keys on. That
+// form is what makes the reference unambiguous across packages, and it is not
+// what a call expression can use.
+//
+// A name the resolver could not resolve is left as the author wrote it and
+// reported as a diagnostic, so an unqualified argument is returned unchanged
+// rather than treated as an error here: the run that produced it has already
+// said so, and failing twice for one cause helps nobody.
+func LocalName(qualified string) string {
+	if i := strings.LastIndex(qualified, "."); i >= 0 {
+		return qualified[i+1:]
+	}
+	return qualified
 }
 
 // Declares reports whether s has a method of the given name.

@@ -130,6 +130,7 @@ that were rejected and the trade-offs accepted.
 | [0014](../adr/0014-split-the-cli-from-the-generator-module.md) | Split the CLI from the generator module |
 | [0015](../adr/0015-subtest-names-carry-the-classification.md) | Subtest names carry the classification |
 | [0016](../adr/0016-directives-are-positive-only.md) | Directives are positive-only |
+| [0017](../adr/0017-every-classification-owes-an-assertion.md) | Every classification owes an assertion |
 
 ## Execution
 
