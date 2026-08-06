@@ -7,11 +7,9 @@ on:
 
 permissions:
   contents: write
-  id-token: write
   packages: write
-
-env:
-  TEST_TIMEOUT: 30m
+  id-token: write       # cosign keyless signing + attestation OIDC
+  attestations: write   # actions/attest-build-provenance writes the SLSA attestation
 
 jobs:
   gate:
@@ -19,29 +17,31 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
         with:
-          go-version-file: go.mod
-      - uses: actions/cache@v5
-        with:
-          path: ~/go/bin
-          key: go-tools-${{ hashFiles('Makefile') }}
-      - run: make bootstrap
+          bootstrap: 'true'
+      # mod verify, the full lint suite, test, coverage, and — because
+      # every coverage layer sets require_branch — the gobco branch gate.
+      # Mutation is excluded via .ergon.yaml's checks.disabled.
       - run: make check
 
   goreleaser:
+    name: Build + publish
     needs: gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
+          # goreleaser derives the changelog from the previous tag.
           fetch-depth: 0
 
+      # This job runs goreleaser directly, never `make`, so it needs the
+      # Go toolchain but not ergon.
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 
@@ -49,7 +49,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y upx
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v3
+        uses: sigstore/cosign-installer@v4
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
@@ -59,3 +59,24 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # SLSA Build L3 provenance. Stored in GitHub's attestation API
+      # rather than attached to the release, so it survives "Immutable
+      # releases" — the release is never modified after creation.
+      # Complements the cosign signature over checksums.txt: cosign
+      # proves the artefact set was signed, the attestation proves which
+      # workflow, commit and runner produced it.
+      #
+      # Verify with: gh attestation verify --owner thesm-os <file>
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          # Both the archives and the raw per-target binaries under
+          # dist/<id>_<goos>_<goarch>/. Attesting the binaries lets a
+          # user verify the installed file directly, without having to
+          # re-download and unpack the archive it came from.
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/**/testkit
+            dist/**/testkit.exe
