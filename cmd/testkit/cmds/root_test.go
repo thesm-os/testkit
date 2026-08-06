@@ -32,10 +32,25 @@ func runRoot(t *testing.T, args ...string) (stdout, stderr string, code int) {
 
 	cfgPath = ""
 	versionKernel.Config = cli.VersionConfig{}
-	// Both kernels are package-level and retain per-invocation state, so a
+	// Every kernel is package-level and retains per-invocation state, so a
 	// second run in the same process would otherwise inherit the first's —
 	// including a context the first run's signal handler already cancelled.
 	*runKernel = cli.RunCommand{}
+	*checkKernel = cli.CheckCommand{}
+	*explainKernel = cli.ExplainCommand{}
+	*planKernel = cli.PlanCommand{}
+	*pruneKernel = cli.PruneCommand{}
+	// cobra fills a subcommand's context only when it is nil, so a second
+	// Execute in one process would dispatch under the first invocation's
+	// context — which that invocation's signal handler cancelled on its way
+	// out. Clearing it puts the fresh, signal-aware context back in play. A
+	// real process runs one command, so only a test binary meets this.
+	for _, c := range rootCmd.Commands() {
+		// nil is the value with the effect wanted: cobra refills a nil context
+		// and leaves a non-nil one alone, so anything else here pins the stale
+		// context rather than clearing it.
+		c.SetContext(nil) //nolint:staticcheck // SA1012: nil is what triggers cobra's refill
+	}
 
 	var out, errOut strings.Builder
 	rootCmd.SetOut(&out)
@@ -68,7 +83,7 @@ func TestCommandTree(t *testing.T) {
 	// Only commands this package registers. cobra grafts `help` and
 	// `completion` onto the tree during Execute, so asserting them here would
 	// pin an ordering rather than a surface.
-	for _, name := range []string{"version"} {
+	for _, name := range []string{"check", "explain", "plan", "prune", "run", "version"} {
 		if !got[name] {
 			t.Errorf("rootCmd has no subcommand %q", name)
 		}
@@ -311,4 +326,64 @@ func TestExecuteCarriesKernelExitCode(t *testing.T) {
 		t.Fatalf("expected the kernel's exit %d to reach the process, got %d",
 			cli.ExitCheckDrift, code)
 	}
+}
+
+// Only run carries a Patterns field, so check, prune and explain would ignore
+// the arguments run accepts. Two commands that must agree about what they
+// looked at cannot read the same argument differently — a check that silently
+// examined the whole module while the user scoped it to one package would pass
+// or fail for reasons unrelated to what they asked about.
+func TestScopedTo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("replaces the configured patterns", func(t *testing.T) {
+		t.Parallel()
+		cfg := &cli.Config{Sources: []cli.ConfigSource{{Frontend: "golang", Patterns: []string{"./..."}}}}
+		got := scopedTo(cfg, []string{"./corpus/..."})
+		if len(got.Sources) != 1 || len(got.Sources[0].Patterns) != 1 {
+			t.Fatalf("expected one source with one pattern, got %+v", got.Sources)
+		}
+		if got.Sources[0].Patterns[0] != "./corpus/..." {
+			t.Fatalf("the argument must win, got %q", got.Sources[0].Patterns[0])
+		}
+	})
+
+	t.Run("keeps the configured frontend", func(t *testing.T) {
+		t.Parallel()
+		// Routing the patterns to a different frontend than the config named
+		// would hand them to a loader that cannot read them.
+		cfg := &cli.Config{Sources: []cli.ConfigSource{{Frontend: "golang"}}}
+		got := scopedTo(cfg, []string{"./x/..."})
+		if got.Sources[0].Frontend != "golang" {
+			t.Fatalf("the configured frontend must survive, got %q", got.Sources[0].Frontend)
+		}
+	})
+
+	t.Run("leaves the config alone without arguments", func(t *testing.T) {
+		t.Parallel()
+		// No arguments means "whatever the config says", which is what makes a
+		// bare invocation from a module root work.
+		cfg := &cli.Config{Sources: []cli.ConfigSource{{Frontend: "golang", Patterns: []string{"./a/..."}}}}
+		got := scopedTo(cfg, nil)
+		if len(got.Sources) != 1 || got.Sources[0].Patterns[0] != "./a/..." {
+			t.Fatalf("the configured patterns must survive, got %+v", got.Sources)
+		}
+	})
+
+	t.Run("names no frontend when the config declared no source", func(t *testing.T) {
+		t.Parallel()
+		// An empty name is what the pipeline reads as "every frontend", which
+		// is the same default a bare run gets.
+		got := scopedTo(&cli.Config{}, []string{"./x/..."})
+		if got.Sources[0].Frontend != "" {
+			t.Fatalf("expected no frontend, got %q", got.Sources[0].Frontend)
+		}
+	})
+
+	t.Run("tolerates an absent config", func(t *testing.T) {
+		t.Parallel()
+		if got := scopedTo(nil, []string{"./x/..."}); got != nil {
+			t.Fatalf("a nil config has nothing to scope, got %+v", got)
+		}
+	})
 }

@@ -50,11 +50,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print brand, emit-contract, generator list, and build",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		env, err := newEnv(cmd)
-		if err != nil {
-			return err
-		}
-		cfg, err := loadConfig(env)
+		env, cfg, err := prepare(cmd)
 		if err != nil {
 			return err
 		}

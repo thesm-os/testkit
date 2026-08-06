@@ -6,6 +6,7 @@ package cmds
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -37,13 +38,13 @@ func TestRunCommand(t *testing.T) {
 	})
 }
 
-// sourceTree writes a module holding one annotated interface and makes it the
-// working directory.
+// sourceTree writes a module holding one annotated interface, makes it the
+// working directory, and returns its path.
 //
 // A real tree rather than a fixture store: the command resolves packages
 // through the Go toolchain, so anything short of one exercises the wiring
 // around the loader instead of the loader itself.
-func sourceTree(t *testing.T) {
+func sourceTree(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -53,7 +54,15 @@ func sourceTree(t *testing.T) {
 			t.Fatalf("write %s: %v", name, err)
 		}
 	}
-	write("go.mod", "module example.com/tree\n\ngo 1.26\n")
+	// The generated double imports testkit's runtime packages, so the module
+	// has to be able to resolve them or the *second* load of the tree — the one
+	// `check` performs, with the generated file now part of the package —
+	// fails to typecheck. A replace to the repository under test also pins what
+	// is being exercised to this checkout rather than to a published version.
+	write("go.mod", "module example.com/tree\n\ngo 1.26\n\n"+
+		"require go.thesmos.sh/testkit v0.0.0\n\n"+
+		"replace go.thesmos.sh/testkit => "+repoRoot(t)+"\n")
+	t.Setenv("GOFLAGS", "-mod=mod")
 	write("iface.go", `package tree
 
 //testkit:stub
@@ -63,4 +72,17 @@ type Store interface {
 `)
 
 	t.Chdir(dir)
+	return dir
+}
+
+// repoRoot returns the checkout this test binary was built from, which is what
+// the fixture module replaces testkit with.
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("cannot locate the source file this test was built from")
+	}
+	// .../cmd/testkit/cmds/run_test.go -> the repository root.
+	return filepath.Dir(filepath.Dir(filepath.Dir(filepath.Dir(file))))
 }

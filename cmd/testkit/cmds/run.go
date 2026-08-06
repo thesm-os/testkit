@@ -27,11 +27,7 @@ var runCmd = &cobra.Command{
 		"from the config file and the per-plugin routing flags, so the same " +
 		"invocation produces the same paths whichever directory it runs from.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		env, err := newEnv(cmd)
-		if err != nil {
-			return err
-		}
-		cfg, err := loadConfig(env)
+		env, cfg, err := prepare(cmd)
 		if err != nil {
 			return err
 		}

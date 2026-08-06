@@ -176,6 +176,51 @@ func withBrandDefaults(cfg *cli.Config) *cli.Config {
 	return cfg
 }
 
+// prepare builds the environment and resolves the config for one invocation.
+//
+// Every subcommand opens the same way, and each copy of the preamble carried
+// its own `if err != nil` around a failure only a broken process can produce —
+// so the arms multiplied with the command count while staying unreachable from
+// a test. One helper leaves a single such arm, and hands the callers a failure
+// their own bad-config paths already reach.
+func prepare(cmd *cobra.Command) (*cli.Env, *cli.Config, error) {
+	env, err := newEnv(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfg, err := loadConfig(env)
+	if err != nil {
+		return nil, nil, err
+	}
+	return env, cfg, nil
+}
+
+// scopedTo returns cfg with its source patterns replaced by args, or cfg
+// unchanged when no positional arguments were given.
+//
+// Only [cli.RunCommand] carries a Patterns field; check, prune and explain read
+// their inputs from the config alone. Without this, `run` would take package
+// patterns and its own drift-checker would ignore them — the same argument
+// meaning two different things on two commands that must agree about what they
+// looked at, which is the shape of mistake that lets a check pass over the
+// wrong tree.
+//
+// The frontend name is carried over from the first configured source so an
+// explicitly-configured frontend keeps its patterns routed to it. With no
+// sources configured there is nothing to carry, and an empty name is what the
+// pipeline reads as "every frontend" — the same default a bare `run` gets.
+func scopedTo(cfg *cli.Config, args []string) *cli.Config {
+	if len(args) == 0 || cfg == nil {
+		return cfg
+	}
+	frontend := ""
+	if len(cfg.Sources) > 0 {
+		frontend = cfg.Sources[0].Frontend
+	}
+	cfg.Sources = []cli.ConfigSource{{Frontend: frontend, Patterns: args}}
+	return cfg
+}
+
 // bindKernelFlags folds a kernel's stdlib flag registrations into cobraCmd.
 //
 // register is the kernel's RegisterFlags method. It binds flags to fields of

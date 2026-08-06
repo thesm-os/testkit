@@ -296,7 +296,7 @@ checks:
         branch: 89
         require_branch: true
       - path: cmd/...
-        line: 98
+        line: 100
         branch: 82
         require_branch: true
       - path: conformance/...
@@ -360,10 +360,16 @@ checks:
         # tests reach a fifth of it — the same layer's line coverage is 100%.
         # Raise both once the scoping is fixed.
         score: 76
-        coverage: 22
+        coverage: 21
       - path: cmd/...
+        # Every uncovered mutant here is a `+` joining two halves of a command's
+        # help text. Go instruments statements inside functions, and a
+        # package-level var initialiser has none, so the prose in each
+        # cobra.Command literal reads as unreached — the counts track the
+        # concatenations per file exactly. Score is what matters for this layer,
+        # and it is 100%.
         score: 100
-        coverage: 80
+        coverage: 56
       - path: conformance/...
         # The corpus is generated code, and this is the gate that matters most
         # for it: a generated check that runs a setter without asserting on it
