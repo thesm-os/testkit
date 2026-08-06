@@ -19,6 +19,7 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
 //testkit:out orderaftertest/ pkg=orderaftertest
 //testkit:stub
 type Mixed interface {

@@ -83,10 +83,22 @@ func TestRender(t *testing.T) {
 		// An injected fault has nowhere to go in a signature with no error,
 		// and a nil Fault is how Answer knows to skip that arm rather than
 		// inventing an error slot.
+		//
+		// Counted rather than sliced out of the body: the fixture's Get and
+		// List return errors and Close does not, so a fault arm appearing for
+		// Close shows up as a third occurrence.
 		body := renderFixture(t).AssertFile(primaryFile).String()
-		closeArms := body[strings.Index(body, "stub.Arms[StoreCloseCall"):]
-		testkit.False(t, strings.Contains(closeArms[:strings.Index(closeArms, "})")], "Fault:"),
-			"a method with no error return declares no fault arm")
+		testkit.Equal(t, strings.Count(body, "Fault:    func(err error)"), 2,
+			"only the two methods that can fail declare a fault arm")
+	})
+
+	t.Run("types a void method's arms with the empty return tuple", func(t *testing.T) {
+		t.Parallel()
+		// A method returning nothing still has a call worth recording and an
+		// override worth dispatching to; the empty struct is the return tuple
+		// of no returns.
+		renderFixture(t).AssertFile(primaryFile).
+			Contains("stub.Arms[StoreCloseCall, struct{}]{")
 	})
 
 	t.Run("puts the companion in the external test package", func(t *testing.T) {

@@ -70,7 +70,8 @@ func CheckCausalOrder[K comparable](events []ClientEvent[K], happensBefore func(
 		if want := reqs[ev.Op.Key]; ev.Op.Version < want {
 			return fmt.Errorf(
 				"causal law: event %d: client %d read key %v at version %d but its causal cut requires >= %d",
-				i, ev.Client, ev.Op.Key, ev.Op.Version, want)
+				i, ev.Client, ev.Op.Key, ev.Op.Version, want,
+			)
 		}
 		// Reading (key, version) observes the write that produced it,
 		// pulling that write's causal predecessors into the cut.

@@ -47,6 +47,23 @@ func TestConformance(t *testing.T) {
 	})
 }
 
+// A stale stamp is worse than a stale file: every generator reading it
+// inherits the staleness, and none of them can tell.
+func TestVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("declares a non-empty version", func(t *testing.T) {
+		t.Parallel()
+		testkit.Assert(t, fault.New().Version()).
+			IsNotEmpty("an annotator without a version cannot invalidate its cache")
+	})
+
+	t.Run("reports the declared constant", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, fault.New().Version(), fault.Version, "the method reports the constant")
+	})
+}
+
 func TestAnnotate(t *testing.T) {
 	t.Parallel()
 

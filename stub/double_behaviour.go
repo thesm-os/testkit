@@ -189,5 +189,13 @@ func doubleLatency[C any](t *testing.T, d Double[C]) {
 		clk.Advance(latencyWindow + time.Second)
 		after, _ := i.Stub.ShouldFaultFor(*new(C))
 		testkit.False(t, after, "a fault past its window stops firing")
+
+		// A reset rewinds counters and keeps configuration, so it must not
+		// revive a fault whose window has already closed — the window is
+		// configuration, not a counter, and a test reusing a double across
+		// phases would otherwise see failures it had already waited out.
+		i.Reset()
+		revived, _ := i.Stub.ShouldFaultFor(*new(C))
+		testkit.False(t, revived, "a reset must not revive an expired fault window")
 	})
 }

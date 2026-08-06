@@ -57,6 +57,27 @@ func TestConformance(t *testing.T) {
 	})
 }
 
+// The version composes into the plugin's cache key, so a stale one serves
+// output produced by a plugin that has since changed. It also renders into
+// every generated file's header, which is why it is a deliberate constant
+// rather than derived from content.
+func TestVersion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("declares a non-empty version", func(t *testing.T) {
+		t.Parallel()
+		// The empty string is legal and means "never invalidate anything",
+		// which is a staleness bug waiting for the first behavioural change.
+		testkit.Assert(t, stub.New().Version()).
+			IsNotEmpty("a plugin without a version cannot invalidate its cache")
+	})
+
+	t.Run("reports the declared constant", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, stub.New().Version(), stub.Version, "the method reports the constant")
+	})
+}
+
 // Outputs is a contract with the Layout phase: the tag routes an emit value
 // to its file, and the suffixes are what Layout appends to the source
 // basename. A silent change writes generated code to a path nothing reads.

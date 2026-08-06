@@ -43,6 +43,24 @@ const (
 	KindStubTests sdk.Kind = "stub.test"
 )
 
+// Version composes into the pipeline's plugin fingerprint, which frontends
+// fold into their cache keys — so a change here invalidates a warm cache
+// populated when this plugin behaved differently. A plugin declaring no
+// version contributes an empty string and can never invalidate anything,
+// which is a silent staleness bug waiting for its first behavioural change.
+//
+// Bump it on any change to what this plugin emits — the Go projection or the
+// templates alike.
+//
+// It is deliberately a constant rather than a digest of the templates, even
+// though a digest would invalidate automatically. The version renders into
+// every generated file's `Plugins:` header, so a content-derived one would
+// churn the header of every output in every consuming repository on any
+// template edit, and a golden diff would stop isolating what actually changed
+// in the output. Stability in the header is worth the discipline; during
+// development `--no-cache` covers the gap.
+const Version = "1.0.0"
+
 // DefaultSuffix is the trailer appended to the source interface's
 // name to form the stub type's identifier.
 const DefaultSuffix = "Stub"
@@ -80,6 +98,9 @@ func New() *Plugin {
 
 // Name returns [Name].
 func (*Plugin) Name() string { return Name }
+
+// Version returns [Version].
+func (*Plugin) Version() string { return Version }
 
 // Priority places the plugin in the foundation bucket: the stub is a
 // base type other generators may decorate, so it must exist before
@@ -314,8 +335,10 @@ type Stub struct {
 // Ordered reports whether any method carries an order constraint, which is
 // what decides whether the double allocates a tracker at all.
 func (s *Stub) Ordered() bool {
-	for _, m := range s.Methods {
-		if m.OrderAfter != "" {
+	// Indexed rather than ranged by value: Method is wide enough that copying
+	// one per iteration is measurable, and nothing here needs a copy.
+	for i := range s.Methods {
+		if s.Methods[i].OrderAfter != "" {
 			return true
 		}
 	}

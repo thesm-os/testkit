@@ -40,6 +40,17 @@ import (
 // Name is the plugin's identity within the pipeline.
 const Name = "fault"
 
+// Version composes into the pipeline's plugin fingerprint, which frontends
+// fold into their cache keys, so a change here invalidates a warm cache
+// populated when this annotator stamped differently. An annotator declaring
+// no version contributes an empty string and can never invalidate anything —
+// and a stale stamp is worse than a stale file, because every generator
+// reading it inherits the staleness.
+//
+// Bump it whenever what gets stamped changes: a new key, a different parse,
+// a changed collision rule.
+const Version = "1.0.0"
+
 // DirectiveName is the directive this annotator owns, written under testkit's
 // namespace as `//testkit:fault`.
 const DirectiveName sdk.DirectiveName = "fault"
@@ -83,6 +94,9 @@ func New() *Plugin { return &Plugin{} }
 
 // Name returns [Name].
 func (*Plugin) Name() string { return Name }
+
+// Version returns [Version].
+func (*Plugin) Version() string { return Version }
 
 // Directives declares the `//testkit:fault` schema.
 //

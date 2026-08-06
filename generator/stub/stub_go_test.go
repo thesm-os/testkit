@@ -50,12 +50,12 @@ func TestGoTemplates(t *testing.T) {
 
 	t.Run("carries the template the double renders from", func(t *testing.T) {
 		t.Parallel()
-		testkit.NoError(t, statTemplate(t, "stub.double.tmpl"), "the primary template must ship")
+		testkit.True(t, hasTemplate(t, "stub.double.tmpl"), "the primary template must ship")
 	})
 
 	t.Run("carries the template the companion renders from", func(t *testing.T) {
 		t.Parallel()
-		testkit.NoError(t, statTemplate(t, "stub.test.tmpl"), "the companion template must ship")
+		testkit.True(t, hasTemplate(t, "stub.test.tmpl"), "the companion template must ship")
 	})
 }
 
@@ -67,13 +67,15 @@ func TestGoFuncMap(t *testing.T) {
 	testkit.Assert(t, stub.GoFuncMap()).IsNotEmpty("the adapter contributes the shared Go helpers")
 }
 
-// statTemplate resolves name against the adapter's embedded tree.
-func statTemplate(t *testing.T, name string) error {
+// hasTemplate reports whether name resolves against the adapter's embedded
+// tree. A missing template renders nothing and fails nowhere, so presence is
+// the whole assertion — the stat error itself carries nothing a reader needs.
+func hasTemplate(t *testing.T, name string) bool {
 	t.Helper()
 	tree, ok := stub.GoTemplates()
 	if !ok {
 		t.Fatal("GoTemplates reported no tree")
 	}
 	_, err := fs.Stat(tree, name)
-	return err
+	return err == nil
 }
