@@ -1,0 +1,146 @@
+{{- define "builder.type" -}}
+{{- $b := .TypeName -}}
+{{- $src := .SourceName -}}
+{{- $tp := renderTypeParams .TypeParams -}}
+{{- $ta := .TypeArgs -}}
+{{- $v := renderExpr .ValueRef -}}
+// {{ $b }} constructs [{{ $src }}] values for tests.
+//
+// Start with [New{{ $src }}] or [New{{ $src }}From], set fields with the With
+// methods, and call [{{ $b }}.Build]. Every setter returns the builder, so a
+// test states only the fields it cares about and the rest keep whatever the
+// constructor seeded.
+type {{ $b }}{{ $tp }} struct {
+	v {{ $v }}{{ $ta }}
+}
+
+{{ if .Companion -}}
+// New{{ $src }} returns a builder seeded from the package's companion, with
+// any per-field default declared in the source applied over it.
+func New{{ $src }}{{ $tp }}() *{{ $b }}{{ $ta }} {
+	v := {{ renderExpr .Companion }}{{ $ta }}()
+{{- range .Fields }}{{ if .Default }}
+	v.{{ .Name }} = {{ if .DefaultRef }}{{ renderExpr .DefaultRef }}{{ else }}{{ .Default }}{{ end }}
+{{- end }}{{ end }}
+	return &{{ $b }}{{ $ta }}{v: v}
+}
+{{- else if .Seeded -}}
+// New{{ $src }} returns a builder seeded with the defaults the source declares.
+func New{{ $src }}{{ $tp }}() *{{ $b }}{{ $ta }} {
+	return &{{ $b }}{{ $ta }}{v: {{ $v }}{{ $ta }}{
+{{- range .Fields }}{{ if .Default }}
+		{{ .Name }}: {{ if .DefaultRef }}{{ renderExpr .DefaultRef }}{{ else }}{{ .Default }}{{ end }},
+{{- end }}{{ end }}
+	}}
+}
+{{- else -}}
+// New{{ $src }} returns a builder holding the zero value.
+func New{{ $src }}{{ $tp }}() *{{ $b }}{{ $ta }} {
+	return &{{ $b }}{{ $ta }}{}
+}
+{{- end }}
+
+// New{{ $src }}From returns a builder seeded with v, for the case where a test
+// varies one field of a value it already has.
+func New{{ $src }}From{{ $tp }}(v {{ $v }}{{ $ta }}) *{{ $b }}{{ $ta }} {
+	return &{{ $b }}{{ $ta }}{v: v}
+}
+{{ range $f := .Fields }}
+{{- if eq $f.Shape "slice" }}
+// With{{ $f.Name }} replaces {{ $f.Name }}.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v ...{{ renderType $f.Elem }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = v
+	return b
+}
+
+// Append{{ $f.Name }} adds to {{ $f.Name }}, keeping what is already there.
+func (b *{{ $b }}{{ $ta }}) Append{{ $f.Name }}(v ...{{ renderType $f.Elem }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = append(b.v.{{ $f.Name }}, v...)
+	return b
+}
+{{ else if eq $f.Shape "bytes" }}
+// With{{ $f.Name }} replaces {{ $f.Name }}.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = v
+	return b
+}
+
+// With{{ $f.Name }}String replaces {{ $f.Name }} with the bytes of s, so a
+// caller holding a string need not convert at the call site.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}String(s string) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = {{ renderType $f.Type }}(s)
+	return b
+}
+{{ else if eq $f.Shape "map" }}
+// With{{ $f.Name }} replaces {{ $f.Name }} wholesale.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = v
+	return b
+}
+
+// With{{ $f.Name }}Entry sets one key of {{ $f.Name }}, allocating the map on
+// first use so a caller need not.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}Entry(k {{ renderType $f.Key }}, v {{ renderType $f.Elem }}) *{{ $b }}{{ $ta }} {
+	if b.v.{{ $f.Name }} == nil {
+		b.v.{{ $f.Name }} = make({{ renderType $f.Type }})
+	}
+	b.v.{{ $f.Name }}[k] = v
+	return b
+}
+
+// With{{ $f.Name }}Entries merges entries into {{ $f.Name }}, overwriting keys
+// it already holds.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}Entries(entries {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
+	if b.v.{{ $f.Name }} == nil {
+		b.v.{{ $f.Name }} = make({{ renderType $f.Type }}, len(entries))
+	}
+	for k, v := range entries {
+		b.v.{{ $f.Name }}[k] = v
+	}
+	return b
+}
+{{ else }}
+// With{{ $f.Name }} replaces {{ $f.Name }}.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = v
+	return b
+}
+{{ end }}
+{{- end }}
+// Mutate applies fn to the value under construction, for the field a setter
+// does not reach — an unexported one, or a shape this builder does not model.
+func (b *{{ $b }}{{ $ta }}) Mutate(fn func(*{{ $v }}{{ $ta }})) *{{ $b }}{{ $ta }} {
+	fn(&b.v)
+	return b
+}
+
+// Clone returns a builder that can be configured without affecting this one.
+//
+// The slice, byte-slice and map fields are copied, so appending through one
+// clone is not visible through another. Values held *inside* those — a struct
+// in a slice that owns a slice of its own — are shared, as are pointer fields,
+// which is what a pointer means.
+func (b *{{ $b }}{{ $ta }}) Clone() *{{ $b }}{{ $ta }} {
+	out := &{{ $b }}{{ $ta }}{v: b.v}
+{{- range $f := .Fields }}
+{{- if $f.Copies }}
+	if b.v.{{ $f.Name }} != nil {
+{{- if eq $f.Shape "map" }}
+		out.v.{{ $f.Name }} = make({{ renderType $f.Type }}, len(b.v.{{ $f.Name }}))
+		for k, v := range b.v.{{ $f.Name }} {
+			out.v.{{ $f.Name }}[k] = v
+		}
+{{- else }}
+		out.v.{{ $f.Name }} = append({{ renderType $f.Type }}(nil), b.v.{{ $f.Name }}...)
+{{- end }}
+	}
+{{- end }}
+{{- end }}
+	return out
+}
+
+// Build returns the constructed [{{ $src }}].
+func (b *{{ $b }}{{ $ta }}) Build() {{ $v }}{{ $ta }} {
+	return b.v
+}
+{{- end -}}

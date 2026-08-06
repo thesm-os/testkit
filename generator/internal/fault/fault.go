@@ -212,12 +212,12 @@ func annotate(ctx *sdk.AnnotatorContext, iface *node.Interface, m *node.Method) 
 			stampRetry(ctx, iface, m, dir.Pos, raw)
 		}
 		if field, ok := dir.KV[PartitionKey]; ok {
-			MetaPartition.Set(m.Meta(), field, Name)
+			MetaPartition.Set(m.EnsureMeta(), field, Name)
 		}
 	}
 
 	if len(sentinels) > 0 {
-		MetaSentinels.Set(m.Meta(), sentinels, Name)
+		MetaSentinels.Set(m.EnsureMeta(), sentinels, Name)
 	}
 }
 
@@ -231,7 +231,7 @@ func stampRetry(ctx *sdk.AnnotatorContext, iface *node.Interface, m *node.Method
 			Name, RetryKey, raw, iface.Name, m.Name)
 		return
 	}
-	MetaRetry.Set(m.Meta(), n, Name)
+	MetaRetry.Set(m.EnsureMeta(), n, Name)
 }
 
 // Helper returns the generated helper identifier for a sentinel variable.

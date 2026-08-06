@@ -12,6 +12,9 @@ package plain
 
 // Item has no defaults of any kind, so New<Item>() must return a builder over
 // the zero value.
+//
+//testkit:out plaintest/ pkg=plaintest
+//testkit:builder
 type Item struct {
 	ID    string
 	Count int

@@ -3,9 +3,9 @@ module go.thesmos.sh/testkit/conformance
 go 1.26.5
 
 require (
-	go.thesmos.sh/eidos/backend/golang v1.5.2
-	go.thesmos.sh/eidos/frontend/golang v1.6.1
-	go.thesmos.sh/eidos/plugins v1.7.0
+	go.thesmos.sh/eidos/backend/golang v1.6.0
+	go.thesmos.sh/eidos/frontend/golang v1.6.2
+	go.thesmos.sh/eidos/plugins v1.7.1
 	go.thesmos.sh/testkit v0.0.0-00010101000000-000000000000
 )
 
@@ -15,7 +15,7 @@ require (
 )
 
 require (
-	go.thesmos.sh/eidos v1.6.3
+	go.thesmos.sh/eidos v1.7.0
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect

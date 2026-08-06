@@ -12,6 +12,8 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 
+	"go.thesmos.sh/testkit/generator/builder"
+	"go.thesmos.sh/testkit/generator/internal/defaults"
 	"go.thesmos.sh/testkit/generator/internal/fault"
 	"go.thesmos.sh/testkit/generator/stub"
 )
@@ -45,7 +47,7 @@ func Annotator() plugin.Annotator {
 // the directives it declares as unknown — which is why the conformance gate
 // takes this set rather than [Annotator] alone.
 func Annotators() []plugin.Annotator {
-	return []plugin.Annotator{Annotator(), fault.New()}
+	return []plugin.Annotator{Annotator(), defaults.New(), fault.New()}
 }
 
 // Generators returns the generator plugins this build carries.
@@ -56,6 +58,7 @@ func Annotators() []plugin.Annotator {
 // later.
 func Generators() []plugin.Plugin {
 	return []plugin.Plugin{
+		builder.New(),
 		stub.New(),
 	}
 }

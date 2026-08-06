@@ -50,6 +50,9 @@ type Bytes = []byte
 // Width and signedness do not change the setter's shape, which is exactly why
 // they belong in one struct: if a builder handles int and int64 differently,
 // that is a bug this fixture surfaces by having both.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type Primitives struct {
 	Bool bool
 
@@ -87,6 +90,9 @@ type Primitives struct {
 type String = string
 
 // Containers carries every shape that owes more than a single With setter.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type Containers struct {
 	// Slice owes both With and Append.
 	Slice []string
@@ -113,7 +119,12 @@ type Containers struct {
 
 	// Set is a map to empty struct, the idiomatic set. Its WithEntry takes no
 	// value parameter at all.
-	Set map[string]struct{}
+	//
+	// Excluded from the builder until eidos renders an anonymous struct: the
+	// type lifts with no package and renderType rejects it, which fails the
+	// whole file rather than only this field. Restore the setter when that
+	// lands — the fixture keeps the field so the gap stays visible.
+	Set map[string]struct{} `builder:"-"`
 
 	// Pointer distinguishes unset from zero, so its setter takes a value and
 	// takes the address rather than requiring the caller to.
@@ -141,6 +152,9 @@ type Containers struct {
 
 // Address is nested inside [User] and used as a slice and map element in
 // [Containers], so its own builder has to be reachable from three directions.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type Address struct {
 	Street string
 	City   string
@@ -149,6 +163,9 @@ type Address struct {
 
 // Role is embedded into [User], so its fields are promoted. A builder reading
 // only declared fields misses Name and Level entirely.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type Role struct {
 	Name  string
 	Level int
@@ -157,6 +174,9 @@ type Role struct {
 // Audit is embedded by pointer rather than by value. The promoted fields are
 // only reachable once the pointer is non-nil, so a builder has to allocate
 // before setting through it.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type Audit struct {
 	CreatedAt time.Time
 	CreatedBy string
@@ -164,6 +184,9 @@ type Audit struct {
 
 // User covers composition: embedding by value and by pointer, nesting, self
 // reference, and the unexported field a builder must skip.
+//
+//testkit:out domaintest/ pkg=domaintest
+//testkit:builder
 type User struct {
 	// Embedded by value — fields promote directly.
 	Role

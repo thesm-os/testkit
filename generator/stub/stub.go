@@ -19,6 +19,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/internal/signature"
+	"go.thesmos.sh/testkit/generator/internal/witness"
 )
 
 // Name is the plugin's stable identifier.
@@ -75,18 +76,6 @@ const Version = "1.0.0"
 // loaded, and guessing at its type set would produce a companion that fails to
 // compile for a reason the author could not have predicted.
 const WitnessKey = "witness"
-
-// witnessPalette supplies the derived witness for each type parameter whose
-// constraint admits any basic type.
-//
-// Positional and pairwise distinct, so a template that crossed two type
-// parameters produces code that does not compile rather than code that
-// typechecks and asserts the wrong thing. Every entry satisfies both `any` and
-// `comparable`; an interface with more parameters than there are entries has
-// no derived witness and keeps the note.
-//
-//nolint:gochecknoglobals // immutable lookup table.
-var witnessPalette = []string{"string", "int", "bool", "float64", "int64", "uint", "uint8", "int32"}
 
 // predeclared is the set of Go type names a witness may use unqualified. A
 // witness outside it is taken to be declared in the source package and
@@ -604,7 +593,7 @@ func witnessesOf(ctx *sdk.GeneratorContext, iface *node.Interface) []emit.Ref {
 	if pinned, ok := pinnedWitnesses(ctx, iface); ok {
 		return pinned
 	}
-	return derivedWitnesses(iface)
+	return witness.For(iface.TypeParams)
 }
 
 // pinnedWitnesses reads the witness key off the interface's stub directive,
@@ -637,49 +626,6 @@ func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *node.Interface) ([]emit.R
 		return out, true
 	}
 	return nil, false
-}
-
-// derivedWitnesses returns a witness per type parameter, or nil when any
-// parameter carries a constraint the generator cannot reason about.
-//
-// All-or-nothing because an entry point instantiates the whole list at once:
-// a witness for one parameter is worth nothing without one for the rest.
-func derivedWitnesses(iface *node.Interface) []emit.Ref {
-	if len(iface.TypeParams) > len(witnessPalette) {
-		return nil
-	}
-	out := make([]emit.Ref, 0, len(iface.TypeParams))
-	for i, p := range iface.TypeParams {
-		if !admitsAnyBasicType(p.Constraint) {
-			return nil
-		}
-		out = append(out, emit.Builtin(witnessPalette[i]))
-	}
-	return out
-}
-
-// admitsAnyBasicType reports whether every entry of [witnessPalette] satisfies
-// the constraint.
-//
-// Matched on the constraint's printed source form, which the frontend always
-// populates, because the structured predicates do not answer this question on
-// their own: [node.Constraint.IsAny] holds only for a parameter with no bound
-// written at all, and one written `[V any]` carries `any` as an embedded bound
-// and so reads as constrained.
-//
-// The set is closed to the two bounds whose type set is known without loading
-// anything: `any` admits everything and `comparable` admits every basic type.
-// A named constraint is a reference into a package the generator never read,
-// so its witness comes from the source or not at all.
-func admitsAnyBasicType(c *node.Constraint) bool {
-	if c.IsAny() || c.IsComparable() {
-		return true
-	}
-	switch strings.TrimSpace(c.Raw) {
-	case "any", "interface{}", "comparable":
-		return true
-	}
-	return false
 }
 
 // witnessRef lifts one witness name into the form the companion renders.

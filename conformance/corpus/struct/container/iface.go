@@ -13,6 +13,9 @@ package container
 
 // Container is generic over one unconstrained parameter, which is the case
 // where nothing about T can be assumed.
+//
+//testkit:out containertest/ pkg=containertest
+//testkit:builder
 type Container[T any] struct {
 	Value T
 
@@ -27,6 +30,9 @@ type Container[T any] struct {
 // Pair is generic over two parameters with different constraints. A generator
 // that assumes a single parameter, or that assumes every parameter is `any`,
 // gets this wrong.
+//
+//testkit:out containertest/ pkg=containertest
+//testkit:builder
 type Pair[K comparable, V any] struct {
 	Key K
 

@@ -19,6 +19,9 @@ package config
 // Config carries a default on every literal kind the directive accepts, since
 // each is parsed differently: quoting for strings, base detection for ints,
 // keyword for bools, and the untyped nil that has no literal form of its own.
+//
+//testkit:out configtest/ pkg=configtest
+//testkit:builder
 type Config struct {
 	Host string //testkit:default "localhost"
 

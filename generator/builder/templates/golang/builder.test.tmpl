@@ -1,0 +1,289 @@
+{{- define "builder.test" -}}
+{{- $T := builderRef "testing.T" -}}
+{{- $equal := builderRef "testkit.Equal" -}}
+{{- $true := builderRef "testkit.True" -}}
+{{- $b := .TypeName -}}
+{{- $src := .SourceName -}}
+{{- $ta := .TypeArgs -}}
+{{- $tp := renderTypeParams .TypeParams -}}
+{{- $ctor := renderExpr .CtorRef -}}
+{{- $val := renderExpr .ValueRef -}}
+{{- if .Generic -}}
+{{- /* A Go test function cannot take type parameters, and the field types are
+       the type parameters, so the checks have to live in generic helpers a
+       concrete entry point calls. Until that split exists the absence is
+       stated rather than left as an empty file, which would read as a
+       generator that failed. */ -}}
+// Skipped: {{ $b }} is generic — instantiate it with concrete types and write
+// the checks in the consuming package.
+{{- else -}}
+// TestNew{{ $src }} pins what the constructor seeds.
+func TestNew{{ $src }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+{{- if and .Companion (not .Seeded) }}
+
+	t.Run("seeds from the package companion", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Compared against the companion's own return rather than a value
+		// restated here: anything weaker would pass against a constructor that
+		// called something else, or nothing at all.
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().Build(), {{ renderExpr .Companion }}{{ $ta }}(),
+			"New{{ $src }} must seed from its companion")
+	})
+{{- else if .Seeded }}
+{{- range .Fields }}{{ if .Default }}
+
+	t.Run("seeds {{ .Name }} with its declared default", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A default the constructor drops reads as a field the author never
+		// declared, and every test built on it starts from the wrong value.
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().Build().{{ .Name }}, {{ if .DefaultRef }}{{ renderExpr .DefaultRef }}{{ else }}{{ .Default }}{{ end }},
+			"New{{ $src }} must seed {{ .Name }}")
+	})
+{{- end }}{{ end }}
+{{- else }}
+
+	t.Run("returns a builder over the zero value", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var zero {{ $val }}{{ $ta }}
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().Build(), zero,
+			"an unseeded builder starts from the zero value")
+	})
+{{- end }}
+}
+
+// TestNew{{ $src }}From pins the seeding constructor, which is what a test
+// uses to vary one field of a value it already holds.
+func TestNew{{ $src }}From(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("carries the value through untouched", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Anything it altered would be a field the caller did not ask to
+		// change, which defeats the point of seeding from a value at all.
+		var seed {{ $val }}{{ $ta }}
+		{{ renderExpr $equal }}(t, {{ renderExpr .FromRef }}{{ $ta }}(seed).Build(), seed,
+			"New{{ $src }}From must not alter what it was given")
+	})
+}
+{{ range $i, $f := .Fields }}
+{{- if eq $f.Shape "slice" }}
+// Test{{ $b }}With{{ $f.Name }} pins the replacing setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("replaces {{ $f.Name }} rather than adding to it", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v, v).With{{ $f.Name }}(v).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "the second call replaces the first")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var v {{ renderType $f.Elem }}
+		b := {{ $ctor }}{{ $ta }}()
+		{{ renderExpr $true }}(t, b.With{{ $f.Name }}(v) == b, "the setter returns its receiver")
+	})
+}
+
+// Test{{ $b }}Append{{ $f.Name }} pins the appending setter for {{ $f.Name }}.
+func Test{{ $b }}Append{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("keeps what is already there", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// An Append that replaced would be a second With under another name,
+		// and a test building a list one entry at a time would keep the last.
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v).Append{{ $f.Name }}(v).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 2, "Append must add to {{ $f.Name }}")
+	})
+
+	t.Run("starts from empty when nothing was set", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().Append{{ $f.Name }}(v).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "Append works on an unset field")
+	})
+}
+{{ else if eq $f.Shape "bytes" }}
+// Test{{ $b }}With{{ $f.Name }} pins the byte setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("reaches {{ $f.Name }}", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		v := {{ renderType $f.Type }}("v{{ $i }}")
+		{{ renderExpr $equal }}(t, string({{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v).Build().{{ $f.Name }}), "v{{ $i }}",
+			"With{{ $f.Name }} must reach {{ $f.Name }}")
+	})
+}
+
+// Test{{ $b }}With{{ $f.Name }}String pins the string-accepting setter, which
+// exists so a caller holding a string need not convert at every call site.
+func Test{{ $b }}With{{ $f.Name }}String(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("converts the string it was given", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}String("v{{ $i }}").Build()
+		{{ renderExpr $equal }}(t, string(got.{{ $f.Name }}), "v{{ $i }}", "the string reaches {{ $f.Name }}")
+	})
+}
+{{ else if eq $f.Shape "map" }}
+// Test{{ $b }}With{{ $f.Name }} pins the replacing setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("replaces {{ $f.Name }} wholesale", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var k {{ renderType $f.Key }}
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k, v).With{{ $f.Name }}(nil).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 0, "the replacing setter discards what was there")
+	})
+}
+
+// Test{{ $b }}With{{ $f.Name }}Entry pins the single-entry setter.
+func Test{{ $b }}With{{ $f.Name }}Entry(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("allocates {{ $f.Name }} on first use", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Assigning into a nil map panics, so a setter that did not allocate
+		// would fail at the caller's first use rather than here.
+		var k {{ renderType $f.Key }}
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k, v).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "the entry reaches {{ $f.Name }}")
+	})
+}
+
+// Test{{ $b }}With{{ $f.Name }}Entries pins the merging setter.
+func Test{{ $b }}With{{ $f.Name }}Entries(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("keeps entries it was not given", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Merging is the whole difference from the replacing setter; one that
+		// discarded would leave the two indistinguishable.
+		var k {{ renderType $f.Key }}
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k, v).
+			With{{ $f.Name }}Entries({{ renderType $f.Type }}{}).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "merging keeps what was there")
+	})
+
+	t.Run("allocates {{ $f.Name }} when it merges into nothing", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Merging into a nil map has to allocate like the single-entry setter
+		// does, or the first caller to reach for it panics.
+		var k {{ renderType $f.Key }}
+		var v {{ renderType $f.Elem }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entries({{ renderType $f.Type }}{k: v}).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "merging allocates on first use")
+	})
+}
+{{ else }}
+// Test{{ $b }}With{{ $f.Name }} pins the setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("reaches {{ $f.Name }}", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A setter assigning the wrong field produces a builder that compiles
+		// and configures something else, which no consumer can see.
+		var v {{ renderType $f.Type }}
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v).Build().{{ $f.Name }}, v,
+			"With{{ $f.Name }} must reach {{ $f.Name }}")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var v {{ renderType $f.Type }}
+		b := {{ $ctor }}{{ $ta }}()
+		{{ renderExpr $true }}(t, b.With{{ $f.Name }}(v) == b, "the setter returns its receiver")
+	})
+}
+{{ end }}
+{{- end }}
+// Test{{ $b }}Mutate pins the escape hatch for a field no setter reaches.
+func Test{{ $b }}Mutate(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("reaches the value under construction", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Handed a copy, every mutation would be discarded and the caller
+		// would see a builder that silently ignored them.
+		reached := false
+		{{ $ctor }}{{ $ta }}().Mutate(func(*{{ $val }}{{ $ta }}) { reached = true })
+		{{ renderExpr $true }}(t, reached, "Mutate must be applied")
+	})
+}
+// Test{{ $b }}Clone pins that a clone can be configured on its own.
+func Test{{ $b }}Clone(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("carries the configuration across", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A clone starting from nothing would be a second constructor under
+		// another name, and a test cloning a configured builder would silently
+		// lose everything it had set.
+		b := {{ $ctor }}{{ $ta }}()
+		{{ renderExpr $equal }}(t, b.Clone().Build(), b.Build(), "a clone starts where its original stood")
+	})
+{{- if .Copies }}
+{{- range $i, $f := .Fields }}
+{{- if eq $f.Shape "bytes" }}
+
+	t.Run("does not share {{ $f.Name }} with its original", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A byte slice is copied like any other, and a clone sharing its
+		// backing array would let one test's bytes appear in another's.
+		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}String("seed")
+		{{ renderExpr $equal }}(t, string(b.Clone().Build().{{ $f.Name }}), "seed",
+			"a clone carries {{ $f.Name }} across")
+	})
+{{- else if eq $f.Shape "slice" }}
+
+	t.Run("does not share {{ $f.Name }} with its original", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Shared backing storage makes one test's setup visible in another's,
+		// which surfaces as a failure for something the test never did.
+		var v {{ renderType $f.Elem }}
+		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v)
+		b.Clone().Append{{ $f.Name }}(v)
+		{{ renderExpr $equal }}(t, len(b.Build().{{ $f.Name }}), 1,
+			"appending to a clone must not reach the original")
+	})
+{{- else if eq $f.Shape "map" }}
+
+	t.Run("does not share {{ $f.Name }} with its original", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var k {{ renderType $f.Key }}
+		var v {{ renderType $f.Elem }}
+		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k, v)
+		b.Clone().With{{ $f.Name }}Entries({{ renderType $f.Type }}{})
+		{{ renderExpr $equal }}(t, len(b.Build().{{ $f.Name }}), 1,
+			"configuring a clone must not reach the original")
+	})
+{{- end }}
+{{- end }}
+{{- end }}
+}
+
+// Test{{ $b }}Build pins what the builder hands back.
+func Test{{ $b }}Build(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("returns every field that was configured", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var seed {{ $val }}{{ $ta }}
+		{{ renderExpr $equal }}(t, {{ renderExpr .FromRef }}{{ $ta }}(seed).Build(), seed,
+			"Build returns the value under construction")
+	})
+}
+{{- end }}
+{{- end -}}
+
