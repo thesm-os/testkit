@@ -85,6 +85,32 @@ One key. `bench=off` suppresses the benchmark harness for a subject whose cost i
 not a contract, leaving the assertions; the benchmark half is otherwise emitted
 because it derives from the same projection at no additional analysis.
 
+A second directive, `//testkit:bench`, carries per-method budgets. It is
+method-scoped because a budget is a property of one hot path, and it batches its
+properties onto one line rather than spending a directive name on each
+([RFC-0001](0001-testkit-as-a-generator-platform.md)):
+
+```go
+//testkit:bench allocs=0 p99=500us mean=100us mem=4KiB
+```
+
+| Key | Gates | Backed by |
+|---|---|---|
+| `allocs=N` | allocations per operation; `0` is an alloc-free hot path | `Contract.AllocsMax` |
+| `p99=D` | 99th-percentile nanoseconds per operation | `Contract.LatencyMax` |
+| `mean=D` | mean nanoseconds per operation | a new `Contract` method; reported today, not gated |
+| `mem=B` | bytes allocated per operation | a new `Contract` method over `MemStats.TotalAlloc` |
+
+Without the directive a method's benchmark measures and reports; with it, each
+key present becomes a ceiling that fails the run. A budget nobody declared is a
+number the generator invented, so there is no default ceiling.
+
+`p99` rather than `latency` names what `Contract.LatencyMax` actually gates —
+`reference/generators/bench.md` describes it as a mean ceiling, and the code
+compares the 99th percentile. `mem` reads `MemStats.TotalAlloc` beside the
+`Mallocs` reading `allocs` already takes, so the two share one stop-the-world
+read.
+
 The directive is independent of `//testkit:stub`. Where both are present the
 generated suite additionally runs the subject through the double, which is what
 proves the double faithful; where only `suite` is present that half is not
@@ -409,11 +435,18 @@ This is the mechanical form of ADR-0015's requirement that a broken fixture fail
 the classification it claims to: calling one exported assertion directly is
 failure identity, with no name matching in between.
 
-The benchmark half needs one runtime primitive that does not exist —
-`testkit.FailableBenchTB`, capturing `Fatal` and `Fatalf` and driving `Loop` a
-bounded number of times. Without it a declared ceiling cannot be shown to be
-enforced, and `contract.go` states that `BenchTB` exists so the machinery can be
-tested without a real benchmark harness, which nothing exercises.
+One stand-in serves both halves. `testkit.FailableTB` satisfies `testing.TB` and
+`testkit.BenchTB`: `Loop` returns true a bounded number of times, `ReportMetric`
+records rather than prints, and a violated ceiling lands in `Msg` instead of
+failing the run. `contract.go` states that `BenchTB` exists so the machinery can
+be tested without a real benchmark harness, and this is what makes that true
+from outside the package as well as inside it.
+
+Two assertions in a benchmark's shape are not symmetric. That an allocating body
+violates `AllocsMax(0)` is robust; that a non-allocating one satisfies it is not,
+because `runtime.ReadMemStats` reads process-wide counters and a parallel test
+contributes to them. The generated demonstration asserts the first direction
+only.
 
 ### Composition and generics
 

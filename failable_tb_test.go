@@ -367,3 +367,90 @@ func TestFailableTBSkip(t *testing.T) {
 		}
 	})
 }
+
+// A FailableTB satisfies both interfaces. The assertion is compile-time
+// because that is when it matters: a method added to BenchTB upstream, or one
+// renamed here, breaks the build rather than a generated benchmark somewhere
+// downstream.
+var (
+	_ testing.TB      = (*testkit.FailableTB)(nil)
+	_ testkit.BenchTB = (*testkit.FailableTB)(nil)
+)
+
+// The benchmark half of the stand-in. Contract's own checks in contract_test.go
+// drive these through StartContract; what is pinned here is the behaviour those
+// checks rely on and would not notice losing.
+func TestFailableTBBench(t *testing.T) {
+	t.Parallel()
+
+	t.Run("runs no iterations until bounded", func(t *testing.T) {
+		t.Parallel()
+		// The default is what makes "End before Loop" checkable, so a default
+		// that looped would silently turn that check into a different one.
+		f := testkit.NewFailableTB()
+		if f.Loop() {
+			t.Fatal("an unbounded FailableTB must not loop")
+		}
+		if got := f.Iterations(); got != 0 {
+			t.Fatalf("Iterations() = %d, want 0", got)
+		}
+	})
+
+	t.Run("loops exactly the bounded number of times", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB().WithIterations(3)
+		n := 0
+		for f.Loop() {
+			n++
+			if n > 10 {
+				t.Fatal("Loop did not terminate")
+			}
+		}
+		if n != 3 {
+			t.Fatalf("looped %d times, want 3", n)
+		}
+		if got := f.Iterations(); got != 3 {
+			t.Fatalf("Iterations() = %d, want 3", got)
+		}
+	})
+
+	t.Run("reports no allocations until asked", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		if f.AllocsReported() {
+			t.Fatal("a fresh FailableTB must not report allocations")
+		}
+		f.ReportAllocs()
+		if !f.AllocsReported() {
+			t.Fatal("ReportAllocs must be recorded")
+		}
+	})
+
+	t.Run("distinguishes an absent metric from a zero one", func(t *testing.T) {
+		t.Parallel()
+		// A latency contract reports ns/op-p99 only while tracking latency, so
+		// a caller reading zero has to be able to tell which it got.
+		f := testkit.NewFailableTB()
+		if _, ok := f.Metric("ns/op-p99"); ok {
+			t.Fatal("an unreported metric must not be present")
+		}
+		f.ReportMetric(0, "ns/op-p99")
+		got, ok := f.Metric("ns/op-p99")
+		if !ok {
+			t.Fatal("a reported metric must be present")
+		}
+		if got != 0 {
+			t.Fatalf("Metric() = %v, want 0", got)
+		}
+	})
+
+	t.Run("keeps the later value for a unit reported twice", func(t *testing.T) {
+		t.Parallel()
+		f := testkit.NewFailableTB()
+		f.ReportMetric(1, "B/op")
+		f.ReportMetric(2, "B/op")
+		if got, _ := f.Metric("B/op"); got != 2 {
+			t.Fatalf("Metric() = %v, want the later value 2", got)
+		}
+	})
+}

@@ -12,26 +12,46 @@ import (
 	"testing"
 )
 
-// FailableTB is a [testing.TB] stub that captures the first fatal message
-// without aborting the test process. Use it to verify that assertion helpers
-// produce the expected failure output without actually failing the parent test.
+// FailableTB captures a failure instead of aborting the test process, so an
+// assertion helper can be driven against input it is expected to reject and the
+// rejection observed.
 //
 //	f := testkit.NewFailableTB()
 //	testkit.Equal(f, 1, 2, "must match")
 //	if !f.Failed() { t.Fatal("Equal should have failed") }
+//
+// It stands in for [testing.TB] and for [BenchTB] both. The second is what lets
+// a benchmark contract be checked the same way an assertion is: [Loop] returns
+// true a bounded number of times, [ReportMetric] records rather than prints, and
+// a violated ceiling lands in [Msg] instead of failing the run.
+//
+//	f := testkit.NewFailableTB().WithIterations(64)
+//	c := testkit.StartContract(f).AllocsMax(0)
+//	for c.Loop() { sink = make([]byte, 64) }
+//	c.End()
+//	if !f.Failed() { t.Fatal("an allocating loop must violate AllocsMax(0)") }
+//
+// One caveat on that direction. Proving a ceiling *rejects* a violating body is
+// reliable; proving it *accepts* a compliant one is not, because
+// [runtime.MemStats] counts allocations process-wide and a parallel test
+// contributes to them.
 type FailableTB struct {
 	testing.TB // embedded nil interface — panics on unimplemented methods
 
-	mu          sync.Mutex
-	ctx         context.Context //nolint:containedctx // test double must hold ctx to implement testing.TB.Context
-	cancel      context.CancelFunc
-	name        string
-	msg         string
-	logs        []string
-	cleanups    []func()
-	helperCalls int
-	failed      bool
-	goexit      bool // when true, Fatal/FailNow call runtime.Goexit()
+	mu             sync.Mutex
+	ctx            context.Context //nolint:containedctx // test double must hold ctx to implement testing.TB.Context
+	cancel         context.CancelFunc
+	name           string
+	msg            string
+	logs           []string
+	cleanups       []func()
+	metrics        map[string]float64
+	helperCalls    int
+	iterations     int // how many times Loop is to return true
+	looped         int // how many times it has
+	failed         bool
+	goexit         bool // when true, Fatal/FailNow call runtime.Goexit()
+	allocsReported bool
 }
 
 // NewFailableTB returns a new [FailableTB] ready for use. The returned
@@ -56,6 +76,20 @@ func (f *FailableTB) WithGoexit() *FailableTB {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.goexit = true
+	return f
+}
+
+// WithIterations bounds how many times [FailableTB.Loop] returns true, which is
+// what makes a benchmark body run a known number of times under a stand-in.
+//
+// The default is zero, so a contract driven without this runs no iterations —
+// which is the right default for checking that [Contract.End] rejects being
+// called before the loop, and the wrong one for everything else. Sixty-four is
+// enough for an allocation delta to clear measurement noise.
+func (f *FailableTB) WithIterations(n int) *FailableTB {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.iterations = n
 	return f
 }
 
@@ -257,4 +291,66 @@ func (f *FailableTB) RunCleanups() {
 // string. Use a real [testing.T] when temporary directories are needed.
 func (*FailableTB) TempDir() string {
 	return ""
+}
+
+// Loop implements [BenchTB], returning true the number of times
+// [FailableTB.WithIterations] allows and false thereafter.
+//
+// Unlike [testing.B.Loop] it neither times nor resets anything: what a caller
+// checking a benchmark contract needs is a body that runs a known number of
+// times, and the timing is [Contract]'s own.
+func (f *FailableTB) Loop() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.looped >= f.iterations {
+		return false
+	}
+	f.looped++
+	return true
+}
+
+// Iterations returns how many times [FailableTB.Loop] returned true.
+func (f *FailableTB) Iterations() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.looped
+}
+
+// ReportAllocs implements [BenchTB] by recording that allocation reporting was
+// requested. There is no output to enable, so the record is the whole effect —
+// it is what lets a caller check that a contract tracking allocations asked for
+// them.
+func (f *FailableTB) ReportAllocs() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.allocsReported = true
+}
+
+// AllocsReported reports whether [FailableTB.ReportAllocs] was called.
+func (f *FailableTB) AllocsReported() bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.allocsReported
+}
+
+// ReportMetric implements [BenchTB] by recording the value under its unit.
+// A unit reported twice keeps the later value, matching [testing.B.ReportMetric].
+func (f *FailableTB) ReportMetric(n float64, unit string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.metrics == nil {
+		f.metrics = make(map[string]float64, 2)
+	}
+	f.metrics[unit] = n
+}
+
+// Metric returns the value recorded for unit, and whether one was recorded.
+//
+// The presence flag is the point: a latency contract reports `ns/op-p99` only
+// when it is tracking latency, so "absent" and "zero" are different answers.
+func (f *FailableTB) Metric(unit string) (float64, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n, ok := f.metrics[unit]
+	return n, ok
 }

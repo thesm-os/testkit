@@ -11,131 +11,97 @@ import (
 	"go.thesmos.sh/testkit"
 )
 
-// stubBench implements testkit.BenchTB for testing Contract without a real
-// benchmark harness.
-type stubBench struct {
-	loopCount int
-	looped    int
-	failed    bool
-	msg       string
-	metrics   map[string]float64
-}
-
-func newStubBench(n int) *stubBench {
-	return &stubBench{loopCount: n, metrics: make(map[string]float64)}
-}
-
-func (*stubBench) Helper()       {}
-func (*stubBench) ReportAllocs() {}
-
-func (s *stubBench) Fatal(args ...any) {
-	if !s.failed {
-		s.failed = true
-		s.msg = args[0].(string)
-	}
-}
-
-func (s *stubBench) Fatalf(format string, args ...any) {
-	if !s.failed {
-		s.failed = true
-		s.msg = format
-		if len(args) > 0 {
-			// Just store format for assertion matching.
-			s.msg = format
-		}
-	}
-}
-
-func (s *stubBench) ReportMetric(n float64, unit string) {
-	s.metrics[unit] = n
-}
-
-func (s *stubBench) Loop() bool {
-	if s.looped < s.loopCount {
-		s.looped++
-		return true
-	}
-	return false
-}
-
+// [testkit.BenchTB] exists so the contract machinery can be driven without a
+// real benchmark harness, and [testkit.FailableTB] is what satisfies it. The
+// checks below are the ones a generated benchmark makes about its own ceilings,
+// written against the same stand-in a generated file uses.
 func TestContract(t *testing.T) {
 	t.Parallel()
 
 	t.Run("passes when no ceilings set", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(3)
+		b := testkit.NewFailableTB().WithIterations(3)
 		c := testkit.StartContract(b)
 		for c.Loop() {
 			// no-op
 		}
 		c.End()
-		testkit.False(t, b.failed, "must pass with no ceilings")
+		testkit.False(t, b.Failed(), "must pass with no ceilings")
+		testkit.Equal(t, b.Iterations(), 3, "the loop must run the bounded number of times")
 	})
 
 	t.Run("End before Loop fatals", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(0)
+		// A contract whose loop never ran has measured nothing, so reporting a
+		// pass would certify an empty benchmark.
+		b := testkit.NewFailableTB()
 		c := testkit.StartContract(b)
 		c.End()
-		testkit.True(t, b.failed, "must fatal when End called before Loop")
+		testkit.True(t, b.Failed(), "must fatal when End called before Loop")
 	})
 
 	t.Run("latency tracking reports metrics", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(5)
+		b := testkit.NewFailableTB().WithIterations(5)
 		c := testkit.StartContract(b).LatencyMax(time.Second)
 		for c.Loop() {
 			time.Sleep(time.Microsecond)
 		}
 		c.End()
-		testkit.False(t, b.failed, "must pass within generous ceiling")
-		_, hasMean := b.metrics["ns/op-mean"]
-		_, hasP99 := b.metrics["ns/op-p99"]
+		testkit.False(t, b.Failed(), "must pass within generous ceiling")
+		_, hasMean := b.Metric("ns/op-mean")
+		_, hasP99 := b.Metric("ns/op-p99")
 		testkit.True(t, hasMean, "must report mean metric")
 		testkit.True(t, hasP99, "must report p99 metric")
 	})
 
 	t.Run("latency violation fatals", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(3)
+		b := testkit.NewFailableTB().WithIterations(3)
 		c := testkit.StartContract(b).LatencyMax(time.Nanosecond)
 		for c.Loop() {
 			time.Sleep(time.Millisecond)
 		}
 		c.End()
-		testkit.True(t, b.failed, "must fatal on latency violation")
-		testkit.True(t, strings.Contains(b.msg, "latency contract violated"),
+		testkit.True(t, b.Failed(), "must fatal on latency violation")
+		testkit.True(t, strings.Contains(b.Msg(), "latency contract violated"),
 			"must mention latency violation")
 	})
 
-	t.Run("alloc tracking runs without crash", func(t *testing.T) {
+	t.Run("alloc tracking asks the harness to report allocations", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(10)
+		// A contract that measures allocations without enabling their reporting
+		// would gate on a number no reader of the benchmark output can see.
+		b := testkit.NewFailableTB().WithIterations(10)
 		c := testkit.StartContract(b).AllocsMax(1000)
 		for c.Loop() {
 			_ = make([]byte, 64) //nolint:gosec // force allocation for test
 		}
 		c.End()
-		// With a generous ceiling, this should pass.
-		testkit.False(t, b.failed, "generous alloc ceiling must pass")
+		testkit.False(t, b.Failed(), "generous alloc ceiling must pass")
+		testkit.True(t, b.AllocsReported(), "tracking allocations must enable their reporting")
 	})
 
 	t.Run("alloc tracking with generous ceiling passes", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(5)
+		b := testkit.NewFailableTB().WithIterations(5)
 		c := testkit.StartContract(b).AllocsMax(1_000_000)
 		for c.Loop() {
 			// no-op
 		}
 		c.End()
-		testkit.False(t, b.failed, "generous ceiling must pass")
+		testkit.False(t, b.Failed(), "generous ceiling must pass")
 	})
 
 	// The alloc ceiling is the whole point of the contract: a loop body that
 	// allocates on every iteration must not slip past AllocsMax(0).
+	//
+	// Only this direction is asserted. runtime.MemStats counts allocations
+	// process-wide, so a parallel test contributes to the delta and "a
+	// non-allocating body satisfies AllocsMax(0)" is not a claim this can make.
 	t.Run("alloc violation fatals", func(t *testing.T) {
 		t.Parallel()
-		b := newStubBench(64)
+		b := testkit.NewFailableTB().WithIterations(64)
 		c := testkit.StartContract(b).AllocsMax(0)
 		for c.Loop() {
 			// The sink defeats escape analysis, so the allocation is real
@@ -143,9 +109,9 @@ func TestContract(t *testing.T) {
 			allocSink = make([]byte, 64) //nolint:gosec // forcing an allocation is the point
 		}
 		c.End()
-		testkit.True(t, b.failed, "an allocating loop must violate AllocsMax(0)")
-		if !strings.Contains(b.msg, "allocation contract violated") {
-			t.Fatalf("the diagnostic must name the ceiling, got: %s", b.msg)
+		testkit.True(t, b.Failed(), "an allocating loop must violate AllocsMax(0)")
+		if !strings.Contains(b.Msg(), "allocation contract violated") {
+			t.Fatalf("the diagnostic must name the ceiling, got: %s", b.Msg())
 		}
 	})
 }
