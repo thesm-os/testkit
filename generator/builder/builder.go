@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"go.thesmos.sh/eidos/core/meta"
 	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
@@ -196,6 +197,22 @@ const (
 	// takes the ordinary map shape.
 	Set Shape = "set"
 
+	// Chan owes a plain setter, and a check comparing identity: a freshly made
+	// channel is distinct from any the constructor could have seeded, so one
+	// value proves what a comparable type needs two for.
+	Chan Shape = "chan"
+
+	// Error owes a plain setter, and a check matching by identity. An error is
+	// an interface, so no value of it can be written down — but it is a builtin
+	// interface with a universal constructor, which is what separates it from
+	// [io.Reader] and the rest.
+	Error Shape = "error"
+
+	// Func owes a plain setter, and a check that a function arrived at all. A
+	// func is not comparable, so there is nothing else to assert — but a setter
+	// assigning nothing leaves nil, which is what the check catches.
+	Func Shape = "func"
+
 	// Pointer owes a setter taking the pointee by value and addressing it. A
 	// pointer field distinguishes unset from zero, and the caller who wants to
 	// say "set" should not have to produce an address to say it. Clearing the
@@ -232,12 +249,16 @@ type Field struct {
 	// import, which only a reference carries — text cannot.
 	DefaultRef *emit.Expr
 
-	// Sample and Alternate are two distinct values of the field's type as
-	// source text, empty when its type admits none. See [samplesFor] for why
-	// the checks need a pair rather than one value, and for what "admits none"
-	// covers.
-	Sample    string
-	Alternate string
+	// Sample and Alternate are two distinct values of whatever the field's
+	// setter takes, empty when its type admits none. See [samplesFor] for why
+	// the checks need a pair rather than one value, and [resolver] for how far
+	// "admits none" reaches.
+	Sample    Sample
+	Alternate Sample
+
+	// Returns are a func field's return types, for the literal a check hands
+	// its setter. Empty for every other shape.
+	Returns []emit.Ref
 }
 
 // Builder is the emit value rendered into the primary output.
@@ -377,11 +398,12 @@ func (t *Tests) SetOutputPackages(byTag map[string]string) {
 // a declaration that cannot do what it says.
 func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	c := sdk.NewProvenance(Name, sdk.EmitTarget{})
+	rv := newResolver(ctx.Reader)
 	for _, s := range ctx.Reader.Structs().Slice() {
 		if !s.HasPositiveDirective(DirectiveName) {
 			continue
 		}
-		fields := fieldsOf(ctx, s)
+		fields := fieldsOf(ctx, rv, s)
 		if len(fields) == 0 {
 			ctx.Diag.Errorf(s.Pos(),
 				"%s: struct %q carries //testkit:%s but has no exported fields to set",
@@ -459,7 +481,7 @@ func substituted(fields []Field, params []*node.TypeParam, witnesses []emit.Ref)
 		// Upgraded rather than overwritten: substitution only ever resolves a
 		// type parameter into something more concrete, so it can add a pair
 		// where none was derivable and must never clear one that was.
-		if sample, alternate := samplesOfRef(sampleSource(f), f.Name); sample != "" {
+		if sample, alternate := samplesOfRef(sampleSource(f), f.Name); sample.OK() {
 			f.Sample, f.Alternate = sample, alternate
 		}
 		out[i] = f
@@ -535,7 +557,7 @@ func companionOf(ctx *sdk.GeneratorContext, s *node.Struct) *emit.Expr {
 // Unexported fields are skipped: a builder in another package cannot name them,
 // and one in the same package would offer a setter the type's own invariants
 // were written to prevent.
-func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
+func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
 	out := make([]Field, 0, len(s.Fields)+len(s.Embeds))
 	// An embedded type is a field named after itself, and the frontend records
 	// it apart from the declared ones. It takes a single setter for the whole
@@ -548,7 +570,9 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
 			continue
 		}
 		field := Field{Name: name, Type: golang.FromNode(e.Type)}
+		source := e.Type
 		if pointer {
+			source = e.Type.Elem
 			// Embedded by pointer takes the same setter a pointer field does:
 			// the promoted fields are reachable only once the pointer is
 			// non-nil, so a setter demanding an address makes every caller
@@ -556,6 +580,7 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
 			field.Shape = Pointer
 			field.Elem = golang.FromNode(e.Type.Elem)
 		}
+		field.Sample, field.Alternate = rv.samples(source, name, make(map[string]bool))
 		out = append(out, field)
 	}
 	for _, f := range s.Fields {
@@ -570,7 +595,7 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
 		if pkg := defaults.Package(f.Meta()); pkg != "" {
 			field.DefaultRef = sdk.NewExternal(pkg, field.Default)
 		}
-		classify(&field, f.Type)
+		classify(rv, &field, f.Type)
 		out = append(out, field)
 	}
 	return out
@@ -616,11 +641,19 @@ func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
 
 // classify records the shape the field's setter follows, and the values its
 // check sets it to.
-func classify(field *Field, t *node.TypeRef) {
+func classify(rv *resolver, field *Field, t *node.TypeRef) {
 	if t == nil {
 		return
 	}
+	seen := make(map[string]bool)
 	switch {
+	case t.TypeKind == node.TypeRefFunc:
+		field.Shape = Func
+		field.Returns = refsOf(t.FuncReturns)
+	case isChan(t):
+		field.Shape = Chan
+	case isError(t):
+		field.Shape = Error
 	case t.TypeKind == node.TypeRefSlice && isByte(t.Elem):
 		field.Shape = Bytes
 	case t.TypeKind == node.TypeRefSlice:
@@ -632,7 +665,7 @@ func classify(field *Field, t *node.TypeRef) {
 		// value is the same one.
 		field.Shape = Set
 		field.Key = golang.FromNode(t.MapKey)
-		field.Sample, field.Alternate = samplesOfNode(t.MapKey, field.Name)
+		field.Sample, field.Alternate = rv.samples(t.MapKey, field.Name, seen)
 	case t.TypeKind == node.TypeRefMap:
 		field.Shape = Map
 		field.Key = golang.FromNode(t.MapKey)
@@ -640,10 +673,67 @@ func classify(field *Field, t *node.TypeRef) {
 	case t.TypeKind == node.TypeRefPointer:
 		field.Shape = Pointer
 		field.Elem = golang.FromNode(t.Elem)
-		field.Sample, field.Alternate = samplesOfNode(t.Elem, field.Name)
+		field.Sample, field.Alternate = rv.samples(t.Elem, field.Name, seen)
 	default:
-		field.Sample, field.Alternate = samplesOfNode(t, field.Name)
+		field.Sample, field.Alternate = rv.samples(t, field.Name, seen)
 	}
+}
+
+// isError reports whether t is the builtin error interface.
+func isError(t *node.TypeRef) bool { return t.IsBuiltin() && t.Name == "error" }
+
+// GoIsChannel and GoChanDir are the Go frontend's published facts about a
+// channel. The node model has no channel kind, so a channel arrives as a named
+// reference in a synthetic `go` package with these stamped beside it.
+//
+// Declared here rather than imported because a meta key is interned by name:
+// the same call in the frontend and in this package yields the same key, and
+// the frontend documents both names as part of its output.
+//
+//nolint:gochecknoglobals // interned keys, immutable after init.
+var (
+	GoIsChannel = meta.EnsureKey("go.isChannel", meta.BoolParser)
+	GoChanDir   = meta.EnsureKey("go.chanDir", meta.StringParser)
+)
+
+// ChanBidirectional is the direction the Go frontend stamps for a channel that
+// can be both sent to and received from.
+const ChanBidirectional = "both"
+
+// isChan reports whether t is a bidirectional channel.
+//
+// Read from the stamp rather than inferred from the shape, because the shape
+// does not carry it: every channel arrives as the same named reference and the
+// direction is stamped beside it.
+//
+// Bidirectional only, and matched positively rather than by excluding the
+// directional spellings: a check makes a channel to hand to the setter, make is
+// not legal on a directional one, and a direction this does not recognise is
+// likelier to be one make rejects than one it accepts. A channel that fails
+// this still gets its setter and falls through with no check of its own, which
+// is the trade every unwritable type takes.
+func isChan(t *node.TypeRef) bool {
+	bag := t.Meta()
+	if bag == nil {
+		return false
+	}
+	if isChannel, _ := GoIsChannel.Get(bag); !isChannel {
+		return false
+	}
+	dir, _ := GoChanDir.Get(bag)
+	return dir == ChanBidirectional
+}
+
+// refsOf lifts a list of source types into their emit form.
+func refsOf(types []*node.TypeRef) []emit.Ref {
+	if len(types) == 0 {
+		return nil
+	}
+	out := make([]emit.Ref, len(types))
+	for i, t := range types {
+		out[i] = golang.FromNode(t)
+	}
+	return out
 }
 
 // isEmptySet reports whether t is the anonymous empty struct, which is what

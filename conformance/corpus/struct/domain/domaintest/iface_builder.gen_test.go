@@ -8,6 +8,7 @@ package domaintest_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"testing"
 	"time"
@@ -439,9 +440,16 @@ func TestPrimitivesBuilderWithFloat64(t *testing.T) {
 func TestPrimitivesBuilderWithComplex64(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Complex64: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Complex64", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithComplex64(1+2i).Build().Complex64, 1+2i,
+			"WithComplex64 must reach Complex64")
+		testkit.Equal(t, domaintest.NewPrimitives().WithComplex64(3+4i).Build().Complex64, 3+4i,
+			"WithComplex64 must reach Complex64")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -455,9 +463,16 @@ func TestPrimitivesBuilderWithComplex64(t *testing.T) {
 func TestPrimitivesBuilderWithComplex128(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Complex128: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Complex128", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithComplex128(1+2i).Build().Complex128, 1+2i,
+			"WithComplex128 must reach Complex128")
+		testkit.Equal(t, domaintest.NewPrimitives().WithComplex128(3+4i).Build().Complex128, 3+4i,
+			"WithComplex128 must reach Complex128")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -471,9 +486,16 @@ func TestPrimitivesBuilderWithComplex128(t *testing.T) {
 func TestPrimitivesBuilderWithDay(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Day: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Day", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithDay(domain.Weekday(42)).Build().Day, domain.Weekday(42),
+			"WithDay must reach Day")
+		testkit.Equal(t, domaintest.NewPrimitives().WithDay(domain.Weekday(7)).Build().Day, domain.Weekday(7),
+			"WithDay must reach Day")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -487,9 +509,16 @@ func TestPrimitivesBuilderWithDay(t *testing.T) {
 func TestPrimitivesBuilderWithTemp(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Temp: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Temp", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithTemp(domain.Celsius(3.14)).Build().Temp, domain.Celsius(3.14),
+			"WithTemp must reach Temp")
+		testkit.Equal(t, domaintest.NewPrimitives().WithTemp(domain.Celsius(2.72)).Build().Temp, domain.Celsius(2.72),
+			"WithTemp must reach Temp")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -503,9 +532,16 @@ func TestPrimitivesBuilderWithTemp(t *testing.T) {
 func TestPrimitivesBuilderWithRef(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Ref: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Ref", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithRef(domain.ID("test-ref")).Build().Ref, domain.ID("test-ref"),
+			"WithRef must reach Ref")
+		testkit.Equal(t, domaintest.NewPrimitives().WithRef(domain.ID("other-ref")).Build().Ref, domain.ID("other-ref"),
+			"WithRef must reach Ref")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -666,9 +702,16 @@ func TestContainersBuilderAppendSliceOfStruct(t *testing.T) {
 func TestContainersBuilderWithArray(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Array: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Array", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewContainers().WithArray([3]int{42}).Build().Array, [3]int{42},
+			"WithArray must reach Array")
+		testkit.Equal(t, domaintest.NewContainers().WithArray([3]int{7}).Build().Array, [3]int{7},
+			"WithArray must reach Array")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -939,9 +982,16 @@ func TestContainersBuilderWithReader(t *testing.T) {
 func TestContainersBuilderWithCallback(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Callback: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Callback", func(t *testing.T) {
+		t.Parallel()
+		// A func is not comparable, so the check is that one arrived at all —
+		// a setter assigning nothing leaves the field nil.
+		testkit.True(t, domaintest.NewContainers().WithCallback(func(context.Context) error {
+			var r0 error
+			return r0
+		}).Build().Callback != nil,
+			"WithCallback must reach Callback")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -955,9 +1005,14 @@ func TestContainersBuilderWithCallback(t *testing.T) {
 func TestContainersBuilderWithEvents(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Events: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Events", func(t *testing.T) {
+		t.Parallel()
+		// One value rather than two: a channel is an identity, and a freshly
+		// made one is distinct from anything the constructor could have seeded.
+		ch := make(chan string)
+		testkit.True(t, domaintest.NewContainers().WithEvents(ch).Build().Events == ch,
+			"WithEvents must reach Events")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -971,9 +1026,16 @@ func TestContainersBuilderWithEvents(t *testing.T) {
 func TestContainersBuilderWithExtra(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Extra: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Extra", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewContainers().WithExtra(any("test-extra")).Build().Extra, any("test-extra"),
+			"WithExtra must reach Extra")
+		testkit.Equal(t, domaintest.NewContainers().WithExtra(any("other-extra")).Build().Extra, any("other-extra"),
+			"WithExtra must reach Extra")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -987,9 +1049,15 @@ func TestContainersBuilderWithExtra(t *testing.T) {
 func TestContainersBuilderWithErr(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Err: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Err", func(t *testing.T) {
+		t.Parallel()
+		// Matched by identity rather than by value: two errors carrying the
+		// same text are not equal, and a fresh one is distinct from anything
+		// the constructor could have seeded.
+		want := errors.New("test-Err")
+		testkit.ErrorIs(t, domaintest.NewContainers().WithErr(want).Build().Err, want,
+			"WithErr must reach Err")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1498,9 +1566,16 @@ func TestNewUserFrom(t *testing.T) {
 func TestUserBuilderWithRole(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Role: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Role", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "test-name"}).Build().Role, domain.Role{Name: "test-name"},
+			"WithRole must reach Role")
+		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "other-name"}).Build().Role, domain.Role{Name: "other-name"},
+			"WithRole must reach Role")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1514,9 +1589,19 @@ func TestUserBuilderWithRole(t *testing.T) {
 func TestUserBuilderWithAudit(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Audit: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Audit", func(t *testing.T) {
+		t.Parallel()
+		// Compared as pointers rather than dereferenced: a setter that assigned
+		// nothing leaves nil, and dereferencing that panics instead of saying
+		// which setter failed. Two values because whatever the constructor
+		// seeded can equal at most one of them.
+		want := domain.Audit(domain.Audit{CreatedBy: "test-createdby"})
+		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "test-createdby"}).Build().Audit, &want,
+			"WithAudit must reach Audit")
+		other := domain.Audit(domain.Audit{CreatedBy: "other-createdby"})
+		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "other-createdby"}).Build().Audit, &other,
+			"WithAudit must reach Audit")
+	})
 
 	t.Run("addresses the value it was given", func(t *testing.T) {
 		t.Parallel()
@@ -1608,9 +1693,16 @@ func TestUserBuilderWithActive(t *testing.T) {
 func TestUserBuilderWithHome(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Home: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Home", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "test-street"}).Build().Home, domain.Address{Street: "test-street"},
+			"WithHome must reach Home")
+		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "other-street"}).Build().Home, domain.Address{Street: "other-street"},
+			"WithHome must reach Home")
+	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1624,9 +1716,19 @@ func TestUserBuilderWithHome(t *testing.T) {
 func TestUserBuilderWithManager(t *testing.T) {
 	t.Parallel()
 
-	// No check that the setter reaches Manager: its type admits no two
-	// values this generator can name, and comparing the zero value against
-	// itself would pass against a setter that assigned nothing.
+	t.Run("reaches Manager", func(t *testing.T) {
+		t.Parallel()
+		// Compared as pointers rather than dereferenced: a setter that assigned
+		// nothing leaves nil, and dereferencing that panics instead of saying
+		// which setter failed. Two values because whatever the constructor
+		// seeded can equal at most one of them.
+		want := domain.User(domain.User{Username: "test-username"})
+		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "test-username"}).Build().Manager, &want,
+			"WithManager must reach Manager")
+		other := domain.User(domain.User{Username: "other-username"})
+		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "other-username"}).Build().Manager, &other,
+			"WithManager must reach Manager")
+	})
 
 	t.Run("addresses the value it was given", func(t *testing.T) {
 		t.Parallel()
@@ -1769,4 +1871,4 @@ func TestUserBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6a7fe4f0ecc2695ee02698e04737c2030bb5e492169fc0e27da2a26e75c8b38e
+// testkit:provenance e33cf9276e8090d928483a98f9f18d99da09e40df37b33114822507ff6112f32

@@ -8,6 +8,8 @@ import (
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/emit"
+	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/store"
 
 	"go.thesmos.sh/testkit"
 )
@@ -55,6 +57,12 @@ func TestSamplesFor(t *testing.T) {
 		testkit.Equal(t, sample, "3.14", "a float takes the float sample")
 	})
 
+	t.Run("answers both complex widths", func(t *testing.T) {
+		t.Parallel()
+		sample, _ := samplesFor("complex128", "Wave")
+		testkit.Equal(t, sample, "1 + 2i", "a complex takes the complex sample")
+	})
+
 	t.Run("exhausts a bool", func(t *testing.T) {
 		t.Parallel()
 		// The only type whose pair covers every value it has, which makes its
@@ -68,94 +76,166 @@ func TestSamplesFor(t *testing.T) {
 		t.Parallel()
 		// A pair whose arms agreed would be one value written twice, and the
 		// check would pass against a constructor that seeded it.
-		for _, name := range []string{"string", "int", "float64", "bool"} {
+		for _, name := range []string{"string", "int", "float64", "complex64", "bool"} {
 			sample, alternate := samplesFor(name, "Field")
 			testkit.NotEqual(t, sample, alternate, "the arms of a pair differ")
 		}
 	})
 
-	t.Run("declines a defined type", func(t *testing.T) {
+	t.Run("declines a name it does not know", func(t *testing.T) {
 		t.Parallel()
-		// `Weekday int` is recorded by name, so there is no way to learn it is
-		// an integer and a literal written for it would not compile.
+		// The table answers builtins; a declared type is [resolver]'s job.
 		sample, _ := samplesFor("Weekday", "Day")
-		testkit.Equal(t, sample, "", "a defined type admits no sample")
-	})
-
-	t.Run("declines a type with no literal but its zero value", func(t *testing.T) {
-		t.Parallel()
-		// Comparing a zero value against itself is exactly the vacuity the pair
-		// exists to prevent, so the caller is told to omit the check instead.
-		for _, name := range []string{"error", "any", "complex128"} {
-			sample, _ := samplesFor(name, "Field")
-			testkit.Equal(t, sample, "", "an unwritable type admits no sample")
-		}
+		testkit.Equal(t, sample, "", "an unknown name admits no sample")
 	})
 }
 
-// The two derivations run at different points — one over the source graph, one
-// after substitution — and a disagreement between them would give a generic
-// field a different check from the concrete field beside it.
-func TestSamplesOfNode(t *testing.T) {
+// A sample carrying a type has to hand that type over as a reference: a
+// rendered file registers an import only for a reference it was given, so a
+// value folded into text would name a package the file never imports.
+func TestSampleShape(t *testing.T) {
 	t.Parallel()
 
-	t.Run("derives from a builtin", func(t *testing.T) {
+	t.Run("reports an empty sample as absent", func(t *testing.T) {
 		t.Parallel()
-		sample, _ := samplesOfNode(storefixture.Named("string"), "Host")
-		testkit.Equal(t, sample, `"test-host"`, "a builtin field takes a sample")
+		testkit.False(t, Sample{}.OK(), "a derived-nothing sample is absent")
 	})
 
-	t.Run("declines a type in another package", func(t *testing.T) {
+	t.Run("carries no reference for a builtin", func(t *testing.T) {
 		t.Parallel()
-		// A named type carries an import path and nothing this generator can
-		// read about its underlying shape.
-		ref := storefixture.Named("Duration")
-		ref.Package = "time"
-		sample, _ := samplesOfNode(ref, "Timeout")
-		testkit.Equal(t, sample, "", "a foreign type admits no sample")
+		// `42` stands alone; wrapping it in `int(42)` would be a conversion the
+		// linters would rightly object to.
+		sample, _ := resolve(t).samples(storefixture.Named("int"), "Count", seen())
+		testkit.True(t, sample.Ref == nil, "a builtin needs no type beside it")
+		testkit.Equal(t, sample.Text, "42", "the literal stands alone")
+	})
+}
+
+// A generator reading only field types sees `Weekday` and `Role` as opaque
+// names, and every setter taking one goes unchecked. The declarations are in
+// the graph, so what is under test is how far reading them reaches — and where
+// it stops.
+func TestResolverSamples(t *testing.T) {
+	t.Parallel()
+
+	t.Run("writes a defined type as a conversion", func(t *testing.T) {
+		t.Parallel()
+		// A bare 42 would compile against `Weekday` today and stop compiling
+		// the moment the field's type moved.
+		sample, alternate := resolve(t).samples(named("Weekday"), "Day", seen())
+		testkit.Equal(t, sample.Text, "42", "the underlying type supplies the value")
+		testkit.False(t, sample.Composite, "a defined type takes a conversion")
+		testkit.Equal(t, alternate.Text, "7", "the alternate follows the same route")
 	})
 
-	t.Run("declines a type parameter", func(t *testing.T) {
+	t.Run("writes a struct as a literal setting one of its fields", func(t *testing.T) {
 		t.Parallel()
-		// A parameter is package-less like a builtin, so it reaches the table
-		// and falls through it; its pair arrives once a witness resolves it.
-		sample, _ := samplesOfNode(storefixture.Named("T"), "Value")
-		testkit.Equal(t, sample, "", "an unresolved parameter admits no sample")
+		sample, alternate := resolve(t).samples(named("Role"), "Role", seen())
+		testkit.Equal(t, sample.Text, `{Name: "test-name"}`, "the struct sets its first usable field")
+		testkit.True(t, sample.Composite, "a struct takes a composite literal")
+		testkit.Equal(t, alternate.Text, `{Name: "other-name"}`, "the arms differ inside the literal")
+	})
+
+	t.Run("skips a struct field it cannot write a value for", func(t *testing.T) {
+		t.Parallel()
+		// Opaque's first field is a foreign type; the second is a string, and
+		// taking the first would have lost the whole struct's sample.
+		sample, _ := resolve(t).samples(named("Opaque"), "Op", seen())
+		testkit.Equal(t, sample.Text, `{Tag: "test-tag"}`, "the first usable field wins")
+	})
+
+	t.Run("declines a struct with no field it can write", func(t *testing.T) {
+		t.Parallel()
+		sample, _ := resolve(t).samples(named("Blind"), "Bl", seen())
+		testkit.False(t, sample.OK(), "a struct of foreign types admits no sample")
+	})
+
+	t.Run("fills one element of an array", func(t *testing.T) {
+		t.Parallel()
+		// Filling the rest would say nothing more than the first element does.
+		sample, _ := resolve(t).samples(storefixture.Array(storefixture.Named("int"), 3), "Arr", seen())
+		testkit.Equal(t, sample.Text, "{42}", "one element differs between the arms")
+		testkit.True(t, sample.Composite, "an array takes a composite literal")
+	})
+
+	t.Run("writes any as a converted string", func(t *testing.T) {
+		t.Parallel()
+		// `any` admits every value; the conversion is what keeps both sides of
+		// the comparison the same type so its parameter can be inferred.
+		sample, _ := resolve(t).samples(storefixture.AnonInterface(nil, nil), "Extra", seen())
+		testkit.Equal(t, sample.Text, `"test-extra"`, "any takes the string pair")
+		testkit.False(t, sample.Composite, "any takes a conversion")
+	})
+
+	t.Run("declines an interface that declares a method", func(t *testing.T) {
+		t.Parallel()
+		// Only the empty interface admits every value. One with a method needs
+		// an implementation, and this generator has none to name.
+		ref := storefixture.AnonInterface([]*node.Method{{Name: "Read"}}, nil)
+		sample, _ := resolve(t).samples(ref, "R", seen())
+		testkit.False(t, sample.OK(), "a non-empty interface admits no sample")
+	})
+
+	t.Run("declines a type from a package the run never read", func(t *testing.T) {
+		t.Parallel()
+		// This is the floor: nothing about time.Time is in the graph, so no
+		// value of it can be written and the check is dropped rather than faked.
+		sample, _ := resolve(t).samples(storefixture.PkgNamed("time", "Time"), "Deadline", seen())
+		testkit.False(t, sample.OK(), "an unloaded type admits no sample")
+	})
+
+	t.Run("terminates on a struct that reaches itself", func(t *testing.T) {
+		t.Parallel()
+		// Cyclic's only field is a Cyclic, so a resolver without the guard
+		// recurses until the stack ends.
+		sample, _ := resolve(t).samples(named("Cyclic"), "C", seen())
+		testkit.False(t, sample.OK(), "a cycle yields nothing rather than looping")
+	})
+
+	t.Run("declines a slice", func(t *testing.T) {
+		t.Parallel()
+		// A slice's checks assert on length and on replace-versus-append, which
+		// no empty setter can pass, so it needs no pair.
+		sample, _ := resolve(t).samples(storefixture.Slice(storefixture.Named("string")), "Tags", seen())
+		testkit.False(t, sample.OK(), "a slice needs no sample")
 	})
 
 	t.Run("declines an absent type", func(t *testing.T) {
 		t.Parallel()
-		sample, _ := samplesOfNode(nil, "Value")
-		testkit.Equal(t, sample, "", "a field with no recorded type admits no sample")
+		sample, _ := resolve(t).samples(nil, "X", seen())
+		testkit.False(t, sample.OK(), "a field with no recorded type admits no sample")
 	})
 }
 
-// TestSamplesOfRef covers the post-substitution derivation, which is what gives
-// a parameterised field the same check its concrete neighbour gets.
+// The post-substitution derivation is what gives a parameterised field the same
+// check its concrete neighbour gets.
 func TestSamplesOfRef(t *testing.T) {
 	t.Parallel()
 
 	t.Run("derives from a witness", func(t *testing.T) {
 		t.Parallel()
 		sample, _ := samplesOfRef(emit.Builtin("int"), "Count")
-		testkit.Equal(t, sample, "42", "a resolved parameter takes a sample")
+		testkit.Equal(t, sample.Text, "42", "a resolved parameter takes a sample")
 	})
 
 	t.Run("declines a reference that is not a builtin", func(t *testing.T) {
 		t.Parallel()
+		// Only a witness reaches here, and a witness is always a builtin — the
+		// source types are gone by this point, so there is nothing to resolve
+		// a named type against.
 		sample, _ := samplesOfRef(emit.SliceOf(emit.Builtin("string")), "Tags")
-		testkit.Equal(t, sample, "", "a composite admits no sample")
+		testkit.False(t, sample.OK(), "a composite admits no sample")
 	})
 
 	t.Run("declines an absent reference", func(t *testing.T) {
 		t.Parallel()
 		sample, _ := samplesOfRef(nil, "Value")
-		testkit.Equal(t, sample, "", "an absent reference admits no sample")
+		testkit.False(t, sample.OK(), "an absent reference admits no sample")
 	})
 }
 
-// A pointer's setter takes the pointee, so its check has to name the pointee's
-// values rather than the field's own type.
+// A field's pair has to describe whatever its setter takes, which for two
+// shapes is not the field's own type.
 func TestSampleSource(t *testing.T) {
 	t.Parallel()
 
@@ -163,7 +243,7 @@ func TestSampleSource(t *testing.T) {
 		t.Parallel()
 		f := Field{Shape: Pointer, Type: emit.Ptr(emit.Builtin("int")), Elem: emit.Builtin("int")}
 		sample, _ := samplesOfRef(sampleSource(f), "Retries")
-		testkit.Equal(t, sample, "42", "a pointer takes its pointee's sample")
+		testkit.Equal(t, sample.Text, "42", "a pointer takes its pointee's sample")
 	})
 
 	t.Run("takes the key for a set", func(t *testing.T) {
@@ -172,22 +252,52 @@ func TestSampleSource(t *testing.T) {
 		// check needs is a pair of keys.
 		f := Field{Shape: Set, Type: emit.MapOf(emit.Builtin("string"), nil), Key: emit.Builtin("string")}
 		sample, _ := samplesOfRef(sampleSource(f), "Tags")
-		testkit.Equal(t, sample, `"test-tags"`, "a set takes its key's sample")
+		testkit.Equal(t, sample.Text, `"test-tags"`, "a set takes its key's sample")
 	})
 
 	t.Run("takes the field's own type otherwise", func(t *testing.T) {
 		t.Parallel()
 		f := Field{Type: emit.Builtin("string")}
 		sample, _ := samplesOfRef(sampleSource(f), "Host")
-		testkit.Equal(t, sample, `"test-host"`, "a scalar takes its own sample")
-	})
-
-	t.Run("yields nothing for a shape with its own checks", func(t *testing.T) {
-		t.Parallel()
-		// A slice, byte slice or map already asserts on length and on
-		// merge-versus-replace, which no empty setter can pass.
-		f := Field{Shape: Slice, Type: emit.SliceOf(emit.Builtin("string")), Elem: emit.Builtin("string")}
-		sample, _ := samplesOfRef(sampleSource(f), "Tags")
-		testkit.Equal(t, sample, "", "a composite needs no sample")
+		testkit.Equal(t, sample.Text, `"test-host"`, "a scalar takes its own sample")
 	})
 }
+
+// seen returns a fresh recursion guard.
+func seen() map[string]bool { return make(map[string]bool) }
+
+// named returns a reference to a type declared by [resolve]'s fixture.
+func named(name string) *node.TypeRef {
+	return storefixture.PkgNamed("example.com/cfg", name)
+}
+
+// resolve returns a resolver over a package declaring one type of each shape
+// the derivation has an arm for.
+func resolve(t *testing.T) *resolver {
+	t.Helper()
+	foreign := func(name string) *node.TypeRef { return storefixture.PkgNamed("time", name) }
+	s := storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Alias("Weekday", func(b *storefixture.AliasBuilder) {
+			b.Target(storefixture.Named("int"))
+		}).
+		Struct("Role", func(b *storefixture.StructBuilder) {
+			b.Field("Name", storefixture.Named("string"), nil)
+		}).
+		Struct("Opaque", func(b *storefixture.StructBuilder) {
+			b.Field("At", foreign("Time"), nil)
+			b.Field("Tag", storefixture.Named("string"), nil)
+		}).
+		Struct("Blind", func(b *storefixture.StructBuilder) {
+			b.Field("At", foreign("Time"), nil)
+		}).
+		Struct("Cyclic", func(b *storefixture.StructBuilder) {
+			b.Field("Self", cyclicRef(), nil)
+		}).
+		Build()
+	return newResolver(store.NewReader(s))
+}
+
+// cyclicRef names the struct that declares it, which is the shape a resolver
+// without a recursion guard never returns from.
+func cyclicRef() *node.TypeRef { return storefixture.PkgNamed("example.com/cfg", "Cyclic") }

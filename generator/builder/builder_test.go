@@ -159,6 +159,108 @@ func TestSamples(t *testing.T) {
 	})
 }
 
+// Three field types carry no value that can be written down, and each is
+// checkable anyway by a route of its own — which is what keeps them from
+// falling into the bucket of setters nothing asserts about.
+func TestUnwritableFields(t *testing.T) {
+	t.Parallel()
+
+	t.Run("checks a channel by identity", func(t *testing.T) {
+		t.Parallel()
+		// A freshly made channel is distinct from anything the constructor
+		// could have seeded, so one value proves what a comparable type needs
+		// two for.
+		f := render(t, unwritablePackage()).AssertFile("types" + builder.GoTestSuffix)
+		f.Contains("ch := make(chan string)")
+		f.Contains("WithEvents(ch).Build().Events == ch")
+	})
+
+	t.Run("checks a func by arrival", func(t *testing.T) {
+		t.Parallel()
+		// A func is not comparable, so there is nothing else to assert — but a
+		// setter assigning nothing leaves nil, which this catches.
+		f := render(t, unwritablePackage()).AssertFile("types" + builder.GoTestSuffix)
+		f.Contains("Build().Callback != nil")
+	})
+
+	t.Run("gives the func literal a body returning its own zero values", func(t *testing.T) {
+		t.Parallel()
+		// A literal is the only non-nil func available, and its body has to
+		// satisfy whatever the field's signature returns.
+		f := render(t, unwritablePackage()).AssertFile("types" + builder.GoTestSuffix)
+		f.Contains("var r0 error")
+		f.Contains("return r0")
+	})
+
+	t.Run("checks an error by identity", func(t *testing.T) {
+		t.Parallel()
+		// Two errors carrying the same text are not equal, so the check matches
+		// the one it handed over rather than comparing values.
+		f := render(t, unwritablePackage()).AssertFile("types" + builder.GoTestSuffix)
+		f.Contains(`errors.New("test-Err")`)
+		f.Contains("testkit.ErrorIs(")
+	})
+
+	t.Run("declines a type from a package the run never read", func(t *testing.T) {
+		t.Parallel()
+		// The floor: nothing about time.Time is in the graph, so no value of it
+		// can be written and the check is dropped rather than faked.
+		render(t, unwritablePackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("No check that the setter reaches At")
+	})
+
+	t.Run("declines a directional channel", func(t *testing.T) {
+		t.Parallel()
+		// make is not legal on a receive-only channel, so a check that treated
+		// every channel alike would emit code that does not compile — and the
+		// direction is in the stamp, not in the reference's shape.
+		render(t, directionalChanPackage()).AssertFile("types" + builder.GoTestSuffix).
+			NotContains("make(")
+	})
+}
+
+// directionalChanPackage carries a receive-only channel, which takes a setter
+// like any other but no check that has to construct one.
+func directionalChanPackage() *node.Package {
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Struct("Item", func(b *storefixture.StructBuilder) {
+			b.Pos(position.At("cfg/types.go", 1, 1))
+			b.Directive(storefixture.Directive("builder"))
+			b.Field("Events", chanRef("recv"), nil)
+		}).
+		PackageNode()
+}
+
+// chanRef builds a channel the way the Go frontend does: a named reference in a
+// synthetic `go` package carrying the element as its type argument, with the
+// facts that make it a channel stamped beside it rather than in its shape.
+func chanRef(dir string) *node.TypeRef {
+	ref := storefixture.WithArgs(storefixture.PkgNamed("go", "chan"), storefixture.Named("string"))
+	builder.GoIsChannel.Set(ref.EnsureMeta(), true, "golang")
+	builder.GoChanDir.Set(ref.EnsureMeta(), dir, "golang")
+	return ref
+}
+
+// unwritablePackage carries the field types no literal can be written for.
+func unwritablePackage() *node.Package {
+	events := chanRef(builder.ChanBidirectional)
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Struct("Item", func(b *storefixture.StructBuilder) {
+			b.Pos(position.At("cfg/types.go", 1, 1))
+			b.Directive(storefixture.Directive("builder"))
+			b.Field("Events", events, nil)
+			b.Field("Callback", storefixture.Func(
+				[]*node.TypeRef{storefixture.Named("int")},
+				[]*node.TypeRef{storefixture.Named("error")},
+			), nil)
+			b.Field("Err", storefixture.Named("error"), nil)
+			b.Field("At", storefixture.PkgNamed("time", "Time"), nil)
+		}).
+		PackageNode()
+}
+
 // A map to the empty struct carries its whole meaning in its keys, so a setter
 // asking for the value asks the caller for the one thing they cannot vary.
 func TestSetField(t *testing.T) {
@@ -263,9 +365,7 @@ func opaqueSetPackage() *node.Package {
 
 // emptyStruct builds the anonymous `struct{}` the frontend records for a set's
 // value type.
-func emptyStruct() *node.TypeRef {
-	return &node.TypeRef{TypeKind: node.TypeRefAnonStruct}
-}
+func emptyStruct() *node.TypeRef { return storefixture.AnonStruct(nil, nil) }
 
 // A pointer field distinguishes unset from zero, and the caller who wants to
 // say "set" should not have to produce an address to say it.
