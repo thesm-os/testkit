@@ -323,9 +323,44 @@ func (b *ContainersBuilder) WithMapOfStructEntries(entries map[string]domain.Add
 	return b
 }
 
-// WithPointer replaces Pointer.
-func (b *ContainersBuilder) WithPointer(v *int) *ContainersBuilder {
-	b.v.Pointer = v
+// WithSet replaces Set wholesale.
+func (b *ContainersBuilder) WithSet(v map[string]struct{}) *ContainersBuilder {
+	b.v.Set = v
+	return b
+}
+
+// WithSetEntry adds one key to Set, allocating the map on
+// first use so a caller need not.
+//
+// A set entry is a key. The map's value carries no information, so there is
+// nothing for the caller to supply and no parameter for it.
+func (b *ContainersBuilder) WithSetEntry(k string) *ContainersBuilder {
+	if b.v.Set == nil {
+		b.v.Set = make(map[string]struct{})
+	}
+	b.v.Set[k] = struct{}{}
+	return b
+}
+
+// WithSetEntries adds each key to Set, keeping the keys it
+// already holds.
+func (b *ContainersBuilder) WithSetEntries(keys ...string) *ContainersBuilder {
+	if b.v.Set == nil {
+		b.v.Set = make(map[string]struct{}, len(keys))
+	}
+	for _, k := range keys {
+		b.v.Set[k] = struct{}{}
+	}
+	return b
+}
+
+// WithPointer replaces Pointer, taking the value and addressing it,
+// so a caller need not hold a variable to point at.
+//
+// Use [ContainersBuilder.Mutate] to clear the field, or to point it at an address that
+// already exists.
+func (b *ContainersBuilder) WithPointer(v int) *ContainersBuilder {
+	b.v.Pointer = &v
 	return b
 }
 
@@ -396,6 +431,12 @@ func (b *ContainersBuilder) Clone() *ContainersBuilder {
 		out.v.MapOfStruct = make(map[string]domain.Address, len(b.v.MapOfStruct))
 		for k, v := range b.v.MapOfStruct {
 			out.v.MapOfStruct[k] = v
+		}
+	}
+	if b.v.Set != nil {
+		out.v.Set = make(map[string]struct{}, len(b.v.Set))
+		for k, v := range b.v.Set {
+			out.v.Set[k] = v
 		}
 	}
 	return out
@@ -612,6 +653,16 @@ func (b *UserBuilder) WithRole(v domain.Role) *UserBuilder {
 	return b
 }
 
+// WithAudit replaces Audit, taking the value and addressing it,
+// so a caller need not hold a variable to point at.
+//
+// Use [UserBuilder.Mutate] to clear the field, or to point it at an address that
+// already exists.
+func (b *UserBuilder) WithAudit(v domain.Audit) *UserBuilder {
+	b.v.Audit = &v
+	return b
+}
+
 // WithUsername replaces Username.
 func (b *UserBuilder) WithUsername(v string) *UserBuilder {
 	b.v.Username = v
@@ -636,9 +687,13 @@ func (b *UserBuilder) WithHome(v domain.Address) *UserBuilder {
 	return b
 }
 
-// WithManager replaces Manager.
-func (b *UserBuilder) WithManager(v *domain.User) *UserBuilder {
-	b.v.Manager = v
+// WithManager replaces Manager, taking the value and addressing it,
+// so a caller need not hold a variable to point at.
+//
+// Use [UserBuilder.Mutate] to clear the field, or to point it at an address that
+// already exists.
+func (b *UserBuilder) WithManager(v domain.User) *UserBuilder {
+	b.v.Manager = &v
 	return b
 }
 
@@ -693,4 +748,4 @@ func (b *UserBuilder) Build() domain.User {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7a7c56b20f59ddceac231a8e1475c67878019f0c992cb37e6d1287b7e4291059
+// testkit:provenance 47c247fb5b5c943722909b23751fdeb6246b2a417e3ddb5a25a24030f0218813

@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/domain/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package domaintest_test
 
@@ -50,10 +50,12 @@ func TestPrimitivesBuilderWithBool(t *testing.T) {
 
 	t.Run("reaches Bool", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v bool
-		testkit.Equal(t, domaintest.NewPrimitives().WithBool(v).Build().Bool, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithBool(true).Build().Bool, true,
+			"WithBool must reach Bool")
+		testkit.Equal(t, domaintest.NewPrimitives().WithBool(false).Build().Bool, false,
 			"WithBool must reach Bool")
 	})
 
@@ -71,10 +73,12 @@ func TestPrimitivesBuilderWithString(t *testing.T) {
 
 	t.Run("reaches String", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewPrimitives().WithString(v).Build().String, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithString("test-string").Build().String, "test-string",
+			"WithString must reach String")
+		testkit.Equal(t, domaintest.NewPrimitives().WithString("other-string").Build().String, "other-string",
 			"WithString must reach String")
 	})
 
@@ -92,10 +96,12 @@ func TestPrimitivesBuilderWithRune(t *testing.T) {
 
 	t.Run("reaches Rune", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v rune
-		testkit.Equal(t, domaintest.NewPrimitives().WithRune(v).Build().Rune, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithRune(42).Build().Rune, 42,
+			"WithRune must reach Rune")
+		testkit.Equal(t, domaintest.NewPrimitives().WithRune(7).Build().Rune, 7,
 			"WithRune must reach Rune")
 	})
 
@@ -113,10 +119,12 @@ func TestPrimitivesBuilderWithByte(t *testing.T) {
 
 	t.Run("reaches Byte", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v byte
-		testkit.Equal(t, domaintest.NewPrimitives().WithByte(v).Build().Byte, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithByte(42).Build().Byte, 42,
+			"WithByte must reach Byte")
+		testkit.Equal(t, domaintest.NewPrimitives().WithByte(7).Build().Byte, 7,
 			"WithByte must reach Byte")
 	})
 
@@ -134,10 +142,12 @@ func TestPrimitivesBuilderWithInt(t *testing.T) {
 
 	t.Run("reaches Int", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, domaintest.NewPrimitives().WithInt(v).Build().Int, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt(42).Build().Int, 42,
+			"WithInt must reach Int")
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt(7).Build().Int, 7,
 			"WithInt must reach Int")
 	})
 
@@ -155,10 +165,12 @@ func TestPrimitivesBuilderWithInt8(t *testing.T) {
 
 	t.Run("reaches Int8", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int8
-		testkit.Equal(t, domaintest.NewPrimitives().WithInt8(v).Build().Int8, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt8(42).Build().Int8, 42,
+			"WithInt8 must reach Int8")
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt8(7).Build().Int8, 7,
 			"WithInt8 must reach Int8")
 	})
 
@@ -176,10 +188,12 @@ func TestPrimitivesBuilderWithInt16(t *testing.T) {
 
 	t.Run("reaches Int16", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int16
-		testkit.Equal(t, domaintest.NewPrimitives().WithInt16(v).Build().Int16, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt16(42).Build().Int16, 42,
+			"WithInt16 must reach Int16")
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt16(7).Build().Int16, 7,
 			"WithInt16 must reach Int16")
 	})
 
@@ -197,10 +211,12 @@ func TestPrimitivesBuilderWithInt32(t *testing.T) {
 
 	t.Run("reaches Int32", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int32
-		testkit.Equal(t, domaintest.NewPrimitives().WithInt32(v).Build().Int32, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt32(42).Build().Int32, 42,
+			"WithInt32 must reach Int32")
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt32(7).Build().Int32, 7,
 			"WithInt32 must reach Int32")
 	})
 
@@ -218,10 +234,12 @@ func TestPrimitivesBuilderWithInt64(t *testing.T) {
 
 	t.Run("reaches Int64", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int64
-		testkit.Equal(t, domaintest.NewPrimitives().WithInt64(v).Build().Int64, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt64(42).Build().Int64, 42,
+			"WithInt64 must reach Int64")
+		testkit.Equal(t, domaintest.NewPrimitives().WithInt64(7).Build().Int64, 7,
 			"WithInt64 must reach Int64")
 	})
 
@@ -239,10 +257,12 @@ func TestPrimitivesBuilderWithUint(t *testing.T) {
 
 	t.Run("reaches Uint", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uint
-		testkit.Equal(t, domaintest.NewPrimitives().WithUint(v).Build().Uint, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint(42).Build().Uint, 42,
+			"WithUint must reach Uint")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint(7).Build().Uint, 7,
 			"WithUint must reach Uint")
 	})
 
@@ -260,10 +280,12 @@ func TestPrimitivesBuilderWithUint8(t *testing.T) {
 
 	t.Run("reaches Uint8", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uint8
-		testkit.Equal(t, domaintest.NewPrimitives().WithUint8(v).Build().Uint8, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint8(42).Build().Uint8, 42,
+			"WithUint8 must reach Uint8")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint8(7).Build().Uint8, 7,
 			"WithUint8 must reach Uint8")
 	})
 
@@ -281,10 +303,12 @@ func TestPrimitivesBuilderWithUint16(t *testing.T) {
 
 	t.Run("reaches Uint16", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uint16
-		testkit.Equal(t, domaintest.NewPrimitives().WithUint16(v).Build().Uint16, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint16(42).Build().Uint16, 42,
+			"WithUint16 must reach Uint16")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint16(7).Build().Uint16, 7,
 			"WithUint16 must reach Uint16")
 	})
 
@@ -302,10 +326,12 @@ func TestPrimitivesBuilderWithUint32(t *testing.T) {
 
 	t.Run("reaches Uint32", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uint32
-		testkit.Equal(t, domaintest.NewPrimitives().WithUint32(v).Build().Uint32, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint32(42).Build().Uint32, 42,
+			"WithUint32 must reach Uint32")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint32(7).Build().Uint32, 7,
 			"WithUint32 must reach Uint32")
 	})
 
@@ -323,10 +349,12 @@ func TestPrimitivesBuilderWithUint64(t *testing.T) {
 
 	t.Run("reaches Uint64", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uint64
-		testkit.Equal(t, domaintest.NewPrimitives().WithUint64(v).Build().Uint64, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint64(42).Build().Uint64, 42,
+			"WithUint64 must reach Uint64")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUint64(7).Build().Uint64, 7,
 			"WithUint64 must reach Uint64")
 	})
 
@@ -344,10 +372,12 @@ func TestPrimitivesBuilderWithUintptr(t *testing.T) {
 
 	t.Run("reaches Uintptr", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v uintptr
-		testkit.Equal(t, domaintest.NewPrimitives().WithUintptr(v).Build().Uintptr, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithUintptr(42).Build().Uintptr, 42,
+			"WithUintptr must reach Uintptr")
+		testkit.Equal(t, domaintest.NewPrimitives().WithUintptr(7).Build().Uintptr, 7,
 			"WithUintptr must reach Uintptr")
 	})
 
@@ -365,10 +395,12 @@ func TestPrimitivesBuilderWithFloat32(t *testing.T) {
 
 	t.Run("reaches Float32", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v float32
-		testkit.Equal(t, domaintest.NewPrimitives().WithFloat32(v).Build().Float32, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithFloat32(3.14).Build().Float32, 3.14,
+			"WithFloat32 must reach Float32")
+		testkit.Equal(t, domaintest.NewPrimitives().WithFloat32(2.72).Build().Float32, 2.72,
 			"WithFloat32 must reach Float32")
 	})
 
@@ -386,10 +418,12 @@ func TestPrimitivesBuilderWithFloat64(t *testing.T) {
 
 	t.Run("reaches Float64", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v float64
-		testkit.Equal(t, domaintest.NewPrimitives().WithFloat64(v).Build().Float64, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewPrimitives().WithFloat64(3.14).Build().Float64, 3.14,
+			"WithFloat64 must reach Float64")
+		testkit.Equal(t, domaintest.NewPrimitives().WithFloat64(2.72).Build().Float64, 2.72,
 			"WithFloat64 must reach Float64")
 	})
 
@@ -405,14 +439,9 @@ func TestPrimitivesBuilderWithFloat64(t *testing.T) {
 func TestPrimitivesBuilderWithComplex64(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Complex64", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v complex64
-		testkit.Equal(t, domaintest.NewPrimitives().WithComplex64(v).Build().Complex64, v,
-			"WithComplex64 must reach Complex64")
-	})
+	// No check that the setter reaches Complex64: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -426,14 +455,9 @@ func TestPrimitivesBuilderWithComplex64(t *testing.T) {
 func TestPrimitivesBuilderWithComplex128(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Complex128", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v complex128
-		testkit.Equal(t, domaintest.NewPrimitives().WithComplex128(v).Build().Complex128, v,
-			"WithComplex128 must reach Complex128")
-	})
+	// No check that the setter reaches Complex128: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -447,14 +471,9 @@ func TestPrimitivesBuilderWithComplex128(t *testing.T) {
 func TestPrimitivesBuilderWithDay(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Day", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v domain.Weekday
-		testkit.Equal(t, domaintest.NewPrimitives().WithDay(v).Build().Day, v,
-			"WithDay must reach Day")
-	})
+	// No check that the setter reaches Day: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -468,14 +487,9 @@ func TestPrimitivesBuilderWithDay(t *testing.T) {
 func TestPrimitivesBuilderWithTemp(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Temp", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v domain.Celsius
-		testkit.Equal(t, domaintest.NewPrimitives().WithTemp(v).Build().Temp, v,
-			"WithTemp must reach Temp")
-	})
+	// No check that the setter reaches Temp: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -489,14 +503,9 @@ func TestPrimitivesBuilderWithTemp(t *testing.T) {
 func TestPrimitivesBuilderWithRef(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Ref", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v domain.ID
-		testkit.Equal(t, domaintest.NewPrimitives().WithRef(v).Build().Ref, v,
-			"WithRef must reach Ref")
-	})
+	// No check that the setter reaches Ref: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -657,14 +666,9 @@ func TestContainersBuilderAppendSliceOfStruct(t *testing.T) {
 func TestContainersBuilderWithArray(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Array", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v [3]int
-		testkit.Equal(t, domaintest.NewContainers().WithArray(v).Build().Array, v,
-			"WithArray must reach Array")
-	})
+	// No check that the setter reaches Array: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -830,22 +834,86 @@ func TestContainersBuilderWithMapOfStructEntries(t *testing.T) {
 	})
 }
 
+// TestContainersBuilderWithSet pins the replacing setter for Set.
+func TestContainersBuilderWithSet(t *testing.T) {
+	t.Parallel()
+
+	t.Run("replaces Set wholesale", func(t *testing.T) {
+		t.Parallel()
+		k := "test-set"
+		got := domaintest.NewContainers().WithSetEntry(k).WithSet(nil).Build()
+		testkit.Equal(t, len(got.Set), 0, "the replacing setter discards what was there")
+	})
+}
+
+// TestContainersBuilderWithSetEntry pins the single-key setter, which takes no
+// value because a set entry is a key.
+func TestContainersBuilderWithSetEntry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allocates Set on first use", func(t *testing.T) {
+		t.Parallel()
+		// Assigning into a nil map panics, so a setter that did not allocate
+		// would fail at the caller's first use rather than here.
+		k := "test-set"
+		got := domaintest.NewContainers().WithSetEntry(k).Build()
+		testkit.Equal(t, len(got.Set), 1, "the key reaches Set")
+	})
+}
+
+// TestContainersBuilderWithSetEntries pins the adding setter.
+func TestContainersBuilderWithSetEntries(t *testing.T) {
+	t.Parallel()
+
+	t.Run("keeps keys it was not given", func(t *testing.T) {
+		t.Parallel()
+		// Adding is the whole difference from the replacing setter; one that
+		// discarded would leave the two indistinguishable.
+		got := domaintest.NewContainers().WithSetEntry("test-set").
+			WithSetEntries("other-set").Build()
+		testkit.Equal(t, len(got.Set), 2, "adding keeps what was there")
+	})
+
+	t.Run("allocates Set when it adds to nothing", func(t *testing.T) {
+		t.Parallel()
+		// Adding to a nil map has to allocate like the single-key setter does,
+		// or the first caller to reach for it panics.
+		k := "test-set"
+		got := domaintest.NewContainers().WithSetEntries(k).Build()
+		testkit.Equal(t, len(got.Set), 1, "adding allocates on first use")
+	})
+}
+
 // TestContainersBuilderWithPointer pins the setter for Pointer.
 func TestContainersBuilderWithPointer(t *testing.T) {
 	t.Parallel()
 
 	t.Run("reaches Pointer", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v *int
-		testkit.Equal(t, domaintest.NewContainers().WithPointer(v).Build().Pointer, v,
+		// Compared as pointers rather than dereferenced: a setter that assigned
+		// nothing leaves nil, and dereferencing that panics instead of saying
+		// which setter failed. Two values because whatever the constructor
+		// seeded can equal at most one of them.
+		want := int(42)
+		testkit.Equal(t, domaintest.NewContainers().WithPointer(42).Build().Pointer, &want,
 			"WithPointer must reach Pointer")
+		other := int(7)
+		testkit.Equal(t, domaintest.NewContainers().WithPointer(7).Build().Pointer, &other,
+			"WithPointer must reach Pointer")
+	})
+
+	t.Run("addresses the value it was given", func(t *testing.T) {
+		t.Parallel()
+		// The setter takes a value, so a builder handing back nil never
+		// allocated and the field stays indistinguishable from unset.
+		var v int
+		testkit.True(t, domaintest.NewContainers().WithPointer(v).Build().Pointer != nil,
+			"WithPointer must take an address")
 	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
-		var v *int
+		var v int
 		b := domaintest.NewContainers()
 		testkit.True(t, b.WithPointer(v) == b, "the setter returns its receiver")
 	})
@@ -855,14 +923,9 @@ func TestContainersBuilderWithPointer(t *testing.T) {
 func TestContainersBuilderWithReader(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Reader", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v io.Reader
-		testkit.Equal(t, domaintest.NewContainers().WithReader(v).Build().Reader, v,
-			"WithReader must reach Reader")
-	})
+	// No check that the setter reaches Reader: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -876,14 +939,9 @@ func TestContainersBuilderWithReader(t *testing.T) {
 func TestContainersBuilderWithCallback(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Callback", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v func(context.Context) error
-		testkit.Equal(t, domaintest.NewContainers().WithCallback(v).Build().Callback, v,
-			"WithCallback must reach Callback")
-	})
+	// No check that the setter reaches Callback: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -897,14 +955,9 @@ func TestContainersBuilderWithCallback(t *testing.T) {
 func TestContainersBuilderWithEvents(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Events", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v chan string
-		testkit.Equal(t, domaintest.NewContainers().WithEvents(v).Build().Events, v,
-			"WithEvents must reach Events")
-	})
+	// No check that the setter reaches Events: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -918,14 +971,9 @@ func TestContainersBuilderWithEvents(t *testing.T) {
 func TestContainersBuilderWithExtra(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Extra", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v any
-		testkit.Equal(t, domaintest.NewContainers().WithExtra(v).Build().Extra, v,
-			"WithExtra must reach Extra")
-	})
+	// No check that the setter reaches Extra: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -939,14 +987,9 @@ func TestContainersBuilderWithExtra(t *testing.T) {
 func TestContainersBuilderWithErr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Err", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v error
-		testkit.Equal(t, domaintest.NewContainers().WithErr(v).Build().Err, v,
-			"WithErr must reach Err")
-	})
+	// No check that the setter reaches Err: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1042,6 +1085,16 @@ func TestContainersBuilderClone(t *testing.T) {
 		testkit.Equal(t, len(b.Build().MapOfStruct), 1,
 			"configuring a clone must not reach the original")
 	})
+
+	t.Run("does not share Set with its original", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct keys: adding the same one twice leaves the original at
+		// one key whether the clone shares its storage or not.
+		b := domaintest.NewContainers().WithSetEntry("test-set")
+		b.Clone().WithSetEntry("other-set")
+		testkit.Equal(t, len(b.Build().Set), 1,
+			"adding to a clone must not reach the original")
+	})
 }
 
 // TestContainersBuilderBuild pins what the builder hands back.
@@ -1091,10 +1144,12 @@ func TestAddressBuilderWithStreet(t *testing.T) {
 
 	t.Run("reaches Street", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewAddress().WithStreet(v).Build().Street, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewAddress().WithStreet("test-street").Build().Street, "test-street",
+			"WithStreet must reach Street")
+		testkit.Equal(t, domaintest.NewAddress().WithStreet("other-street").Build().Street, "other-street",
 			"WithStreet must reach Street")
 	})
 
@@ -1112,10 +1167,12 @@ func TestAddressBuilderWithCity(t *testing.T) {
 
 	t.Run("reaches City", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewAddress().WithCity(v).Build().City, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewAddress().WithCity("test-city").Build().City, "test-city",
+			"WithCity must reach City")
+		testkit.Equal(t, domaintest.NewAddress().WithCity("other-city").Build().City, "other-city",
 			"WithCity must reach City")
 	})
 
@@ -1133,10 +1190,12 @@ func TestAddressBuilderWithPostal(t *testing.T) {
 
 	t.Run("reaches Postal", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewAddress().WithPostal(v).Build().Postal, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewAddress().WithPostal("test-postal").Build().Postal, "test-postal",
+			"WithPostal must reach Postal")
+		testkit.Equal(t, domaintest.NewAddress().WithPostal("other-postal").Build().Postal, "other-postal",
 			"WithPostal must reach Postal")
 	})
 
@@ -1221,10 +1280,12 @@ func TestRoleBuilderWithName(t *testing.T) {
 
 	t.Run("reaches Name", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewRole().WithName(v).Build().Name, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewRole().WithName("test-name").Build().Name, "test-name",
+			"WithName must reach Name")
+		testkit.Equal(t, domaintest.NewRole().WithName("other-name").Build().Name, "other-name",
 			"WithName must reach Name")
 	})
 
@@ -1242,10 +1303,12 @@ func TestRoleBuilderWithLevel(t *testing.T) {
 
 	t.Run("reaches Level", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, domaintest.NewRole().WithLevel(v).Build().Level, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewRole().WithLevel(42).Build().Level, 42,
+			"WithLevel must reach Level")
+		testkit.Equal(t, domaintest.NewRole().WithLevel(7).Build().Level, 7,
 			"WithLevel must reach Level")
 	})
 
@@ -1328,14 +1391,9 @@ func TestNewAuditFrom(t *testing.T) {
 func TestAuditBuilderWithCreatedAt(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches CreatedAt", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v time.Time
-		testkit.Equal(t, domaintest.NewAudit().WithCreatedAt(v).Build().CreatedAt, v,
-			"WithCreatedAt must reach CreatedAt")
-	})
+	// No check that the setter reaches CreatedAt: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1351,10 +1409,12 @@ func TestAuditBuilderWithCreatedBy(t *testing.T) {
 
 	t.Run("reaches CreatedBy", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewAudit().WithCreatedBy(v).Build().CreatedBy, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewAudit().WithCreatedBy("test-createdby").Build().CreatedBy, "test-createdby",
+			"WithCreatedBy must reach CreatedBy")
+		testkit.Equal(t, domaintest.NewAudit().WithCreatedBy("other-createdby").Build().CreatedBy, "other-createdby",
 			"WithCreatedBy must reach CreatedBy")
 	})
 
@@ -1438,14 +1498,9 @@ func TestNewUserFrom(t *testing.T) {
 func TestUserBuilderWithRole(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Role", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v domain.Role
-		testkit.Equal(t, domaintest.NewUser().WithRole(v).Build().Role, v,
-			"WithRole must reach Role")
-	})
+	// No check that the setter reaches Role: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1455,16 +1510,43 @@ func TestUserBuilderWithRole(t *testing.T) {
 	})
 }
 
+// TestUserBuilderWithAudit pins the setter for Audit.
+func TestUserBuilderWithAudit(t *testing.T) {
+	t.Parallel()
+
+	// No check that the setter reaches Audit: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
+
+	t.Run("addresses the value it was given", func(t *testing.T) {
+		t.Parallel()
+		// The setter takes a value, so a builder handing back nil never
+		// allocated and the field stays indistinguishable from unset.
+		var v domain.Audit
+		testkit.True(t, domaintest.NewUser().WithAudit(v).Build().Audit != nil,
+			"WithAudit must take an address")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *testing.T) {
+		t.Parallel()
+		var v domain.Audit
+		b := domaintest.NewUser()
+		testkit.True(t, b.WithAudit(v) == b, "the setter returns its receiver")
+	})
+}
+
 // TestUserBuilderWithUsername pins the setter for Username.
 func TestUserBuilderWithUsername(t *testing.T) {
 	t.Parallel()
 
 	t.Run("reaches Username", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, domaintest.NewUser().WithUsername(v).Build().Username, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewUser().WithUsername("test-username").Build().Username, "test-username",
+			"WithUsername must reach Username")
+		testkit.Equal(t, domaintest.NewUser().WithUsername("other-username").Build().Username, "other-username",
 			"WithUsername must reach Username")
 	})
 
@@ -1482,10 +1564,12 @@ func TestUserBuilderWithAge(t *testing.T) {
 
 	t.Run("reaches Age", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, domaintest.NewUser().WithAge(v).Build().Age, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewUser().WithAge(42).Build().Age, 42,
+			"WithAge must reach Age")
+		testkit.Equal(t, domaintest.NewUser().WithAge(7).Build().Age, 7,
 			"WithAge must reach Age")
 	})
 
@@ -1503,10 +1587,12 @@ func TestUserBuilderWithActive(t *testing.T) {
 
 	t.Run("reaches Active", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v bool
-		testkit.Equal(t, domaintest.NewUser().WithActive(v).Build().Active, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, domaintest.NewUser().WithActive(true).Build().Active, true,
+			"WithActive must reach Active")
+		testkit.Equal(t, domaintest.NewUser().WithActive(false).Build().Active, false,
 			"WithActive must reach Active")
 	})
 
@@ -1522,14 +1608,9 @@ func TestUserBuilderWithActive(t *testing.T) {
 func TestUserBuilderWithHome(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Home", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v domain.Address
-		testkit.Equal(t, domaintest.NewUser().WithHome(v).Build().Home, v,
-			"WithHome must reach Home")
-	})
+	// No check that the setter reaches Home: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1543,18 +1624,22 @@ func TestUserBuilderWithHome(t *testing.T) {
 func TestUserBuilderWithManager(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Manager", func(t *testing.T) {
+	// No check that the setter reaches Manager: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
+
+	t.Run("addresses the value it was given", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v *domain.User
-		testkit.Equal(t, domaintest.NewUser().WithManager(v).Build().Manager, v,
-			"WithManager must reach Manager")
+		// The setter takes a value, so a builder handing back nil never
+		// allocated and the field stays indistinguishable from unset.
+		var v domain.User
+		testkit.True(t, domaintest.NewUser().WithManager(v).Build().Manager != nil,
+			"WithManager must take an address")
 	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
-		var v *domain.User
+		var v domain.User
 		b := domaintest.NewUser()
 		testkit.True(t, b.WithManager(v) == b, "the setter returns its receiver")
 	})
@@ -1604,14 +1689,9 @@ func TestUserBuilderAppendReports(t *testing.T) {
 func TestUserBuilderWithDeadline(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Deadline", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v time.Time
-		testkit.Equal(t, domaintest.NewUser().WithDeadline(v).Build().Deadline, v,
-			"WithDeadline must reach Deadline")
-	})
+	// No check that the setter reaches Deadline: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1625,14 +1705,9 @@ func TestUserBuilderWithDeadline(t *testing.T) {
 func TestUserBuilderWithTimeout(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Timeout", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v time.Duration
-		testkit.Equal(t, domaintest.NewUser().WithTimeout(v).Build().Timeout, v,
-			"WithTimeout must reach Timeout")
-	})
+	// No check that the setter reaches Timeout: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -1694,4 +1769,4 @@ func TestUserBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 551698c676c7d48a2fe8d4dae188bb396669defd340e7023a160573925fd6b72
+// testkit:provenance 6a7fe4f0ecc2695ee02698e04737c2030bb5e492169fc0e27da2a26e75c8b38e

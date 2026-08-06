@@ -71,6 +71,37 @@ func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}String(s string) *{{ $b }}{{ $ta }}
 	b.v.{{ $f.Name }} = {{ renderType $f.Type }}(s)
 	return b
 }
+{{ else if eq $f.Shape "set" }}
+// With{{ $f.Name }} replaces {{ $f.Name }} wholesale.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = v
+	return b
+}
+
+// With{{ $f.Name }}Entry adds one key to {{ $f.Name }}, allocating the map on
+// first use so a caller need not.
+//
+// A set entry is a key. The map's value carries no information, so there is
+// nothing for the caller to supply and no parameter for it.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}Entry(k {{ renderType $f.Key }}) *{{ $b }}{{ $ta }} {
+	if b.v.{{ $f.Name }} == nil {
+		b.v.{{ $f.Name }} = make({{ renderType $f.Type }})
+	}
+	b.v.{{ $f.Name }}[k] = struct{}{}
+	return b
+}
+
+// With{{ $f.Name }}Entries adds each key to {{ $f.Name }}, keeping the keys it
+// already holds.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}Entries(keys ...{{ renderType $f.Key }}) *{{ $b }}{{ $ta }} {
+	if b.v.{{ $f.Name }} == nil {
+		b.v.{{ $f.Name }} = make({{ renderType $f.Type }}, len(keys))
+	}
+	for _, k := range keys {
+		b.v.{{ $f.Name }}[k] = struct{}{}
+	}
+	return b
+}
 {{ else if eq $f.Shape "map" }}
 // With{{ $f.Name }} replaces {{ $f.Name }} wholesale.
 func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
@@ -99,6 +130,16 @@ func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}Entries(entries {{ renderType $f.Ty
 	}
 	return b
 }
+{{ else if eq $f.Shape "pointer" }}
+// With{{ $f.Name }} replaces {{ $f.Name }}, taking the value and addressing it,
+// so a caller need not hold a variable to point at.
+//
+// Use [{{ $b }}.Mutate] to clear the field, or to point it at an address that
+// already exists.
+func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Elem }}) *{{ $b }}{{ $ta }} {
+	b.v.{{ $f.Name }} = &v
+	return b
+}
 {{ else }}
 // With{{ $f.Name }} replaces {{ $f.Name }}.
 func (b *{{ $b }}{{ $ta }}) With{{ $f.Name }}(v {{ renderType $f.Type }}) *{{ $b }}{{ $ta }} {
@@ -125,7 +166,7 @@ func (b *{{ $b }}{{ $ta }}) Clone() *{{ $b }}{{ $ta }} {
 {{- range $f := .Fields }}
 {{- if $f.Copies }}
 	if b.v.{{ $f.Name }} != nil {
-{{- if eq $f.Shape "map" }}
+{{- if or (eq $f.Shape "map") (eq $f.Shape "set") }}
 		out.v.{{ $f.Name }} = make({{ renderType $f.Type }}, len(b.v.{{ $f.Name }}))
 		for k, v := range b.v.{{ $f.Name }} {
 			out.v.{{ $f.Name }}[k] = v

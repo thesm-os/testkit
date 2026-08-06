@@ -94,6 +94,219 @@ func TestEmbedded(t *testing.T) {
 		f := render(t, embeddedPackage()).AssertFile("types" + builder.GoPrimarySuffix)
 		f.Contains("func (b *ItemBuilder) WithMeta(v Meta) *ItemBuilder")
 	})
+
+	t.Run("sets a type embedded by pointer", func(t *testing.T) {
+		t.Parallel()
+		// An embed by pointer records its name on the pointee, so a projection
+		// reading the reference's own name drops the field with no diagnostic
+		// and the promoted fields become unreachable.
+		f := render(t, embeddedPackage()).AssertFile("types" + builder.GoPrimarySuffix)
+		f.Contains("func (b *ItemBuilder) WithAudit(v Audit) *ItemBuilder")
+	})
+
+	t.Run("allocates for a type embedded by pointer", func(t *testing.T) {
+		t.Parallel()
+		// The promoted fields are reachable only once the pointer is non-nil, so
+		// a setter demanding an address makes every caller allocate first.
+		f := render(t, embeddedPackage()).AssertFile("types" + builder.GoPrimarySuffix)
+		f.Contains("b.v.Audit = &v")
+	})
+}
+
+// A check comparing a field against the zero value passes against a setter that
+// assigns nothing, which is what the sample pair exists to prevent — so what is
+// under test is that the pair reaches the rendered check, and that a type with
+// no honest pair loses the check rather than keeping a vacuous one.
+func TestSamples(t *testing.T) {
+	t.Parallel()
+
+	t.Run("sets a field to a value distinct from its zero", func(t *testing.T) {
+		t.Parallel()
+		render(t, plainPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains(`WithName("test-name").Build().Name, "test-name"`)
+	})
+
+	t.Run("sets it a second time to a different value", func(t *testing.T) {
+		t.Parallel()
+		// One value passes whenever the constructor already seeded it, and a
+		// companion's return is opaque here — the pair is what covers that.
+		render(t, plainPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains(`WithName("other-name").Build().Name, "other-name"`)
+	})
+
+	t.Run("omits the check for a type admitting no pair", func(t *testing.T) {
+		t.Parallel()
+		// Keeping it would assert, pass, and prove nothing, which reads as
+		// coverage the setter does not have.
+		render(t, embeddedPackage()).AssertFile("types" + builder.GoTestSuffix).
+			NotContains(`t.Run("reaches Meta"`)
+	})
+
+	t.Run("says why the check is absent", func(t *testing.T) {
+		t.Parallel()
+		// A reader looking for the check finds the reason rather than a gap.
+		render(t, embeddedPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("No check that the setter reaches Meta")
+	})
+
+	t.Run("derives a pair once a type parameter resolves to its witness", func(t *testing.T) {
+		t.Parallel()
+		// The parameter admits no pair at the source, so a projection that did
+		// not re-derive after substitution would leave every generic field's
+		// setter unchecked.
+		render(t, genericPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains(`WithValue("test-value")`)
+	})
+}
+
+// A map to the empty struct carries its whole meaning in its keys, so a setter
+// asking for the value asks the caller for the one thing they cannot vary.
+func TestSetField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("takes no value parameter on the entry setter", func(t *testing.T) {
+		t.Parallel()
+		render(t, setPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("func (b *ItemBuilder) WithTagsEntry(k string) *ItemBuilder")
+	})
+
+	t.Run("adds many keys variadically", func(t *testing.T) {
+		t.Parallel()
+		// A caller writing map[string]struct{}{"a": {}, "b": {}} at every call
+		// site is the reason this shape exists at all.
+		render(t, setPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("func (b *ItemBuilder) WithTagsEntries(keys ...string) *ItemBuilder")
+	})
+
+	t.Run("supplies the value itself", func(t *testing.T) {
+		t.Parallel()
+		render(t, setPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("b.v.Tags[k] = struct{}{}")
+	})
+
+	t.Run("copies the set on clone", func(t *testing.T) {
+		t.Parallel()
+		// A set is a map, so a clone sharing it lets one test's keys appear in
+		// another's.
+		render(t, setPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("out.v.Tags = make(map[string]struct{}, len(b.v.Tags))")
+	})
+
+	t.Run("leaves a map with a real value type alone", func(t *testing.T) {
+		t.Parallel()
+		// The narrower reading applies only where the value is the anonymous
+		// empty struct; anything else is an ordinary mapping.
+		render(t, setPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("func (b *ItemBuilder) WithMetaEntry(k string, v string) *ItemBuilder")
+	})
+
+	t.Run("checks the set with two distinct keys", func(t *testing.T) {
+		t.Parallel()
+		render(t, setPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains(`WithTagsEntry("test-tags").`)
+	})
+}
+
+// A set whose key admits no sample pair is the one case the corpus cannot show,
+// since its own set is keyed by string.
+func TestSetFieldWithoutASamplePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("falls back to a declared zero key", func(t *testing.T) {
+		t.Parallel()
+		// The checks still have to compile, and a key type this generator
+		// cannot write a literal for still has a zero value.
+		render(t, opaqueSetPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("var k Kind")
+	})
+
+	t.Run("omits the check two keys would be needed for", func(t *testing.T) {
+		t.Parallel()
+		// Adding one key twice cannot tell an adding setter from a replacing
+		// one, so the check would pass against either.
+		render(t, opaqueSetPackage()).AssertFile("types" + builder.GoTestSuffix).
+			NotContains(`t.Run("keeps keys it was not given"`)
+	})
+
+	t.Run("says why the check is absent", func(t *testing.T) {
+		t.Parallel()
+		render(t, opaqueSetPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("No check that adding keeps what was there")
+	})
+}
+
+// setPackage carries a set beside an ordinary map, which take different
+// setters and are told apart by the map's value type rather than by its name.
+func setPackage() *node.Package {
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Struct("Item", func(b *storefixture.StructBuilder) {
+			b.Pos(position.At("cfg/types.go", 1, 1))
+			b.Directive(storefixture.Directive("builder"))
+			b.Field("Tags", storefixture.Map(storefixture.Named("string"), emptyStruct()), nil)
+			b.Field("Meta", storefixture.Map(storefixture.Named("string"), storefixture.Named("string")), nil)
+		}).
+		PackageNode()
+}
+
+// opaqueSetPackage keys its set by a type no sample pair can be written for.
+func opaqueSetPackage() *node.Package {
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Struct("Item", func(b *storefixture.StructBuilder) {
+			b.Pos(position.At("cfg/types.go", 1, 1))
+			b.Directive(storefixture.Directive("builder"))
+			b.Field("Kinds", storefixture.Map(storefixture.Named("Kind"), emptyStruct()), nil)
+		}).
+		PackageNode()
+}
+
+// emptyStruct builds the anonymous `struct{}` the frontend records for a set's
+// value type.
+func emptyStruct() *node.TypeRef {
+	return &node.TypeRef{TypeKind: node.TypeRefAnonStruct}
+}
+
+// A pointer field distinguishes unset from zero, and the caller who wants to
+// say "set" should not have to produce an address to say it.
+func TestPointerField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("takes the pointee by value", func(t *testing.T) {
+		t.Parallel()
+		render(t, pointerPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("func (b *ItemBuilder) WithRetries(v int) *ItemBuilder")
+	})
+
+	t.Run("takes the address itself", func(t *testing.T) {
+		t.Parallel()
+		render(t, pointerPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("b.v.Retries = &v")
+	})
+
+	t.Run("checks the field through the pointer rather than past it", func(t *testing.T) {
+		t.Parallel()
+		// A setter that assigned nothing leaves nil, and dereferencing that
+		// panics instead of saying which setter failed.
+		render(t, pointerPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("Build().Retries, &want")
+	})
+
+	t.Run("checks that the setter allocated at all", func(t *testing.T) {
+		t.Parallel()
+		// The one assertion that holds for a pointee admitting no sample pair,
+		// which is every pointer to a struct or an interface.
+		render(t, pointerPackage()).AssertFile("types" + builder.GoTestSuffix).
+			Contains("Build().Retries != nil")
+	})
+
+	t.Run("leaves a pointer element inside a slice alone", func(t *testing.T) {
+		t.Parallel()
+		// The rule applies to a field whose own type is a pointer. An element
+		// type is the caller's to supply, so Append keeps taking it as declared.
+		render(t, pointerPackage()).AssertFile("types" + builder.GoPrimarySuffix).
+			Contains("func (b *ItemBuilder) AppendPeers(v ...*Item) *ItemBuilder")
+	})
 }
 
 // The explicit companion key exists for one that does not follow the
@@ -128,7 +341,7 @@ func TestGenericSubstitution(t *testing.T) {
 	})
 }
 
-// embeddedPackage carries a struct embedding another type.
+// embeddedPackage carries a struct embedding another type both ways.
 func embeddedPackage() *node.Package {
 	return storefixture.New().
 		Package("cfg", "example.com/cfg").
@@ -136,7 +349,22 @@ func embeddedPackage() *node.Package {
 			b.Pos(position.At("cfg/types.go", 1, 1))
 			b.Directive(storefixture.Directive("builder"))
 			b.Embed(storefixture.Named("Meta"))
+			b.Embed(storefixture.Pointer(storefixture.Named("Audit")))
 			b.Field("Name", storefixture.Named("string"), nil)
+		}).
+		PackageNode()
+}
+
+// pointerPackage carries a pointer field and a slice of pointers, which take
+// different setters: the rule applies to a field that is itself a pointer.
+func pointerPackage() *node.Package {
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Struct("Item", func(b *storefixture.StructBuilder) {
+			b.Pos(position.At("cfg/types.go", 1, 1))
+			b.Directive(storefixture.Directive("builder"))
+			b.Field("Retries", storefixture.Pointer(storefixture.Named("int")), nil)
+			b.Field("Peers", storefixture.Slice(storefixture.Pointer(storefixture.Named("Item"))), nil)
 		}).
 		PackageNode()
 }

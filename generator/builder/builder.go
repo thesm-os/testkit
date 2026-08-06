@@ -185,6 +185,22 @@ const (
 
 	// Map owes a replacing setter, a single-entry setter, and a merging one.
 	Map Shape = "map"
+
+	// Set owes the same three, with the value parameter gone. A map to the
+	// empty struct carries its whole meaning in its keys, so a setter asking
+	// for the value asks the caller for the one thing they cannot vary.
+	//
+	// The value has to be an anonymous `struct{}`. A named one — `type unit
+	// struct{}`, `map[string]unit` — arrives as a reference into a package this
+	// generator never read, so its emptiness is not knowable here and the field
+	// takes the ordinary map shape.
+	Set Shape = "set"
+
+	// Pointer owes a setter taking the pointee by value and addressing it. A
+	// pointer field distinguishes unset from zero, and the caller who wants to
+	// say "set" should not have to produce an address to say it. Clearing the
+	// field, or pointing two values at one address, goes through Mutate.
+	Pointer Shape = "pointer"
 )
 
 // Field is one rendered struct field.
@@ -215,6 +231,13 @@ type Field struct {
 	// when the default is a plain literal. A rendered file has to register the
 	// import, which only a reference carries — text cannot.
 	DefaultRef *emit.Expr
+
+	// Sample and Alternate are two distinct values of the field's type as
+	// source text, empty when its type admits none. See [samplesFor] for why
+	// the checks need a pair rather than one value, and for what "admits none"
+	// covers.
+	Sample    string
+	Alternate string
 }
 
 // Builder is the emit value rendered into the primary output.
@@ -261,7 +284,7 @@ func (b *Builder) Seeded() bool {
 
 // Copies reports whether the field owns storage a clone must not share.
 func (f Field) Copies() bool {
-	return f.Shape == Slice || f.Shape == Bytes || f.Shape == Map
+	return f.Shape == Slice || f.Shape == Bytes || f.Shape == Map || f.Shape == Set
 }
 
 // Kind returns [KindBuilder].
@@ -433,6 +456,12 @@ func substituted(fields []Field, params []*node.TypeParam, witnesses []emit.Ref)
 		f.Type = replace(f.Type, by)
 		f.Elem = replace(f.Elem, by)
 		f.Key = replace(f.Key, by)
+		// Upgraded rather than overwritten: substitution only ever resolves a
+		// type parameter into something more concrete, so it can add a pair
+		// where none was derivable and must never clear one that was.
+		if sample, alternate := samplesOfRef(sampleSource(f), f.Name); sample != "" {
+			f.Sample, f.Alternate = sample, alternate
+		}
 		out[i] = f
 	}
 	return out
@@ -514,10 +543,20 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
 	// an embedded value as a unit, and promoting would offer two ways to write
 	// the same thing that disagree about whether the embedded value is set.
 	for _, e := range s.Embeds {
-		if e.Type == nil || e.Type.Name == "" || !golang.IsExported(e.Type.Name) {
+		name, pointer := embedName(e.Type)
+		if name == "" || !golang.IsExported(name) {
 			continue
 		}
-		out = append(out, Field{Name: e.Type.Name, Type: golang.FromNode(e.Type)})
+		field := Field{Name: name, Type: golang.FromNode(e.Type)}
+		if pointer {
+			// Embedded by pointer takes the same setter a pointer field does:
+			// the promoted fields are reachable only once the pointer is
+			// non-nil, so a setter demanding an address makes every caller
+			// allocate before it can set anything.
+			field.Shape = Pointer
+			field.Elem = golang.FromNode(e.Type.Elem)
+		}
+		out = append(out, field)
 	}
 	for _, f := range s.Fields {
 		if !golang.IsExported(f.Name) || skipped(ctx, s, f) {
@@ -535,6 +574,26 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *node.Struct) []Field {
 		out = append(out, field)
 	}
 	return out
+}
+
+// embedName returns the identifier an embedded type contributes as a field
+// name, and whether it was embedded by pointer.
+//
+// An embed by pointer carries its name on the pointee rather than on the
+// reference itself, so reading the reference's own name yields the empty string
+// and the whole field is dropped without a diagnostic — which is what it did.
+func embedName(t *node.TypeRef) (name string, pointer bool) {
+	switch {
+	case t == nil:
+		return "", false
+	case t.TypeKind == node.TypeRefPointer:
+		if t.Elem == nil {
+			return "", false
+		}
+		return t.Elem.Name, true
+	default:
+		return t.Name, false
+	}
 }
 
 // skipped reports whether the field opted out of a setter.
@@ -555,7 +614,8 @@ func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
 	return true
 }
 
-// classify records the shape the field's setter follows.
+// classify records the shape the field's setter follows, and the values its
+// check sets it to.
 func classify(field *Field, t *node.TypeRef) {
 	if t == nil {
 		return
@@ -566,15 +626,42 @@ func classify(field *Field, t *node.TypeRef) {
 	case t.TypeKind == node.TypeRefSlice:
 		field.Shape = Slice
 		field.Elem = golang.FromNode(t.Elem)
+	case t.TypeKind == node.TypeRefMap && isEmptySet(t.MapValue):
+		// Ahead of the map arm: a set is a map, and the narrower reading wins.
+		// Elem stays nil — there is no value type worth carrying when every
+		// value is the same one.
+		field.Shape = Set
+		field.Key = golang.FromNode(t.MapKey)
+		field.Sample, field.Alternate = samplesOfNode(t.MapKey, field.Name)
 	case t.TypeKind == node.TypeRefMap:
 		field.Shape = Map
 		field.Key = golang.FromNode(t.MapKey)
 		field.Elem = golang.FromNode(t.MapValue)
+	case t.TypeKind == node.TypeRefPointer:
+		field.Shape = Pointer
+		field.Elem = golang.FromNode(t.Elem)
+		field.Sample, field.Alternate = samplesOfNode(t.Elem, field.Name)
+	default:
+		field.Sample, field.Alternate = samplesOfNode(t, field.Name)
 	}
+}
+
+// isEmptySet reports whether t is the anonymous empty struct, which is what
+// makes a map to it a set rather than a mapping.
+//
+// Both emptiness tests, because an anonymous struct may carry embedded types as
+// well as declared fields, and one holding either is a value the caller has
+// something to say about.
+func isEmptySet(t *node.TypeRef) bool {
+	return t != nil && t.IsAnonStruct() && len(t.Fields) == 0 && len(t.Embeds) == 0
 }
 
 // isByte reports whether t is the builtin byte, which is what makes a slice of
 // it owe a string-accepting setter rather than a variadic one.
+//
+// Both spellings, because the frontend records whichever the author wrote.
+//
+//nolint:goconst // a type name is its own clearest form; see [samplesFor].
 func isByte(t *node.TypeRef) bool {
 	return t != nil && t.Package == "" && (t.Name == "byte" || t.Name == "uint8")
 }

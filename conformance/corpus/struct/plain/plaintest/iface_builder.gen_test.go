@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/plain/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package plaintest_test
 
@@ -47,10 +47,12 @@ func TestItemBuilderWithID(t *testing.T) {
 
 	t.Run("reaches ID", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, plaintest.NewItem().WithID(v).Build().ID, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, plaintest.NewItem().WithID("test-id").Build().ID, "test-id",
+			"WithID must reach ID")
+		testkit.Equal(t, plaintest.NewItem().WithID("other-id").Build().ID, "other-id",
 			"WithID must reach ID")
 	})
 
@@ -68,10 +70,12 @@ func TestItemBuilderWithCount(t *testing.T) {
 
 	t.Run("reaches Count", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, plaintest.NewItem().WithCount(v).Build().Count, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, plaintest.NewItem().WithCount(42).Build().Count, 42,
+			"WithCount must reach Count")
+		testkit.Equal(t, plaintest.NewItem().WithCount(7).Build().Count, 7,
 			"WithCount must reach Count")
 	})
 
@@ -175,4 +179,4 @@ func TestItemBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ba3c8fa4e1e95a432135cdba65e864abad6f724757839bc95c9bd7ab29f4a4b1
+// testkit:provenance a049cfbbf09db47cddfcdf693a95b82dfb61885b243f63c86f8707aa0e6ed7fc

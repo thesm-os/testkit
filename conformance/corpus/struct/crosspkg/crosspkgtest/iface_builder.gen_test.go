@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/crosspkg/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package crosspkgtest_test
 
@@ -64,14 +64,9 @@ func TestNewSettingsFrom(t *testing.T) {
 func TestSettingsBuilderWithTimeout(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Timeout", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v time.Duration
-		testkit.Equal(t, crosspkgtest.NewSettings().WithTimeout(v).Build().Timeout, v,
-			"WithTimeout must reach Timeout")
-	})
+	// No check that the setter reaches Timeout: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -87,10 +82,12 @@ func TestSettingsBuilderWithRetries(t *testing.T) {
 
 	t.Run("reaches Retries", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, crosspkgtest.NewSettings().WithRetries(v).Build().Retries, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewSettings().WithRetries(42).Build().Retries, 42,
+			"WithRetries must reach Retries")
+		testkit.Equal(t, crosspkgtest.NewSettings().WithRetries(7).Build().Retries, 7,
 			"WithRetries must reach Retries")
 	})
 
@@ -108,10 +105,12 @@ func TestSettingsBuilderWithRegion(t *testing.T) {
 
 	t.Run("reaches Region", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, crosspkgtest.NewSettings().WithRegion(v).Build().Region, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewSettings().WithRegion("test-region").Build().Region, "test-region",
+			"WithRegion must reach Region")
+		testkit.Equal(t, crosspkgtest.NewSettings().WithRegion("other-region").Build().Region, "other-region",
 			"WithRegion must reach Region")
 	})
 
@@ -127,14 +126,9 @@ func TestSettingsBuilderWithRegion(t *testing.T) {
 func TestSettingsBuilderWithDeadline(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reaches Deadline", func(t *testing.T) {
-		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v time.Time
-		testkit.Equal(t, crosspkgtest.NewSettings().WithDeadline(v).Build().Deadline, v,
-			"WithDeadline must reach Deadline")
-	})
+	// No check that the setter reaches Deadline: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
@@ -219,10 +213,12 @@ func TestMirroredBuilderWithRegion(t *testing.T) {
 
 	t.Run("reaches Region", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, crosspkgtest.NewMirrored().WithRegion(v).Build().Region, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithRegion("test-region").Build().Region, "test-region",
+			"WithRegion must reach Region")
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithRegion("other-region").Build().Region, "other-region",
 			"WithRegion must reach Region")
 	})
 
@@ -240,10 +236,12 @@ func TestMirroredBuilderWithRetries(t *testing.T) {
 
 	t.Run("reaches Retries", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, crosspkgtest.NewMirrored().WithRetries(v).Build().Retries, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithRetries(42).Build().Retries, 42,
+			"WithRetries must reach Retries")
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithRetries(7).Build().Retries, 7,
 			"WithRetries must reach Retries")
 	})
 
@@ -261,10 +259,12 @@ func TestMirroredBuilderWithLabel(t *testing.T) {
 
 	t.Run("reaches Label", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, crosspkgtest.NewMirrored().WithLabel(v).Build().Label, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithLabel("test-label").Build().Label, "test-label",
+			"WithLabel must reach Label")
+		testkit.Equal(t, crosspkgtest.NewMirrored().WithLabel("other-label").Build().Label, "other-label",
 			"WithLabel must reach Label")
 	})
 
@@ -317,4 +317,4 @@ func TestMirroredBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e3804a79b4ec4f35adb42c0634934677d02a0804110285371f713ce1f2500bad
+// testkit:provenance b555a108739b83f103ec7714f8badcf995e8b3809b3d6be1bdd0cbe08b91368b

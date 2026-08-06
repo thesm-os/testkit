@@ -131,6 +131,63 @@ func Test{{ $b }}With{{ $f.Name }}String(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, string(got.{{ $f.Name }}), "v{{ $i }}", "the string reaches {{ $f.Name }}")
 	})
 }
+{{ else if eq $f.Shape "set" }}
+// Test{{ $b }}With{{ $f.Name }} pins the replacing setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("replaces {{ $f.Name }} wholesale", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		{{ if $f.Sample }}k := {{ $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k).With{{ $f.Name }}(nil).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 0, "the replacing setter discards what was there")
+	})
+}
+
+// Test{{ $b }}With{{ $f.Name }}Entry pins the single-key setter, which takes no
+// value because a set entry is a key.
+func Test{{ $b }}With{{ $f.Name }}Entry(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	t.Run("allocates {{ $f.Name }} on first use", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Assigning into a nil map panics, so a setter that did not allocate
+		// would fail at the caller's first use rather than here.
+		{{ if $f.Sample }}k := {{ $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "the key reaches {{ $f.Name }}")
+	})
+}
+
+// Test{{ $b }}With{{ $f.Name }}Entries pins the adding setter.
+func Test{{ $b }}With{{ $f.Name }}Entries(t *{{ renderExpr $T }}) {
+	t.Parallel()
+{{- if $f.Sample }}
+
+	t.Run("keeps keys it was not given", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Adding is the whole difference from the replacing setter; one that
+		// discarded would leave the two indistinguishable.
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ $f.Sample }}).
+			With{{ $f.Name }}Entries({{ $f.Alternate }}).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 2, "adding keeps what was there")
+	})
+{{- else }}
+
+	// No check that adding keeps what was there: {{ $f.Name }}'s key type admits
+	// no two values this generator can name, and adding one key twice cannot
+	// tell an adding setter from a replacing one.
+{{- end }}
+
+	t.Run("allocates {{ $f.Name }} when it adds to nothing", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Adding to a nil map has to allocate like the single-key setter does,
+		// or the first caller to reach for it panics.
+		{{ if $f.Sample }}k := {{ $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entries(k).Build()
+		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "adding allocates on first use")
+	})
+}
 {{ else if eq $f.Shape "map" }}
 // Test{{ $b }}With{{ $f.Name }} pins the replacing setter for {{ $f.Name }}.
 func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
@@ -185,19 +242,70 @@ func Test{{ $b }}With{{ $f.Name }}Entries(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "merging allocates on first use")
 	})
 }
+{{ else if eq $f.Shape "pointer" }}
+// Test{{ $b }}With{{ $f.Name }} pins the setter for {{ $f.Name }}.
+func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+{{- if $f.Sample }}
+
+	t.Run("reaches {{ $f.Name }}", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Compared as pointers rather than dereferenced: a setter that assigned
+		// nothing leaves nil, and dereferencing that panics instead of saying
+		// which setter failed. Two values because whatever the constructor
+		// seeded can equal at most one of them.
+		want := {{ renderType $f.Elem }}({{ $f.Sample }})
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ $f.Sample }}).Build().{{ $f.Name }}, &want,
+			"With{{ $f.Name }} must reach {{ $f.Name }}")
+		other := {{ renderType $f.Elem }}({{ $f.Alternate }})
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ $f.Alternate }}).Build().{{ $f.Name }}, &other,
+			"With{{ $f.Name }} must reach {{ $f.Name }}")
+	})
+{{- else }}
+
+	// No check that the setter reaches {{ $f.Name }}: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
+{{- end }}
+
+	t.Run("addresses the value it was given", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// The setter takes a value, so a builder handing back nil never
+		// allocated and the field stays indistinguishable from unset.
+		var v {{ renderType $f.Elem }}
+		{{ renderExpr $true }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v).Build().{{ $f.Name }} != nil,
+			"With{{ $f.Name }} must take an address")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		var v {{ renderType $f.Elem }}
+		b := {{ $ctor }}{{ $ta }}()
+		{{ renderExpr $true }}(t, b.With{{ $f.Name }}(v) == b, "the setter returns its receiver")
+	})
+}
 {{ else }}
 // Test{{ $b }}With{{ $f.Name }} pins the setter for {{ $f.Name }}.
 func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 	t.Parallel()
+{{- if $f.Sample }}
 
 	t.Run("reaches {{ $f.Name }}", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v {{ renderType $f.Type }}
-		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(v).Build().{{ $f.Name }}, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ $f.Sample }}).Build().{{ $f.Name }}, {{ $f.Sample }},
+			"With{{ $f.Name }} must reach {{ $f.Name }}")
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ $f.Alternate }}).Build().{{ $f.Name }}, {{ $f.Alternate }},
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})
+{{- else }}
+
+	// No check that the setter reaches {{ $f.Name }}: its type admits no two
+	// values this generator can name, and comparing the zero value against
+	// itself would pass against a setter that assigned nothing.
+{{- end }}
 
 	t.Run("returns the builder so calls chain", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
@@ -257,6 +365,19 @@ func Test{{ $b }}Clone(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, len(b.Build().{{ $f.Name }}), 1,
 			"appending to a clone must not reach the original")
 	})
+{{- else if eq $f.Shape "set" }}
+{{- if $f.Sample }}
+
+	t.Run("does not share {{ $f.Name }} with its original", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Two distinct keys: adding the same one twice leaves the original at
+		// one key whether the clone shares its storage or not.
+		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ $f.Sample }})
+		b.Clone().With{{ $f.Name }}Entry({{ $f.Alternate }})
+		{{ renderExpr $equal }}(t, len(b.Build().{{ $f.Name }}), 1,
+			"adding to a clone must not reach the original")
+	})
+{{- end }}
 {{- else if eq $f.Shape "map" }}
 
 	t.Run("does not share {{ $f.Name }} with its original", func(t *{{ renderExpr $T }}) {

@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/container/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package containertest_test
 
@@ -47,10 +47,12 @@ func TestContainerBuilderWithValue(t *testing.T) {
 
 	t.Run("reaches Value", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, containertest.NewContainer[string]().WithValue(v).Build().Value, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, containertest.NewContainer[string]().WithValue("test-value").Build().Value, "test-value",
+			"WithValue must reach Value")
+		testkit.Equal(t, containertest.NewContainer[string]().WithValue("other-value").Build().Value, "other-value",
 			"WithValue must reach Value")
 	})
 
@@ -108,10 +110,12 @@ func TestContainerBuilderWithLabel(t *testing.T) {
 
 	t.Run("reaches Label", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, containertest.NewContainer[string]().WithLabel(v).Build().Label, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, containertest.NewContainer[string]().WithLabel("test-label").Build().Label, "test-label",
+			"WithLabel must reach Label")
+		testkit.Equal(t, containertest.NewContainer[string]().WithLabel("other-label").Build().Label, "other-label",
 			"WithLabel must reach Label")
 	})
 
@@ -207,10 +211,12 @@ func TestPairBuilderWithKey(t *testing.T) {
 
 	t.Run("reaches Key", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, containertest.NewPair[string, int]().WithKey(v).Build().Key, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, containertest.NewPair[string, int]().WithKey("test-key").Build().Key, "test-key",
+			"WithKey must reach Key")
+		testkit.Equal(t, containertest.NewPair[string, int]().WithKey("other-key").Build().Key, "other-key",
 			"WithKey must reach Key")
 	})
 
@@ -228,10 +234,12 @@ func TestPairBuilderWithValue(t *testing.T) {
 
 	t.Run("reaches Value", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, containertest.NewPair[string, int]().WithValue(v).Build().Value, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, containertest.NewPair[string, int]().WithValue(42).Build().Value, 42,
+			"WithValue must reach Value")
+		testkit.Equal(t, containertest.NewPair[string, int]().WithValue(7).Build().Value, 7,
 			"WithValue must reach Value")
 	})
 
@@ -348,4 +356,4 @@ func TestPairBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 15c769bc2601abcbad1ec95c2a7f80b0b02af57c2cad99031904020740a5ce60
+// testkit:provenance c4f219a9bad93c03ee7d361e8d2e3d2401a2a50b984ccf051cae971d69518089

@@ -21,6 +21,13 @@
 // [Primitives] covers the scalar spread where the only difference is width and
 // signedness, [Containers] covers the shapes needing more than one setter, and
 // [User] covers composition — embedding, nesting, and self-reference.
+//
+// Routing is declared once for the package rather than repeated on each
+// type: every builder here lands in the same companion package, so a
+// per-struct directive is the same statement written N times, and the Nth
+// copy is the one that gets forgotten.
+//
+//testkit:out domaintest/ pkg=domaintest
 package domain
 
 import (
@@ -51,7 +58,6 @@ type Bytes = []byte
 // they belong in one struct: if a builder handles int and int64 differently,
 // that is a bug this fixture surfaces by having both.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type Primitives struct {
 	Bool bool
@@ -91,7 +97,6 @@ type String = string
 
 // Containers carries every shape that owes more than a single With setter.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type Containers struct {
 	// Slice owes both With and Append.
@@ -117,14 +122,10 @@ type Containers struct {
 	// not a scalar.
 	MapOfStruct map[string]Address
 
-	// Set is a map to empty struct, the idiomatic set. Its WithEntry takes no
-	// value parameter at all.
-	//
-	// Excluded from the builder until eidos renders an anonymous struct: the
-	// type lifts with no package and renderType rejects it, which fails the
-	// whole file rather than only this field. Restore the setter when that
-	// lands — the fixture keeps the field so the gap stays visible.
-	Set map[string]struct{} `builder:"-"`
+	// Set is a map to the empty struct, the idiomatic set. Its WithEntry takes
+	// no value parameter at all: every value is the same one, so a setter
+	// asking for it asks the caller for the one thing they cannot vary.
+	Set map[string]struct{}
 
 	// Pointer distinguishes unset from zero, so its setter takes a value and
 	// takes the address rather than requiring the caller to.
@@ -153,7 +154,6 @@ type Containers struct {
 // Address is nested inside [User] and used as a slice and map element in
 // [Containers], so its own builder has to be reachable from three directions.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type Address struct {
 	Street string
@@ -164,7 +164,6 @@ type Address struct {
 // Role is embedded into [User], so its fields are promoted. A builder reading
 // only declared fields misses Name and Level entirely.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type Role struct {
 	Name  string
@@ -175,7 +174,6 @@ type Role struct {
 // only reachable once the pointer is non-nil, so a builder has to allocate
 // before setting through it.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type Audit struct {
 	CreatedAt time.Time
@@ -185,7 +183,6 @@ type Audit struct {
 // User covers composition: embedding by value and by pointer, nesting, self
 // reference, and the unexported field a builder must skip.
 //
-//testkit:out domaintest/ pkg=domaintest
 //testkit:builder
 type User struct {
 	// Embedded by value — fields promote directly.

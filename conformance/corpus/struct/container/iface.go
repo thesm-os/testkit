@@ -9,12 +9,18 @@
 // erases them produces code which compiles only when T happens to be the
 // constraint's underlying type, so the failure shows up for one instantiation
 // and not another.
+//
+// Routing is declared once for the package rather than repeated on each
+// type: every builder here lands in the same companion package, so a
+// per-struct directive is the same statement written N times, and the Nth
+// copy is the one that gets forgotten.
+//
+//testkit:out containertest/ pkg=containertest
 package container
 
 // Container is generic over one unconstrained parameter, which is the case
 // where nothing about T can be assumed.
 //
-//testkit:out containertest/ pkg=containertest
 //testkit:builder
 type Container[T any] struct {
 	Value T
@@ -31,7 +37,6 @@ type Container[T any] struct {
 // that assumes a single parameter, or that assumes every parameter is `any`,
 // gets this wrong.
 //
-//testkit:out containertest/ pkg=containertest
 //testkit:builder
 type Pair[K comparable, V any] struct {
 	Key K

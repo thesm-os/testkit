@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/config/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package configtest_test
 
@@ -88,10 +88,12 @@ func TestConfigBuilderWithHost(t *testing.T) {
 
 	t.Run("reaches Host", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, configtest.NewConfig().WithHost(v).Build().Host, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithHost("test-host").Build().Host, "test-host",
+			"WithHost must reach Host")
+		testkit.Equal(t, configtest.NewConfig().WithHost("other-host").Build().Host, "other-host",
 			"WithHost must reach Host")
 	})
 
@@ -109,10 +111,12 @@ func TestConfigBuilderWithPort(t *testing.T) {
 
 	t.Run("reaches Port", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, configtest.NewConfig().WithPort(v).Build().Port, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithPort(42).Build().Port, 42,
+			"WithPort must reach Port")
+		testkit.Equal(t, configtest.NewConfig().WithPort(7).Build().Port, 7,
 			"WithPort must reach Port")
 	})
 
@@ -130,10 +134,12 @@ func TestConfigBuilderWithVerbose(t *testing.T) {
 
 	t.Run("reaches Verbose", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v bool
-		testkit.Equal(t, configtest.NewConfig().WithVerbose(v).Build().Verbose, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithVerbose(true).Build().Verbose, true,
+			"WithVerbose must reach Verbose")
+		testkit.Equal(t, configtest.NewConfig().WithVerbose(false).Build().Verbose, false,
 			"WithVerbose must reach Verbose")
 	})
 
@@ -151,10 +157,12 @@ func TestConfigBuilderWithRatio(t *testing.T) {
 
 	t.Run("reaches Ratio", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v float64
-		testkit.Equal(t, configtest.NewConfig().WithRatio(v).Build().Ratio, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithRatio(3.14).Build().Ratio, 3.14,
+			"WithRatio must reach Ratio")
+		testkit.Equal(t, configtest.NewConfig().WithRatio(2.72).Build().Ratio, 2.72,
 			"WithRatio must reach Ratio")
 	})
 
@@ -172,10 +180,12 @@ func TestConfigBuilderWithRetries(t *testing.T) {
 
 	t.Run("reaches Retries", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v int
-		testkit.Equal(t, configtest.NewConfig().WithRetries(v).Build().Retries, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithRetries(42).Build().Retries, 42,
+			"WithRetries must reach Retries")
+		testkit.Equal(t, configtest.NewConfig().WithRetries(7).Build().Retries, 7,
 			"WithRetries must reach Retries")
 	})
 
@@ -193,16 +203,30 @@ func TestConfigBuilderWithFallback(t *testing.T) {
 
 	t.Run("reaches Fallback", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v *string
-		testkit.Equal(t, configtest.NewConfig().WithFallback(v).Build().Fallback, v,
+		// Compared as pointers rather than dereferenced: a setter that assigned
+		// nothing leaves nil, and dereferencing that panics instead of saying
+		// which setter failed. Two values because whatever the constructor
+		// seeded can equal at most one of them.
+		want := string("test-fallback")
+		testkit.Equal(t, configtest.NewConfig().WithFallback("test-fallback").Build().Fallback, &want,
 			"WithFallback must reach Fallback")
+		other := string("other-fallback")
+		testkit.Equal(t, configtest.NewConfig().WithFallback("other-fallback").Build().Fallback, &other,
+			"WithFallback must reach Fallback")
+	})
+
+	t.Run("addresses the value it was given", func(t *testing.T) {
+		t.Parallel()
+		// The setter takes a value, so a builder handing back nil never
+		// allocated and the field stays indistinguishable from unset.
+		var v string
+		testkit.True(t, configtest.NewConfig().WithFallback(v).Build().Fallback != nil,
+			"WithFallback must take an address")
 	})
 
 	t.Run("returns the builder so calls chain", func(t *testing.T) {
 		t.Parallel()
-		var v *string
+		var v string
 		b := configtest.NewConfig()
 		testkit.True(t, b.WithFallback(v) == b, "the setter returns its receiver")
 	})
@@ -214,10 +238,12 @@ func TestConfigBuilderWithUndirected(t *testing.T) {
 
 	t.Run("reaches Undirected", func(t *testing.T) {
 		t.Parallel()
-		// A setter assigning the wrong field produces a builder that compiles
-		// and configures something else, which no consumer can see.
-		var v string
-		testkit.Equal(t, configtest.NewConfig().WithUndirected(v).Build().Undirected, v,
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, configtest.NewConfig().WithUndirected("test-undirected").Build().Undirected, "test-undirected",
+			"WithUndirected must reach Undirected")
+		testkit.Equal(t, configtest.NewConfig().WithUndirected("other-undirected").Build().Undirected, "other-undirected",
 			"WithUndirected must reach Undirected")
 	})
 
@@ -270,4 +296,4 @@ func TestConfigBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance aad77576fd01eb63cbe8a06914b973657b3b971185d733e64ce45c2b07c3b93f
+// testkit:provenance a334bd147f88338ca9a4fcc744976c0094c385feb9af00055f8a01685ed1e103

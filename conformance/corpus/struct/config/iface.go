@@ -14,13 +14,19 @@
 // There is deliberately no Defaults function here. Adding one would make the
 // fixture test precedence between the two sources rather than the directive
 // path itself, and precedence is a question for a composite.
+//
+// Routing is declared once for the package rather than repeated on each
+// type: every builder here lands in the same companion package, so a
+// per-struct directive is the same statement written N times, and the Nth
+// copy is the one that gets forgotten.
+//
+//testkit:out configtest/ pkg=configtest
 package config
 
 // Config carries a default on every literal kind the directive accepts, since
 // each is parsed differently: quoting for strings, base detection for ints,
 // keyword for bools, and the untyped nil that has no literal form of its own.
 //
-//testkit:out configtest/ pkg=configtest
 //testkit:builder
 type Config struct {
 	Host string //testkit:default "localhost"

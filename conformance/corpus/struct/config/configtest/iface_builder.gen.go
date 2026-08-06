@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/config/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package configtest
 
@@ -68,9 +68,13 @@ func (b *ConfigBuilder) WithRetries(v int) *ConfigBuilder {
 	return b
 }
 
-// WithFallback replaces Fallback.
-func (b *ConfigBuilder) WithFallback(v *string) *ConfigBuilder {
-	b.v.Fallback = v
+// WithFallback replaces Fallback, taking the value and addressing it,
+// so a caller need not hold a variable to point at.
+//
+// Use [ConfigBuilder.Mutate] to clear the field, or to point it at an address that
+// already exists.
+func (b *ConfigBuilder) WithFallback(v string) *ConfigBuilder {
+	b.v.Fallback = &v
 	return b
 }
 
@@ -104,4 +108,4 @@ func (b *ConfigBuilder) Build() config.Config {
 }
 
 // testkit: end of generated content.
-// testkit:provenance caf79827825ace175ada47391b218bf46e9d09ca7adcf68f1d989d7a8b499990
+// testkit:provenance f9081f6feec6e4db40b343c8867eb8e7e9ac81ea5cc1ba9feefb586815f9c975
