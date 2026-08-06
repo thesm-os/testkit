@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out ifabsenttest/ pkg=ifabsenttest
+//testkit:stub
 type Contract interface {
 	// Put is the if-absent contract's writer role, and hosts the directive
 	// that names its partners.

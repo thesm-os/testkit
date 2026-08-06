@@ -1,0 +1,87 @@
+{{- define "fault.test" -}}
+{{- $T := faultRef "testing.T" -}}
+{{- $errorIs := faultRef "testkit.ErrorIs" -}}
+{{- $noError := faultRef "testkit.NoError" -}}
+{{- $testErr := faultRef "testkit.TestError" -}}
+{{- $stub := .TypeName -}}
+{{- range $m := .Methods }}
+{{- with $err := $m.ErrReturn }}
+// Test{{ $stub }}{{ $m.Name }}Faults pins the fault helpers generated for
+// {{ $m.Name }}.
+//
+// Separate from the method's own checks because a slot contributes a
+// declaration, not statements inside another plugin's function — and because
+// what fails here is a directive's rendering rather than the double's dispatch.
+func Test{{ $stub }}{{ $m.Name }}Faults(t *{{ renderExpr $T }}) {
+	t.Parallel()
+{{- range $s := $m.Sentinels }}
+
+	t.Run("answers with {{ $s.Name }} after {{ $s.Helper }}", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+		s.{{ $m.OnField }}.{{ $s.Helper }}()
+{{- template "fault.testargs" $m }}
+		{{ faultFails $m.Returns }} := s.{{ $m.Name }}({{ faultIdentArgs "a" $m.Params }})
+		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, {{ renderExpr $s.Ref }}, "{{ $s.Helper }} must answer with {{ $s.Name }}")
+	})
+{{- end }}
+{{- if $m.Retry }}
+
+	t.Run("fails until the retry attempt then succeeds", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A caller written around a retry loop is only exercised by a double
+		// that fails and then stops: one that always fails never reaches the
+		// success path, and one that never fails never enters the loop.
+		s := {{ renderExpr $.CtorRef }}(t)
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-retry")
+		s.{{ $m.OnField }}.RetrySchedule(want)
+{{- template "fault.testargs" $m }}
+		for attempt := 1; attempt < {{ $m.Retry }}; attempt++ {
+			{{ faultFails $m.Returns }} := s.{{ $m.Name }}({{ faultIdentArgs "a" $m.Params }})
+			{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "a call before attempt {{ $m.Retry }} must fail")
+		}
+		{{ faultFails $m.Returns }} := s.{{ $m.Name }}({{ faultIdentArgs "a" $m.Params }})
+		{{ renderExpr $noError }}(t, {{ $err.Local }}, "attempt {{ $m.Retry }} must succeed")
+	})
+{{- end }}
+{{- if $m.Partition }}
+
+	t.Run("faults only the matching partition", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Partitioned failure is what proves isolation: a fault that fired
+		// everywhere would pass a test asserting one tenant's outage reaches
+		// another, which is the bug the directive exists to catch.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var key {{ template "fault.partitiontype" $m }}
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-partition")
+		s.{{ $m.OnField }}.FaultForPartition(key, want, 1)
+{{- template "fault.testargs" $m }}
+		{{ faultFails $m.Returns }} := s.{{ $m.Name }}({{ faultIdentArgs "a" $m.Params }})
+		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "a call in the targeted partition must fail")
+	})
+
+	t.Run("leaves the named partition healthy", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+		var key {{ template "fault.partitiontype" $m }}
+		s.{{ $m.OnField }}.FaultForOtherPartitions(key, {{ renderExpr $testErr }}("{{ $m.Name }}-partition"), 1)
+{{- template "fault.testargs" $m }}
+		{{ faultFails $m.Returns }} := s.{{ $m.Name }}({{ faultIdentArgs "a" $m.Params }})
+		{{ renderExpr $noError }}(t, {{ $err.Local }}, "a call in the named partition must be spared")
+	})
+{{- end }}
+}
+{{ end }}
+{{- end }}
+{{- end -}}
+
+{{- /* Arguments are declared as zero values rather than invented: what these
+       checks assert is which call fails, and the argument values are
+       incidental. A zero key is also what makes the partition checks work —
+       every call lands in the zero partition, so targeting it fails them all
+       and targeting the others spares them all. */ -}}
+{{- define "fault.testargs" -}}
+{{ range $i, $p := .Params }}
+		var a{{ $i }} {{ if $p.Variadic }}[]{{ end }}{{ renderType $p.Type }}
+{{- end }}
+{{- end -}}

@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out sampletest/ pkg=sampletest
+//testkit:stub
 type Mixed interface {
 	// Process takes an input the mixin pins. The parameter is the point: with
 	// no argument there is nothing for a sample to replace.

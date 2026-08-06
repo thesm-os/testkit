@@ -15,7 +15,6 @@ import (
 	"go.thesmos.sh/eidos/store"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/generator/internal/fault"
 	"go.thesmos.sh/testkit/generator/stub"
 )
 
@@ -292,16 +291,6 @@ func TestGenerate(t *testing.T) {
 		testkit.False(t, double.Ordered(), "an unconstrained double needs no tracker")
 	})
 
-	t.Run("carries a sentinel helper qualified against the source package", func(t *testing.T) {
-		t.Parallel()
-		// The double may be routed into its own package, where the sentinel
-		// is not reachable unqualified.
-		double, _ := split(t, generate(t, stub.New(), sentinelFixture()))
-		got := double.Methods[0].Sentinels
-		testkit.Len(t, got, 1, "the stamped sentinel reaches the view model")
-		testkit.Equal(t, got[0].Helper, "FaultNotFound", "the helper names the action")
-	})
-
 	t.Run("names the double with the configured suffix", func(t *testing.T) {
 		t.Parallel()
 		double, _ := split(t, generate(t, withSuffix(t, "Double"), storeFixture(t)))
@@ -487,20 +476,6 @@ func integrationOnlyFixture() *store.Store {
 			i.Method("Connect", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 				stampMixin(m, stub.MixinIntegrationOnly)
-			})
-		}).
-		Build()
-}
-
-// sentinelFixture returns a store whose Get method carries one stamped
-// sentinel, as the fault annotator would leave it.
-func sentinelFixture() *store.Store {
-	return storefixture.New().
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Directive(storefixture.Directive("stub"))
-			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
-				fault.MetaSentinels.Set(m.Node().Meta(), []string{"ErrNotFound"}, "test")
 			})
 		}).
 		Build()

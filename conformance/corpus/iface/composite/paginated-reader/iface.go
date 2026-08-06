@@ -24,6 +24,9 @@ import (
 type Value struct{ Key, Body string }
 
 // PaginatedReader is the fixture interface.
+//
+//testkit:out paginatedreadertest/ pkg=paginatedreadertest
+//testkit:stub
 type PaginatedReader interface {
 	// Page is a reader by signature and pagination's reader role by directive.
 	// The cursor parameter is what the contract keys on.

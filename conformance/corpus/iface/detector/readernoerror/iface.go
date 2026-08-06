@@ -18,6 +18,9 @@ import (
 type Value struct{ Key, Body string }
 
 // ReaderNoError is the fixture interface.
+//
+//testkit:out readernoerrortest/ pkg=readernoerrortest
+//testkit:stub
 type ReaderNoError interface {
 	Lookup(ctx context.Context, key string) Value
 }

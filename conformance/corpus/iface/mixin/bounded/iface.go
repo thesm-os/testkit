@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out boundedtest/ pkg=boundedtest
+//testkit:stub
 type Mixed interface {
 	// List carries the ceiling as a parameter, because the law cannot be
 	// stated without a number to compare against.

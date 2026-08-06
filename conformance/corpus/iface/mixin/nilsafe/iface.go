@@ -22,6 +22,9 @@ import (
 type Payload struct{ Key, Body string }
 
 // Mixed is the fixture interface.
+//
+//testkit:out nilsafetest/ pkg=nilsafetest
+//testkit:stub
 type Mixed interface {
 	// Store takes a pointer, which is what makes nil expressible. A
 	// value parameter would leave the law with no nil to pass.

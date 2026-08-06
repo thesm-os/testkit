@@ -14,6 +14,9 @@ import (
 
 // Wide returns four values. Anything that assumes the last return is an error
 // and the first is the value produces wrong field names here.
+//
+//testkit:out multireturntest/ pkg=multireturntest
+//testkit:stub
 type Wide interface {
 	Quad(ctx context.Context, id string) (string, int, bool, error)
 	Triple(ctx context.Context, id string) (string, int, bool)

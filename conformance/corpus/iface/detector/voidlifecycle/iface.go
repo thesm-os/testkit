@@ -11,6 +11,9 @@
 package voidlifecycle
 
 // VoidLifecycle is the fixture interface.
+//
+//testkit:out voidlifecycletest/ pkg=voidlifecycletest
+//testkit:stub
 type VoidLifecycle interface {
 	Stop()
 }

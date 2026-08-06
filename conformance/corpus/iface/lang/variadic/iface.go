@@ -14,6 +14,9 @@ import (
 
 // Finder takes a variadic key list. Forwarding it needs the ellipsis at the
 // call site, and recording it needs a slice field rather than a scalar.
+//
+//testkit:out variadictest/ pkg=variadictest
+//testkit:stub
 type Finder interface {
 	Find(ctx context.Context, keys ...string) ([]string, error)
 	FindWithLimit(ctx context.Context, limit int, keys ...string) ([]string, error)

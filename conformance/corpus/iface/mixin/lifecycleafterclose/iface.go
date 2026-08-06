@@ -23,6 +23,9 @@ import (
 var ErrClosed = errors.New("lifecycleafterclose: closed")
 
 // Mixed is the fixture interface.
+//
+//testkit:out lifecycleafterclosetest/ pkg=lifecycleafterclosetest
+//testkit:stub
 type Mixed interface {
 	// Close is the teardown the law measures from.
 	//testkit:mixin lifecycleafterclose

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out txtest/ pkg=txtest
+//testkit:stub
 type Contract interface {
 	// Begin is the tx contract's begin role, and hosts the directive
 	// that names its partners.

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out paginationtest/ pkg=paginationtest
+//testkit:stub
 type Contract interface {
 	// Get is the pagination contract's reader role, and hosts the directive
 	// that names its partners.

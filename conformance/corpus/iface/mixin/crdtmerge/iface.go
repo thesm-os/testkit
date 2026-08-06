@@ -20,11 +20,17 @@ import (
 
 // Replica is the peer Merge folds in. The law compares two replicas merged in
 // opposite orders, so the type has to be nameable in the signature.
+//
+//testkit:out crdtmergetest/ pkg=crdtmergetest
+//testkit:stub
 type Replica interface {
 	Items(ctx context.Context) ([]string, error)
 }
 
 // Mixed is the fixture interface.
+//
+//testkit:out crdtmergetest/ pkg=crdtmergetest
+//testkit:stub
 type Mixed interface {
 	// Merge folds another replica in. Convergence is a statement about two
 	// merges in opposite orders, so the method has to take a peer rather than

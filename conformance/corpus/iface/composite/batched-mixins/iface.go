@@ -22,6 +22,9 @@ package batchedmixins
 import "context"
 
 // Batched is the fixture interface.
+//
+//testkit:out batchedmixinstest/ pkg=batchedmixinstest
+//testkit:stub
 type Batched interface {
 	// Put carries three mixins on one line. Bare tokens are read as further
 	// names, never as parameters, which is why none of these may take one.

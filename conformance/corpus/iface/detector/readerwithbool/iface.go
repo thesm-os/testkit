@@ -18,6 +18,9 @@ import (
 type Value struct{ Key, Body string }
 
 // ReaderWithBool is the fixture interface.
+//
+//testkit:out readerwithbooltest/ pkg=readerwithbooltest
+//testkit:stub
 type ReaderWithBool interface {
 	Load(ctx context.Context, key string) (Value, bool)
 }

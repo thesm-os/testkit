@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out cacheabletest/ pkg=cacheabletest
+//testkit:stub
 type Mixed interface {
 	// Get may be cached. The law is that caching is unobservable: two reads
 	// agree whether or not the second was served from memory.

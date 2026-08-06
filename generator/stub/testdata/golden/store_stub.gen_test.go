@@ -211,7 +211,7 @@ func TestStoreStubList(t *testing.T) {
 		// most needs the log to surface.
 		s := storepkg.NewStoreStub(t)
 		_, _ = s.List()
-		got := s.OnList.AssertCalledOnce(t, "List must record the call")
+		s.OnList.AssertCalledOnce(t, "List must record the call")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -297,7 +297,7 @@ func TestStoreStubClose(t *testing.T) {
 		// most needs the log to surface.
 		s := storepkg.NewStoreStub(t)
 		s.Close()
-		got := s.OnClose.AssertCalledOnce(t, "Close must record the call")
+		s.OnClose.AssertCalledOnce(t, "Close must record the call")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -422,4 +422,4 @@ func TestStoreStubDelegateTo(t *testing.T) {
 }
 
 // eidos: end of generated content.
-// eidos:provenance b8948a8f799db866386b0e581489ba452ee707d7b3639428bcc671af17932fa2
+// eidos:provenance f1e29b830b81a23c2624c11caad449cd5e39b144611d01af88d8a9dda99bcfbb

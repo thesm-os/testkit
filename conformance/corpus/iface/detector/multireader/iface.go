@@ -25,6 +25,9 @@ type Value struct{ Key, Body string }
 type Meta struct{ Revision int }
 
 // MultiReader is the fixture interface.
+//
+//testkit:out multireadertest/ pkg=multireadertest
+//testkit:stub
 type MultiReader interface {
 	GetWithMeta(ctx context.Context, key string) (Value, Meta, error)
 }

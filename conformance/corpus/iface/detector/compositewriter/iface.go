@@ -23,6 +23,9 @@ type Value struct {
 }
 
 // CompositeWriter is the fixture interface.
+//
+//testkit:out compositewritertest/ pkg=compositewritertest
+//testkit:stub
 type CompositeWriter interface {
 	Store(ctx context.Context, v Value) (Value, error)
 }

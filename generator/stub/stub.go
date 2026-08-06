@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"io/fs"
 	"slices"
+	"strings"
 	"text/template"
 
 	"go.thesmos.sh/eidos/emit"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
-	"go.thesmos.sh/testkit/generator/internal/fault"
 	"go.thesmos.sh/testkit/generator/internal/signature"
 )
 
@@ -219,18 +220,6 @@ type Method struct {
 	// configuration a double can usefully offer for it.
 	Shape string
 
-	// Sentinels are the error variables this method's double can be made to
-	// fail with, each gaining a one-shot helper.
-	Sentinels []Sentinel
-
-	// Retry is the attempt a scheduled fault stops firing on, zero when the
-	// method configures none.
-	Retry int
-
-	// Partition is the recorded-call field per-key fault targeting matches
-	// against, empty when the method configures none.
-	Partition string
-
 	// Iterator classifies the method's return as a range-over-func sequence,
 	// empty when it returns none. A sequence-returning method gains Yields
 	// helpers, because building one by hand in every test is a closure a
@@ -325,12 +314,28 @@ type Stub struct {
 
 	Methods []Method
 
+	// TypeParams is the source interface's type-parameter list, in the form
+	// `renderTypeParams` spells as `[K comparable, V any]`. Empty for a
+	// non-generic interface, where the helper renders nothing.
+	TypeParams []*emit.TypeParam
+
+	// TypeArgs is the same list in use position — `[K, V]`, or empty. Every
+	// generated identifier that names one of the double's own types has to
+	// carry it, since a generic type cannot be referenced bare.
+	TypeArgs string
+
 	// Complete reports whether the double carries every method its source
 	// declares. An integration-only method is dropped, and a double missing a
 	// method cannot satisfy its interface — so the compile-time assertion is
 	// emitted only when nothing was dropped.
 	Complete bool
 }
+
+// Generic reports whether the double is parameterised, which is what decides
+// whether a companion can be generated for it at all — a Go test function
+// cannot take type parameters, so the checks have no way to name the types the
+// double is instantiated at.
+func (s *Stub) Generic() bool { return len(s.TypeParams) > 0 }
 
 // Ordered reports whether any method carries an order constraint, which is
 // what decides whether the double allocates a tracker at all.
@@ -387,6 +392,12 @@ type Tests struct {
 	StubRef *emit.Expr
 
 	Methods []Method
+
+	// Generic mirrors [Stub.Generic]. A parameterised double gets a note in
+	// place of its checks rather than no file at all: the absence has to be
+	// visible to a reader who expected one, and an empty file would read as a
+	// generator that failed silently.
+	Generic bool
 
 	// Complete mirrors [Stub.Complete], so the companion's compile-time
 	// assertion is emitted on exactly the same condition as the double's.
@@ -463,12 +474,14 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		// append-and-check dance is where the two would drift apart.
 		for _, value := range []sdk.EmitNode{
 			&Stub{
-				BaseEmit:  base,
-				TypeName:  typeName,
-				IfaceName: iface.Name,
-				IfaceRef:  sdk.NewExternal(iface.Package, iface.Name),
-				Methods:   methods,
-				Complete:  len(methods) == len(iface.Methods),
+				BaseEmit:   base,
+				TypeName:   typeName,
+				IfaceName:  iface.Name,
+				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
+				Methods:    methods,
+				TypeParams: typeParamsOf(iface),
+				TypeArgs:   typeArgsOf(iface),
+				Complete:   complete(iface, methods),
 			},
 			&Tests{
 				BaseEmit:  testBase,
@@ -478,7 +491,8 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				CtorRef:   sdk.NewExternal(iface.Package, "New"+typeName),
 				IfaceRef:  sdk.NewExternal(iface.Package, iface.Name),
 				Methods:   methods,
-				Complete:  len(methods) == len(iface.Methods),
+				Generic:   len(iface.TypeParams) > 0,
+				Complete:  complete(iface, methods),
 			},
 		} {
 			prov := c.Provenance(string(value.Kind()) + "." + iface.Name)
@@ -490,34 +504,52 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	return nil
 }
 
-// Sentinel is one error variable a method's double can be made to fail with.
-type Sentinel struct {
-	// Name is the source-side variable identifier, e.g. `ErrNotFound`.
-	Name string
-
-	// Helper is the generated method's identifier, e.g. `FaultNotFound`.
-	Helper string
-
-	// Ref qualifies the variable from wherever the double is routed to. A
-	// double redirected into its own package cannot reach the sentinel
-	// unqualified, and the source package is known at Generate time.
-	Ref *emit.Expr
+// complete reports whether the double carries every method its source
+// declares, which is what decides whether the compile-time interface assertion
+// is emitted.
+//
+// An embedded interface fails it outright. The projection reads only the
+// directly declared methods, so a double for an interface that embeds another
+// is missing whatever the embedded one contributed — and asserting that it
+// satisfies the interface would fail in the consumer's compiler rather than
+// here. Flattening embedded method sets is the fix; until then the double is
+// honestly partial rather than confidently wrong.
+func complete(iface *node.Interface, methods []Method) bool {
+	return len(iface.Embeds) == 0 && len(methods) == len(iface.Methods)
 }
 
-// sentinelsOf lifts the annotator's stamped sentinel names into rendered
-// form. The names and the collision rule belong to the fault annotator; what
-// is added here is the qualified reference the template renders.
-func sentinelsOf(iface *node.Interface, m *node.Method) []Sentinel {
-	names := fault.Sentinels(m.Meta())
-	out := make([]Sentinel, 0, len(names))
-	for _, name := range names {
-		out = append(out, Sentinel{
-			Name:   name,
-			Helper: fault.Helper(name),
-			Ref:    sdk.NewExternal(iface.Package, name),
-		})
+// typeParamsOf lifts the interface's type-parameter list into the emit form
+// `renderTypeParams` consumes.
+//
+// Written here rather than taken from lang/golang because that package's
+// helper is typed to a struct, and an interface's list is the same shape for a
+// different host.
+func typeParamsOf(iface *node.Interface) []*emit.TypeParam {
+	if len(iface.TypeParams) == 0 {
+		return nil
+	}
+	out := make([]*emit.TypeParam, len(iface.TypeParams))
+	for i, p := range iface.TypeParams {
+		out[i] = &emit.TypeParam{
+			Name:       p.Name,
+			Constraint: golang.ConstraintFromNode(p.Constraint),
+		}
 	}
 	return out
+}
+
+// typeArgsOf returns the use form of the interface's type-parameter list —
+// `[K, V]` — or empty for a non-generic interface, so a template can append it
+// unconditionally.
+func typeArgsOf(iface *node.Interface) string {
+	if len(iface.TypeParams) == 0 {
+		return ""
+	}
+	names := make([]string, len(iface.TypeParams))
+	for i, p := range iface.TypeParams {
+		names[i] = p.Name
+	}
+	return "[" + strings.Join(names, ", ") + "]"
 }
 
 // iteratorReturn returns the method's sole return when it has exactly one,
@@ -564,7 +596,6 @@ func methodsOf(iface *node.Interface) []Method {
 		}
 		params := signature.ParamsOf(m)
 		named := signature.NamedReturnsUsable(m)
-		sentinels := sentinelsOf(iface, m)
 		out = append(out, Method{
 			Name:                m.Name,
 			CallType:            iface.Name + m.Name + "Call",
@@ -581,9 +612,6 @@ func methodsOf(iface *node.Interface) []Method {
 			IteratorElem:        signature.IteratorElem(iteratorReturn(m)),
 			IteratorSecond:      signature.IteratorSecond(iteratorReturn(m)),
 			IteratorYieldsError: signature.IteratorYieldsError(iteratorReturn(m)),
-			Sentinels:           sentinels,
-			Retry:               fault.Retry(m.Meta()),
-			Partition:           fault.Partition(m.Meta()),
 		})
 	}
 	return out

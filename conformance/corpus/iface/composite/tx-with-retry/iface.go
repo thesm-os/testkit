@@ -32,6 +32,9 @@ var ErrClosed = errors.New("txwithretry: transaction already settled")
 var ErrTransient = errors.New("txwithretry: transient commit failure")
 
 // TxWithRetry is the fixture interface.
+//
+//testkit:out txwithretrytest/ pkg=txwithretrytest
+//testkit:stub
 type TxWithRetry interface {
 	// Begin hosts the tx contract and names both partners.
 	//testkit:contract tx role=begin commit=Commit rollback=Rollback

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out persistertest/ pkg=persistertest
+//testkit:stub
 type Contract interface {
 	// Put is the persister contract's writer role, and hosts the directive
 	// that names its partners.

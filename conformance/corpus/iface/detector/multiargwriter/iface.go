@@ -18,6 +18,9 @@ import (
 type Value struct{ Key, Body string }
 
 // MultiArgWriter is the fixture interface.
+//
+//testkit:out multiargwritertest/ pkg=multiargwritertest
+//testkit:stub
 type MultiArgWriter interface {
 	Set(ctx context.Context, key, body string) error
 }

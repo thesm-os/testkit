@@ -7,9 +7,9 @@
 // Fields take their names from the source signature — parameters and named
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
-type {{ .CallType }} struct {
+type {{ .CallType }}{{ renderTypeParams $.TypeParams }} struct {
 {{- range .Params }}
-	{{ .Field }} {{ renderType .Type }}
+	{{ .Field }} {{ if .Variadic }}[]{{ end }}{{ renderType .Type }}
 {{- end }}
 {{- range .Returns }}
 	{{ .Field }} {{ renderType .Type }}
@@ -24,17 +24,17 @@ type {{ .CallType }} struct {
 // The embedded MethodStub supplies the machinery every method shares: call
 // recording, fault injection, latency against a virtual clock, gates,
 // call-count expectations, and strict mode.
-type {{ $m.StubType }} struct {
-	*{{ renderExpr (external "go.thesmos.sh/testkit/stub" "MethodStub") }}[{{ $m.CallType }}]
+type {{ $m.StubType }}{{ renderTypeParams $.TypeParams }} struct {
+	*{{ renderExpr (stubRef "stub.MethodStub") }}[{{ $m.CallType }}{{ $.TypeArgs }}]
 
 	fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}
 {{- if $m.HasResults }}
-	fallback *{{ $m.ReturnType }}
+	fallback *{{ $m.ReturnType }}{{ $.TypeArgs }}
 {{- end }}
 }
 {{ if $m.HasResults }}
 // {{ $m.ReturnType }} holds the fixed answer configured through Returns.
-type {{ $m.ReturnType }} struct {
+type {{ $m.ReturnType }}{{ renderTypeParams $.TypeParams }} struct {
 {{- range $m.Returns }}
 	{{ .Field }} {{ renderType .Type }}
 {{- end }}
@@ -42,46 +42,24 @@ type {{ $m.ReturnType }} struct {
 
 // Returns pins a fixed result for every call to {{ $m.Name }}. A Func
 // override and an injected fault both take precedence over it.
-func (s *{{ $m.StubType }}) Returns({{ template "stub.returnparams" $m }}) *{{ $m.StubType }} {
-	s.fallback = &{{ $m.ReturnType }}{ {{- template "stub.returnassign" $m -}} }
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Returns({{ template "stub.returnparams" $m }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
+	s.fallback = &{{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stubNamedFields $m.Returns -}} }
 	return s
 }
 {{ end }}
 // Func supplies a body for {{ $m.Name }}, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *{{ $m.StubType }}) Func(fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}) *{{ $m.StubType }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Func(fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
 	s.fn = fn
 	return s
 }
-{{ range $s := $m.Sentinels }}
-// {{ $s.Helper }} makes the next call to {{ $m.Name }} fail with
-// {{ $s.Name }}.
-//
-// One-shot: the fault fires once and then clears, which is what a test
-// asserting on this error's handling wants. Faults takes a count for the rest.
-func (s *{{ $m.StubType }}) {{ $s.Helper }}() *{{ $m.StubType }} {
-	s.Faults({{ renderExpr $s.Ref }}, 1)
-	return s
-}
-{{ end }}
-{{- if $m.Retry }}
-// RetrySchedule makes {{ $m.Name }} fail with err on every call before call
-// number {{ $m.Retry }}, which succeeds along with every call after it.
-//
-// This is the shape a caller with a retry loop is written against: a test
-// that only ever fails or only ever succeeds never exercises the loop.
-func (s *{{ $m.StubType }}) RetrySchedule(err error) *{{ $m.StubType }} {
-	s.SetFault({{ renderExpr (external "go.thesmos.sh/testkit/fault" "NewRetryFault") }}[{{ $m.CallType }}](err, {{ $m.Retry }}))
-	return s
-}
-{{ end }}
 {{- if $m.Iterator }}
 // Yields makes {{ $m.Name }} return a sequence over items.
 //
 // Building a range-over-func by hand is a closure with a break-handling
 // branch in it, and a test that gets that branch wrong reports a bug in
 // itself rather than in the subject.
-func (s *{{ $m.StubType }}) Yields(items ...{{ renderType $m.IteratorElem }}) *{{ $m.StubType }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Yields(items ...{{ renderType $m.IteratorElem }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
 	s.fn = func({{ template "stub.blankparams" $m }}) {{ template "stub.results" $m }} {
 		return func(yield func({{ template "stub.yieldparams" $m }}) bool) {
 			for _, v := range items {
@@ -100,7 +78,7 @@ func (s *{{ $m.StubType }}) Yields(items ...{{ renderType $m.IteratorElem }}) *{
 //
 // Failing partway through is the case a consumer's loop most often gets
 // wrong, and it cannot be reached by a sequence that only ever succeeds.
-func (s *{{ $m.StubType }}) YieldsError(items []{{ renderType $m.IteratorElem }}, err error) *{{ $m.StubType }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) YieldsError(items []{{ renderType $m.IteratorElem }}, err error) *{{ $m.StubType }}{{ $.TypeArgs }} {
 	s.fn = func({{ template "stub.blankparams" $m }}) {{ template "stub.results" $m }} {
 		return func(yield func({{ template "stub.yieldparams" $m }}) bool) {
 			for _, v := range items {
@@ -115,46 +93,17 @@ func (s *{{ $m.StubType }}) YieldsError(items []{{ renderType $m.IteratorElem }}
 	return s
 }
 {{ end }}
-{{- if $m.Partition }}
-// FaultForPartition makes {{ $m.Name }} fail every nth call whose
-// {{ $m.Partition }} matches key, leaving other partitions untouched.
-//
-// Partitioned failure is what proves isolation: a test asserting that one
-// tenant's outage does not reach another needs the fault to be selective.
-func (s *{{ $m.StubType }}) FaultForPartition(key {{ template "stub.partitiontype" $m }}, err error, n int) *{{ $m.StubType }} {
-	s.SetFault({{ renderExpr (external "go.thesmos.sh/testkit/fault" "And") }}[{{ $m.CallType }}](
-		{{ renderExpr (external "go.thesmos.sh/testkit/fault" "NewPredicateFault") }}[{{ $m.CallType }}](err, func(c {{ $m.CallType }}) bool {
-			return c.{{ $m.Partition }} == key
-		}),
-		{{ renderExpr (external "go.thesmos.sh/testkit/fault" "NewCountedFault") }}[{{ $m.CallType }}](err, n),
-	))
-	return s
-}
-
-// FaultForOtherPartitions inverts FaultForPartition: every nth call whose
-// {{ $m.Partition }} does not match key fails, and the named partition is
-// left healthy.
-func (s *{{ $m.StubType }}) FaultForOtherPartitions(key {{ template "stub.partitiontype" $m }}, err error, n int) *{{ $m.StubType }} {
-	s.SetFault({{ renderExpr (external "go.thesmos.sh/testkit/fault" "And") }}[{{ $m.CallType }}](
-		{{ renderExpr (external "go.thesmos.sh/testkit/fault" "NewPredicateFault") }}[{{ $m.CallType }}](err, func(c {{ $m.CallType }}) bool {
-			return c.{{ $m.Partition }} != key
-		}),
-		{{ renderExpr (external "go.thesmos.sh/testkit/fault" "NewCountedFault") }}[{{ $m.CallType }}](err, n),
-	))
-	return s
-}
-{{ end }}
 {{ end }}
 // --- {{ $stub }} ---
 
 // {{ $stub }}Option configures a [{{ $stub }}] at construction time.
-type {{ $stub }}Option func(*{{ $stub }})
+type {{ $stub }}Option{{ renderTypeParams .TypeParams }} func(*{{ $stub }}{{ .TypeArgs }})
 
 // {{ $stub }}Strict makes an unconfigured method fail the test rather than
 // return its zero value, which turns a call nobody planned for into a failure
 // at the call site instead of a puzzling zero further downstream.
-func {{ $stub }}Strict() {{ $stub }}Option {
-	return func(s *{{ $stub }}) { s.strict = true }
+func {{ $stub }}Strict{{ renderTypeParams .TypeParams }}() {{ $stub }}Option{{ .TypeArgs }} {
+	return func(s *{{ $stub }}{{ .TypeArgs }}) { s.strict = true }
 }
 
 // {{ $stub }}DelegateTo wraps a real implementation: every method forwards to
@@ -162,8 +111,8 @@ func {{ $stub }}Strict() {{ $stub }}Option {
 //
 // This is what lets one generated suite run against both the double and the
 // production type, which is the point of conformance testing.
-func {{ $stub }}DelegateTo(impl {{ renderExpr .IfaceRef }}) {{ $stub }}Option {
-	return func(s *{{ $stub }}) {
+func {{ $stub }}DelegateTo{{ renderTypeParams .TypeParams }}(impl {{ renderExpr .IfaceRef }}{{ .TypeArgs }}) {{ $stub }}Option{{ .TypeArgs }} {
+	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 {{- range .Methods }}
 		s.{{ .OnField }}.Func(impl.{{ .Name }})
 {{- end }}
@@ -173,8 +122,8 @@ func {{ $stub }}DelegateTo(impl {{ renderExpr .IfaceRef }}) {{ $stub }}Option {
 // {{ $stub }}WithClock drives latency and time-windowed faults from clk
 // rather than from wall time, so a test asserting on a five-second timeout
 // does not take five seconds.
-func {{ $stub }}WithClock(clk {{ renderExpr (external "go.thesmos.sh/testkit/clock" "Clock") }}) {{ $stub }}Option {
-	return func(s *{{ $stub }}) {
+func {{ $stub }}WithClock{{ renderTypeParams .TypeParams }}(clk {{ renderExpr (stubRef "clock.Clock") }}) {{ $stub }}Option{{ .TypeArgs }} {
+	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 		for _, m := range s.all {
 			m.SetClock(clk)
 		}
@@ -183,8 +132,8 @@ func {{ $stub }}WithClock(clk {{ renderExpr (external "go.thesmos.sh/testkit/clo
 
 // {{ $stub }}WithRandSource makes probabilistic fault injection reproducible.
 // A failure nobody can replay is not a finding.
-func {{ $stub }}WithRandSource(src {{ renderExpr (external "go.thesmos.sh/testkit/rand" "Source") }}) {{ $stub }}Option {
-	return func(s *{{ $stub }}) {
+func {{ $stub }}WithRandSource{{ renderTypeParams .TypeParams }}(src {{ renderExpr (stubRef "rand.Source") }}) {{ $stub }}Option{{ .TypeArgs }} {
+	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 		for _, m := range s.all {
 			m.SetRandSource(src)
 		}
@@ -194,8 +143,8 @@ func {{ $stub }}WithRandSource(src {{ renderExpr (external "go.thesmos.sh/testki
 // {{ $stub }}BenchMode disables call recording. Dispatch still works; only
 // the accumulating call log is dropped, because its allocations are what a
 // benchmark would otherwise be measuring.
-func {{ $stub }}BenchMode() {{ $stub }}Option {
-	return func(s *{{ $stub }}) {
+func {{ $stub }}BenchMode{{ renderTypeParams .TypeParams }}() {{ $stub }}Option{{ .TypeArgs }} {
+	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 		for _, m := range s.all {
 			m.BenchMode()
 		}
@@ -205,26 +154,26 @@ func {{ $stub }}BenchMode() {{ $stub }}Option {
 // With{{ $iface }}{{ $m.Name }} sets {{ $m.Name }}'s body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func With{{ $iface }}{{ $m.Name }}(fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}) {{ $stub }}Option {
-	return func(s *{{ $stub }}) { s.{{ $m.OnField }}.Func(fn) }
+func With{{ $iface }}{{ $m.Name }}{{ renderTypeParams $.TypeParams }}(fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}) {{ $stub }}Option{{ $.TypeArgs }} {
+	return func(s *{{ $stub }}{{ $.TypeArgs }}) { s.{{ $m.OnField }}.Func(fn) }
 }
 {{ end }}
 // {{ $stub }} is a recording test double for {{ $iface }}.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
-type {{ $stub }} struct {
+type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 {{- range .Methods }}
-	{{ .OnField }} *{{ .StubType }}
+	{{ .OnField }} *{{ .StubType }}{{ $.TypeArgs }}
 {{- end }}
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
 	// double in a loop rather than in one line per method.
-	all []{{ renderExpr (external "go.thesmos.sh/testkit/stub" "Configurable") }}
+	all []{{ renderExpr (stubRef "stub.Configurable") }}
 {{- if .Ordered }}
 
-	order *{{ renderExpr (external "go.thesmos.sh/testkit/stub" "OrderTracker") }}
+	order *{{ renderExpr (stubRef "stub.OrderTracker") }}
 {{- end }}
 	strict bool
 }
@@ -235,13 +184,13 @@ type {{ $stub }} struct {
 // expectations when the test ends, so an unmet Times is reported without the
 // caller remembering to check. A nil tb skips that, which is what benchmarks
 // and non-test callers want.
-func New{{ $stub }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $stub }}Option) *{{ $stub }} {
-	s := &{{ $stub }}{
+func New{{ $stub }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (stubRef "testing.TB") }}, opts ...{{ $stub }}Option{{ .TypeArgs }}) *{{ $stub }}{{ .TypeArgs }} {
+	s := &{{ $stub }}{{ .TypeArgs }}{
 {{- range .Methods }}
-		{{ .OnField }}: &{{ .StubType }}{MethodStub: {{ renderExpr (external "go.thesmos.sh/testkit/stub" "NewMethodStub") }}[{{ .CallType }}](tb, "{{ $iface }}.{{ .Name }}")},
+		{{ .OnField }}: &{{ .StubType }}{{ $.TypeArgs }}{MethodStub: {{ renderExpr (stubRef "stub.NewMethodStub") }}[{{ .CallType }}{{ $.TypeArgs }}](tb, "{{ $iface }}.{{ .Name }}")},
 {{- end }}
 	}
-	s.all = []{{ renderExpr (external "go.thesmos.sh/testkit/stub" "Configurable") }}{
+	s.all = []{{ renderExpr (stubRef "stub.Configurable") }}{
 {{- range .Methods }}
 		s.{{ .OnField }}.MethodStub,
 {{- end }}
@@ -257,13 +206,13 @@ func New{{ $stub }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $s
 {{- if .Ordered }}
 	// Allocated after the options run: the tracker only fails the test in
 	// strict mode, so it has to be told which mode it is in.
-	s.order = {{ renderExpr (external "go.thesmos.sh/testkit/stub" "NewOrderTracker") }}(tb, s.strict)
+	s.order = {{ renderExpr (stubRef "stub.NewOrderTracker") }}(tb, s.strict)
 {{- end }}
 	if tb != nil {
 		// A fuzz target reruns its body many times over and registers a
 		// cleanup per run, so verifying there would report against the wrong
 		// iteration.
-		if _, isFuzz := tb.(*{{ renderExpr (external "testing" "F") }}); !isFuzz {
+		if _, isFuzz := tb.(*{{ renderExpr (stubRef "testing.F") }}); !isFuzz {
 			tb.Cleanup(func() {
 				for _, m := range s.all {
 					m.Verify()
@@ -277,7 +226,7 @@ func New{{ $stub }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $s
 // ResetCalls clears recorded calls, fault counters, and call-count
 // expectations. Func and Returns configuration is deliberately preserved, so
 // a test can reuse one double across phases without rebuilding it.
-func (s *{{ $stub }}) ResetCalls() {
+func (s *{{ $stub }}{{ .TypeArgs }}) ResetCalls() {
 	for _, m := range s.all {
 		m.Reset()
 	}
@@ -292,12 +241,12 @@ func (s *{{ $stub }}) ResetCalls() {
 // invokeVoid adapts the Func override to the shape [stub.Answer] consumes.
 // A method returning nothing still has an override worth dispatching to and
 // a call worth recording; the empty struct is the return tuple of no returns.
-func (s *{{ $m.StubType }}) invokeVoid({{ template "stub.paramdecls" $m }}) func() struct{} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invokeVoid({{ template "stub.paramdecls" $m }}) func() struct{} {
 	if s.fn == nil {
 		return nil
 	}
 	return func() struct{} {
-		s.fn({{ template "stub.args" $m }})
+		s.fn({{ stubArgs $m.Params }})
 		return struct{}{}
 	}
 }
@@ -306,13 +255,13 @@ func (s *{{ $m.StubType }}) invokeVoid({{ template "stub.paramdecls" $m }}) func
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *{{ $m.StubType }}) invoke({{ template "stub.paramdecls" $m }}) func() {{ $m.ReturnType }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invoke({{ template "stub.paramdecls" $m }}) func() {{ $m.ReturnType }}{{ $.TypeArgs }} {
 	if s.fn == nil {
 		return nil
 	}
-	return func() {{ $m.ReturnType }} {
-		{{ template "stub.locals" $m }} := s.fn({{ template "stub.args" $m }})
-		return {{ $m.ReturnType }}{ {{- template "stub.invokeassign" $m -}} }
+	return func() {{ $m.ReturnType }}{{ $.TypeArgs }} {
+		{{ stubLocals $m.Returns }} := s.fn({{ stubArgs $m.Params }})
+		return {{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stubLocalFields $m.Returns -}} }
 	}
 }
 {{ end }}
@@ -322,7 +271,7 @@ func (s *{{ $m.StubType }}) invoke({{ template "stub.paramdecls" $m }}) func() {
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *{{ $stub }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ template "stub.namedresults" $m }} {
+func (s *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ template "stub.namedresults" $m }} {
 {{- if $m.HasMixin "deprecated" }}
 	if tb := s.{{ $m.OnField }}.TB(); tb != nil {
 		tb.Logf("{{ $iface }}.{{ $m.Name }} is deprecated")
@@ -334,36 +283,40 @@ func (s *{{ $stub }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ temp
 {{- if $.Ordered }}
 	defer s.order.Record("{{ $m.Name }}")
 {{- end }}
-	call := {{ $m.CallType }}{ {{- template "stub.callargs" $m -}} }
+	call := {{ $m.CallType }}{{ $.TypeArgs }}{ {{- stubCallFields $m.Params -}} }
 {{- if $m.HasResults }}
-	r := {{ renderExpr (external "go.thesmos.sh/testkit/stub" "Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (external "go.thesmos.sh/testkit/stub" "Arms") }}[{{ $m.CallType }}, {{ $m.ReturnType }}]{
-		Invoke:   s.{{ $m.OnField }}.invoke({{ template "stub.args" $m }}),
+	r := {{ renderExpr (stubRef "stub.Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (stubRef "stub.Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, {{ $m.ReturnType }}{{ $.TypeArgs }}]{
+		Invoke:   s.{{ $m.OnField }}.invoke({{ stubArgs $m.Params }}),
 		Fallback: s.{{ $m.OnField }}.fallback,
 {{- with $err := $m.ErrReturn }}
-		Fault:    func(err error) {{ $m.ReturnType }} { return {{ $m.ReturnType }}{ {{- $err.Field }}: err} },
+		Fault:    func(err error) {{ $m.ReturnType }}{{ $.TypeArgs }} { return {{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- $err.Field }}: err} },
 {{- end }}
-		Stamp: func(c *{{ $m.CallType }}, r {{ $m.ReturnType }}) {
+		Stamp: func(c *{{ $m.CallType }}{{ $.TypeArgs }}, r {{ $m.ReturnType }}{{ $.TypeArgs }}) {
 {{- range $m.Returns }}
 			c.{{ .Field }} = r.{{ .Field }}
 {{- end }}
 		},
 	})
-	return {{ template "stub.answerreturn" $m }}
+	return {{ stubReads $m.Returns }}
 {{- else }}
-	{{ renderExpr (external "go.thesmos.sh/testkit/stub" "Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (external "go.thesmos.sh/testkit/stub" "Arms") }}[{{ $m.CallType }}, struct{}]{
-		Invoke: s.{{ $m.OnField }}.invokeVoid({{ template "stub.args" $m }}),
+	{{ renderExpr (stubRef "stub.Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (stubRef "stub.Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, struct{}]{
+		Invoke: s.{{ $m.OnField }}.invokeVoid({{ stubArgs $m.Params }}),
 	})
 {{- end }}
 }
 {{ end }}
 {{- end -}}
 
-{{- /* The partition key's type is whichever recorded-call field it names, so
-       a caller passes the same type the method takes. */ -}}
+{{- /* Only the lists that spell a type live here. Everything else — argument
+       lists, field assignments, capture locals — is a Go helper in
+       internal/gotmpl, because renderType is the one thing a plain function
+       cannot do: it registers the rendered file's imports and elides the
+       same-package qualifier. */ -}}
+
 {{- /* A sequence helper ignores the call's arguments — it answers the same way
        however it was called — so the generated closure blanks them. */ -}}
 {{- define "stub.blankparams" -}}
-{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p.Type }}{{ end }}
+{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ if $p.Variadic }}...{{ end }}{{ renderType $p.Type }}{{ end }}
 {{- end -}}
 
 {{- define "stub.yieldparams" -}}
@@ -374,61 +327,12 @@ func (s *{{ $stub }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ temp
 v{{ if .IteratorSecond }}, {{ if .IteratorYieldsError }}nil{{ else }}v{{ end }}{{ end }}
 {{- end -}}
 
-{{- define "stub.partitiontype" -}}
-{{- $field := .Partition -}}
-{{- range .Params }}{{ if eq .Field $field }}{{ renderType .Type }}{{ end }}{{ end }}
-{{- end -}}
-
 {{- define "stub.paramtypes" -}}
-{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ renderType $p.Type }}{{ end }}
+{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ if $p.Variadic }}...{{ end }}{{ renderType $p.Type }}{{ end }}
 {{- end -}}
 
 {{- define "stub.paramdecls" -}}
-{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ $p.Name }} {{ renderType $p.Type }}{{ end }}
-{{- end -}}
-
-{{- define "stub.args" -}}
-{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ $p.Name }}{{ end }}
-{{- end -}}
-
-{{- define "stub.callargs" -}}
-{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ $p.Field }}: {{ $p.Name }}{{ end }}
-{{- end -}}
-
-{{- define "stub.invokeassign" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ $r.Field }}: {{ $r.Local }}{{ end }}
-{{- end -}}
-
-{{- define "stub.answerreturn" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}r.{{ $r.Field }}{{ end }}
-{{- end -}}
-
-{{- define "stub.locals" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ $r.Local }}{{ end }}
-{{- end -}}
-
-{{- /* Named results are already declared by the signature and already zero,
-       so declaring them again would not compile. Anonymous ones need a
-       binding before they can be returned. */ -}}
-{{- define "stub.zerodecls" -}}
-{{- if not .NamedReturns }}
-{{- range .Returns }}
-	var {{ .Local }} {{ renderType .Type }}
-{{- end }}
-{{- end }}
-{{- end -}}
-
-{{- /* The fault arm returns faultErr in the error slot, so declaring a local
-       for it would leave that local unused. Every other slot still needs a
-       zero to return alongside it. */ -}}
-{{- define "stub.faultzeros" -}}
-{{- if not .NamedReturns }}
-{{- range .Returns }}
-{{- if not .Error }}
-	var {{ .Local }} {{ renderType .Type }}
-{{- end }}
-{{- end }}
-{{- end }}
+{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ $p.Name }} {{ if $p.Variadic }}...{{ end }}{{ renderType $p.Type }}{{ end }}
 {{- end -}}
 
 {{- define "stub.results" -}}
@@ -450,16 +354,4 @@ v{{ if .IteratorSecond }}, {{ if .IteratorYieldsError }}nil{{ else }}v{{ end }}{
        after the internal capture locals. */ -}}
 {{- define "stub.returnparams" -}}
 {{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ camel $r.Field }} {{ renderType $r.Type }}{{ end }}
-{{- end -}}
-
-{{- define "stub.returnassign" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ $r.Field }}: {{ camel $r.Field }}{{ end }}
-{{- end -}}
-
-{{- define "stub.faultreturn" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}faultErr{{ else }}{{ $r.Local }}{{ end }}{{ end }}
-{{- end -}}
-
-{{- define "stub.fallbackreturn" -}}
-{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}f.{{ $r.Field }}{{ end }}
 {{- end -}}

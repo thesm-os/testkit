@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out castest/ pkg=castest
+//testkit:stub
 type Contract interface {
 	// Put is the cas contract's writer role, and hosts the directive
 	// that names its partners.

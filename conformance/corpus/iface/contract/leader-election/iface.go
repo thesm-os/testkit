@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out leaderelectiontest/ pkg=leaderelectiontest
+//testkit:stub
 type Contract interface {
 	// Campaign is the leader-election contract's campaign role, and hosts the directive
 	// that names its partners.

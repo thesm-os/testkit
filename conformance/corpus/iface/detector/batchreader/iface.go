@@ -18,6 +18,9 @@ import (
 type Value struct{ Key, Body string }
 
 // BatchReader is the fixture interface.
+//
+//testkit:out batchreadertest/ pkg=batchreadertest
+//testkit:stub
 type BatchReader interface {
 	GetAll(ctx context.Context, keys ...string) ([]Value, error)
 }

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out batchwritertest/ pkg=batchwritertest
+//testkit:stub
 type Contract interface {
 	// Put is the batch-writer contract's writer role, and hosts the directive
 	// that names its partners.

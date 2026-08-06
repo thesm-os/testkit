@@ -15,6 +15,9 @@ import (
 // Store is generic over key and value. A generator that drops the type
 // parameters produces code that does not compile, which is the failure this
 // fixture exists to catch.
+//
+//testkit:out generictest/ pkg=generictest
+//testkit:stub
 type Store[K comparable, V any] interface {
 	Get(ctx context.Context, key K) (V, error)
 	Put(ctx context.Context, key K, value V) error

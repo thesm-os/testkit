@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out pooltest/ pkg=pooltest
+//testkit:stub
 type Contract interface {
 	// Get is the pool contract's get role, and hosts the directive
 	// that names its partners.

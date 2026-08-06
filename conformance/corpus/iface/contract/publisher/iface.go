@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out publishertest/ pkg=publishertest
+//testkit:stub
 type Contract interface {
 	// Publish is the publisher contract's publish role, and hosts the directive
 	// that names its partners.

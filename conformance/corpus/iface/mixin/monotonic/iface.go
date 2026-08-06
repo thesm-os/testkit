@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out monotonictest/ pkg=monotonictest
+//testkit:stub
 type Mixed interface {
 	// Version must not decrease across calls. A single read cannot violate
 	// that, so the law is over a sequence and Advance is what moves it.

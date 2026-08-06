@@ -23,11 +23,17 @@ type Value struct{ Key, Body string }
 // Source is the stream Ingest consumes. It has to be an interface: the
 // detector tests whether the parameter is one, and an iter.Seq is a func type
 // however stream-like it reads.
+//
+//testkit:out streamconsumertest/ pkg=streamconsumertest
+//testkit:stub
 type Source interface {
 	Next(ctx context.Context) (Value, bool, error)
 }
 
 // StreamConsumer is the fixture interface.
+//
+//testkit:out streamconsumertest/ pkg=streamconsumertest
+//testkit:stub
 type StreamConsumer interface {
 	// Ingest takes one non-context parameter and returns one value plus an
 	// error. Both counts are load-bearing: a second parameter or a second

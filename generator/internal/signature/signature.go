@@ -47,6 +47,15 @@ type Param struct {
 
 	// Field is the exported field name a recorded-call struct uses.
 	Field string
+
+	// Variadic reports whether the source declared this parameter `...T`.
+	//
+	// Type stays the element type, because that is what the generated
+	// signature spells after the ellipsis. What changes is everything around
+	// it: the recorded-call field holds a slice, the generated method forwards
+	// with `name...`, and a double that dropped the marker would take one
+	// value where the interface takes many and no longer satisfy it.
+	Variadic bool
 }
 
 // Return is one rendered return slot.
@@ -158,9 +167,10 @@ func ParamsOf(m *node.Method) []Param {
 			name = "arg" + strconv.Itoa(i)
 		}
 		out = append(out, Param{
-			Name:  name,
-			Type:  golang.FromNode(p.Type),
-			Field: naming.Pascal(name),
+			Name:     name,
+			Type:     golang.FromNode(p.Type),
+			Field:    naming.Pascal(name),
+			Variadic: p.Variadic,
 		})
 	}
 	return out

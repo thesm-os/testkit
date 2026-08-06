@@ -11,6 +11,9 @@
 package pure
 
 // Pure is the fixture interface.
+//
+//testkit:out puretest/ pkg=puretest
+//testkit:stub
 type Pure interface {
 	Describe() string
 }

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out cursortest/ pkg=cursortest
+//testkit:stub
 type Contract interface {
 	// Next is the cursor contract's next role, and hosts the directive
 	// that names its partners.

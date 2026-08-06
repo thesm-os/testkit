@@ -16,6 +16,9 @@ import "context"
 type Value struct{ Key, Body string }
 
 // PointerReader is the fixture interface.
+//
+//testkit:out pointerreadertest/ pkg=pointerreadertest
+//testkit:stub
 type PointerReader interface {
 	// Find returns exactly one value, and that value is the pointer. Adding an
 	// error return takes the method out of this shape entirely — it becomes an

@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out outboxtest/ pkg=outboxtest
+//testkit:stub
 type Contract interface {
 	// Append is the outbox contract's append role, and hosts the directive
 	// that names its partners.

@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out sideeffecttest/ pkg=sideeffecttest
+//testkit:stub
 type Mixed interface {
 	// Touch returns nothing useful, so its entire effect is out of band. That
 	// is what the mixin declares, and Observed is what makes it visible.

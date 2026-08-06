@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out cachetest/ pkg=cachetest
+//testkit:stub
 type Contract interface {
 	// Lookup is the cache contract's cache role, and hosts the directive
 	// that names its partners.

@@ -11,6 +11,9 @@
 package predicate
 
 // Predicate is the fixture interface.
+//
+//testkit:out predicatetest/ pkg=predicatetest
+//testkit:stub
 type Predicate interface {
 	IsEmpty() bool
 }

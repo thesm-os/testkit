@@ -19,6 +19,11 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+// No //testkit:stub. Every method here is integration-only, so a double would
+// carry none of them — it would satisfy nothing and record nothing. The stub
+// generator reports exactly that, and the fixture exists to hold the mixin
+// rather than to produce a double.
 type Mixed interface {
 	// Connect reaches outside the process. The mixin gates the generated
 	// subtest behind a build tag rather than asserting anything at runtime.

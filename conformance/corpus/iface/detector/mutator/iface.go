@@ -15,6 +15,9 @@ import (
 )
 
 // Mutator is the fixture interface.
+//
+//testkit:out mutatortest/ pkg=mutatortest
+//testkit:stub
 type Mutator interface {
 	Touch(ctx context.Context, key string)
 }

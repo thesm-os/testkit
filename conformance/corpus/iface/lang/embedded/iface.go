@@ -13,11 +13,17 @@ import (
 )
 
 // Base is embedded into [Composed].
+//
+//testkit:out embeddedtest/ pkg=embeddedtest
+//testkit:stub
 type Base interface {
 	Ping(ctx context.Context) error
 }
 
 // Closer is embedded into [Composed] alongside [Base].
+//
+//testkit:out embeddedtest/ pkg=embeddedtest
+//testkit:stub
 type Closer interface {
 	Close(ctx context.Context) error
 }
@@ -25,6 +31,9 @@ type Closer interface {
 // Composed embeds two interfaces and adds one method. A generator that reads
 // only the declared methods emits an incomplete stub, which fails the
 // compile-time interface check.
+//
+//testkit:out embeddedtest/ pkg=embeddedtest
+//testkit:stub
 type Composed interface {
 	Base
 	Closer

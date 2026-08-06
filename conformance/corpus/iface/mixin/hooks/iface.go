@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out hookstest/ pkg=hookstest
+//testkit:stub
 type Mixed interface {
 	// Fire invokes whatever OnEvent registered. Without a registration
 	// method there is no way to observe that it did.

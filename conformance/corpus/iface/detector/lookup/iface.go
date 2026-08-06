@@ -17,6 +17,9 @@ type Value struct{ Key, Body string }
 type Meta struct{ Revision int }
 
 // Lookup is the fixture interface.
+//
+//testkit:out lookuptest/ pkg=lookuptest
+//testkit:stub
 type Lookup interface {
 	Inspect(key string) (Value, Meta, bool)
 }

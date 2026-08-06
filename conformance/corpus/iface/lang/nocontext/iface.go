@@ -18,6 +18,9 @@ var ErrDivideByZero = errors.New("nocontext: divide by zero")
 // Calculator takes no context anywhere. Shapes are defined with the leading
 // context optional, so the same detectors must fire here as on the
 // context-carrying forms.
+//
+//testkit:out nocontexttest/ pkg=nocontexttest
+//testkit:stub
 type Calculator interface {
 	Add(a, b int) int
 	Divide(a, b int) (int, error)

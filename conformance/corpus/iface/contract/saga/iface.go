@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out sagatest/ pkg=sagatest
+//testkit:stub
 type Contract interface {
 	// Step is the saga contract's step role, and hosts the directive
 	// that names its partners.

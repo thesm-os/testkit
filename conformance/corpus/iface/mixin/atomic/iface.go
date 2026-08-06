@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out atomictest/ pkg=atomictest
+//testkit:stub
 type Mixed interface {
 	// Write applies both fields or neither. Observing one without the other
 	// is the violation, which is why Read has to return them together.

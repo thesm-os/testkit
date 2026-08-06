@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: MIT
 
 // Package fault owns testkit's `//testkit:fault` directive: which errors a
-// method can be made to fail with, and how.
+// method can be made to fail with, and how. It both stamps the directive and
+// renders the surface that configuration implies.
 //
-// # Why an annotator rather than part of the stub generator
+// # Why its own plugin rather than part of the stub generator
 //
-// The configuration is not the stub's alone. The stub emits a
+// The configuration is not the stub's alone. The double gains a
 // `Fault<Name>()` helper, the suite generator writes "returns ErrNotFound for
 // a miss" as a subtest, and the model tier needs the partition field to state
 // an isolation law. A directive can only be declared once — eidos's registry
@@ -17,6 +18,21 @@
 // than re-read by each generator. Three copies of "strip the `Err` prefix,
 // watch for helper-name collisions" would be three chances to disagree, and
 // the disagreement would surface as generated code that does not compile.
+//
+// # How the rendered surface reaches the double
+//
+// Not by the stub generator rendering it. This plugin declares the same output
+// suffixes the stub generator declares, which is what makes Layout resolve
+// both contributions to one file — a contributor's Target comes from its own
+// suffix table, so identical suffixes are the whole mechanism. The double
+// lands in that file's `top` slot and the fault surface in its `bottom` slot,
+// which is what puts the helpers after the types they hang off; see
+// [SlotName] for why the slot rather than the plugin order decides that.
+//
+// The consequence worth knowing: the fault helpers are a block at the end of
+// the file rather than lines interleaved into each method's configuration.
+// Slot ordering is per-plugin, not per-item, so there is no interleaving to
+// be had — and the block is attributed, which the interleaved version was not.
 //
 // # Relationship to shape mixins
 //
@@ -35,6 +51,8 @@ import (
 	"go.thesmos.sh/eidos/core/position"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit/generator/stub"
 )
 
 // Name is the plugin's identity within the pipeline.
@@ -86,7 +104,11 @@ var (
 	MetaPartition = meta.EnsureKey("testkit.fault.partition", meta.StringParser)
 )
 
-// Plugin is the fault annotator.
+// Plugin owns the fault directive and renders the surface it configures.
+//
+// Both roles live on one plugin because a directive may be registered only
+// once per run: a second instance declaring the same schema is rejected, so
+// the plugin that reads the stamps has to be the plugin that made them.
 type Plugin struct{}
 
 // New returns a plugin instance.
@@ -97,6 +119,28 @@ func (*Plugin) Name() string { return Name }
 
 // Version returns [Version].
 func (*Plugin) Version() string { return Version }
+
+// Priority places the plugin one bucket behind the generator it contributes
+// into, so the double is queued by the time [Plugin.Generate] looks for it.
+//
+// The annotator and generator ladders share their numbering, so this one value
+// serves both phases: 300 is the cross-cutting generator bucket and the
+// annotator refinement bucket, which is where a directive that reads nothing
+// but its own source lines belongs anyway — after shape detection, before
+// validation.
+func (*Plugin) Priority() sdk.Priority { return sdk.GeneratorCrossCutting }
+
+// Provides advertises [Capability].
+func (*Plugin) Provides() []string { return []string{Capability} }
+
+// Requires declares the dependency on the generator this one contributes into.
+//
+// Documentary rather than load-bearing, and worth saying so: an unsatisfied
+// requirement is ignored silently, the priority buckets are what order the two
+// Generate passes, and the rendered position comes from [SlotName] rather than
+// from plugin order. What it earns is a reader finding the dependency where
+// they look for it.
+func (*Plugin) Requires() []string { return []string{stub.Capability} }
 
 // Directives declares the `//testkit:fault` schema.
 //

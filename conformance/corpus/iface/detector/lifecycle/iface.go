@@ -19,6 +19,9 @@ import (
 var ErrClosed = errors.New("lifecycle: closed")
 
 // Lifecycle is the fixture interface.
+//
+//testkit:out lifecycletest/ pkg=lifecycletest
+//testkit:stub
 type Lifecycle interface {
 	Close(ctx context.Context) error
 }

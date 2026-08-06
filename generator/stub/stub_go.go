@@ -8,8 +8,9 @@ import (
 	"io/fs"
 	"text/template"
 
-	refconv "go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit/generator/internal/gotmpl"
 )
 
 // GoPrimarySuffix is the per-source-basename trailer for the primary
@@ -55,11 +56,13 @@ func GoTemplates() (fs.FS, bool) {
 	return sub, true
 }
 
-// GoFuncMap returns the shared Go-convention helpers.
+// GoFuncMap returns the shared list helpers under this plugin's prefix.
 //
-// The plugin contributes no entries of its own: everything the
-// templates need is either canonical (`renderType`, `renderExpr`,
-// `external`) or comes from the shared bundle, which is the point of
-// having a per-language package rather than each plugin restating
-// the same conversions.
-func GoFuncMap() template.FuncMap { return refconv.FuncMap() }
+// Prefixed because the backend rejects two plugins registering the same
+// extension name outright: a second testkit generator contributing the same
+// unprefixed bundle would fail every run rather than one output. The helpers
+// themselves are shared in Go, which is the coupling that survives a rename.
+//
+// Everything else the templates call is canonical — `renderType`,
+// `renderExpr`, `camel` — and comes from the backend.
+func GoFuncMap() template.FuncMap { return gotmpl.FuncMap(Name) }

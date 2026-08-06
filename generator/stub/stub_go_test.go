@@ -64,7 +64,20 @@ func TestGoTemplates(t *testing.T) {
 func TestGoFuncMap(t *testing.T) {
 	t.Parallel()
 
-	testkit.Assert(t, stub.GoFuncMap()).IsNotEmpty("the adapter contributes the shared Go helpers")
+	t.Run("contributes the shared list helpers", func(t *testing.T) {
+		t.Parallel()
+		testkit.Assert(t, stub.GoFuncMap()).IsNotEmpty("the adapter contributes the shared Go helpers")
+	})
+
+	t.Run("registers every entry under the plugin's own prefix", func(t *testing.T) {
+		t.Parallel()
+		// The backend fails the whole run when two plugins register one
+		// extension name, so an unprefixed entry here breaks every output the
+		// moment a second testkit generator contributes the same bundle.
+		for name := range stub.GoFuncMap() {
+			testkit.HasPrefix(t, name, stub.Name, "every funcmap entry is namespaced")
+		}
+	})
 }
 
 // hasTemplate reports whether name resolves against the adapter's embedded

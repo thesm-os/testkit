@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out timeouttest/ pkg=timeouttest
+//testkit:stub
 type Mixed interface {
 	// Slow carries the budget as a parameter, because "within a budget" is
 	// not a statement until a duration is named.

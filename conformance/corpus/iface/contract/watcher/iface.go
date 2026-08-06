@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out watchertest/ pkg=watchertest
+//testkit:stub
 type Contract interface {
 	// Watch is the watcher contract's watch role, and hosts the directive
 	// that names its partners.

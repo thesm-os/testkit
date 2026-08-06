@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out transactiontest/ pkg=transactiontest
+//testkit:stub
 type Contract interface {
 	// Run is the transaction contract's fn role, and hosts the directive
 	// that names its partners.

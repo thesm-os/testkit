@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out concurrentreaderstest/ pkg=concurrentreaderstest
+//testkit:stub
 type Mixed interface {
 	// Get is driven concurrently against Put. Reads alone cannot violate
 	// this, so the interface has to carry the writer that contends with them.

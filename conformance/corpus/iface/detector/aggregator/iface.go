@@ -15,6 +15,9 @@ import (
 )
 
 // Aggregator is the fixture interface.
+//
+//testkit:out aggregatortest/ pkg=aggregatortest
+//testkit:stub
 type Aggregator interface {
 	Count(ctx context.Context) (int, error)
 }

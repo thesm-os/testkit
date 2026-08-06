@@ -18,6 +18,9 @@ import (
 var ErrPoisoned = errors.New("poisonaccessor: poisoned")
 
 // PoisonAccessor is the fixture interface.
+//
+//testkit:out poisonaccessortest/ pkg=poisonaccessortest
+//testkit:stub
 type PoisonAccessor interface {
 	Err() error
 }

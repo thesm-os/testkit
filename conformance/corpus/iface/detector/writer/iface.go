@@ -18,6 +18,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Writer is the fixture interface.
+//
+//testkit:out writertest/ pkg=writertest
+//testkit:stub
 type Writer interface {
 	Put(ctx context.Context, v Value) error
 }

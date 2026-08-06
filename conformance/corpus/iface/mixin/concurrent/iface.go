@@ -19,6 +19,9 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out concurrenttest/ pkg=concurrenttest
+//testkit:stub
 type Mixed interface {
 	// Bump is driven concurrently by the generated stress. The law is the
 	// absence of a race, so the method must mutate something.

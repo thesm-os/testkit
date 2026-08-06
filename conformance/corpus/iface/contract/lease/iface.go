@@ -17,6 +17,9 @@ import (
 type Value struct{ Key, Body string }
 
 // Contract is the fixture interface.
+//
+//testkit:out leasetest/ pkg=leasetest
+//testkit:stub
 type Contract interface {
 	// Acquire is the lease contract's acquire role, and hosts the directive
 	// that names its partners.
