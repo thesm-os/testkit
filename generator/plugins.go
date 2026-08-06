@@ -15,6 +15,7 @@ import (
 	"go.thesmos.sh/testkit/generator/builder"
 	"go.thesmos.sh/testkit/generator/internal/defaults"
 	"go.thesmos.sh/testkit/generator/internal/fault"
+	"go.thesmos.sh/testkit/generator/sentinel"
 	"go.thesmos.sh/testkit/generator/stub"
 )
 
@@ -59,6 +60,7 @@ func Annotators() []plugin.Annotator {
 func Generators() []plugin.Plugin {
 	return []plugin.Plugin{
 		builder.New(),
+		sentinel.New(),
 		stub.New(),
 	}
 }

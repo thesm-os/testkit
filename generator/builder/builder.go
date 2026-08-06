@@ -10,13 +10,13 @@ import (
 	"strings"
 	"text/template"
 
-	"go.thesmos.sh/eidos/core/meta"
 	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/internal/defaults"
+	"go.thesmos.sh/testkit/generator/internal/nodes"
 	"go.thesmos.sh/testkit/generator/internal/witness"
 )
 
@@ -565,7 +565,7 @@ func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
 	// an embedded value as a unit, and promoting would offer two ways to write
 	// the same thing that disagree about whether the embedded value is set.
 	for _, e := range s.Embeds {
-		name, pointer := embedName(e.Type)
+		name, pointer := nodes.EmbedName(e.Type)
 		if name == "" || !golang.IsExported(name) {
 			continue
 		}
@@ -601,26 +601,6 @@ func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
 	return out
 }
 
-// embedName returns the identifier an embedded type contributes as a field
-// name, and whether it was embedded by pointer.
-//
-// An embed by pointer carries its name on the pointee rather than on the
-// reference itself, so reading the reference's own name yields the empty string
-// and the whole field is dropped without a diagnostic — which is what it did.
-func embedName(t *node.TypeRef) (name string, pointer bool) {
-	switch {
-	case t == nil:
-		return "", false
-	case t.TypeKind == node.TypeRefPointer:
-		if t.Elem == nil {
-			return "", false
-		}
-		return t.Elem.Name, true
-	default:
-		return t.Name, false
-	}
-}
-
 // skipped reports whether the field opted out of a setter.
 func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
 	if f.Tag == "" {
@@ -639,6 +619,18 @@ func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
 	return true
 }
 
+// refsOf lifts a list of source types into their emit form.
+func refsOf(types []*node.TypeRef) []emit.Ref {
+	if len(types) == 0 {
+		return nil
+	}
+	out := make([]emit.Ref, len(types))
+	for i, t := range types {
+		out[i] = golang.FromNode(t)
+	}
+	return out
+}
+
 // classify records the shape the field's setter follows, and the values its
 // check sets it to.
 func classify(rv *resolver, field *Field, t *node.TypeRef) {
@@ -650,16 +642,16 @@ func classify(rv *resolver, field *Field, t *node.TypeRef) {
 	case t.TypeKind == node.TypeRefFunc:
 		field.Shape = Func
 		field.Returns = refsOf(t.FuncReturns)
-	case isChan(t):
+	case nodes.IsBidirectionalChan(t):
 		field.Shape = Chan
-	case isError(t):
+	case nodes.IsError(t):
 		field.Shape = Error
-	case t.TypeKind == node.TypeRefSlice && isByte(t.Elem):
+	case t.TypeKind == node.TypeRefSlice && nodes.IsByte(t.Elem):
 		field.Shape = Bytes
 	case t.TypeKind == node.TypeRefSlice:
 		field.Shape = Slice
 		field.Elem = golang.FromNode(t.Elem)
-	case t.TypeKind == node.TypeRefMap && isEmptySet(t.MapValue):
+	case t.TypeKind == node.TypeRefMap && nodes.IsEmptyStruct(t.MapValue):
 		// Ahead of the map arm: a set is a map, and the narrower reading wins.
 		// Elem stays nil — there is no value type worth carrying when every
 		// value is the same one.
@@ -677,83 +669,6 @@ func classify(rv *resolver, field *Field, t *node.TypeRef) {
 	default:
 		field.Sample, field.Alternate = rv.samples(t, field.Name, seen)
 	}
-}
-
-// isError reports whether t is the builtin error interface.
-func isError(t *node.TypeRef) bool { return t.IsBuiltin() && t.Name == "error" }
-
-// GoIsChannel and GoChanDir are the Go frontend's published facts about a
-// channel. The node model has no channel kind, so a channel arrives as a named
-// reference in a synthetic `go` package with these stamped beside it.
-//
-// Declared here rather than imported because a meta key is interned by name:
-// the same call in the frontend and in this package yields the same key, and
-// the frontend documents both names as part of its output.
-//
-//nolint:gochecknoglobals // interned keys, immutable after init.
-var (
-	GoIsChannel = meta.EnsureKey("go.isChannel", meta.BoolParser)
-	GoChanDir   = meta.EnsureKey("go.chanDir", meta.StringParser)
-)
-
-// ChanBidirectional is the direction the Go frontend stamps for a channel that
-// can be both sent to and received from.
-const ChanBidirectional = "both"
-
-// isChan reports whether t is a bidirectional channel.
-//
-// Read from the stamp rather than inferred from the shape, because the shape
-// does not carry it: every channel arrives as the same named reference and the
-// direction is stamped beside it.
-//
-// Bidirectional only, and matched positively rather than by excluding the
-// directional spellings: a check makes a channel to hand to the setter, make is
-// not legal on a directional one, and a direction this does not recognise is
-// likelier to be one make rejects than one it accepts. A channel that fails
-// this still gets its setter and falls through with no check of its own, which
-// is the trade every unwritable type takes.
-func isChan(t *node.TypeRef) bool {
-	bag := t.Meta()
-	if bag == nil {
-		return false
-	}
-	if isChannel, _ := GoIsChannel.Get(bag); !isChannel {
-		return false
-	}
-	dir, _ := GoChanDir.Get(bag)
-	return dir == ChanBidirectional
-}
-
-// refsOf lifts a list of source types into their emit form.
-func refsOf(types []*node.TypeRef) []emit.Ref {
-	if len(types) == 0 {
-		return nil
-	}
-	out := make([]emit.Ref, len(types))
-	for i, t := range types {
-		out[i] = golang.FromNode(t)
-	}
-	return out
-}
-
-// isEmptySet reports whether t is the anonymous empty struct, which is what
-// makes a map to it a set rather than a mapping.
-//
-// Both emptiness tests, because an anonymous struct may carry embedded types as
-// well as declared fields, and one holding either is a value the caller has
-// something to say about.
-func isEmptySet(t *node.TypeRef) bool {
-	return t != nil && t.IsAnonStruct() && len(t.Fields) == 0 && len(t.Embeds) == 0
-}
-
-// isByte reports whether t is the builtin byte, which is what makes a slice of
-// it owe a string-accepting setter rather than a variadic one.
-//
-// Both spellings, because the frontend records whichever the author wrote.
-//
-//nolint:goconst // a type name is its own clearest form; see [samplesFor].
-func isByte(t *node.TypeRef) bool {
-	return t != nil && t.Package == "" && (t.Name == "byte" || t.Name == "uint8")
 }
 
 // typeParamsOf lifts the struct's type-parameter list into the emit form

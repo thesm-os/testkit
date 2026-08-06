@@ -69,6 +69,8 @@ var packages = map[string]string{
 	"rand":    Module + "/rand",
 	"stub":    Module + "/stub",
 	"errors":  "errors",
+	"fmt":     "fmt",
+	"strings": "strings",
 	"testing": "testing",
 	"time":    "time",
 }

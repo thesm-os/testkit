@@ -4,12 +4,12 @@
 package builder
 
 import (
-	"strings"
-
 	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/store"
+
+	"go.thesmos.sh/testkit/generator/internal/samples"
 )
 
 // Sample is one value a generated check sets a field to.
@@ -36,47 +36,6 @@ func (s Sample) OK() bool { return s.Text != "" }
 
 // literal returns a sample that needs no type beside it.
 func literal(text string) Sample { return Sample{Text: text} }
-
-// samplesFor returns two distinct values of the named Go builtin as source
-// text, or two empty strings when the type admits none.
-//
-// Two values rather than one, because a check comparing a field against a
-// single value passes whenever the constructor already seeded that value — and
-// the seed is not always knowable here, since a companion's return is opaque to
-// this generator. Whatever it seeded equals at most one of a pair, so a setter
-// that assigns nothing fails against the other.
-//
-// The string form carries the field's own name so a value in a failure message
-// says which setter produced it.
-//
-// The arms spell Go's own type names, which several unrelated tables in this
-// module also spell — witness's palette, the double's no-import set. They answer
-// different questions about one domain rather than sharing an answer, so
-// hoisting the names to constants would put an identifier between each table and
-// the thing it is about, and is suppressed instead.
-//
-//nolint:goconst // see above.
-func samplesFor(typeName, fieldName string) (sample, alternate string) {
-	switch typeName {
-	case "string":
-		lower := strings.ToLower(fieldName)
-		return `"test-` + lower + `"`, `"other-` + lower + `"`
-	case "int", "int8", "int16", "int32", "int64",
-		"uint", "uint8", "uint16", "uint32", "uint64", "uintptr",
-		"byte", "rune":
-		return "42", "7"
-	case "float32", "float64":
-		return "3.14", "2.72"
-	case "complex64", "complex128":
-		return "1 + 2i", "3 + 4i"
-	case "bool":
-		// The only type whose pair exhausts its values, which is what makes the
-		// bool check the strictest of them: a setter assigning nothing fails
-		// against one arm no matter what the constructor seeded.
-		return "true", "false"
-	}
-	return "", ""
-}
 
 // resolver answers what a named type is, over the packages the run loaded.
 //
@@ -134,12 +93,12 @@ func (rv *resolver) samples(t *node.TypeRef, fieldName string, seen map[string]b
 		// `any` admits every value, so the string pair serves. The conversion
 		// keeps both sides of the comparison the same type, which is what lets
 		// the check's type parameter be inferred.
-		s, a := samplesFor("string", fieldName)
+		s, a := samples.For("string", fieldName)
 		ref := emit.Builtin("any")
 		return Sample{Ref: ref, Text: s}, Sample{Ref: ref, Text: a}
 
 	case t.IsBuiltin():
-		s, a := samplesFor(t.Name, fieldName)
+		s, a := samples.For(t.Name, fieldName)
 		return literal(s), literal(a)
 
 	case t.TypeKind == node.TypeRefNamed:
@@ -223,7 +182,7 @@ func samplesOfRef(r emit.Ref, fieldName string) (sample, alternate Sample) {
 	if !ok {
 		return Sample{}, Sample{}
 	}
-	s, a := samplesFor(b.Name, fieldName)
+	s, a := samples.For(b.Name, fieldName)
 	return literal(s), literal(a)
 }
 

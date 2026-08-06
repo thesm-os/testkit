@@ -19,6 +19,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/builder"
 	"go.thesmos.sh/testkit/generator/internal/defaults"
+	"go.thesmos.sh/testkit/generator/internal/nodes"
 )
 
 // The framework conformance suites pin the static contract — stable Name,
@@ -237,14 +238,14 @@ func directionalChanPackage() *node.Package {
 // facts that make it a channel stamped beside it rather than in its shape.
 func chanRef(dir string) *node.TypeRef {
 	ref := storefixture.WithArgs(storefixture.PkgNamed("go", "chan"), storefixture.Named("string"))
-	builder.GoIsChannel.Set(ref.EnsureMeta(), true, "golang")
-	builder.GoChanDir.Set(ref.EnsureMeta(), dir, "golang")
+	nodes.GoIsChannel.Set(ref.EnsureMeta(), true, "golang")
+	nodes.GoChanDir.Set(ref.EnsureMeta(), dir, "golang")
 	return ref
 }
 
 // unwritablePackage carries the field types no literal can be written for.
 func unwritablePackage() *node.Package {
-	events := chanRef(builder.ChanBidirectional)
+	events := chanRef(nodes.ChanBidirectional)
 	return storefixture.New().
 		Package("cfg", "example.com/cfg").
 		Struct("Item", func(b *storefixture.StructBuilder) {
