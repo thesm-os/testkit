@@ -5,79 +5,73 @@ on:
   push:
     branches: [main]
 
+# Superseded pushes to the same ref stop burning runners. Five jobs per
+# run makes this worth more here than the single-job default.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
-env:
-  # CI runners are slower than dev laptops; per-package go test deadline
-  # is aligned with the GitHub job-level timeout at 30 minutes.
-  TEST_TIMEOUT: 30m
-
 jobs:
-  vet-build:
+  build:
     name: Vet + Build
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - run: make vet
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+      - run: make lint-vet
       - run: make build
 
   tidy:
     name: Modules tidy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+      - run: make check-tidy
+
+  test:
+    name: Test (race ×3)
+    runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - run: make check-tidy
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+      # Iteration count and per-package deadline come from .ergon.yaml's
+      # `test` section (race_count: 3, timeout: 10m). ergon reads no
+      # environment variables, so overriding here would be silently inert.
+      - run: make test-race
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
         with:
-          go-version-file: go.mod
-      - uses: actions/cache@v5
-        with:
-          path: |
-            ~/go/bin
-            ~/.npm
-          key: go-tools-${{ hashFiles('Makefile') }}
-      - run: make bootstrap
+          bootstrap: 'true'
+      # The umbrella: vet, golangci-lint, markdownlint, license headers,
+      # skip-expiry, error-prefix, govulncheck.
       - run: make lint
 
-  test:
-    name: Test (race + 10x)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - run: make test-race
-
   coverage:
-    name: Coverage
+    name: Coverage + branch
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
         with:
-          go-version-file: go.mod
-      - uses: actions/cache@v5
-        with:
-          path: ~/go/bin
-          key: go-tools-${{ hashFiles('Makefile') }}
-      - run: make bootstrap
+          bootstrap: 'true'
       - run: make check-coverage
+      # gobco. Measured at 21s on this tree — cheap enough to gate every
+      # PR, and `ergon check` appends the branch stage at tag time anyway
+      # (every coverage layer sets require_branch), so leaving it off PR
+      # CI only defers the failure to the release. Shares this job with
+      # check-coverage because a second bootstrap costs 4x the gate.
+      - run: make check-branch

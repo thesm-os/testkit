@@ -1,5 +1,9 @@
 name: Nightly Vulnerability Scan
 
+# `make lint` already runs this gate on every PR. The nightly exists for
+# the case no PR covers: a CVE published against a dependency the tree
+# has not touched in weeks.
+
 on:
   schedule:
     - cron: "0 5 * * *"
@@ -12,11 +16,12 @@ jobs:
   govulncheck:
     name: govulncheck
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+      # `ergon lint vuln` shells out to govulncheck and nothing else, so
+      # this installs the one binary rather than paying for the full
+      # bootstrap tool chain on a scheduled run.
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
-      - run: make check-vuln
+      - run: make lint-vuln

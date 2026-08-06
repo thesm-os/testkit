@@ -1,0 +1,59 @@
+name: Setup ergon
+description: Install the Go toolchain and the pinned ergon binary; put GOBIN on PATH.
+
+# Every Makefile target in this repository is a one-line shell-out to
+# `ergon`, so no workflow can run `make` without this action first.
+#
+# DEPENDABOT BLIND SPOT — both pins below are manual.
+#
+#   1. `inputs.version` (ergon). Neither ecosystem sees it: `gomod`
+#      because ergon has no go.mod entry (testkit is a library, its
+#      module graph is consumer-visible and must not carry a task
+#      runner), `github-actions` because it only parses `uses:` refs.
+#   2. `actions/setup-go` below. Dependabot does not bump actions
+#      referenced from inside a composite action — dependabot-core#6704,
+#      still open. Moving the step out to each caller would restore
+#      automated bumps at a cost of ~27 lines across 9 jobs; that
+#      trade was considered and declined.
+#
+# Both are therefore release-checklist items, not background upkeep.
+#
+# Pinning ergon at all is deliberate: it owns .ergon.yaml's schema, and
+# an unknown stage name is a hard usage error, so a minor bump that
+# renames a stage breaks every gate at once. The eight tools `bootstrap`
+# installs are leaf tools and float at @latest by design.
+
+inputs:
+  version:
+    description: ergon version to install (semver tag, or `latest`).
+    required: false
+    default: v1.10.1
+  bootstrap:
+    description: >-
+      Also run `ergon bootstrap`, installing the external tool chain ergon
+      shells out to (golangci-lint, gofumpt, gci, go-license, govulncheck,
+      gremlins, gobco, markdownlint). Costs ~60-90s; only the lint,
+      coverage and release-gate jobs need it.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v7
+      with:
+        go-version-file: go.mod
+
+    - name: Install ergon
+      shell: bash
+      # GITHUB_PATH applies to *subsequent* steps, so the bootstrap step
+      # below — and every `make` target in the calling job — sees both
+      # ergon and whatever bootstrap installs alongside it in GOBIN.
+      run: |
+        go install "go.thesmos.sh/ergon/cmd/ergon@${{ inputs.version }}"
+        echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+    - name: Install tool chain
+      if: inputs.bootstrap == 'true'
+      shell: bash
+      run: ergon bootstrap
