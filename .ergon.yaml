@@ -213,6 +213,18 @@ checks:
     - label: unreachable-until-run-command
       func_glob: "runVersion"
       file_glob: "cmd/testkit/cmds/version.go"
+    # Behaviour is the shared per-method contract every generated double is
+    # driven through. Its failure arms fire only against a double that does
+    # not record, does not reset, or ignores an injected fault — states no
+    # fixture can reach without shipping a deliberately broken generator. The
+    # arms stay because they are the assertions; the functions are excused
+    # because reaching them means the suite is already failing.
+    - label: assertion-failure-arms
+      func_glob: "Behaviour*"
+      file_glob: "stub/behaviour.go"
+    - label: assertion-failure-arms
+      func_glob: "assertFailed"
+      file_glob: "stub/behaviour.go"
     # Annotate builds its pipeline from a plugin set fixed at compile time —
     # one frontend, one annotator, one backend. eidos's Build only fails on
     # structural faults in that set (duplicate names, wrong role counts), so
