@@ -170,13 +170,23 @@ checks:
   # Path globs both gates ignore. `reason` is human-facing so
   # reviewers can challenge new excludes on PR.
   excludes:
-    # The corpus is generator input, not library code. Its declarations exist
-    # to be read by a generator, and the coverage that matters is the generated
-    # tests exercising the generated output — which land beside each fixture
-    # once the generators do. Gating the fixtures themselves would demand
-    # hand-written tests for the very thing being generated.
-    - path: conformance/corpus/...
-      reason: generator input; covered by generated tests, not hand-written ones
+    # A corpus iface.go is generator input: it declares the shapes, signatures
+    # and directives a generator reads, and its bodies exist only because Go
+    # requires one. Nothing calls them — the generator emits a double, a
+    # builder or a sentinel, and those are what the generated checks drive.
+    #
+    # Scoped to the input files, not to the corpus. Everything the generators
+    # *emit* beside them is gated like any other code.
+    - path: conformance/corpus/**/iface.go
+      reason: generator input; bodies exist to compile, not to run
+    # gen/ is the v1 generator, its own module and deliberately absent from
+    # go.work: it is not built, not tested and pending deletion. `go list ./...`
+    # skips it because it is a different module, so the coverage gate never saw
+    # it — but gremlins walks the filesystem, mutated all 428 files, and found
+    # every mutant uncovered. That, and nothing else, is why the root layer
+    # measured 9.8% mutator coverage against 100% line coverage.
+    - path: gen/...
+      reason: v1 generator; a separate module outside go.work, pending deletion
   # Example:
   #   excludes:
   #     - path: "**/*_test.go"
@@ -282,23 +292,25 @@ checks:
     # reason. New uncovered code is therefore a regression, not a shortfall.
     packages:
       - path: ./...
-        line: 99
-        branch: 80
+        line: 100
+        branch: 89
+        require_branch: true
+      - path: cmd/...
+        line: 98
+        branch: 82
+        require_branch: true
+      - path: conformance/...
+        line: 100
+        branch: 58
+        require_branch: true
+      - path: generator/...
+        line: 96
+        branch: 84
         require_branch: true
       - path: engine/...
         line: 100
-        # Branch coverage is not gated here because it cannot be measured.
-        # gobco instruments by copying the module to a temp directory, which
-        # loses the go.work context and breaks `engine`'s relative replace of
-        # the runtime module, so every engine package is skipped and the layer
-        # reports 0/0 conditions. Gating on that would be a vacuous pass.
-        #
-        # Verified fix: an absolute replace target survives the copy and gobco
-        # measures normally. Absolute paths are not portable, so the durable
-        # fix belongs in ergon — absolutise relative replaces before invoking
-        # gobco. Re-enable this once that lands.
-        branch: 0
-        require_branch: false
+        branch: 94
+        require_branch: true
     # Example:
     #   packages:
     #     - path: internal/...
@@ -323,8 +335,47 @@ checks:
   #            reached at all. Catches "tests don't reach the
   #            mutateable code".
   mutation:
-    # Per-layer thresholds. An empty list short-circuits the check.
-    packages: []
+    # Per-layer thresholds. An empty list short-circuits the check — which is
+    # what this was: declared with no thresholds, so `ergon check mutation`
+    # reported success over zero work for as long as it has existed.
+    packages:
+      # Thresholds are the measured baseline, as everywhere else here.
+      #
+      # `score` is what the suite catches of what it reaches; `coverage` is how
+      # much it reaches at all. The second is the one that catches "the tests
+      # never go near this", which a line percentage cannot: a statement runs
+      # and is counted whether or not anything asserts on what it did.
+      #
+      # The whole set costs ~85s, almost all of it the root layer.
+      - path: ./...
+        # This layer's numbers are not about this module. `path` does not scope
+        # a mutation run, so `./...` re-mutates cmd, conformance, generator and
+        # engine and counts every one of their mutants as uncovered: those four
+        # layers total 1563 mutants, and this layer reports 1551 not covered.
+        # Filed against ergon; see its
+        # docs/superpowers/2026-08-06-mutation-path-does-not-scope-to-a-module.
+        #
+        # Gated at the measurement so the layer cannot silently get worse. The
+        # 22% is an artifact of the miscount, NOT a statement that this module's
+        # tests reach a fifth of it — the same layer's line coverage is 100%.
+        # Raise both once the scoping is fixed.
+        score: 76
+        coverage: 22
+      - path: cmd/...
+        score: 100
+        coverage: 80
+      - path: conformance/...
+        # The corpus is generated code, and this is the gate that matters most
+        # for it: a generated check that runs a setter without asserting on it
+        # scores 100% on lines and lets every mutant live. 274 killed, 0 lived.
+        score: 100
+        coverage: 98
+      - path: generator/...
+        score: 99
+        coverage: 91
+      - path: engine/...
+        score: 99
+        coverage: 98
     # Example:
     #   packages:
     #     - path: internal/...
