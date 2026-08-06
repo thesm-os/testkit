@@ -13,6 +13,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 
 	"go.thesmos.sh/testkit/generator/builder"
+	"go.thesmos.sh/testkit/generator/enum"
 	"go.thesmos.sh/testkit/generator/internal/defaults"
 	"go.thesmos.sh/testkit/generator/internal/fault"
 	"go.thesmos.sh/testkit/generator/sentinel"
@@ -60,6 +61,7 @@ func Annotators() []plugin.Annotator {
 func Generators() []plugin.Plugin {
 	return []plugin.Plugin{
 		builder.New(),
+		enum.New(),
 		sentinel.New(),
 		stub.New(),
 	}

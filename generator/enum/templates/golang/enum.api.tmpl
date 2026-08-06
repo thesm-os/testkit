@@ -1,0 +1,95 @@
+{{- define "enum.api" -}}
+{{- $errors := enumRef "errors.New" -}}
+{{- $sprintf := enumRef "fmt.Sprintf" -}}
+{{- $t := renderExpr .TypeRef -}}
+{{- $variants := .Variants -}}
+{{- if .Emits "String" }}
+// String returns {{ .TypeName }}'s textual form.
+//
+// A value outside the declared set renders as itself rather than as any
+// variant, so a corrupt value is visible in a log rather than passing for a
+// good one.
+func (v {{ $t }}) String() string {
+	switch v {
+{{- range $variants }}
+	case {{ renderExpr .Ref }}:
+		return {{ .Text }}
+{{- end }}
+	}
+{{- if eq $.Form "value" }}
+	return string(v)
+{{- else }}
+	return {{ renderExpr $sprintf }}("{{ $.TypeName }}(%d)", {{ $.Underlying }}(v))
+{{- end }}
+}
+{{ end }}
+{{- if .Emits "Parse" }}
+// {{ .SentinelName }} reports text that names no declared variant.
+var {{ .SentinelName }} = {{ renderExpr $errors }}("{{ .PackageName }}: unknown {{ .TypeName }} value")
+
+// {{ .ParseName }} maps text back to a {{ .TypeName }}.
+//
+// The inverse of String for every declared variant, which is what lets a value
+// survive a round trip through anything that carries it as text.
+func {{ .ParseName }}(s string) ({{ $t }}, error) {
+	switch s {
+{{- range $variants }}
+	case {{ .Text }}:
+		return {{ renderExpr .Ref }}, nil
+{{- end }}
+	}
+	var zero {{ $t }}
+	return zero, {{ .SentinelName }}
+}
+{{ end }}
+{{- if .Emits "Values" }}
+// {{ .ValuesName }} returns every declared variant in declaration order.
+//
+// A fresh slice per call: a package-level one would let any caller reorder or
+// overwrite the set every other caller reads.
+func {{ .ValuesName }}() []{{ $t }} {
+	return []{{ $t }}{
+{{- range $variants }}
+		{{ renderExpr .Ref }},
+{{- end }}
+	}
+}
+{{ end }}
+{{- if .Emits "IsValid" }}
+// IsValid reports whether v is a declared variant.
+//
+// A conversion admits any value of the underlying type, so this is the only
+// thing standing between an out-of-range value and the rest of the program.
+func (v {{ $t }}) IsValid() bool {
+	switch v {
+{{- range $variants }}
+	case {{ renderExpr .Ref }}:
+		return true
+{{- end }}
+	}
+	return false
+}
+{{ end }}
+{{- if .Emits "MarshalText" }}
+// MarshalText implements [encoding.TextMarshaler].
+//
+// Text rather than JSON: encoding/json reaches for TextMarshaler on its own,
+// and so does YAML — and it is what makes {{ .TypeName }} legal as a map key,
+// which a JSON marshaller alone does not.
+func (v {{ $t }}) MarshalText() ([]byte, error) {
+	return []byte(v.String()), nil
+}
+{{ end }}
+{{- if .Emits "UnmarshalText" }}
+// UnmarshalText implements [encoding.TextUnmarshaler], refusing text that
+// names no declared variant rather than admitting it as an unnamed value.
+func (v *{{ $t }}) UnmarshalText(text []byte) error {
+	parsed, err := {{ .ParseName }}(string(text))
+	if err != nil {
+		return err
+	}
+	*v = parsed
+	return nil
+}
+{{ end }}
+{{- end -}}

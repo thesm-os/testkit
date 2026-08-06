@@ -78,6 +78,15 @@ func TestIsBidirectionalChan(t *testing.T) {
 			"an unrecognised direction is declined")
 	})
 
+	t.Run("declines a reference stamped as not a channel", func(t *testing.T) {
+		t.Parallel()
+		// The key may be present and false — a frontend that stamps every
+		// reference would say so rather than omit it.
+		ref := storefixture.Named("string")
+		nodes.GoIsChannel.Set(ref.EnsureMeta(), false, "golang")
+		testkit.False(t, nodes.IsBidirectionalChan(ref), "an explicit false is declined")
+	})
+
 	t.Run("declines a reference carrying no stamp", func(t *testing.T) {
 		t.Parallel()
 		testkit.False(t, nodes.IsBidirectionalChan(storefixture.Named("string")),

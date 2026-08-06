@@ -161,6 +161,30 @@ func TestResolve(t *testing.T) {
 		testkit.Equal(t, defaults.Package(fieldOf(t, s).Meta()), "", "a literal needs no import")
 	})
 
+	t.Run("reads nothing from an absent bag", func(t *testing.T) {
+		t.Parallel()
+		// Meta is allocated on first write, so a node nothing stamped has no
+		// bag at all — and both accessors are called on every field.
+		testkit.Equal(t, defaults.Of(nil), "", "an unstamped field declares no default")
+		testkit.Equal(t, defaults.Package(nil), "", "and names no package")
+	})
+
+	t.Run("passes a negative number through untouched", func(t *testing.T) {
+		t.Parallel()
+		// A leading minus is arithmetic, not a package qualifier.
+		pkg, sym := resolve(t, "-1")
+		testkit.Equal(t, pkg, "", "a negative number names no package")
+		testkit.Equal(t, sym, "-1", "the number travels verbatim")
+	})
+
+	t.Run("passes a raw-quoted literal through untouched", func(t *testing.T) {
+		t.Parallel()
+		// A backquoted string may hold dots and is still a literal.
+		pkg, sym := resolve(t, "`a.b.c`")
+		testkit.Equal(t, pkg, "", "a raw literal names no package")
+		testkit.Equal(t, sym, "`a.b.c`", "the literal travels verbatim")
+	})
+
 	t.Run("reports a qualifier naming no import", func(t *testing.T) {
 		t.Parallel()
 		// Resolving it to something plausible would emit a reference the file

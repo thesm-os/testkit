@@ -98,6 +98,29 @@ func TestPrefix(t *testing.T) {
 func TestSentinelChecks(t *testing.T) {
 	t.Parallel()
 
+	t.Run("ignores a variable outside the naming convention", func(t *testing.T) {
+		t.Parallel()
+		// The Err prefix is what opts a variable in. One named otherwise is
+		// not a sentinel, and treating it as one would assert a message
+		// contract over something that never claimed to have it.
+		b := bare("")
+		b.Variable("Timeout", func(v *storefixture.VariableBuilder) {
+			v.Pos(position.At("cfg/errors.go", 1, 1))
+		})
+		rendered(t, b).NotContains(`"Timeout"`)
+	})
+
+	t.Run("ignores an unexported error variable", func(t *testing.T) {
+		t.Parallel()
+		// A consumer cannot name it, so a check in their external test package
+		// would not compile.
+		b := bare("")
+		b.Variable("errInternal", func(v *storefixture.VariableBuilder) {
+			v.Pos(position.At("cfg/errors.go", 1, 1))
+		})
+		rendered(t, b).NotContains("errInternal")
+	})
+
 	t.Run("lists every sentinel it found", func(t *testing.T) {
 		t.Parallel()
 		// A sentinel named outside the convention is not found, so the list is
@@ -198,6 +221,33 @@ func TestErrorTypes(t *testing.T) {
 	t.Run("writes a value into every string field it checks", func(t *testing.T) {
 		t.Parallel()
 		rendered(t, rich()).Contains(`Key: "test-key"`)
+	})
+
+	t.Run("ignores an unexported type declaring Error", func(t *testing.T) {
+		t.Parallel()
+		// Same reason as an unexported sentinel: the checks live outside the
+		// package and cannot name it.
+		b := rich()
+		b.Struct("hiddenError", func(st *storefixture.StructBuilder) {
+			st.Pos(position.At("cfg/errors.go", 1, 1))
+			st.Field("Detail", storefixture.Named("string"), nil)
+		})
+		methods(b, "hiddenError", "Error")
+		rendered(t, b).NotContains("hiddenError")
+	})
+
+	t.Run("ignores an unexported field of an error type", func(t *testing.T) {
+		t.Parallel()
+		// A literal naming it would not compile from the test package.
+		b := rich()
+		for _, st := range b.PackageNode().Structs {
+			if st.Name == "NotFoundError" {
+				st.Fields = append(st.Fields,
+					&node.Field{Name: "secret", Type: storefixture.Named("string")},
+					&node.Field{Name: "Untyped"})
+			}
+		}
+		rendered(t, b).NotContains("secret:")
 	})
 
 	t.Run("leaves a non-string field out of the message check", func(t *testing.T) {
