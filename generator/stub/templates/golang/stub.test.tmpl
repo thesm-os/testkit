@@ -19,6 +19,7 @@
 {{- $subject := stubRef "stub.Subject" -}}
 {{- $pkg := .StubRef.Pkg -}}
 {{- $stub := .TypeName -}}
+{{- $tp := renderTypeParams .TypeParams -}}
 {{- if .Generic -}}
 {{- /* A Go test function cannot take type parameters, so there is no way to
        name the types the double would be instantiated at. The note is emitted
@@ -31,7 +32,7 @@
 // Compile-time proof that {{ $stub }} satisfies the interface it doubles.
 // A drifted signature fails here rather than at the first test that assigns
 // the double.
-var _ {{ renderExpr .IfaceRef }} = (*{{ renderExpr .StubRef }})(nil)
+var _ {{ renderExpr .IfaceRef }}{{ template "stub.witness" $ }} = (*{{ renderExpr .StubRef }}{{ template "stub.witness" $ }})(nil)
 {{- end }}
 {{ range $m := .Methods }}
 // {{ camel $stub }}{{ $m.Name }}Subject binds {{ $m.Name }} into the shape
@@ -41,20 +42,20 @@ var _ {{ renderExpr .IfaceRef }} = (*{{ renderExpr .StubRef }})(nil)
 // Each call builds a fresh double, because several of the checks assert on
 // failure and need one bound to a failable TB rather than to the running
 // test.
-func {{ camel $stub }}{{ $m.Name }}Subject(tb {{ renderExpr $TB }}) {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ else }}struct{}{{ end }}] {
+func {{ camel $stub }}{{ $m.Name }}Subject{{ $tp }}(tb {{ renderExpr $TB }}) {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }}{{ else }}struct{}{{ end }}] {
 	tb.Helper()
-	s := {{ renderExpr $.CtorRef }}(tb)
-	return {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ else }}struct{}{{ end }}]{
+	s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb)
+	return {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }}{{ else }}struct{}{{ end }}]{
 		Stub: s.{{ $m.OnField }}.MethodStub,
 		Call: func() {
 {{- template "stub.testargs" $m }}
 			{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
 		},
 {{- if $m.HasResults }}
-		Result: func() {{ renderExpr (external $pkg $m.ReturnType) }} {
+		Result: func() {{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }} {
 {{- template "stub.testargs" $m }}
 			{{ stubIdents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
-			return {{ renderExpr (external $pkg $m.ReturnType) }}{ {{- stubIdentFields "got" $m.Returns -}} }
+			return {{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }}{ {{- stubIdentFields "got" $m.Returns -}} }
 		},
 {{- end }}
 		Override: func(mark func()) {
@@ -84,15 +85,19 @@ func {{ camel $stub }}{{ $m.Name }}Subject(tb {{ renderExpr $TB }}) {{ renderExp
 // and zero-value dispatch are the same contract for every method, so they are
 // asserted once in [stub.Behaviour] rather than restated here. What remains
 // below needs a value this method's signature can tell apart from a zero one.
+{{ if $.Witnesses -}}
+func {{ camel $stub }}{{ $m.Name }}Checks{{ $tp }}(t *{{ renderExpr $T }}) {
+{{- else -}}
 func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
+{{- end }}
 	t.Parallel()
 
-	{{ renderExpr $behaviour }}(t, "{{ $m.Name }}", {{ camel $stub }}{{ $m.Name }}Subject)
+	{{ renderExpr $behaviour }}(t, "{{ $m.Name }}", {{ camel $stub }}{{ $m.Name }}Subject{{ $.TypeArgs }})
 {{- if $m.HasResults }}
 
 	t.Run("answers with the value pinned by Returns", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 {{- range $i, $r := $m.Returns }}
 		var want{{ $i }} {{ renderType $r.Type }}
 {{- end }}
@@ -109,7 +114,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// Asserting only that a call happened would pass against a double
 		// that recorded the wrong arguments, which is the failure a reader
 		// most needs the log to surface.
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 {{- template "stub.testargs" $m }}
 		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
 		{{ if $m.Params }}got := {{ end }}s.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must record the call")
@@ -123,9 +128,9 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// The hook fires synchronously as each call lands, which is what a
 		// concurrency test observes progress with — polling the log instead
 		// races the thing under test.
-		s := {{ renderExpr $.CtorRef }}(t)
-		var seen []{{ renderExpr (external $pkg $m.CallType) }}
-		s.{{ $m.OnField }}.OnRecord(func(c {{ renderExpr (external $pkg $m.CallType) }}) { seen = append(seen, c) })
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
+		var seen []{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}
+		s.{{ $m.OnField }}.OnRecord(func(c {{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}) { seen = append(seen, c) })
 {{- template "stub.testargs" $m }}
 		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
 		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
@@ -135,7 +140,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 	t.Run("wires With{{ $iface }}{{ $m.Name }} at construction", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		called := false
-		s := {{ renderExpr $.CtorRef }}(t, {{ renderExpr (external $pkg (printf "With%s%s" $iface $m.Name)) }}(func({{ template "stub.testfuncparams" $m }}) {{ template "stub.results" $m }} {
+		s := {{ renderExpr $.CtorRef }}(t, {{ renderExpr (external $pkg (printf "With%s%s" $iface $m.Name)) }}{{ $.TypeArgs }}(func({{ template "stub.testfuncparams" $m }}) {{ template "stub.results" $m }} {
 			called = true
 {{- if $m.HasResults }}
 {{- range $i, $r := $m.Returns }}
@@ -155,7 +160,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// A reset clears what happened, not what was configured. Losing the
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 {{- range $i, $r := $m.Returns }}
 		var want{{ $i }} {{ renderType $r.Type }}
 {{- end }}
@@ -173,7 +178,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 
 	t.Run("yields the items Yields configured", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 		var want {{ renderType $m.IteratorElem }}
 		s.{{ $m.OnField }}.Yields(want, want)
 {{- template "stub.testargs" $m }}
@@ -191,7 +196,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// to write one wrong, and the loop it breaks out of is a consumer's,
 		// not ours — so the double has to honour it or every consumer's early
 		// exit silently runs to completion.
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 		var want {{ renderType $m.IteratorElem }}
 		s.{{ $m.OnField }}.Yields(want, want, want)
 {{- template "stub.testargs" $m }}
@@ -210,7 +215,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Failing partway through is the case a consumer's loop most often
 		// gets wrong, and a sequence that only ever succeeds never reaches it.
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 		var item {{ renderType $m.IteratorElem }}
 		want := {{ renderExpr $testErr }}("{{ $m.Name }}-yields")
 		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item}, want)
@@ -234,7 +239,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// Breaking before the error is the path a caller takes when it has
 		// seen enough, and a sequence that ran on regardless would keep
 		// producing after its consumer stopped listening.
-		s := {{ renderExpr $.CtorRef }}(t)
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 		var item {{ renderType $m.IteratorElem }}
 		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item, item}, {{ renderExpr $testErr }}("{{ $m.Name }}-yields"))
 {{- template "stub.testargs" $m }}
@@ -254,7 +259,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// Out-of-order use is a caller's bug, and one that silently works
 		// against a double will not work against the real implementation.
 		f := {{ renderExpr $failable }}()
-		s := {{ renderExpr $.CtorRef }}(f, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}())
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(f, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}{{ $.TypeArgs }}())
 {{- template "stub.testargs" $m }}
 		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
 		{{ renderExpr $true }}(t, f.Failed(), "{{ $m.Name }} before {{ $m.OrderAfter }} must be refused")
@@ -269,9 +274,9 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 // {{ $m.Name }} stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func {{ camel $stub }}Double() {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-	instance := func(s *{{ renderExpr $.StubRef }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-		return {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}]{
+func {{ camel $stub }}Double{{ $tp }}() {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+	instance := func(s *{{ renderExpr $.StubRef }}{{ $.TypeArgs }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+		return {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}]{
 			Stub: s.{{ $m.OnField }}.MethodStub,
 			Call: func() {
 {{- template "stub.testargs" $m }}
@@ -280,21 +285,21 @@ func {{ camel $stub }}Double() {{ renderExpr $doubleT }}[{{ renderExpr (external
 			Reset: s.ResetCalls,
 		}
 	}
-	return {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}]{
-		New: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-			return instance({{ renderExpr $.CtorRef }}(tb))
+	return {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}]{
+		New: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+			return instance({{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb))
 		},
-		WithClock: func(tb {{ renderExpr $TB }}, clk {{ renderExpr $clock }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sWithClock" $stub)) }}(clk)))
+		WithClock: func(tb {{ renderExpr $TB }}, clk {{ renderExpr $clock }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+			return instance({{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb, {{ renderExpr (external $pkg (printf "%sWithClock" $stub)) }}{{ $.TypeArgs }}(clk)))
 		},
-		WithRandSource: func(tb {{ renderExpr $TB }}, src {{ renderExpr $randsrc }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sWithRandSource" $stub)) }}(src)))
+		WithRandSource: func(tb {{ renderExpr $TB }}, src {{ renderExpr $randsrc }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+			return instance({{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb, {{ renderExpr (external $pkg (printf "%sWithRandSource" $stub)) }}{{ $.TypeArgs }}(src)))
 		},
-		BenchMode: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sBenchMode" $stub)) }}()))
+		BenchMode: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+			return instance({{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb, {{ renderExpr (external $pkg (printf "%sBenchMode" $stub)) }}{{ $.TypeArgs }}()))
 		},
-		Strict: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
-			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}()))
+		Strict: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}] {
+			return instance({{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(tb, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}{{ $.TypeArgs }}()))
 		},
 	}
 }
@@ -302,10 +307,14 @@ func {{ camel $stub }}Double() {{ renderExpr $doubleT }}[{{ renderExpr (external
 // Test{{ $stub }}Options pins the settings that apply to the double rather
 // than to one method: bench mode, the injected clock and random source, and
 // what a reset clears.
+{{ if $.Witnesses -}}
+func {{ camel $stub }}OptionChecks{{ $tp }}(t *{{ renderExpr $T }}) {
+{{- else -}}
 func Test{{ $stub }}Options(t *{{ renderExpr $T }}) {
+{{- end }}
 	t.Parallel()
 
-	{{ renderExpr $doubleBehaviour }}(t, {{ camel $stub }}Double())
+	{{ renderExpr $doubleBehaviour }}(t, {{ camel $stub }}Double{{ $.TypeArgs }}())
 }
 {{ end }}
 {{- if .Complete }}
@@ -318,11 +327,15 @@ func Test{{ $stub }}Options(t *{{ renderExpr $T }}) {
 //
 // This is what lets one generated suite run against both the double and a
 // production type, which is the point of conformance testing.
+{{ if .Witnesses -}}
+func {{ camel $stub }}DelegationChecks{{ $tp }}(t *{{ renderExpr $T }}) {
+{{- else -}}
 func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
+{{- end }}
 	t.Parallel()
 
-	inner := {{ renderExpr .CtorRef }}(t)
-	s := {{ renderExpr .CtorRef }}(t, {{ renderExpr (external $pkg (printf "%sDelegateTo" $stub)) }}(inner))
+	inner := {{ renderExpr .CtorRef }}{{ .TypeArgs }}(t)
+	s := {{ renderExpr .CtorRef }}{{ .TypeArgs }}(t, {{ renderExpr (external $pkg (printf "%sDelegateTo" $stub)) }}{{ .TypeArgs }}(inner))
 {{ range $m := .Methods }}
 	t.Run("forwards {{ $m.Name }} to the wrapped implementation", func(t *{{ renderExpr $T }}) {
 {{- template "stub.testargs" $m }}
@@ -344,6 +357,24 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
 {{- end }}
 {{ end }}}
 {{- end }}
+{{ if .Witnesses }}
+{{ range $m := .Methods }}
+// Test{{ $stub }}{{ $m.Name }} runs {{ $m.Name }}'s checks at the witness types
+// its constraints admit.
+//
+// A Go test function cannot take type parameters, so the checks live in a
+// generic helper and this instantiates it. One instantiation is enough: the
+// generated double never branches on its type parameters, so a single set of
+// witnesses reaches every statement.
+func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) { {{ camel $stub }}{{ $m.Name }}Checks{{ template "stub.witness" $ }}(t) }
+{{ end }}
+// Test{{ $stub }}Options runs the whole-double checks at the same witnesses.
+func Test{{ $stub }}Options(t *{{ renderExpr $T }}) { {{ camel $stub }}OptionChecks{{ template "stub.witness" $ }}(t) }
+{{ if .Complete }}
+// Test{{ $stub }}DelegateTo runs the delegation checks at the same witnesses.
+func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) { {{ camel $stub }}DelegationChecks{{ template "stub.witness" $ }}(t) }
+{{ end }}
+{{- end }}
 {{- end }}
 {{- end -}}
 
@@ -361,4 +392,11 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
 
 {{- define "stub.testfuncparams" -}}
 {{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ if $p.Variadic }}...{{ end }}{{ renderType $p.Type }}{{ end }}
+{{- end -}}
+
+{{- /* The concrete instantiation each entry point uses — `[string, int]`, or
+       nothing at all for a non-generic double, so a call site can append it
+       unconditionally. */ -}}
+{{- define "stub.witness" -}}
+{{- if .Witnesses }}[{{ range $i, $w := .Witnesses }}{{ if $i }}, {{ end }}{{ renderType $w }}{{ end }}]{{ end }}
 {{- end -}}

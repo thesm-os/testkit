@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"go.thesmos.sh/eidos/core/directive"
 	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
@@ -61,6 +62,43 @@ const (
 // in the output. Stability in the header is worth the discipline; during
 // development `--no-cache` covers the gap.
 const Version = "1.0.0"
+
+// WitnessKey is the directive key naming the concrete types a generic
+// double's companion is instantiated at, in type-parameter order —
+// `//testkit:stub witness=int,string`.
+//
+// Needed only where the constraint is one the generator cannot reason about.
+// `any` and `comparable` are satisfied by anything and by every basic type
+// respectively, so those are derived; a named constraint like
+// `constraints.Ordered` is a reference into a package the generator never
+// loaded, and guessing at its type set would produce a companion that fails to
+// compile for a reason the author could not have predicted.
+const WitnessKey = "witness"
+
+// witnessPalette supplies the derived witness for each type parameter whose
+// constraint admits any basic type.
+//
+// Positional and pairwise distinct, so a template that crossed two type
+// parameters produces code that does not compile rather than code that
+// typechecks and asserts the wrong thing. Every entry satisfies both `any` and
+// `comparable`; an interface with more parameters than there are entries has
+// no derived witness and keeps the note.
+//
+//nolint:gochecknoglobals // immutable lookup table.
+var witnessPalette = []string{"string", "int", "bool", "float64", "int64", "uint", "uint8", "int32"}
+
+// predeclared is the set of Go type names a witness may use unqualified. A
+// witness outside it is taken to be declared in the source package and
+// qualified against it, which is the same rule the sentinel helpers follow.
+//
+//nolint:gochecknoglobals // immutable lookup table.
+var predeclared = map[string]struct{}{
+	"any": {}, "bool": {}, "byte": {}, "complex64": {}, "complex128": {},
+	"error": {}, "float32": {}, "float64": {}, "int": {}, "int8": {},
+	"int16": {}, "int32": {}, "int64": {}, "rune": {}, "string": {},
+	"uint": {}, "uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
+	"uintptr": {},
+}
 
 // DefaultSuffix is the trailer appended to the source interface's
 // name to form the stub type's identifier.
@@ -393,10 +431,31 @@ type Tests struct {
 
 	Methods []Method
 
-	// Generic mirrors [Stub.Generic]. A parameterised double gets a note in
-	// place of its checks rather than no file at all: the absence has to be
-	// visible to a reader who expected one, and an empty file would read as a
-	// generator that failed silently.
+	// TypeArgs is the type-parameter list in use position — `[K, V]` — which
+	// is what the generic check helpers instantiate the double at. Distinct
+	// from Witnesses: inside a helper the double is named at the helper's own
+	// parameters, and only the entry point substitutes concrete types.
+	TypeArgs string
+
+	// TypeParams is the source interface's type-parameter list in declaration
+	// form. The checks live in generic helpers carrying it, because a Go test
+	// function cannot take type parameters and an entry point therefore has to
+	// instantiate rather than parameterise.
+	TypeParams []*emit.TypeParam
+
+	// Witnesses are the concrete types each entry point instantiates at, in
+	// parameter order. Empty for a non-generic double.
+	//
+	// References rather than strings: a witness declared in the source package
+	// is not reachable unqualified from the external test package, exactly as a
+	// sentinel is not.
+	Witnesses []emit.Ref
+
+	// Generic reports that the double is parameterised and no witness could be
+	// found for it, which is the one case where a companion cannot be written.
+	// It gets a note in place of its checks rather than no file at all: the
+	// absence has to be visible to a reader who expected one, and an empty file
+	// would read as a generator that failed silently.
 	Generic bool
 
 	// Complete mirrors [Stub.Complete], so the companion's compile-time
@@ -461,6 +520,8 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 
+		witnesses := witnessesOf(ctx, iface)
+
 		base := sdk.BaseEmit{
 			OriginNode: iface,
 			SetByName:  c.SetBy(),
@@ -484,15 +545,18 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Complete:   complete(iface, methods),
 			},
 			&Tests{
-				BaseEmit:  testBase,
-				TypeName:  typeName,
-				IfaceName: iface.Name,
-				StubRef:   sdk.NewExternal(iface.Package, typeName),
-				CtorRef:   sdk.NewExternal(iface.Package, "New"+typeName),
-				IfaceRef:  sdk.NewExternal(iface.Package, iface.Name),
-				Methods:   methods,
-				Generic:   len(iface.TypeParams) > 0,
-				Complete:  complete(iface, methods),
+				BaseEmit:   testBase,
+				TypeName:   typeName,
+				IfaceName:  iface.Name,
+				StubRef:    sdk.NewExternal(iface.Package, typeName),
+				CtorRef:    sdk.NewExternal(iface.Package, "New"+typeName),
+				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
+				Methods:    methods,
+				TypeArgs:   typeArgsOf(iface),
+				TypeParams: typeParamsOf(iface),
+				Witnesses:  witnesses,
+				Generic:    len(iface.TypeParams) > 0 && len(witnesses) == 0,
+				Complete:   complete(iface, methods),
 			},
 		} {
 			prov := c.Provenance(string(value.Kind()) + "." + iface.Name)
@@ -502,6 +566,125 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		}
 	}
 	return nil
+}
+
+// witnessesOf resolves the concrete types the companion's entry points
+// instantiate the double at, or nil when it cannot.
+//
+// A source-pinned list wins over derivation and is all-or-nothing: a partially
+// pinned list would leave the generator guessing which position a lone entry
+// meant, and a wrong guess is a compile error in generated code.
+//
+// Nothing here checks that a witness satisfies its constraint. It cannot — the
+// constraint is a reference into a package the generator never loaded — so a
+// wrong witness surfaces when the generated file is compiled. That is a loud
+// failure naming the type, which is the best available outcome for a fact the
+// generator has no way to know.
+func witnessesOf(ctx *sdk.GeneratorContext, iface *node.Interface) []emit.Ref {
+	if len(iface.TypeParams) == 0 {
+		return nil
+	}
+	if pinned, ok := pinnedWitnesses(ctx, iface); ok {
+		return pinned
+	}
+	return derivedWitnesses(iface)
+}
+
+// pinnedWitnesses reads the witness key off the interface's stub directive,
+// reporting a list whose length does not match the type-parameter list.
+//
+// The second result distinguishes "the source pinned nothing" from "the source
+// pinned something unusable": the first falls through to derivation, the second
+// has already been diagnosed and must not be silently replaced by a guess.
+func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *node.Interface) ([]emit.Ref, bool) {
+	for _, dir := range iface.Directives() {
+		if dir.Name != directive.Name(DirectiveName) {
+			continue
+		}
+		raw, given := dir.KV[WitnessKey]
+		if !given {
+			continue
+		}
+		names := strings.Split(raw, ",")
+		if len(names) != len(iface.TypeParams) {
+			ctx.Diag.Errorf(iface.Pos(),
+				"%s: %s=%q on %s names %d type%s for %d type parameter%s; supply one per parameter",
+				Name, WitnessKey, raw, iface.Name,
+				len(names), plural(len(names)), len(iface.TypeParams), plural(len(iface.TypeParams)))
+			return nil, true
+		}
+		out := make([]emit.Ref, 0, len(names))
+		for _, n := range names {
+			out = append(out, witnessRef(iface, strings.TrimSpace(n)))
+		}
+		return out, true
+	}
+	return nil, false
+}
+
+// derivedWitnesses returns a witness per type parameter, or nil when any
+// parameter carries a constraint the generator cannot reason about.
+//
+// All-or-nothing because an entry point instantiates the whole list at once:
+// a witness for one parameter is worth nothing without one for the rest.
+func derivedWitnesses(iface *node.Interface) []emit.Ref {
+	if len(iface.TypeParams) > len(witnessPalette) {
+		return nil
+	}
+	out := make([]emit.Ref, 0, len(iface.TypeParams))
+	for i, p := range iface.TypeParams {
+		if !admitsAnyBasicType(p.Constraint) {
+			return nil
+		}
+		out = append(out, emit.Builtin(witnessPalette[i]))
+	}
+	return out
+}
+
+// admitsAnyBasicType reports whether every entry of [witnessPalette] satisfies
+// the constraint.
+//
+// Matched on the constraint's printed source form, which the frontend always
+// populates, because the structured predicates do not answer this question on
+// their own: [node.Constraint.IsAny] holds only for a parameter with no bound
+// written at all, and one written `[V any]` carries `any` as an embedded bound
+// and so reads as constrained.
+//
+// The set is closed to the two bounds whose type set is known without loading
+// anything: `any` admits everything and `comparable` admits every basic type.
+// A named constraint is a reference into a package the generator never read,
+// so its witness comes from the source or not at all.
+func admitsAnyBasicType(c *node.Constraint) bool {
+	if c.IsAny() || c.IsComparable() {
+		return true
+	}
+	switch strings.TrimSpace(c.Raw) {
+	case "any", "interface{}", "comparable":
+		return true
+	}
+	return false
+}
+
+// witnessRef lifts one witness name into the form the companion renders.
+//
+// A predeclared type renders bare. Anything else is taken to be declared in
+// the source package and qualified against it — the companion lives in an
+// external test package and reaches nothing there unqualified. A name carrying
+// its own qualifier is not resolvable: the generator would have to invent the
+// import path, so the author declares a local alias instead.
+func witnessRef(iface *node.Interface, name string) emit.Ref {
+	if _, builtin := predeclared[name]; builtin {
+		return emit.Builtin(name)
+	}
+	return emit.External(iface.Package, name)
+}
+
+// plural returns the suffix that makes a count read correctly.
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // complete reports whether the double carries every method its source

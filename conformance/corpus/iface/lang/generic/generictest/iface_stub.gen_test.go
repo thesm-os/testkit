@@ -6,8 +6,400 @@
 
 package generictest_test
 
-// Skipped: StoreStub is generic — instantiate it with concrete types and
-// write the checks in the consuming package.
+import (
+	"context"
+	"testing"
+	"time"
+
+	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/generic"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/generic/generictest"
+	"go.thesmos.sh/testkit/rand"
+	"go.thesmos.sh/testkit/stub"
+)
+
+// Compile-time proof that StoreStub satisfies the interface it doubles.
+// A drifted signature fails here rather than at the first test that assigns
+// the double.
+var _ generic.Store[string, int] = (*generictest.StoreStub[string, int])(nil)
+
+// storeStubGetSubject binds Get into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func storeStubGetSubject[K comparable, V any](tb testing.TB) stub.Subject[generictest.StoreGetCall[K, V], generictest.StoreGetReturn[K, V]] {
+	tb.Helper()
+	s := generictest.NewStoreStub[K, V](tb)
+	return stub.Subject[generictest.StoreGetCall[K, V], generictest.StoreGetReturn[K, V]]{
+		Stub: s.OnGet.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 K
+			_, _ = s.Get(a0, a1)
+		},
+		Result: func() generictest.StoreGetReturn[K, V] {
+			var a0 context.Context
+			var a1 K
+			got0, got1 := s.Get(a0, a1)
+			return generictest.StoreGetReturn[K, V]{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnGet.Func(func(_ context.Context, _ K) (V, error) {
+				mark()
+				var z0 V
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 K
+			_, r1 := s.Get(a0, a1)
+			return r1
+		},
+	}
+}
+
+// TestStoreStubGet pins how Get answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func storeStubGetChecks[K comparable, V any](t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Get", storeStubGetSubject[K, V])
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := generictest.NewStoreStub[K, V](t)
+		var want0 V
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 K
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "Get must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Get must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := generictest.NewStoreStub[K, V](t)
+		var a0 context.Context
+		var a1 K
+		_, _ = s.Get(a0, a1)
+		got := s.OnGet.AssertCalledOnce(t, "Get must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := generictest.NewStoreStub[K, V](t)
+		var seen []generictest.StoreGetCall[K, V]
+		s.OnGet.OnRecord(func(c generictest.StoreGetCall[K, V]) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 K
+		_, _ = s.Get(a0, a1)
+		_, _ = s.Get(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Get call")
+	})
+
+	t.Run("wires WithStoreGet at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := generictest.NewStoreStub(t, generictest.WithStoreGet[K, V](func(_ context.Context, _ K) (V, error) {
+			called = true
+			var z0 V
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		var a1 K
+		_, _ = s.Get(a0, a1)
+		testkit.True(t, called, "WithStoreGet must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := generictest.NewStoreStub[K, V](t)
+		var want0 V
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 K
+		_, _ = s.Get(a0, a1)
+		s.ResetCalls()
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
+// storeStubPutSubject binds Put into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func storeStubPutSubject[K comparable, V any](tb testing.TB) stub.Subject[generictest.StorePutCall[K, V], generictest.StorePutReturn[K, V]] {
+	tb.Helper()
+	s := generictest.NewStoreStub[K, V](tb)
+	return stub.Subject[generictest.StorePutCall[K, V], generictest.StorePutReturn[K, V]]{
+		Stub: s.OnPut.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 K
+			var a2 V
+			_ = s.Put(a0, a1, a2)
+		},
+		Result: func() generictest.StorePutReturn[K, V] {
+			var a0 context.Context
+			var a1 K
+			var a2 V
+			got0 := s.Put(a0, a1, a2)
+			return generictest.StorePutReturn[K, V]{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnPut.Func(func(_ context.Context, _ K, _ V) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 K
+			var a2 V
+			r0 := s.Put(a0, a1, a2)
+			return r0
+		},
+	}
+}
+
+// TestStoreStubPut pins how Put answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func storeStubPutChecks[K comparable, V any](t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Put", storeStubPutSubject[K, V])
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := generictest.NewStoreStub[K, V](t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		got0 := s.Put(a0, a1, a2)
+		testkit.Equal(t, got0, want0, "Put must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := generictest.NewStoreStub[K, V](t)
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		_ = s.Put(a0, a1, a2)
+		got := s.OnPut.AssertCalledOnce(t, "Put must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.Value, a2, "the recorded call carries Value")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := generictest.NewStoreStub[K, V](t)
+		var seen []generictest.StorePutCall[K, V]
+		s.OnPut.OnRecord(func(c generictest.StorePutCall[K, V]) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		_ = s.Put(a0, a1, a2)
+		_ = s.Put(a0, a1, a2)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Put call")
+	})
+
+	t.Run("wires WithStorePut at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := generictest.NewStoreStub(t, generictest.WithStorePut[K, V](func(_ context.Context, _ K, _ V) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		_ = s.Put(a0, a1, a2)
+		testkit.True(t, called, "WithStorePut must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := generictest.NewStoreStub[K, V](t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		_ = s.Put(a0, a1, a2)
+		s.ResetCalls()
+		got0 := s.Put(a0, a1, a2)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
+// storeStubDouble describes how to build a StoreStub under each
+// option whose effect is the same whatever a method's signature.
+//
+// Get stands in for the double as a whole: what these checks assert
+// is that an option reached it at all, and the first method witnesses that as
+// well as any other would.
+func storeStubDouble[K comparable, V any]() stub.Double[generictest.StoreGetCall[K, V]] {
+	instance := func(s *generictest.StoreStub[K, V]) stub.Instance[generictest.StoreGetCall[K, V]] {
+		return stub.Instance[generictest.StoreGetCall[K, V]]{
+			Stub: s.OnGet.MethodStub,
+			Call: func() {
+				var a0 context.Context
+				var a1 K
+				_, _ = s.Get(a0, a1)
+			},
+			Reset: s.ResetCalls,
+		}
+	}
+	return stub.Double[generictest.StoreGetCall[K, V]]{
+		New: func(tb testing.TB) stub.Instance[generictest.StoreGetCall[K, V]] {
+			return instance(generictest.NewStoreStub[K, V](tb))
+		},
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[generictest.StoreGetCall[K, V]] {
+			return instance(generictest.NewStoreStub[K, V](tb, generictest.StoreStubWithClock[K, V](clk)))
+		},
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[generictest.StoreGetCall[K, V]] {
+			return instance(generictest.NewStoreStub[K, V](tb, generictest.StoreStubWithRandSource[K, V](src)))
+		},
+		BenchMode: func(tb testing.TB) stub.Instance[generictest.StoreGetCall[K, V]] {
+			return instance(generictest.NewStoreStub[K, V](tb, generictest.StoreStubBenchMode[K, V]()))
+		},
+		Strict: func(tb testing.TB) stub.Instance[generictest.StoreGetCall[K, V]] {
+			return instance(generictest.NewStoreStub[K, V](tb, generictest.StoreStubStrict[K, V]()))
+		},
+	}
+}
+
+// TestStoreStubOptions pins the settings that apply to the double rather
+// than to one method: bench mode, the injected clock and random source, and
+// what a reset clears.
+func storeStubOptionChecks[K comparable, V any](t *testing.T) {
+	t.Parallel()
+
+	stub.DoubleBehaviour(t, storeStubDouble[K, V]())
+}
+
+// TestStoreStubDelegateTo pins that a wrapped implementation is called
+// through, and recorded on the way past.
+//
+// This is what lets one generated suite run against both the double and a
+// production type, which is the point of conformance testing.
+func storeStubDelegationChecks[K comparable, V any](t *testing.T) {
+	t.Parallel()
+
+	inner := generictest.NewStoreStub[K, V](t)
+	s := generictest.NewStoreStub[K, V](t, generictest.StoreStubDelegateTo[K, V](inner))
+
+	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 K
+		_, _ = s.Get(a0, a1)
+		inner.OnGet.AssertCalledOnce(t, "Get must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Get answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Get-delegate")
+		inner.OnGet.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 K
+		_, r1 := s.Get(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Get must surface the wrapped answer")
+	})
+
+	t.Run("forwards Put to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		_ = s.Put(a0, a1, a2)
+		inner.OnPut.AssertCalledOnce(t, "Put must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Put answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Put-delegate")
+		inner.OnPut.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 K
+		var a2 V
+		r0 := s.Put(a0, a1, a2)
+		testkit.ErrorIs(t, r0, want, "Put must surface the wrapped answer")
+	})
+}
+
+// TestStoreStubGet runs Get's checks at the witness types
+// its constraints admit.
+//
+// A Go test function cannot take type parameters, so the checks live in a
+// generic helper and this instantiates it. One instantiation is enough: the
+// generated double never branches on its type parameters, so a single set of
+// witnesses reaches every statement.
+func TestStoreStubGet(t *testing.T) { storeStubGetChecks[string, int](t) }
+
+// TestStoreStubPut runs Put's checks at the witness types
+// its constraints admit.
+//
+// A Go test function cannot take type parameters, so the checks live in a
+// generic helper and this instantiates it. One instantiation is enough: the
+// generated double never branches on its type parameters, so a single set of
+// witnesses reaches every statement.
+func TestStoreStubPut(t *testing.T) { storeStubPutChecks[string, int](t) }
+
+// TestStoreStubOptions runs the whole-double checks at the same witnesses.
+func TestStoreStubOptions(t *testing.T) { storeStubOptionChecks[string, int](t) }
+
+// TestStoreStubDelegateTo runs the delegation checks at the same witnesses.
+func TestStoreStubDelegateTo(t *testing.T) { storeStubDelegationChecks[string, int](t) }
 
 // testkit: end of generated content.
-// testkit:provenance f57d9d9d84ed97c856c32aacdc2cf4e832b6702a23b87f6a4550e203dd2f3f67
+// testkit:provenance d703fa49fd97a7903d48faddafdd9c5d2d8dfe2218d4b1cea0798f2e96b2ca56

@@ -4,12 +4,15 @@
 package stub_test
 
 import (
+	"maps"
 	"testing"
 
 	"go.thesmos.sh/eidos/core/diag"
 	"go.thesmos.sh/eidos/core/opt"
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/emit"
+	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/plugin"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/store"
@@ -544,6 +547,17 @@ func generate(t *testing.T, p *stub.Plugin, s *store.Store) []store.PendingOrigi
 	return s.Emit().PendingOriginSlots()
 }
 
+// generateDiagnostics drives p over s and returns what it reported, for the
+// cases where the diagnostic is the behaviour under test.
+func generateDiagnostics(t *testing.T, p *stub.Plugin, s *store.Store) []diag.Diag {
+	t.Helper()
+	sink := diag.New()
+	if err := p.Generate(generatorContext(s, sink)); err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	return sink.Diagnostics()
+}
+
 // split separates the queued contributions into the primary double and the
 // tagged companion, failing when either is absent.
 func split(t *testing.T, pending []store.PendingOriginSlot) (*stub.Stub, *stub.Tests) {
@@ -564,4 +578,152 @@ func split(t *testing.T, pending []store.PendingOriginSlot) (*stub.Stub, *stub.T
 		t.Fatalf("expected one double and one companion contribution; got %d", len(pending))
 	}
 	return double, tests
+}
+
+// A generic double's checks live in a generic helper that a concrete entry
+// point instantiates, so the witnesses are what decides whether a companion
+// can be written at all.
+func TestWitnesses(t *testing.T) {
+	t.Parallel()
+
+	t.Run("derives a witness for a comparable parameter", func(t *testing.T) {
+		t.Parallel()
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "comparable", "any", nil)))
+		testkit.Len(t, tests.Witnesses, 2, "both parameters take a derived witness")
+	})
+
+	t.Run("derives distinct witnesses per position", func(t *testing.T) {
+		t.Parallel()
+		// Identical witnesses would let a template that crossed two type
+		// parameters typecheck, which is the mistake most worth catching and
+		// the one an assertion cannot see.
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "comparable", "any", nil)))
+		testkit.NotEqual(t, renderRef(t, tests.Witnesses[0]), renderRef(t, tests.Witnesses[1]),
+			"a crossed type parameter must not typecheck")
+	})
+
+	t.Run("writes a companion for a derivable interface", func(t *testing.T) {
+		t.Parallel()
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "comparable", "any", nil)))
+		testkit.False(t, tests.Generic, "a derivable double gets checks rather than a note")
+	})
+
+	t.Run("declines a constraint it cannot read", func(t *testing.T) {
+		t.Parallel()
+		// A named constraint is a reference into a package the generator never
+		// loaded. Guessing at its type set would produce a companion that fails
+		// to compile for a reason the author could not have predicted.
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "Ordered", "any", nil)))
+		testkit.True(t, tests.Generic, "an unreadable constraint leaves a note")
+	})
+
+	t.Run("takes the witnesses the source pinned", func(t *testing.T) {
+		t.Parallel()
+		pinned := map[string]string{stub.WitnessKey: "int,Score"}
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "Ordered", "any", pinned)))
+		testkit.Len(t, tests.Witnesses, 2, "a pinned list makes an opaque constraint witnessable")
+	})
+
+	t.Run("qualifies a pinned witness against the source package", func(t *testing.T) {
+		t.Parallel()
+		// The companion lives in an external test package and reaches nothing
+		// in the source package unqualified.
+		pinned := map[string]string{stub.WitnessKey: "int,Score"}
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "Ordered", "any", pinned)))
+		testkit.Equal(t, renderRef(t, tests.Witnesses[1]), "example.com/storepkg.Score",
+			"a witness declared in the source package carries its package")
+	})
+
+	t.Run("renders a predeclared witness bare", func(t *testing.T) {
+		t.Parallel()
+		pinned := map[string]string{stub.WitnessKey: "int,Score"}
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "Ordered", "any", pinned)))
+		testkit.Equal(t, renderRef(t, tests.Witnesses[0]), "int",
+			"a predeclared type needs no qualifier")
+	})
+
+	t.Run("leaves a non-generic double no witnesses", func(t *testing.T) {
+		t.Parallel()
+		_, tests := split(t, generate(t, stub.New(), storeFixture(t)))
+		testkit.Len(t, tests.Witnesses, 0, "an unparameterised double instantiates nothing")
+	})
+}
+
+// A witness list that does not match the type-parameter list cannot be
+// positionally assigned, and guessing which parameter a lone entry meant would
+// produce a compile error in generated code.
+func TestWitnessCountMismatch(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports a list that is too short", func(t *testing.T) {
+		t.Parallel()
+		pinned := map[string]string{stub.WitnessKey: "int"}
+		diags := generateDiagnostics(t, stub.New(), genericFixture(t, "Ordered", "any", pinned))
+		testkit.Len(t, diags, 1, "a mismatched witness list is reported once")
+	})
+
+	t.Run("names the count it was given", func(t *testing.T) {
+		t.Parallel()
+		pinned := map[string]string{stub.WitnessKey: "int"}
+		diags := generateDiagnostics(t, stub.New(), genericFixture(t, "Ordered", "any", pinned))
+		testkit.Contains(t, diags[0].Message, "1 type for 2 type parameters",
+			"the diagnostic names both counts")
+	})
+
+	t.Run("does not fall back to a guess", func(t *testing.T) {
+		t.Parallel()
+		// Falling through to derivation would replace a stated intent with a
+		// guess, and the author would never learn their line was ignored.
+		pinned := map[string]string{stub.WitnessKey: "int"}
+		_, tests := split(t, generate(t, stub.New(), genericFixture(t, "Ordered", "any", pinned)))
+		testkit.Len(t, tests.Witnesses, 0, "a rejected list is not silently replaced")
+	})
+}
+
+// genericFixture returns a two-parameter generic store, with each constraint
+// named and an optional set of directive keys.
+//
+// A constraint named `any` or `comparable` is spelled as the frontend spells
+// it — an embedded bound plus the printed source form — because that is the
+// shape the derivation reads, and a fixture that carried only one of the two
+// would pass against a projection that read the wrong one.
+func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *store.Store {
+	t.Helper()
+	dir := storefixture.Directive("stub")
+	maps.Copy(dir.KV, kv)
+	return storefixture.New().
+		Package("storepkg", "example.com/storepkg").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(dir)
+			i.TypeParam("K", bound(kBound))
+			i.TypeParam("V", bound(vBound))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("key", storefixture.Named("K"))
+				m.Return(storefixture.Named("V"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// bound builds the constraint the frontend produces for a written bound.
+func bound(name string) *node.Constraint {
+	c := storefixture.Constraint(storefixture.Named(name))
+	c.Raw = name
+	return c
+}
+
+// renderRef spells a witness the way the backend would, which is the only form
+// a reader of the generated file sees.
+func renderRef(t *testing.T, r emit.Ref) string {
+	t.Helper()
+	switch typed := r.(type) {
+	case *emit.BuiltinRef:
+		return typed.Name
+	case *emit.ExternalRef:
+		return typed.Package + "." + typed.Name
+	default:
+		t.Fatalf("witness is %T, want a builtin or external reference", r)
+		return ""
+	}
 }
