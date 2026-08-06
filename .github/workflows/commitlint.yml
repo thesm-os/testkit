@@ -1,26 +1,51 @@
 name: Commit Lint
 
+# Validation delegates to `ergon check commit-msg`, which reads
+# .ergon.yaml's `checks.commit_msg` block — the same accepted type set
+# `ergon release` reads for bump inference, and the same rules the local
+# pre-commit commit-msg hook enforces. One source of truth; a second
+# config for a third-party action would drift from it.
+
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
 
 permissions:
   contents: read
-  pull-requests: read
 
 jobs:
-  commitlint:
+  commit-msg:
     name: Commit message format
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
+          # The validated range spans base..head, so both endpoints and
+          # every commit between them must be in the local history.
           fetch-depth: 0
 
+      - uses: ./.github/actions/setup-ergon
+
       - name: Validate commit messages
-        uses: wagoid/commitlint-github-action@v6
-        with:
-          configFile: .commitlintrc.yml
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        # Every offending commit is reported, not just the first: a
+        # contributor fixing one subject line at a time per CI round is
+        # the failure mode worth designing against.
+        #
+        # --no-merges drops "Merge branch 'main' into ..." commits a
+        # contributor picked up by syncing their branch. Those are not
+        # authored messages and cannot be conventional.
+        run: |
+          set -euo pipefail
+          msg="$(mktemp)"
+          failed=0
+          for sha in $(git rev-list --no-merges "$BASE_SHA..$HEAD_SHA"); do
+            git log -1 --format=%B "$sha" >"$msg"
+            if ! ergon check commit-msg "$msg"; then
+              echo "::error::$(git log -1 --format='%h %s' "$sha")"
+              failed=1
+            fi
+          done
+          exit "$failed"
