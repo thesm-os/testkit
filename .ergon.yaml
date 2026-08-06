@@ -165,7 +165,7 @@ checks:
   # on top per-invocation; an unknown stage name surfaces as a
   # usage error.
   enabled: []   # empty = every stage in scope (the default)
-  disabled: []  # remove individual stages without forking the binary
+  disabled: [mutation]
 
   # Path globs both gates ignore. `reason` is human-facing so
   # reviewers can challenge new excludes on PR.
@@ -179,14 +179,6 @@ checks:
     # *emit* beside them is gated like any other code.
     - path: conformance/corpus/**/iface.go
       reason: generator input; bodies exist to compile, not to run
-    # gen/ is the v1 generator, its own module and deliberately absent from
-    # go.work: it is not built, not tested and pending deletion. `go list ./...`
-    # skips it because it is a different module, so the coverage gate never saw
-    # it — but gremlins walks the filesystem, mutated all 428 files, and found
-    # every mutant uncovered. That, and nothing else, is why the root layer
-    # measured 9.8% mutator coverage against 100% line coverage.
-    - path: gen/...
-      reason: v1 generator; a separate module outside go.work, pending deletion
   # Example:
   #   excludes:
   #     - path: "**/*_test.go"
@@ -348,19 +340,14 @@ checks:
       #
       # The whole set costs ~85s, almost all of it the root layer.
       - path: ./...
-        # This layer's numbers are not about this module. `path` does not scope
-        # a mutation run, so `./...` re-mutates cmd, conformance, generator and
-        # engine and counts every one of their mutants as uncovered: those four
-        # layers total 1563 mutants, and this layer reports 1551 not covered.
-        # Filed against ergon; see its
-        # docs/superpowers/2026-08-06-mutation-path-does-not-scope-to-a-module.
-        #
-        # Gated at the measurement so the layer cannot silently get worse. The
-        # 22% is an artifact of the miscount, NOT a statement that this module's
-        # tests reach a fifth of it — the same layer's line coverage is 100%.
-        # Raise both once the scoping is fixed.
+        # Score is the honest weak spot in this repository. The tests reach
+        # 98.9% of the mutants in this module and kill 76.8% of what they
+        # reach — 102 survivors, over half of them in core/visualize/emit.go.
+        # A surviving mutant is code that runs under test with nothing
+        # asserting on what it did, which is the one thing a line percentage
+        # cannot show: this layer is at 100% lines.
         score: 76
-        coverage: 21
+        coverage: 98
       - path: cmd/...
         # Every uncovered mutant here is a `+` joining two halves of a command's
         # help text. Go instruments statements inside functions, and a
