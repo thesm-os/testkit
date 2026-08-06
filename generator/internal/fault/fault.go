@@ -1,0 +1,216 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+// Package fault owns testkit's `//testkit:fault` directive: which errors a
+// method can be made to fail with, and how.
+//
+// # Why an annotator rather than part of the stub generator
+//
+// The configuration is not the stub's alone. The stub emits a
+// `Fault<Name>()` helper, the suite generator writes "returns ErrNotFound for
+// a miss" as a subtest, and the model tier needs the partition field to state
+// an isolation law. A directive can only be declared once — eidos's registry
+// rejects a duplicate name — so declaring it inside any one generator would
+// make the others depend on that generator being registered.
+//
+// Owning it here also means the directive is parsed once and stamped, rather
+// than re-read by each generator. Three copies of "strip the `Err` prefix,
+// watch for helper-name collisions" would be three chances to disagree, and
+// the disagreement would surface as generated code that does not compile.
+//
+// # Relationship to shape mixins
+//
+// eidos's `//testkit:mixin errors` says a method reports misses through a
+// sentinel — a law about what the implementation does, which the suite and
+// model tiers assert. This directive says which sentinel a test double should
+// offer a one-shot helper for, which is test-double ergonomics. Neither
+// implies the other, and the two are read independently.
+package fault
+
+import (
+	"strconv"
+	"strings"
+
+	"go.thesmos.sh/eidos/core/meta"
+	"go.thesmos.sh/eidos/core/position"
+	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/sdk"
+)
+
+// Name is the plugin's identity within the pipeline.
+const Name = "fault"
+
+// DirectiveName is the directive this annotator owns, written under testkit's
+// namespace as `//testkit:fault`.
+const DirectiveName sdk.DirectiveName = "fault"
+
+// Keys the directive accepts alongside its positional sentinels.
+const (
+	// RetryKey pins the attempt a scheduled fault stops firing on, so
+	// `retry=3` fails twice and succeeds on the third call.
+	RetryKey = "retry"
+
+	// PartitionKey names the recorded-call field per-key fault targeting
+	// matches against.
+	PartitionKey = "partition"
+)
+
+// SentinelPrefix is stripped from an error variable's name to form its helper
+// identifier. `ErrNotFound` yields `FaultNotFound`, which reads as the action
+// performed rather than as the variable it happens to use.
+const SentinelPrefix = "Err"
+
+// Meta keys this annotator stamps. Generators read through the accessors
+// below rather than touching these directly.
+var (
+	// MetaSentinels holds the error-variable names attached to a callable,
+	// in the order they were written.
+	MetaSentinels = meta.EnsureKey("testkit.fault.sentinels", meta.StringListParser)
+
+	// MetaRetry holds the attempt a scheduled fault stops firing on.
+	MetaRetry = meta.EnsureKey("testkit.fault.retry", meta.IntParser)
+
+	// MetaPartition holds the recorded-call field per-key targeting matches
+	// against.
+	MetaPartition = meta.EnsureKey("testkit.fault.partition", meta.StringParser)
+)
+
+// Plugin is the fault annotator.
+type Plugin struct{}
+
+// New returns a plugin instance.
+func New() *Plugin { return &Plugin{} }
+
+// Name returns [Name].
+func (*Plugin) Name() string { return Name }
+
+// Directives declares the `//testkit:fault` schema.
+//
+// Sentinels are variadic positionals so a method reporting several errors
+// stays readable on one line, and the directive repeats so it can also be
+// split across lines — one concern each.
+//
+// Negation is denied: a fault helper exists exactly where one is declared, so
+// deleting the line is the suppression.
+func (*Plugin) Directives() []sdk.DirectiveSchema {
+	return []sdk.DirectiveSchema{
+		sdk.NewDirective(DirectiveName).
+			Describe(
+				"Configures how the annotated method can be made to fail on a "+
+					"generated test double. Positional arguments name error "+
+					"variables in the source package, each gaining a Fault<Name> "+
+					"helper; retry pins the attempt a scheduled fault stops firing "+
+					"on, and partition names the recorded-call field per-key "+
+					"targeting matches against. Repeatable — sentinels union across "+
+					"lines, keys take the last value written.",
+			).
+			Positional("sentinel").
+			AllowExtraPositional().
+			AllowedKeys(RetryKey, PartitionKey).
+			On(node.KindMethod).
+			DenyNegation().
+			Build(),
+	}
+}
+
+// Annotate folds every fault directive on every method into stamped metadata.
+//
+// Malformed input is reported and dropped rather than guessed at. A retry
+// count that does not parse would otherwise silently become zero, which reads
+// as "no retry configured" — the one answer indistinguishable from the
+// directive being absent.
+func (*Plugin) Annotate(ctx *sdk.AnnotatorContext) error {
+	for _, iface := range ctx.Reader.Interfaces().Slice() {
+		for _, m := range iface.Methods {
+			annotate(ctx, iface, m)
+		}
+	}
+	return nil
+}
+
+// annotate stamps one method's fault configuration.
+func annotate(ctx *sdk.AnnotatorContext, iface *node.Interface, m *node.Method) {
+	var (
+		sentinels []string
+		seen      = make(map[string]string)
+	)
+
+	for _, dir := range m.Directives() {
+		if dir.Name != DirectiveName {
+			continue
+		}
+		for _, name := range dir.Args {
+			helper := Helper(name)
+			if prior, clash := seen[helper]; clash {
+				ctx.Diag.Errorf(dir.Pos,
+					"%s: sentinels %q and %q on %s.%s both generate %s; rename one or drop it",
+					Name, prior, name, iface.Name, m.Name, helper)
+				continue
+			}
+			seen[helper] = name
+			sentinels = append(sentinels, name)
+		}
+		if raw, ok := dir.KV[RetryKey]; ok {
+			stampRetry(ctx, iface, m, dir.Pos, raw)
+		}
+		if field, ok := dir.KV[PartitionKey]; ok {
+			MetaPartition.Set(m.Meta(), field, Name)
+		}
+	}
+
+	if len(sentinels) > 0 {
+		MetaSentinels.Set(m.Meta(), sentinels, Name)
+	}
+}
+
+// stampRetry records a retry count, reporting anything that is not a positive
+// attempt number.
+func stampRetry(ctx *sdk.AnnotatorContext, iface *node.Interface, m *node.Method, pos position.Pos, raw string) {
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		ctx.Diag.Errorf(pos,
+			"%s: %s=%q on %s.%s is not a positive attempt count",
+			Name, RetryKey, raw, iface.Name, m.Name)
+		return
+	}
+	MetaRetry.Set(m.Meta(), n, Name)
+}
+
+// Helper returns the generated helper identifier for a sentinel variable.
+//
+// Exported because the collision rule and the emitted method name have to
+// agree: the annotator reports a clash using this, and a generator names the
+// method with it.
+func Helper(sentinel string) string {
+	return "Fault" + strings.TrimPrefix(sentinel, SentinelPrefix)
+}
+
+// Sentinels returns the error variables attached to a callable, in the order
+// written. Empty when the callable declares none.
+func Sentinels(bag *meta.Bag) []string {
+	if bag == nil {
+		return nil
+	}
+	out, _ := MetaSentinels.Get(bag)
+	return out
+}
+
+// Retry returns the attempt a scheduled fault stops firing on, or zero when
+// the callable configures none.
+func Retry(bag *meta.Bag) int {
+	if bag == nil {
+		return 0
+	}
+	out, _ := MetaRetry.Get(bag)
+	return out
+}
+
+// Partition returns the recorded-call field per-key targeting matches
+// against, or empty when the callable configures none.
+func Partition(bag *meta.Bag) string {
+	if bag == nil {
+		return ""
+	}
+	out, _ := MetaPartition.Get(bag)
+	return out
+}

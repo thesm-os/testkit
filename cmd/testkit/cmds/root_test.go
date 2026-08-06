@@ -16,6 +16,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.thesmos.sh/eidos/cli"
+	"go.thesmos.sh/eidos/plugin"
 
 	"go.thesmos.sh/testkit/core/brand"
 )
@@ -237,13 +238,47 @@ func TestBindKernelFlags(t *testing.T) {
 	}
 }
 
-// The generator set is empty until the first generator is ported. Pinning it
-// makes the day it changes a deliberate edit rather than a surprise.
-func TestGeneratorSetIsEmpty(t *testing.T) {
+// The binary is useless without all four plugin roles: a missing frontend
+// parses nothing, a missing backend renders nothing, and either failure
+// reports as a build error at run time rather than here.
+//
+// Pinning the roles rather than the count means adding a generator does not
+// touch this test, while dropping the frontend does.
+func TestPluginSetCarriesEveryRole(t *testing.T) {
 	t.Parallel()
 
-	if got := generators(); len(got) != 0 {
-		t.Fatalf("expected no generators yet, got %d", len(got))
+	plugins := generators()
+	if len(plugins) == 0 {
+		t.Fatal("the binary registers no plugins at all")
+	}
+
+	var frontends, annotators, gens, backends int
+	for _, p := range plugins {
+		if _, ok := p.(plugin.Frontend); ok {
+			frontends++
+		}
+		if _, ok := p.(plugin.Annotator); ok {
+			annotators++
+		}
+		if _, ok := p.(plugin.Generator); ok {
+			gens++
+		}
+		if _, ok := p.(plugin.Backend); ok {
+			backends++
+		}
+	}
+	for _, c := range []struct {
+		role string
+		n    int
+	}{
+		{"frontend", frontends},
+		{"annotator", annotators},
+		{"generator", gens},
+		{"backend", backends},
+	} {
+		if c.n == 0 {
+			t.Errorf("the plugin set registers no %s", c.role)
+		}
 	}
 }
 

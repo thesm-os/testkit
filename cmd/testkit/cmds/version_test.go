@@ -16,9 +16,8 @@ import (
 	"go.thesmos.sh/testkit/core/brand"
 )
 
-// The binary reports the generator set so an operator can confirm which
-// generators a given build carries. An empty set has to be visible rather than
-// silent, which is why this asserts the rendered line and not the slice.
+// The binary reports its plugin set so an operator can confirm which
+// generators a given build carries — the question a bug report starts with.
 //
 //nolint:paralleltest // drives the shared rootCmd
 func TestVersionTextOutput(t *testing.T) {
@@ -27,7 +26,10 @@ func TestVersionTextOutput(t *testing.T) {
 	if code != cli.ExitOK {
 		t.Fatalf("version must succeed, got exit %d", code)
 	}
-	for _, want := range []string{"testkit", "emit-contract:", "plugins: (none)", "build: dev"} {
+	// The generator name rather than the count: a build carrying a generator
+	// that silently failed to register is the failure worth catching, and a
+	// count would pass so long as something was there.
+	for _, want := range []string{"testkit", "emit-contract:", "stub", "build: dev"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("version output missing %q:\n%s", want, stdout)
 		}

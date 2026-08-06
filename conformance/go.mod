@@ -3,20 +3,28 @@ module go.thesmos.sh/testkit/conformance
 go 1.26.5
 
 require (
-	go.thesmos.sh/eidos/backend/golang v1.3.2
-	go.thesmos.sh/eidos/frontend/golang v1.4.1
-	go.thesmos.sh/eidos/plugins v1.5.1
+	go.thesmos.sh/eidos/backend/golang v1.4.1
+	go.thesmos.sh/eidos/frontend/golang v1.5.1
+	go.thesmos.sh/eidos/plugins v1.6.1
 	go.thesmos.sh/testkit v0.0.0-00010101000000-000000000000
 )
 
 require (
-	go.thesmos.sh/eidos v1.3.3
+	github.com/google/go-cmp v0.7.0 // indirect
+	go.thesmos.sh/testkit/generator v0.0.0-00010101000000-000000000000
+)
+
+require (
+	go.thesmos.sh/eidos v1.5.0
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 )
 
-// The runtime module is developed in lockstep with this one and its current
-// tree is not published. go.work covers the workspace build; this replace is
-// what lets `go mod tidy` resolve per-module.
-replace go.thesmos.sh/testkit => ../
+// The runtime and generator modules are developed in lockstep with this one
+// and their current trees are not published. go.work covers the workspace
+// build; these replaces are what let `go mod tidy` resolve per-module.
+replace (
+	go.thesmos.sh/testkit => ../
+	go.thesmos.sh/testkit/generator => ../generator
+)

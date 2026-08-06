@@ -12,12 +12,10 @@ import (
 	"go.thesmos.sh/eidos/frontend/golang"
 	"go.thesmos.sh/eidos/pipeline"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sink"
 
 	"go.thesmos.sh/testkit/core/brand"
+	"go.thesmos.sh/testkit/generator"
 )
 
 // Annotate runs eidos's frontend and shape annotator over the corpus and
@@ -56,17 +54,21 @@ func Annotate(ctx context.Context, root string, patterns ...string) (map[string]
 		scoped[i] = filepath.Join(root, p)
 	}
 
-	plugin := shape.New().
-		Detectors(detectors.All()...).
-		Contracts(contracts.All()...).
-		Mixins(mixins.All()...)
-
-	pipe, err := pipeline.New().
+	// Taken from the generator module rather than assembled here. The set the
+	// gate measures and the set the CLI applies have to be the same one, and
+	// two constructions of it would be free to drift. It also registers every
+	// testkit directive schema, without which a fixture carrying one is
+	// rejected as unknown rather than measured.
+	builder := pipeline.New().
 		WithBrand(brand.Name).
 		WithDirectivePrefix(brand.DirectivePrefix).
 		WithSourceRoot(root).
-		WithFrontend(golang.New()).
-		WithAnnotator(plugin).
+		WithFrontend(golang.New())
+	for _, a := range generator.Annotators() {
+		builder = builder.WithAnnotator(a)
+	}
+
+	pipe, err := builder.
 		WithBackend(backendgolang.New()).
 		WithSink(sink.NewMemory()).
 		Build()

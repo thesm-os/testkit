@@ -41,10 +41,12 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.thesmos.sh/eidos/cli"
+	"go.thesmos.sh/eidos/core/directive"
 	"go.thesmos.sh/eidos/plugin"
 
 	"go.thesmos.sh/testkit/cmd/internal/version"
 	"go.thesmos.sh/testkit/core/brand"
+	"go.thesmos.sh/testkit/generator"
 )
 
 // rootCmd is the top-level `testkit` command. Subcommand files register
@@ -136,7 +138,7 @@ func loadConfig(env *cli.Env) (*cli.Config, error) {
 	if path == "" {
 		found, ok := cli.DiscoverConfig(env.Workdir, env.ConfigFileName())
 		if !ok {
-			return cli.DefaultConfig(), nil
+			return withBrandDefaults(cli.DefaultConfig()), nil
 		}
 		path = found
 	}
@@ -144,7 +146,34 @@ func loadConfig(env *cli.Env) (*cli.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("cmds: load config %s: %w", path, err)
 	}
-	return cfg, nil
+	return withBrandDefaults(cfg), nil
+}
+
+// withBrandDefaults fills the directive prefix from [brand.DirectivePrefix]
+// when the config leaves it unset.
+//
+// eidos takes the prefix from configuration alone and otherwise applies its
+// own, so without this every consumer would have to write `directives.prefix:
+// testkit` in their config or find that no directive they wrote was ever read.
+// The failure is silent — the pipeline runs, reports no errors, and generates
+// nothing — which is the worst shape for a misconfiguration to take.
+//
+// A config that sets the prefix explicitly still wins, because a consumer
+// vendoring testkit's generators under their own namespace is a legitimate
+// thing to want.
+//
+// The comparison is against eidos's own default rather than the empty string.
+// [cli.LoadConfig] and [cli.DefaultConfig] both fill Prefix with
+// [directive.DefaultPrefix] before this function sees the config, so an
+// empty-string check matches nothing and leaves every run reading `//gen:`
+// directives that testkit never emits. The cost is that a consumer cannot
+// deliberately pin the prefix back to eidos's default — which nobody wants,
+// since testkit's directives are the only ones these generators declare.
+func withBrandDefaults(cfg *cli.Config) *cli.Config {
+	if cfg != nil && (cfg.Directives.Prefix == "" || cfg.Directives.Prefix == directive.DefaultPrefix) {
+		cfg.Directives.Prefix = brand.DirectivePrefix
+	}
+	return cfg
 }
 
 // bindKernelFlags folds a kernel's stdlib flag registrations into cobraCmd.
@@ -159,7 +188,12 @@ func bindKernelFlags(cobraCmd *cobra.Command, name string, register func(*flag.F
 	cobraCmd.Flags().AddGoFlagSet(fs)
 }
 
-// generators returns the plugin set this binary embeds. Empty until the first
-// generator is ported; `testkit version` reports the set, so an empty result is
-// visible rather than silent.
-func generators() []plugin.Plugin { return nil }
+// generators returns the plugin set this binary embeds — frontend, annotator,
+// generators, and backend.
+//
+// The set lives in the generator module rather than here because the
+// conformance gate configures the same annotator to measure what the corpus
+// stamps. Two definitions would let the gate and the binary disagree about
+// which classifications exist, and the gate would report coverage the
+// generated output does not have.
+func generators() []plugin.Plugin { return generator.All() }

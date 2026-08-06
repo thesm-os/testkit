@@ -1,0 +1,443 @@
+{{- define "stub.test" -}}
+{{- $T := external "testing" "T" -}}
+{{- $TB := external "testing" "TB" -}}
+{{- $equal := external "go.thesmos.sh/testkit" "Equal" -}}
+{{- $errorIs := external "go.thesmos.sh/testkit" "ErrorIs" -}}
+{{- $true := external "go.thesmos.sh/testkit" "True" -}}
+{{- $len := external "go.thesmos.sh/testkit" "Len" -}}
+{{- $noError := external "go.thesmos.sh/testkit" "NoError" -}}
+{{- $testErr := external "go.thesmos.sh/testkit" "TestError" -}}
+{{- $failable := external "go.thesmos.sh/testkit" "NewFailableTB" -}}
+{{- $hour := external "time" "Hour" -}}
+{{- $iface := .IfaceName -}}
+{{- $behaviour := external "go.thesmos.sh/testkit/stub" "Behaviour" -}}
+{{- $doubleBehaviour := external "go.thesmos.sh/testkit/stub" "DoubleBehaviour" -}}
+{{- $doubleT := external "go.thesmos.sh/testkit/stub" "Double" -}}
+{{- $instance := external "go.thesmos.sh/testkit/stub" "Instance" -}}
+{{- $clock := external "go.thesmos.sh/testkit/clock" "Clock" -}}
+{{- $randsrc := external "go.thesmos.sh/testkit/rand" "Source" -}}
+{{- $subject := external "go.thesmos.sh/testkit/stub" "Subject" -}}
+{{- $pkg := .StubRef.Pkg -}}
+{{- $stub := .TypeName -}}
+{{ if .Complete -}}
+// Compile-time proof that {{ $stub }} satisfies the interface it doubles.
+// A drifted signature fails here rather than at the first test that assigns
+// the double.
+var _ {{ renderExpr .IfaceRef }} = (*{{ renderExpr .StubRef }})(nil)
+{{- end }}
+{{ range $m := .Methods }}
+// {{ camel $stub }}{{ $m.Name }}Subject binds {{ $m.Name }} into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func {{ camel $stub }}{{ $m.Name }}Subject(tb {{ renderExpr $TB }}) {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ else }}struct{}{{ end }}] {
+	tb.Helper()
+	s := {{ renderExpr $.CtorRef }}(tb)
+	return {{ renderExpr $subject }}[{{ renderExpr (external $pkg $m.CallType) }}, {{ if $m.HasResults }}{{ renderExpr (external $pkg $m.ReturnType) }}{{ else }}struct{}{{ end }}]{
+		Stub: s.{{ $m.OnField }}.MethodStub,
+		Call: func() {
+{{- template "stub.testargs" $m }}
+			{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		},
+{{- if $m.HasResults }}
+		Result: func() {{ renderExpr (external $pkg $m.ReturnType) }} {
+{{- template "stub.testargs" $m }}
+			{{ template "stub.testgot" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+			return {{ renderExpr (external $pkg $m.ReturnType) }}{ {{- template "stub.resultassign" $m -}} }
+		},
+{{- end }}
+		Override: func(mark func()) {
+			s.{{ $m.OnField }}.Func(func({{ template "stub.testfuncparams" $m }}) {{ template "stub.results" $m }} {
+				mark()
+{{- if $m.HasResults }}
+{{- range $i, $r := $m.Returns }}
+				var z{{ $i }} {{ renderType $r.Type }}
+{{- end }}
+				return {{ template "stub.testzeros" $m }}
+{{- end }}
+			})
+		},
+{{- with $err := $m.ErrReturn }}
+		Fails: func() error {
+{{- template "stub.testargs" $m }}
+			{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+			return {{ $err.Local }}
+		},
+{{- end }}
+	}
+}
+
+// Test{{ $stub }}{{ $m.Name }} pins how {{ $m.Name }} answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	{{ renderExpr $behaviour }}(t, "{{ $m.Name }}", {{ camel $stub }}{{ $m.Name }}Subject)
+{{- if $m.HasResults }}
+
+	t.Run("answers with the value pinned by Returns", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+{{- range $i, $r := $m.Returns }}
+		var want{{ $i }} {{ renderType $r.Type }}
+{{- end }}
+		s.{{ $m.OnField }}.Returns({{ template "stub.testwants" $m }})
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testgot" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+{{- range $i, $r := $m.Returns }}
+		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "{{ $m.Name }} must answer with what Returns pinned")
+{{- end }}
+	})
+{{- end }}
+	t.Run("records what it was called with", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := {{ renderExpr $.CtorRef }}(t)
+{{- template "stub.testargs" $m }}
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		got := s.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must record the call")
+{{- range $i, $p := $m.Params }}
+		{{ renderExpr $equal }}(t, got.{{ $p.Field }}, a{{ $i }}, "the recorded call carries {{ $p.Field }}")
+{{- end }}
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var seen []{{ renderExpr (external $pkg $m.CallType) }}
+		s.{{ $m.OnField }}.OnRecord(func(c {{ renderExpr (external $pkg $m.CallType) }}) { seen = append(seen, c) })
+{{- template "stub.testargs" $m }}
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $len }}(t, seen, 2, "OnRecord must fire once per {{ $m.Name }} call")
+	})
+
+	t.Run("wires With{{ $iface }}{{ $m.Name }} at construction", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		called := false
+		s := {{ renderExpr $.CtorRef }}(t, {{ renderExpr (external $pkg (printf "With%s%s" $iface $m.Name)) }}(func({{ template "stub.testfuncparams" $m }}) {{ template "stub.results" $m }} {
+			called = true
+{{- if $m.HasResults }}
+{{- range $i, $r := $m.Returns }}
+			var z{{ $i }} {{ renderType $r.Type }}
+{{- end }}
+			return {{ template "stub.testzeros" $m }}
+{{- end }}
+		}))
+{{- template "stub.testargs" $m }}
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $true }}(t, called, "With{{ $iface }}{{ $m.Name }} must install the override")
+	})
+{{- if $m.HasResults }}
+
+	t.Run("keeps the Returns configuration across a reset", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := {{ renderExpr $.CtorRef }}(t)
+{{- range $i, $r := $m.Returns }}
+		var want{{ $i }} {{ renderType $r.Type }}
+{{- end }}
+		s.{{ $m.OnField }}.Returns({{ template "stub.testwants" $m }})
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testblank" $m }} = s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		s.ResetCalls()
+		{{ template "stub.testgot" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+{{- range $i, $r := $m.Returns }}
+		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "a reset must keep what Returns pinned")
+{{- end }}
+	})
+{{- end }}
+{{- if $m.Iterator }}
+
+	t.Run("yields the items Yields configured", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+		var want {{ renderType $m.IteratorElem }}
+		s.{{ $m.OnField }}.Yields(want, want)
+{{- template "stub.testargs" $m }}
+		got0 := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		seen := 0
+		for range got0 {
+			seen++
+		}
+		{{ renderExpr $equal }}(t, seen, 2, "{{ $m.Name }} must yield every configured item")
+	})
+
+	t.Run("stops yielding when the caller breaks", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A range-over-func that ignores its yield's false is the classic way
+		// to write one wrong, and the loop it breaks out of is a consumer's,
+		// not ours — so the double has to honour it or every consumer's early
+		// exit silently runs to completion.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var want {{ renderType $m.IteratorElem }}
+		s.{{ $m.OnField }}.Yields(want, want, want)
+{{- template "stub.testargs" $m }}
+		got0 := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		seen := 0
+		for range got0 {
+			seen++
+			break
+		}
+		{{ renderExpr $equal }}(t, seen, 1, "{{ $m.Name }} must stop when the caller breaks")
+	})
+{{- end }}
+{{- if $m.IteratorYieldsError }}
+
+	t.Run("yields the items YieldsError configured and then fails", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Failing partway through is the case a consumer's loop most often
+		// gets wrong, and a sequence that only ever succeeds never reaches it.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var item {{ renderType $m.IteratorElem }}
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-yields")
+		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item}, want)
+{{- template "stub.testargs" $m }}
+		got0 := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		seen := 0
+		var last error
+		for _, err := range got0 {
+			if err != nil {
+				last = err
+				break
+			}
+			seen++
+		}
+		{{ renderExpr $equal }}(t, seen, 2, "{{ $m.Name }} must yield every item before failing")
+		{{ renderExpr $errorIs }}(t, last, want, "{{ $m.Name }} must end with the configured error")
+	})
+
+	t.Run("stops a failing sequence when the caller breaks", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Breaking before the error is the path a caller takes when it has
+		// seen enough, and a sequence that ran on regardless would keep
+		// producing after its consumer stopped listening.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var item {{ renderType $m.IteratorElem }}
+		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item, item}, {{ renderExpr $testErr }}("{{ $m.Name }}-yields"))
+{{- template "stub.testargs" $m }}
+		got0 := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		seen := 0
+		for range got0 {
+			seen++
+			break
+		}
+		{{ renderExpr $equal }}(t, seen, 1, "{{ $m.Name }} must stop when the caller breaks")
+	})
+{{- end }}
+{{- if $m.Partition }}
+{{- with $err := $m.ErrReturn }}
+
+	t.Run("faults only the matching partition", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Partitioned failure is what proves isolation: a fault that fired
+		// everywhere would pass a test asserting one tenant's outage reaches
+		// another, which is the bug the mixin exists to catch.
+		s := {{ renderExpr $.CtorRef }}(t)
+		var key {{ template "stub.partitionkeytype" $m }}
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-partition")
+		s.{{ $m.OnField }}.FaultForPartition(key, want, 1)
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "a call in the targeted partition must fail")
+	})
+
+	t.Run("leaves the named partition healthy", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+		var key {{ template "stub.partitionkeytype" $m }}
+		s.{{ $m.OnField }}.FaultForOtherPartitions(key, {{ renderExpr $testErr }}("{{ $m.Name }}-partition"), 1)
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $noError }}(t, {{ $err.Local }}, "a call in the named partition must be spared")
+	})
+{{- end }}
+{{- end }}
+{{- if $m.OrderAfter }}
+
+	t.Run("refuses {{ $m.Name }} before {{ $m.OrderAfter }} in strict mode", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// Out-of-order use is a caller's bug, and one that silently works
+		// against a double will not work against the real implementation.
+		f := {{ renderExpr $failable }}()
+		s := {{ renderExpr $.CtorRef }}(f, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}())
+{{- template "stub.testargs" $m }}
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $true }}(t, f.Failed(), "{{ $m.Name }} before {{ $m.OrderAfter }} must be refused")
+	})
+{{- end }}
+{{- with $err := $m.ErrReturn }}
+{{- if $m.Retry }}
+
+	t.Run("fails until the retry attempt then succeeds", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// A caller written around a retry loop is only exercised by a double
+		// that fails and then stops: one that always fails never reaches the
+		// success path, and one that never fails never enters the loop.
+		s := {{ renderExpr $.CtorRef }}(t)
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-retry")
+		s.{{ $m.OnField }}.RetrySchedule(want)
+{{- template "stub.testargs" $m }}
+		for attempt := 1; attempt < {{ $m.Retry }}; attempt++ {
+			{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+			{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "a call before attempt {{ $m.Retry }} must fail")
+		}
+		{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $noError }}(t, {{ $err.Local }}, "attempt {{ $m.Retry }} must succeed")
+	})
+{{- end }}
+{{- range $s := $m.Sentinels }}
+
+	t.Run("answers with {{ $s.Name }} after {{ $s.Helper }}", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		s := {{ renderExpr $.CtorRef }}(t)
+		s.{{ $m.OnField }}.{{ $s.Helper }}()
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, {{ renderExpr $s.Ref }}, "{{ $s.Helper }} must answer with {{ $s.Name }}")
+	})
+{{- end }}
+{{- end }}
+}
+{{ end }}
+{{ with $m := index .Methods 0 }}
+// {{ camel $stub }}Double describes how to build a {{ $stub }} under each
+// option whose effect is the same whatever a method's signature.
+//
+// {{ $m.Name }} stands in for the double as a whole: what these checks assert
+// is that an option reached it at all, and the first method witnesses that as
+// well as any other would.
+func {{ camel $stub }}Double() {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+	instance := func(s *{{ renderExpr $.StubRef }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+		return {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}]{
+			Stub: s.{{ $m.OnField }}.MethodStub,
+			Call: func() {
+{{- template "stub.testargs" $m }}
+				{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+			},
+			Reset: s.ResetCalls,
+		}
+	}
+	return {{ renderExpr $doubleT }}[{{ renderExpr (external $pkg $m.CallType) }}]{
+		New: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+			return instance({{ renderExpr $.CtorRef }}(tb))
+		},
+		WithClock: func(tb {{ renderExpr $TB }}, clk {{ renderExpr $clock }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sWithClock" $stub)) }}(clk)))
+		},
+		WithRandSource: func(tb {{ renderExpr $TB }}, src {{ renderExpr $randsrc }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sWithRandSource" $stub)) }}(src)))
+		},
+		BenchMode: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sBenchMode" $stub)) }}()))
+		},
+		Strict: func(tb {{ renderExpr $TB }}) {{ renderExpr $instance }}[{{ renderExpr (external $pkg $m.CallType) }}] {
+			return instance({{ renderExpr $.CtorRef }}(tb, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}()))
+		},
+	}
+}
+
+// Test{{ $stub }}Options pins the settings that apply to the double rather
+// than to one method: bench mode, the injected clock and random source, and
+// what a reset clears.
+func Test{{ $stub }}Options(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	{{ renderExpr $doubleBehaviour }}(t, {{ camel $stub }}Double())
+}
+{{ end }}
+// Test{{ $stub }}DelegateTo pins that a wrapped implementation is called
+// through, and recorded on the way past.
+//
+// This is what lets one generated suite run against both the double and a
+// production type, which is the point of conformance testing.
+func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
+	t.Parallel()
+
+	inner := {{ renderExpr .CtorRef }}(t)
+	s := {{ renderExpr .CtorRef }}(t, {{ renderExpr (external $pkg (printf "%sDelegateTo" $stub)) }}(inner))
+{{ range $m := .Methods }}
+	t.Run("forwards {{ $m.Name }} to the wrapped implementation", func(t *{{ renderExpr $T }}) {
+{{- template "stub.testargs" $m }}
+		{{ if $m.HasResults }}{{ template "stub.testblank" $m }} = {{ end }}s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		inner.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must reach the wrapped implementation")
+	})
+{{- with $err := $m.ErrReturn }}
+
+	t.Run("surfaces what {{ $m.Name }} answered", func(t *{{ renderExpr $T }}) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := {{ renderExpr $testErr }}("{{ $m.Name }}-delegate")
+		inner.{{ $m.OnField }}.FaultsFor({{ renderExpr $hour }}, want)
+{{- template "stub.testargs" $m }}
+		{{ template "stub.testfails" $m }} := s.{{ $m.Name }}({{ template "stub.testcall" $m }})
+		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "{{ $m.Name }} must surface the wrapped answer")
+	})
+{{- end }}
+{{ end }}}
+{{- end -}}
+
+{{- /* Arguments are declared as zero values rather than invented: what these
+       tests assert is dispatch, and the argument values are incidental. */ -}}
+{{- define "stub.testargs" -}}
+{{ range $i, $p := .Params }}
+			var a{{ $i }} {{ renderType $p.Type }}
+{{- end }}
+{{- end -}}
+
+{{- /* The partition key is typed by whichever recorded-call field it names,
+       so a caller passes the same type the method takes. */ -}}
+{{- define "stub.partitionkeytype" -}}
+{{- $field := .Partition -}}
+{{- range .Params }}{{ if eq .Field $field }}{{ renderType .Type }}{{ end }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testcall" -}}
+{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}a{{ $i }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testgot" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}got{{ $i }}{{ end }}
+{{- end -}}
+
+{{- /* Boxes a call's results into the return tuple Behaviour compares. */ -}}
+{{- define "stub.resultassign" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ $r.Field }}: got{{ $i }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testblank" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}_{{ end }}
+{{- end -}}
+
+{{- /* Binds only the error slot and discards the rest: what a fault check
+       needs is the error and nothing else. */ -}}
+{{- define "stub.testfails" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}{{ $r.Local }}{{ else }}_{{ end }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testzeros" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testwants" -}}
+{{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}want{{ $i }}{{ end }}
+{{- end -}}
+
+{{- define "stub.testfuncparams" -}}
+{{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p.Type }}{{ end }}
+{{- end -}}
