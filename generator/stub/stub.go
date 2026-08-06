@@ -308,10 +308,6 @@ func (m Method) HasMixin(name string) bool { return slices.Contains(m.Mixins, na
 // these are the subset that changes what a double emits, as opposed to the
 // ones that only state a law for the suite and model tiers.
 const (
-	// MixinIntegrationOnly marks a method a double cannot stand in for — it
-	// reaches a real dependency, so a recorded stand-in would be a lie.
-	MixinIntegrationOnly = "integrationonly"
-
 	// MixinDeprecated marks a method whose use should be reported.
 	MixinDeprecated = "deprecated"
 
@@ -377,12 +373,6 @@ type Stub struct {
 	// and for one whose constraints admit no witness — the latter gets no
 	// guard, because there is no way to name the types it would hold at.
 	Witnesses []emit.Ref
-
-	// Complete reports whether the double carries every method its source
-	// declares. An integration-only method is dropped, and a double missing a
-	// method cannot satisfy its interface — so the compile-time assertion is
-	// emitted only when nothing was dropped.
-	Complete bool
 }
 
 // Generic reports whether the double is parameterised, which is what decides
@@ -473,14 +463,7 @@ type Tests struct {
 	// absence has to be visible to a reader who expected one, and an empty file
 	// would read as a generator that failed silently.
 	Generic bool
-
-	// Complete mirrors [Stub.Complete], so the companion's compile-time
-	// assertion is emitted on exactly the same condition as the double's.
-	Complete bool
 }
-
-// Complete mirrors [Stub.Complete], so the companion's compile-time
-// assertion is emitted on exactly the same condition as the double's.
 
 // Kind returns [KindStubTests].
 func (*Tests) Kind() sdk.Kind { return KindStubTests }
@@ -570,7 +553,6 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				TypeParams: typeParamsOf(iface),
 				TypeArgs:   typeArgsOf(iface),
 				Witnesses:  witnesses,
-				Complete:   len(methods) == len(full),
 			},
 			&Tests{
 				BaseEmit:   testBase,
@@ -584,7 +566,6 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				TypeParams: typeParamsOf(iface),
 				Witnesses:  witnesses,
 				Generic:    len(iface.TypeParams) > 0 && len(witnesses) == 0,
-				Complete:   len(methods) == len(full),
 			},
 		} {
 			prov := c.Provenance(string(value.Kind()) + "." + iface.Name)
@@ -772,16 +753,6 @@ func orderAfter(m *node.Method) string {
 	return name
 }
 
-// doubled reports whether a double can stand in for m.
-//
-// An integration-only method reaches a real dependency — a network, a
-// database — so a recorded stand-in would answer for something it never did.
-// Dropping it means the double no longer satisfies its interface, which is
-// deliberate and why the compile-time assertion is guarded on completeness.
-func doubled(m *node.Method) bool {
-	return !slices.Contains(shape.Mixins(m.Meta()), MixinIntegrationOnly)
-}
-
 // sourceMethod pairs a source method with the embedded interface that
 // contributed it, so the projection can say where a flattened method came
 // from without re-walking the embed graph.
@@ -923,9 +894,6 @@ func methodsOf(iface *node.Interface, full []sourceMethod) []Method {
 	out := make([]Method, 0, len(full))
 	for _, sm := range full {
 		m := sm.Method
-		if !doubled(m) {
-			continue
-		}
 		params := signature.ParamsOf(m)
 		named := signature.NamedReturnsUsable(m)
 		out = append(out, Method{

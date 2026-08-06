@@ -311,11 +311,6 @@ func Test{{ $stub }}Options(t *{{ renderExpr $T }}) {
 	{{ renderExpr $doubleBehaviour }}(t, {{ camel $stub }}Double{{ $.TypeArgs }}())
 }
 {{ end }}
-{{- if .Complete }}
-{{- /* The check wraps the double in itself, so it needs the double to satisfy
-       the interface — the same condition the compile-time assertion is emitted
-       under. An incomplete double is one an embedded interface contributed
-       methods to that the projection did not carry. */}}
 // Test{{ $stub }}DelegateTo pins that a wrapped implementation is called
 // through, and recorded on the way past.
 //
@@ -350,7 +345,6 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
 	})
 {{- end }}
 {{ end }}}
-{{- end }}
 {{ if .Witnesses }}
 {{ range $m := .Methods }}
 // Test{{ $stub }}{{ $m.Name }} runs {{ $m.Name }}'s checks at the witness types
@@ -364,10 +358,8 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) { {{ camel $stub }}{{ 
 {{ end }}
 // Test{{ $stub }}Options runs the whole-double checks at the same witnesses.
 func Test{{ $stub }}Options(t *{{ renderExpr $T }}) { {{ camel $stub }}OptionChecks{{ template "stub.witness" $ }}(t) }
-{{ if .Complete }}
 // Test{{ $stub }}DelegateTo runs the delegation checks at the same witnesses.
 func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) { {{ camel $stub }}DelegationChecks{{ template "stub.witness" $ }}(t) }
-{{ end }}
 {{- end }}
 {{- end }}
 {{- end -}}

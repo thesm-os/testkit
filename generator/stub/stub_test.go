@@ -237,30 +237,22 @@ func TestGenerate(t *testing.T) {
 		testkit.Assert(t, s.Emit().PendingOriginSlots()).IsEmpty("a diagnosed interface emits nothing")
 	})
 
-	t.Run("drops an integration-only method from the double", func(t *testing.T) {
+	t.Run("carries an integration-only method like any other", func(t *testing.T) {
 		t.Parallel()
-		// The method reaches a real dependency, so a recorded stand-in would
-		// answer for something it never did.
+		// The mixin is a law for the suite and model tiers about what a test
+		// runs against. It says nothing about the double, and a double missing
+		// the method would not satisfy the interface at all — which is the one
+		// thing a double has to do.
 		double, _ := split(t, generate(t, stub.New(), mixedFixture(t)))
-		for _, m := range double.Methods {
-			testkit.NotEqual(t, m.Name, "Connect", "an integration-only method is not doubled")
-		}
+		testkit.Len(t, double.Methods, 2, "every declared method is doubled")
 	})
 
-	t.Run("withholds the compile-time assertion once a method is dropped", func(t *testing.T) {
-		t.Parallel()
-		// A double missing a method cannot satisfy its interface, so asserting
-		// that it does would fail inside generated code.
-		double, _ := split(t, generate(t, stub.New(), mixedFixture(t)))
-		testkit.False(t, double.Complete, "a double with a dropped method is incomplete")
-	})
-
-	t.Run("reports an interface whose every method is undoubleable", func(t *testing.T) {
+	t.Run("reports an interface with no methods at all", func(t *testing.T) {
 		t.Parallel()
 		// Measured after projection: the interface has a method, but nothing
 		// a double can stand in for, and an empty shell would satisfy and
 		// record nothing.
-		s := integrationOnlyFixture()
+		s := emptyFixture()
 		d := diag.New()
 
 		_ = stub.New().Generate(generatorContext(s, d))
@@ -464,22 +456,18 @@ func mixedFixture(t *testing.T) *store.Store {
 			})
 			i.Method("Connect", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
-				stampMixin(m, stub.MixinIntegrationOnly)
+				stampMixin(m, "integrationonly")
 			})
 		}).
 		Build()
 }
 
-// integrationOnlyFixture returns a store whose only method is stamped
-// integration-only, leaving nothing for a double to stand in for.
-func integrationOnlyFixture() *store.Store {
+// emptyFixture returns a store whose annotated interface declares no methods,
+// which is the one shape a double has nothing to stand in for.
+func emptyFixture() *store.Store {
 	return storefixture.New().
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Method("Connect", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
-				stampMixin(m, stub.MixinIntegrationOnly)
-			})
 		}).
 		Build()
 }
@@ -755,12 +743,6 @@ func TestFlatten(t *testing.T) {
 		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
 		testkit.Equal(t, double.Methods[0].From, "Base", "the generated field says where it came from")
 		testkit.Equal(t, double.Methods[1].From, "", "a declared method is attributed to nothing")
-	})
-
-	t.Run("asserts the interface once the method set is whole", func(t *testing.T) {
-		t.Parallel()
-		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
-		testkit.True(t, double.Complete, "a flattened double satisfies its interface")
 	})
 
 	t.Run("emits nothing when an embed cannot be resolved", func(t *testing.T) {

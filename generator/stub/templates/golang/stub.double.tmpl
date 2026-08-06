@@ -181,7 +181,7 @@ type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 	strict bool
 }
 
-{{ if and .Complete (or (not .TypeParams) .Witnesses) }}
+{{ if or (not .TypeParams) .Witnesses }}
 // Compile-time proof that {{ $stub }} satisfies {{ $iface }}.
 //
 // It lives here rather than in the companion so a drifted signature fails

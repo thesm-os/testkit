@@ -20,10 +20,13 @@ import (
 
 // Mixed is the fixture interface.
 //
-// No //testkit:stub. Every method here is integration-only, so a double would
-// carry none of them — it would satisfy nothing and record nothing. The stub
-// generator reports exactly that, and the fixture exists to hold the mixin
-// rather than to produce a double.
+// Mixed is the fixture interface. The double carries Connect like any other
+// method: the mixin is a law for the suite and model tiers about what a test
+// runs against, not an instruction to the stub generator, and a double
+// omitting the method would not satisfy the interface at all.
+//
+//testkit:out integrationonlytest/ pkg=integrationonlytest
+//testkit:stub
 type Mixed interface {
 	// Connect reaches outside the process. The mixin gates the generated
 	// subtest behind a build tag rather than asserting anything at runtime.
