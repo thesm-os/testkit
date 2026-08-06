@@ -15,6 +15,8 @@ import (
 // Service names its returns. A generated call type takes its field names from
 // them, falling back to positional names only when they are absent — so this
 // fixture and the unnamed one below must produce different field names.
+//testkit:out namedreturnstest/ pkg=namedreturnstest
+//testkit:stub
 type Service interface {
 	Named(ctx context.Context, id string) (item string, err error)
 	Unnamed(ctx context.Context, id string) (string, error)

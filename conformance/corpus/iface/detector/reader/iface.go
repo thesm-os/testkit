@@ -22,6 +22,9 @@ var ErrNotFound = errors.New("reader: not found")
 type Value struct{ Key, Body string }
 
 // Reader is the fixture interface.
+//
+//testkit:out readertest/ pkg=readertest
+//testkit:stub
 type Reader interface {
 	Get(ctx context.Context, key string) (Value, error)
 }

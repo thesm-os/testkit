@@ -19,6 +19,8 @@ import (
 )
 
 // Mixed is the fixture interface.
+//testkit:out orderaftertest/ pkg=orderaftertest
+//testkit:stub
 type Mixed interface {
 	// Commit is valid only after Prepare. The fn parameter names the
 	// predecessor, and the resolver resolves it to a sibling — so Prepare has

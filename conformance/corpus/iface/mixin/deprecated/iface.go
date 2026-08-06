@@ -19,6 +19,8 @@ import (
 )
 
 // Mixed is the fixture interface.
+//testkit:out deprecatedtest/ pkg=deprecatedtest
+//testkit:stub
 type Mixed interface {
 	// Old carries no runtime law: the mixin is an annotation the generator
 	// surfaces, so the signature is deliberately unremarkable.

@@ -19,10 +19,14 @@ import (
 )
 
 // Mixed is the fixture interface.
+//
+//testkit:out retrysucceedstest/ pkg=retrysucceedstest
+//testkit:stub
 type Mixed interface {
 	// Call fails transiently before succeeding. The law drives it repeatedly,
 	// so a method that either always works or never does cannot host it.
 	//testkit:mixin retrysucceeds
+	//testkit:fault retry=3
 	Call(ctx context.Context, key string) error
 
 	// Attempts reports how many tries the subject has seen, which is how the

@@ -19,6 +19,9 @@ import (
 type Value struct{ Key, Body string }
 
 // StreamReader is the fixture interface.
+//
+//testkit:out streamreadertest/ pkg=streamreadertest
+//testkit:stub
 type StreamReader interface {
 	List(ctx context.Context) iter.Seq2[Value, error]
 }
