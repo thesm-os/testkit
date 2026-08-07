@@ -4,7 +4,6 @@
 package stub
 
 import (
-	"fmt"
 	"io/fs"
 	"path"
 	"slices"
@@ -13,11 +12,12 @@ import (
 
 	"go.thesmos.sh/eidos/core/directive"
 	"go.thesmos.sh/eidos/emit"
-	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/internal/emitq"
+	"go.thesmos.sh/testkit/generator/internal/generic"
 	"go.thesmos.sh/testkit/generator/internal/nodes"
 	"go.thesmos.sh/testkit/generator/internal/signature"
 	"go.thesmos.sh/testkit/generator/internal/witness"
@@ -481,10 +481,12 @@ func (*Tests) Kind() sdk.Kind { return KindStubTests }
 // compile error naming the symbol, while a bare name silently binds
 // to whatever else is in scope.
 func (t *Tests) SetOutputPackages(byTag map[string]string) {
-	if path := byTag[""]; path != "" {
-		t.StubRef = sdk.NewExternal(path, t.TypeName)
-		t.CtorRef = sdk.NewExternal(path, "New"+t.TypeName)
+	path, ok := emitq.PrimaryPackage(byTag)
+	if !ok {
+		return
 	}
+	t.StubRef = sdk.NewExternal(path, t.TypeName)
+	t.CtorRef = sdk.NewExternal(path, "New"+t.TypeName)
 }
 
 // Generate walks every source interface carrying `//testkit:stub` and
@@ -530,46 +532,36 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 
 		witnesses := witnessesOf(ctx, iface)
 
-		base := sdk.BaseEmit{
-			OriginNode: iface,
-			SetByName:  c.SetBy(),
-			SourcePos:  iface.Pos(),
-		}
-		testBase := base
-		testBase.OutputTagName = GoTestOutputTag
+		base := emitq.Base(c, iface)
 
-		// Appended through one loop rather than two blocks. The pair differs
-		// only in its emit kind and output tag, and a second copy of the
-		// append-and-check dance is where the two would drift apart.
-		for _, value := range []sdk.EmitNode{
+		// Queued in one call rather than two. The pair differs only in its emit
+		// kind and output tag, and a second append is where the two would drift.
+		if err := emitq.Append(ctx, c, SlotName, iface,
 			&Stub{
 				BaseEmit:   base,
 				TypeName:   typeName,
 				IfaceName:  iface.Name,
 				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
 				Methods:    methods,
-				TypeParams: typeParamsOf(iface),
-				TypeArgs:   typeArgsOf(iface),
+				TypeParams: generic.Params(iface.TypeParams),
+				TypeArgs:   generic.Args(iface.TypeParams),
 				Witnesses:  witnesses,
 			},
 			&Tests{
-				BaseEmit:   testBase,
+				BaseEmit:   emitq.Tagged(base, GoTestOutputTag),
 				TypeName:   typeName,
 				IfaceName:  iface.Name,
 				StubRef:    sdk.NewExternal(iface.Package, typeName),
 				CtorRef:    sdk.NewExternal(iface.Package, "New"+typeName),
 				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
 				Methods:    methods,
-				TypeArgs:   typeArgsOf(iface),
-				TypeParams: typeParamsOf(iface),
+				TypeArgs:   generic.Args(iface.TypeParams),
+				TypeParams: generic.Params(iface.TypeParams),
 				Witnesses:  witnesses,
 				Generic:    len(iface.TypeParams) > 0 && len(witnesses) == 0,
 			},
-		} {
-			prov := c.Provenance(string(value.Kind()) + "." + iface.Name)
-			if err := ctx.Store.Emit().AppendOriginSlot(iface, SlotName, value, prov); err != nil {
-				return fmt.Errorf("%s: append %s slot for %q: %w", Name, value.Kind(), iface.Name, err)
-			}
+		); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -649,40 +641,6 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
-}
-
-// typeParamsOf lifts the interface's type-parameter list into the emit form
-// `renderTypeParams` consumes.
-//
-// Written here rather than taken from lang/golang because that package's
-// helper is typed to a struct, and an interface's list is the same shape for a
-// different host.
-func typeParamsOf(iface *node.Interface) []*emit.TypeParam {
-	if len(iface.TypeParams) == 0 {
-		return nil
-	}
-	out := make([]*emit.TypeParam, len(iface.TypeParams))
-	for i, p := range iface.TypeParams {
-		out[i] = &emit.TypeParam{
-			Name:       p.Name,
-			Constraint: golang.ConstraintFromNode(p.Constraint),
-		}
-	}
-	return out
-}
-
-// typeArgsOf returns the use form of the interface's type-parameter list —
-// `[K, V]` — or empty for a non-generic interface, so a template can append it
-// unconditionally.
-func typeArgsOf(iface *node.Interface) string {
-	if len(iface.TypeParams) == 0 {
-		return ""
-	}
-	names := make([]string, len(iface.TypeParams))
-	for i, p := range iface.TypeParams {
-		names[i] = p.Name
-	}
-	return "[" + strings.Join(names, ", ") + "]"
 }
 
 // iteratorReturn returns the method's sole return when it has exactly one,

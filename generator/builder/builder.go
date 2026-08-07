@@ -4,7 +4,6 @@
 package builder
 
 import (
-	"fmt"
 	"io/fs"
 	"reflect"
 	"strings"
@@ -16,6 +15,8 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/internal/defaults"
+	"go.thesmos.sh/testkit/generator/internal/emitq"
+	"go.thesmos.sh/testkit/generator/internal/generic"
 	"go.thesmos.sh/testkit/generator/internal/nodes"
 	"go.thesmos.sh/testkit/generator/internal/witness"
 )
@@ -384,10 +385,12 @@ func (*Tests) Kind() sdk.Kind { return KindBuilderTests }
 // SetOutputPackages repoints the references at wherever Layout routed the
 // builder.
 func (t *Tests) SetOutputPackages(byTag map[string]string) {
-	if path := byTag[""]; path != "" {
-		t.CtorRef = sdk.NewExternal(path, "New"+t.SourceName)
-		t.FromRef = sdk.NewExternal(path, "New"+t.SourceName+"From")
+	path, ok := emitq.PrimaryPackage(byTag)
+	if !ok {
+		return
 	}
+	t.CtorRef = sdk.NewExternal(path, "New"+t.SourceName)
+	t.FromRef = sdk.NewExternal(path, "New"+t.SourceName+"From")
 }
 
 // Generate walks every source struct carrying `//testkit:builder` and queues
@@ -412,28 +415,21 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		}
 
 		value := &Builder{
-			BaseEmit: sdk.BaseEmit{
-				OriginNode: s,
-				SetByName:  c.SetBy(),
-				SourcePos:  s.Pos(),
-			},
+			BaseEmit:   emitq.Base(c, s),
 			TypeName:   s.Name + Suffix,
 			SourceName: s.Name,
 			ValueRef:   sdk.NewExternal(s.Package, s.Name),
-			TypeParams: typeParamsOf(s),
-			TypeArgs:   typeArgsOf(s),
+			TypeParams: generic.Params(s.TypeParams),
+			TypeArgs:   generic.Args(s.TypeParams),
 			Fields:     fields,
 			Companion:  companionOf(ctx, s),
 		}
 		w := witness.For(s.TypeParams)
-		testBase := value.BaseEmit
-		testBase.OutputTagName = GoTestOutputTag
 
-		// Appended through one loop rather than two blocks: the pair differs
-		// only in its emit kind and output tag, and a second copy of the
-		// append-and-check dance is where the two would drift apart.
-		for _, emitted := range []sdk.EmitNode{value, &Tests{
-			BaseEmit:   testBase,
+		// Queued in one call rather than two: the pair differs only in its emit
+		// kind and output tag, and a second append is where the two would drift.
+		if err := emitq.Append(ctx, c, SlotName, s, value, &Tests{
+			BaseEmit:   emitq.Tagged(value.BaseEmit, GoTestOutputTag),
 			TypeName:   value.TypeName,
 			SourceName: s.Name,
 			CtorRef:    sdk.NewExternal(s.Package, "New"+s.Name),
@@ -445,11 +441,8 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Seeded:     value.Seeded(),
 			Companion:  value.Companion,
 			Witnesses:  w,
-		}} {
-			prov := c.Provenance(string(emitted.Kind()) + "." + s.Name)
-			if err := ctx.Store.Emit().AppendOriginSlot(s, SlotName, emitted, prov); err != nil {
-				return fmt.Errorf("%s: append %s slot for %q: %w", Name, emitted.Kind(), s.Name, err)
-			}
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -669,34 +662,4 @@ func classify(rv *resolver, field *Field, t *node.TypeRef) {
 	default:
 		field.Sample, field.Alternate = rv.samples(t, field.Name, seen)
 	}
-}
-
-// typeParamsOf lifts the struct's type-parameter list into the emit form
-// `renderTypeParams` consumes.
-func typeParamsOf(s *node.Struct) []*emit.TypeParam {
-	if len(s.TypeParams) == 0 {
-		return nil
-	}
-	out := make([]*emit.TypeParam, len(s.TypeParams))
-	for i, p := range s.TypeParams {
-		out[i] = &emit.TypeParam{
-			Name:       p.Name,
-			Constraint: golang.ConstraintFromNode(p.Constraint),
-		}
-	}
-	return out
-}
-
-// typeArgsOf returns the use form of the struct's type-parameter list —
-// `[K, V]` — or empty for a plain struct, so a template can append it
-// unconditionally.
-func typeArgsOf(s *node.Struct) string {
-	if len(s.TypeParams) == 0 {
-		return ""
-	}
-	names := make([]string, len(s.TypeParams))
-	for i, p := range s.TypeParams {
-		names[i] = p.Name
-	}
-	return "[" + strings.Join(names, ", ") + "]"
 }

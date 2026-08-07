@@ -4,7 +4,6 @@
 package enum
 
 import (
-	"fmt"
 	"io/fs"
 	"sort"
 	"strconv"
@@ -16,6 +15,8 @@ import (
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/pipeline"
 	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit/generator/internal/emitq"
 )
 
 // Name is the plugin's stable identifier.
@@ -287,7 +288,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 		api := &API{
-			BaseEmit:     sdk.BaseEmit{OriginNode: e, SetByName: c.SetBy(), SourcePos: e.Pos()},
+			BaseEmit:     emitq.Base(c, e),
 			TypeName:     e.Name,
 			TypeRef:      sdk.NewExternal(e.Package, e.Name),
 			Underlying:   underlyingOf(e),
@@ -300,7 +301,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Generate:     generated(e),
 		}
 		tests := &Tests{
-			BaseEmit:    baseFor(api, GoTestOutputTag),
+			BaseEmit:    emitq.Tagged(api.BaseEmit, GoTestOutputTag),
 			TypeName:    api.TypeName,
 			TypeRef:     api.TypeRef,
 			Form:        form,
@@ -317,11 +318,8 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Validates:   api.Emits(MethodIsValid) || declares(e, MethodIsValid),
 			Enumerates:  api.Emits(ValuesSuffix),
 		}
-		for _, emitted := range queued(api, tests) {
-			prov := c.Provenance(string(emitted.Kind()) + "." + e.Name)
-			if err := ctx.Store.Emit().AppendOriginSlot(e, SlotName, emitted, prov); err != nil {
-				return fmt.Errorf("%s: append %s slot for %q: %w", Name, emitted.Kind(), e.Name, err)
-			}
+		if err := emitq.Append(ctx, c, SlotName, e, queued(api, tests)...); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -337,13 +335,6 @@ func queued(api *API, tests *Tests) []sdk.EmitNode {
 		return []sdk.EmitNode{tests}
 	}
 	return []sdk.EmitNode{api, tests}
-}
-
-// baseFor derives the tagged output's emit base from the primary's.
-func baseFor(api *API, tag string) sdk.BaseEmit {
-	base := api.BaseEmit
-	base.OutputTagName = tag
-	return base
 }
 
 // strayVariants returns the packages declaring constants of e's type outside

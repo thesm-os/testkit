@@ -4,7 +4,6 @@
 package sentinel
 
 import (
-	"fmt"
 	"io/fs"
 	"path"
 	"sort"
@@ -16,6 +15,7 @@ import (
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/internal/emitq"
 	"go.thesmos.sh/testkit/generator/internal/nodes"
 	"go.thesmos.sh/testkit/generator/internal/samples"
 )
@@ -272,16 +272,18 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 		value := &Tests{
-			BaseEmit:    sdk.BaseEmit{OriginNode: anchor, SetByName: c.SetBy(), SourcePos: anchor.Pos()},
+			BaseEmit:    emitq.Base(c, anchor),
 			PackageName: pkg.Name,
 			Prefix:      prefixOf(pkg),
 			Sentinels:   found,
 			ErrTypes:    types,
 			Neighbours:  neighboursOf(ctx, pkg, byPackage),
 		}
-		prov := c.Provenance(string(KindTests) + "." + pkg.Name)
-		if err := ctx.Store.Emit().AppendOriginSlot(anchor, SlotName, value, prov); err != nil {
-			return fmt.Errorf("%s: append %s slot for %q: %w", Name, KindTests, pkg.Path, err)
+		// Identified by the package rather than by the anchor: the anchor is
+		// whichever declaration the package happened to offer, and naming it
+		// would move this value's identifier when an unrelated type is renamed.
+		if err := emitq.AppendAs(ctx, c, SlotName, anchor, pkg.Name, value); err != nil {
+			return err
 		}
 	}
 	return nil
