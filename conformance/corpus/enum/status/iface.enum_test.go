@@ -5,7 +5,7 @@
 //
 // Source:    corpus/enum/status/iface.go
 // Plugins:   golang 1.0.0, enum 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/enum/...
+// Command:   testkit run ./corpus/...
 
 package status_test
 
@@ -101,7 +101,7 @@ func TestStatusText(t *testing.T) {
 		t.Parallel()
 		// Admitting it would let an unnamed value in through the one door
 		// that exists to keep it out.
-		_, err := status.ParseStatus("Status__no_such_variant")
+		_, err := status.ParseStatus("__eidos_unknown__")
 		testkit.ErrorIs(t, err, status.ErrUnknownStatus, "unknown text must be refused")
 	})
 
@@ -140,10 +140,10 @@ func TestStatusMarshalling(t *testing.T) {
 		// The decoder is the boundary an unnamed value arrives at, so refusing
 		// here is what keeps it out of everything downstream.
 		var got status.Status
-		testkit.True(t, got.UnmarshalText([]byte("Status__no_such_variant")) != nil,
+		testkit.True(t, got.UnmarshalText([]byte("__eidos_unknown__")) != nil,
 			"unknown text must not decode")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance a2a649191889f97a1d8e446f1277cb4ba289060c9b0e42ca8cba55cdaf84b6a5
+// testkit:provenance b5e70536b716bc4c487179b05dca6c61554d412079346635b0c63f19d84a05d6

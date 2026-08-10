@@ -1,6 +1,6 @@
 # Smoke
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 CLI command coverage generator. Invokes each declared `cobra.Command` (or equivalent) with sampled flag combinations, asserts exit code and stdout/stderr shape per command. Auto-detects the subcommand tree, flag types, and required-flag validation. Captures golden output for stable commands; diffs on regression.
 

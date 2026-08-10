@@ -24,10 +24,9 @@
 // # Per-field declarations
 //
 // A field seeds its own default with `//testkit:default <expression>`, owned by
-// [go.thesmos.sh/testkit/generator/internal/defaults] so a later generator can
-// read the same stamp. A field opts out of a setter entirely with a
-// `builder:"-"` struct tag, for one a test should never set but which cannot be
-// unexported.
+// [go.thesmos.sh/testkit/generator/defaults] so a later generator can read the
+// same stamp. A field opts out of a setter entirely with a `builder:"-"` struct
+// tag, for one a test should never set but which cannot be unexported.
 //
 // # Setter shape follows the field's type
 //

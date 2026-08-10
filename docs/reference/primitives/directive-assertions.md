@@ -1,129 +1,77 @@
-# Directive Assertions
-
-testkit ships assertion helpers in `suite/directives.go` that match the semantics of `//testkit:` directives. The `suite` generator emits one call per directive; consumers can also call them directly when wiring suite logic by hand.
-
-Each assertion returns `func(*testing.T, func() T)` — a closure that the generated driver invokes with the test and factory. The closures passed in are minimal translators that adapt the impl's specific signature to the runtime's expected shape. No control flow lives in generated code.
-
-## Context-safety assertions
-
-These run by default on every ctx-taking method without requiring a directive.
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertNilSafe` | `nilsafe` | No panic on zero-value / nil inputs |
-| `AssertCtxCancellation` | (auto) | Cancelled ctx returns `context.Canceled` |
-| `AssertCtxDeadline` | (auto) | Past-deadline ctx returns deadline error |
-| `AssertNilCtx` | (auto) | Nil ctx does not panic |
-
-## Directive-driven assertions
-
-Each corresponds to a `//testkit:` directive. The generator emits one call per directive occurrence.
-
-### Behavioral directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertDeprecatedSmoke` | `deprecated` | Deprecated method doesn't panic; logs replacement |
-| `AssertRetrySucceedsOnAttempt` | `retry-succeeds-on-attempt` | First N-1 calls error, Nth succeeds |
-| `AssertOrderAfter` | `order-after` | Carrier errors before prerequisite, succeeds after |
-| `AssertPartitionIsolation` | `partition` | Two sequential partition writes succeed |
-| `AssertWrappedVia` | `wrapped-via` | Error satisfies `errors.Is` for both wrap target and sentinel |
-| `AssertIdempotentSecondCall` | `idempotent` | Second call doesn't panic |
-| `AssertNilSafeNoPanic` | `nilsafe` | No panic on zero inputs (void-return variant) |
-
-### Property directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertPureImplIndependent` | `pure` | Two independent impls return equal results |
-| `AssertCacheableRepeatedReads` | `cacheable` | Three reads return pairwise-equal results |
-| `AssertMonotonicNonDecreasing` | `monotonic` | N samples are non-decreasing (`cmp.Ordered` result) |
-| `AssertBoundedRange` | `bounded` | Result is in `[min, max]` inclusive |
-| `AssertAtomicNoTrace` | `atomic` | Failed mutation leaves state equal to pre-call |
-
-### Concurrency directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertConcurrentStrict` | `concurrent` | 16 workers x 25 iters under race detector |
-| `AssertConcurrentReadersParallel` | `concurrent-readers` | 32 reader goroutines under race detector |
-
-### Timing directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertTimeoutWithin` | `timeout` | Call completes within the specified duration |
-| `AssertEventuallyConverges` | `eventually` | Polling converges (two consecutive equal results) within deadline |
-
-### Observation directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertSideEffectObservable` | `side-effect` | Observable state differs before vs after mutation |
-| `AssertValidatesZeroInput` | `validates` | Zero/invalid input returns non-nil error |
-| `AssertHooksFire` | `hooks` | Named hooks fire during method invocation (via `HookRecorder`) |
-
-### Resource directives
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertScopeAuthRequired` | `scope` | Unauthorized call returns sentinel; authorized call succeeds |
-| `AssertLeaseAcquireRelease` | `lease` | Acquire/release/acquire works; double-acquire-without-release fails |
-
-## Cross-method assertions
-
-These verify invariants spanning two methods on the same interface.
-
-| Helper | Directive | Contract |
-|--------|-----------|----------|
-| `AssertReadAfterWrite` | `read-after-write` | Write then read returns the written value |
-| `AssertReadAfterWriteByKey` | `read-after-write` | Key-parameterized variant |
-| `AssertDeleteRemovesValue` | `delete-removes` | Delete then read returns sentinel |
-| `AssertDeleteRemovesByKey` | `delete-removes` | Key-parameterized variant |
-| `AssertStreamReflectsMutations` | `stream-reflects-mutations` | Stream yields values written via paired writer |
-| `AssertStreamReflectsValueWritten` | `stream-reflects-mutations` | Value-parameterized variant |
-| `AssertLifecycleAfterClose` | `lifecycle-after-close` | Reader errors or returns zero after lifecycle method |
-| `AssertLifecycleAfterCloseReflective` | `lifecycle-after-close` | Reflective variant using method name |
-| `AssertCRDTMerge` | `crdt-merge` | Merge is commutative: merge(a,b) == merge(b,a) |
-
-## HookRecorder
-
-Used by `AssertHooksFire`. Production hook-firing code extracts the recorder from context and calls `Record(name)`.
+# Directive assertions
 
 ```go
-recorder := suite.NewHookRecorder()
-ctx := suite.ContextWithRecorder(t.Context(), recorder)
-subject.DoWork(ctx)
-assert(recorder.Count("BeforeWrite") > 0)
+import "go.thesmos.sh/testkit"
 ```
 
-| Method | Purpose |
-|--------|---------|
-| `NewHookRecorder()` | Create empty recorder |
-| `Record(name)` | Increment fire count (goroutine-safe, nil-safe) |
-| `Count(name)` | Query fire count |
-| `ContextWithRecorder(ctx, r)` | Attach recorder to context |
-| `RecorderFromContext(ctx)` | Extract recorder (nil when absent) |
+Three helpers for invariants a signature cannot express: that a call does not panic, that it changes nothing observable, and that its result stays inside a range. Each corresponds to a [mixin](../generators/shapes.md#mixins) a generated suite would assert automatically — exported so a hand-written test can assert the same thing on code no generator has reached.
 
-## Suite options
+## AssertNilSafe
 
-Consumer-supplied configuration passed to the generated driver via `...suite.Option`.
+```go
+func AssertNilSafe(tb testing.TB, fn func())
+```
 
-| Option | Purpose |
-|--------|---------|
-| `WithInvalidFactory(factory)` | Factory producing an impl that must fail RejectInvalid assertions |
-| `WithPoisonedFactory(factory)` | Factory producing a poisoned impl for PoisonAccessor tests |
-| `WithPrePopulate(seed)` | Seed callback applied to every fresh impl before subtests |
-| `WithObservableVia(method)` | Reader method name for paired-method observation |
-| `WithAggregatorBounds(lower, upper)` | Bounds for Aggregator bounded assertions |
-| `WithAggregatorBoundsAt(i, lower, upper)` | Per-slot bounds for MultiAggregator |
-| `WithStreamSample(factory)` | Factory producing a fresh `io.Reader` for StreamConsumer tests |
-| `WithScopeContext(fn)` | Context factory for scope authorization tests |
-| `WithScopeUnauthorized(err)` | Sentinel error for unauthorized scope access |
-| `WithLeaseRelease(method)` | Release method name for lease lifecycle tests |
-| `WithStateEqual(eq)` | Custom equality function for atomic assertions |
+Calls `fn` and fails if it panics, reporting the recovered value and the stack.
+
+```go
+testkit.AssertNilSafe(t, func() {
+    var s *store.Store
+    _ = s.Len()
+})
+```
+
+The invariant is that a method on a nil receiver, or one handed a nil argument, returns rather than panicking. It corresponds to `//testkit:mixin nilsafe`.
+
+Reach for it where a nil is reachable from a caller — an optional dependency, a zero-value struct, a map lookup that missed. Not as a blanket wrapper: a panic that a test converts into a failure message is still a panic, and `AssertNilSafe` around everything hides which call was supposed to be safe.
+
+## AssertPure
+
+```go
+func AssertPure[S any](tb testing.TB, observe func() S, fn func())
+```
+
+Snapshots observable state with `observe`, runs `fn`, snapshots again, and fails if the two differ under `cmp.Diff`.
+
+```go
+testkit.AssertPure(t,
+    func() []store.Record { return db.All() },
+    func() { _ = svc.Validate(rec) },
+)
+```
+
+The invariant is that `fn` has no side effect on whatever `observe` can see. It corresponds to `//testkit:mixin pure`.
+
+**The assertion is only as strong as `observe`.** A snapshot that reads one field proves nothing about the rest, and one that reads a map without ordering it will fail intermittently for a reason that has nothing to do with purity. Return a value with a stable rendering, and make it cover the state the method could plausibly touch.
+
+## AssertBounded
+
+```go
+func AssertBounded[T cmp.Ordered](tb testing.TB, lower, upper T, fn func() T)
+```
+
+Calls `fn` and fails if the result falls outside `[lower, upper]`, inclusive.
+
+```go
+testkit.AssertBounded(t, 0, 100, func() int { return pool.Size() })
+```
+
+It corresponds to `//testkit:mixin bounded limit=100`. Both ends are checked, so it catches a counter that went negative as well as one that overran — and the negative case is the one a `<= limit` check written by hand usually misses.
+
+## Choosing between these and a plain assertion
+
+These wrap a call and assert something about the *manner* of the call. Where the property is about a value you already have, the [plain assertions](assertions.md) say it more directly:
+
+```go
+// Not this — the closure adds nothing.
+testkit.AssertBounded(t, 0, 100, func() int { return n })
+
+// This.
+testkit.Assert(t, float64(n)).IsWithin(0, 100, "n must stay in range")
+```
 
 ## See also
 
-- [Configuration](../configuration.md) — directive vocabulary reference
-- [Generators / suite](../generators/suite.md) — how `suite` consumes directives to call these helpers
+- [Context assertions](context.md) — the four context-shaped contract helpers.
+- [Assertions](assertions.md) — the direct forms.
+- [Shape classification](../generators/shapes.md) — the mixin vocabulary these mirror.

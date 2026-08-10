@@ -1,6 +1,6 @@
 # Differential Rollout
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Tier 5 shadow-traffic harness. Runs a production interface across N implementations in parallel, compares responses, and reports divergences. Migration-grade testing — answers "can I cut over from impl A to impl B without breakage?" Pluggable equivalence relations handle non-deterministic fields (timestamps, generated IDs).
 

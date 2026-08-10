@@ -4,19 +4,12 @@
 package enum
 
 import (
-	"io/fs"
-	"sort"
-	"strconv"
+	"fmt"
 	"strings"
-	"text/template"
 
-	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
-	"go.thesmos.sh/eidos/node"
-	"go.thesmos.sh/eidos/pipeline"
 	"go.thesmos.sh/eidos/sdk"
-
-	"go.thesmos.sh/testkit/generator/internal/emitq"
+	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 )
 
 // Name is the plugin's stable identifier.
@@ -37,8 +30,8 @@ const DirectiveName sdk.DirectiveName = "enum"
 // case the derivation cannot be taught about.
 //
 // Read but not declared: `value` is one of the framework's own directives
-// ([pipeline.ValueDirective]), registered for every run. A plugin declaring it
-// again fails the build, since a directive name may be registered once.
+// ([golang.EnumValueDirective]), registered for every run. A plugin declaring
+// it again fails the build, since a directive name may be registered once.
 
 // MethodsKey suppresses method generation entirely, leaving the checks:
 //
@@ -52,21 +45,38 @@ const MethodsKey = "methods"
 // MethodsOff is the only value [MethodsKey] accepts.
 const MethodsOff = "off"
 
-// The methods the plugin generates, each skipped when the type already
+// The surface the plugin generates, each entry skipped when the type already
 // declares it. The names are the API, so they are constants rather than
 // literals scattered through the projection and the template.
+//
+// String, MarshalText and UnmarshalText are not here: [golang.MethodString],
+// [golang.MethodMarshalText] and [golang.MethodUnmarshalText] hold them, and
+// the name a generator emits and the name a detector looks for have to be one
+// string rather than two that agree today.
 const (
-	MethodString      = "String"
-	MethodMarshal     = "MarshalText"
-	MethodUnmarshal   = "UnmarshalText"
-	MethodIsValid     = "IsValid"
-	ParsePrefix       = "Parse"
-	ValuesSuffix      = "Values"
-	SentinelPrefix    = "ErrUnknown"
-	unknownTextSample = "__testkit_unknown__"
+	// MethodIsValid has no counterpart upstream. [golang.MethodValidate] is
+	// `Validate` — a different method with a different signature — so naming
+	// this one through it would generate the wrong identifier.
+	MethodIsValid = "IsValid"
+
+	// ParsePrefix is the prefix [golang.ParseFuncName] composes the parse
+	// function's identifier from, repeated here as the key the projection and
+	// the template track that function under. The function is package-level, so
+	// it is not a method name the enum node could carry.
+	ParsePrefix = "Parse"
+
+	// ValuesSuffix composes the accessor's identifier — `<Type>Values` — and
+	// keys it. Go states no convention for this one, so there is nothing
+	// upstream to defer to.
+	ValuesSuffix = "Values"
+
+	// SentinelSubject is the subject [golang.SentinelName] turns into
+	// `ErrUnknown<Type>`, which is the spelling every sentinel detector matches
+	// on.
+	SentinelSubject = "Unknown"
 )
 
-// SlotName is the [emit.File] slot both outputs land in.
+// SlotName is the [sdk.EmitFile] slot both outputs land in.
 const SlotName = "top"
 
 // KindAPI and KindTests are the plugin-defined emit kinds. The backend resolves
@@ -80,48 +90,40 @@ const (
 // Version composes into the pipeline's plugin fingerprint.
 const Version = "1.0.0"
 
-// langGo is the backend language identifier the per-language adapters key on.
-const langGo = golang.Language
-
-// Form is how a variant renders as text.
-type Form string
-
-const (
-	// FormIdentifier renders the variant's own name, which for a numeric enum
-	// is the only textual form the declaration carries.
-	FormIdentifier Form = "identifier"
-
-	// FormValue renders the declared value. A string enum's value *is* its
-	// textual form, and it is already written down — deriving a different one
-	// discards the only thing the declaration said, and breaks every value
-	// that arrives from JSON, a database column or a query parameter.
-	FormValue Form = "value"
-)
-
 // Plugin is the enum generator.
-type Plugin struct{}
+//
+// The embedded base answers the six declaration methods — name, version,
+// priority, capabilities, directives, and the Go output/template set — so the
+// plugin itself carries only what makes it this generator.
+type Plugin struct{ *sdkgolang.Base }
 
 // New returns a fresh plugin instance.
-func New() *Plugin { return &Plugin{} }
+//
+// The templates register no helper of their own. Everything they call is
+// either a backend builtin — `renderExpr`, `external` — or one of
+// [golang.AllFuncMap]'s entries, which the base merges under this plugin's own
+// prefix. The testkit import path a check resolves its assertions through is
+// carried on the emit value instead; see [RuntimePaths].
+//
+// # Failure mode
+//
+// [sdkgolang.Builder.Build] panics on a declaration the pipeline cannot serve
+// rather than returning an error. It runs here, so the failure fires in the
+// first test that constructs the plugin rather than in the first run that
+// renders nothing and explains why in no output at all.
+func New() *Plugin {
+	return &Plugin{Base: sdkgolang.NewGenerator(Name, goTemplatesFS, GoOutputs()...).
+		Version(Version).
+		// An enum's API is a base a later generator may read, so it exists
+		// before composition runs.
+		Priority(sdk.GeneratorFoundation).
+		Provides(Capability).
+		Directives(directives()...).
+		Build()}
+}
 
-// Name returns [Name].
-func (*Plugin) Name() string { return Name }
-
-// Version returns [Version].
-func (*Plugin) Version() string { return Version }
-
-// Priority places the plugin in the foundation bucket: an enum's API is a base
-// a later generator may read, so it exists before composition runs.
-func (*Plugin) Priority() sdk.Priority { return sdk.GeneratorFoundation }
-
-// Provides advertises [Capability].
-func (*Plugin) Provides() []string { return []string{Capability} }
-
-// Requires returns nil.
-func (*Plugin) Requires() []string { return nil }
-
-// Directives declares both schemas.
-func (*Plugin) Directives() []sdk.DirectiveSchema {
+// directives declares the schema for [DirectiveName].
+func directives() []sdk.DirectiveSchema {
 	return []sdk.DirectiveSchema{
 		sdk.NewDirective(DirectiveName).
 			Describe(
@@ -133,38 +135,11 @@ func (*Plugin) Directives() []sdk.DirectiveSchema {
 					"removing the directive is the suppression.",
 			).
 			AllowedKeys(MethodsKey).
-			On(node.KindEnum).
+			On(sdk.NodeKindEnum).
 			DenyNegation().
 			Build(),
 	}
 }
-
-// Outputs dispatches to the per-language adapter.
-func (*Plugin) Outputs(lang string) []sdk.Output {
-	if lang == langGo {
-		return GoOutputs()
-	}
-	return nil
-}
-
-// Templates dispatches to the per-language adapter's template tree.
-func (*Plugin) Templates(lang string) (fs.FS, bool) {
-	if lang == langGo {
-		return GoTemplates()
-	}
-	return nil, false
-}
-
-// TemplateFuncs dispatches to the per-language adapter's funcmap.
-func (*Plugin) TemplateFuncs(lang string) template.FuncMap {
-	if lang == langGo {
-		return GoFuncMap()
-	}
-	return nil
-}
-
-// TemplateOverrides returns nil.
-func (*Plugin) TemplateOverrides(string) template.FuncMap { return nil }
 
 // Variant is one declared constant.
 type Variant struct {
@@ -173,11 +148,11 @@ type Variant struct {
 
 	// Ref qualifies it, so the checks can name it from the external test
 	// package the framework routes them into.
-	Ref *emit.Expr
+	Ref *sdk.Expr
 
 	// Text is the variant's textual form, as a Go string literal ready to
-	// render — quoted here rather than in the template so the quoting rule
-	// lives beside the derivation that decides it.
+	// render — quoted by [golang.EnumTextLiteral] rather than in the template
+	// so the quoting rule lives beside the derivation that decides it.
 	Text string
 }
 
@@ -186,11 +161,23 @@ type API struct {
 	sdk.BaseEmit
 
 	TypeName string
-	TypeRef  *emit.Expr
+	TypeRef  *sdk.Expr
 
-	// Underlying names the enum's base type, which decides whether the
-	// fallback converts numerically or textually.
-	Underlying string
+	// Underlying is the type String's numeric fallback converts a value to
+	// before printing it, and Verb is the format verb that conversion prints
+	// under.
+	//
+	// Derived together by [golang.EnumFallback], because choosing one without
+	// the other is how `fmt.Sprintf("Ratio(%d)", float64(v))` gets written —
+	// output that prints `%!d(float64=0.5)` and that `go vet` reports as a
+	// defect in a repository whose authors did not write it.
+	//
+	// A reference rather than a name, and rendered through `renderType` rather
+	// than `renderExpr`: a conversion's operand is a type, and that is the path
+	// registering the import. Spelled as a bare name, an enum declared over
+	// another package's type emitted `Priority(v)` with nothing importing it.
+	Underlying sdk.Ref
+	Verb       string
 
 	// PackageName is the enum's own package, which prefixes the parse
 	// sentinel's message. The package rather than the type: a message is read
@@ -199,7 +186,7 @@ type API struct {
 	// it distinguishes this sentinel from its neighbours.
 	PackageName string
 
-	Form     Form
+	Form     golang.EnumForm
 	Variants []Variant
 
 	// ParseName, ValuesName and SentinelName are the derived identifiers, held
@@ -224,21 +211,35 @@ func (*API) Kind() sdk.Kind { return KindAPI }
 // Tests is the emit value rendered into the tagged test output.
 type Tests struct {
 	sdk.BaseEmit
+	RuntimePaths
 
 	TypeName string
-	TypeRef  *emit.Expr
-	Form     Form
+	TypeRef  *sdk.Expr
+	Form     golang.EnumForm
 	Variants []Variant
 
 	// ParseRef, ValuesRef and SentinelRef qualify the API this file drives.
 	// The checks are routed into the external test package, so nothing in the
 	// source package is reachable unqualified.
-	ParseRef, ValuesRef, SentinelRef *emit.Expr
+	ParseRef, ValuesRef, SentinelRef *sdk.Expr
 
-	// ZeroName is the variant whose value is the zero, empty when none is. The
-	// two cases read as opposite assertions, and which one an enum earns is
-	// the thing a fixture pair exists to tell apart.
+	// ZeroName is the variant whose value is the zero, empty when none is, and
+	// ZeroRef is that same variant as a reference. The two cases read as
+	// opposite assertions, and which one an enum earns is the thing a fixture
+	// pair exists to tell apart.
+	//
+	// The reference is carried rather than the check rebuilding the variant by
+	// position. Declaration order and zero-ness are different questions and
+	// agree only for a set declaring its zero first — so a set written
+	// `US Region = "us-east"; Unset Region = ""` asserted the zero equalled US
+	// and failed in the consumer's repository, naming a variant the assertion
+	// did not mention.
 	ZeroName string
+	ZeroRef  *sdk.Expr
+
+	// UnknownText is the quoted text a parse-refusal probe submits, empty when
+	// the declared set already contains the marker.
+	UnknownText string
 
 	// OutOfRange is a value past the declared set as source text, empty when
 	// none could be derived. Used to check that an undeclared value does not
@@ -261,7 +262,7 @@ func (*Tests) Kind() sdk.Kind { return KindTests }
 // Generate walks every enum carrying the directive and queues its API and
 // checks.
 func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
-	c := sdk.NewProvenance(Name, sdk.EmitTarget{})
+	c := sdk.NewProvenance(Name)
 	for _, e := range ctx.Reader.Enums().Slice() {
 		if !e.HasPositiveDirective(DirectiveName) {
 			continue
@@ -279,47 +280,57 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Name, e.QName(), strings.Join(stray, ", "))
 			continue
 		}
-		form := formOf(e)
-		variants := variantsOf(e, form)
-		if dup := duplicateText(variants); dup != "" {
+		if dup, clash := golang.DuplicateText(e); clash {
 			ctx.Diag.Errorf(e.Pos(),
-				"%s: enum %q renders two variants as %s; pin one with //testkit:%s",
-				Name, e.QName(), dup, pipeline.ValueDirective)
+				"%s: enum %q renders two variants as %q; pin one with //testkit:%s",
+				Name, e.QName(), dup, golang.EnumValueDirective)
 			continue
 		}
+		variants := variantsOf(e)
+		conversion, verb := golang.EnumFallback(e)
+		zeroName, zeroRef := zeroVariant(e)
 		api := &API{
-			BaseEmit:     emitq.Base(c, e),
+			BaseEmit:     sdk.EmitBase(c, e),
 			TypeName:     e.Name,
 			TypeRef:      sdk.NewExternal(e.Package, e.Name),
-			Underlying:   underlyingOf(e),
+			Underlying:   conversion,
+			Verb:         verb,
 			PackageName:  packageName(ctx, e.Package),
-			Form:         form,
+			Form:         golang.EnumFormOf(e),
 			Variants:     variants,
-			ParseName:    ParsePrefix + e.Name,
+			ParseName:    golang.ParseFuncName(e.Name),
 			ValuesName:   e.Name + ValuesSuffix,
-			SentinelName: SentinelPrefix + e.Name,
+			SentinelName: golang.SentinelName(SentinelSubject + e.Name),
 			Generate:     generated(e),
 		}
 		tests := &Tests{
-			BaseEmit:    emitq.Tagged(api.BaseEmit, GoTestOutputTag),
-			TypeName:    api.TypeName,
-			TypeRef:     api.TypeRef,
-			Form:        form,
-			Variants:    variants,
-			ParseRef:    sdk.NewExternal(e.Package, api.ParseName),
-			ValuesRef:   sdk.NewExternal(e.Package, api.ValuesName),
-			SentinelRef: sdk.NewExternal(e.Package, api.SentinelName),
-			ZeroName:    zeroOf(e, variants),
-			OutOfRange:  outOfRange(e, form, variants),
-			Renders:     api.Emits(MethodString) || declares(e, MethodString),
-			Parses:      api.Emits(ParsePrefix),
-			Marshals:    api.Emits(MethodMarshal) && api.Emits(MethodUnmarshal),
-			Encodes:     api.Emits(MethodMarshal) || declares(e, MethodMarshal),
-			Validates:   api.Emits(MethodIsValid) || declares(e, MethodIsValid),
-			Enumerates:  api.Emits(ValuesSuffix),
+			BaseEmit:     sdk.EmitBaseTagged(api.BaseEmit, GoTestOutputTag),
+			RuntimePaths: GoRuntime(),
+			TypeName:     api.TypeName,
+			TypeRef:      api.TypeRef,
+			Form:         api.Form,
+			Variants:     variants,
+			ParseRef:     sdk.NewExternal(e.Package, api.ParseName),
+			ValuesRef:    sdk.NewExternal(e.Package, api.ValuesName),
+			SentinelRef:  sdk.NewExternal(e.Package, api.SentinelName),
+			ZeroName:     zeroName,
+			ZeroRef:      zeroRef,
+			UnknownText:  unknownText(e),
+			OutOfRange:   outOfRange(e),
+			Renders:      api.Emits(golang.MethodString) || golang.EnumDeclares(e, golang.MethodString),
+			Parses:       api.Emits(ParsePrefix),
+			Marshals: api.Emits(golang.MethodMarshalText) &&
+				api.Emits(golang.MethodUnmarshalText),
+			Encodes: api.Emits(golang.MethodMarshalText) ||
+				golang.EnumDeclares(e, golang.MethodMarshalText),
+			Validates:  api.Emits(MethodIsValid) || golang.EnumDeclares(e, MethodIsValid),
+			Enumerates: api.Emits(ValuesSuffix),
 		}
-		if err := emitq.Append(ctx, c, SlotName, e, queued(api, tests)...); err != nil {
-			return err
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, e, queued(api, tests)...); err != nil {
+			// Wrapped even though the queue names the plugin and the slot: what
+			// it cannot name is which declaration the run was on when it failed,
+			// and that is the only part a reader needs to find the source line.
+			return fmt.Errorf("%s: queue enum %q: %w", Name, e.Name, err)
 		}
 	}
 	return nil
@@ -351,108 +362,49 @@ func queued(api *API, tests *Tests) []sdk.EmitNode {
 // them would make the generated set depend on which packages a run happened to
 // include, so the same type would generate differently from one invocation to
 // the next.
-func strayVariants(ctx *sdk.GeneratorContext, e *node.Enum) []string {
-	seen := map[string]bool{}
-	for _, c := range ctx.Reader.Constants().Slice() {
-		if c.Package == e.Package || c.Type == nil {
-			continue
-		}
-		if c.Type.Package == e.Package && c.Type.Name == e.Name {
-			seen[c.Package] = true
-		}
-	}
-	out := make([]string, 0, len(seen))
-	for pkg := range seen {
-		out = append(out, pkg)
-	}
-	sort.Strings(out)
-	return out
+func strayVariants(ctx *sdk.GeneratorContext, e *sdk.Enum) []string {
+	return golang.ForeignVariants(e, ctx.Reader.Constants().Slice())
 }
 
 // packageName returns the short name of the package at path, falling back to
-// the path's last segment when the run did not load a node for it.
+// the name the path implies when the run did not load a node for it.
 //
 // The declared name rather than the directory: the two usually agree and
 // occasionally do not, and a message naming a package that does not exist is
-// worse than one naming a directory.
+// worse than one naming a directory. [golang.PackageName] is the fallback
+// because the last segment is not always the name — `example.com/cfg/v2` is
+// package `cfg`, and taking the trailing segment would report `v2`.
+//
+// The fallback is unreachable from a well-formed run — every enum the walk
+// reaches belongs to a package the same run loaded — and is kept because the
+// alternative is an empty package clause in a generated file, which fails at
+// format rather than here.
 func packageName(ctx *sdk.GeneratorContext, path string) string {
-	for _, p := range ctx.Reader.Packages().Slice() {
-		if p.Path == path {
-			return p.Name
-		}
+	p, loaded := ctx.Reader.Packages().
+		Where(func(p *sdk.Package) bool { return p.Path == path }).
+		First()
+	if loaded {
+		return p.Name
 	}
-	if i := strings.LastIndex(path, "/"); i >= 0 {
-		return path[i+1:]
-	}
-	return path
-}
-
-// formOf decides how a variant renders as text.
-func formOf(e *node.Enum) Form {
-	if underlyingOf(e) == "string" {
-		return FormValue
-	}
-	return FormIdentifier
-}
-
-// underlyingOf returns the enum's base type name, or empty when unrecorded.
-func underlyingOf(e *node.Enum) string {
-	if e.Underlying == nil {
-		return ""
-	}
-	return e.Underlying.Name
+	return golang.PackageName(path)
 }
 
 // variantsOf lifts every declared constant with its textual form resolved.
-func variantsOf(e *node.Enum, form Form) []Variant {
+//
+// The text arrives from [golang.EnumTextLiteral] already quoted, which is
+// where the quoting belongs: an authored `value` override is arbitrary text,
+// and a template concatenating quotes around one carrying a quote produces a
+// literal that truncates at the first one.
+func variantsOf(e *sdk.Enum) []Variant {
 	out := make([]Variant, 0, len(e.Variants))
 	for _, v := range e.Variants {
 		out = append(out, Variant{
 			Name: v.Name,
 			Ref:  sdk.NewExternal(e.Package, v.Name),
-			Text: strconv.Quote(textOf(e, v, form)),
+			Text: golang.EnumTextLiteral(e, v),
 		})
 	}
 	return out
-}
-
-// textOf resolves one variant's textual form, low to high: the derived
-// spelling, then a `//testkit:value` override.
-func textOf(e *node.Enum, v *node.EnumVariant, form Form) string {
-	for _, dir := range v.Directives() {
-		if dir.Name == pipeline.ValueDirective && len(dir.Args) > 0 {
-			return dir.Args[0]
-		}
-	}
-	if form == FormValue {
-		// A string variant's value arrives in verbatim source form, quotes
-		// included. Unquoting here rather than in the template keeps the one
-		// place that knows the value is source text.
-		if unquoted, err := strconv.Unquote(v.Value); err == nil {
-			return unquoted
-		}
-		return v.Value
-	}
-	// `StatusActive` on `type Status int` renders as `Active`: the type name
-	// is already context wherever the value appears, and repeating it is noise
-	// in every log line and wire payload.
-	return strings.TrimPrefix(v.Name, e.Name)
-}
-
-// duplicateText returns the first textual form two variants share, or empty.
-//
-// Reported rather than generated around: Parse maps text to exactly one
-// variant, so a collision makes one of them unreachable through it, and the
-// generated round-trip check would fail with no indication of the cause.
-func duplicateText(variants []Variant) string {
-	seen := make(map[string]bool, len(variants))
-	for _, v := range variants {
-		if seen[v.Text] {
-			return v.Text
-		}
-		seen[v.Text] = true
-	}
-	return ""
 }
 
 // generated returns the methods this run writes: every one the type does not
@@ -461,13 +413,17 @@ func duplicateText(variants []Variant) string {
 // Skipping silently rather than reporting a clash. An author who wrote their
 // own String meant to keep it, and a generator that refused to run until they
 // deleted it would be demanding they give up the more specific statement.
-func generated(e *node.Enum) map[string]bool {
+//
+// [golang.EnumMethods] is not the source of the candidate list: it answers over
+// the six shapes eidos knows, which include the JSON pair this plugin
+// deliberately does not emit and exclude IsValid, which it does.
+func generated(e *sdk.Enum) map[string]bool {
 	if suppressed(e) {
 		return map[string]bool{}
 	}
 	out := map[string]bool{}
-	for _, m := range []string{MethodString, MethodMarshal, MethodIsValid} {
-		if !declares(e, m) {
+	for _, m := range []string{golang.MethodString, golang.MethodMarshalText, MethodIsValid} {
+		if !golang.EnumDeclares(e, m) {
 			out[m] = true
 		}
 	}
@@ -475,89 +431,77 @@ func generated(e *node.Enum) map[string]bool {
 	// declaration is not something the enum node can see. They ride with
 	// String: a type keeping its own String almost always keeps its own Parse,
 	// and generating one that shadows theirs is the worse guess.
-	if out[MethodString] {
+	if out[golang.MethodString] {
 		out[ParsePrefix] = true
 		out[ValuesSuffix] = true
 	}
 	// UnmarshalText is written in terms of Parse, so it rides with it rather
 	// than with the other methods. Generated without it, the file names a
 	// function nothing declares.
-	if out[ParsePrefix] && !declares(e, MethodUnmarshal) {
-		out[MethodUnmarshal] = true
+	if out[ParsePrefix] && !golang.EnumDeclares(e, golang.MethodUnmarshalText) {
+		out[golang.MethodUnmarshalText] = true
 	}
 	return out
 }
 
 // suppressed reports whether the directive asked for no methods at all.
-func suppressed(e *node.Enum) bool {
-	for _, dir := range e.Directives() {
-		if string(dir.Name) == string(DirectiveName) && dir.KV[MethodsKey] == MethodsOff {
-			return true
-		}
-	}
-	return false
+func suppressed(e *sdk.Enum) bool {
+	dir := e.Directive(DirectiveName)
+	return dir != nil && dir.Value(MethodsKey) == MethodsOff
 }
 
-// declares reports whether the enum's type already has the named method.
-func declares(e *node.Enum, method string) bool {
-	for _, m := range e.Methods {
-		if m.Name == method {
-			return true
-		}
+// zeroVariant returns the variant whose value is the zero, as a name for the
+// assertion's message and a reference for the assertion itself.
+//
+// Both from one lookup. The check previously took the name here and rebuilt the
+// variant by position in the template, which are different questions: they agree
+// only for a set that declares its zero first.
+func zeroVariant(e *sdk.Enum) (name string, ref *sdk.Expr) {
+	v, ok := golang.ZeroVariant(e)
+	if !ok {
+		return "", nil
 	}
-	return false
+	return v.Name, sdk.NewExternal(e.Package, v.Name)
 }
 
-// zeroOf returns the variant whose value is the zero, or empty when none is.
-func zeroOf(e *node.Enum, variants []Variant) string {
-	for i, v := range e.Variants {
-		if isZero(v.Value) {
-			return variants[i].Name
-		}
+// unknownText returns the quoted text a parse-refusal probe submits, or empty
+// when the declared set already contains the marker.
+//
+// The same marker and the same collision check the out-of-range probe uses.
+// Composed in a template before, where the collision could not be checked at
+// all — a variant pinned to it produced a check that failed because the parse
+// succeeded.
+func unknownText(e *sdk.Enum) string {
+	text, ok := golang.OutOfRangeText(e)
+	if !ok {
+		return ""
 	}
-	return ""
+	return golang.Quote(text)
 }
-
-// isZero reports whether a variant's verbatim value is its type's zero.
-func isZero(value string) bool { return value == "0" || value == `""` }
 
 // outOfRange returns a value past the declared set as source text, or empty
 // when none can be derived.
 //
-// Integers take one past the largest, which is the boundary a fallback is most
-// likely to get wrong. Strings take a fixed marker no sensible declaration
-// would collide with. Anything else — a float, whose value arrives as an exact
-// rational this cannot safely render, or an unrecorded underlying type —
-// yields nothing, and the check is dropped rather than written against a value
-// that might be declared.
-func outOfRange(e *node.Enum, form Form, variants []Variant) string {
-	if form == FormValue {
-		for _, v := range variants {
-			if v.Text == strconv.Quote(unknownTextSample) {
-				return ""
-			}
+// A string enum's probe is a marker no sensible declaration collides with, and
+// the collision is checked rather than assumed. A numeric one takes a value
+// outside the set whatever kind it is declared in — [golang.OutOfRangeLiteral]
+// asks the integer question first, because an integral literal parses as a
+// float too and a set declared over `int` means the narrower reading.
+//
+// Empty drops the subtest, which is the conservative answer: a probe rendered
+// from a value the set turned out to declare would assert that a declared
+// variant is undeclared.
+func outOfRange(e *sdk.Enum) string {
+	if golang.EnumFormOf(e) == golang.FormValue {
+		text, ok := golang.OutOfRangeText(e)
+		if !ok {
+			return ""
 		}
-		return strconv.Quote(unknownTextSample)
+		return golang.Quote(text)
 	}
-	highest, ok := largest(e)
+	literal, ok := golang.OutOfRangeLiteral(e)
 	if !ok {
 		return ""
 	}
-	return strconv.FormatInt(highest+1, 10)
-}
-
-// largest returns the greatest declared value, or false when any of them is
-// not an integer this can read.
-func largest(e *node.Enum) (int64, bool) {
-	var highest int64
-	for i, v := range e.Variants {
-		n, err := strconv.ParseInt(v.Value, 10, 64)
-		if err != nil {
-			return 0, false
-		}
-		if i == 0 || n > highest {
-			highest = n
-		}
-	}
-	return highest, len(e.Variants) > 0
+	return literal
 }

@@ -5,7 +5,7 @@
 //
 // Source:    corpus/enum/split/iface.go
 // Plugins:   golang 1.0.0, enum 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/enum/...
+// Command:   testkit run ./corpus/...
 
 package split_test
 
@@ -101,7 +101,7 @@ func TestSignalText(t *testing.T) {
 		t.Parallel()
 		// Admitting it would let an unnamed value in through the one door
 		// that exists to keep it out.
-		_, err := split.ParseSignal("Signal__no_such_variant")
+		_, err := split.ParseSignal("__eidos_unknown__")
 		testkit.ErrorIs(t, err, split.ErrUnknownSignal, "unknown text must be refused")
 	})
 
@@ -140,10 +140,10 @@ func TestSignalMarshalling(t *testing.T) {
 		// The decoder is the boundary an unnamed value arrives at, so refusing
 		// here is what keeps it out of everything downstream.
 		var got split.Signal
-		testkit.True(t, got.UnmarshalText([]byte("Signal__no_such_variant")) != nil,
+		testkit.True(t, got.UnmarshalText([]byte("__eidos_unknown__")) != nil,
 			"unknown text must not decode")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance a62e84bb53849e53e89e99d5d1f5effe730ff0f63cbed68b6c9521a30c492d0f
+// testkit:provenance 2105fc91fff493db7025648956bb4d647dace93317ea7a48c3b3bf0eafc38b05

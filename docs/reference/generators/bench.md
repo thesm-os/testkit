@@ -1,5 +1,7 @@
 # Bench
 
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
+
 Tier 4 conformance. Reads a Go interface, classifies each method into a *shape* by signature pattern, and emits a `Benchmark<Iface>Contract(b, factory, opts...)` harness.
 
 The generated `bench` harness evaluates implementations against three layers of performance contracts:

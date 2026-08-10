@@ -1,6 +1,6 @@
 # Pkgdoc
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Compliance audit-doc generator. Emits a per-package skeleton at `docs/compliance/package-audit/<pkg>.md` with REQ table, refactor-history banner, and evidence section. Auto-fills mechanical parts (REQ rows from `//testkit:req` annotations, evidence rows from CI output); refreshes when source changes; validates REQ IDs against source directives.
 

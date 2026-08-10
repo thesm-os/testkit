@@ -5,12 +5,8 @@ package stub
 
 import (
 	"embed"
-	"io/fs"
-	"text/template"
 
 	"go.thesmos.sh/eidos/sdk"
-
-	"go.thesmos.sh/testkit/generator/internal/gotmpl"
 )
 
 // GoPrimarySuffix is the per-source-basename trailer for the primary
@@ -29,6 +25,51 @@ const GoTestSuffix = "_stub.gen_test.go"
 // all match against this value.
 const GoTestOutputTag = "test"
 
+// Module is testkit's module path.
+//
+// Generated code references the runtime by import path, and a path spelled in
+// each template would have to be corrected in every one of them the day the
+// module moves. Held here once and carried onto the emit values instead, so a
+// template names a package rather than a path.
+const Module = "go.thesmos.sh/testkit"
+
+// RuntimePaths is the set of testkit import paths a generated file
+// references, embedded in both emit values so the templates can reach them.
+//
+// The backend's `external` builtin turns a path and a symbol into a qualified
+// reference and registers the import on the rendered file, so a path is all a
+// template needs — no plugin-registered helper stands between the two. The
+// fields carry the `Runtime` prefix rather than sitting behind a nested value
+// because a template writes them constantly: promoted, `external
+// $.RuntimeStub "Answer"` reads as one thought.
+type RuntimePaths struct {
+	// Runtime is the module root, where the assertion helpers the companion
+	// calls live.
+	Runtime string
+
+	// RuntimeStub is the double's own runtime: MethodStub, Answer, the
+	// order tracker, and the behaviour suites the companion drives.
+	RuntimeStub string
+
+	// RuntimeClock is the virtual clock latency and time-windowed faults run
+	// against.
+	RuntimeClock string
+
+	// RuntimeRand is the seeded source that makes probabilistic fault
+	// injection replayable.
+	RuntimeRand string
+}
+
+// GoRuntime returns the import paths the Go templates reference.
+func GoRuntime() RuntimePaths {
+	return RuntimePaths{
+		Runtime:      Module,
+		RuntimeStub:  Module + "/stub",
+		RuntimeClock: Module + "/clock",
+		RuntimeRand:  Module + "/rand",
+	}
+}
+
 //go:embed templates/golang/*.tmpl
 var goTemplates embed.FS
 
@@ -44,25 +85,3 @@ func GoOutputs() []sdk.Output {
 		{Tag: GoTestOutputTag, Suffix: GoTestSuffix},
 	}
 }
-
-// GoTemplates returns the embedded Go template tree. The backend
-// reads it once at Build time and registers every `*.tmpl` under it.
-// The error is discarded rather than branched on: fs.Sub fails only for a
-// malformed path, and this one is a compile-time constant the //go:embed
-// directive already validated. A branch for it could not be reached from a
-// test — the same call shape eidos's own enum plugin uses.
-func GoTemplates() (fs.FS, bool) {
-	sub, _ := fs.Sub(goTemplates, "templates/golang")
-	return sub, true
-}
-
-// GoFuncMap returns the shared list helpers under this plugin's prefix.
-//
-// Prefixed because the backend rejects two plugins registering the same
-// extension name outright: a second testkit generator contributing the same
-// unprefixed bundle would fail every run rather than one output. The helpers
-// themselves are shared in Go, which is the coupling that survives a rename.
-//
-// Everything else the templates call is canonical — `renderType`,
-// `renderExpr`, `camel` — and comes from the backend.
-func GoFuncMap() template.FuncMap { return gotmpl.FuncMap(Name) }

@@ -1,259 +1,189 @@
 # Builder
 
-Generates a fluent test-fixture builder for Go structs. Each generation emits two files: the impl (`builder.gen.go`) containing the builders, and a companion test file (`builder_test.gen.go`) verifying the contract every builder honors. Emits one `With*` setter per exported field, plus shape-specific extras: `Append*` for slices, `WithDataString` for `[]byte`, `With<Field>Entry` for maps. Always emits `Mutate`, `Clone`, and `Build`. Generic types are preserved with type parameters intact.
+A test that constructs a value by composite literal restates every field each time. Add a field to the struct and every literal breaks at once; read the test back and you cannot tell which fields it actually cares about, because all of them are written down.
 
-## Directive
-
-```go
-//go:generate testkit builder -o storetest/item_builder.gen.go Item
-
-// Multiple types in one file:
-//go:generate testkit builder -o storetest/builders.gen.go Item User Order
-```
-
-## Default output
-
-`<package>test/<subject>_builder.gen.go`.
-
-## Constructors
-
-The generator emits two constructors per type:
-
-| Constructor | Seed |
-|-------------|------|
-| `New<Type>()` | Either zero values, or `<Type>Defaults()` from the source package, or directive defaults — see "Defaults" below |
-| `New<Type>From(v)` | Caller-supplied value |
-
-## What is generated
-
-For
+A builder inverts that. The constructor supplies the rest, and the test states only what it varies.
 
 ```go
-type Item struct {
-    ID       string
-    Name     string
-    Count    int
-    Active   bool
-    Tags     []string
-    Data     []byte
-    Metadata map[string]string
-    hidden   int  // unexported — no setter emitted
-}
+cfg := configtest.NewConfig().WithPort(0).Build()
 ```
 
-the generator produces:
-
-### Builder skeleton
+## The directive
 
 ```go
-type ItemBuilder struct {
-    v basic.Item
-}
-
-func NewItem() *ItemBuilder              // zero-value seed (or directive defaults)
-func NewItemFrom(v basic.Item) *ItemBuilder
-
-func (b *ItemBuilder) Build() basic.Item
-func (b *ItemBuilder) Mutate(fn func(*basic.Item)) *ItemBuilder
-func (b *ItemBuilder) Clone() *ItemBuilder
+//testkit:builder
+type Config struct { ... }
 ```
 
-### Per-field setters
+| Key | Value | Effect |
+|---|---|---|
+| `defaults` | A function name | Seeds the constructor from that function instead of from the `<Type>Defaults()` convention. |
 
-Setters are sorted alphabetically by field name.
-
-**Scalar fields** — one `With<Field>` returning the receiver:
+The value names a function returning the struct, in either of two notations:
 
 ```go
-func (b *ItemBuilder) WithActive(v bool) *ItemBuilder    { b.v.Active = v; return b }
-func (b *ItemBuilder) WithCount(v int) *ItemBuilder      { b.v.Count = v; return b }
-func (b *ItemBuilder) WithID(v string) *ItemBuilder      { b.v.ID = v; return b }
-func (b *ItemBuilder) WithName(v string) *ItemBuilder    { b.v.Name = v; return b }
+//testkit:builder defaults=seed.ConfigDefaults
+//testkit:builder defaults=example.com/seed.ConfigDefaults
 ```
 
-**Slice fields** — variadic `With*` (replaces) plus `Append*`:
+The first resolves its qualifier against the imports of the file that declared the struct, which is what an author writes for a package the file already uses. The second carries its own import path, and exists because an import written solely to feed a directive is an unused import — which does not compile.
 
-```go
-func (b *ItemBuilder) WithTags(v ...string) *ItemBuilder    { b.v.Tags = v; return b }
-func (b *ItemBuilder) AppendTags(v ...string) *ItemBuilder  { b.v.Tags = append(b.v.Tags, v...); return b }
-```
+Repeating the directive takes the last `defaults=` written, matching `//testkit:default`.
 
-**`[]byte` fields** — both raw and string forms:
-
-```go
-func (b *ItemBuilder) WithData(v []byte) *ItemBuilder       { b.v.Data = v; return b }
-func (b *ItemBuilder) WithDataString(s string) *ItemBuilder { b.v.Data = []byte(s); return b }
-```
-
-**Map fields** — replace and per-entry insert:
-
-```go
-func (b *ItemBuilder) WithMetadata(m map[string]string) *ItemBuilder
-func (b *ItemBuilder) WithMetadataEntry(k string, v string) *ItemBuilder
-```
-
-`WithMetadataEntry` lazily initializes the map if it's nil.
-
-**Unexported fields** are skipped — only exported fields produce setters.
-
-### Mutate and Clone
-
-```go
-func (b *ItemBuilder) Mutate(fn func(*basic.Item)) *ItemBuilder { fn(&b.v); return b }
-```
-
-`Mutate` runs `fn` against the in-progress value. Used for one-off complex modifications that don't justify a setter.
-
-```go
-func (b *ItemBuilder) Clone() *ItemBuilder
-```
-
-`Clone` returns a deep copy. Slice and map fields are copied so mutations to the clone do not affect the original. Generated `Clone` walks every reference field — slices via `append([]T(nil), src...)`, maps via per-key copy. Pointer fields are shallow-copied (the generator does not assume value-type ownership of arbitrary pointer targets).
-
-## Defaults
-
-`New<Type>()` seeds with one of three sources, in priority order:
-
-### 1. `<Type>Defaults()` companion function
-
-If a function `<Type>Defaults() <Type>` exists in the **source** package alongside the type, the generator uses it as the seed. The name carries the type because a package declaring several types needs one companion each, and a bare `Defaults` collides on the second:
-
-```go
-// defaults/defaults.go — hand-written, beside the type
-func RequestDefaults() Request {
-    return Request{
-        RunID: "test-run-id",
-        Token: 42,
-        Data:  []byte("test-data"),
-    }
-}
-```
-
-```go
-// defaultstest/builders.gen.go — generated
-func NewRequest() *RequestBuilder {
-    return &RequestBuilder{v: defaults.RequestDefaults()}  // seed from companion
-}
-```
-
-### 2. `//testkit:default` field directives
-
-Per-field directives bake literal defaults into the generated constructor:
+Per-field, two more declarations apply:
 
 ```go
 type Config struct {
-    Host    string //testkit:default "localhost"
-    Port    int    //testkit:default 8080
-    Verbose bool   //testkit:default true
-    Name    string // no default — uses zero value
+    Host     string `` //testkit:default "localhost"
+    Internal string `builder:"-"`
+}
+```
+
+`//testkit:default <expression>` seeds one field. The directive is owned by the shared `defaults` package rather than by this generator, so a later generator can read the same stamp.
+
+`builder:"-"` drops a field's setter entirely, for one a test should never set but which cannot be unexported.
+
+## Where the output goes
+
+| Tag | Suffix | Contents |
+|---|---|---|
+| *(primary)* | `_builder.gen.go` | The builder |
+| `test` | `_builder.gen_test.go` | The companion checks |
+
+Both land beside the source unless routed. Declare routing once at package scope — every builder in a package lands in the same companion package, so a per-struct directive is the same statement written N times and the Nth copy is the one that gets forgotten:
+
+```go
+//testkit:out configtest/ pkg=configtest
+package config
+```
+
+## What it generates
+
+Given:
+
+```go
+//testkit:out plaintest/ pkg=plaintest
+package plain
+
+//testkit:builder
+type Item struct {
+    ID    string
+    Count int
+    Tags  []string
+}
+```
+
+the generator writes:
+
+```go
+type ItemBuilder struct{ v plain.Item }
+
+func NewItem() *ItemBuilder                     { return &ItemBuilder{} }
+func NewItemFrom(v plain.Item) *ItemBuilder     { return &ItemBuilder{v: v} }
+
+func (b *ItemBuilder) WithID(v string) *ItemBuilder       { b.v.ID = v; return b }
+func (b *ItemBuilder) WithCount(v int) *ItemBuilder       { b.v.Count = v; return b }
+func (b *ItemBuilder) WithTags(v ...string) *ItemBuilder  { b.v.Tags = v; return b }
+func (b *ItemBuilder) AppendTags(v ...string) *ItemBuilder
+
+func (b *ItemBuilder) Mutate(fn func(*plain.Item)) *ItemBuilder
+func (b *ItemBuilder) Clone() *ItemBuilder
+func (b *ItemBuilder) Build() plain.Item
+```
+
+`New<T>From` exists for the case where a test varies one field of a value it already has. `Mutate` reaches the field a setter does not — an unexported one, or a shape the builder does not model.
+
+## The setter follows the field's type
+
+A setter that took `any` would defeat the point; a setter for `Weekday int` takes `Weekday`, or the declaration was pointless. What each field owes:
+
+| Field type | Setters |
+|---|---|
+| Scalar, struct, interface, func, channel, `any`, `error` | `With<F>(v T)` |
+| Slice | `With<F>(v ...T)` replacing, `Append<F>(v ...T)` adding |
+| Fixed-length array | `With<F>(v [N]T)` only — an append has nowhere to go |
+| `[]byte`, and named aliases of it | `With<F>(v []byte)` and `With<F>String(v string)`, so a caller with a string need not convert |
+| Map | `With<F>(m)`, `With<F>Entry(k, v)`, `With<F>Entries(m)` |
+| Set — `map[K]struct{}` | `With<F>(m)`, `With<F>Entry(k)`, `With<F>Entries(m)` |
+| Pointer | `With<F>(v T)` taking the pointee and addressing it |
+
+The set case is the one worth calling out: `With<F>Entry` takes **no value parameter**. Every value in a set is the same one, so a setter asking for it asks the caller for the one thing they cannot vary.
+
+A channel gets a setter but is never constructed by the builder — capacity is a decision the caller owns.
+
+## Defaults
+
+Three sources, applied in order. Each produces a different constructor, so the one you get depends on what the source declares.
+
+**1. A companion function** — a `<Type>Defaults()` beside the struct by convention, or whatever `defaults=` names. It is written by hand and its signature is checked, not only its name: one taking arguments or returning something else is a different function that happens to collide.
+
+**2. Per-field `//testkit:default` directives**, which apply on top of whatever the companion seeded:
+
+```go
+//testkit:builder
+type User struct {
+    Username string //testkit:default "anonymous"
 }
 ```
 
 ```go
-// generated:
-func NewConfig() *ConfigBuilder {
-    return &ConfigBuilder{v: fielddefaults.Config{
-        Host:    "localhost",
-        Port:    8080,
-        Verbose: true,
-    }}
+func NewUser() *UserBuilder {
+    v := domain.UserDefaults()
+    v.Username = "anonymous"
+    return &UserBuilder{v: v}
 }
 ```
 
-`//testkit:default` accepts Go literal values (strings, ints, bools, nil). Field directives are useful when the defaults are stable enough to live with the type definition; the companion function is better when defaults need test-package context.
-
-### 3. Zero values
-
-If neither a companion nor field directives are present, `New<Type>()` returns a builder over the zero value:
+**3. The zero value**, when neither is declared:
 
 ```go
 func NewItem() *ItemBuilder { return &ItemBuilder{} }
 ```
 
-## Generic types
+A default of `0`, `false` or `nil` is still a default. The directive is read, not inferred from whether the value differs from the zero — so `//testkit:default 0` produces an explicit assignment, and a generator that treated "zero" as "no directive" would be caught by it.
 
-Generic structs preserve their type parameters end-to-end:
+The literal is carried verbatim rather than parsed per kind. `"localhost"`, `8080`, `true` and `nil` all reach the generated file as themselves, which avoids a parser that would have to know every literal form Go admits and be told the field's type to tell `0` from `0.0`. What is checked is that the value cannot swallow the rest of the line: an unterminated string, raw string or rune fails at the directive rather than as a syntax error somewhere else.
+
+A value that carries a dot is a symbol, not a literal, and resolves through the same two notations `defaults=` takes — so `//testkit:default time.Second` needs the file to import `time`, and `//testkit:default example.com/seed.Region` does not. A leading dot is a decimal point: `.5` is a number.
+
+## Clone shares what a pointer means
+
+`Clone` copies the slice, byte-slice and map fields, so appending through one clone is not visible through another.
+
+Values held *inside* those are shared — a struct in a slice that owns a slice of its own — as are pointer fields. That is what a pointer means, and it is what stops a self-referential struct sending the copy into a loop it cannot leave.
+
+```go
+base := NewItem().WithTags("a")
+other := base.Clone().AppendTags("b")
+
+base.Build().Tags   // ["a"]
+other.Build().Tags  // ["a", "b"]
+```
+
+## Generic structs
+
+Type parameters are preserved, and a setter acquires them only if its field uses them:
 
 ```go
 type Container[T any] struct {
-    Label string
+    Value T
     Items []T
-    Limit int
-}
-
-type Pair[A, B any] struct {
-    First  A
-    Second B
+    Label string   // not parameterised
 }
 ```
 
-produces
+`WithValue` and `AppendItems` thread `T`; `WithLabel` does not. A map keyed by a comparable parameter threads both.
 
-```go
-type ContainerBuilder[T any] struct{ v generics.Container[T] }
-func NewContainer[T any]() *ContainerBuilder[T]
-func NewContainerFrom[T any](v generics.Container[T]) *ContainerBuilder[T]
-func (b *ContainerBuilder[T]) WithItems(v ...T) *ContainerBuilder[T]
-func (b *ContainerBuilder[T]) AppendItems(v ...T) *ContainerBuilder[T]
-// ...
-
-type PairBuilder[A any, B any] struct{ v generics.Pair[A, B] }
-// ...
-```
-
-Type-parameter constraints are propagated. The companion function for a generic type, if present, must also be generic.
-
-## Usage
-
-```go
-// Vanilla — zero-seeded.
-item := basictest.NewItem().
-    WithID("item-1").
-    WithName("Widget").
-    AppendTags("alpha", "beta").
-    Build()
-
-// From defaults companion.
-req := defaultstest.NewRequest().
-    WithToken(99).  // override one field
-    Build()
-
-// From directive defaults.
-cfg := fielddefaultstest.NewConfig().
-    WithName("override").
-    Build()
-
-// Mutate for complex modifications.
-item := basictest.NewItem().
-    Mutate(func(i *basic.Item) {
-        i.Metadata = make(map[string]string)
-        i.Metadata["a"] = "1"
-    }).
-    Build()
-
-// Clone for variants from a shared base.
-base := basictest.NewItem().WithName("base")
-a := base.Clone().WithID("a").Build()
-b := base.Clone().WithID("b").Build()
-```
-
-## Why
-
-Builders eliminate brittle inline struct construction. When a field is added, only `<Type>Defaults` (or the field's `//testkit:default`) needs updating — every test using the builder continues to compile and run. The generator produces deterministic output: setters sorted by name, deep-copy logic emitted only for fields that need it (slices, maps, byte slices), and generic type parameters preserved exactly as written.
-
-## Layout Conventions
-
-A typical domain object generates its builder into a `<pkg>test/` sub-package. This ensures the builder is accessible to integration tests across your codebase without leaking test-infrastructure dependencies into your production binary.
-
-**What goes where:**
+## Layout conventions
 
 | File | Owner | Contents |
-|------|-------|----------|
-| `types.go` | Developer | The source file containing the struct definition. |
-| `*_builder.gen.go` | Generator | The fluent builder implementation (DO NOT EDIT). |
-| `*_builder.gen_test.go` | Generator | The self-verifying test suite for the builder itself (DO NOT EDIT). |
-| `defaults.go` | Developer | Hand-written `func <Type>Defaults() <Type>` factories, in the source package beside the type. |
+|---|---|---|
+| `iface.go` | Developer | The struct, its directives, and the package-scope routing |
+| `<pkg>test/iface_builder.gen.go` | Generator | The builder. Do not edit. |
+| `<pkg>test/iface_builder.gen_test.go` | Generator | The checks for the builder itself. Do not edit. |
+| `<pkg>test/defaults.go` | Developer | The `<Type>Defaults()` companion, when `defaults=companion` is declared |
 
 ## See also
 
-- [Generators / Overview](README.md)
+- [Stub](stub.md) — for the doubles that return the values a builder constructs.
+- [Assertions](../primitives/assertions.md) — the assertion functions the generated checks call.

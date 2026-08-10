@@ -4,21 +4,13 @@
 package builder
 
 import (
-	"io/fs"
-	"reflect"
-	"strings"
-	"text/template"
+	"fmt"
 
-	"go.thesmos.sh/eidos/emit"
 	"go.thesmos.sh/eidos/lang/golang"
-	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
+	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
-	"go.thesmos.sh/testkit/generator/internal/defaults"
-	"go.thesmos.sh/testkit/generator/internal/emitq"
-	"go.thesmos.sh/testkit/generator/internal/generic"
-	"go.thesmos.sh/testkit/generator/internal/nodes"
-	"go.thesmos.sh/testkit/generator/internal/witness"
+	"go.thesmos.sh/testkit/generator/defaults"
 )
 
 // Name is the plugin's stable identifier.
@@ -63,8 +55,8 @@ const SkipTag = "builder"
 // SkipValue is the only value [SkipTag] accepts.
 const SkipValue = "-"
 
-// SlotName is the [emit.File] slot the builders land in. `top` renders between
-// the package clause and the first core decl, which is where a
+// SlotName is the [sdk.EmitFile] slot the builders land in. `top` renders
+// between the package clause and the first core decl, which is where a
 // template-rendered block of whole declarations belongs.
 const SlotName = "top"
 
@@ -89,38 +81,44 @@ const Version = "1.0.0"
 // builder's identifier.
 const Suffix = "Builder"
 
-// langGo is the backend language identifier the per-language adapters key on.
-const langGo = golang.Language
-
-// Plugin is the builder generator.
-type Plugin struct{}
+// Plugin is the builder generator. The zero value is unusable; go through
+// [New], which is where the declaration is frozen.
+type Plugin struct{ *sdkgolang.Base }
 
 // New returns a fresh plugin instance.
-func New() *Plugin { return &Plugin{} }
+//
+// The foundation bucket is where a builder belongs: it is a base a later
+// generator may decorate, so it exists before composition runs. Nothing is
+// required — the plugin reads source structs and depends on no other plugin's
+// contribution — so no capability is declared on that side.
+//
+// The templates register no helper of their own. Everything they call is
+// either a backend builtin — `renderType`, `renderTypeParams`, `renderExpr`,
+// `external` — or one of [golang.AllFuncMap]'s entries, which the base merges
+// under this plugin's own prefix. The testkit import paths a template used to
+// resolve through a local function are carried on the emit value instead; see
+// [RuntimePaths].
+//
+// # Failure mode
+//
+// [sdkgolang.Builder.Build] panics on a declaration the pipeline cannot serve.
+// That fires here, inside New, so it lands on the first test that constructs
+// the plugin rather than on the first run that renders a short file.
+func New() *Plugin {
+	return &Plugin{Base: sdkgolang.NewGenerator(Name, goTemplates, GoOutputs()...).
+		Version(Version).
+		Priority(sdk.GeneratorFoundation).
+		Provides(Capability).
+		Directives(directives()...).
+		Build()}
+}
 
-// Name returns [Name].
-func (*Plugin) Name() string { return Name }
-
-// Version returns [Version].
-func (*Plugin) Version() string { return Version }
-
-// Priority places the plugin in the foundation bucket: a builder is a base a
-// later generator may decorate, so it exists before composition runs.
-func (*Plugin) Priority() sdk.Priority { return sdk.GeneratorFoundation }
-
-// Provides advertises [Capability].
-func (*Plugin) Provides() []string { return []string{Capability} }
-
-// Requires returns nil — the plugin reads source structs and depends on no
-// other plugin's contribution.
-func (*Plugin) Requires() []string { return nil }
-
-// Directives declares the `//testkit:builder` schema.
+// directives declares the `//testkit:builder` schema.
 //
 // The directive takes no positional argument: a builder exists exactly where
 // one is declared, so deleting the line is the suppression and a negated form
 // would have nothing to act on.
-func (*Plugin) Directives() []sdk.DirectiveSchema {
+func directives() []sdk.DirectiveSchema {
 	return []sdk.DirectiveSchema{
 		sdk.NewDirective(DirectiveName).
 			Describe(
@@ -132,42 +130,18 @@ func (*Plugin) Directives() []sdk.DirectiveSchema {
 					"declared, so removing the directive is the suppression.",
 			).
 			AllowedKeys(CompanionKey).
-			On(node.KindStruct).
+			On(sdk.NodeKindStruct).
 			DenyNegation().
 			Build(),
 	}
 }
 
-// Outputs dispatches to the per-language adapter.
-func (*Plugin) Outputs(lang string) []sdk.Output {
-	if lang == langGo {
-		return GoOutputs()
-	}
-	return nil
-}
-
-// Templates dispatches to the per-language adapter's template tree.
-func (*Plugin) Templates(lang string) (fs.FS, bool) {
-	if lang == langGo {
-		return GoTemplates()
-	}
-	return nil, false
-}
-
-// TemplateFuncs dispatches to the per-language adapter's funcmap.
-func (*Plugin) TemplateFuncs(lang string) template.FuncMap {
-	if lang == langGo {
-		return GoFuncMap()
-	}
-	return nil
-}
-
-// TemplateOverrides returns nil — the plugin replaces no canonical funcmap
-// entry.
-func (*Plugin) TemplateOverrides(string) template.FuncMap { return nil }
-
 // Shape classifies a field by what setter it owes, which depends on the
 // field's type rather than on its name.
+//
+// It is testkit's vocabulary rather than Go's: eidos answers what a type *is*
+// — [golang.IsSlice], [golang.IsByteSlice], [golang.IsMap],
+// [golang.IsEmptyStruct] — and this names what a builder therefore owes it.
 type Shape string
 
 // The field shapes. Scalar is the zero value, so a projection that never
@@ -221,6 +195,15 @@ const (
 	Pointer Shape = "pointer"
 )
 
+// Sample is [golang.Sample] — the literal a generated check writes together
+// with the type it is written against.
+//
+// Aliased rather than restated: the shape is eidos's, the derivation is
+// [golang.SampleRefFor], and a local copy of a value type whose fields the
+// templates read by name is exactly the drift this migration removed
+// elsewhere.
+type Sample = golang.Sample
+
 // Field is one rendered struct field.
 type Field struct {
 	// Name is the field identifier, which is also what the setter is named
@@ -231,15 +214,15 @@ type Field struct {
 	// its underlying type by the time the frontend records it, which is what
 	// makes `Bytes = []byte` take the byte-slice setter rather than one of its
 	// own.
-	Type emit.Ref
+	Type sdk.Ref
 
 	Shape Shape
 
 	// Elem is a slice's element type or a map's value type, nil otherwise.
-	Elem emit.Ref
+	Elem sdk.Ref
 
 	// Key is a map's key type, nil otherwise.
-	Key emit.Ref
+	Key sdk.Ref
 
 	// Default is the field's declared default as Go source, empty when it
 	// declared none. It renders straight into the constructor's literal.
@@ -248,18 +231,23 @@ type Field struct {
 	// DefaultRef qualifies a default naming a symbol in another package, nil
 	// when the default is a plain literal. A rendered file has to register the
 	// import, which only a reference carries — text cannot.
-	DefaultRef *emit.Expr
+	DefaultRef *sdk.Expr
 
 	// Sample and Alternate are two distinct values of whatever the field's
-	// setter takes, empty when its type admits none. See [samplesFor] for why
-	// the checks need a pair rather than one value, and [resolver] for how far
+	// setter takes, empty when its type admits none. See [Sample] for why the
+	// checks need a pair rather than one value, and [resolver] for how far
 	// "admits none" reaches.
 	Sample    Sample
 	Alternate Sample
 
 	// Returns are a func field's return types, for the literal a check hands
 	// its setter. Empty for every other shape.
-	Returns []emit.Ref
+	Returns []sdk.Ref
+}
+
+// Copies reports whether the field owns storage a clone must not share.
+func (f Field) Copies() bool {
+	return f.Shape == Slice || f.Shape == Bytes || f.Shape == Map || f.Shape == Set
 }
 
 // Builder is the emit value rendered into the primary output.
@@ -276,11 +264,11 @@ type Builder struct {
 	// ValueRef qualifies the struct the builder constructs. A builder routed
 	// into its own package cannot reach it unqualified, and where the two share
 	// a package the backend renders it bare.
-	ValueRef *emit.Expr
+	ValueRef *sdk.Expr
 
 	// TypeParams is the source struct's type-parameter list in declaration
 	// form, empty for a plain struct.
-	TypeParams []*emit.TypeParam
+	TypeParams []*sdk.EmitTypeParam
 
 	// TypeArgs is the same list in use position — `[K, V]`, or empty.
 	TypeArgs string
@@ -290,7 +278,7 @@ type Builder struct {
 	// Companion qualifies the seeding function the constructor calls, nil when
 	// the package declares none. It lives in the source package, so a builder
 	// routed elsewhere cannot reach it unqualified.
-	Companion *emit.Expr
+	Companion *sdk.Expr
 }
 
 // Seeded reports whether any field declares a default, which is what decides
@@ -304,11 +292,6 @@ func (b *Builder) Seeded() bool {
 	return false
 }
 
-// Copies reports whether the field owns storage a clone must not share.
-func (f Field) Copies() bool {
-	return f.Shape == Slice || f.Shape == Bytes || f.Shape == Map || f.Shape == Set
-}
-
 // Kind returns [KindBuilder].
 func (*Builder) Kind() sdk.Kind { return KindBuilder }
 
@@ -317,9 +300,10 @@ func (*Builder) Kind() sdk.Kind { return KindBuilder }
 // The companion lands in the external test package of wherever the builder was
 // routed, so it reaches neither the builder nor the struct unqualified. The
 // struct's package is known during Generate; the builder's is not decided until
-// Layout, which is why [Tests] implements [emit.OutputPackageSetter].
+// Layout, which is why [Tests] implements [sdk.OutputPackageSetter].
 type Tests struct {
 	sdk.BaseEmit
+	RuntimePaths
 
 	// TypeName is the builder's identifier, which names the generated check.
 	TypeName string
@@ -332,21 +316,21 @@ type Tests struct {
 	// the source package as a provisional value, then corrected once routing
 	// resolves — a wrong package is a compile error naming the symbol, while a
 	// bare name silently binds to whatever else is in scope.
-	CtorRef *emit.Expr
+	CtorRef *sdk.Expr
 
 	// FromRef qualifies the seeding constructor, which lives beside it.
-	FromRef *emit.Expr
+	FromRef *sdk.Expr
 
 	// ValueRef qualifies the struct the builder constructs.
-	ValueRef *emit.Expr
+	ValueRef *sdk.Expr
 
 	TypeArgs   string
-	TypeParams []*emit.TypeParam
+	TypeParams []*sdk.EmitTypeParam
 
 	// Witnesses are the concrete types the entry points instantiate at, empty
 	// for a plain struct and for one whose constraints admit none — the latter
 	// gets a note in place of its checks.
-	Witnesses []emit.Ref
+	Witnesses []sdk.Ref
 
 	Fields []Field
 
@@ -358,7 +342,7 @@ type Tests struct {
 	// the check compares the constructed value against the companion's own
 	// return, which is exact — anything weaker would pass against a
 	// constructor that called something else.
-	Companion *emit.Expr
+	Companion *sdk.Expr
 }
 
 // Generic reports that the struct is parameterised and no witness could be
@@ -385,7 +369,7 @@ func (*Tests) Kind() sdk.Kind { return KindBuilderTests }
 // SetOutputPackages repoints the references at wherever Layout routed the
 // builder.
 func (t *Tests) SetOutputPackages(byTag map[string]string) {
-	path, ok := emitq.PrimaryPackage(byTag)
+	path, ok := sdk.PrimaryPackage(byTag)
 	if !ok {
 		return
 	}
@@ -394,19 +378,19 @@ func (t *Tests) SetOutputPackages(byTag map[string]string) {
 }
 
 // Generate walks every source struct carrying `//testkit:builder` and queues
-// one [Builder] against the primary output.
+// one [Builder] against the primary output and one [Tests] against the tagged
+// test output.
 //
 // A struct with no exported fields is skipped with a positioned diagnostic: a
 // builder with no setters configures nothing, and emitting the shell would hide
 // a declaration that cannot do what it says.
 func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
-	c := sdk.NewProvenance(Name, sdk.EmitTarget{})
-	rv := newResolver(ctx.Reader)
-	for _, s := range ctx.Reader.Structs().Slice() {
+	c := sdk.NewProvenance(Name)
+	for s := range ctx.Reader.Structs().All() {
 		if !s.HasPositiveDirective(DirectiveName) {
 			continue
 		}
-		fields := fieldsOf(ctx, rv, s)
+		fields := fieldsOf(ctx, s)
 		if len(fields) == 0 {
 			ctx.Diag.Errorf(s.Pos(),
 				"%s: struct %q carries //testkit:%s but has no exported fields to set",
@@ -415,34 +399,38 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		}
 
 		value := &Builder{
-			BaseEmit:   emitq.Base(c, s),
+			BaseEmit:   sdk.EmitBase(c, s),
 			TypeName:   s.Name + Suffix,
 			SourceName: s.Name,
 			ValueRef:   sdk.NewExternal(s.Package, s.Name),
-			TypeParams: generic.Params(s.TypeParams),
-			TypeArgs:   generic.Args(s.TypeParams),
+			TypeParams: golang.TypeParams(s),
+			TypeArgs:   golang.TypeArgs(s),
 			Fields:     fields,
 			Companion:  companionOf(ctx, s),
 		}
-		w := witness.For(s.TypeParams)
+		w := golang.Witnesses(s.TypeParams)
 
 		// Queued in one call rather than two: the pair differs only in its emit
 		// kind and output tag, and a second append is where the two would drift.
-		if err := emitq.Append(ctx, c, SlotName, s, value, &Tests{
-			BaseEmit:   emitq.Tagged(value.BaseEmit, GoTestOutputTag),
-			TypeName:   value.TypeName,
-			SourceName: s.Name,
-			CtorRef:    sdk.NewExternal(s.Package, "New"+s.Name),
-			FromRef:    sdk.NewExternal(s.Package, "New"+s.Name+"From"),
-			ValueRef:   sdk.NewExternal(s.Package, s.Name),
-			TypeArgs:   witness.Args(s.TypeParams),
-			TypeParams: value.TypeParams,
-			Fields:     substituted(fields, s.TypeParams, w),
-			Seeded:     value.Seeded(),
-			Companion:  value.Companion,
-			Witnesses:  w,
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, s, value, &Tests{
+			BaseEmit:     sdk.EmitBaseTagged(value.BaseEmit, GoTestOutputTag),
+			RuntimePaths: GoRuntime(),
+			TypeName:     value.TypeName,
+			SourceName:   s.Name,
+			CtorRef:      sdk.NewExternal(s.Package, "New"+s.Name),
+			FromRef:      sdk.NewExternal(s.Package, "New"+s.Name+"From"),
+			ValueRef:     sdk.NewExternal(s.Package, s.Name),
+			TypeArgs:     golang.WitnessUse(s.TypeParams),
+			TypeParams:   value.TypeParams,
+			Fields:       substituted(fields, s.TypeParams, w),
+			Seeded:       value.Seeded(),
+			Companion:    value.Companion,
+			Witnesses:    w,
 		}); err != nil {
-			return err
+			// Wrapped even though the queue names the plugin and the slot: what
+			// it cannot name is which declaration the run was on when it failed,
+			// and that is the only part a reader needs to find the source line.
+			return fmt.Errorf("%s: queue struct %q: %w", Name, s.Name, err)
 		}
 	}
 	return nil
@@ -457,20 +445,19 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 // which also name the subject's own methods.
 //
 // Returns fields unchanged when there is nothing to substitute, so the
-// non-generic path allocates nothing.
-func substituted(fields []Field, params []*node.TypeParam, witnesses []emit.Ref) []Field {
-	if len(params) == 0 || len(witnesses) != len(params) {
+// non-generic path allocates nothing: [golang.WitnessBindings] answers nil for
+// a non-generic declaration and for lists that disagree in length, which is the
+// case a partial rewrite would leave naming a parameter no longer in scope.
+func substituted(fields []Field, params []*sdk.TypeParam, witnesses []sdk.Ref) []Field {
+	by := golang.WitnessBindings(params, witnesses)
+	if by == nil {
 		return fields
-	}
-	by := make(map[string]emit.Ref, len(params))
-	for i, p := range params {
-		by[p.Name] = witnesses[i]
 	}
 	out := make([]Field, len(fields))
 	for i, f := range fields {
-		f.Type = replace(f.Type, by)
-		f.Elem = replace(f.Elem, by)
-		f.Key = replace(f.Key, by)
+		f.Type = golang.SubstituteTypeParams(f.Type, by)
+		f.Elem = golang.SubstituteTypeParams(f.Elem, by)
+		f.Key = golang.SubstituteTypeParams(f.Key, by)
 		// Upgraded rather than overwritten: substitution only ever resolves a
 		// type parameter into something more concrete, so it can add a pair
 		// where none was derivable and must never clear one that was.
@@ -482,26 +469,6 @@ func substituted(fields []Field, params []*node.TypeParam, witnesses []emit.Ref)
 	return out
 }
 
-// replace swaps a reference naming a type parameter for its witness,
-// recursing so `[]T` and `map[K]V` are rewritten as well as a bare `T`.
-func replace(r emit.Ref, by map[string]emit.Ref) emit.Ref {
-	switch typed := r.(type) {
-	case nil:
-		return nil
-	case *emit.BuiltinRef:
-		if w, ok := by[typed.Name]; ok {
-			return w
-		}
-	case *emit.CompositeRef:
-		clone := *typed
-		clone.Elem = replace(typed.Elem, by)
-		clone.MapKey = replace(typed.MapKey, by)
-		clone.MapValue = replace(typed.MapValue, by)
-		return &clone
-	}
-	return r
-}
-
 // companionOf finds the seeding function for s, or nil when none applies.
 //
 // A `defaults=` key names one explicitly, in either notation [defaults.Resolve]
@@ -509,40 +476,43 @@ func replace(r emit.Ref, by map[string]emit.Ref) emit.Ref {
 // one imported only for this directive. Absent the key, the convention applies:
 // a `<Type>Defaults()` beside the struct.
 //
+// The last declaration wins, matching `//testkit:default`. [sdk.Struct.Directive]
+// is first-wins and answers a different question — whether the directive is
+// there at all — and two tie-break rules for two directives in one repo is a
+// difference nobody can predict from the outside.
+//
 // The signature is checked rather than only the name: a `UserDefaults` taking
 // arguments, or returning something else, is a different function that happens
 // to collide, and calling it would emit a constructor that does not compile.
-func companionOf(ctx *sdk.GeneratorContext, s *node.Struct) *emit.Expr {
-	for _, dir := range s.Directives() {
-		if string(dir.Name) != string(DirectiveName) {
-			continue
+func companionOf(ctx *sdk.GeneratorContext, s *sdk.Struct) *sdk.Expr {
+	if dir := sdk.Last(s.Directives(), DirectiveName); dir != nil && dir.KV[CompanionKey] != "" {
+		// The qualifier form resolves against the imports of the file that
+		// declared the struct, so the file is what the resolver needs. Passing
+		// no file at all only ever resolved the full-path form.
+		pkgNode, _ := ctx.Reader.PackageAt(s.Package)
+		pkg, symbol, err := defaults.Resolve(
+			golang.FileOf(pkgNode, s), dir.KV[CompanionKey],
+		)
+		if err != nil {
+			ctx.Diag.Errorf(s.Pos(), "%s: %s on %s: %v", Name, CompanionKey, s.Name, err)
+			return nil
 		}
-		if raw := dir.KV[CompanionKey]; raw != "" {
-			pkg, symbol, err := defaults.Resolve(ctx.Reader, nil, raw)
-			if err != nil {
-				ctx.Diag.Errorf(s.Pos(), "%s: %s on %s: %v", Name, CompanionKey, s.Name, err)
-				return nil
-			}
-			if pkg == "" {
-				pkg = s.Package
-			}
-			return sdk.NewExternal(pkg, symbol)
+		if pkg == "" {
+			pkg = s.Package
 		}
+		return sdk.NewExternal(pkg, symbol)
 	}
 	name := s.Name + CompanionSuffix
-	for _, fn := range ctx.Reader.Functions().Slice() {
-		if fn.Name != name || fn.Package != s.Package {
-			continue
-		}
-		if len(fn.Params) != 0 || len(fn.Returns) != 1 {
-			continue
-		}
-		if r := fn.Returns[0].Type; r == nil || r.Name != s.Name {
-			continue
-		}
-		return sdk.NewExternal(s.Package, name)
+	fn, found := ctx.Reader.Functions().Where(func(fn *sdk.Function) bool {
+		return fn.Name == name && fn.Package == s.Package
+	}).First()
+	if !found || len(fn.Params) != 0 || len(fn.Returns) != 1 {
+		return nil
 	}
-	return nil
+	if r := fn.Returns[0].Type; r == nil || r.Name != s.Name {
+		return nil
+	}
+	return sdk.NewExternal(s.Package, name)
 }
 
 // fieldsOf lifts every field a builder can set.
@@ -550,7 +520,10 @@ func companionOf(ctx *sdk.GeneratorContext, s *node.Struct) *emit.Expr {
 // Unexported fields are skipped: a builder in another package cannot name them,
 // and one in the same package would offer a setter the type's own invariants
 // were written to prevent.
-func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
+func fieldsOf(ctx *sdk.GeneratorContext, s *sdk.Struct) []Field {
+	// The reader is the resolver: [store.Reader] implements [golang.Resolver],
+	// so the sample walk needs nothing built for it.
+	rv := ctx.Reader
 	out := make([]Field, 0, len(s.Fields)+len(s.Embeds))
 	// An embedded type is a field named after itself, and the frontend records
 	// it apart from the declared ones. It takes a single setter for the whole
@@ -558,31 +531,40 @@ func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
 	// an embedded value as a unit, and promoting would offer two ways to write
 	// the same thing that disagree about whether the embedded value is set.
 	for _, e := range s.Embeds {
-		name, pointer := nodes.EmbedName(e.Type)
+		name, pointer := golang.EmbedIdent(e)
 		if name == "" || !golang.IsExported(name) {
 			continue
 		}
 		field := Field{Name: name, Type: golang.FromNode(e.Type)}
-		source := e.Type
 		if pointer {
-			source = e.Type.Elem
 			// Embedded by pointer takes the same setter a pointer field does:
 			// the promoted fields are reachable only once the pointer is
 			// non-nil, so a setter demanding an address makes every caller
 			// allocate before it can set anything.
 			field.Shape = Pointer
-			field.Elem = golang.FromNode(e.Type.Elem)
+			field.Elem = golang.FromNode(golang.EmbedTarget(e))
 		}
-		field.Sample, field.Alternate = rv.samples(source, name, make(map[string]bool))
+		field.Sample, field.Alternate = golang.SampleRefFor(golang.EmbedTarget(e), name, rv)
 		out = append(out, field)
 	}
-	for _, f := range s.Fields {
-		if !golang.IsExported(f.Name) || skipped(ctx, s, f) {
+	for _, f := range golang.ExportedFields(s) {
+		if skipped(ctx, s, f) {
+			continue
+		}
+		if f.Type == nil {
+			// A field whose type the run could not record. A setter needs one
+			// to declare its parameter, and there is nothing to put there — the
+			// template renders the reference unconditionally, so keeping the
+			// field fails the whole run with a message naming a template line
+			// rather than the declaration that caused it.
+			ctx.Diag.Warnf(f.Pos(),
+				"%s: %s.%s has no recorded type, so no setter is generated for it",
+				Name, s.Name, f.Name)
 			continue
 		}
 		field := Field{
 			Name:    f.Name,
-			Type:    golang.FromNode(f.Type),
+			Type:    golang.FieldType(f),
 			Default: defaults.Of(f.Meta()),
 		}
 		if pkg := defaults.Package(f.Meta()); pkg != "" {
@@ -595,11 +577,8 @@ func fieldsOf(ctx *sdk.GeneratorContext, rv *resolver, s *node.Struct) []Field {
 }
 
 // skipped reports whether the field opted out of a setter.
-func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
-	if f.Tag == "" {
-		return false
-	}
-	raw, ok := reflect.StructTag(strings.Trim(f.Tag, "`")).Lookup(SkipTag)
+func skipped(ctx *sdk.GeneratorContext, s *sdk.Struct, f *sdk.Field) bool {
+	raw, ok := golang.TagValue(f.Tag, SkipTag)
 	if !ok {
 		return false
 	}
@@ -612,54 +591,74 @@ func skipped(ctx *sdk.GeneratorContext, s *node.Struct, f *node.Field) bool {
 	return true
 }
 
-// refsOf lifts a list of source types into their emit form.
-func refsOf(types []*node.TypeRef) []emit.Ref {
-	if len(types) == 0 {
-		return nil
-	}
-	out := make([]emit.Ref, len(types))
-	for i, t := range types {
-		out[i] = golang.FromNode(t)
-	}
-	return out
-}
-
 // classify records the shape the field's setter follows, and the values its
 // check sets it to.
-func classify(rv *resolver, field *Field, t *node.TypeRef) {
-	if t == nil {
-		return
-	}
-	seen := make(map[string]bool)
+//
+// Every question asked here is eidos's; what is decided here is which setter
+// testkit owes the answer.
+func classify(rv golang.Resolver, field *Field, t *sdk.TypeRef) {
+	// The cycle guard lives in [golang.SampleRefFor] now, bounded by its own
+	// recursion budget, so nothing here threads a visited set through.
 	switch {
-	case t.TypeKind == node.TypeRefFunc:
+	case t.IsFunc():
 		field.Shape = Func
-		field.Returns = refsOf(t.FuncReturns)
-	case nodes.IsBidirectionalChan(t):
+		field.Returns = golang.RefsOf(t.FuncReturns)
+	case golang.IsBidirectionalChan(t):
 		field.Shape = Chan
-	case nodes.IsError(t):
+	case golang.IsError(t):
 		field.Shape = Error
-	case t.TypeKind == node.TypeRefSlice && nodes.IsByte(t.Elem):
+	case golang.IsByteSliceAny(t):
+		// The `Any` spelling rather than [golang.IsByteSlice]: `[]uint8` is the
+		// same type as `[]byte`, an author may have written either, and a field
+		// spelled the second way owes the same string-accepting setter.
 		field.Shape = Bytes
-	case t.TypeKind == node.TypeRefSlice:
+	case golang.IsSlice(t):
 		field.Shape = Slice
-		field.Elem = golang.FromNode(t.Elem)
-	case t.TypeKind == node.TypeRefMap && nodes.IsEmptyStruct(t.MapValue):
+		field.Elem = golang.ElemType(t)
+	case golang.IsMap(t) && golang.IsEmptyStruct(golang.MapValue(t)):
 		// Ahead of the map arm: a set is a map, and the narrower reading wins.
 		// Elem stays nil — there is no value type worth carrying when every
 		// value is the same one.
 		field.Shape = Set
-		field.Key = golang.FromNode(t.MapKey)
-		field.Sample, field.Alternate = rv.samples(t.MapKey, field.Name, seen)
-	case t.TypeKind == node.TypeRefMap:
+		field.Key = golang.MapKeyType(t)
+		field.Sample, field.Alternate = golang.SampleRefFor(golang.MapKey(t), field.Name, rv)
+	case golang.IsMap(t):
 		field.Shape = Map
-		field.Key = golang.FromNode(t.MapKey)
-		field.Elem = golang.FromNode(t.MapValue)
-	case t.TypeKind == node.TypeRefPointer:
+		field.Key = golang.MapKeyType(t)
+		field.Elem = golang.MapValType(t)
+	case t.IsPointer():
 		field.Shape = Pointer
-		field.Elem = golang.FromNode(t.Elem)
-		field.Sample, field.Alternate = rv.samples(t.Elem, field.Name, seen)
+		field.Elem = golang.ElemType(t)
+		field.Sample, field.Alternate = golang.SampleRefFor(golang.PointerElem(t), field.Name, rv)
 	default:
-		field.Sample, field.Alternate = rv.samples(t, field.Name, seen)
+		field.Sample, field.Alternate = golang.SampleRefFor(t, field.Name, rv)
+	}
+}
+
+// samplesOfRef derives the pair from an emit reference, which is what a
+// field's type has become by the time witnesses are substituted into it.
+//
+// Builtins only: a witness is always one, and this runs after the source types
+// are gone, so there is nothing left to resolve a named type against.
+func samplesOfRef(r sdk.Ref, fieldName string) (sample, alternate Sample) {
+	b, ok := r.(*sdk.BuiltinRef)
+	if !ok {
+		return Sample{}, Sample{}
+	}
+	text, alt := golang.SampleValues(b.Name, fieldName)
+	return Sample{Text: text}, Sample{Text: alt}
+}
+
+// sampleSource returns the reference a field's pair is derived from, which is
+// whatever its setter actually takes: the pointee for a pointer, the key for a
+// set, and the field's own type otherwise.
+func sampleSource(f Field) sdk.Ref {
+	switch f.Shape {
+	case Pointer:
+		return f.Elem
+	case Set:
+		return f.Key
+	default:
+		return f.Type
 	}
 }

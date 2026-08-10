@@ -1,6 +1,6 @@
 # Codec
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Wire-correctness generator. Reads a proto descriptor and emits a `codectest.Spec[T]` round-trip suite plus per-spec benchmark, fuzz seeds, and binary wire fixtures (`testdata/wire/*.bin`) regenerated when codec semantics change. Single source of truth across the spec and the wire artifact — no hand-written field-classification tables.
 

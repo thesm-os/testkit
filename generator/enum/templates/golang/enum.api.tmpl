@@ -1,6 +1,10 @@
+{{- /* The two standard-library symbols are composed with the backend's own
+       `external <path> <Symbol>`, which registers the import as it renders —
+       so the file imports errors and fmt exactly when the branch that needs
+       one is taken. */ -}}
 {{- define "enum.api" -}}
-{{- $errors := enumRef "errors.New" -}}
-{{- $sprintf := enumRef "fmt.Sprintf" -}}
+{{- $errors := external "errors" "New" -}}
+{{- $sprintf := external "fmt" "Sprintf" -}}
 {{- $t := renderExpr .TypeRef -}}
 {{- $variants := .Variants -}}
 {{- if .Emits "String" }}
@@ -19,7 +23,7 @@ func (v {{ $t }}) String() string {
 {{- if eq $.Form "value" }}
 	return string(v)
 {{- else }}
-	return {{ renderExpr $sprintf }}("{{ $.TypeName }}(%d)", {{ $.Underlying }}(v))
+	return {{ renderExpr $sprintf }}("{{ $.TypeName }}({{ $.Verb }})", {{ renderType $.Underlying }}(v))
 {{- end }}
 }
 {{ end }}

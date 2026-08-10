@@ -316,5 +316,143 @@ func TestMirroredBuilderBuild(t *testing.T) {
 	})
 }
 
+// TestNewShorthand pins what the constructor seeds.
+func TestNewShorthand(t *testing.T) {
+	t.Parallel()
+
+	t.Run("seeds from the package companion", func(t *testing.T) {
+		t.Parallel()
+		// Compared against the companion's own return rather than a value
+		// restated here: anything weaker would pass against a constructor that
+		// called something else, or nothing at all.
+		testkit.Equal(t, crosspkgtest.NewShorthand().Build(), seed.ConfigDefaults(),
+			"NewShorthand must seed from its companion")
+	})
+}
+
+// TestNewShorthandFrom pins the seeding constructor, which is what a test
+// uses to vary one field of a value it already holds.
+func TestNewShorthandFrom(t *testing.T) {
+	t.Parallel()
+
+	t.Run("carries the value through untouched", func(t *testing.T) {
+		t.Parallel()
+		// Anything it altered would be a field the caller did not ask to
+		// change, which defeats the point of seeding from a value at all.
+		var seed crosspkg.Shorthand
+		testkit.Equal(t, crosspkgtest.NewShorthandFrom(seed).Build(), seed,
+			"NewShorthandFrom must not alter what it was given")
+	})
+}
+
+// TestShorthandBuilderWithRegion pins the setter for Region.
+func TestShorthandBuilderWithRegion(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reaches Region", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithRegion("test-region").Build().Region, "test-region",
+			"WithRegion must reach Region")
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithRegion("other-region").Build().Region, "other-region",
+			"WithRegion must reach Region")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *testing.T) {
+		t.Parallel()
+		var v string
+		b := crosspkgtest.NewShorthand()
+		testkit.True(t, b.WithRegion(v) == b, "the setter returns its receiver")
+	})
+}
+
+// TestShorthandBuilderWithRetries pins the setter for Retries.
+func TestShorthandBuilderWithRetries(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reaches Retries", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithRetries(42).Build().Retries, 42,
+			"WithRetries must reach Retries")
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithRetries(7).Build().Retries, 7,
+			"WithRetries must reach Retries")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *testing.T) {
+		t.Parallel()
+		var v int
+		b := crosspkgtest.NewShorthand()
+		testkit.True(t, b.WithRetries(v) == b, "the setter returns its receiver")
+	})
+}
+
+// TestShorthandBuilderWithLabel pins the setter for Label.
+func TestShorthandBuilderWithLabel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reaches Label", func(t *testing.T) {
+		t.Parallel()
+		// Two distinct values rather than one: whatever the constructor seeded
+		// can equal at most one of them, so a setter assigning nothing fails
+		// here instead of passing against its own seed.
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithLabel("test-label").Build().Label, "test-label",
+			"WithLabel must reach Label")
+		testkit.Equal(t, crosspkgtest.NewShorthand().WithLabel("other-label").Build().Label, "other-label",
+			"WithLabel must reach Label")
+	})
+
+	t.Run("returns the builder so calls chain", func(t *testing.T) {
+		t.Parallel()
+		var v string
+		b := crosspkgtest.NewShorthand()
+		testkit.True(t, b.WithLabel(v) == b, "the setter returns its receiver")
+	})
+}
+
+// TestShorthandBuilderMutate pins the escape hatch for a field no setter reaches.
+func TestShorthandBuilderMutate(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reaches the value under construction", func(t *testing.T) {
+		t.Parallel()
+		// Handed a copy, every mutation would be discarded and the caller
+		// would see a builder that silently ignored them.
+		reached := false
+		crosspkgtest.NewShorthand().Mutate(func(*crosspkg.Shorthand) { reached = true })
+		testkit.True(t, reached, "Mutate must be applied")
+	})
+}
+
+// TestShorthandBuilderClone pins that a clone can be configured on its own.
+func TestShorthandBuilderClone(t *testing.T) {
+	t.Parallel()
+
+	t.Run("carries the configuration across", func(t *testing.T) {
+		t.Parallel()
+		// A clone starting from nothing would be a second constructor under
+		// another name, and a test cloning a configured builder would silently
+		// lose everything it had set.
+		b := crosspkgtest.NewShorthand()
+		testkit.Equal(t, b.Clone().Build(), b.Build(), "a clone starts where its original stood")
+	})
+}
+
+// TestShorthandBuilderBuild pins what the builder hands back.
+func TestShorthandBuilderBuild(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns every field that was configured", func(t *testing.T) {
+		t.Parallel()
+		var seed crosspkg.Shorthand
+		testkit.Equal(t, crosspkgtest.NewShorthandFrom(seed).Build(), seed,
+			"Build returns the value under construction")
+	})
+}
+
 // testkit: end of generated content.
-// testkit:provenance b555a108739b83f103ec7714f8badcf995e8b3809b3d6be1bdd0cbe08b91368b
+// testkit:provenance 773f867988212afa4dee526f3d83ab7d9e711364ad06bd2fe8c3c4457239d751

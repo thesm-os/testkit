@@ -1,64 +1,80 @@
-# RandSource
-
-`RandSource` is a pluggable random-number-generator interface used by probabilistic fault injection. testkit defines the interface; consumers inject their own deterministic RNG (e.g., a simulation engine's seeded PCG) when reproducibility matters.
-
-## The Architectural Pattern
-
-Why require a `RandSource` interface instead of relying on `math/rand`?
-
-If a test fails because a probabilistic network fault fired at the worst possible moment, you must be able to reproduce that exact failure to fix it. If the fault relies on the global `math/rand` source, reproducing the exact sequence of "random" events across thousands of concurrent goroutines is mathematically impossible.
-
-The `RandSource` interface allows the `model`, `sim`, and `chaos` harnesses to inject a single, master-seeded PRNG. If a property test finds a failing trace on iteration 42,901, the engine simply hands you the seed. Supplying that seed to your local environment guarantees the `RandSource` will yield the exact same sequence of probabilities, firing the exact same faults, reproducing the bug instantly.
-
-## Interface
+# Rand
 
 ```go
-type RandSource interface {
-    Float64() float64 // returns a value in [0.0, 1.0)
+import "go.thesmos.sh/testkit/rand"
+```
+
+Probabilistic fault injection needs randomness, and a failure nobody can replay is not a finding. `rand.Source` is the seam that makes the draw controllable.
+
+```go
+type Source interface {
+    Float64() float64
 }
 ```
 
-Single method. Implementations must be safe for concurrent use — testkit calls `Float64` from generated stub dispatch code that may run across goroutines.
+One method, because one is all a probability check needs. A narrower interface is a smaller thing to fake.
 
-## Implementations
-
-### DefaultRandSource
+## The two implementations
 
 ```go
-src := testkit.DefaultRandSource()
+func DefaultRandSource() Source
+func FixedRandSource(v float64) Source
 ```
 
-Backed by `math/rand/v2` (the package-level global). Thread-safe. Used by every probabilistic fault when no source is explicitly configured.
+`DefaultRandSource` draws from the standard library.
 
-### FixedRandSource
+`FixedRandSource(v)` returns `v` from every call. That turns a probabilistic fault into a deterministic one and lets a test drive both sides of the threshold exactly:
 
 ```go
-src := testkit.FixedRandSource(0.0) // every call returns 0.0
+// p = 0.3; a draw of 0.1 is below it, so the fault fires every time.
+s.OnGet.WithRandSource(rand.FixedRandSource(0.1))
+s.OnGet.FaultsWithProbability(0.3, store.ErrUnavailable)
+
+_, err := s.Get(ctx, "k")
+testkit.ErrorIs(t, err, store.ErrUnavailable, "a draw below p must fire the fault")
 ```
 
-Returns a constant. Use in tests to force deterministic outcomes from probabilistic faults: `0.0` makes every probabilistic fault fire; `1.0` makes none fire.
+Flip to `FixedRandSource(0.9)` for the other arm. Both branches of the comparison get covered, which a real source reaches only by luck.
 
-## Wiring into stubs
+## The boundary
+
+The comparison is `draw < p`. `FixedRandSource(p)` for the exact `p` therefore does **not** fire — the boundary belongs to the non-firing side. Worth pinning explicitly if the threshold matters:
 
 ```go
-stub.OnGet.WithRandSource(testkit.FixedRandSource(0.0))
-stub.OnGet.FaultsWithProbability(errBoom, 0.05) // fires every call (because 0.0 < 0.05)
+s.OnGet.WithRandSource(rand.FixedRandSource(0.3))
+s.OnGet.FaultsWithProbability(0.3, store.ErrUnavailable)
+
+_, err := s.Get(ctx, "k")
+testkit.NoError(t, err, "a draw equal to p must not fire")
 ```
 
-In a generated stub, the constructor option `<Stub>RandSource(src)` propagates the source to every method's `MethodStub`.
+## Seeded randomness for fixtures
 
-## Why not just use math/rand directly?
+`rand.Source` is for fault injection. Where a test wants varied but reproducible *data*, [`testkit.SeededRand`](helpers.md#fixtures) returns a `*math/rand.Rand` seeded from the test's name — deterministic within a test, different between tests.
 
-Two reasons:
+```go
+r := testkit.SeededRand(t)
+for range 100 {
+    _ = store.Put(fmt.Sprintf("k%d", r.IntN(1000)))
+}
+```
 
-1. **Reproducibility.** Simulation engines manage seeds carefully — a single seed reproduces an entire run. testkit can't manage seeds for them; the engine plugs in its own source so the seed lifecycle stays in one place.
-2. **Determinism in tests.** `FixedRandSource` lets tests assert "this probabilistic fault will fire" or "won't fire" without flake.
+## Wiring a source
 
-## Concurrency
+Per method:
 
-Implementations must be thread-safe — `Float64` is called from generated stub dispatch and may run concurrently across goroutines. `DefaultRandSource` is thread-safe (math/rand/v2 global). `FixedRandSource` returns a constant and is trivially thread-safe.
+```go
+s.OnGet.WithRandSource(rand.FixedRandSource(0.1))
+```
+
+Across every method of a generated double:
+
+```go
+s := readertest.NewReaderStub(t, readertest.ReaderStubWithRandSource(rand.FixedRandSource(0.1)))
+```
 
 ## See also
 
-- [Fault injection](fault-injection.md) — `ProbabilityFault` consumes RandSource
-- [MethodStub](method-stub.md) — `WithRandSource`
+- [Fault injection](fault-injection.md) — `NewProbabilityFault`, the one consumer.
+- [Method stub](method-stub.md) — `WithRandSource` and `FaultsWithProbability`.
+- [Helpers](helpers.md) — `SeededRand` for fixture data.

@@ -1,6 +1,6 @@
 # Model
 
-> **Status: planned.** The `model` subcommand is wired into the CLI but the analyze + render implementation has not yet landed. Invocations return a port-pending error. This document records the intended design so consumers can plan adoption against a stable target.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Tier 2-3 conformance. The `model` generator elevates your testing from "single-call assertions" (Tier 1) to **Property-Based State Machines**.
 

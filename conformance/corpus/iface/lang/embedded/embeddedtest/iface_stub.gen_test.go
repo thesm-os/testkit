@@ -389,6 +389,132 @@ func TestCloserStubDelegateTo(t *testing.T) {
 	})
 }
 
+// composedStubGetSubject binds Get into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func composedStubGetSubject(tb testing.TB) stub.Subject[embeddedtest.ComposedGetCall, embeddedtest.ComposedGetReturn] {
+	tb.Helper()
+	s := embeddedtest.NewComposedStub(tb)
+	return stub.Subject[embeddedtest.ComposedGetCall, embeddedtest.ComposedGetReturn]{
+		Stub: s.OnGet.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 string
+			_, _ = s.Get(a0, a1)
+		},
+		Result: func() embeddedtest.ComposedGetReturn {
+			var a0 context.Context
+			var a1 string
+			got0, got1 := s.Get(a0, a1)
+			return embeddedtest.ComposedGetReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnGet.Func(func(_ context.Context, _ string) (string, error) {
+				mark()
+				var z0 string
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 string
+			_, r1 := s.Get(a0, a1)
+			return r1
+		},
+	}
+}
+
+// TestComposedStubGet pins how Get answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestComposedStubGet(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Get", composedStubGetSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := embeddedtest.NewComposedStub(t)
+		var want0 string
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 string
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "Get must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Get must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := embeddedtest.NewComposedStub(t)
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		got := s.OnGet.AssertCalledOnce(t, "Get must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := embeddedtest.NewComposedStub(t)
+		var seen []embeddedtest.ComposedGetCall
+		s.OnGet.OnRecord(func(c embeddedtest.ComposedGetCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		_, _ = s.Get(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Get call")
+	})
+
+	t.Run("wires WithComposedGet at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := embeddedtest.NewComposedStub(t, embeddedtest.WithComposedGet(func(_ context.Context, _ string) (string, error) {
+			called = true
+			var z0 string
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		testkit.True(t, called, "WithComposedGet must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := embeddedtest.NewComposedStub(t)
+		var want0 string
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		s.ResetCalls()
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
 // composedStubPingSubject binds Ping into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -611,163 +737,38 @@ func TestComposedStubClose(t *testing.T) {
 	})
 }
 
-// composedStubGetSubject binds Get into the shape
-// [stub.Behaviour] drives: how to call it, what it answers with, and how to
-// override it.
-//
-// Each call builds a fresh double, because several of the checks assert on
-// failure and need one bound to a failable TB rather than to the running
-// test.
-func composedStubGetSubject(tb testing.TB) stub.Subject[embeddedtest.ComposedGetCall, embeddedtest.ComposedGetReturn] {
-	tb.Helper()
-	s := embeddedtest.NewComposedStub(tb)
-	return stub.Subject[embeddedtest.ComposedGetCall, embeddedtest.ComposedGetReturn]{
-		Stub: s.OnGet.MethodStub,
-		Call: func() {
-			var a0 context.Context
-			var a1 string
-			_, _ = s.Get(a0, a1)
-		},
-		Result: func() embeddedtest.ComposedGetReturn {
-			var a0 context.Context
-			var a1 string
-			got0, got1 := s.Get(a0, a1)
-			return embeddedtest.ComposedGetReturn{Result: got0, Err: got1}
-		},
-		Override: func(mark func()) {
-			s.OnGet.Func(func(_ context.Context, _ string) (string, error) {
-				mark()
-				var z0 string
-				var z1 error
-				return z0, z1
-			})
-		},
-		Fails: func() error {
-			var a0 context.Context
-			var a1 string
-			_, r1 := s.Get(a0, a1)
-			return r1
-		},
-	}
-}
-
-// TestComposedStubGet pins how Get answers.
-//
-// Recording, resetting, call-count expectations, strict mode, fault injection
-// and zero-value dispatch are the same contract for every method, so they are
-// asserted once in [stub.Behaviour] rather than restated here. What remains
-// below needs a value this method's signature can tell apart from a zero one.
-func TestComposedStubGet(t *testing.T) {
-	t.Parallel()
-
-	stub.Behaviour(t, "Get", composedStubGetSubject)
-
-	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
-		t.Parallel()
-		s := embeddedtest.NewComposedStub(t)
-		var want0 string
-		var want1 error
-		s.OnGet.Returns(want0, want1)
-		var a0 context.Context
-		var a1 string
-		got0, got1 := s.Get(a0, a1)
-		testkit.Equal(t, got0, want0, "Get must answer with what Returns pinned")
-		testkit.Equal(t, got1, want1, "Get must answer with what Returns pinned")
-	})
-	t.Run("records what it was called with", func(t *testing.T) {
-		t.Parallel()
-		// Asserting only that a call happened would pass against a double
-		// that recorded the wrong arguments, which is the failure a reader
-		// most needs the log to surface.
-		s := embeddedtest.NewComposedStub(t)
-		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		got := s.OnGet.AssertCalledOnce(t, "Get must record the call")
-		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
-	})
-
-	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
-		t.Parallel()
-		// The hook fires synchronously as each call lands, which is what a
-		// concurrency test observes progress with — polling the log instead
-		// races the thing under test.
-		s := embeddedtest.NewComposedStub(t)
-		var seen []embeddedtest.ComposedGetCall
-		s.OnGet.OnRecord(func(c embeddedtest.ComposedGetCall) { seen = append(seen, c) })
-		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		_, _ = s.Get(a0, a1)
-		testkit.Len(t, seen, 2, "OnRecord must fire once per Get call")
-	})
-
-	t.Run("wires WithComposedGet at construction", func(t *testing.T) {
-		t.Parallel()
-		called := false
-		s := embeddedtest.NewComposedStub(t, embeddedtest.WithComposedGet(func(_ context.Context, _ string) (string, error) {
-			called = true
-			var z0 string
-			var z1 error
-			return z0, z1
-		}))
-		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		testkit.True(t, called, "WithComposedGet must install the override")
-	})
-
-	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
-		t.Parallel()
-		// A reset clears what happened, not what was configured. Losing the
-		// configuration would make a double answer differently in the second
-		// half of a test than in the first, for no reason the reader can see.
-		s := embeddedtest.NewComposedStub(t)
-		var want0 string
-		var want1 error
-		s.OnGet.Returns(want0, want1)
-		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		s.ResetCalls()
-		got0, got1 := s.Get(a0, a1)
-		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
-		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
-	})
-}
-
 // composedStubDouble describes how to build a ComposedStub under each
 // option whose effect is the same whatever a method's signature.
 //
-// Ping stands in for the double as a whole: what these checks assert
+// Get stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func composedStubDouble() stub.Double[embeddedtest.ComposedPingCall] {
-	instance := func(s *embeddedtest.ComposedStub) stub.Instance[embeddedtest.ComposedPingCall] {
-		return stub.Instance[embeddedtest.ComposedPingCall]{
-			Stub: s.OnPing.MethodStub,
+func composedStubDouble() stub.Double[embeddedtest.ComposedGetCall] {
+	instance := func(s *embeddedtest.ComposedStub) stub.Instance[embeddedtest.ComposedGetCall] {
+		return stub.Instance[embeddedtest.ComposedGetCall]{
+			Stub: s.OnGet.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				_ = s.Ping(a0)
+				var a1 string
+				_, _ = s.Get(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
 	}
-	return stub.Double[embeddedtest.ComposedPingCall]{
-		New: func(tb testing.TB) stub.Instance[embeddedtest.ComposedPingCall] {
+	return stub.Double[embeddedtest.ComposedGetCall]{
+		New: func(tb testing.TB) stub.Instance[embeddedtest.ComposedGetCall] {
 			return instance(embeddedtest.NewComposedStub(tb))
 		},
-		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[embeddedtest.ComposedPingCall] {
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[embeddedtest.ComposedGetCall] {
 			return instance(embeddedtest.NewComposedStub(tb, embeddedtest.ComposedStubWithClock(clk)))
 		},
-		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[embeddedtest.ComposedPingCall] {
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[embeddedtest.ComposedGetCall] {
 			return instance(embeddedtest.NewComposedStub(tb, embeddedtest.ComposedStubWithRandSource(src)))
 		},
-		BenchMode: func(tb testing.TB) stub.Instance[embeddedtest.ComposedPingCall] {
+		BenchMode: func(tb testing.TB) stub.Instance[embeddedtest.ComposedGetCall] {
 			return instance(embeddedtest.NewComposedStub(tb, embeddedtest.ComposedStubBenchMode()))
 		},
-		Strict: func(tb testing.TB) stub.Instance[embeddedtest.ComposedPingCall] {
+		Strict: func(tb testing.TB) stub.Instance[embeddedtest.ComposedGetCall] {
 			return instance(embeddedtest.NewComposedStub(tb, embeddedtest.ComposedStubStrict()))
 		},
 	}
@@ -792,6 +793,25 @@ func TestComposedStubDelegateTo(t *testing.T) {
 
 	inner := embeddedtest.NewComposedStub(t)
 	s := embeddedtest.NewComposedStub(t, embeddedtest.ComposedStubDelegateTo(inner))
+
+	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		inner.OnGet.AssertCalledOnce(t, "Get must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Get answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Get-delegate")
+		inner.OnGet.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 string
+		_, r1 := s.Get(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Get must surface the wrapped answer")
+	})
 
 	t.Run("forwards Ping to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
@@ -825,25 +845,6 @@ func TestComposedStubDelegateTo(t *testing.T) {
 		var a0 context.Context
 		r0 := s.Close(a0)
 		testkit.ErrorIs(t, r0, want, "Close must surface the wrapped answer")
-	})
-
-	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
-		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		inner.OnGet.AssertCalledOnce(t, "Get must reach the wrapped implementation")
-	})
-
-	t.Run("surfaces what Get answered", func(t *testing.T) {
-		// Reaching the wrapped implementation is not enough: a double that
-		// called through and then discarded the answer would pass the check
-		// above while telling its caller nothing true.
-		want := testkit.TestError("Get-delegate")
-		inner.OnGet.FaultsFor(time.Hour, want)
-		var a0 context.Context
-		var a1 string
-		_, r1 := s.Get(a0, a1)
-		testkit.ErrorIs(t, r1, want, "Get must surface the wrapped answer")
 	})
 }
 
@@ -886,4 +887,4 @@ func TestComposedStubPingFaults(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 807ae929d4d1ccdc10bb1304504b9f2e0d51b796467f8911b30d921945b04932
+// testkit:provenance 4904da5377800ac3fe44bbfbfb1382840613b93e2ccb20716ab82d77297dad01

@@ -1,107 +1,153 @@
 # Sentinel
 
-The `sentinel` generator is a "Static" conformance tier tool. It does not generate production code. Instead, it reads the package's exported error declarations and emits tests (`_test.go`) that lock in error-handling discipline. Two layers:
+A sentinel error is an API. Callers match on it with `errors.Is`, operators read it in logs, and code branches on it — so its message, its identity, and its behaviour under wrapping are as much a contract as any exported signature. None of that is enforced by the compiler.
 
-1. **Package-level sentinels** (`var ErrX = errors.New(...)`) get prefix, uniqueness, non-overlap, and unwrap-chain tests as one umbrella `Test<Pkg>SentinelErrors` function.
-2. **Custom error types** (structs implementing `error`) get a per-type `Test<Type>` function with `errors.As` extraction, wrapping survival (`errors.Join`, `fmt.Errorf %w`), `Error()` content strictness, and optional `Is`/`Unwrap` exercises.
+Two sentinels that share a message are indistinguishable in a log. One that stops matching once wrapped is unusable at a package boundary. A custom error type whose `Error()` drops a field it carries hides the one detail an operator needed. Each is a one-character mistake, and each is invisible until production.
 
-The generator scans the source package — no type arguments needed.
+The `sentinel` generator writes the checks for all of it. Nothing production-side is generated — the author writes the errors, this asserts their invariants.
 
-## Directive
+## The directive
+
+The directive sits at package scope, so what opts a package in and what the generator reads are different things.
 
 ```go
-//go:generate testkit sentinel -o errors.gen_test.go
-
-// To enforce non-overlap against another package's sentinels:
-//testkit:sentinel-no-overlap-with go.thesmos.sh/project/storage
+//testkit:sentinel
+package store
 ```
 
-## Default output
+| Key | Value | Effect |
+|---|---|---|
+| `prefix` | any string | The prefix every sentinel's message must begin with. Defaults to the package name. |
+| `prefix` | `off` | Drops the prefix subtests. |
 
-`errors.gen_test.go` in the source package directory.
+Use `prefix=` for a package whose errors are named for the subsystem rather than the directory. Use `prefix=off` for a package whose errors are deliberately bare. Suppression has to be written down, because a generator that silently skipped the check when it failed would be worse than not having the check.
 
-## What is generated
-
-For a package with sentinels `ErrNotFound`, `ErrConflict`, `ErrForbidden`, plus custom types `ValidationError`, `NotFoundError` (with `Is`), `WrappedError` (with `Unwrap`):
-
-### Test\<Pkg\>SentinelErrors
-
-Single function with subtests covering the package-level sentinel set:
+A second directive names another package whose sentinels must not satisfy `errors.Is` against this one's. It repeats, and each line unions:
 
 ```go
-func TestBasicSentinelErrors(t *testing.T) {
-    type errEntry struct { name string; err error }
-    all := []errEntry{
-        {"ErrConflict",  basic.ErrConflict},
-        {"ErrForbidden", basic.ErrForbidden},
-        {"ErrNotFound",  basic.ErrNotFound},
+//testkit:sentinel prefix=store
+//testkit:sentinel-no-overlap-with go.thesmos.sh/example/storage
+package store
+```
+
+Distinct values describing the same condition — an `ErrNotFound` in two packages — are exactly where a copy-paste produces an accidental alias, and that is invisible from inside either package.
+
+## What it reads
+
+Two sets, both from the annotated package.
+
+**Sentinels** are exported package-level variables named `Err…`. The naming convention is load-bearing: a sentinel not named this way is not found. That is the same rule every Go codebase already follows, so it costs nothing — but a variable called `NotFoundError` holding an `error` will be silently skipped.
+
+**Custom error types** are exported types declaring `Error() string`. Whether each also declares `Is` or `Unwrap` decides which further checks it earns. A type without `Is` gets no self-consistency check rather than a vacuous one.
+
+## Where the output goes
+
+One file per annotated package, named for the source file that carried the anchor declaration, plus `.gen_test.go`. For `corpus/errors/store/iface.go` that is `corpus/errors/store/iface.gen_test.go`.
+
+The `_test.go` ending puts the file in the external test package — `store_test`, not `store` — so the checks reach the errors exactly the way a consumer does, through the exported surface only.
+
+## What it generates
+
+Given this source:
+
+```go
+//testkit:sentinel prefix=store
+//testkit:sentinel-no-overlap-with go.thesmos.sh/testkit/conformance/corpus/errors/neighbour
+package store
+
+var (
+    ErrNotFound = errors.New("store: not found")
+    ErrConflict = errors.New("store: conflict")
+    ErrClosed   = errors.New("store: closed")
+)
+
+type NotFoundError struct{ Key string }
+func (e *NotFoundError) Error() string { ... }
+func (e *NotFoundError) Is(target error) bool { ... }
+
+type WrappedError struct{ Cause error }
+func (e *WrappedError) Error() string { ... }
+func (e *WrappedError) Unwrap() error { ... }
+```
+
+the generator writes one function over the sentinel set and one per custom error type:
+
+```go
+// Code generated by testkit. DO NOT EDIT.
+//
+// Source:    corpus/errors/store/iface.go
+// Plugins:   golang 1.0.0, sentinel 1.0.0, backend.golang 1.0.0
+// Command:   testkit run ./corpus/errors/...
+
+package store_test
+
+func TestStoreSentinels(t *testing.T)        { ... }
+func TestNotFoundErrorContract(t *testing.T) { ... }
+func TestWrappedErrorContract(t *testing.T)  { ... }
+```
+
+### Test\<Pkg\>Sentinels
+
+The sentinel set is collected into one table and every subtest runs over it, so adding a sentinel extends every check at once rather than needing a new case written for each.
+
+```go
+func TestStoreSentinels(t *testing.T) {
+    t.Parallel()
+
+    all := []struct {
+        name string
+        err  error
+    }{
+        {"ErrNotFound", store.ErrNotFound},
+        {"ErrConflict", store.ErrConflict},
+        {"ErrClosed", store.ErrClosed},
     }
 
-    t.Run("prefix",        func(t *testing.T) { /* each Error() starts with "<pkg>: " */ })
-    t.Run("uniqueness",    func(t *testing.T) { /* no two have identical Error() */ })
-    t.Run("non-overlap",   func(t *testing.T) { /* errors.Is asymmetric — ErrA != ErrB */ })
-    t.Run("unwrap chain",  func(t *testing.T) { /* errors.Join wrap survives errors.Is */ })
-    t.Run("cross package", func(t *testing.T) { /* no overlap with peer packages */ })
+    t.Run("every sentinel is non-nil", func(t *testing.T) { ... })
+    t.Run("every sentinel has a message", func(t *testing.T) { ... })
+    t.Run("every sentinel carries the package prefix", func(t *testing.T) { ... })
+    t.Run("no two sentinels share a message", func(t *testing.T) { ... })
+    t.Run("no sentinel's message is a prefix of another's", func(t *testing.T) { ... })
+    t.Run("no sentinel matches another", func(t *testing.T) { ... })
+    t.Run("no sentinel matches one in neighbour", func(t *testing.T) { ... })
 }
 ```
 
-The prefix derived from the package name (e.g. `"basic: "`). The sentinel list is sorted alphabetically — generation is deterministic.
+| Subtest | What a failure means | Emitted |
+|---|---|---|
+| `every sentinel is non-nil` | A `var` was declared and never assigned. It compiles, matches nothing, and every caller's branch on it is dead. | always |
+| `every sentinel has a message` | An empty message reaches a log as nothing at all — the operator sees that something failed and no indication of what. | always |
+| `every sentinel carries the package prefix` | The message reads in a log exactly like one from any other package. | unless `prefix=off` |
+| `no two sentinels share a message` | Two identical messages cannot be told apart in a log, and the second is usually a copy-paste that was meant to be edited. | always |
+| `no sentinel's message is a prefix of another's` | Substring log matching cannot separate them. | always |
+| `no sentinel matches another` | Two sentinels satisfying `errors.Is` against each other collapse a caller's branches, invisibly. | always |
+| `no sentinel matches one in <pkg>` | An accidental alias across a package boundary. | once per `sentinel-no-overlap-with` package |
 
-### Per-type tests for custom error types
+### Test\<Type\>Contract
 
-For each struct that implements `error()`, a per-type test function with shared subtests plus optional ones based on detected methods:
+One function per custom error type. Which subtests appear depends on what the type declares — a type without `Is` gets no `Is` check, rather than one that cannot fail.
 
-```go
-func TestNotFoundError(t *testing.T) {
-    t.Run("errors.As extracts type", ...)              // round-trip via errors.As
-    t.Run("survives errors.Join wrapping", ...)        // wrap + As
-    t.Run("survives fmt.Errorf wrapping", ...)         // wrap + As (%w)
-    t.Run("Error format includes all fields", ...)     // every exported field appears in Error()
-    t.Run("Is matches same type", ...)                 // only if Is() is defined
-    t.Run("Is matches across instances ...", ...)      // only if Is() is defined
-    t.Run("Is rejects different error types", ...)     // only if Is() is defined
-}
+| Subtest | What a failure means | Emitted |
+|---|---|---|
+| `reports a message for its zero value` | `Error()` panics or returns empty on a value nobody populated, which is what a `var e MyError` in a caller produces. | always |
+| `carries the package prefix like a sentinel does` | The type's messages sort differently in a log from the package's sentinels. | unless `prefix=off` |
+| `does not match the package's other error types` | Two error types that satisfy `errors.Is` against each other collapse a caller's branches, and the caller cannot see it from the declarations. | when the package declares another error type |
+| `agrees with errors.Is about what it matches` | A hand-written `Is` disagrees with `errors.Is` over the package's sentinels. | when the type declares `Is`, and the package has sentinels |
+| `exposes the cause it was given` | `Unwrap` drops or rewrites the cause, breaking `errors.Is` traversal through it. | when the type declares `Unwrap` and carries a cause field |
+| `puts every field it carries into its message` | A format-string typo drops a field, hiding the one detail an operator needed. | when a field carries a value a check can write |
 
-func TestWrappedError(t *testing.T) {
-    // ... shared subtests ...
-    t.Run("Unwrap returns cause", ...)                 // only if Unwrap() is defined
-    t.Run("errors.Is traverses Unwrap chain", ...)     // only if Unwrap() is defined
-}
-```
+There is deliberately no `errors.As` recovery check. `As` finds a value by assignability while walking the chain, so it succeeds for any type reachable through the chain and fails for none — a check over it can never fail. What a type can genuinely get wrong is its own `Unwrap`, and that is checked directly.
 
-The "Error format includes all fields" subtest constructs a value with sentinel field values (e.g. `"test-entity"`) and asserts every value appears in the rendered `Error()` string — catching broken format strings.
+## Layout conventions
 
-## What it locks in
-
-| Property | Why it matters |
-|----------|----------------|
-| Prefix | Consistent log grep — `"store: not found"` is greppable by package |
-| Uniqueness | No two sentinels share `.Error()` — ambiguous logs are bugs |
-| Non-overlap | `errors.Is(a, b) == false` for every pair — prevents alias bugs in `switch` |
-| Unwrap chain | Sentinels survive `errors.Join` so callers can match through wrappers |
-| Cross-package | Enforces strict boundaries between layers (e.g. `core` vs `storage` errors) |
-| `errors.As` round-trip | Custom types survive `errors.Join` and `fmt.Errorf("%w", ...)` |
-| `Error()` format | Every exported field appears in the rendered string, preventing lost context |
-| Optional `Is` | Custom matchers are self-consistent (matches same type, rejects other types) |
-| Optional `Unwrap` | Returns the documented cause and is found via `errors.Is` traversal |
-
-## Why
-
-Sentinel discipline silently rots: a renamed package leaves old prefixes, copy-paste produces aliases, a switch on `errors.Is` matches the wrong branch when sentinels accidentally overlap, a format-string typo drops a field. The generator catches all of these at `go test` time — no runtime detection, no production incident.
-
-## Layout Conventions
-
-Unlike the `suite` and `stub` generators which write to a `<pkg>test/` sub-package, the `sentinel` generator writes its output directly into the source package directory, but scoped as a `_test.go` file.
-
-**What goes where:**
+The output lands in the source package directory as a `_test.go` file, so it adds nothing to the production binary.
 
 | File | Owner | Contents |
-|------|-------|----------|
-| `errors.go` | Developer | The source file containing `var ErrX = ...` and custom error structs. |
-| `errors.gen_test.go` | Generator | The static verification suite asserting the package's error invariants. |
-
-Because `_test.go` files are excluded from the final production binary, this layout provides 100% test coverage for your public error API without adding runtime weight.
+|---|---|---|
+| `iface.go` | Developer | The `var Err… = …` declarations, the custom error types, and the package-scope directive |
+| `iface.gen_test.go` | Generator | The checks asserting the package's error invariants. Do not edit. |
 
 ## See also
 
-- [`error-prefix` validator](../validators/error-prefix.md) — catches the prefix issue at CI time across packages that haven't yet adopted the generator.
+- [`error-prefix` validator](../validators/error-prefix.md) — catches the prefix issue at CI time across packages that have not adopted the generator.
+- [Assertions](../primitives/assertions.md) — the assertion functions the generated checks call.

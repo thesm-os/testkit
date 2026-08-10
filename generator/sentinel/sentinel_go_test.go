@@ -7,6 +7,8 @@ import (
 	"io/fs"
 	"testing"
 
+	"go.thesmos.sh/eidos/lang/golang"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/sentinel"
 )
@@ -46,7 +48,7 @@ func TestGoTemplates(t *testing.T) {
 
 	t.Run("carries the template the checks render from", func(t *testing.T) {
 		t.Parallel()
-		tree, ok := sentinel.GoTemplates()
+		tree, ok := sentinel.New().Templates(golang.Language)
 		testkit.True(t, ok, "the adapter reports a tree")
 		_, err := fs.Stat(tree, "sentinel.tests.tmpl")
 		testkit.NoError(t, err, "the template must ship")
@@ -60,12 +62,12 @@ func TestGoFuncMap(t *testing.T) {
 
 	t.Run("contributes the shared helpers", func(t *testing.T) {
 		t.Parallel()
-		testkit.Assert(t, sentinel.GoFuncMap()).IsNotEmpty("the adapter contributes helpers")
+		testkit.Assert(t, sentinel.New().TemplateFuncs(golang.Language)).IsNotEmpty("the adapter contributes helpers")
 	})
 
 	t.Run("registers every entry under the plugin's own prefix", func(t *testing.T) {
 		t.Parallel()
-		for name := range sentinel.GoFuncMap() {
+		for name := range sentinel.New().TemplateFuncs(golang.Language) {
 			testkit.HasPrefix(t, name, sentinel.Name, "every funcmap entry is namespaced")
 		}
 	})

@@ -1,16 +1,12 @@
 # Clock
 
-`Clock` abstracts time operations for deterministic testing. testkit defines the interface; consumers inject implementations. The default is real wall-clock time (`RealClock`); tests use `TestClock` for manual advancement; simulation engines plug in their own clock that drives every method, fault, and recorder timestamp from a single virtual timebase.
+```go
+import "go.thesmos.sh/testkit/clock"
+```
 
-## The Architectural Pattern
+A test asserting on a five-second timeout should not take five seconds. `clock.Clock` is the seam: production code and test doubles read time through it, and a test swaps in a clock it advances by hand.
 
-Why require a `Clock` interface instead of just using `time.Now()` and `time.Sleep()`?
-
-Real-time tests in distributed systems are fundamentally flawed. A `time.Sleep(100ms)` race condition that passes consistently on a developer's fast laptop will inevitably fail on a busy, resource-constrained CI runner. Furthermore, wall-clock fault windows are impossible to reproduce—a fault configured to fire at "12:00:00" cannot be replayed deterministically if the test fails.
-
-The `Clock` interface separates the *concept* of time ("I need a timestamp" or "I need to wait") from the *execution* of time. In production, your code uses the real wall-clock. In tests, you inject a virtual `TestClock`. Time only advances when your test explicitly calls `clk.Advance()`, completely eliminating scheduling flakes and ensuring 100% reproducible execution traces.
-
-## Interface
+## The interface
 
 ```go
 type Clock interface {
@@ -27,61 +23,64 @@ type Timer interface {
 }
 ```
 
-`testkit.RealClock()` returns a `Clock` backed by `time` stdlib. `testkit.NewTestClock(epoch)` returns a virtual clock controlled by `Advance`.
+`clock.RealClock()` delegates to the standard library. `clock.NewTestClock(origin time.Time)` returns a `*TestClock` frozen at `origin`.
 
-## TestClock — deterministic virtual time
+## TestClock
 
-```go
-clk := testkit.NewTestClock(time.Unix(0, 0))
-clk.Advance(5 * time.Second)
-clk.Now() // time.Unix(5, 0)
-```
+| Method | Effect |
+|---|---|
+| `Now() time.Time` | The current virtual time. Does not advance on its own. |
+| `Advance(d time.Duration)` | Moves virtual time forward and fires every waiter whose deadline has passed |
+| `Sleep(d time.Duration)` | Blocks until virtual time reaches `Now() + d` |
+| `After(d time.Duration) <-chan time.Time` | A channel that receives when virtual time reaches the deadline |
+| `NewTimer(d time.Duration) Timer` | A timer on virtual time |
+| `AwaitWaiters(n int)` | Blocks until exactly `n` goroutines are waiting on this clock |
 
-Time does not advance on its own. Goroutines blocked in `Sleep`, `After`, or on a `Timer` are released when virtual time crosses their deadline.
+Virtual time moves only when `Advance` is called. Nothing elapses in the background, so a test is deterministic by construction rather than by being fast enough.
 
-### Synchronizing with sleepers
+## AwaitWaiters is the part that matters
 
-```go
-go func() { clk.Sleep(5 * time.Second) }()
-clk.AwaitWaiters(1)         // spin until the goroutine is parked
-clk.Advance(6 * time.Second) // wake it up
-```
-
-`AwaitWaiters(n)` spins until at least `n` goroutines are blocked on the clock. This eliminates the `time.Sleep`-based race that plagues clock-based tests.
-
-## Wiring into stubs and recorders
-
-A single clock should drive everything in a test — fault windows, stub latencies, recorder timestamps, wait timeouts. Pass it once at construction:
+The obvious test is a race:
 
 ```go
-clk := testkit.NewTestClock(time.Unix(0, 0))
-stub := storetest.NewStoreStub(t,
-    storetest.WithStoreClock(clk),
-)
-
-stub.OnGet.FaultsFor(5 * time.Second) // window driven by clk
-stub.OnGet.Latency(2 * time.Millisecond) // simulated by clk.Sleep
-stub.OnGet.WaitForN(t, 3, time.Second) // timeout driven by clk
+clk := clock.NewTestClock(time.Unix(0, 0))
+go worker(clk)      // will call clk.Sleep(time.Second) — eventually
+clk.Advance(time.Second)   // may fire before the worker is waiting
 ```
 
-Internally, `MethodStub.WithClock` propagates to the embedded `Recorder`, so `Recorder.Timestamped()` and `Recorder.WaitForN` use the same clock.
+If `Advance` runs first, the worker sleeps for a second of virtual time that has already passed and blocks forever. The test hangs, or passes for the wrong reason.
 
-## Why a Clock interface
+`AwaitWaiters` closes it by waiting for the goroutine to arrive:
 
-Real-time tests are flaky: a `time.Sleep(100ms)` race that passes on a fast laptop fails on a busy CI runner. Wall-clock fault windows are unreproducible — a windowed fault that fires at 12:00:00 cannot be replayed deterministically.
+```go
+clk := clock.NewTestClock(time.Unix(0, 0))
+go worker(clk)
 
-`Clock` separates "I need a timestamp" from "I need to wait" from "I need wall-clock semantics." Production code calls a real clock; tests substitute a virtual one and step through scenarios that would otherwise require real time.
+clk.AwaitWaiters(1)        // the worker is now parked on the clock
+clk.Advance(time.Second)   // and this releases it
+```
 
-## Standard injection points
+Advance only after the waiters you expect are registered. That is the whole synchronisation discipline, and skipping it is the one way to make a `TestClock` flaky.
 
-| Surface | How to inject |
-|---------|---------------|
-| MethodStub fault windows + latency | `MethodStub.WithClock(clk)` or generated `WithIfaceClock(clk)` constructor option |
-| Recorder timestamps + waits | Inherits from `MethodStub.WithClock`; standalone via `Recorder.WithClock(clk)` |
-| Polling helpers | `RetryUntil` / `AssertEventually` use real time by design — for virtual-time waits, use `Recorder.WaitForN` or `TestClock.AwaitWaiters` |
+## Wiring it into a double
+
+Generated doubles take a clock through a construction option, which applies it to every method at once:
+
+```go
+clk := clock.NewTestClock(time.Unix(0, 0))
+s := readertest.NewReaderStub(t, readertest.ReaderStubWithClock(clk))
+
+s.OnGet.Latency(2 * time.Second)
+
+go func() { _, _ = s.Get(t.Context(), "k") }()
+clk.AwaitWaiters(1)
+clk.Advance(2 * time.Second)
+```
+
+Latency and time-windowed faults both read the clock the double was given, so neither costs wall-clock time.
 
 ## See also
 
-- [Fault injection](fault-injection.md) — windowed faults are clock-driven
-- [Recording](recording.md) — `Timestamped` reads from the configured clock
-- [MethodStub](method-stub.md) — `WithClock`, `Latency`
+- [Fault injection](fault-injection.md) — `WindowedFault` reads a clock for its deadline.
+- [Method stub](method-stub.md) — `Latency` and `WithClock` on the per-method engine.
+- [Recording](recording.md) — `Recorder.WithClock` timestamps recorded calls on virtual time.

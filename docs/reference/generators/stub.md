@@ -1,422 +1,234 @@
 # Stub
 
-Generates a per-method test double for a Go interface. Each method gets a stub type that embeds `*testkit.MethodStub[Call]` — composing recording, fault injection, latency, strict mode, call-count expectations, clock injection, and rand-source injection — and adds two type-safe dispatch entries: `Func(fn)` and `Returns(values...)`.
+A hand-written test double answers calls. It rarely records them — and most of what a conformance test needs to assert is the interaction, not the return value. Whether `Get` was called twice, whether `Close` came after `Open`, what key the caller actually passed: none of that survives a double that only returns.
 
-The aggregate stub composes these per-method stubs into a single value implementing the target interface and provides constructor options, `Reset`, and a compile-time interface check.
+The `stub` generator writes a recording double for every annotated interface, plus a companion test proving the double satisfies the interface it stands in for. The double is the substrate every other conformance tier composes against — a generated suite drives it, a benchmark measures through it, a model runs it against a reference implementation.
 
-## Directive
+## The directive
 
 ```go
-//go:generate testkit stub -o storetest/store_stub.gen.go Store
-//go:generate testkit stub -o storetest/cache_stub.gen.go Cache
-
-// Multiple types in one file:
-//go:generate testkit stub -o storetest/stubs.gen.go Store Cache
+//testkit:stub
+type Store interface { ... }
 ```
 
-## Default output
+The directive takes no positional argument and denies the negated form. A double exists exactly where one is declared, so deleting the line is the suppression.
 
-`<package>test/<subject>_stub.gen.go` — one file per type when `-o` is omitted.
+| Key | Value | Effect |
+|---|---|---|
+| `witness` | comma-separated type names | Concrete types a generic double's companion test is instantiated at. See [Generic interfaces](#generic-interfaces). |
 
-## What is generated
+## Where the output goes
 
-For
+Two files flow from one annotated interface, and the tag is what makes them independently routable.
+
+| Tag | Suffix | Contents |
+|---|---|---|
+| *(primary)* | `_stub.gen.go` | The double. Declares the source package, so other packages' tests can import it. |
+| `test` | `_stub.gen_test.go` | The companion checks. The `_test.go` ending triggers the external test package shift. |
+
+By default both land beside the source. Route them with `//testkit:out`, which is usually written once at package scope rather than repeated per interface:
 
 ```go
-type Store interface {
-    Get(ctx context.Context, id string) (Item, error)
-    Put(ctx context.Context, item Item) error
-    Delete(ctx context.Context, id string) error
+//testkit:out readertest/ pkg=readertest
+package reader
+```
+
+Every double in the package then lands in `readertest`. A per-interface directive says the same thing N times, and the Nth copy is the one that gets forgotten.
+
+To move one output without the other, scope the override by tag:
+
+```go
+//testkit:out tag=test ./elsewhere/
+```
+
+## What it generates
+
+Given this interface:
+
+```go
+//testkit:out readertest/ pkg=readertest
+package reader
+
+//testkit:stub
+type Reader interface {
+    Get(ctx context.Context, key string) (Value, error)
 }
 ```
 
-the generator emits two files: the stub (`store_stub.gen.go`) and tests for the generated plumbing (`store_stub.gen_test.go`).
+the generator writes `readertest/iface_stub.gen.go`. Six pieces, in order.
 
-### Call types — one per method
+### The recorded call
 
 ```go
-type StoreGetCall struct {
+type ReaderGetCall struct {
     Ctx    context.Context
-    ID     string
-    Result Item   // populated after dispatch
+    Key    string
+    Result reader.Value
     Err    error
 }
 ```
 
-The call struct holds inputs and outputs. The `Recorder[StoreGetCall]` embedded in the per-method stub captures the populated call after every dispatch — tests inspect both the arguments passed in and the values returned.
+Field names come from the source signature — parameters and named returns alike. A signature written `(item User, err error)` documents what its returns mean, and the recorded-call struct is the main consumer of that documentation: it is what a reader sees in a failure message. A slot the source left unnamed, or named `_`, falls back to `Result0`, `Result1`, positionally.
 
-Result fields use the return-value names from the source interface when named; unnamed returns produce positional names (`Result0`, `Result1`, ...). `Err` is the conventional name for the error position.
-
-### Per-method stubs
+### The per-method configuration point
 
 ```go
-type StoreGetStub struct {
-    *testkit.MethodStub[StoreGetCall]
-    fn       func(context.Context, string) (Item, error)
-    fallback *storeGetReturn
+type ReaderGetStub struct {
+    *stub.MethodStub[ReaderGetCall]
+
+    fn       func(context.Context, string) (reader.Value, error)
+    fallback *ReaderGetReturn
 }
 
-func (s *StoreGetStub) Returns(result Item, err error) *StoreGetStub
-func (s *StoreGetStub) Func(fn func(context.Context, string) (Item, error)) *StoreGetStub
+func (s *ReaderGetStub) Returns(result reader.Value, err error) *ReaderGetStub
+func (s *ReaderGetStub) Func(fn func(context.Context, string) (reader.Value, error)) *ReaderGetStub
 ```
 
-Each per-method stub embeds `*MethodStub[Call]`, so the full primitive surface is available without indirection: `Faults`, `FaultsWhen`, `FaultsWithProbability`, `FaultsFor`, `FaultsUntil`, `SetFault`, `Latency`, `Strict`, `Times`, `TimesAtLeast`, `Verify`, `WithClock`, `WithRandSource`, `BenchMode`, plus the entire `Recorder[Call]` API (`CallCount`, `Calls`, `Filter`, `WaitForN`, `OnRecord`, `NewGate`, `Timestamped`, ...).
+The embedded [`stub.MethodStub`](../primitives/method-stub.md) supplies everything that does not depend on the signature: call recording, fault injection, latency against a virtual clock, gates, call-count expectations, strict mode.
 
-`Returns` stores a fallback return value; `Func` stores a function override.
-
-### Aggregate stub + constructor
+### The double
 
 ```go
-type StoreStub struct {
-    OnDelete *StoreDeleteStub
-    OnGet    *StoreGetStub
-    OnPut    *StorePutStub
-    strict   bool
+type ReaderStub struct {
+    OnGet *ReaderGetStub
+    // ...
 }
 
-func NewStoreStub(tb testing.TB, opts ...StoreStubOption) *StoreStub
+var _ reader.Reader = (*ReaderStub)(nil)
+
+func NewReaderStub(tb testing.TB, opts ...ReaderStubOption) *ReaderStub
+func (s *ReaderStub) ResetCalls()
 ```
 
-`NewStoreStub` constructs each per-method stub via `testkit.NewMethodStub[Call](tb, "Store.<Method>")`, applies options, and registers `tb.Cleanup` that invokes `Verify` on every method (auto-verifies `Times`/`TimesAtLeast` expectations at test end).
+Each `On<Method>` field is that method's configuration point. Left alone, a method returns its zero value and records the call.
 
-### Constructor options
+The compile-time assertion lives in the double's own file rather than in the companion, so a drifted signature fails `go build` instead of waiting for a test run.
+
+Passing `tb` to the constructor registers a cleanup that verifies every method's call-count expectations when the test ends, so an unmet `Times(2)` is reported without the caller remembering to check. A `nil` tb skips that, which is what benchmarks and non-test callers want. `*testing.F` is skipped too: a fuzz target reruns its body many times and registers a cleanup per run, so verifying there would report against the wrong iteration.
+
+`ResetCalls` clears recorded calls, fault counters and call-count expectations. `Func` and `Returns` configuration is deliberately preserved, so one double can carry across test phases without being rebuilt.
+
+### Construction options
 
 ```go
-StoreStubStrict()                       // turn on strict mode for every method
-StoreStubDelegateTo(impl Store)         // forward every method to a real implementation
-StoreStubWithClock(clk testkit.Clock)   // propagate clock to every method
-StoreStubWithRandSource(testkit.RandSource)
-StoreStubBenchMode()                    // disable recording on every method
-
-WithStoreGet(fn func(...) (...))        // per-method Func override at construction time
-WithStorePut(fn func(...) error)
-WithStoreDelete(fn func(...) error)
+func ReaderStubStrict() ReaderStubOption
+func ReaderStubDelegateTo(impl reader.Reader) ReaderStubOption
+func ReaderStubWithClock(clk clock.Clock) ReaderStubOption
+func ReaderStubWithRandSource(src rand.Source) ReaderStubOption
+func ReaderStubBenchMode() ReaderStubOption
+func WithReaderGet(fn func(context.Context, string) (reader.Value, error)) ReaderStubOption
 ```
 
-Notice the option-naming convention: `<StubName><Verb>(...)` for stub-wide options, `With<StubName><Method>(...)` for per-method dispatch overrides. The full stub name (`StoreStub`, not `Store`) is used as the prefix on `With*` options to avoid collisions when multiple stubs live in the same package.
-
-### Compile-time interface check
-
-```go
-var _ basic.Store = (*StoreStub)(nil)
-```
-
-If the source interface gains or loses a method, the next regeneration changes this line and any obsolete dispatch — but the check ensures the stub never silently drifts from the interface.
-
-### Reset
-
-```go
-func (s *StoreStub) Reset() {
-    s.OnDelete.Reset()
-    s.OnGet.Reset()
-    s.OnPut.Reset()
-}
-```
-
-`Reset` rewinds observation state on every method (recorded calls, fault counters, `Times`/`TimesAtLeast`). It does **not** clear `Func`, `Returns`, or `Faults` — behavior is preserved across resets so a single `NewStoreStub` can drive multiple test phases.
-
-### Interface method implementations
-
-For methods returning an error, dispatch is:
-
-```go
-func (s *StoreStub) Get(ctx context.Context, id string) (Item, error) {
-    s.OnGet.SleepLatency()
-    call := StoreGetCall{Ctx: ctx, ID: id}
-    if fired, faultErr := s.OnGet.ShouldFaultFor(call); fired {
-        call.Err = faultErr
-        s.OnGet.Record(call)
-        return Item{}, faultErr
-    }
-    if s.OnGet.fn != nil {
-        r0, r1 := s.OnGet.fn(ctx, id)
-        call.Result = r0
-        call.Err = r1
-        s.OnGet.Record(call)
-        return r0, r1
-    }
-    if s.OnGet.fallback != nil {
-        f := s.OnGet.fallback
-        call.Result = f.Result
-        call.Err = f.Err
-        s.OnGet.Record(call)
-        return f.Result, f.Err
-    }
-    s.OnGet.FailUnexpectedCall(call)
-    s.OnGet.Record(call)
-    return Item{}, nil
-}
-```
-
-Order: `SleepLatency` → fault check → `Func` → `Returns` fallback → `FailUnexpectedCall` (strict mode fatal) → zero-value return. The call struct is populated with results in every successful path and recorded.
-
-Methods that don't return an error skip the fault check.
-
-### iter.Seq / iter.Seq2 detection
-
-When a method returns `iter.Seq[T]` or `iter.Seq2[V, error]`, the per-method stub gains a `Yields` helper that constructs a `Func` returning a single-pass iterator:
-
-```go
-func (s *ScannerKeysStub) Yields(items ...string) *ScannerKeysStub
-```
-
-For `iter.Seq2[V, error]`, an additional helper yields values then a final error:
-
-```go
-func (s *ScannerScanStub) YieldsError(items []Item, err error) *ScannerScanStub
-```
-
-The fault path is omitted on iterator methods — errors flow through the iterator's pair, not the return.
-
-### Generated tests
-
-Alongside the stub, a `_test.go` file exercises the generated plumbing — every `Func` path, every `Returns` path, every fault path, every constructor option, recording, and `Reset`. The tests don't depend on domain logic; they verify the generator's output is internally consistent.
-
-## Directive-driven additions
-
-The generator reads `//testkit:` directives and emits per-method helpers or alters dispatch logic:
-
-| Directive | Effect |
-|-----------|--------|
-| `errors ErrA ErrB` | Emits a `Fault<ShortName>()` helper per sentinel (e.g., `s.OnGet.FaultNotFound()` calls `s.Faults(ErrNotFound, 1)`). |
-| `wrapped-via Target` | Modifies the `Fault<ShortName>()` helpers to wrap the sentinel via the specified target error struct. |
-| `deprecated <Replacement>` | Injects `tb.Logf("<Method> is deprecated, use <Replacement> instead")` at the top of the generated dispatch (if `tb` is non-nil). |
-| `integration-only` | Skips stub emission for that method. The compile-time interface check still includes it, so consumers must wire it via `DelegateTo`. |
-| `retry-succeeds-on-attempt N` | Emits a `RetrySchedule(err)` helper that returns a fault sequence simulating a transient failure that succeeds on the Nth attempt. |
-| `partition Field` | Emits `FaultForPartition` and `FaultForOtherPartitions` helpers to inject faults isolated to a specific request parameter (e.g., isolating a network fault to a specific tenant ID). |
-| `order-after Method` | Emits an `AssertAfter` check inside the dispatch body (active in strict mode) to fatal the test if the method is called out of order. |
-
-## Usage patterns
-
-### Vanilla stub
-
-```go
-stub := storetest.NewStoreStub(t)
-stub.OnGet.Returns(Item{ID: "x"}, nil)
-
-result, err := stub.Get(ctx, "x")
-testkit.NoError(t, err, "Get must succeed")
-testkit.Equal(t, result.ID, "x", "result")
-
-stub.OnGet.AssertCalledOnce(t, "single Get")
-```
-
-### Strict mode
-
-```go
-stub := storetest.NewStoreStub(t, storetest.StoreStubStrict())
-// Calling any method without configuring it fatals the test.
-```
-
-### DelegateTo
-
-```go
-inMem := companion.NewInMemoryStore()
-stub := storetest.NewStoreStub(t, storetest.StoreStubDelegateTo(inMem))
-// Every call forwards to inMem; the recorder captures every call.
-```
-
-See [Wiring a companion](#wiring-a-companion) below for the full pattern.
-
-### Fault injection
-
-```go
-stub.OnGet.Faults(store.ErrNotFound, 3)              // counter
-stub.OnGet.FaultNotFound()                            // directive helper
-stub.OnGet.FaultsWhen(isHotKey, store.ErrTransient, 1) // predicate
-stub.OnGet.FaultsWithProbability(store.ErrTransient, 0.05)
-stub.OnGet.FaultsFor(5 * time.Second)                 // windowed
-stub.OnGet.SetFault(testkit.And(predFault, windowFault))
-```
-
-### Virtual time
-
-```go
-clk := testkit.NewTestClock(time.Unix(0, 0))
-stub := storetest.NewStoreStub(t, storetest.StoreStubWithClock(clk))
-
-stub.OnGet.Latency(2 * time.Millisecond)
-stub.OnGet.FaultsFor(5 * time.Second)
-// Both driven by clk — Advance to test windows deterministically.
-```
-
-### Bench mode
-
-```go
-stub := storetest.NewStoreStub(b, storetest.StoreStubBenchMode())
-// Recording is no-op; dispatch (Func/Returns/Faults) still works.
-```
-
-## Wiring a companion
-
-A *companion* is a hand-written implementation of the source interface — typically an in-memory or fake variant — that the stub wraps via `DelegateTo`. The companion supplies real behavior; the generated stub adds recording, fault injection, call-count verification, strict mode, virtual clock, and rand-source injection on top, without the consumer writing any of that plumbing.
-
-This is the load-bearing pattern for integration tests and for the consumer side of the planned `sim`, `chaos`, and `replay` generators.
-
-### Step 1 — write the companion
-
-Place the companion next to the interface (or in any package — the import path is irrelevant to the stub generator):
-
-```go
-// store/inmemory.go — hand-written
-package store
-
-import (
-    "context"
-    "sync"
-)
-
-type InMemoryStore struct {
-    mu   sync.Mutex
-    data map[string]string
-}
-
-func NewInMemoryStore() *InMemoryStore {
-    return &InMemoryStore{data: make(map[string]string)}
-}
-
-func (s *InMemoryStore) Get(_ context.Context, key string) (string, error) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    v, ok := s.data[key]
-    if !ok {
-        return "", ErrNotFound
-    }
-    return v, nil
-}
-
-func (s *InMemoryStore) Put(_ context.Context, key string, value string) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.data[key] = value
-    return nil
-}
-
-func (s *InMemoryStore) Delete(_ context.Context, key string) error {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    if _, ok := s.data[key]; !ok {
-        return ErrNotFound
-    }
-    delete(s.data, key)
-    return nil
-}
-```
-
-The companion does not need to be in `*test` — it can live anywhere as long as it satisfies the interface. Keeping it next to the interface keeps the wire-up trivially importable.
-
-### Step 2 — wrap with `DelegateTo`
-
-```go
-inner := store.NewInMemoryStore()
-s := storetest.NewStoreStub(t, storetest.StoreStubDelegateTo(inner))
-```
-
-`StoreStubDelegateTo(impl)` is the constructor option the stub generator emits; it sets `OnGet.Func`, `OnPut.Func`, `OnDelete.Func` to forward to the companion's matching method. Every method dispatches through the inner implementation; every call is recorded on the outer stub.
-
-### Step 3 — exercise through the stub
-
-Writes go through to the companion, reads come back from the companion's state, and the stub records every call:
-
-```go
-err := s.Put(t.Context(), "greeting", "hello")
-testkit.NoError(t, err, "Put must succeed")
-
-got, err := s.Get(t.Context(), "greeting")
-testkit.NoError(t, err, "Get must succeed")
-testkit.Equal(t, got, "hello", "must return stored value")
-
-s.OnPut.AssertCalledOnce(t, "must record Put")
-s.OnGet.AssertCalledOnce(t, "must record Get")
-
-call := s.OnGet.LastCall(t)
-testkit.Equal(t, call.Key, "greeting", "must capture arg")
-```
-
-### Composition rules
-
-The stub layers on top of the companion in a defined order. Once `DelegateTo` is wired, you can configure any of these without touching the companion:
-
-**Fault injection takes precedence over delegation.** Once a fault is configured, the companion is bypassed for matching calls:
-
-```go
-inner := store.NewInMemoryStore()
-s := storetest.NewStoreStub(t, storetest.StoreStubDelegateTo(inner))
-
-err := s.Put(t.Context(), "key", "value")
-testkit.NoError(t, err, "real Put succeeds")
-
-s.OnGet.Faults(testkit.TestError("transient"), 1)
-_, err = s.Get(t.Context(), "key")
-// Fault fires — companion never runs.
-```
-
-**Per-method `Func` overrides delegation for that method.** Use this to keep the companion for some methods and stub others:
-
-```go
-s := storetest.NewStoreStub(t,
-    storetest.StoreStubDelegateTo(inner),
-    storetest.WithStoreGet(func(ctx context.Context, key string) (string, error) {
-        return "stubbed", nil // overrides the companion just for Get
-    }),
-)
-```
-
-**Call-count expectations apply to delegated calls just like any other:**
-
-```go
-s.OnPut.Times(2) // verified at t.Cleanup
-s.Put(t.Context(), "a", "1")
-s.Put(t.Context(), "b", "2") // OK
-```
-
-**`OnRecord` hooks observe every delegated call** — useful for streaming traces into a sim engine without modifying the companion:
-
-```go
-s.OnPut.OnRecord(func(c storetest.StorePutCall) {
-    trace.Append(tick, c)
-})
-```
-
-**Strict mode + DelegateTo: DelegateTo wires every method**, so strict mode does not fire on any of them. Strict catches unconfigured methods; once `DelegateTo` is in play, every method is configured. To make strict mode meaningful with a companion, omit `DelegateTo` for the methods that should fail on call:
-
-```go
-// Test that asserts Delete is NEVER called.
-s := storetest.NewStoreStub(t,
-    storetest.StoreStubStrict(),
-    storetest.WithStoreGet(inner.Get),
-    storetest.WithStorePut(inner.Put),
-    // OnDelete intentionally not wired — calling it fatals the test.
-)
-```
-
-### Why use the companion pattern at all?
-
-| Without companion | With companion |
+| Option | Effect |
 |---|---|
-| Tests configure `Returns` for every method on every test | Companion provides real behavior; tests configure deviations only |
-| Each test re-implements key-value semantics | Companion implements them once |
-| Refactoring the interface breaks every test | Refactoring breaks only the companion |
-| No way to assert "the data the test wrote is what it reads back" | Real state means real round-trip works |
+| `Strict` | An unconfigured method fails the test rather than returning its zero value, turning a call nobody planned for into a failure at the call site instead of a puzzling zero downstream. |
+| `DelegateTo` | Every method forwards to a real implementation and is recorded on the way through. |
+| `WithClock` | Latency and time-windowed faults run on a [virtual clock](../primitives/clock.md), so a test asserting on a five-second timeout does not take five seconds. |
+| `WithRandSource` | Probabilistic fault injection becomes reproducible. A failure nobody can replay is not a finding. |
+| `BenchMode` | Disables call recording. Dispatch still works; only the accumulating call log is dropped, because its allocations are what a benchmark would otherwise measure. |
+| `With<Iface><Method>` | Sets one method's body at construction, for the common case of configuring one method and taking defaults for the rest. |
 
-The companion is the substrate for any integration-grade test where the stub would otherwise need an unreasonable number of `Returns` calls. The stub layer remains useful — it adds recording, fault injection, expectations, observation hooks — without forcing the test to also write the domain logic.
+### The interface methods
 
-## Layout Conventions
+```go
+func (s *ReaderStub) Get(ctx context.Context, key string) (reader.Value, error) {
+    call := ReaderGetCall{Ctx: ctx, Key: key}
+    r := stub.Answer(s.OnGet.MethodStub, &call, stub.Arms[ReaderGetCall, ReaderGetReturn]{
+        Invoke:   s.OnGet.invoke(ctx, key),
+        Fallback: s.OnGet.fallback,
+        Fault:    func(err error) ReaderGetReturn { return ReaderGetReturn{Err: err} },
+        Stamp: func(c *ReaderGetCall, r ReaderGetReturn) {
+            c.Result = r.Result
+            c.Err = r.Err
+        },
+    })
+    return r.Result, r.Err
+}
+```
 
-A typical interface generates its stub into a `<pkg>test/` sub-package. This prevents test-infrastructure code from bloating the production binary and clearly delineates the testing surface.
+Which arm answers is [`stub.Answer`](../primitives/method-stub.md)'s decision, not the template's, so every generated double resolves a call the same way and the precedence is tested once rather than restated per method. The order is **injected fault, then `Func` override, then `Returns` fallback, then the zero value** — and under `Strict`, the zero-value arm fails the test instead.
 
-**What goes where:**
+## Fault helpers
+
+A method that declares which errors it can be made to fail with gains one-shot helpers, contributed into the same file by the `fault` plugin:
+
+```go
+type Mixed interface {
+    //testkit:mixin errors
+    //testkit:fault ErrNotFound ErrGone
+    Get(ctx context.Context, key string) (string, error)
+}
+```
+
+```go
+// FaultNotFound makes the next call to Get fail with ErrNotFound.
+func (s *MixedGetStub) FaultNotFound() *MixedGetStub {
+    s.Faults(errors.ErrNotFound, 1)
+    return s
+}
+```
+
+The `Err` prefix is stripped from the helper name. These are one-shot — the fault fires once and clears, which is what a test asserting on that error's handling wants. For anything else, `Faults(err, n)` on the embedded `MethodStub` takes a count, and [`FaultsWhen`, `FaultsUntil`, `FaultsFor` and `FaultsWithProbability`](../primitives/fault-injection.md) cover the rest.
+
+The helpers arrive as a block at the end of the file rather than interleaved with each method's configuration. Slot ordering is per-plugin, not per-item, so there is no interleaving to be had — and the block is attributed in the file header, which an interleaved version would not be.
+
+## Using the double
+
+```go
+func TestCacheMissesFallThrough(t *testing.T) {
+    s := readertest.NewReaderStub(t, readertest.ReaderStubStrict())
+    s.OnGet.Returns(reader.Value{}, reader.ErrNotFound).Times(1)
+
+    c := cache.New(s)
+    _, err := c.Lookup(t.Context(), "absent")
+
+    testkit.ErrorIs(t, err, reader.ErrNotFound, "a miss must propagate")
+    testkit.Equal(t, s.OnGet.LastCall().Key, "absent", "the key must reach the reader")
+}
+```
+
+`Times(1)` is verified by the cleanup the constructor registered — nothing in the test body checks it.
+
+### Delegating to a real implementation
+
+`DelegateTo` wraps a production type so every call forwards to it and is recorded on the way through. This is what lets one generated suite run against both the double and the real thing, which is the point of conformance testing.
+
+```go
+real := memstore.New()
+s := readertest.NewReaderStub(t, readertest.ReaderStubDelegateTo(real))
+
+_, _ = s.Get(t.Context(), "k")
+
+testkit.Equal(t, s.OnGet.CallCount(), 1, "the call must be recorded on the way through")
+```
+
+Per-method overrides still apply on top: set `s.OnGet.Func(...)` after construction and that method stops delegating while the rest continue. A fault takes precedence over both.
+
+## Generic interfaces
+
+A generic interface produces a generic double, and the double itself needs no help. The *companion test* does — Go cannot instantiate a generic type without concrete arguments, and the generator has no way to choose them.
+
+```go
+//testkit:stub witness=int,Score
+type Store[K comparable, V any] interface { ... }
+```
+
+The witness names the concrete types the companion instantiates at. Without it the double is still generated; the companion test that would have proved it satisfies the interface is skipped, because there is no type to prove it at.
+
+## Layout conventions
 
 | File | Owner | Contents |
-|------|-------|----------|
-| `*_stub.gen.go` | Generator | The generated recording stub (DO NOT EDIT). |
-| `*_stub.gen_test.go` | Generator | The self-verifying test suite for the generated stub (DO NOT EDIT). |
-| `companion.go` | Developer | The hand-written fake or in-memory implementation (e.g., `InMemoryStore`). |
-| `setup.go` | Developer | Test helpers that construct the `NewStoreStub(t, StoreStubDelegateTo(companion))` wiring. |
+|---|---|---|
+| `iface.go` | Developer | The interface, its directives, and the package-scope routing |
+| `<pkg>test/iface_stub.gen.go` | Generator | The recording double. Do not edit. |
+| `<pkg>test/iface_stub.gen_test.go` | Generator | The companion checks for the double itself. Do not edit. |
+
+The double lives in a normal (non-test) file so tests in other packages can import it. The companion lives in a `_test.go` file so it stays out of the binary.
 
 ## See also
 
-- [Primitives / MethodStub](../primitives/method-stub.md)
-- [Primitives / Recording](../primitives/recording.md)
-- [Primitives / Fault injection](../primitives/fault-injection.md)
-- [Primitives / Clock](../primitives/clock.md)
+- [`stub.MethodStub`](../primitives/method-stub.md) — the per-method dispatch engine the generated code embeds.
+- [Recording](../primitives/recording.md) — `Recorder`, gates, and the call-inspection API.
+- [Fault injection](../primitives/fault-injection.md) — the strategies behind `Faults` and its variants.
+- [Clock](../primitives/clock.md) — the virtual clock `WithClock` binds.
+- [Builder](builder.md) — for constructing the values a double returns.

@@ -54,4 +54,17 @@ type Settings struct {
 //testkit:builder defaults=go.thesmos.sh/testkit/conformance/corpus/struct/seed.ConfigDefaults
 type Mirrored = seed.Config
 
+// Shorthand names the same companion by qualifier rather than by path, which
+// is the notation an author reaches for first and the one every field in this
+// file already uses.
+//
+// It exists because the two notations take different routes: a full path names
+// itself, while a qualifier is only meaningful against the import block of the
+// file that wrote it. The qualifier route was documented and unreachable — no
+// fixture wrote one on a `defaults=` key, so nothing established that the
+// generator could get from a struct to its file at all.
+//
+//testkit:builder defaults=seed.ConfigDefaults
+type Shorthand = seed.Config
+
 var _ = seed.Region

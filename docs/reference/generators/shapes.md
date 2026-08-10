@@ -1,117 +1,168 @@
-# Shape Classification
+# Shape classification
 
-> **Status: superseded in mechanism, retained for vocabulary.** The priority
-> registry described below lived in `generator/shape`, which has been removed.
-> Classification now comes from eidos's `shape` annotator, which uses three
-> orthogonal axes rather than a first-match-wins cascade — so nothing is
-> shadowed by priority. The shape *names* and the laws attached to them carry
-> over; the architecture section does not. See
-> [the classification map](../../internal/classification-map.md) for the mapping and
-> [ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md) for why.
+A generator that reads only a signature can write a double. A generator that knows what the signature *means* can write the checks — that a read after a write returns what was written, that a second identical call changes nothing, that a cancelled context is honoured. Classification is what turns the first into the second.
 
-Shape classification is the analytical engine of the `testkit` generators. The `generator/shape` package uses signature-driven analysis to categorize Go interface methods into **21 canonical Shapes**. Downstream generators (`suite`, `bench`, `model`) use this classification to automatically apply the correct mathematical laws, performance budgets, and state-machine transitions without requiring you to write custom test logic.
+testkit does not implement classification. It configures eidos's shape annotator and reads the stamps ([ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md)). This page is the vocabulary that annotator provides, as of `go.thesmos.sh/eidos/plugins v1.7.3`.
 
-## Architecture: The Priority Registry
+## Three orthogonal axes
 
-Classification is handled by a priority-ordered registry of detectors. The registry walks the 21 detectors from highest priority to lowest; the **first match wins**. This cascade allows highly specialized shapes to claim a signature before a more generic fallback detector catches it.
+An earlier design used one priority-ordered registry with first-match-wins, so a permissive shape could shadow a specific one and the loser was invisible. That is gone. Classification now runs on three independent axes, and a callable can carry stamps from all three at once.
 
-| Priority Band | Characteristics | Example Shapes |
-|---------------|-----------------|----------------|
-| **1000 - 900** | **High-Signal:** Unambiguous patterns like `iter.Seq` returns or interface-typed parameters. | `StreamReader`, `BatchReader` |
-| **850 - 800** | **Exact-Match:** Strict, no-argument signatures. | `Predicate`, `Pure`, `Lookup` |
-| **750 - 500** | **Directive-Driven / Multi-Arg:** Shapes where arity or a `//testkit:` directive disambiguates intent. | `Deleter`, `MultiArgWriter` |
-| **450 - 200** | **Generic Catch-alls:** The standard single-key/single-value read/write patterns. | `Reader`, `Writer`, `Mutator` |
+| Axis | Scope | Stamped by | Directive |
+|---|---|---|---|
+| **Detector** | One callable | Signature analysis | `//testkit:shape <name>` overrides |
+| **Contract** | Several callables bound into one protocol | The author | `//testkit:contract <name> role=<role> …` |
+| **Mixin** | One callable, layered on its detected shape | The author | `//testkit:mixin <name> [k=v …]` |
 
----
+The mental model is layered. The detector picks the base laws — a writer owes write-then-observe. Each mixin adds one more invariant on top. A contract binds a method to its partners, so `Commit` is known to be the commit half of the `Begin` above it.
 
-## The Shape Taxonomy
+### What a detector stamps
 
-Every shape expects its leading `context.Context` parameter to be optional. When `ctx?` is listed below, it means the shape matches both `func(ctx context.Context, ...)` and `func(...)`.
+Three meta keys, and they are the same across every source language:
 
-### Reading Band
+| Key | Carries |
+|---|---|
+| `shape` | The canonical name, e.g. `reader` |
+| `shape.key_type` | Qualified type of the key or input parameter, where the shape has one |
+| `shape.value_type` | Qualified type of the value or output, where the shape has one |
 
-Idempotent operations that retrieve data without mutating system state.
+A Go `func(ctx, K) (V, error)` and a hypothetical Rust `fn(&self, K) -> Result<V, E>` both surface as `shape = "reader"`. A generator branches on the stamp without knowing which frontend produced it.
 
-| Shape | Signature Pattern | Description | Suite Baseline Law | Example |
-|-------|-------------------|-------------|--------------------|---------|
-| **Reader** | `func(ctx?, K) (V, error)` | Standard single-key fetch. | **Consistent Reads:** Repeated calls return identical values. | `Get(ctx, string) (Record, error)` |
-| **ReaderNoError** | `func(ctx?, K) V` | Infallible fetch. | **Consistent Reads:** Repeated calls return identical values. | `Lookup(ctx, string) Record` |
-| **ReaderWithBool** | `func(ctx?, K) (V, bool)` | Map-style fetch. | **Missing Returns False:** The boolean accurately reflects presence. | `Load(ctx, string) (Record, bool)` |
-| **Lookup** | `func(ctx?, K) (V, R, bool)` | Fetch returning a value + metadata. | **Metadata Consistency:** `V` and `R` are stable across reads. | `Inspect(ctx, string) (Record, string, bool)` |
-| **PointerReader** | `func(ctx?, K) *V` | Fetch returning a pointer. | **Nil On Missing:** Returns `nil` instead of an error when not found. | `Find(ctx, string) *Record` |
-| **MultiReader** | `func(ctx?, K) (V1, V2, error)` | Fetch returning multiple discrete values. | **Atomic Read:** Both `V1` and `V2` are read at the same snapshot. | `Fetch(ctx, string) (Record, string, error)` |
-| **BatchReader** | `func(ctx?, ...K) ([]V, error)` | Fetch for a slice/variadic list of keys. | **Partial Failure:** Batch queries don't fail entirely if one key is missing. | `Many(ctx, ...string) ([]Record, error)` |
+Detectors still carry a `Priority`, but it now orders dispatch within the detector axis only — it cannot shadow a contract or a mixin. Higher runs first; equal priorities tie-break on registration order.
 
-### Writing Band
+## Detectors
 
-Operations that mutate system state.
+Twenty, and every one has a fixture in `conformance/corpus/iface/detector/`. A leading `context.Context` is optional unless the table says otherwise — `ctx?` means both `func(ctx, K)` and `func(K)` detect.
 
-| Shape | Signature Pattern | Description | Suite Baseline Law | Example |
-|-------|-------------------|-------------|--------------------|---------|
-| **Writer** | `func(ctx?, V) error` <br> `func(ctx?, V) (R, error)` | Single-value insert/update. Can optionally return a result `R`. | **Write Success:** Ensures the system accepts valid samples. | `Put(ctx, Record) error` |
-| **CompositeWriter** | `func(ctx?, K, V) error` | Insert/update parameterized by an explicit key. | **Keyed Atomicity:** The write is bound to the given key. | `Set(ctx, string, Record) error` |
-| **Mutator** | `func(ctx?, V)` | Infallible, fire-and-forget state mutation. | **Non-Observable Error:** Never panics on valid samples. | `Touch(ctx, string)` |
-| **Deleter** | `func(ctx?, K) error` | Removes state. | **Delete Removes Value:** A subsequent `Reader` must fail/return false. | `Remove(ctx, string) error` |
-| **MultiArgWriter** | `func(ctx, P1, P2, ...) error` | Complex mutation with multiple distinct parameters. | **Parameter Validation:** Respects context and rejects zero-values. | `Schedule(ctx, string, Record, int) error` |
+| Shape | Priority | Signature | Notes |
+|---|---|---|---|
+| `streamreader` | 1000 | `func(ctx?, K?) iter.Seq[V]` | Also `iter.Seq2`. The variant is stamped so a consumer can tell the two apart. |
+| `batchreader` | 950 | `func(ctx?, ...K) ([]V, error)` | The only non-context parameter is the variadic tail. |
+| `lookup` | 850 | `func(ctx?, K) (V, M, bool)` | No error return. The metadata type is stamped alongside the triple. |
+| `readerwithbool` | 840 | `func(ctx?, K) (V, bool)` | Map-style presence. No error return. |
+| `poisonaccessor` | 830 | `func() error` | Takes nothing. Forbids a context, which is what separates it from `lifecycle`. |
+| `predicate` | 820 | `func() bool` | Takes nothing. |
+| `voidlifecycle` | 810 | `func()` | No parameters, no returns. |
+| `pure` | 800 | `func(…) T` | No context, no error, exactly one return. Parameters are unconstrained — the shape is about return discipline, not input shape. |
+| `multiargwriter` | 750 | `func(ctx?, P1, P2, P3, …) error` | Three or more non-context parameters. The full argument-type list is stamped. |
+| `compositewriter` | 700 | `func(ctx?, K, V) error` | Exactly two non-context parameters. |
+| `multireader` | 650 | `func(ctx?, K) (V1, V2, …, error)` | Two or more non-error returns. The full list is stamped. |
+| `multiaggregator` | 600 | `func(ctx?) (V1, V2, …, error)` | No non-context parameters, two or more non-error returns. |
+| `writer` | 500 | `func(ctx?, V) error` | `error` is the *only* return, not "at most one" — see below. |
+| `streamconsumer` | 470 | `func(ctx, iface) (V, error)` | The context is **required**. |
+| `pointerreader` | 450 | `func(ctx?, K) *V` | No error return. |
+| `reader` | 420 | `func(ctx?, K) (V, error)` | The parameter must be usable as a key. |
+| `readernoerror` | 400 | `func(ctx?, K) V` | Infallible fetch. |
+| `aggregator` | 350 | `func(ctx?) (T, error?)` | No non-context parameters. |
+| `mutator` | 300 | `func(ctx?, V)` | Zero returns. A `*V` parameter is unwrapped so the stamped value type names the element. |
+| `lifecycle` | 200 | `func(ctx) error` | The context is **required**, which is what separates it from `poisonaccessor`. |
 
-> **Note on Deleter:** Because `func(ctx, string) error` is ambiguous (is it `Writer(V)` or `Deleter(K)`?), `Deleter` detection requires the `//testkit:deleter` directive on the method.
-> **Note on Mutator:** Automatically detected from any `func(ctx?, V)` signature that has no returns. Use `//testkit:not-mutator` to opt out.
+Three of these encode a decision worth knowing about.
 
-### Streaming Band
+**`writer` requires `error` to be the only return.** An earlier form accepted "at most one non-error return", which made every signature `reader` recognises a strict subset of `writer` — and `writer` runs first. `reader` never won a dispatch, and the harm was not the dead rule but the wrong stamp that replaced it.
 
-High-throughput or unbounded data sequences.
+**`reader` refuses a parameter that cannot serve as a key.** The stamp's whole content is that the parameter *is* a key: same-key-same-value, read-after-write and deterministic re-read all derive from it. A parameter with no equality makes those checks vacuous rather than false, which is worse.
 
-| Shape | Signature Pattern | Description | Suite Baseline Law | Example |
-|-------|-------------------|-------------|--------------------|---------|
-| **StreamReader** | Returns `iter.Seq[V]` or `iter.Seq2[K, V]` | Go 1.23+ iterator. | **Reentrancy Safety:** The iterator can be broken early without leaking. | `All(ctx) iter.Seq[Record]` |
-| **StreamConsumer** | `func(ctx, io.Reader) (V, error)` | Consumes a stream interface. | **Backpressure Respect:** Stops consuming if context is canceled. | `ReadFrom(ctx, io.Reader) (int, error)` |
+**`streamconsumer` requires the context deliberately.** `func(io.Reader) (V, error)` is too ambiguous to claim — constructors and helpers share it. The cost is a missed stamp on an unusual form, against mislabelling a common one.
 
-### Aggregation & Lifecycle
+## Contracts
 
-System-level state, counting, or management.
+A contract binds several callables into one protocol. The author declares it, because no signature analysis can tell that `Commit` belongs to the `Begin` three lines above. Twenty-four, each with a fixture in `conformance/corpus/iface/contract/`.
 
-| Shape | Signature Pattern | Description | Suite Baseline Law | Example |
-|-------|-------------------|-------------|--------------------|---------|
-| **Aggregator** | `func(ctx?) (T, error)` | Computes a global metric (e.g., `Count()`, `Sum()`). | **Count Consistency:** Aggregation is stable across immediate re-reads. | `Count(ctx) (int, error)` |
-| **MultiAggregator** | `func(ctx?) (T1, T2, error)` | Computes multiple global metrics. | **Atomic Aggregation:** Metrics are computed from the same snapshot. | `Stats(ctx) (int, int, error)` |
-| **Lifecycle** | `func(ctx) error` | State machine progression (e.g., `Start`, `Stop`). | **Order Awareness:** Idempotent if called twice; respects teardown. | `Init(ctx) error` |
-| **VoidLifecycle** | `func()` <br> `func(ctx)` | Infallible state machine progression. | **Resource Cleanup:** Does not panic on repeated teardowns. | `Reset()` |
-| **PoisonAccessor** | `func() error` | Checks health/error state (e.g., `Err() error`). | **Sticky Error:** Once an error is returned, it never clears. | `Err() error` |
+Every member carries `role=`, and the roles a contract accepts are a closed set — a directive naming an undeclared role is rejected. Partner roles reference sibling methods by name and are resolved to qualified names during annotation.
 
-> **Note on Lifecycle:** A signature like `func() error` could be an `Aggregator`, `Lifecycle`, or `PoisonAccessor`. To disambiguate, `Lifecycle` requires a `context.Context` parameter, while `PoisonAccessor` strictly forbids it.
+| Contract | Directive as written |
+|---|---|
+| `appender` | `//testkit:contract appender role=fn` |
+| `batch-writer` | `//testkit:contract batch-writer role=writer mode=atomic` |
+| `cache` | `//testkit:contract cache role=cache backing=Fetch` |
+| `cas` | `//testkit:contract cas role=writer version=Version` |
+| `circuit-breaker` | `//testkit:contract circuit-breaker role=fn` |
+| `cursor` | `//testkit:contract cursor role=next close=Close` |
+| `if-absent` | `//testkit:contract if-absent role=writer` |
+| `if-match` | `//testkit:contract if-match role=writer pred=Match` |
+| `leader-election` | `//testkit:contract leader-election role=campaign resign=Resign isleader=IsLeader` |
+| `lease` | `//testkit:contract lease role=acquire release=Release` |
+| `outbox` | `//testkit:contract outbox role=append subscribe=Subscribe` |
+| `pagination` | `//testkit:contract pagination role=reader cursor=Cursor` |
+| `persister` | `//testkit:contract persister role=writer reader=Get` |
+| `pool` | `//testkit:contract pool role=get put=Put` |
+| `publisher` | `//testkit:contract publisher role=publish subscribe=Subscribe` |
+| `rate-limit` | `//testkit:contract rate-limit role=fn rate=100 burst=10` |
+| `saga` | `//testkit:contract saga role=step compensate=Compensate` |
+| `singleflight` | `//testkit:contract singleflight role=fn` |
+| `transaction` | `//testkit:contract transaction role=fn` |
+| `tx` | `//testkit:contract tx role=begin commit=Commit rollback=Rollback` |
+| `updater` | `//testkit:contract updater role=writer reader=Get` |
+| `upserter` | `//testkit:contract upserter role=writer reader=Get` |
+| `watcher` | `//testkit:contract watcher role=watch trigger=Trigger` |
+| `workflow` | `//testkit:contract workflow role=fn transitions=Draft>Live` |
 
-### Stateless Band
+A key whose value names a partner method is resolved; a key whose value is a literal is not. `cas version=Version` names a field, `rate-limit rate=100` is a number, and `workflow transitions=Draft>Live` is a state expression — none of those is looked up as a sibling.
 
-Utility methods that do not rely on or modify the system's internal state.
+## Mixins
 
-| Shape | Signature Pattern | Description | Suite Baseline Law | Example |
-|-------|-------------------|-------------|--------------------|---------|
-| **Pure** | `func() T` | Deterministic computation without inputs. | **Determinism:** Always returns the exact same value. | `Description() string` |
-| **Predicate** | `func() bool` | Binary state check (e.g., `IsReady()`). | **Constant Return:** Value does not flap between reads. | `IsHealthy() bool` |
+A mixin asserts one orthogonal invariant about a single callable. Unlike a contract it binds nothing to anything. Twenty-eight, each with a fixture in `conformance/corpus/iface/mixin/`.
 
----
+| Mixin | Directive as written |
+|---|---|
+| `atomic` | `//testkit:mixin atomic` |
+| `bounded` | `//testkit:mixin bounded limit=100` |
+| `cacheable` | `//testkit:mixin cacheable` |
+| `concurrent` | `//testkit:mixin concurrent` |
+| `concurrentreaders` | `//testkit:mixin concurrentreaders` |
+| `crdtmerge` | `//testkit:mixin crdtmerge` |
+| `deleteremoves` | `//testkit:mixin deleteremoves` |
+| `deprecated` | `//testkit:mixin deprecated` |
+| `errors` | `//testkit:mixin errors` |
+| `eventually` | `//testkit:mixin eventually` |
+| `hooks` | `//testkit:mixin hooks` |
+| `idempotent` | `//testkit:mixin idempotent` |
+| `integrationonly` | `//testkit:mixin integrationonly` |
+| `lifecycleafterclose` | `//testkit:mixin lifecycleafterclose` |
+| `monotonic` | `//testkit:mixin monotonic` |
+| `nilsafe` | `//testkit:mixin nilsafe` |
+| `orderafter` | `//testkit:mixin orderafter fn=Prepare` |
+| `partition` | `//testkit:mixin partition` |
+| `pure` | `//testkit:mixin pure` |
+| `readafterwrite` | `//testkit:mixin readafterwrite write=Put` |
+| `retrysucceeds` | `//testkit:mixin retrysucceeds` |
+| `sample` | `//testkit:mixin sample` |
+| `scope` | `//testkit:mixin scope name=tenant` |
+| `sideeffect` | `//testkit:mixin sideeffect` |
+| `streamreflectsmutations` | `//testkit:mixin streamreflectsmutations` |
+| `timeout` | `//testkit:mixin timeout duration=5s` |
+| `validates` | `//testkit:mixin validates fn=Validate` |
+| `wrappedvia` | `//testkit:mixin wrappedvia fn=Cause` |
 
-## The "Universal Laws"
+Several mixins fit on one line, and the axis is genuinely orthogonal:
 
-In addition to shape-specific laws, the `suite` generator automatically enforces **Universal Laws** on every method, based solely on the presence of `context.Context` and `error`:
+```go
+//testkit:mixin idempotent concurrent sideeffect
+Put(ctx context.Context, r Record) error
+```
 
-1. **Context Cancellation:** If `ctx` is present, it is canceled immediately; the method MUST return a context error.
-2. **Context Deadline Exceeded:** If `ctx` is present, a pre-expired context is passed; the method MUST return a deadline error.
-3. **Nil Context Safety:** If `ctx` is present, `nil` is passed; the method MUST NOT panic.
-4. **Smoke Test:** Automatically generates zero-value or sampled inputs to ensure the method does not panic on basic invocation.
+`orderafter fn=`, `readafterwrite write=`, `validates fn=` and `wrappedvia fn=` name sibling methods, which the resolver rewrites to qualified names and a validator checks resolve to something real. `bounded limit=`, `scope name=` and `timeout duration=` are opaque literals.
 
-## Overriding Detection
+## Overriding detection
 
-The priority registry is robust, but sometimes Go's type system isn't expressive enough to capture your intent. You can use **Shape Hints** (directives) to force or prevent specific classification:
+```go
+//testkit:shape reader
+Fetch(ctx context.Context, id string) (Record, error)
+```
 
-* `//testkit:deleter` — Elevates a `func(ctx?, string) error` signature. Without this, the registry detects it as a generic `Writer(V)`; with it, it becomes a `Deleter(K)`, enabling delete-removes validation.
-* `//testkit:mutator` — Explicit marker for state-changing methods (though `func(ctx?, V)` is auto-detected as a `Mutator` even without it).
-* `//testkit:not-mutator` — Prevents `Mutator` auto-detection for a void-return method (e.g., `Log(v)`). It falls back to `Unknown`.
-* `//testkit:directive mutator=off` — The bundle-syntax equivalent of `not-mutator`.
-* `//testkit:keyfield FieldName` — While not changing the shape, this hint tells the registry which struct field to extract when synthesizing a `K` from a `V`.
+A `//testkit:shape` directive wins over every detector. The plugin checks the directive list first per callable; on a hit it stamps the named shape and skips the cascade entirely.
+
+The corpus contains no shape overrides. That is deliberate — a fixture whose classification came from a directive proves the directive was read, not that the detector works, so every detector fixture is written to be recognised from its signature alone.
+
+## What consumes the stamps
+
+Only `stub` today, and it reads a narrow slice: the mixin axis for `deprecated` and `orderafter`, and the detector axis for the iterator variants. The `suite`, `bench` and `model` generators are designed against the full vocabulary and are not implemented — see their pages.
+
+testkit registers the *entire* eidos registry rather than a curated subset ([ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md)), so a classification added upstream is available the moment the dependency moves, and the conformance gate starts asking for a fixture in the same build.
 
 ## See also
 
-* [Generators / suite](suite.md) — How the Tier 1 test suite utilizes shapes.
-* [Generators / bench](bench.md) — How benchmarks use shapes to determine hot-paths.
-* [Generators / model](model.md) — How the state-machine uses shapes to infer transitions.
+- [Classification map](../../internal/classification-map.md) — the mapping from these names to the laws each implies.
+- [Stub](stub.md) — the one shipped generator that reads these stamps.
+- [ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md) — why testkit consumes eidos's annotator rather than implementing its own.

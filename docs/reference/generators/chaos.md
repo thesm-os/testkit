@@ -1,6 +1,6 @@
 # Chaos
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Tier 5 fault simulation. Built on top of [`sim`](sim.md). Drives randomized fault schedules, network partitions, clock skew, and process restarts across operation sequences. Seeded reproducible runs; on failure, emits a trace plus a minimal-reproducer seed extracted from the failing prefix. Integrates with the sim engine via `OnRecord` hooks for trace correlation.
 

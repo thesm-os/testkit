@@ -43,6 +43,19 @@
 // own and so does YAML, and it is what makes the type legal as a map key,
 // which a JSON marshaller alone does not.
 //
+// # What the checks cannot say about a float enum
+//
+// Every generated check needs a value outside the declared set to probe with,
+// and for a float-valued enum there is none to be had: eidos reads a variant's
+// declared value as an integer and knows the bounds of no float type, so the
+// set reports no values at all and nothing can name a successor to them. The
+// two subtests that need one — an undeclared value is invalid, and it does not
+// render as a declared one — are dropped rather than written against a guess
+// that the set might turn out to declare. Everything else a float enum earns
+// is unaffected: the arity, the distinctness of values and of text, the zero,
+// the round trip and the encoding boundary are all derivable without a
+// boundary value.
+//
 // # Where the output lands
 //
 // Beside its source, and it cannot be routed elsewhere — the API declares

@@ -90,14 +90,17 @@
 // # Recorded-call field names
 //
 // `Item` and `Err` above are not positional placeholders — they are the
-// source's declared return names, read from [node.Return.Name]. A signature
+// source's declared return names, read from [sdk.Return.Name]. A signature
 // written `(item User, err error)` documents what its returns mean, and a
 // recorded-call struct is the main consumer of that documentation: it is what
 // a reader sees in a failure message.
 //
-// Returns without declared names fall back to `Result0`, `Result1`, …
-// positionally. The blank identifier counts as unnamed, since `_` cannot be a
-// field name.
+// Returns without declared names fall back to the framework's rule
+// ([golang.Sig]): the error slot is `Err`, a lone value slot is `Result`, and
+// several value slots are `Result0`, `Result1`, … numbered across the value
+// slots only — so adding an error return does not renumber the fields beside
+// it. The blank identifier counts as unnamed, since `_` cannot be a field
+// name.
 //
 // # Named returns on the generated methods
 //
@@ -109,8 +112,9 @@
 // omission.
 //
 // Propagation is all-or-nothing and falls back to unnamed returns when either
-// condition fails. NamedReturnsUsable in the shared signature package owns
-// that rule and explains both.
+// condition fails. [golang.NamedReturnsUsable] owns that rule and explains
+// both; [golang.SigOf] applies it and records the answer on the projection
+// this plugin embeds in each [Method].
 //
 // # A nil func field panics
 //
@@ -138,6 +142,28 @@
 // is not known until the Layout phase resolves routing, which is why [Tests]
 // implements the framework's output-package callback rather than computing a
 // path here.
+//
+// References into testkit's own runtime use the backend's `external` builtin
+// too. The import paths come off the emit value — see [RuntimePaths] — so the
+// module path is one Go constant rather than a literal in each template, and
+// the plugin registers no template function to resolve them.
+//
+// # Embedded interfaces
+//
+// A double stands in for the interface's whole method set, embeds included: a
+// double short one embedded method does not satisfy the interface it doubles,
+// which is the one thing a double has to do. Resolution is
+// [sdk.StoreReader.MethodSet]'s, and so is the order — the interface's own
+// declarations first, then each embed's contribution in embed order. That
+// order fixes the generated field order, so it is part of what a consumer
+// upgrading this plugin sees change.
+//
+// An embed that contributed nothing is reported and the interface is skipped.
+// An embed this run did not load is a warning, because a narrow invocation is
+// legitimate and one unreachable dependency should not cost a project the rest
+// of its doubles; a non-interface or parameterised embed is an error, because
+// no wider run repairs it. A type-set term carries no name and is passed over
+// — a constraint is never a stub target.
 //
 // # Hazards
 //

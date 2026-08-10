@@ -7,11 +7,16 @@
 {{- else }}{{ renderType .Ref }}({{ .Text }}){{ end -}}
 {{- end -}}
 
+{{- /* Every cross-package symbol is composed with the backend's own
+       `external <path> <Symbol>`, which registers the import as it renders.
+       The testkit path comes off the emit value ($.Runtime) rather than being
+       spelled here, so the day the module moves no template changes. */ -}}
 {{- define "builder.test" -}}
-{{- $T := builderRef "testing.T" -}}
-{{- $equal := builderRef "testkit.Equal" -}}
-{{- $true := builderRef "testkit.True" -}}
-{{- $errorIs := builderRef "testkit.ErrorIs" -}}
+{{- $T := external "testing" "T" -}}
+{{- $equal := external $.Runtime "Equal" -}}
+{{- $true := external $.Runtime "True" -}}
+{{- $errorIs := external $.Runtime "ErrorIs" -}}
+{{- $errorsNew := external "errors" "New" -}}
 {{- $b := .TypeName -}}
 {{- $src := .SourceName -}}
 {{- $ta := .TypeArgs -}}
@@ -172,7 +177,7 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 		// Matched by identity rather than by value: two errors carrying the
 		// same text are not equal, and a fresh one is distinct from anything
 		// the constructor could have seeded.
-		want := {{ renderExpr (builderRef "errors.New") }}("test-{{ $f.Name }}")
+		want := {{ renderExpr $errorsNew }}("test-{{ $f.Name }}")
 		{{ renderExpr $errorIs }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(want).Build().{{ $f.Name }}, want,
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})
@@ -197,7 +202,7 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 {{- range $i, $r := $f.Returns }}
 			var r{{ $i }} {{ renderType $r }}
 {{- end }}
-			return{{ if $f.Returns }} {{ builderIdents "r" (len $f.Returns) }}{{ end }}
+			return{{ if $f.Returns }} {{ builder_idents "r" (len $f.Returns) }}{{ end }}
 		}).Build().{{ $f.Name }} != nil,
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})

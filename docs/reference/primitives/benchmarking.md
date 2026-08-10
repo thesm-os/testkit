@@ -1,106 +1,77 @@
 # Benchmarking
 
-Two layers of benchmarking primitives:
+```go
+import "go.thesmos.sh/testkit"
+```
 
-- **`testkit.StartContract`** — scope-based allocation and latency contract, a drop-in replacement for `for b.Loop()` that adds explicit ceilings.
-- **`testkit/bench` runtime helpers** — a thin layer over `b.Loop` / `b.RunParallel` that drives single-goroutine measurement, parallel throughput, and the three opt-in budget gates (`allocs`, `latency`, `percentiles`). The shape-typed primitives consumed by [`bench` generator](../generators/bench.md) sit on top of these helpers.
+A benchmark reports numbers. A benchmark *contract* fails when the numbers move the wrong way — which is the difference between a measurement someone has to read and a gate that holds a budget.
 
-## The Architectural Pattern
-
-Why use custom benchmarking primitives instead of standard `testing.B` loops?
-
-1. **Eliminating Vanity Metrics:** Standard Go benchmarks report metrics, but they do not enforce bounds. A benchmark that reports `0 allocs/op` today can silently degrade to `3 allocs/op` tomorrow without failing a CI run. The `testkit` primitives turn benchmarks into **Contracts**. They take explicit `maxAllocs` and `maxLatency` ceilings and call `b.Fatalf` if the implementation violates them, turning performance regressions into immediate build failures.
-2. **Defeating Closure-Escape Contamination:** A common mistake in custom benchmark helpers is accepting a callback (e.g., `Measure(func() { ... })`). In Go, capturing variables in a closure often forces them to escape to the heap, creating artificial allocations that pollute your `allocs/op` measurements. `testkit.StartContract` uses a scope-based `for c.Loop()` design to completely avoid closure contamination. For the `testkit/bench` helpers that *do* use callbacks, the documentation provides strict rules (like using package-level `errSink`s) to defeat compiler elision without boxing values.
-
-## Contract (`testkit.StartContract`)
-
-Scope-based contract with chained ceilings:
+## Contract
 
 ```go
-func BenchmarkStore_Get(b *testing.B) {
-    s := setup(b)
+func StartContract(tb BenchTB) *Contract
+
+func (c *Contract) AllocsMax(n uint64) *Contract
+func (c *Contract) LatencyMax(d time.Duration) *Contract
+func (c *Contract) Loop() bool
+func (c *Contract) End()
+```
+
+`Loop` is a drop-in replacement for `testing.B.Loop`, so the benchmark body looks like any other:
+
+```go
+func BenchmarkStoreGet(b *testing.B) {
+    s := store.New()
     c := testkit.StartContract(b).
-        AllocsMax(0).
-        LatencyMax(5 * time.Microsecond)
+        AllocsMax(2).
+        LatencyMax(500 * time.Microsecond)
+    defer c.End()
+
     for c.Loop() {
-        _ = s.Get(b.Context(), key)
+        _, _ = s.Get("k")
     }
-    c.End()
 }
 ```
 
-| Method | Description |
-|--------|-------------|
-| `StartContract(b)` | Begin contract; `b` is `*testing.B` or `BenchTB` stub |
-| `AllocsMax(n)` | Max allocations per iteration; `0` = zero-alloc |
-| `LatencyMax(d)` | Max p99 per-iteration latency |
-| `Loop() bool` | Drop-in replacement for `b.Loop()` |
-| `End()` | Report metrics and assert ceilings; fatals on violation |
+`End` reports the measured allocation count and p99 latency as benchmark metrics, then fails the benchmark if either ceiling is exceeded. Defer it — a ceiling that only applies when the body returns normally is not a ceiling.
 
-The scope form avoids the closure-escape contamination that a callback form imposes on zero-alloc claims.
+A contract with no ceiling set still reports. `AllocsMax` and `LatencyMax` are independent; set either, both, or neither.
 
-### BenchTB
+## What the ceilings mean
 
-`BenchTB` is the subset of `*testing.B` that `Contract` depends on. Defining it as an interface allows testing the contract machinery itself with a stub. Most code passes `*testing.B` directly.
+`AllocsMax(n)` is **heap allocations per iteration**, the same number `-benchmem` prints as `allocs/op`. It is the more stable of the two: allocation count is a property of the code, not of the machine, so a budget that holds on a laptop holds in CI.
 
-## Runtime helpers (`testkit/bench`)
+`LatencyMax(d)` is **p99 per iteration**, not the mean. The mean hides the tail, and the tail is what a latency budget is about — a p50 that never moves alongside a p99 that doubled is a regression the mean will not show.
 
-The `bench` package ships a small set of `*testing.B`-rooted primitives the [`bench` generator](../generators/bench.md) calls into. Consumers can call them directly when hand-writing benchmarks that don't fit the generator's shape vocabulary.
+Set the latency ceiling with headroom. CI runners are slower and noisier than a development machine, and a p99 budget pinned to the number you measured locally will fail on the first shared runner.
+
+## BenchTB
 
 ```go
-import "go.thesmos.sh/testkit/bench"
-
-func BenchmarkCache_Lookup(b *testing.B) {
-    c := newCache()
-    bench.HotPath(b, "hot-path", func() {
-        _ = c.Lookup("known-key")
-    })
-    bench.AllocsWithin(b, "allocs-within-0", 0, func() {
-        _ = c.Lookup("known-key")
-    })
-    bench.LatencyPercentilesWithin(b, "percentiles", map[float64]time.Duration{
-        0.50: 1 * time.Microsecond,
-        0.99: 10 * time.Microsecond,
-    }, func() {
-        _ = c.Lookup("known-key")
-    })
-}
+type BenchTB interface { ... }
 ```
 
-Each helper opens its own `b.Run(name, ...)` namespace and exits cleanly on assertion failure. The helpers are deliberately untyped over the call signature (`func()`) so they compose with any Go function, regardless of arity or return type.
+The subset of `*testing.B` that `Contract` needs. Taking the interface rather than the concrete type is what lets the contract be driven from a test — including testkit's own tests of the contract itself.
 
-### Always-emitted primitives
+## Benchmarking through a double
 
-| Helper | Purpose |
-|--------|---------|
-| `HotPath(b, name, call)` | Single-goroutine `b.Loop` measurement; reports `ns/op` and `allocs/op`. |
-| `ConcurrentThroughput(b, name, parallelism, call)` | `b.RunParallel`-style stress at the given parallelism. |
+A generated double records every call, and those allocations are what the benchmark would otherwise measure. Turn recording off:
 
-### Opt-in budget gates
+```go
+s := readertest.NewReaderStub(nil, readertest.ReaderStubBenchMode())
+```
 
-| Helper | Purpose |
-|--------|---------|
-| `AllocsWithin(b, name, maxAllocs, call)` | Fails the benchmark when `allocs/op` exceeds `maxAllocs`. `0` is a valid alloc-free assertion. |
-| `LatencyWithin(b, name, maxLatency, call)` | Fails when mean `ns/op` exceeds the duration ceiling. |
-| `LatencyPercentilesWithin(b, name, budgets, call)` | Records per-iteration durations into a pre-allocated slice, sorts the distribution, reports `p50/p95/p99` via `b.ReportMetric` (regardless of which percentiles are budgeted), and fails when any budgeted percentile exceeds its ceiling. Percentile keys in `(0, 1)`, e.g. `0.50`, `0.99`. |
+Two things there:
 
-### `*WithBytes` variants for I/O shapes
+**`BenchMode` drops the call log**, keeping dispatch. What remains is the cost of the double's method call, which is what a benchmark measuring the code around it wants.
 
-`HotPathWithBytes`, `AllocsWithinWithBytes`, `LatencyWithinWithBytes`, and `ConcurrentThroughputWithBytes` accept a `bytesPerOp int64` argument and call `b.SetBytes` so `MB/s` is reported alongside `ns/op`. Use these for `BatchReader` / `StreamReader` / `StreamConsumer` shapes where throughput is the meaningful metric.
+**The `tb` is `nil`.** A non-nil one registers a cleanup that verifies call-count expectations, which a benchmark has none of — and the constructor skips the cleanup on `nil`, so passing it is correct rather than a shortcut.
 
-The bench generator wires `BytesPerOp` automatically for `StreamConsumer` methods whose stream parameter is `io.Reader` (defaults to the synthesized sample length); other I/O shapes accept a per-method `<Iface>BenchSetBytes(method, n)` option.
+## Recording a baseline
 
-### Utilities
+Budgets in the code are the gate. Tracking the numbers over time is [`ergon bench`](https://go.thesmos.sh/ergon)'s job — `ergon bench baseline` pins the current results and `ergon bench regression` fails when a run drifts beyond noise. The two are complementary: the contract catches an absolute breach at the point it happens, the baseline catches a slow drift that never breaches anything.
 
-| Helper | Purpose |
-|--------|---------|
-| `SubtestKey(v)` | Renders an arbitrary value into a benchmark-safe subtest segment (used by the generator to name subtests like `Get/hot-path/seed-1`). |
-| `ReportRunningMetric(b, unit, value)` | Thin wrapper over `b.ReportMetric` for surfacing custom metrics from inside a `for b.Loop()` body. |
+## See also
 
-## Choosing between layers
-
-| Need | Use |
-|------|-----|
-| One ad-hoc benchmark with mean-latency / alloc ceilings | `testkit.StartContract` |
-| Hand-written benchmark with shape-style primitives (multiple `b.Run` namespaces, percentile gating, parallel sweep) | `bench` runtime helpers |
-| Generated benchmarks for a whole interface | [`bench` generator](../generators/bench.md) — emits typed `<Iface>BenchOn<Method>` plug-ins on top of the helpers |
+- [Recording](recording.md) — `BenchMode` on the recorder.
+- [Stub](../generators/stub.md) — the `BenchMode` construction option.

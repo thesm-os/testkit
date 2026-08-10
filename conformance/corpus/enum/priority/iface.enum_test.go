@@ -5,7 +5,7 @@
 //
 // Source:    corpus/enum/priority/iface.go
 // Plugins:   golang 1.0.0, enum 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/enum/...
+// Command:   testkit run ./corpus/...
 
 package priority_test
 
@@ -103,7 +103,7 @@ func TestPriorityText(t *testing.T) {
 		t.Parallel()
 		// Admitting it would let an unnamed value in through the one door
 		// that exists to keep it out.
-		_, err := priority.ParsePriority("Priority__no_such_variant")
+		_, err := priority.ParsePriority("__eidos_unknown__")
 		testkit.ErrorIs(t, err, priority.ErrUnknownPriority, "unknown text must be refused")
 	})
 
@@ -142,10 +142,10 @@ func TestPriorityMarshalling(t *testing.T) {
 		// The decoder is the boundary an unnamed value arrives at, so refusing
 		// here is what keeps it out of everything downstream.
 		var got priority.Priority
-		testkit.True(t, got.UnmarshalText([]byte("Priority__no_such_variant")) != nil,
+		testkit.True(t, got.UnmarshalText([]byte("__eidos_unknown__")) != nil,
 			"unknown text must not decode")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance d8c1c7b25cbedaf0215652d653eee45594f132ce4085ed12a0683d7634cb92db
+// testkit:provenance ecd163ef95a11930f8bc825040f605e131cf159d438e6c23ecf046c3f05170e1

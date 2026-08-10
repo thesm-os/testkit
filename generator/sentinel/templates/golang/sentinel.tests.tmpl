@@ -1,25 +1,27 @@
 {{- define "sentinel.tests" -}}
-{{- $T := sentinelRef "testing.T" -}}
-{{- $equal := sentinelRef "testkit.Equal" -}}
-{{- $notEqual := sentinelRef "testkit.NotEqual" -}}
-{{- $true := sentinelRef "testkit.True" -}}
-{{- $false := sentinelRef "testkit.False" -}}
-{{- $hasPrefix := sentinelRef "testkit.HasPrefix" -}}
-{{- $contains := sentinelRef "testkit.Contains" -}}
-{{- $errorIs := sentinelRef "testkit.ErrorIs" -}}
-{{- $errorsIs := sentinelRef "errors.Is" -}}
-{{- $errorf := sentinelRef "fmt.Errorf" -}}
-{{- $newErr := sentinelRef "errors.New" -}}
-{{- $strHasPrefix := sentinelRef "strings.HasPrefix" -}}
+{{- $T := external "testing" "T" -}}
+{{- $equal := external $.Runtime "Equal" -}}
+{{- $notEqual := external $.Runtime "NotEqual" -}}
+{{- $true := external $.Runtime "True" -}}
+{{- $false := external $.Runtime "False" -}}
+{{- $hasPrefix := external $.Runtime "HasPrefix" -}}
+{{- $contains := external $.Runtime "Contains" -}}
+{{- $errorIs := external $.Runtime "ErrorIs" -}}
+{{- $errorsIs := external "errors" "Is" -}}
+{{- $errorf := external "fmt" "Errorf" -}}
+{{- $strHasPrefix := external "strings" "HasPrefix" -}}
 {{- $types := .ErrTypes -}}
-{{- $pkg := pascal .PackageName -}}
+{{- /* Composed rather than spelled: a test function whose name does not open
+       with an upper-case rune after `Test` is never run, and the suite reports
+       one fewer case than the file declares. */ -}}
+{{- $suite := sentinel_testFuncName .PackageName "Sentinels" -}}
 {{- $sentinels := .Sentinels -}}
 {{- if $sentinels }}
-// Test{{ $pkg }}Sentinels pins the contract every sentinel in this package
+// {{ $suite }} pins the contract every sentinel in this package
 // carries. Callers match on these values, read them in logs, and branch on
 // them, so their messages and identities are as much an API as any exported
 // signature — and nothing in the compiler holds them to it.
-func Test{{ $pkg }}Sentinels(t *{{ renderExpr $T }}) {
+func {{ $suite }}(t *{{ renderExpr $T }}) {
 	t.Parallel()
 
 	all := []struct {

@@ -1,139 +1,127 @@
-# MethodStub
-
-`MethodStub[C]` is the generic per-method test double that the `stub` generator embeds in every method's stub. It composes recording, fault injection, strict mode, call-count expectations, latency simulation, clock injection, and rand-source injection into a single primitive.
-
-`MethodStub` is the runtime substrate that conformance tiers (`suite`, `model`, `bench`) and pre-prod tiers (`sim`, `chaos`, `replay`) build on top of. Most consumers interact with it through generated stub code rather than directly.
-
-## The Architectural Pattern
-
-Why does the `stub` generator embed `*testkit.MethodStub[Call]` instead of just generating a raw struct for every method?
-
-The answer is **behavioral uniformity**. Whether your method is a `Reader`, `Writer`, `StreamConsumer`, or `Lifecycle`, the mechanics of recording a call, injecting a time-windowed fault, asserting a call count, or simulating latency are identical. By embedding `MethodStub[C]`, the generator ensures that every stub in your project inherits the exact same, heavily tested observation and fault-injection runtime. The generator only has to emit the type-safe `Call` struct (the `C` type parameter) and the dispatch logic to route arguments into it.
-
-## Construction
+# Method stub
 
 ```go
-stub := testkit.NewMethodStub[StoreGetCall](t, "Store.Get")
+import "go.thesmos.sh/testkit/stub"
 ```
 
-- `t` is `testing.TB` for auto-verification via `t.Cleanup`. Pass `nil` for a stub without test integration (rare — the generated constructor always passes `t`).
-- The name string appears in error messages: `"Store.Get: unexpected call (strict mode)"`.
+`MethodStub[C]` is the per-method engine a generated double embeds. It owns everything that does not depend on the signature: fault injection, latency, call recording, call-count expectations, strict mode. `C` is the recorded-call type.
 
-The generated stub aggregates one `MethodStub[C]` per interface method:
+Most tests reach it through a generated `On<Method>` field rather than constructing one:
 
 ```go
-type StoreStub struct {
-    OnGet    *getStub      // embeds *testkit.MethodStub[StoreGetCall]
-    OnPut    *putStub      // embeds *testkit.MethodStub[StorePutCall]
-    OnDelete *deleteStub
-}
+s := readertest.NewReaderStub(t)
+s.OnGet.Faults(store.ErrUnavailable, 2).Times(4)
 ```
-
-## Recording
-
-`MethodStub[C]` embeds `*Recorder[C]`. All recorder methods are available directly on the stub:
 
 ```go
-stub.OnGet.CallCount()
-stub.OnGet.Filter(func(c StoreGetCall) bool { return c.ID == "x" })
-stub.OnGet.AssertCalledOnce(t, "must read once")
-stub.OnGet.WaitForN(t, 3, time.Second)
-gate := stub.OnGet.NewGate()
+func NewMethodStub[C any](tb testing.TB, name string) *MethodStub[C]
 ```
 
-See [Recording](recording.md) for the full Recorder API.
+The name (`"Reader.Get"`) is what failure messages identify the method by.
 
-## Fault injection
-
-Five strategies + composition. Convenience methods install common patterns; `SetFault` accepts any `Fault`.
+## Answer decides which arm wins
 
 ```go
-stub.OnGet.Faults(store.ErrNotFound, 3)                          // every 3rd call
-stub.OnGet.FaultsWhen(isHotKey, store.ErrNotFound, 1)            // predicate
-stub.OnGet.FaultsWithProbability(store.ErrTransient, 0.05)       // probabilistic
-stub.OnGet.FaultsFor(5 * time.Second)                            // time-windowed
-stub.OnGet.FaultsUntil(deadline)                                 // until deadline
-stub.OnGet.SetFault(testkit.And(predFault, windowFault))         // composition
+func Answer[C, R any](s *MethodStub[C], call *C, arms Arms[C, R]) R
 ```
 
-See [Fault injection](fault-injection.md) for strategy details.
+Generated methods do not implement precedence themselves — they hand the arms to `Answer`, so every double resolves a call the same way and the ordering is tested once rather than restated per method.
 
-## Strict mode
+The order is:
+
+1. **An injected fault**, if one fires for this call.
+2. **The `Func` override**, if one is set.
+3. **The `Returns` fallback**, if one is set.
+4. **The zero value** — or, under [strict mode](#strict-mode), a test failure.
+
+`Answer` records the call and stamps the outcome onto the record on the way out, so the recorded call carries what the method actually returned rather than only what it was asked.
+
+## Faults
+
+| Method | Fires |
+|---|---|
+| `Faults(err, failEveryN)` | every `failEveryN`th call |
+| `FaultsWhen(pred func(C) bool, err, n)` | when the call matches `pred` |
+| `FaultsWithProbability(p float64, err)` | with probability `p` |
+| `FaultsUntil(deadline time.Time, err)` | until `deadline` |
+| `FaultsFor(d time.Duration, err)` | for `d` from now |
+| `SetFault(f fault.Fault[C])` | whenever the supplied strategy says so |
+| `ShouldFaultFor(call C) (bool, error)` | — asks the current strategy directly |
+
+All of them return the stub, so they chain. See [Fault injection](fault-injection.md) for the strategies underneath and how they compose.
+
+## Latency
 
 ```go
-stub.OnGet.Strict()
+func (s *MethodStub[C]) Latency(d time.Duration) *MethodStub[C]
 ```
 
-In strict mode, `MethodStub.FailUnexpectedCall(call)` fatals the test. Generated dispatch calls `FailUnexpectedCall` when no behavior is configured (no `Func`, no `Returns`, no fault). Use strict to assert "this method must not be called" or "this method must always have explicit behavior."
+Sleeps `d` on every call, against the stub's clock. Under a [`TestClock`](clock.md) that costs no wall-clock time — the test advances the clock and the sleeping call resumes.
 
-The constructor option `<Stub>Strict()` enables strict on every method at once.
+`SleepLatency()` applies the configured delay once, for a generated method that needs to control when in its body the delay lands.
+
+## Determinism
+
+```go
+func (s *MethodStub[C]) WithClock(clk clock.Clock) *MethodStub[C]
+func (s *MethodStub[C]) WithRandSource(src rand.Source) *MethodStub[C]
+func (s *MethodStub[C]) Clock() clock.Clock
+```
+
+`WithClock` binds the clock latency and time-windowed faults read. `WithRandSource` binds the source probabilistic faults draw from, which is what makes a failing run replayable.
+
+A generated double sets both across every method at once through `ReaderStubWithClock` and `ReaderStubWithRandSource`.
 
 ## Call-count expectations
 
 ```go
-stub.OnGet.Times(3)        // exactly 3 calls
-stub.OnPut.TimesAtLeast(1) // at least 1 call
+func (s *MethodStub[C]) Times(n int) *MethodStub[C]
+func (s *MethodStub[C]) TimesAtLeast(n int) *MethodStub[C]
+func (s *MethodStub[C]) Verify()
 ```
 
-`Verify()` is registered with `t.Cleanup` automatically — expectations are checked at test end. To check eagerly, call `stub.OnGet.Verify()` directly.
+`Times(n)` requires exactly `n` calls; `TimesAtLeast(n)` requires at least that many. Neither fails at the moment the count is exceeded — `Verify` checks them.
 
-## Clock and rand-source injection
+A generated constructor given a non-nil `tb` registers `Verify` as a cleanup, so an unmet expectation is reported without the test remembering to ask. That is the whole reason to pass `tb`.
+
+## Strict mode
 
 ```go
-clk := testkit.NewTestClock(time.Unix(0, 0))
-rng := testkit.FixedRandSource(0.0)
-
-stub.OnGet.WithClock(clk).WithRandSource(rng)
+func (s *MethodStub[C]) Strict()
+func (s *MethodStub[C]) IsStrict() bool
+func (s *MethodStub[C]) FailUnexpectedCall(call C)
 ```
 
-The clock drives windowed faults, latency simulation, recorder timestamps, and wait timeouts. The rand source drives probabilistic faults.
+Under strict mode a call that reaches the zero-value arm fails the test instead. A method nobody configured was probably not meant to be called, and the alternative is a zero value flowing downstream until it causes a confusing failure somewhere else.
 
-In a generated stub, the constructor option `<Stub>Clock(clk)` propagates the clock to every method's `MethodStub` and to the embedded `Recorder`.
+`FailUnexpectedCall` is what the zero-value arm calls; it reports the method name and the call.
 
-See [Clock](clock.md) and [RandSource](rand.md).
-
-## Latency simulation
+## Reset
 
 ```go
-stub.OnGet.Latency(5 * time.Millisecond)
+func (s *MethodStub[C]) Reset()
 ```
 
-`Latency(d)` configures a clock-driven sleep before every dispatch path, including fault and unconfigured paths. Composes with `Faults` — `Latency(5*time.Second).Faults(err, 1)` models a slow-then-failing backend.
+Clears recorded calls, fault counters and call-count expectations. `Func` and `Returns` configuration is preserved, so one double carries across test phases without being rebuilt.
 
-`Latency(0)` disables (default). Generated dispatch calls `SleepLatency` at the start of every method.
-
-## Reset semantics
+## Configurable
 
 ```go
-stub.OnGet.Reset()
+type Configurable interface {
+    Strict()
+    Reset()
+    Verify()
+    BenchMode()
+    SetClock(clk clock.Clock)
+    SetRandSource(src rand.Source)
+}
 ```
 
-Reset clears recorded calls, resets fault counters, clears `Times`/`TimesAtLeast` expectations. It does **not** clear `Func`, `Returns`, or the installed fault — behavior is preserved, only observations are rewound. To remove behavior entirely, call `stub.OnGet.SetFault(nil)` or set `Func`/`Returns` to nil via the generated APIs.
-
-## API summary
-
-| Method | Purpose |
-|--------|---------|
-| `Strict()` / `IsStrict()` | Enable/check strict mode |
-| `Faults(err, n)` | Counter-based fault every Nth call |
-| `FaultsWhen(pred, err, every)` | Predicate fault |
-| `FaultsWithProbability(err, p)` | Probabilistic fault |
-| `FaultsFor(d)` / `FaultsUntil(t)` | Time-windowed fault |
-| `SetFault(f Fault)` | Install arbitrary strategy |
-| `ShouldFaultFor(call) (bool, error)` | Generated dispatch entry point |
-| `WithClock(c)` / `Clock()` | Clock injection / accessor |
-| `WithRandSource(r)` | Rand source injection |
-| `Latency(d)` / `SleepLatency()` | Latency simulation |
-| `Times(n)` / `TimesAtLeast(n)` / `Verify()` | Call-count expectations |
-| `FailUnexpectedCall(call)` | Strict-mode fatal |
-| `Reset()` | Rewind observations, preserve behavior |
-| `Name()` / `TB()` | Identity accessors |
-
-Plus all `Recorder[T]` methods via embedding.
+The signature-independent surface. A generated double holds every method's stub as a `[]Configurable`, which is what lets a construction option apply to the whole double in a loop rather than in one line per method.
 
 ## See also
 
-- [Recording](recording.md) — embedded recorder API
-- [Fault injection](fault-injection.md) — strategy details
-- [Clock](clock.md) — virtual time
-- [RandSource](rand.md) — pluggable RNG
+- [Recording](recording.md) — the `Recorder` that backs call inspection.
+- [Fault injection](fault-injection.md) — the strategies behind the `Faults*` methods.
+- [Clock](clock.md) — the virtual clock latency runs on.
+- [Stub](../generators/stub.md) — the generator that produces the code embedding this.

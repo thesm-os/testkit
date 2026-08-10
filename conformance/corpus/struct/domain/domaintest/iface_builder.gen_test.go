@@ -1031,9 +1031,9 @@ func TestContainersBuilderWithExtra(t *testing.T) {
 		// Two distinct values rather than one: whatever the constructor seeded
 		// can equal at most one of them, so a setter assigning nothing fails
 		// here instead of passing against its own seed.
-		testkit.Equal(t, domaintest.NewContainers().WithExtra(any("test-extra")).Build().Extra, any("test-extra"),
+		testkit.Equal(t, domaintest.NewContainers().WithExtra("test-extra").Build().Extra, "test-extra",
 			"WithExtra must reach Extra")
-		testkit.Equal(t, domaintest.NewContainers().WithExtra(any("other-extra")).Build().Extra, any("other-extra"),
+		testkit.Equal(t, domaintest.NewContainers().WithExtra("other-extra").Build().Extra, "other-extra",
 			"WithExtra must reach Extra")
 	})
 
@@ -1571,9 +1571,9 @@ func TestUserBuilderWithRole(t *testing.T) {
 		// Two distinct values rather than one: whatever the constructor seeded
 		// can equal at most one of them, so a setter assigning nothing fails
 		// here instead of passing against its own seed.
-		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "test-name"}).Build().Role, domain.Role{Name: "test-name"},
+		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "test-role"}).Build().Role, domain.Role{Name: "test-role"},
 			"WithRole must reach Role")
-		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "other-name"}).Build().Role, domain.Role{Name: "other-name"},
+		testkit.Equal(t, domaintest.NewUser().WithRole(domain.Role{Name: "other-role"}).Build().Role, domain.Role{Name: "other-role"},
 			"WithRole must reach Role")
 	})
 
@@ -1595,11 +1595,11 @@ func TestUserBuilderWithAudit(t *testing.T) {
 		// nothing leaves nil, and dereferencing that panics instead of saying
 		// which setter failed. Two values because whatever the constructor
 		// seeded can equal at most one of them.
-		want := domain.Audit(domain.Audit{CreatedBy: "test-createdby"})
-		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "test-createdby"}).Build().Audit, &want,
+		want := domain.Audit(domain.Audit{CreatedBy: "test-audit"})
+		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "test-audit"}).Build().Audit, &want,
 			"WithAudit must reach Audit")
-		other := domain.Audit(domain.Audit{CreatedBy: "other-createdby"})
-		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "other-createdby"}).Build().Audit, &other,
+		other := domain.Audit(domain.Audit{CreatedBy: "other-audit"})
+		testkit.Equal(t, domaintest.NewUser().WithAudit(domain.Audit{CreatedBy: "other-audit"}).Build().Audit, &other,
 			"WithAudit must reach Audit")
 	})
 
@@ -1698,9 +1698,9 @@ func TestUserBuilderWithHome(t *testing.T) {
 		// Two distinct values rather than one: whatever the constructor seeded
 		// can equal at most one of them, so a setter assigning nothing fails
 		// here instead of passing against its own seed.
-		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "test-street"}).Build().Home, domain.Address{Street: "test-street"},
+		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "test-home"}).Build().Home, domain.Address{Street: "test-home"},
 			"WithHome must reach Home")
-		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "other-street"}).Build().Home, domain.Address{Street: "other-street"},
+		testkit.Equal(t, domaintest.NewUser().WithHome(domain.Address{Street: "other-home"}).Build().Home, domain.Address{Street: "other-home"},
 			"WithHome must reach Home")
 	})
 
@@ -1722,11 +1722,11 @@ func TestUserBuilderWithManager(t *testing.T) {
 		// nothing leaves nil, and dereferencing that panics instead of saying
 		// which setter failed. Two values because whatever the constructor
 		// seeded can equal at most one of them.
-		want := domain.User(domain.User{Username: "test-username"})
-		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "test-username"}).Build().Manager, &want,
+		want := domain.User(domain.User{Username: "test-manager"})
+		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "test-manager"}).Build().Manager, &want,
 			"WithManager must reach Manager")
-		other := domain.User(domain.User{Username: "other-username"})
-		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "other-username"}).Build().Manager, &other,
+		other := domain.User(domain.User{Username: "other-manager"})
+		testkit.Equal(t, domaintest.NewUser().WithManager(domain.User{Username: "other-manager"}).Build().Manager, &other,
 			"WithManager must reach Manager")
 	})
 
@@ -1871,4 +1871,4 @@ func TestUserBuilderBuild(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e33cf9276e8090d928483a98f9f18d99da09e40df37b33114822507ff6112f32
+// testkit:provenance b22649e9e051406b38dd04a6b27a3855caefd63888a4a536eab68cc8dd19fe55

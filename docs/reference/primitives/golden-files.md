@@ -1,91 +1,75 @@
-# Golden Files
-
-The `golden` package (`testkit/golden`) provides update-or-compare assertions for wire snapshots, fixture files, and expected output.
-
-## AssertGolden
-
-Compares `got` against a golden file under `testdata/golden/`. Flag registration (`-update`) is automatic via `init()`.
+# Golden files
 
 ```go
-golden.AssertGolden(t, "snapshot.bin", got, golden.ShouldUpdate())
-
-// Regenerate goldens:
-//   go test -update ./...
+import "go.thesmos.sh/testkit/golden"
 ```
 
-| Outcome | Behavior |
-|---------|----------|
-| File missing + update=true | Write, pass |
-| File missing + update=false | Fail with regenerate instruction |
-| Content matches | Pass |
-| Content differs + update=true | Overwrite, pass |
-| Content differs + update=false | Fail with line-level diff |
+Comparing generated or serialised output against a checked-in reference. The value is in the diff: a golden file turns "the output changed" into a reviewable line-by-line change rather than a failed equality check with two blobs.
 
-## AssertGoldenAt
+## Asserting
 
-Same as `AssertGolden` but takes a literal file path instead of a `testdata/golden/`-relative name. Useful when the golden file lives outside the conventional directory.
+| Function | Compares against |
+|---|---|
+| `AssertGolden(tb, file string, got []byte, update bool, scrubbers ...Scrubber)` | `testdata/<file>` |
+| `AssertGoldenAt(tb, path string, got []byte, update bool, scrubbers ...Scrubber)` | `path`, verbatim |
+| `AssertGoldenJSONField(tb, path, field string, got []byte, update bool, scrubbers ...Scrubber)` | one field of the JSON document at `path` |
 
 ```go
-golden.AssertGoldenAt(t, "path/to/expected.json", got, golden.ShouldUpdate())
-```
-
-## AssertGoldenJSONField
-
-Per-field update-or-compare for JSON golden files. Updates or compares a single field within a JSON object, preserving sibling fields across regenerations.
-
-```go
-golden.AssertGoldenJSONField(t, "api.golden.json", "users", got,
-    golden.ShouldUpdate(),
-    golden.ScrubTimestamps(),
-)
-```
-
-| Outcome | Behavior |
-|---------|----------|
-| Field present + matches | Pass |
-| Field present + differs + update=false | Fail with `cmp.Diff` over the field |
-| Field present + differs + update=true | Replace field value; siblings preserved |
-| Field absent + update=true | Add field |
-| Field absent + update=false | Fail with regenerate instruction |
-
-Comparison is structural (both sides re-marshaled with the same indent) so whitespace differences don't false-fail.
-
-## Compare
-
-Returns a diff string (empty when equal) without failing the test. Useful for custom assertion logic.
-
-```go
-if diff := golden.Compare(want, got, golden.ScrubTimestamps()); diff != "" {
-    t.Errorf("mismatch:\n%s", diff)
+func TestRenderReport(t *testing.T) {
+    got := report.Render(input)
+    golden.AssertGolden(t, "report.txt", got, golden.ShouldUpdate())
 }
 ```
 
-## ShouldUpdate
+`AssertGoldenJSONField` is for the case where one field of a large document is what the test is about. Pinning the whole document there would make every unrelated change fail this test too.
 
-```go
-if golden.ShouldUpdate() {
-    // -update flag was passed; regenerate fixture
-}
+## Updating
+
+`ShouldUpdate()` reports whether the update flag is set, so the same test both checks and regenerates:
+
 ```
+go test ./... -update
+```
+
+Pass `golden.ShouldUpdate()` rather than a hard-coded `false` — a test wired with a literal cannot be regenerated, and someone will eventually edit the golden file by hand instead.
+
+**Review the diff before committing a regenerated file.** An update flag turns any change into a passing test, which is exactly the failure mode golden files exist to prevent. The regenerated file is the assertion; if you did not read it, the test asserts nothing.
 
 ## Scrubbers
 
-Byte-level transformations applied to golden output before comparison. Use them to normalize volatile fields that are deterministic within a run but irrelevant to the behavioral assertion.
-
-| Scrubber | What it does |
-|----------|---|
-| `ScrubJSONFields(fields...)` | Replace named JSON field values with `"SCRUBBED"` |
-| `ScrubTimestamps()` | Replace ISO-8601 / RFC-3339 timestamps with `"SCRUBBED_TS"` |
-| `ScrubHashes()` | Replace hex digests (32-128 chars) with `"SCRUBBED_HASH"` |
-| `ScrubRunIDs()` | Replace `run_[a-z0-9]{16}` tokens with `"SCRUBBED_RUN"` |
+Output carrying a timestamp, a hash or a run ID differs on every run and would make the file unstable. A `Scrubber` rewrites those to a fixed placeholder before comparison.
 
 ```go
-golden.AssertGolden(t, "response.json", got, golden.ShouldUpdate(),
+type Scrubber func([]byte) []byte
+```
+
+| Scrubber | Replaces |
+|---|---|
+| `ScrubTimestamps()` | timestamps |
+| `ScrubHashes()` | hex hash digests |
+| `ScrubRunIDs()` | run identifiers |
+| `ScrubJSONFields(fields ...string)` | the named JSON fields, whatever they contain |
+
+They compose, and they apply to both sides:
+
+```go
+golden.AssertGolden(t, "trace.json", got, golden.ShouldUpdate(),
     golden.ScrubTimestamps(),
-    golden.ScrubJSONFields("request_id", "trace_id"),
+    golden.ScrubJSONFields("request_id", "duration_ms"),
 )
 ```
 
-`Scrubber` is just `func([]byte) []byte`, so custom scrubbers compose freely.
+Scrub as little as possible. Every scrubbed field is a field the golden file no longer checks, and a scrubber broad enough to catch the noise usually catches some signal with it.
 
-`ScrubJSONFields` uses a regex approach — not a real JSON parser. Adequate for stable test fixtures; not robust against arbitrary JSON.
+## Comparing without asserting
+
+```go
+func Compare(want, got []byte, scrubbers ...Scrubber) string
+```
+
+Returns the diff, or empty when they match after scrubbing. Use it where the comparison feeds something other than a test failure — a report, a summary line, a check that counts differences.
+
+## See also
+
+- [Assertions](assertions.md) — `Equal` uses the same diff machinery for in-memory values.
+- [Helpers](helpers.md) — `MustMarshal` for producing the bytes to compare.

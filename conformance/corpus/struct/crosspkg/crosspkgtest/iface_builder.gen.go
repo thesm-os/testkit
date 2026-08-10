@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/crosspkg/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/crosspkg/...
+// Command:   testkit run ./corpus/...
 
 package crosspkgtest
 
@@ -149,5 +149,69 @@ func (b *MirroredBuilder) Build() crosspkg.Mirrored {
 	return b.v
 }
 
+// ShorthandBuilder constructs [Shorthand] values for tests.
+//
+// Start with [NewShorthand] or [NewShorthandFrom], set fields with the With
+// methods, and call [ShorthandBuilder.Build]. Every setter returns the builder, so a
+// test states only the fields it cares about and the rest keep whatever the
+// constructor seeded.
+type ShorthandBuilder struct {
+	v crosspkg.Shorthand
+}
+
+// NewShorthand returns a builder seeded from the package's companion, with
+// any per-field default declared in the source applied over it.
+func NewShorthand() *ShorthandBuilder {
+	v := seed.ConfigDefaults()
+	return &ShorthandBuilder{v: v}
+}
+
+// NewShorthandFrom returns a builder seeded with v, for the case where a test
+// varies one field of a value it already has.
+func NewShorthandFrom(v crosspkg.Shorthand) *ShorthandBuilder {
+	return &ShorthandBuilder{v: v}
+}
+
+// WithRegion replaces Region.
+func (b *ShorthandBuilder) WithRegion(v string) *ShorthandBuilder {
+	b.v.Region = v
+	return b
+}
+
+// WithRetries replaces Retries.
+func (b *ShorthandBuilder) WithRetries(v int) *ShorthandBuilder {
+	b.v.Retries = v
+	return b
+}
+
+// WithLabel replaces Label.
+func (b *ShorthandBuilder) WithLabel(v string) *ShorthandBuilder {
+	b.v.Label = v
+	return b
+}
+
+// Mutate applies fn to the value under construction, for the field a setter
+// does not reach — an unexported one, or a shape this builder does not model.
+func (b *ShorthandBuilder) Mutate(fn func(*crosspkg.Shorthand)) *ShorthandBuilder {
+	fn(&b.v)
+	return b
+}
+
+// Clone returns a builder that can be configured without affecting this one.
+//
+// The slice, byte-slice and map fields are copied, so appending through one
+// clone is not visible through another. Values held *inside* those — a struct
+// in a slice that owns a slice of its own — are shared, as are pointer fields,
+// which is what a pointer means.
+func (b *ShorthandBuilder) Clone() *ShorthandBuilder {
+	out := &ShorthandBuilder{v: b.v}
+	return out
+}
+
+// Build returns the constructed [Shorthand].
+func (b *ShorthandBuilder) Build() crosspkg.Shorthand {
+	return b.v
+}
+
 // testkit: end of generated content.
-// testkit:provenance be36b3f79b8ec5893a0a1be6595c20a7783595e5e3f9786922173f2800e1cbc8
+// testkit:provenance eed9a77ba97390aef13dc765f9e88ed4024ace3e647e0f072371e2873a3949a8

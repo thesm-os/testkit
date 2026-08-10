@@ -1,71 +1,98 @@
 # Assertions
 
-Type-safe assertion helpers with mandatory contract messages. Every assertion accepts `testing.TB` (works with both `*testing.T` and `*testing.B`) and produces a clear failure message without requiring `%v` formatting.
-
-## Positional assertions
-
-| Function | Description |
-|----------|-------------|
-| `Equal[T any](t, got, want, msg)` | go-cmp structural diff on mismatch |
-| `NotEqual[T any](t, got, want, msg)` | Fails if `got` deep-equals `want` |
-| `ErrorIs(t, err, target, msg)` | Fails if `!errors.Is(err, target)` |
-| `ErrorIsNot(t, err, target, msg)` | Fails if `errors.Is(err, target)` — for distinguishing two errors |
-| `ErrorAs[T](t, err, msg) T` | Fails if `!errors.As`; returns matched value |
-| `NoError(t, err, msg)` | Fails if `err != nil` |
-| `Error(t, err, msg)` | Fails if `err == nil` |
-| `True(t, cond, msg)` / `False(t, cond, msg)` | Boolean assertions |
-| `Len(t, obj, n, msg)` | Length check (slice, map, string, chan, array) |
-| `Contains(t, haystack, needle, msg)` | Substring / element / map-key membership |
-| `NotContains(t, haystack, needle, msg)` | Inverse of `Contains` |
-| `HasPrefix(t, s, prefix, msg)` | Fails if string `s` doesn't start with `prefix` |
-| `HasSuffix(t, s, suffix, msg)` | Fails if string `s` doesn't end with `suffix` |
-| `ContainsInOrder(t, haystack, needles, msg)` | Fails unless all needles appear in order within haystack |
-| `Panics(t, fn, msg) any` | Fails unless `fn` panics; returns recovered value |
-| `Sequence[T](t, items, pred, msg)` | Fails unless `pred(items[i-1], items[i])` holds for every adjacent pair |
-
-`Equal` uses `go-cmp` internally for structural comparison and produces field-level diff output on mismatch — dramatically better than `reflect.DeepEqual` for complex structs. For JSON comparison, unmarshal first and use `Equal`.
-
 ```go
-testkit.Equal(t, got, want, "Get must return the stored item")
-testkit.ErrorIs(t, err, store.ErrNotFound, "Get on missing key")
-testkit.ErrorIsNot(t, err1, err2, "ErrA and ErrB must be distinct")
-testkit.HasPrefix(t, path, "/api/", "path must start with /api/")
-testkit.ContainsInOrder(t, log, []string{"init", "ready", "shutdown"},
-    "lifecycle events must appear in order")
-testkit.Sequence(t, timestamps,
-    func(a, b time.Time) bool { return a.Before(b) },
-    "timestamps must be strictly ordered")
+import "go.thesmos.sh/testkit"
 ```
 
-## Fluent assertions
+Every assertion takes `testing.TB` first and a message last, and calls `tb.Fatalf` on failure. Structural comparison goes through [`go-cmp`](https://pkg.go.dev/github.com/google/go-cmp/cmp), so a failure reports a diff rather than two rendered values you have to compare by eye.
 
-Fluent matcher chain over a single subject. Start with `Assert`; every matcher returns the same `*Assertion[T]` for chaining. Matchers fatal on failure (AND logic).
+The message says what was being checked. `"counts match"` is worth more than the diff below it, because the diff shows what differed and only the message shows what was supposed to be true.
+
+## Functions
+
+| Function | Fails when |
+|---|---|
+| `Equal[T](tb, got, want T, msg)` | `cmp.Diff(got, want)` is non-empty |
+| `NotEqual[T](tb, got, want T, msg)` | `got` and `want` are structurally equal |
+| `True(tb, cond bool, msg)` | `cond` is false |
+| `False(tb, cond bool, msg)` | `cond` is true |
+| `Len(tb, obj any, want int, msg)` | the length of `obj` is not `want` |
+| `Contains(tb, haystack, needle any, msg)` | `haystack` does not contain `needle` |
+| `NotContains(tb, haystack, needle any, msg)` | `haystack` contains `needle` |
+| `HasPrefix(tb, s, prefix, msg)` | `s` does not start with `prefix` |
+| `HasSuffix(tb, s, suffix, msg)` | `s` does not end with `suffix` |
+| `ContainsInOrder(tb, haystack string, needles []string, msg)` | the needles do not all appear, in order |
+| `Panics(tb, fn func(), msg) (recovered any)` | `fn` does not panic. Returns the recovered value. |
+| `Sequence[T](tb, items []T, pred func(earlier, later T) bool, msg)` | any adjacent pair fails `pred` |
+
+### Errors
+
+| Function | Fails when |
+|---|---|
+| `NoError(tb, err, msg)` | `err` is non-nil |
+| `Error(tb, err, msg)` | `err` is nil |
+| `ErrorIs(tb, err, target error, msg)` | `errors.Is(err, target)` is false |
+| `ErrorIsNot(tb, err, target error, msg)` | `errors.Is(err, target)` is true |
+| `ErrorAs[T](tb, err error, msg) T` | `errors.As` cannot unwrap `err` into `T`. Returns the extracted value. |
+
+`ErrorAs` returns what it extracted, so the assertion and the access are one statement:
 
 ```go
-testkit.Assert(t, got).
-    Equals(want, "contract X").
-    HasLen(3, "must carry 3 entries").
-    Contains(required, "must include required")
+ve := testkit.ErrorAs[*store.ValidationError](t, err, "a bad field must surface as a ValidationError")
+testkit.Equal(t, ve.Field, "email", "the offending field must be named")
 ```
 
-| Matcher | Description |
-|---------|-------------|
-| `Equals(want, msg)` | go-cmp structural comparison |
-| `NotEquals(want, msg)` | Inverse |
-| `IsNil(msg)` / `IsNotNil(msg)` | Interface/pointer/slice/map/chan/func nil checks |
-| `HasLen(n, msg)` | Length check |
-| `IsEmpty(msg)` / `IsNotEmpty(msg)` | Length 0 / >0 |
-| `Contains(needle, msg)` / `NotContains(needle, msg)` | Membership |
-| `HasPrefix(prefix, msg)` / `HasSuffix(suffix, msg)` | String prefix/suffix checks |
-| `ContainsInOrder(needles, msg)` | Ordered substring membership |
-| `IsError(target, msg)` / `IsNotError(target, msg)` | `errors.Is` checks |
-| `Matches(pattern, msg)` | Regexp match on string/[]byte |
-| `IsApproximately(want, tol, msg)` | Numeric within tolerance |
-| `IsWithin(lo, hi, msg)` | Numeric in range |
-| `Panics(msg)` | Subject is `func()`; must panic |
+`ErrorIsNot` exists because "this is not that error" is a real assertion and `!errors.Is` inside `True` loses the message. Generated sentinel checks rely on it.
 
-Use whichever reads more clearly: positional for a single assertion, fluent for a sequence about the same subject.
+## Sequence
 
-## Directive-driven assertions
+`Sequence` checks a relation between every adjacent pair, which is how a monotonic or sorted property is stated without a loop:
 
-For semantic properties that match `//testkit:` directives, see [directive-assertions.md](directive-assertions.md) — 21 directive-driven assertions, cross-method invariants, HookRecorder, and suite options.
+```go
+testkit.Sequence(t, timestamps, func(earlier, later time.Time) bool {
+    return !later.Before(earlier)
+}, "timestamps must not go backwards")
+```
+
+The predicate receives the pair in order. A failure names the index, so a long slice still points at the offending element.
+
+## The fluent chain
+
+```go
+func Assert[T any](tb testing.TB, got T) *Assertion[T]
+```
+
+`Assert` starts a chain on one subject and returns an `*Assertion[T]`. Every method returns the same chain, and the chain stops at the first failure.
+
+```go
+testkit.Assert(t, resp.Body).
+    IsNotEmpty("a response must carry a body").
+    HasPrefix("{", "the body must be JSON").
+    Matches(`"id":\s*"\w+"`, "the body must carry an id")
+```
+
+Use it when several properties of one value are worth stating together. Use the plain functions when the subjects differ — a chain over three different values reads as one assertion and is not.
+
+| Method | Fails when |
+|---|---|
+| `Equals(want T, msg)` | `cmp.Diff` is non-empty |
+| `NotEquals(want T, msg)` | structurally equal |
+| `IsNil(msg)` / `IsNotNil(msg)` | the subject is non-nil / nil |
+| `IsEmpty(msg)` / `IsNotEmpty(msg)` | the subject is non-empty / empty |
+| `HasLen(want int, msg)` | the length is not `want` |
+| `Contains(needle any, msg)` / `NotContains(needle any, msg)` | the subject does not contain / contains `needle` |
+| `HasPrefix(prefix, msg)` / `HasSuffix(suffix, msg)` | the subject (string or `[]byte`) does not start / end with it |
+| `ContainsInOrder(needles []string, msg)` | the needles do not all appear, in order |
+| `Matches(pattern, msg)` | the subject does not match the regular expression |
+| `IsError(target error, msg)` / `IsNotError(target error, msg)` | `errors.Is` against `target` is false / true |
+| `IsApproximately(want, tolerance float64, msg)` | the subject is further than `tolerance` from `want` |
+| `IsWithin(lo, hi float64, msg)` | the subject falls outside `[lo, hi]` |
+| `Panics(msg)` | the subject (a `func()`) does not panic |
+
+`IsError` and `Panics` require the subject to be an `error` and a `func()` respectively; anything else fails the assertion rather than compiling away.
+
+## See also
+
+- [Directive assertions](directive-assertions.md) — the contract-shaped helpers: nil-safety, purity, bounds.
+- [Context assertions](context.md) — cancellation, deadline and timeout behaviour.
+- [Helpers](helpers.md) — `FailableTB`, for testing an assertion's failing path.

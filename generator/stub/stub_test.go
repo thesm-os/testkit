@@ -5,21 +5,18 @@ package stub_test
 
 import (
 	"maps"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	backendgolang "go.thesmos.sh/eidos/backend/golang"
-	"go.thesmos.sh/eidos/core/diag"
-	"go.thesmos.sh/eidos/core/opt"
-	"go.thesmos.sh/eidos/core/position"
+	"go.thesmos.sh/eidos/eidostest/golangtest"
 	"go.thesmos.sh/eidos/eidostest/pipelinetest"
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
-	"go.thesmos.sh/eidos/emit"
-	"go.thesmos.sh/eidos/node"
-	"go.thesmos.sh/eidos/plugin"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
-	"go.thesmos.sh/eidos/store"
+	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/stub"
@@ -42,11 +39,11 @@ func TestConformance(t *testing.T) {
 		plugintest.RunGeneratorSuite(t, stub.New(), []plugintest.GeneratorFixture{
 			{
 				Name:       "annotated interface",
-				BuildStore: func(t *testing.T) *store.Store { t.Helper(); return storeFixture(t) },
+				BuildStore: func(t *testing.T) *sdk.Store { t.Helper(); return storeFixture(t) },
 			},
 			{
 				Name: "empty store",
-				BuildStore: func(t *testing.T) *store.Store {
+				BuildStore: func(t *testing.T) *sdk.Store {
 					t.Helper()
 					return storefixture.New().Build()
 				},
@@ -216,7 +213,7 @@ func TestGenerate(t *testing.T) {
 		// A double with nothing to stand in for is a mistake. Emitting an
 		// empty struct would compile and hide it, so the plugin reports it.
 		s := emptyInterfaceFixture()
-		d := diag.New()
+		d := sdk.NewSink()
 
 		_ = stub.New().Generate(generatorContext(s, d))
 
@@ -227,7 +224,7 @@ func TestGenerate(t *testing.T) {
 		t.Parallel()
 		// A diagnosed fixture is skipped, not fatal: one bad interface must
 		// not stop every other interface in the run from generating.
-		err := stub.New().Generate(generatorContext(emptyInterfaceFixture(), diag.New()))
+		err := stub.New().Generate(generatorContext(emptyInterfaceFixture(), sdk.NewSink()))
 
 		testkit.NoError(t, err, "a reported interface must not abort the run")
 	})
@@ -236,7 +233,7 @@ func TestGenerate(t *testing.T) {
 		t.Parallel()
 		s := emptyInterfaceFixture()
 
-		_ = stub.New().Generate(generatorContext(s, diag.New()))
+		_ = stub.New().Generate(generatorContext(s, sdk.NewSink()))
 
 		testkit.Assert(t, s.Emit().PendingOriginSlots()).IsEmpty("a diagnosed interface emits nothing")
 	})
@@ -257,7 +254,7 @@ func TestGenerate(t *testing.T) {
 		// a double can stand in for, and an empty shell would satisfy and
 		// record nothing.
 		s := emptyFixture()
-		d := diag.New()
+		d := sdk.NewSink()
 
 		_ = stub.New().Generate(generatorContext(s, d))
 
@@ -315,9 +312,14 @@ func TestGenerate(t *testing.T) {
 		s := storeFixture(t)
 		s.Emit().Freeze()
 
-		err := stub.New().Generate(generatorContext(s, diag.New()))
+		err := stub.New().Generate(generatorContext(s, sdk.NewSink()))
 
 		testkit.Error(t, err, "a failed append must surface")
+		// Which declaration the run was on, not merely that something failed.
+		// The wrapping exists so a reader can find the source line, and an
+		// assertion that stops at "an error happened" passes just as well
+		// against one that names nothing.
+		testkit.Contains(t, err.Error(), "Store", "the error must name the declaration")
 	})
 
 	t.Run("names the plugin in a failed append so the fault is attributable", func(t *testing.T) {
@@ -325,7 +327,7 @@ func TestGenerate(t *testing.T) {
 		s := storeFixture(t)
 		s.Emit().Freeze()
 
-		err := stub.New().Generate(generatorContext(s, diag.New()))
+		err := stub.New().Generate(generatorContext(s, sdk.NewSink()))
 
 		testkit.Contains(t, err.Error(), stub.Name, "the error must name the plugin")
 	})
@@ -423,10 +425,19 @@ func TestSetOutputPackages(t *testing.T) {
 	})
 }
 
+// fixturePkg is the import path every multi-interface fixture declares.
+//
+// Named rather than repeated because an embed has to carry it: the Go frontend
+// records the declaring package on every named reference, in-package ones
+// included, and [sdk.StoreReader.MethodSet] resolves an embed by qualified name.
+// A fixture spelling a bare `Base` describes source no frontend produces, and
+// the method set it resolves to is short by everything the embed contributes.
+const fixturePkg = "example.com/storepkg"
+
 // storeFixture returns a store holding one `//testkit:stub` interface with a
 // named-return method, an unnamed-return method, and a void method — the
 // three shapes the signature rules discriminate on.
-func storeFixture(t *testing.T) *store.Store {
+func storeFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
@@ -449,7 +460,7 @@ func storeFixture(t *testing.T) *store.Store {
 // mixedFixture returns a store holding an annotated interface with one
 // ordinary method and one stamped integration-only, so the projection has
 // something to drop and something to keep.
-func mixedFixture(t *testing.T) *store.Store {
+func mixedFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
@@ -468,7 +479,7 @@ func mixedFixture(t *testing.T) *store.Store {
 
 // emptyFixture returns a store whose annotated interface declares no methods,
 // which is the one shape a double has nothing to stand in for.
-func emptyFixture() *store.Store {
+func emptyFixture() *sdk.Store {
 	return storefixture.New().
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
@@ -478,7 +489,7 @@ func emptyFixture() *store.Store {
 
 // orderedFixture returns a store whose Commit method may only follow Prepare,
 // stamped the way the orderafter mixin does.
-func orderedFixture() *store.Store {
+func orderedFixture() *sdk.Store {
 	return storefixture.New().
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
@@ -506,7 +517,7 @@ func stampMixin(m *storefixture.MethodBuilder, name string) {
 
 // emptyInterfaceFixture returns a store holding an annotated interface that
 // declares no methods — the shape the plugin diagnoses rather than emits.
-func emptyInterfaceFixture() *store.Store {
+func emptyInterfaceFixture() *sdk.Store {
 	return storefixture.New().
 		Interface("Empty", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
@@ -516,24 +527,24 @@ func emptyInterfaceFixture() *store.Store {
 
 // generatorContext wires a store and a diagnostic sink into the context the
 // generator phase would hand the plugin.
-func generatorContext(s *store.Store, d *diag.Sink) *plugin.GeneratorContext {
-	return &plugin.GeneratorContext{Store: s, Reader: store.NewReader(s), Diag: d}
+func generatorContext(s *sdk.Store, d *sdk.Sink) *sdk.GeneratorContext {
+	return &sdk.GeneratorContext{Store: s, Reader: sdk.NewStoreReader(s), Diag: d}
 }
 
 // withSuffix returns a plugin configured with the given suffix option.
 func withSuffix(t *testing.T, suffix string) *stub.Plugin {
 	t.Helper()
 	p := stub.New()
-	if err := p.SetOptions(opt.New(p.OptionsSchema(), map[string]string{"suffix": suffix})); err != nil {
+	if err := p.SetOptions(sdk.NewOptions(p.OptionsSchema(), map[string]string{"suffix": suffix})); err != nil {
 		t.Fatalf("SetOptions(%q): %v", suffix, err)
 	}
 	return p
 }
 
 // generate drives p over s and returns the queued contributions.
-func generate(t *testing.T, p *stub.Plugin, s *store.Store) []store.PendingOriginSlot {
+func generate(t *testing.T, p *stub.Plugin, s *sdk.Store) []sdk.PendingOriginSlot {
 	t.Helper()
-	if err := p.Generate(generatorContext(s, diag.New())); err != nil {
+	if err := p.Generate(generatorContext(s, sdk.NewSink())); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 	return s.Emit().PendingOriginSlots()
@@ -541,9 +552,9 @@ func generate(t *testing.T, p *stub.Plugin, s *store.Store) []store.PendingOrigi
 
 // generateDiagnostics drives p over s and returns what it reported, for the
 // cases where the diagnostic is the behaviour under test.
-func generateDiagnostics(t *testing.T, p *stub.Plugin, s *store.Store) []diag.Diag {
+func generateDiagnostics(t *testing.T, p *stub.Plugin, s *sdk.Store) []sdk.Diag {
 	t.Helper()
-	sink := diag.New()
+	sink := sdk.NewSink()
 	if err := p.Generate(generatorContext(s, sink)); err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
@@ -552,7 +563,7 @@ func generateDiagnostics(t *testing.T, p *stub.Plugin, s *store.Store) []diag.Di
 
 // split separates the queued contributions into the primary double and the
 // tagged companion, failing when either is absent.
-func split(t *testing.T, pending []store.PendingOriginSlot) (*stub.Stub, *stub.Tests) {
+func split(t *testing.T, pending []sdk.PendingOriginSlot) (*stub.Stub, *stub.Tests) {
 	t.Helper()
 	var (
 		double *stub.Stub
@@ -679,7 +690,7 @@ func TestWitnessCountMismatch(t *testing.T) {
 // it — an embedded bound plus the printed source form — because that is the
 // shape the derivation reads, and a fixture that carried only one of the two
 // would pass against a projection that read the wrong one.
-func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *store.Store {
+func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *sdk.Store {
 	t.Helper()
 	dir := storefixture.Directive("stub")
 	maps.Copy(dir.KV, kv)
@@ -687,7 +698,7 @@ func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *
 	// interface, so the witness read has to pass over one it does not own.
 	routing := storefixture.Directive("out", storefixture.Arg("storetest/"))
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(routing)
 			i.Directive(dir)
@@ -703,7 +714,7 @@ func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *
 }
 
 // bound builds the constraint the frontend produces for a written bound.
-func bound(name string) *node.Constraint {
+func bound(name string) *sdk.Constraint {
 	c := storefixture.Constraint(storefixture.Named(name))
 	c.Raw = name
 	return c
@@ -711,12 +722,12 @@ func bound(name string) *node.Constraint {
 
 // renderRef spells a witness the way the backend would, which is the only form
 // a reader of the generated file sees.
-func renderRef(t *testing.T, r emit.Ref) string {
+func renderRef(t *testing.T, r sdk.Ref) string {
 	t.Helper()
 	switch typed := r.(type) {
-	case *emit.BuiltinRef:
+	case *sdk.BuiltinRef:
 		return typed.Name
-	case *emit.ExternalRef:
+	case *sdk.ExternalRef:
 		return typed.Package + "." + typed.Name
 	default:
 		t.Fatalf("witness is %T, want a builtin or external reference", r)
@@ -728,7 +739,7 @@ func renderRef(t *testing.T, r emit.Ref) string {
 // one of those methods does not satisfy the interface it doubles — so what is
 // under test here is a resolution failure producing no artefact rather than a
 // partial one.
-func TestFlatten(t *testing.T) {
+func TestMethodSet(t *testing.T) {
 	t.Parallel()
 
 	t.Run("carries an embedded interface's methods", func(t *testing.T) {
@@ -737,20 +748,22 @@ func TestFlatten(t *testing.T) {
 		testkit.Len(t, double.Methods, 2, "the double carries the embedded method and its own")
 	})
 
-	t.Run("orders embedded methods before declared ones", func(t *testing.T) {
+	t.Run("orders declared methods before embedded ones", func(t *testing.T) {
 		t.Parallel()
-		// Source order, so the generated fields stay put as an embedded
-		// interface gains a method.
+		// The order [sdk.MethodSet] documents: the interface's own
+		// declarations, then each embed's contribution in embed order. What
+		// matters to the generated fields is that the order is fixed, so they
+		// stay put as an embedded interface gains a method.
 		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
-		testkit.Equal(t, double.Methods[0].Name, "Ping", "the embed contributes first")
-		testkit.Equal(t, double.Methods[1].Name, "Get", "the declared method follows")
+		testkit.Equal(t, double.Methods[0].Name, "Get", "the declared method comes first")
+		testkit.Equal(t, double.Methods[1].Name, "Ping", "the embed contributes after it")
 	})
 
 	t.Run("attributes an embedded method to the interface that carried it", func(t *testing.T) {
 		t.Parallel()
 		double, _ := split(t, generate(t, stub.New(), embeddedFixture(t, "Base")))
-		testkit.Equal(t, double.Methods[0].From, "Base", "the generated field says where it came from")
-		testkit.Equal(t, double.Methods[1].From, "", "a declared method is attributed to nothing")
+		testkit.Equal(t, double.Methods[0].From, "", "a declared method is attributed to nothing")
+		testkit.Equal(t, double.Methods[1].From, "Base", "the generated field says where it came from")
 	})
 
 	t.Run("emits nothing when an embed cannot be resolved", func(t *testing.T) {
@@ -773,14 +786,14 @@ func TestFlatten(t *testing.T) {
 		// Every other interface in the same run still generates, so one
 		// unreachable dependency does not cost a project its doubles.
 		diags := generateDiagnostics(t, stub.New(), embeddedFixture(t, "Missing"))
-		testkit.Equal(t, diags[0].Severity, diag.Warn,
+		testkit.Equal(t, diags[0].Severity, sdk.SeverityWarn,
 			"an unreachable embed is a warning, not a failure")
 	})
 }
 
 // A diagnostic naming a bare `Closer` sends the author looking in the wrong
 // package, so an embed is spelled the way the source wrote it.
-func TestFlattenForeignEmbed(t *testing.T) {
+func TestMethodSetForeignEmbed(t *testing.T) {
 	t.Parallel()
 
 	t.Run("qualifies an embed from another package", func(t *testing.T) {
@@ -802,10 +815,10 @@ func TestFlattenForeignEmbed(t *testing.T) {
 }
 
 // foreignEmbedFixture returns an interface embedding one from another package.
-func foreignEmbedFixture(t *testing.T) *store.Store {
+func foreignEmbedFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Stream", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed("io", "Closer"))
@@ -818,10 +831,10 @@ func foreignEmbedFixture(t *testing.T) *store.Store {
 
 // unionTermFixture returns an interface whose embed list holds a term with no
 // name, as a type set does.
-func unionTermFixture(t *testing.T) *store.Store {
+func unionTermFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Termed", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.Slice(storefixture.Named("byte")))
@@ -834,16 +847,40 @@ func unionTermFixture(t *testing.T) *store.Store {
 
 // The embed walk has three arms nothing in the corpus reaches, each of which
 // would corrupt a method set rather than fail loudly if it were wrong.
-func TestFlattenEdges(t *testing.T) {
+func TestMethodSetEdges(t *testing.T) {
 	t.Parallel()
 
 	t.Run("terminates on a cyclic embed graph", func(t *testing.T) {
 		t.Parallel()
 		// Illegal in Go and unreachable from a real frontend, so the guard is
 		// checked against a hand-built graph — a malformed one should cost a
-		// diagnostic rather than the process.
+		// diagnostic rather than the process. The walk breaks the cycle only
+		// after the interface it points back at has contributed, so the set is
+		// short of nothing and the double is still worth emitting.
 		pending := generate(t, stub.New(), cyclicFixture(t))
 		testkit.Len(t, pending, 2, "a cycle still yields the double and its companion")
+	})
+
+	t.Run("reports the cycle it broke out of", func(t *testing.T) {
+		t.Parallel()
+		// Emitting anyway is not the same as saying nothing: the source is
+		// illegal Go, and a run that generated a working double from it without
+		// a word would leave the author to find that out from the compiler.
+		diags := generateDiagnostics(t, stub.New(), cyclicFixture(t))
+		testkit.Len(t, diags, 1, "a cycle is reported once")
+		testkit.Equal(t, diags[0].Severity, sdk.SeverityWarn,
+			"a cycle costs no method, so it is a warning")
+	})
+
+	t.Run("refuses an embed that resolves to something other than an interface", func(t *testing.T) {
+		t.Parallel()
+		// Distinct from an embed this run did not load: no wider run repairs a
+		// struct in an embed list, so the author must be sent to their source
+		// rather than to their -target filter.
+		diags := generateDiagnostics(t, stub.New(), structEmbedFixture(t))
+		testkit.Len(t, diags, 1, "a non-interface embed is reported once")
+		testkit.Equal(t, diags[0].Severity, sdk.SeverityError,
+			"a source defect is an error, not a warning")
 	})
 
 	t.Run("carries an unresolved embed up through a nested one", func(t *testing.T) {
@@ -865,38 +902,55 @@ func TestFlattenEdges(t *testing.T) {
 }
 
 // cyclicFixture returns two interfaces embedding each other.
-func cyclicFixture(t *testing.T) *store.Store {
+func cyclicFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("A", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Embed(storefixture.Named("B"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "B"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
 		}).
 		Interface("B", func(i *storefixture.InterfaceBuilder) {
-			i.Embed(storefixture.Named("A"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "A"))
+		}).
+		Build()
+}
+
+// structEmbedFixture returns an interface embedding a struct, which resolves
+// to a declaration that cannot carry a method set.
+func structEmbedFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("storepkg", fixturePkg).
+		Struct("Config", nil).
+		Interface("Broken", func(i *storefixture.InterfaceBuilder) {
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "Config"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
 		}).
 		Build()
 }
 
 // nestedMissingFixture returns an interface whose embed embeds something the
 // store does not hold.
-func nestedMissingFixture(t *testing.T) *store.Store {
+func nestedMissingFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Middle", func(i *storefixture.InterfaceBuilder) {
-			i.Embed(storefixture.Named("Missing"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "Missing"))
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
 		}).
 		Interface("Outer", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Embed(storefixture.Named("Middle"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "Middle"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
@@ -906,7 +960,7 @@ func nestedMissingFixture(t *testing.T) *store.Store {
 
 // overlappingFixture returns an interface embedding two that declare the same
 // method.
-func overlappingFixture(t *testing.T) *store.Store {
+func overlappingFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	shared := func(i *storefixture.InterfaceBuilder) {
 		i.Method("Close", func(m *storefixture.MethodBuilder) {
@@ -914,27 +968,27 @@ func overlappingFixture(t *testing.T) *store.Store {
 		})
 	}
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Left", shared).
 		Interface("Right", shared).
 		Interface("Both", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Embed(storefixture.Named("Left"))
-			i.Embed(storefixture.Named("Right"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "Left"))
+			i.Embed(storefixture.PkgNamed(fixturePkg, "Right"))
 		}).
 		Build()
 }
 
 // A generic embed's methods name the embedded interface's type parameters, not
-// the embedder's, and flattening copies signatures without substituting them.
-func TestFlattenGenericEmbed(t *testing.T) {
+// the embedder's, and resolution copies signatures without substituting them.
+func TestMethodSetGenericEmbed(t *testing.T) {
 	t.Parallel()
 
 	t.Run("refuses an embed carrying type arguments", func(t *testing.T) {
 		t.Parallel()
 		diags := generateDiagnostics(t, stub.New(), genericEmbedFixture(t))
 		testkit.Len(t, diags, 1, "a generic embed is reported once")
-		testkit.Equal(t, diags[0].Severity, diag.Error,
+		testkit.Equal(t, diags[0].Severity, sdk.SeverityError,
 			"a substitution the projection cannot do is an error, not a warning")
 	})
 
@@ -977,11 +1031,11 @@ func TestStubGeneric(t *testing.T) {
 }
 
 // genericEmbedFixture returns an interface embedding a generic one at an
-// instantiation, which is the shape flattening cannot carry.
-func genericEmbedFixture(t *testing.T) *store.Store {
+// instantiation, which is the shape resolution cannot carry.
+func genericEmbedFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Base", func(i *storefixture.InterfaceBuilder) {
 			i.TypeParam("K", bound("any"))
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
@@ -990,7 +1044,7 @@ func genericEmbedFixture(t *testing.T) *store.Store {
 		}).
 		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Embed(instantiated("Base", "string"))
+			i.Embed(instantiated(fixturePkg, "Base", "string"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
@@ -999,18 +1053,18 @@ func genericEmbedFixture(t *testing.T) *store.Store {
 }
 
 // instantiated builds a reference to a generic type at one type argument.
-func instantiated(name, arg string) *node.TypeRef {
-	ref := storefixture.Named(name)
-	ref.TypeArgs = []*node.TypeRef{storefixture.Named(arg)}
+func instantiated(pkg, name, arg string) *sdk.TypeRef {
+	ref := storefixture.PkgNamed(pkg, name)
+	ref.TypeArgs = []*sdk.TypeRef{storefixture.Named(arg)}
 	return ref
 }
 
 // wideGenericFixture returns an interface with more type parameters than the
 // witness palette holds.
-func wideGenericFixture(t *testing.T) *store.Store {
+func wideGenericFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Wide", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			for _, n := range []string{"A", "B", "C", "D", "E", "F", "G", "H", "I"} {
@@ -1026,10 +1080,10 @@ func wideGenericFixture(t *testing.T) *store.Store {
 // embeddedFixture returns a store whose Composed interface embeds embedName
 // and declares one method of its own. Naming an interface the store does not
 // hold exercises the unresolvable path.
-func embeddedFixture(t *testing.T, embedName string) *store.Store {
+func embeddedFixture(t *testing.T, embedName string) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Base", func(i *storefixture.InterfaceBuilder) {
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
@@ -1037,7 +1091,7 @@ func embeddedFixture(t *testing.T, embedName string) *store.Store {
 		}).
 		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
-			i.Embed(storefixture.Named(embedName))
+			i.Embed(storefixture.PkgNamed(fixturePkg, embedName))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Named("error"))
 			})
@@ -1200,14 +1254,25 @@ func renderFixture(t *testing.T) *pipelinetest.Pipeline {
 }
 
 // fixturePackage is storeFixture's package node, for the synthetic frontend.
-func fixturePackage() *node.Package {
+func fixturePackage() *sdk.Package { return fixtureBuilder().PackageNode() }
+
+// fixtureBuilder is the fixture itself, kept as the builder rather than only
+// its package node so [Builder.GoSource] can project the hand-written package
+// the generated double references.
+//
+// That projection is what makes the toolchain assertions mean anything. A
+// double is checked against the interface it doubles, and supplying that
+// interface as a separately maintained support file makes the fixture that
+// drove the run and the source it stands for two things that can disagree —
+// silently, because a stale support file still compiles.
+func fixtureBuilder() *storefixture.Builder {
 	return storefixture.New().
-		Package("storepkg", "example.com/storepkg").
+		Package("storepkg", fixturePkg).
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			// Layout composes the output filename from the source basename,
 			// so the fixture needs a position for the rendered names to be
 			// anything other than a bare suffix.
-			i.Pos(position.At("storepkg/store.go", 1, 1))
+			i.Pos(sdk.At("storepkg/store.go", 1, 1))
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
@@ -1220,6 +1285,110 @@ func fixturePackage() *node.Package {
 				m.Return(storefixture.Named("error"))
 			})
 			i.Method("Close", nil)
-		}).
-		PackageNode()
+		})
+}
+
+// What the double is FOR is standing in for the interface, and nothing above
+// this point checks that it does.
+//
+// Every structural assertion in this file passes against a double that does not
+// satisfy Store: a dropped variadic marker, a method lost through an embed, or a
+// return whose type shifted all compile perfectly and satisfy nothing. Only the
+// compiler can say otherwise, so these four assertions are the ones that make
+// the rest of the suite mean something.
+//
+// The toolchain is shelled out to once per assertion at roughly a second each,
+// so the module is built once here and the four share it rather than each
+// standing up its own.
+func TestGeneratedCodeHoldsUp(t *testing.T) {
+	t.Parallel()
+
+	gen := generatedModule(t)
+
+	t.Run("compiles against the package it doubles", func(t *testing.T) {
+		t.Parallel()
+		gen.AssertCompiles(t)
+	})
+
+	t.Run("passes go vet", func(t *testing.T) {
+		t.Parallel()
+		// Catches what compiling does not: an unused local, a shadowed
+		// variable, a Printf verb that does not match its argument.
+		gen.AssertVets(t)
+	})
+
+	t.Run("satisfies the interface it doubles", func(t *testing.T) {
+		t.Parallel()
+		// The whole contract, in one line the compiler decides.
+		gen.AssertSatisfies(t, "StoreStub", "Store")
+	})
+
+	t.Run("the companion it emits passes", func(t *testing.T) {
+		t.Parallel()
+		// This generator emits a test suite, and until now nothing ran it. A
+		// generated check that cannot fail is worse than no check: it reports
+		// the double as verified having asserted nothing.
+		gen.AssertTestsPass(t)
+	})
+}
+
+func generatedModule(t *testing.T) *golangtest.Generated {
+	t.Helper()
+	b := fixtureBuilder()
+	// A double imports the testkit runtime — clock, rand and stub — so a module
+	// holding only the generated files cannot resolve them, and the sandbox
+	// runs with GOPROXY=off. WithRequire wires the checkout in and raises the
+	// throwaway module's go directive to the runtime's own floor, which is what
+	// keeps the assertion honest: it builds against the runtime in this tree,
+	// not a published one that may differ.
+	return golangtest.Render(t, backendgolang.New(), b.PackageNode(), stub.New()).
+		WithSource(golangtest.GoFile(b.GoSource())).
+		WithRequire(stub.Module, filepath.Join("..", ".."))
+}
+
+// A constraint interface carries a type set rather than a method-set contract,
+// so there is nothing for a double to stand in for.
+//
+// Declined by reading the Go frontend's own stamp, which is the only answer
+// that knows: a term like `~MyInt` is a Named reference and indistinguishable
+// by shape from an interface the run did not load, so leaving it to the embed
+// walk reports it as an unresolved embed — naming a type the author never
+// wrote.
+func TestGenerateDeclinesAConstraint(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits nothing for a constraint", func(t *testing.T) {
+		t.Parallel()
+		testkit.Assert(t, generate(t, stub.New(), constraintFixture(t))).
+			IsEmpty("a type set has no behaviour to double")
+	})
+
+	t.Run("says why rather than complaining about an embed", func(t *testing.T) {
+		t.Parallel()
+		// The failure this replaces reported "embeds %q, which was not loaded"
+		// against `~int` — a term the author wrote as a type set, not as an
+		// embed, and which no wider run would ever resolve.
+		got := plugintest.Generate(t, stub.New(), constraintFixture(t)).Diagnostics()
+		testkit.Len(t, got, 1, "a declined constraint is reported once")
+		testkit.Contains(t, got[0].Message, "generic constraint",
+			"the diagnostic names what the declaration actually is")
+	})
+}
+
+// constraintFixture is `interface{ ~int | ~float64 }` carrying the directive,
+// stamped the way the Go frontend stamps one.
+func constraintFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	b := storefixture.New().
+		Package("storepkg", fixturePkg).
+		Interface("Numeric", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Directive(storefixture.Directive("stub"))
+			i.Embed(storefixture.Named("int"))
+			i.Embed(storefixture.Named("float64"))
+		})
+	for _, iface := range b.PackageNode().Interfaces {
+		golang.MetaIsConstraintInterface.Set(iface.EnsureMeta(), true, "test")
+	}
+	return b.Build()
 }

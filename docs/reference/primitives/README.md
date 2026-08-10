@@ -1,50 +1,56 @@
-# testkit Primitives
+# Primitives
 
-Reusable test utilities provided by the `testkit` module. Every primitive is generic, domain-agnostic, and safe for concurrent use in parallel tests.
+The runtime half of testkit. Generated code calls into these packages, and a hand-written test can call them directly — nothing here requires a generator.
 
-testkit has zero knowledge of any consuming project's types. Domain-specific test infrastructure (stubs, fixtures, simulators) lives in each project's `*test` packages — testkit provides the building blocks those packages compose.
+Every function takes `testing.TB` first and a message last. The message is not decoration: it is what a reader sees when the assertion fires, and the assertion has no other way to say what it was checking.
 
-## Dependencies
+## Packages
 
-The core `testkit` package depends on:
+### What a test calls
 
-- `github.com/google/go-cmp/cmp` — structural diff for deep equality assertions
-- `pgregory.net/rapid` — property-based testing generators
+| Import | Provides | Page |
+|---|---|---|
+| `go.thesmos.sh/testkit` | Assertions, the fluent chain, contract helpers, benchmark budgets, fixtures | [assertions](assertions.md), [directive assertions](directive-assertions.md), [context](context.md), [benchmarking](benchmarking.md), [helpers](helpers.md) |
+| `go.thesmos.sh/testkit/stub` | The dispatch engine, recorder, gates and order tracker generated doubles embed | [method stub](method-stub.md), [recording](recording.md), [order tracker](order-tracker.md), [behaviour suites](behaviour-suites.md) |
+| `go.thesmos.sh/testkit/clock` | Deterministic time | [clock](clock.md) |
+| `go.thesmos.sh/testkit/fault` | Composable fault-injection strategies | [fault injection](fault-injection.md) |
+| `go.thesmos.sh/testkit/rand` | Deterministic random sources | [rand](rand.md) |
+| `go.thesmos.sh/testkit/polling` | Wait-for-condition helpers | [polling](polling.md) |
+| `go.thesmos.sh/testkit/concurrency` | Stress runs, leak detection, timeouts | [concurrency](concurrency.md) |
+| `go.thesmos.sh/testkit/golden` | Golden-file comparison and scrubbing | [golden files](golden-files.md) |
 
-Optional sub-packages have additional dependencies — see [sub-packages.md](../sub-packages.md).
+### What a run produces
 
-## Catalog
+`core/*` is the substrate behind observation and reporting. Generated code and the engine call into it; a hand-written test rarely does.
 
-| Document | Surface |
-|----------|---------|
-| [Assertions](assertions.md) | Positional + fluent helpers with go-cmp diffs |
-| [Directive assertions](directive-assertions.md) | 21 directive-driven contract assertions, cross-method invariants, HookRecorder, suite options |
-| [MethodStub](method-stub.md) | Generic per-method test double — recording, faults, clock, strict, verify |
-| [Recording](recording.md) | `Recorder[T]` with filtering, waiting, hooks, gating, timestamping, bench mode |
-| [Fault injection](fault-injection.md) | `Fault` interface + 5 strategies (counted, retry, probability, windowed, predicate) + `And`/`Or` composition |
-| [Clock](clock.md) | `Clock` interface + `RealClock` + `TestClock` for deterministic time |
-| [OrderTracker](order-tracker.md) | Cross-method call-order constraints (driven by `//testkit:order-after`) |
-| [RandSource](rand.md) | Pluggable RNG for probabilistic faults; defaults to `math/rand/v2`, `FixedRandSource` for tests |
-| [Concurrency](concurrency.md) | `ConcurrentStress`, `GoroutineLeak`, `Timeout`, goroutine capture utilities |
-| [Benchmarking](benchmarking.md) | `Contract` for allocation and latency gates |
-| [Golden files](golden-files.md) | `AssertGolden`, `AssertGoldenAt`, `AssertGoldenJSONField`, `Compare` + scrubbers |
-| [Polling](polling.md) | `RetryUntil`, `AssertEventually` |
-| [Helpers](helpers.md) | `TestError`, `RequireEnv`, `SeededRand`, `MustMarshal`, `Quiet`, `FailableTB`, `TempFile`, `FreePort`, `SortedKeys`, `TableTest`, `MapDiff`, rapid generators |
+| Import | Provides | Page |
+|---|---|---|
+| `go.thesmos.sh/testkit/core/factory` | Named implementations and the `TESTKIT_SEED` contract | [factory](factory.md) |
+| `go.thesmos.sh/testkit/core/trace` | Method-call observations, queryable and causal | [trace](trace.md) |
+| `go.thesmos.sh/testkit/core/failure` | The classified failure envelope and its artifacts | [failure](failure.md) |
+| `go.thesmos.sh/testkit/core/coverage` | Law, requirement and state-space coverage | [coverage](coverage.md) |
+| `go.thesmos.sh/testkit/core/equivalence` | Pluggable equivalence relations for differential comparison | [equivalence](equivalence.md) |
+| `go.thesmos.sh/testkit/core/visualize` | Self-contained HTML timelines | [visualize](visualize.md) |
+| `go.thesmos.sh/testkit/core/brand` | The project identity every artifact keys off | [brand](brand.md) |
 
-## Sub-packages
+**`core/equivalence`, `core/visualize` and `core/factory` ship ahead of their consumers.** Their package docs name `model`, `sim`, `chaos`, `differential-rollout` and `replay`, none of which is implemented — see the [generator index](../generators/README.md). All three work standalone today; `factory.SeedFromEnv` in particular defines environment variables worth knowing about now.
 
-| Package | Description |
-|---------|-------------|
-| [`testkit/container`](../sub-packages.md#testkitcontainer) *(not implemented)* | `SharedContainer` via `testcontainers-go` |
-| [`testkit/httptest`](../sub-packages.md#testkithttptest) | HTTP response assertions |
-| [`testkit/oteltest`](../sub-packages.md#testkitoteltest) | OpenTelemetry metric assertions |
-| [`testkit/clitest`](../sub-packages.md#testkitclitest) | CLI binary testing |
+Each top-level sub-package is a separate module path but ships from this repository ([ADR-0005](../../adr/0005-split-into-published-modules.md)). A package earns its place at the top level by being imported on its own ([ADR-0007](../../adr/0007-earn-top-level-packages-by-import.md)) — which is why `clock` and `rand` are not folded into `stub` despite being consumed mostly by it.
 
-## Out of scope
+## Fatal, not error
 
-The following live in each project's own `*test` packages because they depend on project-specific types:
+Every assertion calls `tb.Fatalf`. None of them returns a bool for the caller to branch on.
 
-- **Pagination cursors** — depend on project-specific page types.
-- **Codec harnesses** — depend on project-specific codec interfaces. testkit's `codec` generator produces them from proto descriptors.
-- **State fixtures** — depend on project-specific state key types. testkit's `builder` generator produces them.
-- **Simulation engines** — projects define their own engine. testkit provides `Recorder` (with hooks, gating, waiting) as the observation layer and the `sim` generator as the harness — but the engine itself is consumer-owned.
+That is deliberate. An assertion that returns leaves the test running against state it has already declared wrong, and the second failure is usually a consequence of the first — so the output names two problems where there is one. Where a test genuinely needs to continue, `Assert` chains, and the chain stops at the first failure for the same reason.
+
+## Testing the assertions themselves
+
+An assertion that never fails is not an assertion, and `tb.Fatalf` makes the failing path hard to reach from a test. [`FailableTB`](helpers.md#failabletb) is the answer: a `testing.TB` that records the first fatal message instead of aborting, so a test can drive an assertion into failure and check what it said.
+
+```go
+ft := testkit.NewFailableTB()
+testkit.Equal(ft, 1, 2, "counts must match")
+
+testkit.True(t, ft.Failed(), "the assertion must have fired")
+testkit.Contains(t, ft.Msg(), "counts must match", "the message must reach the reader")
+```

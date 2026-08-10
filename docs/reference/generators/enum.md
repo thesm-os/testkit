@@ -1,157 +1,145 @@
 # Enum
 
-The `enum` generator is a "Static" conformance tier tool. It scans `const` blocks of named integer types and emits a test file (`_test.go`) along with a wire-compat JSON golden file (`_wire.json`) to aggressively verify the safety and stability of your hand-written enums. Optional methods (`String`, `Parse<Type>`, `MarshalText`, `MarshalJSON`) are detected automatically; their round-trip tests are appended when the methods exist.
+A Go enum is a convention, not a language feature: a defined type and a block of typed constants. Nothing stops a conversion admitting a value outside the set, nothing notices when a variant is added without the switch arm it needs, and nothing relates the type's textual form to the values it was declared with.
 
-## Directive
+Each of those is a one-line mistake that compiles. The `enum` generator writes the textual surface and the checks that hold the type to what its declaration says.
 
-```go
-//go:generate testkit enum -o enum.gen_test.go Status
-
-// Multiple enums in one file:
-//go:generate testkit enum -o enum.gen_test.go Status Priority Region
-```
-
-## Default output
-
-The generator emits two files in the source package directory:
-
-1. `<subject>_enum.gen_test.go` (or your chosen `-o` path) — The test file.
-2. `<subject>_wire.json` — A committed golden file mapping constant names to their exact integer values.
-
-## What is generated
-
-### Always-emitted subtests
-
-For every enum:
+## The directive
 
 ```go
-func TestStatusEnum(t *testing.T) {
-    type enumEntry struct {
-        value   basic.Status
-        name    string
-        wantStr string  // only when stringer is detected
-    }
-    all := []enumEntry{
-        {value: basic.StatusActive,  name: "StatusActive",  wantStr: "Active"},
-        {value: basic.StatusClosed,  name: "StatusClosed",  wantStr: "Closed"},
-        {value: basic.StatusPending, name: "StatusPending", wantStr: "Pending"},
-    }
-
-    t.Run("exhaustive", ...)              // len(all) matches the declared count
-    t.Run("zero value is StatusPending", ...)  // first iota declaration
-    t.Run("all values are distinct", ...) // no two constants alias the same int
-    t.Run("wire compat", ...)             // const→int matches _wire.json golden
-}
+//testkit:enum
+type Status int
 ```
 
-The constant list is sorted alphabetically by name.
+| Key | Value | Effect |
+|---|---|---|
+| `methods` | `off` | Suppresses the generated methods, leaving only the checks. |
 
-### Stringer-conditional subtests
-
-Emitted when the enum has a `String() string` method:
+A variant overrides its own textual form with `//testkit:value`, for the case where the derived spelling clashes with a protocol's and the derivation cannot be taught about it:
 
 ```go
-t.Run("stringer", ...)                         // every name → expected string
-t.Run("out of range uses fallback format", ...) // Status(N) for N == len(all)
+const (
+    Draft Status = iota + 1
+    Published
+    Archived //testkit:value archived-v2
+)
 ```
 
-The "out of range" subtest constructs a value just past the last declared constant and asserts the stringer falls back to `"<Type>(<int>)"` format.
+## The textual form follows the underlying type
 
-### ParseX round-trip
+This is the one rule worth reading before anything else, because getting it wrong is invisible.
 
-Emitted when a top-level `Parse<Type>(string) (<Type>, error)` exists:
+**For a numeric enum the identifier is the only textual form the declaration carries.** `StatusActive` on `type Status int` renders as `Active` — the type name is context wherever the value appears, and repeating it is noise in every log line.
+
+**For a string enum the value _is_ the textual form, and it is already written down.**
 
 ```go
-t.Run("parse round-trip", ...)            // Parse(value.String()) → value
-t.Run("parse rejects unknown string", ...) // Parse("<invalid-Type>") → error
+//testkit:enum
+type Region string
+
+const (
+    US Region = "us-east"
+    EU Region = "eu-west"
+    AP Region = "ap-south"
+)
 ```
 
-### MarshalText round-trip
+`US` renders as `us-east` and parses from it. Deriving `US` instead would discard the only thing the declaration said and break every value arriving from JSON, a database column or a query parameter — while still round-tripping against itself, so the failure would be invisible to a check that only tested the generated pair against itself.
 
-Emitted when both `MarshalText` and `UnmarshalText` are defined:
+## Where the output goes
+
+Two files, and neither can be routed elsewhere.
+
+| Tag | Suffix | Contents |
+|---|---|---|
+| _(primary)_ | `.enum_gen.go` | The methods and functions, in the type's own package |
+| `test` | `.enum_test.go` | The checks, in the external test package |
+
+The generated API declares methods on the enum's type, which Go permits only in that type's own package. An `//testkit:out` sending it away produces a file naming an undefined type. The checks travel with it and take the external test package the `_test.go` ending gives them.
+
+## What it generates
+
+For `type Status int` with variants `Draft`, `Published`, `Archived`:
 
 ```go
-t.Run("marshal text round-trip", ...)         // MarshalText → UnmarshalText
-t.Run("unmarshal rejects unknown text", ...)  // UnmarshalText("<invalid>") → error
+func (v Status) String() string
+func (v Status) IsValid() bool
+func (v Status) MarshalText() ([]byte, error)
+func (v *Status) UnmarshalText(text []byte) error
+
+func ParseStatus(s string) (Status, error)
+func StatusValues() []Status
+
+var ErrUnknownStatus = errors.New("status: unknown Status value")
 ```
 
-### JSON round-trip
+Two details in the bodies are worth knowing:
 
-Emitted when both `MarshalJSON` and `UnmarshalJSON` are defined:
+**`String` renders an out-of-range value as itself**, `Status(7)`, rather than as any variant. A corrupt value stays visible in a log rather than passing for a good one.
 
-```go
-t.Run("json round-trip", ...)                // json.Marshal → json.Unmarshal
-t.Run("json unmarshal rejects unknown", ...) // unknown string → error
-```
+**`StatusValues` returns a fresh slice per call.** A package-level one would let any caller reorder or overwrite the set every other caller reads.
 
-### Plain-iota enums
+### Text rather than JSON
 
-When an enum has no String/Parse/Marshal methods (a bare `iota` block), the generator emits only the always-emitted subtests:
+`MarshalText` over `MarshalJSON`: `encoding/json` reaches for `TextMarshaler` on its own and so does YAML, and it is what makes the type legal as a **map key**, which a JSON marshaller alone does not.
 
-```go
-func TestPriorityEnum(t *testing.T) {
-    all := []enumEntry{ /* sorted by name */ }
-    t.Run("exhaustive", ...)
-    t.Run("zero value is PriorityLow", ...)
-    t.Run("all values are distinct", ...)
-    t.Run("wire compat", ...)
-}
-```
+### Anything the type already declares is skipped
 
-The struct does not contain `wantStr` or anything else only useful for stringers.
+An author who wrote their own `String` meant to keep it, and a second declaration is a redeclaration error in their own package against a file they did not write. So the generator stands down — and it stands down for a group, not just the one method:
 
-## What it locks in
+| Already declared | Also skipped | Why |
+|---|---|---|
+| `String` | `Parse<T>`, `<T>Values`, `UnmarshalText` | `Parse` and `Values` are package-level rather than methods, so a same-named declaration is invisible to the enum node — a generator emitting them anyway would shadow whatever the author wrote. `UnmarshalText` is written in terms of `Parse`. |
 
-| Property | Why it matters |
-|----------|----------------|
-| Exhaustiveness | If a constant is added but the test is not regenerated, the count mismatch fails immediately |
-| Zero value | The zero value is the first iota declaration — explicit assertion catches reordering |
-| Distinct values | No two constants share an integer value (catches accidental `iota` arithmetic bugs) |
-| Wire compat | Catch accidental integer value shifting that breaks database/API serialization |
-| Stringer | Every named value renders to the expected string |
-| Out-of-range fallback | Strings that aren't named values render as `"<Type>(N)"` |
-| Parse round-trip | `Parse(v.String()) == v` for every named value |
-| Parse rejection | Unknown strings return an error |
-| Text/JSON round-trip | Marshal-Unmarshal preserves identity |
-| Text/JSON rejection | Unknown encoded values return an error |
+What survives in that case is `IsValid` and `MarshalText`, which depend on neither. `methods=off` suppresses all of them at once and leaves the checks in place.
 
-## Detection rules
+## What the checks assert
 
-- **Stringer**: method `String() string` on the enum type
-- **Parse**: top-level function `Parse<Type>(s string) (<Type>, error)` in the same package
-- **MarshalText**: both `MarshalText() ([]byte, error)` on the value receiver and `UnmarshalText([]byte) error` on the pointer receiver
-- **MarshalJSON**: both `MarshalJSON() ([]byte, error)` and `UnmarshalJSON([]byte) error`
+Three functions in `<basename>.enum_test.go`.
 
-If only one half of a Marshal pair is present, neither subtest is emitted — partial round-trip is not testable.
+### Test\<T\>Variants
 
-## Updating the Wire Golden File
+| Subtest | What a failure means |
+|---|---|
+| `declares exactly N variants` | A variant was added or removed without the test being regenerated. |
+| `no two variants share a value` | Two names for one value make a `switch` unreachable in one arm. |
+| `no two variants share a textual form` | The round trip cannot be a bijection; one of them will not survive it. |
+| `a value outside the set is not valid` | `IsValid` admits a value a conversion produced. |
+| `every declared variant is valid` | `IsValid` rejects something the declaration says exists. |
+| `the zero value is not a declared variant` / `the zero value is <Variant>` | The subtest adapts to what the declaration chose. Starting at `iota + 1` makes an unset value invalid; starting at `iota` makes it mean the first variant. Both are legitimate, and the check pins whichever was written. |
 
-If you deliberately change an integer value or add a new constant, the wire-compat test will fail. To accept the new schema, run:
+### Test\<T\>Text
 
-```bash
-go test -update
-```
+| Subtest | What a failure means |
+|---|---|
+| `every variant survives String and back` | `String` and `Parse` disagree for some variant. |
+| `text naming no variant is refused` | `Parse` admits a string the declaration never mentioned. |
+| `a value outside the set does not render as one inside it` | `String`'s fallback collides with a declared variant's rendering. |
 
-This overwrites the `_wire.json` file with the new mapping, which you then commit to source control.
+### Test\<T\>Marshalling
 
-## Why
+| Subtest | What a failure means |
+|---|---|
+| `every variant survives a marshal round trip` | `MarshalText` and `UnmarshalText` disagree. |
+| `text naming no variant is refused on unmarshal` | Unmarshalling admits an undeclared value, usually straight from a wire payload. |
 
-Enum types accumulate silent bugs: a new constant added without test coverage, a stringer not regenerated so the new value prints as `Status(4)` in logs, a Marshal pair where one side was hand-written and drifted from the other, or an `iota` shift that silently breaks your database. The generator catches all of these at `go test` time, in seconds. Adding a new constant to the source forces regeneration, and the generated test asserts every property against the new constant set.
+## Declaring an enum the checks can hold
 
-## Layout Conventions
+Two choices in the source make the difference between checks that mean something and checks that pass vacuously.
 
-Unlike the `suite` and `stub` generators which write to a `<pkg>test/` sub-package, the `enum` generator writes its output directly into the source package directory, but scoped as a `_test.go` file.
+**Leave no gap in a numeric sequence.** A gap is indistinguishable from an out-of-range value in the fallback check, and the boundary the check probes is the one past the last declared variant.
 
-**What goes where:**
+**For a string enum, do not let one value be a prefix of another.** A prefix makes the fallback indistinguishable from a declared value under a naive match.
+
+## Layout conventions
 
 | File | Owner | Contents |
-|------|-------|----------|
-| `types.go` | Developer | The source file containing the `type Status int` and `const (...)` block. |
-| `*_enum.gen_test.go` | Generator | The static verification suite asserting the enum's invariants. |
-| `*_wire.json` | Generator | The committed golden file tracking exact integer allocations. |
-
-Because `_test.go` files and `_wire.json` files are excluded from the final production binary, this layout provides 100% test coverage without bloating the compiled artifact.
+|---|---|---|
+| `iface.go` | Developer | The type, its variants, and the directive |
+| `iface.enum_gen.go` | Generator | `String`, `Parse`, `Values`, `IsValid`, the marshallers, the sentinel. Do not edit. |
+| `iface.enum_test.go` | Generator | The checks. Do not edit. |
 
 ## See also
 
-- [Generators / Overview](README.md)
+- [Sentinel](sentinel.md) — for the `ErrUnknown<T>` sentinel the parse failure returns, and the rest of a package's error contract.
+- [Assertions](../primitives/assertions.md) — the assertion functions the generated checks call.

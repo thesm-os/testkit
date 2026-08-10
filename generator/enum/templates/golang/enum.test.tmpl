@@ -14,15 +14,19 @@
 {{- end }}
 {{- end -}}
 
+{{- /* Every cross-package symbol is composed with the backend's own
+       `external <path> <Symbol>`, which registers the import as it renders.
+       The testkit path comes off the emit value ($.Runtime) rather than being
+       spelled here, so the day the module moves no template changes. */ -}}
 {{- define "enum.test" -}}
-{{- $T := enumRef "testing.T" -}}
-{{- $equal := enumRef "testkit.Equal" -}}
-{{- $notEqual := enumRef "testkit.NotEqual" -}}
-{{- $true := enumRef "testkit.True" -}}
-{{- $false := enumRef "testkit.False" -}}
-{{- $len := enumRef "testkit.Len" -}}
-{{- $noError := enumRef "testkit.NoError" -}}
-{{- $errorIs := enumRef "testkit.ErrorIs" -}}
+{{- $T := external "testing" "T" -}}
+{{- $equal := external $.Runtime "Equal" -}}
+{{- $notEqual := external $.Runtime "NotEqual" -}}
+{{- $true := external $.Runtime "True" -}}
+{{- $false := external $.Runtime "False" -}}
+{{- $len := external $.Runtime "Len" -}}
+{{- $noError := external $.Runtime "NoError" -}}
+{{- $errorIs := external $.Runtime "ErrorIs" -}}
 {{- $t := renderExpr .TypeRef -}}
 {{- $variants := .Variants -}}
 {{- $n := len .Variants -}}
@@ -94,7 +98,7 @@ func Test{{ .TypeName }}Variants(t *{{ renderExpr $T }}) {
 		// The neighbouring fixture makes the opposite choice.
 		var zero {{ $t }}
 		{{ renderExpr $true }}(t, zero.IsValid(), "the zero value is a declared variant")
-		{{ renderExpr $equal }}(t, zero, {{ renderExpr (index $variants 0).Ref }}, "the zero value is {{ .ZeroName }}")
+		{{ renderExpr $equal }}(t, zero, {{ renderExpr .ZeroRef }}, "the zero value is {{ .ZeroName }}")
 	})
 {{- else }}
 
@@ -127,13 +131,16 @@ func Test{{ .TypeName }}Text(t *{{ renderExpr $T }}) {
 		}
 	})
 
+{{- if .UnknownText }}
+
 	t.Run("text naming no variant is refused", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Admitting it would let an unnamed value in through the one door
 		// that exists to keep it out.
-		_, err := {{ renderExpr .ParseRef }}("{{ .TypeName }}__no_such_variant")
+		_, err := {{ renderExpr .ParseRef }}({{ .UnknownText }})
 		{{ renderExpr $errorIs }}(t, err, {{ renderExpr .SentinelRef }}, "unknown text must be refused")
 	})
+{{- end }}
 {{- if .OutOfRange }}
 
 	t.Run("a value outside the set does not render as one inside it", func(t *{{ renderExpr $T }}) {
@@ -188,14 +195,17 @@ func Test{{ .TypeName }}Marshalling(t *{{ renderExpr $T }}) {
 		}
 	})
 
+{{- if .UnknownText }}
+
 	t.Run("text naming no variant is refused on unmarshal", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// The decoder is the boundary an unnamed value arrives at, so refusing
 		// here is what keeps it out of everything downstream.
 		var got {{ $t }}
-		{{ renderExpr $true }}(t, got.UnmarshalText([]byte("{{ .TypeName }}__no_such_variant")) != nil,
+		{{ renderExpr $true }}(t, got.UnmarshalText([]byte({{ .UnknownText }})) != nil,
 			"unknown text must not decode")
 	})
+{{- end }}
 }
 {{- end }}
 {{- end -}}

@@ -1,0 +1,73 @@
+{{- define "fault.helpers" -}}
+{{- $iface := .IfaceName -}}
+{{- $and := external $.RuntimeFault "And" -}}
+{{- $counted := external $.RuntimeFault "NewCountedFault" -}}
+{{- $predicate := external $.RuntimeFault "NewPredicateFault" -}}
+{{- $retry := external $.RuntimeFault "NewRetryFault" -}}
+// --- Fault injection ---
+{{ range $m := .Methods }}
+{{- range $s := $m.Sentinels }}
+// {{ $s.Helper }} makes the next call to {{ $m.Name }} fail with
+// {{ $s.Name }}.
+//
+// One-shot: the fault fires once and then clears, which is what a test
+// asserting on this error's handling wants. Faults takes a count for the rest.
+func (s *{{ $m.StubType }}) {{ $s.Helper }}() *{{ $m.StubType }} {
+	s.Faults({{ renderExpr $s.Ref }}, 1)
+	return s
+}
+
+{{ end }}
+{{- if $m.Retry }}
+// RetrySchedule makes {{ $m.Name }} fail with err on every call before call
+// number {{ $m.Retry }}, which succeeds along with every call after it.
+//
+// This is the shape a caller with a retry loop is written against: a test
+// that only ever fails or only ever succeeds never exercises the loop.
+func (s *{{ $m.StubType }}) RetrySchedule(err error) *{{ $m.StubType }} {
+	s.SetFault({{ renderExpr $retry }}[{{ $m.CallType }}](err, {{ $m.Retry }}))
+	return s
+}
+
+{{ end }}
+{{- if $m.Partition }}
+// FaultForPartition makes {{ $m.Name }} fail every nth call whose
+// {{ $m.Partition }} matches key, leaving other partitions untouched.
+//
+// Partitioned failure is what proves isolation: a test asserting that one
+// tenant's outage does not reach another needs the fault to be selective.
+func (s *{{ $m.StubType }}) FaultForPartition(key {{ template "fault.partitiontype" $m }}, err error, n int) *{{ $m.StubType }} {
+	s.SetFault({{ renderExpr $and }}[{{ $m.CallType }}](
+		{{ renderExpr $predicate }}[{{ $m.CallType }}](err, func(c {{ $m.CallType }}) bool {
+			return c.{{ $m.Partition }} == key
+		}),
+		{{ renderExpr $counted }}[{{ $m.CallType }}](err, n),
+	))
+	return s
+}
+
+// FaultForOtherPartitions inverts FaultForPartition: every nth call whose
+// {{ $m.Partition }} does not match key fails, and the named partition is
+// left healthy.
+func (s *{{ $m.StubType }}) FaultForOtherPartitions(key {{ template "fault.partitiontype" $m }}, err error, n int) *{{ $m.StubType }} {
+	s.SetFault({{ renderExpr $and }}[{{ $m.CallType }}](
+		{{ renderExpr $predicate }}[{{ $m.CallType }}](err, func(c {{ $m.CallType }}) bool {
+			return c.{{ $m.Partition }} != key
+		}),
+		{{ renderExpr $counted }}[{{ $m.CallType }}](err, n),
+	))
+	return s
+}
+
+{{ end }}
+{{- end }}
+{{- end -}}
+
+{{- /* The partition key's type is whichever recorded-call field it names, so
+       a caller passes the same type the method takes. The projection has
+       already reported a field naming no parameter, so the range always
+       matches exactly once here. */ -}}
+{{- define "fault.partitiontype" -}}
+{{- $field := .Partition -}}
+{{- range .Params }}{{ if eq .Field $field }}{{ renderType .Type }}{{ end }}{{ end }}
+{{- end -}}

@@ -1,22 +1,21 @@
 {{- define "stub.test" -}}
-{{- $T := stubRef "testing.T" -}}
-{{- $TB := stubRef "testing.TB" -}}
-{{- $equal := stubRef "testkit.Equal" -}}
-{{- $errorIs := stubRef "testkit.ErrorIs" -}}
-{{- $true := stubRef "testkit.True" -}}
-{{- $len := stubRef "testkit.Len" -}}
-{{- $noError := stubRef "testkit.NoError" -}}
-{{- $testErr := stubRef "testkit.TestError" -}}
-{{- $failable := stubRef "testkit.NewFailableTB" -}}
-{{- $hour := stubRef "time.Hour" -}}
+{{- $T := external "testing" "T" -}}
+{{- $TB := external "testing" "TB" -}}
+{{- $equal := external $.Runtime "Equal" -}}
+{{- $errorIs := external $.Runtime "ErrorIs" -}}
+{{- $true := external $.Runtime "True" -}}
+{{- $len := external $.Runtime "Len" -}}
+{{- $testErr := external $.Runtime "TestError" -}}
+{{- $failable := external $.Runtime "NewFailableTB" -}}
+{{- $hour := external "time" "Hour" -}}
 {{- $iface := .IfaceName -}}
-{{- $behaviour := stubRef "stub.Behaviour" -}}
-{{- $doubleBehaviour := stubRef "stub.DoubleBehaviour" -}}
-{{- $doubleT := stubRef "stub.Double" -}}
-{{- $instance := stubRef "stub.Instance" -}}
-{{- $clock := stubRef "clock.Clock" -}}
-{{- $randsrc := stubRef "rand.Source" -}}
-{{- $subject := stubRef "stub.Subject" -}}
+{{- $behaviour := external $.RuntimeStub "Behaviour" -}}
+{{- $doubleBehaviour := external $.RuntimeStub "DoubleBehaviour" -}}
+{{- $doubleT := external $.RuntimeStub "Double" -}}
+{{- $instance := external $.RuntimeStub "Instance" -}}
+{{- $clock := external $.RuntimeClock "Clock" -}}
+{{- $randsrc := external $.RuntimeRand "Source" -}}
+{{- $subject := external $.RuntimeStub "Subject" -}}
 {{- $pkg := .StubRef.Pkg -}}
 {{- $stub := .TypeName -}}
 {{- $tp := renderTypeParams .TypeParams -}}
@@ -43,13 +42,13 @@ func {{ camel $stub }}{{ $m.Name }}Subject{{ $tp }}(tb {{ renderExpr $TB }}) {{ 
 		Stub: s.{{ $m.OnField }}.MethodStub,
 		Call: func() {
 {{- template "stub.testargs" $m }}
-			{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+			{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		},
 {{- if $m.HasResults }}
 		Result: func() {{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }} {
 {{- template "stub.testargs" $m }}
-			{{ stubIdents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
-			return {{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }}{ {{- stubIdentFields "got" $m.Returns -}} }
+			{{ stub_idents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+			return {{ renderExpr (external $pkg $m.ReturnType) }}{{ $.TypeArgs }}{ {{- stub_identFields "got" $m.Sig -}} }
 		},
 {{- end }}
 		Override: func(mark func()) {
@@ -59,14 +58,14 @@ func {{ camel $stub }}{{ $m.Name }}Subject{{ $tp }}(tb {{ renderExpr $TB }}) {{ 
 {{- range $i, $r := $m.Returns }}
 				var z{{ $i }} {{ renderType $r.Type }}
 {{- end }}
-				return {{ stubIdents "z" (len $m.Returns) }}
+				return {{ stub_idents "z" (len $m.Returns) }}
 {{- end }}
 			})
 		},
 {{- with $err := $m.ErrReturn }}
 		Fails: func() error {
 {{- template "stub.testargs" $m }}
-			{{ stubFails $m.Returns }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+			{{ stub_fails $m.Sig }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 			return {{ $err.Local }}
 		},
 {{- end }}
@@ -95,9 +94,9 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 {{- range $i, $r := $m.Returns }}
 		var want{{ $i }} {{ renderType $r.Type }}
 {{- end }}
-		s.{{ $m.OnField }}.Returns({{ stubIdents "want" (len $m.Returns) }})
+		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
 {{- template "stub.testargs" $m }}
-		{{ stubIdents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ stub_idents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 {{- range $i, $r := $m.Returns }}
 		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "{{ $m.Name }} must answer with what Returns pinned")
 {{- end }}
@@ -110,7 +109,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// most needs the log to surface.
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
 {{- template "stub.testargs" $m }}
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		{{ if $m.Params }}got := {{ end }}s.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must record the call")
 {{- range $i, $p := $m.Params }}
 		{{ renderExpr $equal }}(t, got.{{ $p.Field }}, a{{ $i }}, "the recorded call carries {{ $p.Field }}")
@@ -126,8 +125,8 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		var seen []{{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}
 		s.{{ $m.OnField }}.OnRecord(func(c {{ renderExpr (external $pkg $m.CallType) }}{{ $.TypeArgs }}) { seen = append(seen, c) })
 {{- template "stub.testargs" $m }}
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		{{ renderExpr $len }}(t, seen, 2, "OnRecord must fire once per {{ $m.Name }} call")
 	})
 
@@ -140,11 +139,11 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 {{- range $i, $r := $m.Returns }}
 			var z{{ $i }} {{ renderType $r.Type }}
 {{- end }}
-			return {{ stubIdents "z" (len $m.Returns) }}
+			return {{ stub_idents "z" (len $m.Returns) }}
 {{- end }}
 		}))
 {{- template "stub.testargs" $m }}
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		{{ renderExpr $true }}(t, called, "With{{ $iface }}{{ $m.Name }} must install the override")
 	})
 {{- if $m.HasResults }}
@@ -158,25 +157,25 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 {{- range $i, $r := $m.Returns }}
 		var want{{ $i }} {{ renderType $r.Type }}
 {{- end }}
-		s.{{ $m.OnField }}.Returns({{ stubIdents "want" (len $m.Returns) }})
+		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
 {{- template "stub.testargs" $m }}
-		{{ stubBlanks (len $m.Returns) }} = s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ stub_blanks (len $m.Returns) }} = s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		s.ResetCalls()
-		{{ stubIdents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ stub_idents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 {{- range $i, $r := $m.Returns }}
 		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "a reset must keep what Returns pinned")
 {{- end }}
 	})
 {{- end }}
-{{- if $m.Iterator }}
+{{- if $m.Sequence.Kind }}
 
 	t.Run("yields the items Yields configured", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-		var want {{ renderType $m.IteratorElem }}
+		var want {{ renderType $m.Sequence.Elem }}
 		s.{{ $m.OnField }}.Yields(want, want)
 {{- template "stub.testargs" $m }}
-		got0 := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		got0 := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		seen := 0
 		for range got0 {
 			seen++
@@ -191,10 +190,10 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// not ours — so the double has to honour it or every consumer's early
 		// exit silently runs to completion.
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-		var want {{ renderType $m.IteratorElem }}
+		var want {{ renderType $m.Sequence.Elem }}
 		s.{{ $m.OnField }}.Yields(want, want, want)
 {{- template "stub.testargs" $m }}
-		got0 := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		got0 := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		seen := 0
 		for range got0 {
 			seen++
@@ -203,18 +202,18 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, seen, 1, "{{ $m.Name }} must stop when the caller breaks")
 	})
 {{- end }}
-{{- if $m.IteratorYieldsError }}
+{{- if $m.Sequence.YieldsError }}
 
 	t.Run("yields the items YieldsError configured and then fails", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Failing partway through is the case a consumer's loop most often
 		// gets wrong, and a sequence that only ever succeeds never reaches it.
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-		var item {{ renderType $m.IteratorElem }}
+		var item {{ renderType $m.Sequence.Elem }}
 		want := {{ renderExpr $testErr }}("{{ $m.Name }}-yields")
-		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item}, want)
+		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.Sequence.Elem }}{item, item}, want)
 {{- template "stub.testargs" $m }}
-		got0 := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		got0 := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		seen := 0
 		var last error
 		for _, err := range got0 {
@@ -234,10 +233,10 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		// seen enough, and a sequence that ran on regardless would keep
 		// producing after its consumer stopped listening.
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-		var item {{ renderType $m.IteratorElem }}
-		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.IteratorElem }}{item, item, item}, {{ renderExpr $testErr }}("{{ $m.Name }}-yields"))
+		var item {{ renderType $m.Sequence.Elem }}
+		s.{{ $m.OnField }}.YieldsError([]{{ renderType $m.Sequence.Elem }}{item, item, item}, {{ renderExpr $testErr }}("{{ $m.Name }}-yields"))
 {{- template "stub.testargs" $m }}
-		got0 := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		got0 := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		seen := 0
 		for range got0 {
 			seen++
@@ -255,7 +254,7 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		f := {{ renderExpr $failable }}()
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(f, {{ renderExpr (external $pkg (printf "%sStrict" $stub)) }}{{ $.TypeArgs }}())
 {{- template "stub.testargs" $m }}
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		{{ renderExpr $true }}(t, f.Failed(), "{{ $m.Name }} before {{ $m.OrderAfter }} must be refused")
 	})
 {{- end }}
@@ -274,7 +273,7 @@ func {{ camel $stub }}Double{{ $tp }}() {{ renderExpr $doubleT }}[{{ renderExpr 
 			Stub: s.{{ $m.OnField }}.MethodStub,
 			Call: func() {
 {{- template "stub.testargs" $m }}
-				{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+				{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 			},
 			Reset: s.ResetCalls,
 		}
@@ -328,7 +327,7 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
 {{ range $m := .Methods }}
 	t.Run("forwards {{ $m.Name }} to the wrapped implementation", func(t *{{ renderExpr $T }}) {
 {{- template "stub.testargs" $m }}
-		{{ if $m.HasResults }}{{ stubBlanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ if $m.HasResults }}{{ stub_blanks (len $m.Returns) }} = {{ end }}s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		inner.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must reach the wrapped implementation")
 	})
 {{- with $err := $m.ErrReturn }}
@@ -340,7 +339,7 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) {
 		want := {{ renderExpr $testErr }}("{{ $m.Name }}-delegate")
 		inner.{{ $m.OnField }}.FaultsFor({{ renderExpr $hour }}, want)
 {{- template "stub.testargs" $m }}
-		{{ stubFails $m.Returns }} := s.{{ $m.Name }}({{ stubIdentArgs "a" $m.Params }})
+		{{ stub_fails $m.Sig }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		{{ renderExpr $errorIs }}(t, {{ $err.Local }}, want, "{{ $m.Name }} must surface the wrapped answer")
 	})
 {{- end }}
@@ -365,8 +364,8 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) { {{ camel $stub }}Delega
 {{- end -}}
 
 {{- /* Only the lists that spell a type live here; the rest are Go helpers in
-       internal/gotmpl. See stub.double.tmpl for why the split falls where it
-       does. */ -}}
+       eidos's lang/golang, under this plugin's `stub_` prefix. See
+       stub.double.tmpl for why the split falls where it does. */ -}}
 
 {{- /* Arguments are declared as zero values rather than invented: what these
        tests assert is dispatch, and the argument values are incidental. */ -}}

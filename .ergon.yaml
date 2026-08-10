@@ -42,7 +42,13 @@ license:
   config_file: .go-license.yml
   # Directory basenames pruned from the source walk (the entire
   # subtree below any match drops). Extend or replace.
-  exclude_dirs: [.git, vendor, dist, node_modules]
+  # `golden` is pruned because a golden file is a byte-exact record of what a
+  # generator produced. Stamping a licence header into one makes it differ from
+  # the output it pins, and the generator's own test is what fails — reporting a
+  # generator bug that does not exist. The filename globs below cover the
+  # generated files a run writes into the tree; this covers the copies kept as
+  # fixtures, which do not all share those spellings.
+  exclude_dirs: [.git, vendor, dist, node_modules, golden]
   # Filename globs (matched via filepath.Match) skipped during the
   # walk. Covers the generated-file conventions ergon recognises.
   # Two spellings, because the generators do not share one. Most write

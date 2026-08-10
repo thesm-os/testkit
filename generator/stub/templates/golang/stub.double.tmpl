@@ -25,7 +25,7 @@ type {{ .CallType }}{{ renderTypeParams $.TypeParams }} struct {
 // recording, fault injection, latency against a virtual clock, gates,
 // call-count expectations, and strict mode.
 type {{ $m.StubType }}{{ renderTypeParams $.TypeParams }} struct {
-	*{{ renderExpr (stubRef "stub.MethodStub") }}[{{ $m.CallType }}{{ $.TypeArgs }}]
+	*{{ renderExpr (external $.RuntimeStub "MethodStub") }}[{{ $m.CallType }}{{ $.TypeArgs }}]
 
 	fn func({{ template "stub.paramtypes" $m }}) {{ template "stub.results" $m }}
 {{- if $m.HasResults }}
@@ -43,7 +43,7 @@ type {{ $m.ReturnType }}{{ renderTypeParams $.TypeParams }} struct {
 // Returns pins a fixed result for every call to {{ $m.Name }}. A Func
 // override and an injected fault both take precedence over it.
 func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Returns({{ template "stub.returnparams" $m }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
-	s.fallback = &{{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stubNamedFields $m.Returns -}} }
+	s.fallback = &{{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stub_namedFields $m.Sig -}} }
 	return s
 }
 {{ end }}
@@ -53,13 +53,13 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Func(fn func({{ template "stub.param
 	s.fn = fn
 	return s
 }
-{{- if $m.Iterator }}
+{{- if $m.Sequence.Kind }}
 // Yields makes {{ $m.Name }} return a sequence over items.
 //
 // Building a range-over-func by hand is a closure with a break-handling
 // branch in it, and a test that gets that branch wrong reports a bug in
 // itself rather than in the subject.
-func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Yields(items ...{{ renderType $m.IteratorElem }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Yields(items ...{{ renderType $m.Sequence.Elem }}) *{{ $m.StubType }}{{ $.TypeArgs }} {
 	s.fn = func({{ template "stub.blankparams" $m }}) {{ template "stub.results" $m }} {
 		return func(yield func({{ template "stub.yieldparams" $m }}) bool) {
 			for _, v := range items {
@@ -72,13 +72,13 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) Yields(items ...{{ renderType $m.Ite
 	return s
 }
 {{ end }}
-{{- if $m.IteratorYieldsError }}
+{{- if $m.Sequence.YieldsError }}
 // YieldsError makes {{ $m.Name }} return a sequence that produces items and
 // then fails.
 //
 // Failing partway through is the case a consumer's loop most often gets
 // wrong, and it cannot be reached by a sequence that only ever succeeds.
-func (s *{{ $m.StubType }}{{ $.TypeArgs }}) YieldsError(items []{{ renderType $m.IteratorElem }}, err error) *{{ $m.StubType }}{{ $.TypeArgs }} {
+func (s *{{ $m.StubType }}{{ $.TypeArgs }}) YieldsError(items []{{ renderType $m.Sequence.Elem }}, err error) *{{ $m.StubType }}{{ $.TypeArgs }} {
 	s.fn = func({{ template "stub.blankparams" $m }}) {{ template "stub.results" $m }} {
 		return func(yield func({{ template "stub.yieldparams" $m }}) bool) {
 			for _, v := range items {
@@ -86,7 +86,7 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) YieldsError(items []{{ renderType $m
 					return
 				}
 			}
-			var zero {{ renderType $m.IteratorElem }}
+			var zero {{ renderType $m.Sequence.Elem }}
 			yield(zero, err)
 		}
 	}
@@ -122,7 +122,7 @@ func {{ $stub }}DelegateTo{{ renderTypeParams .TypeParams }}(impl {{ renderExpr 
 // {{ $stub }}WithClock drives latency and time-windowed faults from clk
 // rather than from wall time, so a test asserting on a five-second timeout
 // does not take five seconds.
-func {{ $stub }}WithClock{{ renderTypeParams .TypeParams }}(clk {{ renderExpr (stubRef "clock.Clock") }}) {{ $stub }}Option{{ .TypeArgs }} {
+func {{ $stub }}WithClock{{ renderTypeParams .TypeParams }}(clk {{ renderExpr (external $.RuntimeClock "Clock") }}) {{ $stub }}Option{{ .TypeArgs }} {
 	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 		for _, m := range s.all {
 			m.SetClock(clk)
@@ -132,7 +132,7 @@ func {{ $stub }}WithClock{{ renderTypeParams .TypeParams }}(clk {{ renderExpr (s
 
 // {{ $stub }}WithRandSource makes probabilistic fault injection reproducible.
 // A failure nobody can replay is not a finding.
-func {{ $stub }}WithRandSource{{ renderTypeParams .TypeParams }}(src {{ renderExpr (stubRef "rand.Source") }}) {{ $stub }}Option{{ .TypeArgs }} {
+func {{ $stub }}WithRandSource{{ renderTypeParams .TypeParams }}(src {{ renderExpr (external $.RuntimeRand "Source") }}) {{ $stub }}Option{{ .TypeArgs }} {
 	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 		for _, m := range s.all {
 			m.SetRandSource(src)
@@ -173,10 +173,10 @@ type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
 	// double in a loop rather than in one line per method.
-	all []{{ renderExpr (stubRef "stub.Configurable") }}
+	all []{{ renderExpr (external $.RuntimeStub "Configurable") }}
 {{- if .Ordered }}
 
-	order *{{ renderExpr (stubRef "stub.OrderTracker") }}
+	order *{{ renderExpr (external $.RuntimeStub "OrderTracker") }}
 {{- end }}
 	strict bool
 }
@@ -202,13 +202,13 @@ var _ {{ renderExpr .IfaceRef }}{{ template "stub.doublewitness" . }} = (*{{ $st
 // expectations when the test ends, so an unmet Times is reported without the
 // caller remembering to check. A nil tb skips that, which is what benchmarks
 // and non-test callers want.
-func New{{ $stub }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (stubRef "testing.TB") }}, opts ...{{ $stub }}Option{{ .TypeArgs }}) *{{ $stub }}{{ .TypeArgs }} {
+func New{{ $stub }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $stub }}Option{{ .TypeArgs }}) *{{ $stub }}{{ .TypeArgs }} {
 	s := &{{ $stub }}{{ .TypeArgs }}{
 {{- range .Methods }}
-		{{ .OnField }}: &{{ .StubType }}{{ $.TypeArgs }}{MethodStub: {{ renderExpr (stubRef "stub.NewMethodStub") }}[{{ .CallType }}{{ $.TypeArgs }}](tb, "{{ $iface }}.{{ .Name }}")},
+		{{ .OnField }}: &{{ .StubType }}{{ $.TypeArgs }}{MethodStub: {{ renderExpr (external $.RuntimeStub "NewMethodStub") }}[{{ .CallType }}{{ $.TypeArgs }}](tb, "{{ $iface }}.{{ .Name }}")},
 {{- end }}
 	}
-	s.all = []{{ renderExpr (stubRef "stub.Configurable") }}{
+	s.all = []{{ renderExpr (external $.RuntimeStub "Configurable") }}{
 {{- range .Methods }}
 		s.{{ .OnField }}.MethodStub,
 {{- end }}
@@ -224,13 +224,13 @@ func New{{ $stub }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (stubRef 
 {{- if .Ordered }}
 	// Allocated after the options run: the tracker only fails the test in
 	// strict mode, so it has to be told which mode it is in.
-	s.order = {{ renderExpr (stubRef "stub.NewOrderTracker") }}(tb, s.strict)
+	s.order = {{ renderExpr (external $.RuntimeStub "NewOrderTracker") }}(tb, s.strict)
 {{- end }}
 	if tb != nil {
 		// A fuzz target reruns its body many times over and registers a
 		// cleanup per run, so verifying there would report against the wrong
 		// iteration.
-		if _, isFuzz := tb.(*{{ renderExpr (stubRef "testing.F") }}); !isFuzz {
+		if _, isFuzz := tb.(*{{ renderExpr (external "testing" "F") }}); !isFuzz {
 			tb.Cleanup(func() {
 				for _, m := range s.all {
 					m.Verify()
@@ -259,12 +259,12 @@ func (s *{{ $stub }}{{ .TypeArgs }}) ResetCalls() {
 // invokeVoid adapts the Func override to the shape [stub.Answer] consumes.
 // A method returning nothing still has an override worth dispatching to and
 // a call worth recording; the empty struct is the return tuple of no returns.
-func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invokeVoid({{ template "stub.paramdecls" $m }}) func() struct{} {
-	if s.fn == nil {
+func ({{ $m.ReceiverIdent }} *{{ $m.StubType }}{{ $.TypeArgs }}) invokeVoid({{ template "stub.paramdecls" $m }}) func() struct{} {
+	if {{ $m.ReceiverIdent }}.fn == nil {
 		return nil
 	}
 	return func() struct{} {
-		s.fn({{ stubArgs $m.Params }})
+		{{ $m.ReceiverIdent }}.fn({{ stub_args $m.Sig }})
 		return struct{}{}
 	}
 }
@@ -273,13 +273,13 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invokeVoid({{ template "stub.paramde
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invoke({{ template "stub.paramdecls" $m }}) func() {{ $m.ReturnType }}{{ $.TypeArgs }} {
-	if s.fn == nil {
+func ({{ $m.ReceiverIdent }} *{{ $m.StubType }}{{ $.TypeArgs }}) invoke({{ template "stub.paramdecls" $m }}) func() {{ $m.ReturnType }}{{ $.TypeArgs }} {
+	if {{ $m.ReceiverIdent }}.fn == nil {
 		return nil
 	}
 	return func() {{ $m.ReturnType }}{{ $.TypeArgs }} {
-		{{ stubLocals $m.Returns }} := s.fn({{ stubArgs $m.Params }})
-		return {{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stubLocalFields $m.Returns -}} }
+		{{ stub_locals $m.Sig }} := {{ $m.ReceiverIdent }}.fn({{ stub_args $m.Sig }})
+		return {{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- stub_localFields $m.Sig -}} }
 	}
 }
 {{ end }}
@@ -289,23 +289,23 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) invoke({{ template "stub.paramdecls"
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ template "stub.namedresults" $m }} {
-{{- if $m.HasMixin "deprecated" }}
-	if tb := s.{{ $m.OnField }}.TB(); tb != nil {
+func ({{ $m.ReceiverIdent }} *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls" $m }}) {{ template "stub.namedresults" $m }} {
+{{- if $m.Deprecated }}
+	if tb := {{ $m.ReceiverIdent }}.{{ $m.OnField }}.TB(); tb != nil {
 		tb.Logf("{{ $iface }}.{{ $m.Name }} is deprecated")
 	}
 {{- end }}
 {{- if $m.OrderAfter }}
-	s.order.AssertAfter("{{ $m.Name }}", "{{ $m.OrderAfter }}")
+	{{ $m.ReceiverIdent }}.order.AssertAfter("{{ $m.Name }}", "{{ $m.OrderAfter }}")
 {{- end }}
 {{- if $.Ordered }}
-	defer s.order.Record("{{ $m.Name }}")
+	defer {{ $m.ReceiverIdent }}.order.Record("{{ $m.Name }}")
 {{- end }}
-	call := {{ $m.CallType }}{{ $.TypeArgs }}{ {{- stubCallFields $m.Params -}} }
+	call := {{ $m.CallType }}{{ $.TypeArgs }}{ {{- stub_callFields $m.Sig -}} }
 {{- if $m.HasResults }}
-	r := {{ renderExpr (stubRef "stub.Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (stubRef "stub.Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, {{ $m.ReturnType }}{{ $.TypeArgs }}]{
-		Invoke:   s.{{ $m.OnField }}.invoke({{ stubArgs $m.Params }}),
-		Fallback: s.{{ $m.OnField }}.fallback,
+	r := {{ renderExpr (external $.RuntimeStub "Answer") }}({{ $m.ReceiverIdent }}.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (external $.RuntimeStub "Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, {{ $m.ReturnType }}{{ $.TypeArgs }}]{
+		Invoke:   {{ $m.ReceiverIdent }}.{{ $m.OnField }}.invoke({{ stub_args $m.Sig }}),
+		Fallback: {{ $m.ReceiverIdent }}.{{ $m.OnField }}.fallback,
 {{- with $err := $m.ErrReturn }}
 		Fault:    func(err error) {{ $m.ReturnType }}{{ $.TypeArgs }} { return {{ $m.ReturnType }}{{ $.TypeArgs }}{ {{- $err.Field }}: err} },
 {{- end }}
@@ -315,10 +315,10 @@ func (s *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls
 {{- end }}
 		},
 	})
-	return {{ stubReads $m.Returns }}
+	return {{ stub_reads "r" $m.Sig }}
 {{- else }}
-	{{ renderExpr (stubRef "stub.Answer") }}(s.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (stubRef "stub.Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, struct{}]{
-		Invoke: s.{{ $m.OnField }}.invokeVoid({{ stubArgs $m.Params }}),
+	{{ renderExpr (external $.RuntimeStub "Answer") }}({{ $m.ReceiverIdent }}.{{ $m.OnField }}.MethodStub, &call, {{ renderExpr (external $.RuntimeStub "Arms") }}[{{ $m.CallType }}{{ $.TypeArgs }}, struct{}]{
+		Invoke: {{ $m.ReceiverIdent }}.{{ $m.OnField }}.invokeVoid({{ stub_args $m.Sig }}),
 	})
 {{- end }}
 }
@@ -326,10 +326,20 @@ func (s *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls
 {{- end -}}
 
 {{- /* Only the lists that spell a type live here. Everything else — argument
-       lists, field assignments, capture locals — is a Go helper in
-       internal/gotmpl, because renderType is the one thing a plain function
-       cannot do: it registers the rendered file's imports and elides the
-       same-package qualifier. */ -}}
+       lists, field assignments, capture locals — is a Go helper in eidos's
+       lang/golang, reached under this plugin's own `stub_` prefix, because
+       renderType is the one thing a plain function cannot do: it registers the
+       rendered file's imports and elides the same-package qualifier. Each of
+       those helpers takes the whole projection, `.Sig`, rather than a slice of
+       parameters or returns: the field, local and error-slot conventions are
+       the projection's, and a caller reconstructing them is the duplication
+       they exist to remove.
+
+       Every reference into testkit's runtime goes through the backend's own
+       `external <path> <Symbol>`, which registers the import as it renders.
+       The paths come off the emit value ($.RuntimeStub and friends) rather
+       than being spelled here, so the module path lives in one Go constant
+       and this plugin registers no helper of its own. */ -}}
 
 {{- /* A sequence helper ignores the call's arguments — it answers the same way
        however it was called — so the generated closure blanks them. */ -}}
@@ -338,11 +348,11 @@ func (s *{{ $stub }}{{ $.TypeArgs }}) {{ $m.Name }}({{ template "stub.paramdecls
 {{- end -}}
 
 {{- define "stub.yieldparams" -}}
-{{ renderType .IteratorElem }}{{ if .IteratorSecond }}, {{ renderType .IteratorSecond }}{{ end }}
+{{ renderType .Sequence.Elem }}{{ if .Sequence.Second }}, {{ renderType .Sequence.Second }}{{ end }}
 {{- end -}}
 
 {{- define "stub.yieldargs" -}}
-v{{ if .IteratorSecond }}, {{ if .IteratorYieldsError }}nil{{ else }}v{{ end }}{{ end }}
+v{{ if .Sequence.Second }}, {{ if .Sequence.YieldsError }}nil{{ else }}v{{ end }}{{ end }}
 {{- end -}}
 
 {{- define "stub.paramtypes" -}}

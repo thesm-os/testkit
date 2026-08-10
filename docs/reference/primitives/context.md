@@ -1,44 +1,50 @@
-# Context
-
-## t.Context() (Go 1.24+)
-
-Use `t.Context()` directly. testkit does not wrap it. The returned context is cancelled when the test finishes; child contexts and goroutines respect that cancellation.
+# Context assertions
 
 ```go
-func TestStore_Put(t *testing.T) {
-    ctx := t.Context()
-    err := store.Put(ctx, item)
-    testkit.NoError(t, err, "Put must succeed")
-}
+import "go.thesmos.sh/testkit"
 ```
 
-All testkit examples use `t.Context()` rather than `context.Background()`.
+Four helpers for the context behaviour every `func(ctx, …) error` owes and almost none is tested for. Each takes the method under test as a closure and drives one context condition into it.
 
-## Timeout
+## The functions
 
-`testkit.Timeout(t, d)` wraps `t.Context()` with a deadline and **fails the test loudly** if the deadline fires before the test completes — not a quiet cancellation.
+| Function | Passes a | Asserts |
+|---|---|---|
+| `AssertCtxCancellation(tb, fn)` | context cancelled before the call | `fn` returns a context error |
+| `AssertCtxDeadline(tb, fn)` | context whose deadline has already passed | `fn` returns a deadline error |
+| `AssertNilCtx(tb, fn)` | `nil` context | `fn` does not panic |
+| `AssertTimeout(tb, deadline, fn)` | context cancelled after `deadline` | `fn` returns before the deadline elapses |
 
-```go
-ctx := testkit.Timeout(t, 10*time.Second)
-result, err := subject.SlowOperation(ctx)
-// On hang: "Timeout: 10s deadline exceeded" instead of silent cancel
-```
-
-For integration tests where a hung operation must be a loud failure. See [concurrency.md](concurrency.md).
-
-## AssertCtxCancellation / AssertTimeout
-
-To assert that a method respects context cancellation or honors a deadline, use the directive-driven helpers:
+All four take `fn func(ctx context.Context) error`.
 
 ```go
 testkit.AssertCtxCancellation(t, func(ctx context.Context) error {
-    _, err := store.Get(ctx, "id")
-    return err
-})
-
-testkit.AssertTimeout(t, 5*time.Second, func(ctx context.Context) error {
-    return runner.Run(ctx)
+    return svc.Fetch(ctx, "id")
 })
 ```
 
-See [directive-assertions.md](directive-assertions.md).
+## What each one catches
+
+**`AssertCtxCancellation`** catches the method that accepts a context and never reads it. The common shape is a function that passes `ctx` down to one call and does its own work before that — cancellation is honoured eventually, not promptly, and a caller that cancelled expects promptly.
+
+**`AssertCtxDeadline`** catches the method that checks `ctx.Done()` but not `ctx.Err()`, or that treats an already-expired deadline as "plenty of time" because the select raced the wrong way.
+
+**`AssertNilCtx`** catches the `ctx.Value(...)` on a nil context. A nil context is a caller bug, but a panic in a library turns a caller's bug into an incident in a goroutine nobody can recover. Returning an error is the contract; this asserts the method has one.
+
+**`AssertTimeout`** is the positive form: given a deadline, the method must come back inside it. Use it for a method that does its own bounded wait — a retry loop, a poll, a drain.
+
+```go
+testkit.AssertTimeout(t, 500*time.Millisecond, func(ctx context.Context) error {
+    return pool.Drain(ctx)
+})
+```
+
+## Where these come from
+
+The four are what a generated conformance suite asserts on every method carrying a `context.Context`, independent of the method's shape. They are exported so a hand-written test can make the same assertions on code no generator has reached yet.
+
+## See also
+
+- [Directive assertions](directive-assertions.md) — the other contract-shaped helpers.
+- [Concurrency](concurrency.md) — `Timeout` for bounding a test that might hang, which is a different job.
+- [Shape classification](../generators/shapes.md) — which methods a suite would apply these to.

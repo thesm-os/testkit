@@ -1,143 +1,138 @@
 # Recording
 
-`Recorder[T]` is the thread-safe call log that captures values of type `T`. It is the core observation primitive used by `MethodStub`, simulation drivers, and integration tests.
-
-## The Architectural Pattern
-
-Why use a generic `Recorder[T]` instead of just appending to a slice, or using a traditional mock expectation like `mock.AssertCalled("Method", arg)`?
-
-1. **Thread Safety & Isolation:** In concurrent tests (especially under Tier 2/3 `model` linearizability checking), thousands of goroutines might hit your stub simultaneously. Slices race; traditional mocks often hold global locks that skew performance. `Recorder[T]` is highly optimized for concurrent appends.
-2. **Asynchronous Causality:** Distributed systems are asynchronous. A call to `Put` might eventually trigger a call to `Notify`. `Recorder` provides `WaitForN` and `WaitFor` (backed by condition variables, not polling) to deterministically synchronize tests across goroutine boundaries without `time.Sleep()`.
-3. **Simulation Hooks & Gating:** In Tier 5 simulation, you need to precisely control the ordering of events. `Recorder` allows you to install synchronous `Hooks` to broadcast events to a trace engine, and `Gates` to deliberately block execution until a specific condition is met, allowing you to synthesize and test impossible race conditions.
-
-## Construction and basic recording
-
 ```go
-rec := testkit.NewRecorder[PutCall]()
-rec.Record(PutCall{Key: "a", Value: "1"})
-calls := rec.Calls()         // defensive copy
-testkit.Len(t, calls, 1, "expected 1 call")
+import "go.thesmos.sh/testkit/stub"
 ```
 
-| Method | Purpose |
-|--------|---------|
-| `NewRecorder[T]()` | Create empty recorder |
-| `Record(v T)` | Append; fire hooks; unblock waiters; respect gates |
-| `Calls() []T` | Defensive copy of all recorded values |
-| `Timestamped() []RecordedCall[T]` | Defensive copy with per-call timestamps |
-| `CallCount() int` | Number of recorded values |
-| `LastCall() T` | Most recent value; `tb.Fatalf` if none |
-| `Reset()` | Clear log; preserve hooks, gates, clock |
-
-## Assertion helpers
-
-Combine count check with value retrieval. Replaces the common three-line pattern.
+`Recorder[T]` captures calls for after-the-fact inspection. Generated doubles embed one per method through [`MethodStub`](method-stub.md); a hand-written double can use it directly.
 
 ```go
-call := rec.AssertCalledOnce(t, "single put")
-calls := rec.AssertCalledN(t, 3, "three puts")
-rec.AssertNotCalled(t, "Put must not run yet")
+func NewRecorder[T any]() *Recorder[T]
+func (r *Recorder[T]) Record(v T)
 ```
 
-| Method | Purpose |
-|--------|---------|
-| `AssertCalledOnce(t, msg) T` | Exactly 1 call; returns it |
-| `AssertCalledN(t, n, msg) []T` | Exactly n calls; returns them |
-| `AssertNotCalled(t, msg)` | No calls recorded |
+`T` is whatever the call is worth recording as — for a generated double, the `<Iface><Method>Call` struct.
 
-## Filtering
-
-```go
-active := rec.Filter(func(c StorePutCall) bool { return c.Status == StatusActive })
-testkit.Len(t, active, 2, "two active puts")
-
-c, ok := rec.First(func(c StorePutCall) bool { return c.ID == "x" })
-present := rec.Any(func(c StorePutCall) bool { return c.ID == "x" })
-allActive := rec.All(func(c StorePutCall) bool { return c.Status == StatusActive })
-```
+## Reading calls back
 
 | Method | Returns |
-|--------|---------|
-| `Filter(pred)` | All matching values |
-| `First(pred)` | First match + ok bool |
-| `Any(pred)` / `All(pred)` | Bool |
+|---|---|
+| `Calls() []T` | every recorded call, in order |
+| `CallCount() int` | how many |
+| `LastCall(tb) T` | the most recent, failing the test when there is none |
+| `Timestamped() []RecordedCall[T]` | each call with the time it was recorded |
+
+```go
+testkit.Equal(t, s.OnGet.CallCount(), 1, "the reader must be consulted once")
+testkit.Equal(t, s.OnGet.LastCall(t).Key, "absent", "the key must reach the reader")
+```
+
+`LastCall` takes `tb` because "the last call" of an empty recorder has no answer. Failing there names the real problem — nothing was called — rather than returning a zero value that fails a field comparison three lines later.
+
+## Asserting
+
+| Method | Fails when |
+|---|---|
+| `AssertCalledOnce(tb, msg) T` | the count is not exactly 1. Returns the call. |
+| `AssertCalledN(tb, n, msg) []T` | the count is not `n`. Returns the calls. |
+| `AssertNotCalled(tb, msg)` | anything was recorded |
+
+`AssertCalledOnce` returning the call is the point — the assertion and the inspection are one statement:
+
+```go
+call := s.OnPut.AssertCalledOnce(t, "a flush must write exactly once")
+testkit.Equal(t, call.Record.ID, "42", "the right record must be written")
+```
+
+## Querying
+
+| Method | Returns |
+|---|---|
+| `Filter(pred func(T) bool) []T` | every matching call |
+| `First(pred func(T) bool) (T, bool)` | the first match, and whether there was one |
+| `Any(pred func(T) bool) bool` | whether any call matches |
+| `All(pred func(T) bool) bool` | whether every call matches |
+
+```go
+testkit.True(t, s.OnPut.All(func(c PutCall) bool { return c.Ctx != nil }),
+    "every write must carry a context")
+```
+
+`All` on an empty recorder is true, as it is for any universal quantifier. Where "and there was at least one" is part of the claim, assert the count too — otherwise a double that was never called passes.
 
 ## Waiting
 
-For asynchronous tests where calls arrive on goroutines outside the test's control. Uses condition variables — no polling, no `time.Sleep`.
+| Method | Blocks until |
+|---|---|
+| `WaitForN(tb, n int, timeout)` | `n` calls have been recorded, or the timeout elapses |
+| `WaitFor(tb, pred func(T) bool, timeout, msg)` | a recorded call matches `pred`, or the timeout elapses |
+
+These are what a concurrent test should wait on. A background worker that will call the double is ready when the double has been called — waiting on a sleep instead is a flake with a timer attached.
 
 ```go
-rec.WaitForN(t, 3, 5*time.Second)
-
-rec.WaitFor(t, func(c StorePutCall) bool { return c.Status == StatusActive },
-    5*time.Second, "active put must arrive")
+go svc.Run(ctx)
+s.OnFetch.WaitForN(t, 3, time.Second)
 ```
-
-Timeouts route through the configured `Clock` — pass a `TestClock` and use `Advance` to step over the deadline deterministically.
-
-## Hooks
-
-Synchronous callbacks fired on every `Record`. Used to wire observation into simulation engines.
-
-```go
-rec.OnRecord(func(c PutCall) {
-    trace.Append(tick, Event{Kind: "put", Data: c})
-})
-```
-
-Multiple hooks are allowed. They run under the recorder mutex — keep them fast. For expensive work, send to a channel inside the hook.
 
 ## Gates
 
-Block `Record` calls until released. Used to create deterministic race conditions.
+A gate blocks a recorded call until the test releases it, which is how a test controls interleaving rather than hoping for it.
 
 ```go
-gate := rec.NewGate()
-
-go func() {
-    _ = store.Put(ctx, req) // blocks at recording layer
-}()
-
-_, _ = store.Get(ctx, key) // happens while Put is blocked
-gate.Release()              // let the Put through
+func (r *Recorder[T]) NewGate() *Gate
+func (g *Gate) Release()
+func (g *Gate) ReleaseOne()
 ```
 
-| Method | Behavior |
-|--------|----------|
-| `NewGate()` | Install a gate; only one may be active at a time |
-| `gate.Release()` | Unblock all waiting Record calls |
-| `gate.ReleaseOne()` | Unblock exactly one waiting Record call |
-
-Gates compose with hooks and waiters — a gated `Record` fires hooks and unblocks waiters only after the gate releases.
-
-## Timestamping
+`Release` frees every waiter; `ReleaseOne` frees one, which is what lets a test step a queue and observe the state between steps.
 
 ```go
-rec.WithClock(clk) // optional — defaults to RealClock
+gate := s.OnGet.NewGate()
 
-rec.Record(c1)
-rec.Record(c2)
+go func() { _, _ = s.Get(ctx, "a") }()
+go func() { _, _ = s.Get(ctx, "b") }()
 
-stamped := rec.Timestamped()
-// stamped[0].Time = clock.Now() at the moment c1 was recorded
-// stamped[1].Time = clock.Now() at the moment c2 was recorded
+s.OnGet.WaitForN(t, 2, time.Second)   // both are parked
+gate.ReleaseOne()                      // let exactly one through
 ```
 
-`RecordedCall[T]` wraps the value with the timestamp of when it was recorded. The clock is the one configured via `WithClock` (default: real time). When the recorder is embedded in a `MethodStub`, the stub's clock propagates here automatically.
+## Hooks
+
+```go
+func (r *Recorder[T]) OnRecord(fn func(T))
+```
+
+Runs `fn` for every recorded call, as it is recorded. Use it to drive a side channel — an [order tracker](order-tracker.md), a counter, a log the test asserts on afterwards.
+
+## Timestamps
+
+```go
+func (r *Recorder[T]) WithClock(clk clock.Clock) *Recorder[T]
+```
+
+Binds the clock `Timestamped` reads. Under a [`TestClock`](clock.md) the recorded times are virtual, so a test can assert that two calls were 200ms apart without waiting 200ms.
 
 ## Bench mode
 
 ```go
-rec.BenchMode()
+func (r *Recorder[T]) BenchMode()
+func (r *Recorder[T]) IsBenchMode() bool
 ```
 
-Disables call recording — `Record` becomes a no-op. No allocation, no hooks, no gate checks. Dispatch (Func, Returns, Faults) still works through the enclosing `MethodStub`. The `bench` generator enables this automatically; consumers writing their own benchmarks against generated stubs do the same.
+Stops recording. The call log's allocations are what a benchmark measuring the surrounding code would otherwise be measuring — see [Benchmarking](benchmarking.md).
 
-## Concurrency
+Every query method still works and reports an empty recorder, so a benchmark that accidentally asserts on calls gets zero rather than a panic.
 
-All Recorder methods are thread-safe via mutex. `WaitForN` and `WaitFor` use condition variables. Gates use condition variables internally. Generated stub code inherits this safety.
+## Reset
+
+```go
+func (r *Recorder[T]) Reset()
+```
+
+Clears recorded calls. Hooks, the clock and bench mode survive.
 
 ## See also
 
-- [MethodStub](method-stub.md) — embeds `*Recorder[T]`
-- [Clock](clock.md) — drives `Timestamped` and `WaitForN` timeouts
+- [Method stub](method-stub.md) — the engine that records through this.
+- [Order tracker](order-tracker.md) — cross-method ordering, usually driven from `OnRecord`.
+- [Concurrency](concurrency.md) — for the goroutines a gate coordinates.

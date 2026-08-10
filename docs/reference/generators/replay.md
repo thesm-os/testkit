@@ -1,6 +1,6 @@
 # Replay
 
-> **Status:** not yet implemented. Targeted for a subsequent dev cycle. The behavior described below is the design intent — code, flags, and output may differ once shipped.
+> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
 
 Tier 5 trace-replay harness. Consumes captured production call traces (or sim-engine traces) and replays them through implementations to verify behavioral preservation across versions. Answers "does the new impl behave the same way the old one did on real workloads?"
 

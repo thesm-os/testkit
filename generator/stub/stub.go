@@ -4,23 +4,16 @@
 package stub
 
 import (
-	"io/fs"
-	"path"
+	"fmt"
 	"slices"
 	"strings"
-	"text/template"
 
-	"go.thesmos.sh/eidos/core/directive"
-	"go.thesmos.sh/eidos/emit"
-	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
 	"go.thesmos.sh/eidos/sdk"
-
-	"go.thesmos.sh/testkit/generator/internal/emitq"
-	"go.thesmos.sh/testkit/generator/internal/generic"
-	"go.thesmos.sh/testkit/generator/internal/nodes"
-	"go.thesmos.sh/testkit/generator/internal/signature"
-	"go.thesmos.sh/testkit/generator/internal/witness"
+	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 )
 
 // Name is the plugin's stable identifier.
@@ -34,7 +27,7 @@ const Capability = "stub"
 // prefix — the plugin reads from source interfaces.
 const DirectiveName sdk.DirectiveName = "stub"
 
-// SlotName is the [emit.File] slot both emit values append into.
+// SlotName is the [sdk.EmitFile] slot both emit values append into.
 // `top` renders between the package clause and the first core decl,
 // which is where a template-rendered block of whole declarations
 // belongs.
@@ -78,28 +71,30 @@ const Version = "1.0.0"
 // compile for a reason the author could not have predicted.
 const WitnessKey = "witness"
 
-// predeclared is the set of Go type names a witness may use unqualified. A
-// witness outside it is taken to be declared in the source package and
-// qualified against it, which is the same rule the sentinel helpers follow.
-//
-//nolint:gochecknoglobals // immutable lookup table.
-var predeclared = map[string]struct{}{
-	"any": {}, "bool": {}, "byte": {}, "complex64": {}, "complex128": {},
-	"error": {}, "float32": {}, "float64": {}, "int": {}, "int8": {},
-	"int16": {}, "int32": {}, "int64": {}, "rune": {}, "string": {},
-	"uint": {}, "uint8": {}, "uint16": {}, "uint32": {}, "uint64": {},
-	"uintptr": {},
-}
-
 // DefaultSuffix is the trailer appended to the source interface's
 // name to form the stub type's identifier.
 const DefaultSuffix = "Stub"
 
-// langGo is the backend language identifier the per-language
-// adapters key on. Every dispatcher below compares against it, so a
-// second language arrives as one more arm rather than a scattered
-// string literal.
-const langGo = "golang"
+// Mixin names this plugin reads, taken from the packages that declare them.
+//
+// The vocabulary is the shape annotator's and testkit registers it whole, so a
+// name spelled here as a literal would be a copy no rename could reach — and
+// the failure would be silent rather than loud. A moved name would simply stop
+// matching: every order guard would vanish from every generated double, the
+// compile would still succeed, and the generated suite would still pass,
+// because the check that would have caught it is the one that went missing.
+const (
+	// MixinDeprecated marks a method whose use should be reported.
+	MixinDeprecated = deprecated.Name
+
+	// MixinOrderAfter marks a method that may only be called once its
+	// prerequisite has been.
+	MixinOrderAfter = orderafter.Name
+)
+
+// MixinOrderAfterParam is the key carrying the prerequisite method's name, as
+// in `//testkit:mixin orderafter fn=Prepare`.
+const MixinOrderAfterParam = orderafter.ParamFn
 
 // Options carries the plugin's user-tunable settings.
 //
@@ -114,42 +109,60 @@ type Options struct {
 
 // Plugin is the stub generator. The zero value is unusable; go
 // through [New] so the embedded holder binds to the options field.
+//
+// The embedded base answers every declaration method — name, version,
+// priority, provides, requires, directives, and the per-language
+// output, template and funcmap dispatch. Written out per plugin those
+// drift: testkit carried sixteen hand-written copies of the language
+// dispatch, and two of them tested the backend's language marker
+// against a local constant rather than the backend's own — plugins
+// that emitted nothing, with no diagnostic, because the string did not
+// match.
 type Plugin struct {
+	*sdkgolang.Base
 	*sdk.Holder[Options]
 	opts Options
 }
 
 // New returns a fresh plugin instance with the options holder bound.
+//
+// The templates register no helper of their own. Everything they call is
+// either a backend builtin — `renderType`, `renderExpr`, `renderTypeParams`,
+// `external`, `camel` — or one of [golang.AllFuncMap]'s signature helpers,
+// which the base merges under this plugin's own prefix. The testkit import
+// paths a template used to resolve through a local function are carried on
+// the emit value instead; see [RuntimePaths].
+//
+// # Failure mode
+//
+// Build panics on a declaration the pipeline cannot serve — a missing
+// output suffix, a duplicate output tag, a template tree that is not
+// there. Every one is a mistake in this function rather than in a
+// consumer's source, so it fires on the first construction in any
+// test rather than on a run that renders a short file and explains
+// why in no output at all.
 func New() *Plugin {
-	p := &Plugin{}
+	p := &Plugin{Base: sdkgolang.NewGenerator(Name, goTemplates, GoOutputs()...).
+		Version(Version).
+		// The foundation bucket: the double is a base type other
+		// generators decorate, so it must exist before composition and
+		// cross-cutting plugins run.
+		Priority(sdk.GeneratorFoundation).
+		Provides(Capability).
+		// Nothing is required: the plugin reads source interfaces and
+		// depends on no other plugin's contribution.
+		Directives(directives()...).
+		Build()}
 	p.Holder = sdk.BindOptions(&p.opts)
 	return p
 }
 
-// Name returns [Name].
-func (*Plugin) Name() string { return Name }
-
-// Version returns [Version].
-func (*Plugin) Version() string { return Version }
-
-// Priority places the plugin in the foundation bucket: the stub is a
-// base type other generators may decorate, so it must exist before
-// composition and cross-cutting plugins run.
-func (*Plugin) Priority() sdk.Priority { return sdk.GeneratorFoundation }
-
-// Provides advertises [Capability].
-func (*Plugin) Provides() []string { return []string{Capability} }
-
-// Requires returns nil — the plugin reads source interfaces and
-// depends on no other plugin's contribution.
-func (*Plugin) Requires() []string { return nil }
-
-// Directives declares the `//testkit:stub` schema.
+// directives declares the `//testkit:stub` schema.
 //
 // The directive takes no positional argument and denies negation: a
 // stub exists exactly where one is declared, so deleting the line is
 // the suppression and a negated form would have nothing to act on.
-func (*Plugin) Directives() []sdk.DirectiveSchema {
+func directives() []sdk.DirectiveSchema {
 	return []sdk.DirectiveSchema{
 		sdk.NewDirective(DirectiveName).
 			Describe(
@@ -159,41 +172,11 @@ func (*Plugin) Directives() []sdk.DirectiveSchema {
 					"exists only where declared, so removing the directive is the " +
 					"suppression.",
 			).
-			On(node.KindInterface).
+			On(sdk.NodeKindInterface).
 			DenyNegation().
 			Build(),
 	}
 }
-
-// Outputs dispatches to the per-language adapter. Adding a language
-// adds an arm here; unknown languages return nil, which the
-// framework reads as "no routable output for this backend".
-func (*Plugin) Outputs(lang string) []sdk.Output {
-	if lang == langGo {
-		return GoOutputs()
-	}
-	return nil
-}
-
-// Templates dispatches to the per-language adapter's template tree.
-func (*Plugin) Templates(lang string) (fs.FS, bool) {
-	if lang == langGo {
-		return GoTemplates()
-	}
-	return nil, false
-}
-
-// TemplateFuncs dispatches to the per-language adapter's funcmap.
-func (*Plugin) TemplateFuncs(lang string) template.FuncMap {
-	if lang == langGo {
-		return GoFuncMap()
-	}
-	return nil
-}
-
-// TemplateOverrides returns nil — the plugin replaces no canonical
-// funcmap entry.
-func (*Plugin) TemplateOverrides(string) template.FuncMap { return nil }
 
 // suffix returns the configured stub-type suffix, or the documented
 // default when unset.
@@ -206,12 +189,28 @@ func (p *Plugin) suffix() string {
 
 // Method is one rendered interface method.
 //
-// The signature itself — parameters, returns, locals, and the named-return
-// decision — comes from [signature], because the suite, bench, and model
-// generators project the same source the same way. What this type adds is the
-// naming convention specific to a double.
+// The signature itself — the method's name, its parameters, its return slots
+// with their recorded-call fields and capture locals, and the named-return
+// decision — comes from [golang.Sig], because every Go generator projects the
+// same source the same way and four independent implementations had already
+// disagreed about it. What this type adds is the naming convention specific to
+// a double.
 type Method struct {
-	Name string
+	// Sig is the source signature in rendered form, embedded so `.Name`,
+	// `.Params`, `.Returns`, `.NamedReturns` and `.Source` promote onto the
+	// method and the templates can hand the whole projection to the shared
+	// list helpers.
+	//
+	// [golang.Sig.Source] is the escape hatch a contributing generator reads
+	// the method's own metadata through. Carried rather than re-derived
+	// because after resolution the method set is not the interface's declared
+	// methods, and a contributor walking the declarations would miss
+	// everything an embedded interface added.
+	//
+	// [golang.Sig.NamedReturns] decides whether the generated signature
+	// declares its return names. See [golang.NamedReturnsUsable] for why that
+	// is all-or-nothing rather than per-return.
+	*golang.Sig
 
 	// CallType is the identifier of the per-method recorded-call
 	// struct — `<Iface><Method>Call`.
@@ -235,54 +234,22 @@ type Method struct {
 	// method's configuration — `On<Method>`.
 	OnField string
 
-	Params  []signature.Param
-	Returns []signature.Return
-
-	// NamedReturns reports whether the generated signature declares
-	// its return names. See [signature.NamedReturnsUsable] for why this is
-	// all-or-nothing rather than per-return.
-	NamedReturns bool
-
-	// Shape is the detector classification the annotator stamped, empty when
-	// the signature matched no detector. It names what the method *is* —
-	// `reader`, `writer`, `deleter` — which is what decides the extra
-	// configuration a double can usefully offer for it.
-	Shape string
-
-	// Iterator classifies the method's return as a range-over-func sequence,
-	// empty when it returns none. A sequence-returning method gains Yields
-	// helpers, because building one by hand in every test is a closure a
-	// caller should not have to write.
-	Iterator signature.Iterator
-
-	// IteratorElem is the sequence's element type, nil when the method
-	// returns no sequence.
-	IteratorElem emit.Ref
-
-	// IteratorSecond is a Seq2's second type argument, nil for a Seq or for a
-	// method returning no sequence.
-	IteratorSecond emit.Ref
-
-	// IteratorYieldsError reports the `iter.Seq2[V, error]` shape, where a
-	// helper can usefully append a terminal failure after the values.
-	IteratorYieldsError bool
+	// Sequence classifies the method's return as a range-over-func sequence.
+	// Its zero value reads as "not one", so a template branches on
+	// [golang.Sequence.Kind] with no separate flag beside it.
+	//
+	// A sequence-returning method gains Yields helpers, because building one by
+	// hand in every test is a closure a caller should not have to write.
+	Sequence golang.Sequence
 
 	// OrderAfter is the prerequisite method this one may only follow, taken
 	// from the orderafter mixin's `fn` parameter. Empty when unconstrained.
 	OrderAfter string
 
-	// Source is the method this was projected from.
-	//
-	// Carried so a contributing generator can read the method's own metadata
-	// without re-deriving the interface's method set: after flattening, that
-	// set is not the interface's declared methods, and a contributor walking
-	// the declarations would miss everything an embedded interface added.
-	Source *node.Method
-
 	// From names the embedded interface that contributed this method, empty
 	// for one the source declared directly.
 	//
-	// Carried so the generated field says where it came from: a flattened
+	// Carried so the generated field says where it came from: a resolved
 	// method set reads as if every method were declared on the interface, and
 	// a double that grows because an embedded interface gained a method would
 	// otherwise offer nothing to explain the change.
@@ -302,43 +269,24 @@ type Method struct {
 // the template decides whether to emit the configuration that mixin implies.
 func (m Method) HasMixin(name string) bool { return slices.Contains(m.Mixins, name) }
 
-// Mixin names this plugin reads. The shape annotator owns the vocabulary;
-// these are the subset that changes what a double emits, as opposed to the
-// ones that only state a law for the suite and model tiers.
-const (
-	// MixinDeprecated marks a method whose use should be reported.
-	MixinDeprecated = "deprecated"
-
-	// MixinOrderAfter marks a method that may only be called once its
-	// prerequisite has been.
-	MixinOrderAfter = "orderafter"
-)
-
-// MixinOrderAfterParam is the key carrying the prerequisite method's name, as
-// in `//testkit:mixin orderafter fn=Prepare`.
-const MixinOrderAfterParam = "fn"
-
-// HasResults reports whether the method returns anything, which decides
-// whether a fixed-return holder and its Returns setter are emitted at all.
-func (m Method) HasResults() bool { return len(m.Returns) > 0 }
-
-// ErrReturn returns the method's error slot, or nil when it has none.
+// Deprecated reports whether the source marked this method deprecated.
 //
-// Fault injection stamps the injected error onto that slot before recording
-// and returns it, so the dispatch body needs to name the field rather than
-// assume the error is last.
-func (m Method) ErrReturn() *signature.Return {
-	for i, r := range m.Returns {
-		if r.Error {
-			return &m.Returns[i]
-		}
-	}
-	return nil
-}
+// Answered here rather than by a template asking [Method.HasMixin] for a name
+// spelled as a template literal. A literal in a template is the one copy of an
+// upstream name that neither a rename nor a compiler can reach, and the mixin
+// vocabulary belongs to the shape annotator.
+func (m Method) Deprecated() bool { return m.HasMixin(MixinDeprecated) }
+
+// HasResults and ErrReturn are promoted from the embedded [golang.Sig].
+// HasResults decides whether a fixed-return holder and its Returns setter are
+// emitted at all; ErrReturn names the slot fault injection stamps the injected
+// error onto before recording, found by flag rather than by position because a
+// signature returning `(error, bool)` is unusual and legal.
 
 // Stub is the emit value rendered into the primary output.
 type Stub struct {
 	sdk.BaseEmit
+	RuntimePaths
 
 	// TypeName is the stub struct's identifier — `<Iface><Suffix>`.
 	TypeName string
@@ -352,14 +300,14 @@ type Stub struct {
 	// A double routed into its own package through `out=` no longer shares a
 	// package with the interface it doubles, so the reference has to carry
 	// one. Where the two do share a package the backend renders it bare.
-	IfaceRef *emit.Expr
+	IfaceRef *sdk.Expr
 
 	Methods []Method
 
 	// TypeParams is the source interface's type-parameter list, in the form
 	// `renderTypeParams` spells as `[K comparable, V any]`. Empty for a
 	// non-generic interface, where the helper renders nothing.
-	TypeParams []*emit.TypeParam
+	TypeParams []*sdk.EmitTypeParam
 
 	// TypeArgs is the same list in use position — `[K, V]`, or empty. Every
 	// generated identifier that names one of the double's own types has to
@@ -370,7 +318,7 @@ type Stub struct {
 	// generic double at, in parameter order. Empty for a non-generic double,
 	// and for one whose constraints admit no witness — the latter gets no
 	// guard, because there is no way to name the types it would hold at.
-	Witnesses []emit.Ref
+	Witnesses []sdk.Ref
 }
 
 // Generic reports whether the double is parameterised, which is what decides
@@ -405,7 +353,7 @@ func (*Stub) Kind() sdk.Kind { return KindStub }
 //
 // The two references resolve from different places, and the
 // difference is the whole reason [Tests] implements
-// [emit.OutputPackageSetter]:
+// [sdk.OutputPackageSetter]:
 //
 //   - IfaceRef names the source interface, which is hand-written and
 //     stays where the author put it. Its package is known during
@@ -415,23 +363,24 @@ func (*Stub) Kind() sdk.Kind { return KindStub }
 //     Layout, so it is filled in by [Tests.SetOutputPackages].
 type Tests struct {
 	sdk.BaseEmit
+	RuntimePaths
 
 	TypeName  string
 	IfaceName string
 
 	// IfaceRef qualifies the source interface. Set during Generate.
-	IfaceRef *emit.Expr
+	IfaceRef *sdk.Expr
 
 	// CtorRef qualifies the double's constructor, which lives beside it and
 	// therefore follows the same routing.
-	CtorRef *emit.Expr
+	CtorRef *sdk.Expr
 
 	// StubRef qualifies the generated stub. Set during Generate
 	// against the source package as a provisional value, then
 	// corrected by [Tests.SetOutputPackages] once routing resolves.
 	// The provisional value is what a run without a Layout phase —
 	// a direct generator unit test — observes.
-	StubRef *emit.Expr
+	StubRef *sdk.Expr
 
 	Methods []Method
 
@@ -445,7 +394,7 @@ type Tests struct {
 	// form. The checks live in generic helpers carrying it, because a Go test
 	// function cannot take type parameters and an entry point therefore has to
 	// instantiate rather than parameterise.
-	TypeParams []*emit.TypeParam
+	TypeParams []*sdk.EmitTypeParam
 
 	// Witnesses are the concrete types each entry point instantiates at, in
 	// parameter order. Empty for a non-generic double.
@@ -453,7 +402,7 @@ type Tests struct {
 	// References rather than strings: a witness declared in the source package
 	// is not reachable unqualified from the external test package, exactly as a
 	// sentinel is not.
-	Witnesses []emit.Ref
+	Witnesses []sdk.Ref
 
 	// Generic reports that the double is parameterised and no witness could be
 	// found for it, which is the one case where a companion cannot be written.
@@ -481,7 +430,7 @@ func (*Tests) Kind() sdk.Kind { return KindStubTests }
 // compile error naming the symbol, while a bare name silently binds
 // to whatever else is in scope.
 func (t *Tests) SetOutputPackages(byTag map[string]string) {
-	path, ok := emitq.PrimaryPackage(byTag)
+	path, ok := sdk.PrimaryPackage(byTag)
 	if !ok {
 		return
 	}
@@ -500,24 +449,38 @@ func (t *Tests) SetOutputPackages(byTag map[string]string) {
 // diagnostic — a double with no behaviour to stand in for is
 // certainly a mistake, and emitting an empty struct would hide it.
 func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
-	c := sdk.NewProvenance(Name, sdk.EmitTarget{})
+	c := sdk.NewProvenance(Name)
 	for _, iface := range ctx.Reader.Interfaces().Slice() {
 		if !iface.HasPositiveDirective(DirectiveName) {
 			continue
 		}
+		if golang.IsConstraintInterface(iface) {
+			// A constraint declares a type set, not a method-set contract, so
+			// there is no behaviour to stand in for. Declined here rather than
+			// left to the embed walk: a term like `~MyInt` is a Named ref and
+			// indistinguishable from an unloaded interface by shape alone, so
+			// the walk would report it as an embed the run failed to resolve —
+			// naming something the author never wrote. This reads the Go
+			// frontend's own stamp, which is the only answer that knows.
+			ctx.Diag.Errorf(iface.Pos(),
+				"%s: interface %q carries //testkit:%s but is a generic constraint, not a "+
+					"method-set contract; there is nothing to double",
+				Name, iface.QName(), DirectiveName)
+			continue
+		}
 		typeName := iface.Name + p.suffix()
-		full, resolved := flatten(ctx, iface)
-		if !resolved {
+		set, complete := resolveMethods(ctx, iface)
+		if !complete {
 			// Nothing is emitted for an interface whose method set could not be
 			// completed. A double missing a method does not satisfy the
 			// interface it doubles, so it cannot be passed anywhere that
 			// interface is expected — which is the whole of what a double is
 			// for. Recording faithfully is worth nothing if nothing can accept
-			// it, so the diagnostic raised during the walk stands alone rather
+			// it, so the diagnostic raised during resolution stands alone rather
 			// than accompanying an artefact that cannot be used.
 			continue
 		}
-		methods := methodsOf(iface, full)
+		methods := methodsOf(iface, set)
 
 		// Measured after projection rather than on the source method set: an
 		// interface whose every method is integration-only has methods but
@@ -532,39 +495,92 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 
 		witnesses := witnessesOf(ctx, iface)
 
-		base := emitq.Base(c, iface)
+		base := sdk.EmitBase(c, iface)
 
 		// Queued in one call rather than two. The pair differs only in its emit
 		// kind and output tag, and a second append is where the two would drift.
-		if err := emitq.Append(ctx, c, SlotName, iface,
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface,
 			&Stub{
-				BaseEmit:   base,
-				TypeName:   typeName,
-				IfaceName:  iface.Name,
-				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
-				Methods:    methods,
-				TypeParams: generic.Params(iface.TypeParams),
-				TypeArgs:   generic.Args(iface.TypeParams),
-				Witnesses:  witnesses,
+				BaseEmit:     base,
+				RuntimePaths: GoRuntime(),
+				TypeName:     typeName,
+				IfaceName:    iface.Name,
+				IfaceRef:     sdk.NewExternal(iface.Package, iface.Name),
+				Methods:      methods,
+				TypeParams:   golang.TypeParamDecls(iface.TypeParams),
+				TypeArgs:     golang.TypeParamNames(iface.TypeParams),
+				Witnesses:    witnesses,
 			},
 			&Tests{
-				BaseEmit:   emitq.Tagged(base, GoTestOutputTag),
-				TypeName:   typeName,
-				IfaceName:  iface.Name,
-				StubRef:    sdk.NewExternal(iface.Package, typeName),
-				CtorRef:    sdk.NewExternal(iface.Package, "New"+typeName),
-				IfaceRef:   sdk.NewExternal(iface.Package, iface.Name),
-				Methods:    methods,
-				TypeArgs:   generic.Args(iface.TypeParams),
-				TypeParams: generic.Params(iface.TypeParams),
-				Witnesses:  witnesses,
-				Generic:    len(iface.TypeParams) > 0 && len(witnesses) == 0,
+				BaseEmit:     sdk.EmitBaseTagged(base, GoTestOutputTag),
+				RuntimePaths: GoRuntime(),
+				TypeName:     typeName,
+				IfaceName:    iface.Name,
+				StubRef:      sdk.NewExternal(iface.Package, typeName),
+				CtorRef:      sdk.NewExternal(iface.Package, "New"+typeName),
+				IfaceRef:     sdk.NewExternal(iface.Package, iface.Name),
+				Methods:      methods,
+				TypeArgs:     golang.TypeParamNames(iface.TypeParams),
+				TypeParams:   golang.TypeParamDecls(iface.TypeParams),
+				Witnesses:    witnesses,
+				Generic:      len(iface.TypeParams) > 0 && len(witnesses) == 0,
 			},
 		); err != nil {
-			return err
+			// Wrapped even though the queue names the plugin and the slot: what
+			// it cannot name is which declaration the run was on when it failed,
+			// and that is the only part a reader needs to find the source line.
+			return fmt.Errorf("%s: queue interface %q: %w", Name, iface.Name, err)
 		}
 	}
 	return nil
+}
+
+// resolveMethods returns iface's full method set and whether it is complete.
+//
+// Resolution itself is [sdk.StoreReader.MethodSet]: the embed walk, the
+// duplicate rule, the cycle guard and the attribution of a method to the embed
+// it arrived through are all facts about a Go method set. What is decided here
+// is what testkit does with an incomplete one — refuse to emit, because a
+// double missing a method cannot be passed anywhere the interface is expected.
+//
+// Severity splits on whether a wider run would fix it. An embed this run did
+// not load is a warning: a narrow invocation is legitimate, and one unreachable
+// dependency should not cost a project the rest of its doubles. A
+// non-interface or parameterised embed is a source defect no wider run repairs.
+func resolveMethods(ctx *sdk.GeneratorContext, iface *sdk.Interface) (sdk.MethodSetResult, bool) {
+	set := ctx.Reader.MethodSet(iface)
+	complete := true
+	for _, issue := range set.Issues {
+		// Spelled the way the source wrote it — `io.Closer`, not the bare
+		// `Closer` the reference carries — so a diagnostic names something the
+		// author can search for.
+		written := golang.Display(issue.Embed.Type)
+		switch issue.Reason {
+		case sdk.ReasonCyclic:
+			// Illegal in Go and unreachable from a real frontend. The walk
+			// broke the cycle only after the interface it points back at had
+			// already contributed, so the set is short of nothing and the
+			// double is still worth emitting.
+			ctx.Diag.Warnf(issue.Embed.Pos(),
+				"%s: interface %q embeds %q through a cycle; the walk broke out of it, "+
+					"so the double carries whatever the source had already contributed",
+				Name, iface.QName(), written)
+		case sdk.ReasonUnresolved:
+			complete = false
+			ctx.Diag.Warnf(issue.Embed.Pos(),
+				"%s: interface %q embeds %q, which this run did not load, so its "+
+					"method set cannot be completed; nothing is generated, because a "+
+					"double missing a method cannot stand in for the interface it doubles",
+				Name, iface.QName(), written)
+		default:
+			complete = false
+			ctx.Diag.Errorf(issue.Embed.Pos(),
+				"%s: interface %q embeds %q, which %s; nothing is generated, because a "+
+					"double missing a method cannot stand in for the interface it doubles",
+				Name, iface.QName(), written, issue.Reason)
+		}
+	}
+	return set, complete
 }
 
 // witnessesOf resolves the concrete types the companion's entry points
@@ -579,14 +595,14 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 // wrong witness surfaces when the generated file is compiled. That is a loud
 // failure naming the type, which is the best available outcome for a fact the
 // generator has no way to know.
-func witnessesOf(ctx *sdk.GeneratorContext, iface *node.Interface) []emit.Ref {
+func witnessesOf(ctx *sdk.GeneratorContext, iface *sdk.Interface) []sdk.Ref {
 	if len(iface.TypeParams) == 0 {
 		return nil
 	}
 	if pinned, ok := pinnedWitnesses(ctx, iface); ok {
 		return pinned
 	}
-	return witness.For(iface.TypeParams)
+	return golang.Witnesses(iface.TypeParams)
 }
 
 // pinnedWitnesses reads the witness key off the interface's stub directive,
@@ -595,44 +611,40 @@ func witnessesOf(ctx *sdk.GeneratorContext, iface *node.Interface) []emit.Ref {
 // The second result distinguishes "the source pinned nothing" from "the source
 // pinned something unusable": the first falls through to derivation, the second
 // has already been diagnosed and must not be silently replaced by a guess.
-func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *node.Interface) ([]emit.Ref, bool) {
-	for _, dir := range iface.Directives() {
-		if dir.Name != directive.Name(DirectiveName) {
-			continue
-		}
-		raw, given := dir.KV[WitnessKey]
-		if !given {
-			continue
-		}
-		names := strings.Split(raw, ",")
-		if len(names) != len(iface.TypeParams) {
-			ctx.Diag.Errorf(iface.Pos(),
-				"%s: %s=%q on %s names %d type%s for %d type parameter%s; supply one per parameter",
-				Name, WitnessKey, raw, iface.Name,
-				len(names), plural(len(names)), len(iface.TypeParams), plural(len(iface.TypeParams)))
-			return nil, true
-		}
-		out := make([]emit.Ref, 0, len(names))
-		for _, n := range names {
-			out = append(out, witnessRef(iface, strings.TrimSpace(n)))
-		}
-		return out, true
-	}
-	return nil, false
-}
-
-// witnessRef lifts one witness name into the form the companion renders.
 //
-// A predeclared type renders bare. Anything else is taken to be declared in
-// the source package and qualified against it — the companion lives in an
-// external test package and reaches nothing there unqualified. A name carrying
-// its own qualifier is not resolvable: the generator would have to invent the
-// import path, so the author declares a local alias instead.
-func witnessRef(iface *node.Interface, name string) emit.Ref {
-	if _, builtin := predeclared[name]; builtin {
-		return emit.Builtin(name)
+// Each name is lifted by [golang.RefFor], which renders a predeclared type
+// bare and qualifies anything else against the source package — the companion
+// lives in an external test package and reaches nothing there unqualified.
+func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *sdk.Interface) ([]sdk.Ref, bool) {
+	// The first directive of this name rather than the first carrying the key.
+	// The schema denies negation but does not forbid a second `//testkit:stub`
+	// line, so a source putting the witness list on that second line now gets
+	// derived witnesses where it once got pinned ones. Both answers are silent,
+	// and the shorter rule is the one every source in the corpus writes.
+	// Unreachable from Generate, which walks only interfaces carrying the
+	// directive; kept because the alternative is a nil dereference if the walk
+	// is ever widened.
+	dir := iface.Directive(DirectiveName)
+	if dir == nil {
+		return nil, false
 	}
-	return emit.External(iface.Package, name)
+	raw, given := dir.KV[WitnessKey]
+	if !given {
+		return nil, false
+	}
+	names := strings.Split(raw, ",")
+	if len(names) != len(iface.TypeParams) {
+		ctx.Diag.Errorf(iface.Pos(),
+			"%s: %s=%q on %s names %d type%s for %d type parameter%s; supply one per parameter",
+			Name, WitnessKey, raw, iface.Name,
+			len(names), plural(len(names)), len(iface.TypeParams), plural(len(iface.TypeParams)))
+		return nil, true
+	}
+	out := make([]sdk.Ref, 0, len(names))
+	for _, n := range names {
+		out = append(out, golang.RefFor(strings.TrimSpace(n), iface.Package))
+	}
+	return out, true
 }
 
 // plural returns the suffix that makes a count read correctly.
@@ -643,193 +655,56 @@ func plural(n int) string {
 	return "s"
 }
 
-// iteratorReturn returns the method's sole return when it has exactly one,
-// which is the only shape a sequence helper can drive.
+// methodsOf lifts every method a double carries into the rendered form both
+// outputs share. Free function rather than a method: the lifting depends only
+// on the source signature and the annotator's stamps, not on plugin options.
 //
-// A method returning `(iter.Seq[V], error)` is deliberately not treated as a
-// sequence: the helper would have to invent the error's value on every call,
-// and inventing return values is what makes a double lie.
-func iteratorReturn(m *node.Method) *node.TypeRef {
-	if len(m.Returns) != 1 {
-		return nil
+// Driven off [sdk.MethodSetResult.Entries] rather than Methods, because the
+// two are index-aligned and only the entry says which embed a method arrived
+// through — the fact the generated field's doc comment carries.
+func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
+	out := make([]Method, 0, len(set.Entries))
+	for _, entry := range set.Entries {
+		m := entry.Method
+		from, _ := sdk.EmbedName(entry.From)
+		out = append(out, Method{
+			// One projection replaces four calls: the parameter identifiers,
+			// the return fields, the capture locals and the named-return
+			// decision are derived together, and the receiver identifier the
+			// collision guard reserves is the one the templates bind.
+			// Named rather than left to default, because naming it is what
+			// makes the guard run: the identifier is made unique against the
+			// parameters, so an interface declaring `Put(s Session) error`
+			// binds the receiver to something else instead of declaring `s`
+			// twice in one signature. The letter is eidos's default, so no
+			// output moves except the signatures that did not compile.
+			Sig:        golang.SigOf(m, golang.WithReceiverIdent(golang.DefaultReceiverIdent)),
+			From:       from,
+			CallType:   iface.Name + m.Name + "Call",
+			StubType:   iface.Name + m.Name + "Stub",
+			ReturnType: iface.Name + m.Name + "Return",
+			OnField:    "On" + m.Name,
+			Mixins:     shape.Mixins(m.Meta()),
+			OrderAfter: orderAfter(m),
+			Sequence:   golang.SequenceOf(m),
+		})
 	}
-	return m.Returns[0].Type
+	return out
 }
 
 // orderAfter reads the prerequisite method from the orderafter mixin's
 // parameter, or returns empty when the method carries no such constraint.
-func orderAfter(m *node.Method) string {
-	if !slices.Contains(shape.Mixins(m.Meta()), MixinOrderAfter) {
+//
+// Three steps, none of which eidos can take for us: confirm the mixin is
+// attached, read the stamp, and take the trailing identifier off the qualified
+// name the shape resolver rewrote it into. Generated code calls the prerequisite
+// on the subject it already holds, so the qualified form is exactly what it
+// cannot use.
+func orderAfter(m *sdk.Method) string {
+	bag := m.Meta()
+	if !slices.Contains(shape.Mixins(bag), MixinOrderAfter) {
 		return ""
 	}
-	name, _ := shape.MixinParamKey(MixinOrderAfter, MixinOrderAfterParam).Get(m.Meta())
-	// The resolver rewrites the stamp into a qualified name; the double calls
-	// the prerequisite on itself, so only the method identifier is usable.
-	return nodes.LocalName(name)
-}
-
-// sourceMethod pairs a source method with the embedded interface that
-// contributed it, so the projection can say where a flattened method came
-// from without re-walking the embed graph.
-type sourceMethod struct {
-	Method *node.Method
-
-	// From is the contributing interface's name, empty for a method the
-	// interface declared itself.
-	From string
-}
-
-// flatten returns iface's full source method set and whether every embed
-// resolved.
-//
-// Embedded methods come first, depth-first in the order the source embeds
-// them, then the interface's own — which is how the source reads, and what
-// keeps the generated field order stable as an embed gains a method.
-//
-// # Why flatten rather than compose
-//
-// A double could embed the doubles of the interfaces its source embeds, which
-// would mirror the source exactly. It cannot: an embedded interface need not
-// carry `//testkit:stub`, so its double may not exist. Embedding is a fact
-// about the source rather than an opt-in, so the method set is copied.
-//
-// # Hazards
-//
-// Resolution is against the interfaces this run loaded, so the result depends
-// on the invocation and not only on the source: a run over one package cannot
-// see an embed declared in another. The difference is always toward a smaller
-// double rather than a wrong one, and every unresolved embed is warned about
-// by name — but a narrower invocation does produce a different file from the
-// same source, which is the cost of resolving embeds at all.
-func flatten(ctx *sdk.GeneratorContext, iface *node.Interface) ([]sourceMethod, bool) {
-	byQName := make(map[string]*node.Interface)
-	for _, candidate := range ctx.Reader.Interfaces().Slice() {
-		byQName[candidate.QName()] = candidate
-	}
-	var (
-		out     []sourceMethod
-		seen    = make(map[string]struct{})
-		visited = make(map[string]struct{})
-	)
-	resolved := collect(ctx, iface, "", byQName, seen, visited, &out)
-	return out, resolved
-}
-
-// collect appends host's method set to out, recursing into its embeds first.
-//
-// from names the interface the caller is collecting on behalf of, so a method
-// reached through a chain of embeds is attributed to the embed the source
-// actually wrote rather than to whichever interface declared it.
-func collect(
-	ctx *sdk.GeneratorContext,
-	host *node.Interface,
-	from string,
-	byQName map[string]*node.Interface,
-	seen, visited map[string]struct{},
-	out *[]sourceMethod,
-) bool {
-	// Guards a cycle. Illegal in Go and unreachable from a real frontend, but
-	// a malformed graph should fail to terminate the walk rather than the run.
-	if _, looping := visited[host.QName()]; looping {
-		return true
-	}
-	visited[host.QName()] = struct{}{}
-
-	resolved := true
-	for _, embed := range host.Embeds {
-		// A union term in type-set position is not an interface and carries no
-		// methods. Such a type is never a stub target, so it is skipped rather
-		// than reported.
-		if embed.Type == nil || embed.Type.Name == "" {
-			continue
-		}
-		written := embedName(embed.Type)
-		if len(embed.Type.TypeArgs) > 0 {
-			ctx.Diag.Errorf(embed.Pos(),
-				"%s: interface %q embeds the generic %q; its methods name that "+
-					"interface's type parameters rather than this one's, which "+
-					"flattening does not substitute",
-				Name, host.QName(), written)
-			resolved = false
-			continue
-		}
-		// An embed with no package is declared alongside its embedder, which
-		// is what the frontend records for an in-package reference.
-		pkg := embed.Type.Package
-		if pkg == "" {
-			pkg = host.Package
-		}
-		target, known := byQName[pkg+"."+embed.Type.Name]
-		if !known {
-			ctx.Diag.Warnf(embed.Pos(),
-				"%s: interface %q embeds %q, which this run did not load, so its "+
-					"method set cannot be completed; no double is generated, "+
-					"because one missing a method cannot stand in for the "+
-					"interface it doubles",
-				Name, host.QName(), written)
-			resolved = false
-			continue
-		}
-		attributed := from
-		if attributed == "" {
-			attributed = embed.Type.Name
-		}
-		if !collect(ctx, target, attributed, byQName, seen, visited, out) {
-			resolved = false
-		}
-	}
-
-	for _, m := range host.Methods {
-		// Go admits overlapping embedded method sets only where the signatures
-		// agree, so a repeat is the same method reached twice and the first
-		// arrival is as good as any.
-		if _, dup := seen[m.Name]; dup {
-			continue
-		}
-		seen[m.Name] = struct{}{}
-		*out = append(*out, sourceMethod{Method: m, From: from})
-	}
-	return resolved
-}
-
-// embedName spells an embed the way the source wrote it, so a diagnostic names
-// something the author can find. A cross-package embed reads as `io.Closer`
-// rather than as the bare `Closer` the reference carries.
-func embedName(t *node.TypeRef) string {
-	if t.Package == "" {
-		return t.Name
-	}
-	return path.Base(t.Package) + "." + t.Name
-}
-
-// methodsOf lifts every method a double carries into the rendered form both
-// outputs share. Free function rather than a method: the lifting depends only
-// on the source signature and the annotator's stamps, not on plugin options.
-func methodsOf(iface *node.Interface, full []sourceMethod) []Method {
-	out := make([]Method, 0, len(full))
-	for _, sm := range full {
-		m := sm.Method
-		params := signature.ParamsOf(m)
-		named := signature.NamedReturnsUsable(m)
-		out = append(out, Method{
-			Name:                m.Name,
-			Source:              m,
-			From:                sm.From,
-			CallType:            iface.Name + m.Name + "Call",
-			StubType:            iface.Name + m.Name + "Stub",
-			ReturnType:          iface.Name + m.Name + "Return",
-			OnField:             "On" + m.Name,
-			Params:              params,
-			Returns:             signature.WithLocals(signature.ReturnsOf(m), params, named),
-			NamedReturns:        named,
-			Shape:               shape.Get(m.Meta()),
-			Mixins:              shape.Mixins(m.Meta()),
-			OrderAfter:          orderAfter(m),
-			Iterator:            signature.IteratorOf(iteratorReturn(m)),
-			IteratorElem:        signature.IteratorElem(iteratorReturn(m)),
-			IteratorSecond:      signature.IteratorSecond(iteratorReturn(m)),
-			IteratorYieldsError: signature.IteratorYieldsError(iteratorReturn(m)),
-		})
-	}
-	return out
+	name, _ := shape.MixinParamKey(MixinOrderAfter, MixinOrderAfterParam).Get(bag)
+	return golang.LocalName(name)
 }

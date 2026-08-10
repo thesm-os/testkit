@@ -5,7 +5,7 @@
 //
 // Source:    corpus/enum/region/iface.go
 // Plugins:   golang 1.0.0, enum 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/enum/...
+// Command:   testkit run ./corpus/...
 
 package region_test
 
@@ -57,7 +57,7 @@ func TestRegionVariants(t *testing.T) {
 		// A conversion admits any value of the underlying type, so this is the
 		// one place an undeclared value is turned away. An enum whose zero is
 		// itself a variant has no other check that reaches this arm.
-		testkit.False(t, region.Region("__testkit_unknown__").IsValid(), "an undeclared value must not be valid")
+		testkit.False(t, region.Region("__eidos_unknown__").IsValid(), "an undeclared value must not be valid")
 	})
 
 	t.Run("every declared variant is valid", func(t *testing.T) {
@@ -101,7 +101,7 @@ func TestRegionText(t *testing.T) {
 		t.Parallel()
 		// Admitting it would let an unnamed value in through the one door
 		// that exists to keep it out.
-		_, err := region.ParseRegion("Region__no_such_variant")
+		_, err := region.ParseRegion("__eidos_unknown__")
 		testkit.ErrorIs(t, err, region.ErrUnknownRegion, "unknown text must be refused")
 	})
 
@@ -110,7 +110,7 @@ func TestRegionText(t *testing.T) {
 		// A conversion admits any value of the underlying type. One whose
 		// fallback collided with a declared variant's text would be
 		// indistinguishable from it in a log.
-		out := region.Region("__testkit_unknown__")
+		out := region.Region("__eidos_unknown__")
 		for _, v := range all {
 			testkit.NotEqual(t, out.String(), v.String(), "an undeclared value must render distinctly")
 		}
@@ -140,10 +140,10 @@ func TestRegionMarshalling(t *testing.T) {
 		// The decoder is the boundary an unnamed value arrives at, so refusing
 		// here is what keeps it out of everything downstream.
 		var got region.Region
-		testkit.True(t, got.UnmarshalText([]byte("Region__no_such_variant")) != nil,
+		testkit.True(t, got.UnmarshalText([]byte("__eidos_unknown__")) != nil,
 			"unknown text must not decode")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance c5dba66d693f4d56f42d3150eaa7f9503bf9014638ed544c58689da92f70caee
+// testkit:provenance bcf070dcc8cd3c37c45107682054bf097fcbb1fc3b3fcb4008dd898b4a89a7fd
