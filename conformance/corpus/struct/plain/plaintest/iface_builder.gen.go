@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/plain/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/plain/... ./corpus/struct/config/...
+// Command:   testkit run ./corpus/...
 
 package plaintest
 

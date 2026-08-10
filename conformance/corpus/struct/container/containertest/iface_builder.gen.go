@@ -2,7 +2,7 @@
 //
 // Source:    corpus/struct/container/iface.go
 // Plugins:   golang 1.0.0, builder 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/struct/...
+// Command:   testkit run ./corpus/...
 
 package containertest
 

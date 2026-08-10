@@ -2,7 +2,7 @@
 //
 // Source:    corpus/enum/priority/iface.go
 // Plugins:   golang 1.0.0, enum 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/enum/...
+// Command:   testkit run ./corpus/...
 
 package priority
 

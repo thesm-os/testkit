@@ -51,13 +51,24 @@ license:
   exclude_dirs: [.git, vendor, dist, node_modules, golden]
   # Filename globs (matched via filepath.Match) skipped during the
   # walk. Covers the generated-file conventions ergon recognises.
-  # Two spellings, because the generators do not share one. Most write
-  # `<source>_<plugin>.gen.go`; the enum generator writes
-  # `<source>.enum_gen.go`, so a rule keyed on `.gen.` alone misses it and
-  # reports generated files as missing a licence header they are never given.
+  #
+  # Every suffix a generator declares needs an entry, and the list is easy to
+  # leave half-written because the generators do not share one spelling. Most
+  # write `<source>_<plugin>.gen.go` and `<source>_<plugin>.gen_test.go`; the
+  # enum generator writes `<source>.enum_gen.go` and `<source>.enum_test.go`.
+  #
+  # A missing entry is not a cosmetic slip. The licence step stamps the file, the
+  # generator does not emit that header, and `testkit check` then reports the
+  # file as drifting on every run — for a difference nothing in the pipeline
+  # produced. `.enum_test.go` was missing and did exactly that to six corpus
+  # files; `.enum_gen.go` was covered only because `*_gen.go` happens to match it.
+  #
+  # The authority is each generator's Go suffix constants — GoPrimarySuffix and
+  # GoTestSuffix in `generator/<plugin>/<plugin>_go.go`.
   exclude_files:
     - "*.gen.go"
     - "*.gen_test.go"
+    - "*.enum_test.go"
     - "*_gen.go"
 
 # lint — `ergon lint` umbrella

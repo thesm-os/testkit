@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/lang/receivercollision/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/lang/receivercollision/...
+// Command:   testkit run ./corpus/...
 
 package receivercollisiontest
 
