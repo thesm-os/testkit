@@ -457,6 +457,39 @@ func TestRelationalMixin(t *testing.T) {
 	})
 }
 
+// A hooks check constructs the callback it registers, so the partner has to be
+// a registration and not merely a method the directive was pointed at.
+func TestHooksCheck(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits where the partner takes one callback", func(t *testing.T) {
+		t.Parallel()
+		// Params and returns both, so the literal the check builds has a
+		// signature to spell rather than an empty one.
+		cb := storefixture.Func(
+			[]*sdk.TypeRef{storefixture.Named("string")},
+			[]*sdk.TypeRef{storefixture.Named("error")},
+		)
+		testkit.True(t, hasCheckIn(t, hooksFixture(t, cb), "Fire", "hooks"),
+			"a func-typed parameter is a callback the check can build")
+	})
+
+	t.Run("emits nothing where the partner takes no func", func(t *testing.T) {
+		t.Parallel()
+		// `OnEvent(name string)` is something else the directive was aimed at,
+		// and a func literal passed to it would not compile.
+		testkit.False(t, hasCheckIn(t, hooksFixture(t, storefixture.Named("string")), "Fire", "hooks"),
+			"a registration takes a callback, not a name")
+	})
+
+	t.Run("emits nothing where the partner takes several parameters", func(t *testing.T) {
+		t.Parallel()
+		// Which one is the callback is a guess, and the mixin says nothing.
+		testkit.False(t, hasCheckIn(t, hooksTwoParamFixture(t), "Fire", "hooks"),
+			"two parameters and no rule for which registers")
+	})
+}
+
 // A sample check passes the builder's output straight to the method, so the two
 // have to fit — checked rather than assumed, since a mismatch is a generated
 // call the toolchain refuses and a render error is a file that came out short.
@@ -519,6 +552,22 @@ func TestPartitionCheck(t *testing.T) {
 		// compile, and a render error is a file that came out short.
 		testkit.False(t, hasCheckIn(t, partitionFixture(t, "absent"), "Put", "partition"),
 			"an axis outside the parameter list is nothing to vary")
+	})
+
+	t.Run("emits nothing where the reader needs what the writer does not take", func(t *testing.T) {
+		t.Parallel()
+		// A generated check receives the writer's parameters and nothing else,
+		// so a reader wanting more cannot be called from inside it.
+		testkit.False(t, hasCheckIn(t, partitionWiderReaderFixture(t), "Put", "partition"),
+			"a reader taking a parameter the writer does not is one the check cannot call")
+	})
+
+	t.Run("emits nothing where the axis has no second value", func(t *testing.T) {
+		t.Parallel()
+		// Two partitions need two partition values, and a func-typed axis
+		// yields none — so there is no second write to make.
+		testkit.False(t, hasCheckIn(t, partitionUnderivableAxisFixture(t), "Put", "partition"),
+			"an axis nothing can be written for is one nothing can be varied along")
 	})
 
 	t.Run("emits nothing where every parameter identifies the slot", func(t *testing.T) {
@@ -732,6 +781,53 @@ func missFixture(t *testing.T, shapeName string) *sdk.Store {
 	return s
 }
 
+// hooksFixture is a firing method beside a registration taking one parameter of
+// the given type.
+func hooksFixture(t *testing.T, param *sdk.TypeRef) *sdk.Store {
+	t.Helper()
+	return hooksStore(t, func(m *storefixture.MethodBuilder) { m.Param("fn", param) })
+}
+
+// hooksTwoParamFixture gives the registration two parameters, so which one
+// registers is unstated.
+func hooksTwoParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return hooksStore(t, func(m *storefixture.MethodBuilder) {
+		m.Param("fn", storefixture.Func(nil, nil))
+		m.Param("name", storefixture.Named("string"))
+	})
+}
+
+// hooksStore builds the fixture with the given registration signature.
+func hooksStore(t *testing.T, register func(*storefixture.MethodBuilder)) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("hk", "example.com/hk").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("hk/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Fire", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("event", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("OnEvent", register)
+		}).
+		Build()
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Fire" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{suite.MixinHooks}, "test")
+			shape.MixinParamKey(suite.MixinHooks, suite.MixinHooksParam).
+				Set(bag, "OnEvent", "test")
+		}
+	}
+	return s
+}
+
 // sampleFixture is a single-parameter method beside a builder producing
 // produces values of the given type.
 func sampleFixture(t *testing.T, built string, produces int) *sdk.Store {
@@ -782,6 +878,94 @@ func partitionFixture(t *testing.T, axis string) *sdk.Store {
 func payloadlessPartitionFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return partitionStore(t, "part", false)
+}
+
+// partitionWiderReaderFixture gives the reader a parameter the writer does not
+// take, so a check cannot spell the call.
+func partitionWiderReaderFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return partitionCustom(t, "part", func(m *storefixture.MethodBuilder) {
+		m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+		m.Param("part", storefixture.Named("string"))
+		m.Param("key", storefixture.Named("string"))
+		m.Param("at", storefixture.Named("int"))
+		m.Return(storefixture.Named("string"))
+		m.Return(storefixture.Named("error"))
+	}, true)
+}
+
+// partitionUnderivableAxisFixture makes the axis a type no literal can be
+// written for, so it has no alternate to vary along.
+func partitionUnderivableAxisFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("pt", "example.com/pt").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("pt/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("part", storefixture.Func(nil, nil))
+				m.Param("key", storefixture.Named("string"))
+				m.Param("value", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Read", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("part", storefixture.Func(nil, nil))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampPartition(s, "part")
+	return s
+}
+
+// partitionCustom builds the fixture with a caller-supplied reader signature.
+func partitionCustom(
+	t *testing.T, axis string, read func(*storefixture.MethodBuilder), payload bool,
+) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("pt", "example.com/pt").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("pt/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("part", storefixture.Named("string"))
+				m.Param("key", storefixture.Named("string"))
+				if payload {
+					m.Param("value", storefixture.Named("string"))
+				}
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Read", read)
+		}).
+		Build()
+	stampPartition(s, axis)
+	return s
+}
+
+// stampPartition attaches the mixin with its read partner and axis.
+func stampPartition(s *sdk.Store, axis string) {
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Put" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{suite.MixinPartition}, "test")
+			shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionRead).
+				Set(bag, "Read", "test")
+			if axis != "" {
+				shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionAxis).
+					Set(bag, axis, "test")
+			}
+		}
+	}
 }
 
 // partitionStore builds the fixture, optionally giving the write a payload the

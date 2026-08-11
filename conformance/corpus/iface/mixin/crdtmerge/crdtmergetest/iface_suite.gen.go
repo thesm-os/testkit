@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/crdtmerge/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/iface/mixin/crdtmerge/...
 
 package crdtmergetest
 
@@ -339,5 +339,584 @@ func (c *replicaConfig) run(t *testing.T, path, name string, fn func(tb testing.
 	})
 }
 
+// MixedMergeCheck is one assertion about Merge.
+//
+// Every generated check for Merge is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type MixedMergeCheck func(tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica)
+
+// MixedAddCheck is one assertion about Add.
+//
+// Every generated check for Add is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type MixedAddCheck func(tb testing.TB, subject crdtmerge.Mixed, item string)
+
+// MixedItemsCheck is one assertion about Items.
+//
+// Every generated check for Items is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+//
+// Items returns a value beside its error and takes nothing to vary, so no
+// "an error carries the zero value" check is generated for it. That check reaches
+// the failure it is about by choosing an input that misses, and this signature
+// offers none — a generated one could only demand failure from a correct
+// implementation. Write it here against a subject this package can break.
+type MixedItemsCheck func(tb testing.TB, subject crdtmerge.Mixed)
+
+// MixedFixture holds every input the generated checks run against.
+//
+// Derived from each method's parameter names and types. Every field has a
+// companion holding a second, different value: a check comparing a result
+// against a single input passes whenever the subject happened to be seeded with
+// it, and a miss check whose key happens to hit asserts nothing.
+//
+// A field whose type admits no literal — a func, a channel, a type from a
+// package this run never read — is declared and left at its zero value, and
+// every generated check that needed it was dropped rather than emitted against
+// a value nobody could write. Supply one through MixedWithFixture
+// and the check a consumer writes has something to use.
+type MixedFixture struct {
+	Peer      crdtmerge.Replica
+	PeerOther crdtmerge.Replica
+	Item      string
+	ItemOther string
+}
+
+// DefaultMixedFixture is what this run derived. Replace any field through
+// MixedWithFixture; the rest keep these values.
+func DefaultMixedFixture() MixedFixture {
+	return MixedFixture{
+		Item:      "test-item",
+		ItemOther: "other-item",
+	}
+}
+
+// AssertMixedContract runs every generated check against every declared subject.
+//
+//	Checks:   12 across 3 methods, per subject
+//	Subjects: declare each with MixedSubject
+//	Double:   every subject runs a second time wrapped in MixedStub, so
+//	          anything the wrapper fails that the subject passes is the double
+//	          lying. MixedWithoutDouble declines it.
+//	Extend:   MixedOnMerge, MixedOnAdd, MixedOnItems
+//	Drop:     MixedWithout, by the path each check reports under
+func AssertMixedContract(t *testing.T, opts ...MixedOption) {
+	t.Helper()
+	cfg := newMixedConfig(opts...)
+	if len(cfg.subjects) == 0 {
+		t.Fatalf("AssertMixedContract was given no subject; declare one with " +
+			"MixedSubject(name, factory)")
+	}
+	for _, s := range cfg.subjects {
+		runMixedChecks(t, cfg, s.name, s.factory, nil)
+		if !cfg.withoutDouble {
+			runMixedChecks(t, cfg, s.name+" through the double", s.factory,
+				func(tb testing.TB, subject crdtmerge.Mixed) crdtmerge.Mixed {
+					return NewMixedStub(tb, MixedStubDelegateTo(subject))
+				})
+		}
+	}
+}
+
+// runMixedChecks runs the whole contract against one subject.
+//
+// wrap is applied after the subject is built and seeded, so a wrapper is
+// transparent to the seed and every failure it causes is its own.
+func runMixedChecks(
+	t *testing.T,
+	cfg *mixedConfig,
+	label string,
+	factory func() crdtmerge.Mixed,
+	wrap func(tb testing.TB, subject crdtmerge.Mixed) crdtmerge.Mixed,
+) {
+	t.Helper()
+	t.Run(label, func(t *testing.T) {
+		t.Parallel()
+
+		t.Run("Merge", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Merge/smoke", "smoke", func(tb testing.TB) {
+				AssertMixedMergeSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Peer)
+			})
+			cfg.run(t, "Merge/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertMixedMergeCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Peer)
+			})
+			cfg.run(t, "Merge/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertMixedMergeHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Peer)
+			})
+			cfg.run(t, "Merge/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertMixedMergeToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Peer)
+			})
+			for _, c := range cfg.onMerge {
+				cfg.run(t, "Merge"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Peer)
+				})
+			}
+		})
+
+		t.Run("Add", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Add/smoke", "smoke", func(tb testing.TB) {
+				AssertMixedAddSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Add/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertMixedAddCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Add/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertMixedAddHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Add/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertMixedAddToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			for _, c := range cfg.onAdd {
+				cfg.run(t, "Add"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+				})
+			}
+		})
+
+		t.Run("Items", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Items/smoke", "smoke", func(tb testing.TB) {
+				AssertMixedItemsSmoke(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Items/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertMixedItemsCancels(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Items/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertMixedItemsHonoursDeadline(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Items/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertMixedItemsToleratesNilContext(tb, cfg.subject(tb, factory, wrap))
+			})
+			for _, c := range cfg.onItems {
+				cfg.run(t, "Items"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap))
+				})
+			}
+		})
+	})
+}
+
+// AssertMixedMergeSmoke asserts Merge survives a call with derived inputs.
+//
+// Fails when: Merge panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertMixedMergeSmoke(tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Merge panicked on a derived value (%v); supply one it "+
+				"accepts through MixedWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_ = subject.Merge(ctx, peer)
+}
+
+// AssertMixedMergeCancels asserts Merge reports a cancelled context as cancelled.
+//
+// Fails when: Merge returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertMixedMergeCancels(tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	err := subject.Merge(ctx, peer)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Merge must report a cancelled context as context.Canceled")
+}
+
+// AssertMixedMergeHonoursDeadline asserts Merge reports an expired deadline as exceeded.
+//
+// Fails when: Merge returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertMixedMergeHonoursDeadline(tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	err := subject.Merge(ctx, peer)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Merge must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertMixedMergeToleratesNilContext asserts Merge does not panic on a nil context.
+//
+// Fails when: Merge panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertMixedMergeToleratesNilContext(tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Merge panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_ = subject.Merge(ctx, peer)
+}
+
+// AssertMixedAddSmoke asserts Add survives a call with derived inputs.
+//
+// Fails when: Add panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertMixedAddSmoke(tb testing.TB, subject crdtmerge.Mixed, item string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Add panicked on a derived value (%v); supply one it "+
+				"accepts through MixedWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_ = subject.Add(ctx, item)
+}
+
+// AssertMixedAddCancels asserts Add reports a cancelled context as cancelled.
+//
+// Fails when: Add returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertMixedAddCancels(tb testing.TB, subject crdtmerge.Mixed, item string) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	err := subject.Add(ctx, item)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Add must report a cancelled context as context.Canceled")
+}
+
+// AssertMixedAddHonoursDeadline asserts Add reports an expired deadline as exceeded.
+//
+// Fails when: Add returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertMixedAddHonoursDeadline(tb testing.TB, subject crdtmerge.Mixed, item string) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	err := subject.Add(ctx, item)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Add must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertMixedAddToleratesNilContext asserts Add does not panic on a nil context.
+//
+// Fails when: Add panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertMixedAddToleratesNilContext(tb testing.TB, subject crdtmerge.Mixed, item string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Add panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_ = subject.Add(ctx, item)
+}
+
+// AssertMixedItemsSmoke asserts Items survives a call with derived inputs.
+//
+// Fails when: Items panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertMixedItemsSmoke(tb testing.TB, subject crdtmerge.Mixed) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Items panicked on a derived value (%v); supply one it "+
+				"accepts through MixedWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_, _ = subject.Items(ctx)
+}
+
+// AssertMixedItemsCancels asserts Items reports a cancelled context as cancelled.
+//
+// Fails when: Items returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertMixedItemsCancels(tb testing.TB, subject crdtmerge.Mixed) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	_, err := subject.Items(ctx)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Items must report a cancelled context as context.Canceled")
+}
+
+// AssertMixedItemsHonoursDeadline asserts Items reports an expired deadline as exceeded.
+//
+// Fails when: Items returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertMixedItemsHonoursDeadline(tb testing.TB, subject crdtmerge.Mixed) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	_, err := subject.Items(ctx)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Items must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertMixedItemsToleratesNilContext asserts Items does not panic on a nil context.
+//
+// Fails when: Items panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertMixedItemsToleratesNilContext(tb testing.TB, subject crdtmerge.Mixed) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Items panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_, _ = subject.Items(ctx)
+}
+
+// MixedOption configures a contract run.
+type MixedOption func(*mixedConfig)
+
+// MixedSubject declares an implementation to hold to the contract.
+//
+// Repeat it for every implementation that claims to satisfy the interface — an
+// in-memory one, the one backed by a database, the one behind a network. Every
+// check and every option is stated once and runs against all of them, which is
+// what a conformance suite is for.
+func MixedSubject(name string, factory func() crdtmerge.Mixed) MixedOption {
+	return func(c *mixedConfig) {
+		c.subjects = append(c.subjects, namedMixedSubject{name, factory})
+	}
+}
+
+// MixedWithoutDouble declines the second run through MixedStub.
+//
+// The double run proves the stand-in is faithful, and costs a second pass over
+// every check. Decline it where the double is not used.
+func MixedWithoutDouble() MixedOption {
+	return func(c *mixedConfig) { c.withoutDouble = true }
+}
+
+// MixedWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func MixedWithClock(c clock.Clock) MixedOption {
+	return func(cfg *mixedConfig) { cfg.clock = c }
+}
+
+// MixedWithFixture replaces the derived inputs.
+func MixedWithFixture(f MixedFixture) MixedOption {
+	return func(c *mixedConfig) { c.Fixture = f }
+}
+
+// MixedSeed replaces the derived seed.
+//
+// For an interface with no writer to seed itself through, which is the one
+// input a conformance run cannot derive: a reader over an empty subject
+// asserts nothing.
+//
+// Returning an error rather than swallowing one. A seed that failed quietly
+// leaves every check after it asserting nothing and reporting success.
+func MixedSeed(fn func(ctx context.Context, subject crdtmerge.Mixed) error) MixedOption {
+	return func(c *mixedConfig) {
+		c.seed = fn
+		c.seedIsDerived = false
+	}
+}
+
+// MixedOnMerge adds a named check to Merge.
+func MixedOnMerge(name string, fn MixedMergeCheck) MixedOption {
+	return func(c *mixedConfig) {
+		c.onMerge = append(c.onMerge, namedMixedMergeCheck{name, fn})
+	}
+}
+
+// MixedOnAdd adds a named check to Add.
+func MixedOnAdd(name string, fn MixedAddCheck) MixedOption {
+	return func(c *mixedConfig) {
+		c.onAdd = append(c.onAdd, namedMixedAddCheck{name, fn})
+	}
+}
+
+// MixedOnItems adds a named check to Items.
+func MixedOnItems(name string, fn MixedItemsCheck) MixedOption {
+	return func(c *mixedConfig) {
+		c.onItems = append(c.onItems, namedMixedItemsCheck{name, fn})
+	}
+}
+
+// MixedWithout drops generated checks by the path each reports under.
+//
+// For a subject that legitimately violates one. Without this the only recourse
+// is to stop running the suite, which costs every other check in the file — so
+// a dropped check is reported as skipped rather than silently omitted.
+func MixedWithout(paths ...string) MixedOption {
+	return func(c *mixedConfig) {
+		for _, p := range paths {
+			c.without[p] = struct{}{}
+		}
+	}
+}
+
+type namedMixedMergeCheck struct {
+	name string
+	fn   MixedMergeCheck
+}
+
+type namedMixedAddCheck struct {
+	name string
+	fn   MixedAddCheck
+}
+
+type namedMixedItemsCheck struct {
+	name string
+	fn   MixedItemsCheck
+}
+
+type namedMixedSubject struct {
+	name    string
+	factory func() crdtmerge.Mixed
+}
+
+type mixedConfig struct {
+	Fixture       MixedFixture
+	subjects      []namedMixedSubject
+	withoutDouble bool
+	clock         clock.Clock
+	seed          func(ctx context.Context, subject crdtmerge.Mixed) error
+	// seedIsDerived is what lets a failed seed name the right culprit. The
+	// derived seed and a consumer's are the same field, and the advice for one
+	// is useless for the other.
+	seedIsDerived bool
+	without       map[string]struct{}
+	onMerge       []namedMixedMergeCheck
+	onAdd         []namedMixedAddCheck
+	onItems       []namedMixedItemsCheck
+}
+
+func newMixedConfig(opts ...MixedOption) *mixedConfig {
+	c := &mixedConfig{
+		Fixture: DefaultMixedFixture(),
+		clock:   clock.RealClock(),
+		without: map[string]struct{}{},
+	}
+	// Derived: Add is classified writer, so the interface
+	// populates itself and a reader has something to read.
+	c.seed = func(ctx context.Context, subject crdtmerge.Mixed) error {
+		return subject.Add(ctx, c.Fixture.Item)
+	}
+	c.seedIsDerived = true
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+
+// subject builds a fresh implementation and seeds it, so every check runs
+// against state no other check touched.
+func (c *mixedConfig) subject(
+	tb testing.TB,
+	factory func() crdtmerge.Mixed,
+	wrap func(tb testing.TB, subject crdtmerge.Mixed) crdtmerge.Mixed,
+) crdtmerge.Mixed {
+	tb.Helper()
+	s := factory()
+	if c.seed != nil {
+		// Reported rather than ignored. A seed that silently failed would leave
+		// every check after it running against an empty subject — passing, and
+		// asserting nothing.
+		//
+		// Which seed ran decides what the message can usefully say. The derived
+		// one fails for one of two reasons and both are fixable from here, so it
+		// names them. A seed the caller supplied is theirs, and telling them to
+		// supply one is advice they already took.
+		if err := c.seed(tb.Context(), s); err != nil {
+			if c.seedIsDerived {
+				tb.Fatalf("seeding through Add failed: %v; "+
+					"supply a value it accepts through MixedWithFixture, or a "+
+					"whole seed through MixedSeed", err)
+			} else {
+				tb.Fatalf("the seed supplied through MixedSeed failed: %v", err)
+			}
+		}
+	}
+	if wrap != nil {
+		s = wrap(tb, s)
+	}
+	return s
+}
+
+// run executes one check unless it was dropped, reporting the drop rather than
+// silently omitting it.
+func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
+	t.Helper()
+	if _, dropped := c.without[path]; dropped {
+		t.Run(name, func(t *testing.T) {
+			t.Skipf("dropped through MixedWithout(%q)", path)
+		})
+		return
+	}
+	t.Run(name, func(t *testing.T) {
+		t.Parallel()
+		fn(t)
+	})
+}
+
 // testkit: end of generated content.
-// testkit:provenance f7aa77d3a902e34f884a54a23bf3181f758282269af16921fb1642fb21569d4a
+// testkit:provenance 8d743ae0afcce290c1b8e563f711094ddf95ab6676940686de4348514c1380ec

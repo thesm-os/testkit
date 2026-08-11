@@ -32,6 +32,7 @@ type Replica interface {
 //
 //testkit:out crdtmergetest/ pkg=crdtmergetest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Merge folds another replica in. Convergence is a statement about two
 	// merges in opposite orders, so the method has to take a peer rather than
