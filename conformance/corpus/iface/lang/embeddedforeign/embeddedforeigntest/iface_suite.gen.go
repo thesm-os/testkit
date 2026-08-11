@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/embeddedforeign"
 )
 
@@ -269,6 +270,17 @@ func StreamWithoutDouble() StreamOption {
 	return func(c *streamConfig) { c.withoutDouble = true }
 }
 
+// StreamWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func StreamWithClock(c clock.Clock) StreamOption {
+	return func(cfg *streamConfig) { cfg.clock = c }
+}
+
 // StreamWithFixture replaces the derived inputs.
 func StreamWithFixture(f StreamFixture) StreamOption {
 	return func(c *streamConfig) { c.Fixture = f }
@@ -334,6 +346,7 @@ type streamConfig struct {
 	Fixture       StreamFixture
 	subjects      []namedStreamSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject embeddedforeign.Stream) error
 	without       map[string]struct{}
 	onRead        []namedStreamReadCheck
@@ -343,6 +356,7 @@ type streamConfig struct {
 func newStreamConfig(opts ...StreamOption) *streamConfig {
 	c := &streamConfig{
 		Fixture: DefaultStreamFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -396,4 +410,4 @@ func (c *streamConfig) run(t *testing.T, path, name string, fn func(tb testing.T
 }
 
 // testkit: end of generated content.
-// testkit:provenance 01ed23e00cb8596bc08cc85e199ffb7e91b12c806e378e95b385aeef3134b234
+// testkit:provenance 8e8a67159c977b560efe290d2086b09599b1a221a904048f9e14d315d68d1576

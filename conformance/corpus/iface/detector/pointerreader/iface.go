@@ -19,6 +19,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out pointerreadertest/ pkg=pointerreadertest
 //testkit:stub
+//testkit:suite
 type PointerReader interface {
 	// Find returns exactly one value, and that value is the pointer. Adding an
 	// error return takes the method out of this shape entirely — it becomes an

@@ -25,7 +25,7 @@ import (
 type Mixed interface {
 	// Fire invokes whatever OnEvent registered. Without a registration
 	// method there is no way to observe that it did.
-	//testkit:mixin hooks
+	//testkit:mixin hooks register=OnEvent
 	Fire(ctx context.Context, event string) error
 
 	// OnEvent registers the callback Fire invokes.

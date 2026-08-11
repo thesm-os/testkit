@@ -93,8 +93,18 @@ func TestTimeout(t *testing.T) {
 
 	t.Run("expired context has DeadlineExceeded error", func(t *testing.T) {
 		t.Parallel()
-		ctx := concurrency.Timeout(t, 1*time.Millisecond)
-		time.Sleep(10 * time.Millisecond)
+		// A deadline already in the past rather than a short one waited out.
+		//
+		// The claim is about an expired context, not about expiry happening, so
+		// nothing here has to wait: WithTimeout on a non-positive duration
+		// returns a context that is already done. Sleeping for ten times a 1ms
+		// deadline sounds like ample margin and is not — under the coverage
+		// gate's whole-tree instrumentation this goroutine may simply not be
+		// scheduled in time, which is how it failed.
+		//
+		// A fake clock is not the answer either: context.WithTimeout schedules
+		// on the runtime timer, and clock.Clock has no seam a context consults.
+		ctx := concurrency.Timeout(t, -time.Second)
 		testkit.ErrorIs(t, ctx.Err(), context.DeadlineExceeded, "must be deadline exceeded")
 	})
 }

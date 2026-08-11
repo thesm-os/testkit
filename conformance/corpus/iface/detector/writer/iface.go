@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out writertest/ pkg=writertest
 //testkit:stub
+//testkit:suite
 type Writer interface {
 	Put(ctx context.Context, v Value) error
 }

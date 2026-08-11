@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/generic"
 )
 
@@ -313,6 +314,17 @@ func StoreWithoutDouble[K comparable, V any]() StoreOption[K, V] {
 	return func(c *storeConfig[K, V]) { c.withoutDouble = true }
 }
 
+// StoreWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func StoreWithClock[K comparable, V any](c clock.Clock) StoreOption[K, V] {
+	return func(cfg *storeConfig[K, V]) { cfg.clock = c }
+}
+
 // StoreWithFixture replaces the derived inputs.
 func StoreWithFixture[K comparable, V any](f StoreFixture[K, V]) StoreOption[K, V] {
 	return func(c *storeConfig[K, V]) { c.Fixture = f }
@@ -378,6 +390,7 @@ type storeConfig[K comparable, V any] struct {
 	Fixture       StoreFixture[K, V]
 	subjects      []namedStoreSubject[K, V]
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject generic.Store[K, V]) error
 	without       map[string]struct{}
 	onGet         []namedStoreGetCheck[K, V]
@@ -387,6 +400,7 @@ type storeConfig[K comparable, V any] struct {
 func newStoreConfig[K comparable, V any](opts ...StoreOption[K, V]) *storeConfig[K, V] {
 	c := &storeConfig[K, V]{
 		Fixture: DefaultStoreFixture[K, V](),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -440,4 +454,4 @@ func (c *storeConfig[K, V]) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance a47fe7cb9ce80488fb483788f178fb7f5727e4a09cda37e92a1c2720047bb593
+// testkit:provenance 8c094ca1125b776afb40a76bf7f616bfa404c49ce41e2cdb5d38f4b2c7d0492e

@@ -5,8 +5,20 @@ package suite
 
 import (
 	"fmt"
+	"slices"
 
 	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/integrationonly"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/nilsafe"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
@@ -48,6 +60,26 @@ const (
 	KindDeadline    sdk.Kind = "suite.check.deadline"
 	KindNilContext  sdk.Kind = "suite.check.nilcontext"
 	KindZeroOnError sdk.Kind = "suite.check.zeroonerror"
+)
+
+// The emit kinds for the detector-derived checks.
+//
+// One family, split by how a shape signals absence. [KindZeroOnError] is the
+// third member and belongs to the signature rather than to a classification,
+// because an error return says on its own that a call can fail; a bool or a bare
+// zero says nothing without knowing the method is a lookup, which is what the
+// shape stamp supplies (docs/adr/0018).
+const (
+	KindMissZero sdk.Kind = "suite.check.misszero"
+	KindMissFlag sdk.Kind = "suite.check.missflag"
+)
+
+// The emit kinds for the mixin-derived checks.
+const (
+	KindNilSafe    sdk.Kind = "suite.check.nilsafe"
+	KindTimeout    sdk.Kind = "suite.check.timeout"
+	KindOrderAfter sdk.Kind = "suite.check.orderafter"
+	KindSideEffect sdk.Kind = "suite.check.sideeffect"
 )
 
 // Plugin is the conformance-suite generator.
@@ -137,6 +169,14 @@ type Subject struct {
 	// path is all a template needs.
 	Runtime string
 
+	// ClockRef is [clock.Clock] in type position — a config field, a parameter.
+	//
+	// Built here rather than composed in a template, because `external` yields
+	// the expression form and a type position rejects it. The two render
+	// through different builtins, and the mismatch is a render error rather
+	// than a compile one, so it surfaces as a file that came out short.
+	ClockRef sdk.Ref
+
 	// TypeParams is the source interface's type-parameter list in declaration
 	// form, which `renderTypeParams` spells as `[K comparable, V any]`. Empty
 	// for a non-generic interface, where the helper renders nothing.
@@ -196,6 +236,20 @@ type Check struct {
 	// looked at it.
 	NeedsDerivedInput bool
 
+	// NeedsClock reports whether the check reads time, and so is handed the
+	// run's [clock.Clock] rather than reaching for the wall clock.
+	//
+	// Generated code that calls time.Now is generated code whose subject is
+	// partly the machine it runs on. A consumer builds their implementation in
+	// the factory they supply, so one that takes a clock can be built with the
+	// same [clock.TestClock] the harness measures on — and then "within a
+	// budget" is a claim about the time the implementation means to spend,
+	// settled deterministically, rather than about how loaded the machine was.
+	//
+	// The default is the real clock, so an implementation that does not take
+	// one behaves as it would have.
+	NeedsClock bool
+
 	// Args names the fixture fields this check is handed, one per parameter the
 	// method takes after its context.
 	//
@@ -206,6 +260,16 @@ type Check struct {
 
 	// Method is the signature under check.
 	Method Method
+
+	// Partner is the second callable a relational classification names, with
+	// PartnerArgs the identifiers a call to it is handed.
+	//
+	// A signature rather than a name, because the check calls it: `sideeffect`
+	// observes before and after, `hooks` registers through it. The name alone
+	// was enough for `orderafter`, which asserts that calling early fails and
+	// never calls the partner at all.
+	Partner     *Method
+	PartnerArgs []string
 }
 
 // Kind returns [Check.KindName].
@@ -240,6 +304,49 @@ type Method struct {
 	// Checks are the generated assertions for this method, in the order the
 	// entry point runs them.
 	Checks []*Check
+
+	// Mixins names the classifications the annotator attached, and Contracts
+	// the same for contract roles.
+	//
+	// Carried on the projection rather than read from the source node at each
+	// use. A check is selected once and rendered later, and the node is not in
+	// scope by then — but more to the point, two derivations of the same stamp
+	// are two chances to disagree about what the run classified.
+	Mixins, Contracts []string
+
+	// mixinParams holds each attached mixin's KV arguments, keyed
+	// `<mixin>.<param>`.
+	//
+	// Unexported with an accessor, because a template reaching a map by a
+	// composed key would spell the composition itself — and the one thing
+	// worth hiding here is that a sibling param arrives qualified and has to be
+	// cut back down to the local name a generated call can use.
+	mixinParams map[string]string
+}
+
+// HasMixin reports whether the annotator attached the named classification.
+func (m Method) HasMixin(name string) bool { return slices.Contains(m.Mixins, name) }
+
+// MixinParam returns a mixin's KV argument, and whether one was written.
+//
+// The value verbatim. A param the mixin declares as a sibling arrives as a
+// qualified name, which is right for identity and wrong for a call site — see
+// [Method.MixinPartner] for that.
+func (m Method) MixinParam(name, param string) (string, bool) {
+	v, ok := m.mixinParams[name+"."+param]
+	return v, ok
+}
+
+// MixinPartner returns the local identifier a mixin's sibling param names.
+//
+// The shape resolver rewrites a sibling param into a qualified name so it is
+// unambiguous across packages. Generated code calls the partner on the subject
+// it already holds, so the qualified form is exactly what it cannot spell —
+// [golang.LocalName] takes the trailing identifier back off, which is what
+// [generator/stub] already does for `orderafter`.
+func (m Method) MixinPartner(name, param string) string {
+	v, _ := m.MixinParam(name, param)
+	return golang.LocalName(v)
 }
 
 // TakesContext reports whether the method's first parameter is a context.
@@ -259,6 +366,14 @@ func (m Method) CallArgs() []golang.Param {
 	}
 	return m.Params
 }
+
+// HasInput reports whether the method takes anything after its context.
+//
+// The only lever a harness has over a subject. A parameterless method can still
+// fail — a closed store, a dropped connection — but not because of anything the
+// suite chose, so a check whose meaning is "this input misses" cannot reach the
+// failure it is about and would demand one from a correct implementation.
+func (m Method) HasInput() bool { return len(m.CallArgs()) > 0 }
 
 // VariadicParam returns the method's variadic parameter, or nil.
 //
@@ -285,6 +400,39 @@ func (m Method) ValueReturns() []golang.Return {
 		}
 	}
 	return out
+}
+
+// FlagReturn returns the trailing bool a comma-ok shape signals absence with,
+// or nil.
+//
+// Trailing rather than anywhere, because that is what the idiom is: a bool in
+// any other position is a value the method computed, not a report on whether it
+// found anything. Nil for every other signature, which is what the templates
+// branch on.
+func (m Method) FlagReturn() *golang.Return {
+	values := m.ValueReturns()
+	if len(values) == 0 {
+		return nil
+	}
+	last := &values[len(values)-1]
+	if golang.QName(last.Source) != "bool" {
+		return nil
+	}
+	return last
+}
+
+// MissReturns returns the slots a miss check holds to their zero: every value
+// return except the flag that reported the miss.
+//
+// The flag is excluded because it is the signal rather than a result — asserting
+// it is zero is asserting `false == false`, and a check that cannot fail is
+// worse than no check.
+func (m Method) MissReturns() []golang.Return {
+	values := m.ValueReturns()
+	if m.FlagReturn() != nil {
+		return values[:len(values)-1]
+	}
+	return values
 }
 
 // Double names the generated stand-in a harness runs itself through.
@@ -445,10 +593,44 @@ func resolveMethods(ctx *sdk.GeneratorContext, iface *sdk.Interface) (sdk.Method
 func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	out := make([]Method, 0, len(set.Methods))
 	for _, src := range set.Methods {
+		bag := src.Meta()
 		out = append(out, Method{
-			Sig:       golang.SigOf(src),
-			CheckType: iface.Name + src.Name + "Check",
+			Sig:         golang.SigOf(src),
+			CheckType:   iface.Name + src.Name + "Check",
+			Mixins:      shape.Mixins(bag),
+			Contracts:   shape.Contracts(bag),
+			mixinParams: mixinParamsOf(bag),
 		})
+	}
+	return out
+}
+
+// mixinParamsOf reads the KV arguments of every mixin this generator acts on.
+//
+// Pulled once, into a map, rather than reached through [shape.MixinParamKey] at
+// each use. The projection is what a check is selected from and what a template
+// renders, and neither holds the source node by then.
+//
+// Enumerated rather than discovered because eidos exposes no "every param
+// stamped under this mixin" accessor — [shape.MixinParamKey] composes one key
+// from a pair. A classification this generator does not act on has nothing to
+// read, so the list is the set of checks rather than an inventory of eidos.
+func mixinParamsOf(bag *sdk.Bag) map[string]string {
+	wanted := [...]struct{ mixin, param string }{
+		{MixinOrderAfter, MixinOrderAfterParam},
+		{MixinTimeout, MixinTimeoutParam},
+		{MixinSideEffect, MixinSideEffectParam},
+	}
+	var out map[string]string
+	for _, w := range wanted {
+		v, found := shape.MixinParamKey(w.mixin, w.param).Get(bag)
+		if !found {
+			continue
+		}
+		if out == nil {
+			out = make(map[string]string, len(wanted))
+		}
+		out[w.mixin+"."+w.param] = v
 	}
 	return out
 }
@@ -491,10 +673,202 @@ func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Metho
 	if m.TakesContext() {
 		out = append(out, base(KindNilContext, "tolerates a nil context", "ToleratesNilContext", args, false))
 	}
-	if m.ReturnsError() && len(m.ValueReturns()) > 0 {
+	if m.ReturnsError() && len(m.ValueReturns()) > 0 && m.HasInput() {
 		// The only one whose meaning is in the value: a miss check called with
 		// the value the subject was seeded with succeeds, and asserts nothing.
+		//
+		// HasInput because the check reaches the failure it is about through the
+		// alternate value, and a method taking nothing after its context leaves
+		// nowhere to put one. Emitted anyway it fatals against every correct
+		// implementation, and names a fixture field that does not exist.
 		out = append(out, base(KindZeroOnError, "an error carries the zero value", "ZeroOnError", other, true))
+	}
+	return out
+}
+
+// The mixins this generator generates a check for, and the parameters it reads.
+//
+// Named here rather than taken from eidos's own constants at each use so the
+// set a reader has to hold is one list. Each is suite-owned under
+// docs/adr/0018 — no [engine/model/law] property covers it — and each is
+// derivable from the stamp plus the signature, which is what excludes the rest:
+// `validates` and `scope` need a value no run can invent, and `sideeffect`,
+// `partition`, `hooks` and `sample` name a partner eidos declares no parameter
+// for (thesm-os/eidos#16).
+const (
+	MixinNilSafe         = nilsafe.Name
+	MixinDeprecated      = deprecated.Name
+	MixinIntegrationOnly = integrationonly.Name
+	MixinTimeout         = timeout.Name
+	MixinTimeoutParam    = timeout.ParamDuration
+	MixinOrderAfter      = orderafter.Name
+	MixinOrderAfterParam = orderafter.ParamFn
+	MixinSideEffect      = sideeffect.Name
+	MixinSideEffectParam = sideeffect.ParamObserve
+)
+
+// missShapes are the classifications whose absence signal is a value rather
+// than an error, and which no [engine/model/law] property covers.
+//
+// A stamp rather than the signature, which is the one judgement here. `(T,
+// bool)` and a bare `T` are common shapes that are not always lookups — a
+// `Validate(v) (Report, bool)` returns a verdict, and holding its report to the
+// zero when the flag is false would be a check about nothing. The stamp is what
+// says the method answers a question about presence (docs/adr/0018).
+//
+// The cost is that an identically shaped method eidos classifies otherwise gets
+// no check. Reversing this to a signature gate is a one-line change if that
+// trade turns out wrong.
+var missShapes = map[string]struct{}{
+	readernoerror.Name:  {},
+	readerwithbool.Name: {},
+	lookup.Name:         {},
+	pointerreader.Name:  {},
+}
+
+// detectorChecks selects the family a method owes for its classification.
+//
+// Only the miss family so far, and only where the shape says absence is
+// reported in a value. The error-signalled member of the same family is
+// [KindZeroOnError], which the signature earns on its own.
+//
+// HasInput for the same reason zero-on-error needs it: the miss is reached by
+// choosing an input that is not there, and a method taking nothing after its
+// context offers nowhere to put one.
+func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method) []*Check {
+	if _, owned := missShapes[shape.Get(m.Source.Meta())]; !owned || !m.HasInput() {
+		return nil
+	}
+	if len(m.MissReturns()) == 0 {
+		// Nothing to hold to a zero. A lookup whose only result is the flag
+		// reports absence and returns nothing else, so the check would assert
+		// that `false` is `false`.
+		return nil
+	}
+
+	kind, suffix := KindMissZero, "ReportsAMiss"
+	if m.FlagReturn() != nil {
+		kind = KindMissFlag
+	}
+	return []*Check{{
+		BaseEmit:          sdk.EmitBase(c, iface),
+		Subject:           subjectOf(iface),
+		KindName:          kind,
+		Subtest:           "reports a miss",
+		Func:              "Assert" + iface.Name + m.Name + suffix,
+		Path:              m.Name + "/reports a miss",
+		Args:              fixtureArgs(f, m, true),
+		NeedsDerivedInput: true,
+		Method:            m,
+	}}
+}
+
+// mixinChecks selects the family a method owes for the classifications attached
+// to it.
+//
+// Three, where the RFC's tier table lists sixteen. What is missing is not
+// unwritten: `validates` and `scope` need a value no run can invent, four name a
+// partner eidos declares no parameter for (thesm-os/eidos#16), `concurrent` and
+// `concurrentreaders` assert nothing without `-race`, `retrysucceeds` has no
+// attempt count to read, `integrationonly` is a build tag rather than an
+// assertion, and `deprecated` is a fact about a method rather than a claim about
+// its behaviour — it is stated in the generated documentation instead.
+// partnerArgs names the identifiers a call to the partner is handed, and
+// whether the check can spell them all.
+//
+// A generated check receives the *annotated* method's parameters and nothing
+// else, so the partner can only be called with values already in scope. Both
+// resolve their parameters to fixture fields, and a field they share is one
+// identifier serving both — which is the ordinary case, since a partner
+// observing an effect keyed on something observes it by the same key.
+//
+// Where the partner needs a field the method does not take, the check is not
+// generated: widening its parameter list would give it a signature no other
+// check has, for a shape the corpus does not contain.
+func partnerArgs(f Fixture, m, partner Method) ([]string, bool) {
+	byField := map[string]string{}
+	for _, p := range m.CallArgs() {
+		byField[f.FieldFor(p)] = p.Name
+	}
+	out := make([]string, 0, len(partner.CallArgs()))
+	for _, p := range partner.CallArgs() {
+		name, found := byField[f.FieldFor(p)]
+		if !found {
+			return nil, false
+		}
+		out = append(out, name)
+	}
+	return out, true
+}
+
+// partnerOf resolves a relational mixin's sibling param to the method it names.
+//
+// Against the interface's own resolved method set, so an inherited partner is
+// found: the resolver guarantees the name refers to something in scope, and a
+// conformance check can only call what the subject declares.
+//
+// Nil when the mixin names none. The param is optional by design — a bare
+// `//testkit:mixin sideeffect` is still a classification — so its absence is a
+// check not generated rather than a fault to report.
+func partnerOf(methods []Method, m Method, mixin, param string) *Method {
+	name := m.MixinPartner(mixin, param)
+	if name == "" {
+		return nil
+	}
+	for i := range methods {
+		if methods[i].Name == name {
+			return &methods[i]
+		}
+	}
+	return nil
+}
+
+func mixinChecks(
+	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
+) []*Check {
+	base := func(kind sdk.Kind, subtest, suffix string, args []string) *Check {
+		return &Check{
+			BaseEmit: sdk.EmitBase(c, iface),
+			Subject:  subjectOf(iface),
+			KindName: kind,
+			Subtest:  subtest,
+			Func:     "Assert" + iface.Name + m.Name + suffix,
+			Path:     m.Name + "/" + subtest,
+			Args:     args,
+			Method:   m,
+		}
+	}
+
+	var out []*Check
+	if m.HasMixin(MixinNilSafe) && m.HasInput() {
+		// The check supplies its own zeros, so it takes no argument — but it
+		// needs a parameter to zero, and a method taking none has nothing to
+		// be unsafe about.
+		out = append(out, base(KindNilSafe, MixinNilSafe, "IsNilSafe", nil))
+	}
+	if _, declared := m.MixinParam(MixinTimeout, MixinTimeoutParam); declared {
+		// Gated on the parameter rather than the mixin: "within a budget" is
+		// not a statement until a duration is named, and a bare
+		// `//testkit:mixin timeout` names none.
+		ck := base(KindTimeout, MixinTimeout, "CompletesInBudget", fixtureArgs(f, m, false))
+		ck.NeedsClock = true
+		out = append(out, ck)
+	}
+	if p := partnerOf(methods, m, MixinSideEffect, MixinSideEffectParam); p != nil && p.ReturnsError() {
+		// The observation is the check, so a partner that cannot report its own
+		// failure leaves the comparison unable to tell "unchanged" from "the
+		// observer broke".
+		if args, spellable := partnerArgs(f, m, *p); spellable {
+			ck := base(KindSideEffect, MixinSideEffect, "HasAnObservableEffect", fixtureArgs(f, m, false))
+			ck.Partner, ck.PartnerArgs = p, args
+			out = append(out, ck)
+		}
+	}
+	if p := m.MixinPartner(MixinOrderAfter, MixinOrderAfterParam); p != "" && m.ReturnsError() {
+		// ReturnsError because the claim is that calling early *fails*, and a
+		// method with nowhere to report failure cannot make it.
+		out = append(out, base(KindOrderAfter, MixinOrderAfter, "RequiresItsPrerequisite",
+			fixtureArgs(f, m, false)))
 	}
 	return out
 }
@@ -524,6 +898,7 @@ func subjectOf(iface *sdk.Interface) Subject {
 		IfaceName:  iface.Name,
 		IfaceRef:   golang.RefFor(iface.Name, iface.Package),
 		Runtime:    Module,
+		ClockRef:   golang.RefFor("Clock", Module+"/clock"),
 		TypeParams: golang.TypeParamDecls(iface.TypeParams),
 		TypeArgs:   golang.TypeParamNames(iface.TypeParams),
 	}

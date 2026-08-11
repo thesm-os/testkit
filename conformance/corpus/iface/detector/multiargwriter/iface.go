@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out multiargwritertest/ pkg=multiargwritertest
 //testkit:stub
+//testkit:suite
 type MultiArgWriter interface {
 	Set(ctx context.Context, key, body string) error
 }

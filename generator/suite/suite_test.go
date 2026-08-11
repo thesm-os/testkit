@@ -99,6 +99,18 @@ func TestSignatureChecks(t *testing.T) {
 			"Store returns no value to compare")
 	})
 
+	t.Run("checks it only where an input can be varied", func(t *testing.T) {
+		t.Parallel()
+		// The check reaches the failure it is about by choosing an input that
+		// misses. `Count(ctx) (int, error)` offers none, so a generated one
+		// could only demand failure from a correct implementation — and its own
+		// diagnostic would name a fixture field the signature never produced.
+		testkit.False(t, hasCheckIn(t, noInputFixture(t), "Count", "an error carries the zero value"),
+			"a method taking nothing after its context has no miss to reach")
+		testkit.True(t, hasCheckIn(t, noInputFixture(t), "Count", "smoke"),
+			"the rest of the family is untouched")
+	})
+
 	t.Run("counts ten across three methods", func(t *testing.T) {
 		t.Parallel()
 		// The number is the point of the design, not an incidental: a harness
@@ -406,6 +418,24 @@ func funcParamFixture(t *testing.T) *sdk.Store {
 				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 				m.Param("fn", storefixture.Func(nil, nil))
 				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// noInputFixture returns a value beside an error and takes nothing to vary,
+// which is the aggregator shape: a count over whatever the subject holds.
+func noInputFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("agg", "example.com/agg").
+		Interface("Agg", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("agg/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Count", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Return(storefixture.Named("int"))
 				m.Return(storefixture.Named("error"))
 			})
 		}).

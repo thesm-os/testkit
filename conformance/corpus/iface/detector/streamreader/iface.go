@@ -22,6 +22,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out streamreadertest/ pkg=streamreadertest
 //testkit:stub
+//testkit:suite
 type StreamReader interface {
 	List(ctx context.Context) iter.Seq2[Value, error]
 }

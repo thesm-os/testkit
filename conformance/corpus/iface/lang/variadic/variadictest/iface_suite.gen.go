@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/variadic"
 )
 
@@ -20,6 +21,11 @@ import (
 // Every generated check for Find is a value of it, and so is one you
 // write — so they compose, reorder, and each runs standalone. testing.TB rather
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
+//
+// keys is one element of Find's variadic parameter, not the list.
+// The fixture derives one value per parameter, so every generated check calls
+// Find with exactly one — which leaves everything about *several* to a
+// check written here, including the empty call no derivation reaches.
 type FinderFindCheck func(tb testing.TB, subject variadic.Finder, keys string)
 
 // FinderFindWithLimitCheck is one assertion about FindWithLimit.
@@ -27,6 +33,11 @@ type FinderFindCheck func(tb testing.TB, subject variadic.Finder, keys string)
 // Every generated check for FindWithLimit is a value of it, and so is one you
 // write — so they compose, reorder, and each runs standalone. testing.TB rather
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
+//
+// keys is one element of FindWithLimit's variadic parameter, not the list.
+// The fixture derives one value per parameter, so every generated check calls
+// FindWithLimit with exactly one — which leaves everything about *several* to a
+// check written here, including the empty call no derivation reaches.
 type FinderFindWithLimitCheck func(tb testing.TB, subject variadic.Finder, limit int, keys string)
 
 // FinderFixture holds every input the generated checks run against.
@@ -42,6 +53,9 @@ type FinderFindWithLimitCheck func(tb testing.TB, subject variadic.Finder, limit
 // a value nobody could write. Supply one through FinderWithFixture
 // and the check a consumer writes has something to use.
 type FinderFixture struct {
+	// Keys is one element of a variadic parameter, not the list. Every
+	// generated check passes it alone; what a method does with several is a
+	// claim only a check written by hand can make.
 	Keys       string
 	KeysOther  string
 	Limit      int
@@ -364,6 +378,17 @@ func FinderWithoutDouble() FinderOption {
 	return func(c *finderConfig) { c.withoutDouble = true }
 }
 
+// FinderWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func FinderWithClock(c clock.Clock) FinderOption {
+	return func(cfg *finderConfig) { cfg.clock = c }
+}
+
 // FinderWithFixture replaces the derived inputs.
 func FinderWithFixture(f FinderFixture) FinderOption {
 	return func(c *finderConfig) { c.Fixture = f }
@@ -429,6 +454,7 @@ type finderConfig struct {
 	Fixture         FinderFixture
 	subjects        []namedFinderSubject
 	withoutDouble   bool
+	clock           clock.Clock
 	seed            func(ctx context.Context, subject variadic.Finder) error
 	without         map[string]struct{}
 	onFind          []namedFinderFindCheck
@@ -438,6 +464,7 @@ type finderConfig struct {
 func newFinderConfig(opts ...FinderOption) *finderConfig {
 	c := &finderConfig{
 		Fixture: DefaultFinderFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -491,4 +518,4 @@ func (c *finderConfig) run(t *testing.T, path, name string, fn func(tb testing.T
 }
 
 // testkit: end of generated content.
-// testkit:provenance 75f423c090f9bea5bd37e4d139f4b88bb1a48e8d7a8f931f2b19613678ec3228
+// testkit:provenance b98ace21902ab182098af542986be2949d30bc249097655338c6f7aee6a469df

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/namedreturns"
 )
 
@@ -486,6 +487,17 @@ func ServiceWithoutDouble() ServiceOption {
 	return func(c *serviceConfig) { c.withoutDouble = true }
 }
 
+// ServiceWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func ServiceWithClock(c clock.Clock) ServiceOption {
+	return func(cfg *serviceConfig) { cfg.clock = c }
+}
+
 // ServiceWithFixture replaces the derived inputs.
 func ServiceWithFixture(f ServiceFixture) ServiceOption {
 	return func(c *serviceConfig) { c.Fixture = f }
@@ -563,6 +575,7 @@ type serviceConfig struct {
 	Fixture          ServiceFixture
 	subjects         []namedServiceSubject
 	withoutDouble    bool
+	clock            clock.Clock
 	seed             func(ctx context.Context, subject namedreturns.Service) error
 	without          map[string]struct{}
 	onNamed          []namedServiceNamedCheck
@@ -573,6 +586,7 @@ type serviceConfig struct {
 func newServiceConfig(opts ...ServiceOption) *serviceConfig {
 	c := &serviceConfig{
 		Fixture: DefaultServiceFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -626,4 +640,4 @@ func (c *serviceConfig) run(t *testing.T, path, name string, fn func(tb testing.
 }
 
 // testkit: end of generated content.
-// testkit:provenance bcf60932484ea89743586cc0755901710bdc596d8f9600b7bb1d53f6382dd603
+// testkit:provenance 130180acd2539bef1aa029eb2adaeab6c92c11339c87a832115287828aa3d6bf

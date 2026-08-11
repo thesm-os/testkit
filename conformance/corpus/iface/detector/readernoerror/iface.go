@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out readernoerrortest/ pkg=readernoerrortest
 //testkit:stub
+//testkit:suite
 type ReaderNoError interface {
 	Lookup(ctx context.Context, key string) Value
 }

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/nocontext"
 )
 
@@ -238,6 +239,17 @@ func CalculatorWithoutDouble() CalculatorOption {
 	return func(c *calculatorConfig) { c.withoutDouble = true }
 }
 
+// CalculatorWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func CalculatorWithClock(c clock.Clock) CalculatorOption {
+	return func(cfg *calculatorConfig) { cfg.clock = c }
+}
+
 // CalculatorWithFixture replaces the derived inputs.
 func CalculatorWithFixture(f CalculatorFixture) CalculatorOption {
 	return func(c *calculatorConfig) { c.Fixture = f }
@@ -315,6 +327,7 @@ type calculatorConfig struct {
 	Fixture       CalculatorFixture
 	subjects      []namedCalculatorSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject nocontext.Calculator) error
 	without       map[string]struct{}
 	onAdd         []namedCalculatorAddCheck
@@ -325,6 +338,7 @@ type calculatorConfig struct {
 func newCalculatorConfig(opts ...CalculatorOption) *calculatorConfig {
 	c := &calculatorConfig{
 		Fixture: DefaultCalculatorFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -378,4 +392,4 @@ func (c *calculatorConfig) run(t *testing.T, path, name string, fn func(tb testi
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4e69dcaf0f25db00debfaffed68fa20dd81abaed5816e45b487d93e42c338f14
+// testkit:provenance 991c4a1bb60a53af16cd835cd4562271460b020e0b54b8342281502e5bbab6ab

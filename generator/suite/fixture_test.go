@@ -11,8 +11,13 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/mutator"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/predicate"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/sdk"
 
@@ -302,6 +307,156 @@ func TestVariadicIsAnnounced(t *testing.T) {
 	})
 }
 
+// A shape that reports absence in a value rather than an error owes a check the
+// signature cannot derive.
+//
+// An error return says on its own that a call can fail. A trailing bool, or a
+// bare value, says nothing without knowing the method answers a question about
+// presence — which is what the shape stamp supplies (docs/adr/0018).
+func TestMissChecks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("holds every slot but the flag to its zero", func(t *testing.T) {
+		t.Parallel()
+		// The flag is the signal, not a result: asserting `false` is `false`
+		// is a check that cannot fail.
+		m := methodNamed(t, contractIn(t, missFixture(t, readerwithbool.Name)), "Load")
+		testkit.Len(t, m.MissReturns(), 1, "the value slot is held, the flag is not")
+		testkit.True(t, m.FlagReturn() != nil, "the trailing bool is the signal")
+	})
+
+	t.Run("takes every slot where nothing flags the miss", func(t *testing.T) {
+		t.Parallel()
+		// A pointer reader has neither an error nor a flag, so the zero — nil —
+		// is the only signal, and every returned slot carries it.
+		m := methodNamed(t, contractIn(t, missNoFlagFixture(t)), "Load")
+		testkit.True(t, m.FlagReturn() == nil, "no trailing bool to exclude")
+		testkit.Len(t, m.MissReturns(), 2, "so every value slot is held to its zero")
+	})
+
+	t.Run("emits the check for a shape that owns it", func(t *testing.T) {
+		t.Parallel()
+		for _, name := range []string{
+			readernoerror.Name, readerwithbool.Name, lookup.Name, pointerreader.Name,
+		} {
+			testkit.True(t, hasCheckIn(t, missFixture(t, name), "Load", "reports a miss"),
+				name+" reports absence in a value, so it owes the check")
+		}
+	})
+
+	t.Run("emits nothing for a shape that does not", func(t *testing.T) {
+		t.Parallel()
+		// The identical signature under another classification. A
+		// `Validate(v) (Report, bool)` returns a verdict rather than an answer
+		// about presence, and holding its report to the zero asserts nothing.
+		testkit.False(t, hasCheckIn(t, missFixture(t, predicate.Name), "Load", "reports a miss"),
+			"the stamp decides, not the shape of the return list")
+	})
+
+	t.Run("needs an input to miss on", func(t *testing.T) {
+		t.Parallel()
+		// The same rule zero-on-error follows: the miss is reached by choosing
+		// an input that is not there.
+		testkit.False(t, hasCheckIn(t, missNoInputFixture(t), "Load", "reports a miss"),
+			"a method taking nothing after its context has no miss to reach")
+	})
+
+	t.Run("emits nothing when the flag is the only result", func(t *testing.T) {
+		t.Parallel()
+		// `Load(ctx, key) bool` reports absence and returns nothing else, so
+		// the check would assert that false is false.
+		//
+		// Reachable despite no detector matching this signature: a source
+		// directive overrides a classification at an authority above anything
+		// an annotator wrote, and the generator cannot tell the difference.
+		s := missShapeFixture(t, storefixture.Named("bool"))
+		testkit.False(t, hasCheckIn(t, s, "Load", "reports a miss"),
+			"a lone flag is the signal, and there is nothing beside it to hold")
+	})
+
+	t.Run("emits nothing when there is no result at all", func(t *testing.T) {
+		t.Parallel()
+		// `Load(ctx, key) error` under a lookup stamp — an override again. No
+		// value slot means no flag to find and nothing to compare.
+		s := missShapeFixture(t, storefixture.Named("error"))
+		testkit.False(t, hasCheckIn(t, s, "Load", "reports a miss"),
+			"an error-only return carries no value a miss could zero")
+	})
+}
+
+// A classification the annotator attached, read off the projection rather than
+// off the source node — which is not in scope by the time a template renders.
+func TestMixinChecks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits nilsafe where the mixin is attached", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, hasCheckIn(t, mixinFixture(t, "nilsafe", ""), "Load", "nilsafe"),
+			"a method carrying the mixin owes the check")
+	})
+
+	t.Run("emits nothing where it is not", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, hasCheckIn(t, mixinFixture(t, "", ""), "Load", "nilsafe"),
+			"an unclassified method owes nothing")
+	})
+
+	t.Run("gates timeout on the duration rather than the mixin", func(t *testing.T) {
+		t.Parallel()
+		// "Within a budget" is not a statement until one is named, so a bare
+		// `//testkit:mixin timeout` has nothing to assert.
+		testkit.True(t, hasCheckIn(t, mixinFixture(t, "timeout", "5s"), "Load", "timeout"),
+			"a declared duration is a budget to measure against")
+		testkit.False(t, hasCheckIn(t, mixinFixture(t, "timeout", ""), "Load", "timeout"),
+			"a bare timeout mixin names no budget")
+	})
+
+	t.Run("cuts a sibling param back to its local name", func(t *testing.T) {
+		t.Parallel()
+		// The resolver rewrites a sibling into a qualified name so it is
+		// unambiguous across packages; a generated call site holds the subject
+		// and cannot spell that form.
+		m := methodNamed(t, contractIn(t, mixinFixture(t, "orderafter", "example.com/miss.Store.Prepare")), "Load")
+		testkit.Equal(t, m.MixinPartner("orderafter", "fn"), "Prepare",
+			"the trailing identifier is what a call site can use")
+	})
+}
+
+// A relational classification names a second callable, and the check calls it.
+//
+// Until eidos declared the sibling param there was no second callable to reach
+// — the stamp held a bare name with no package and no owner, so a generator
+// could confirm a relationship existed and do nothing about it
+// (thesm-os/eidos#16).
+func TestRelationalMixin(t *testing.T) {
+	t.Parallel()
+
+	t.Run("calls the partner the directive names", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, hasCheckIn(t, relationalFixture(t, "Observed"), "Touch", "sideeffect"),
+			"a named partner is one the check can observe through")
+	})
+
+	t.Run("emits nothing where the mixin names none", func(t *testing.T) {
+		t.Parallel()
+		// The param is optional by design: a bare mixin is still a
+		// classification, and a consumer may want only to record that an effect
+		// exists. So its absence is a check not generated, not a fault.
+		testkit.False(t, hasCheckIn(t, relationalFixture(t, ""), "Touch", "sideeffect"),
+			"an unnamed partner is nothing to call")
+	})
+
+	t.Run("emits nothing where the partner is not in the method set", func(t *testing.T) {
+		t.Parallel()
+		// The resolver refuses a name it cannot see, so this is unreachable
+		// through a real run — but a check composing a call to a method the
+		// subject does not declare would not compile, and a render error is a
+		// file that came out short.
+		testkit.False(t, hasCheckIn(t, relationalFixture(t, "Absent"), "Touch", "sideeffect"),
+			"a partner outside the interface is one the subject cannot be asked for")
+	})
+}
+
 // Two reasons a value is missing, and only one of them is the author's to fix.
 //
 // A func admits no literal under any run. A type in a package the patterns did
@@ -472,6 +627,192 @@ func seeded(t *testing.T) *sdk.Store {
 			}
 		}
 	}
+	return s
+}
+
+// missFixture is a two-slot comma-ok read stamped with the given shape, so the
+// gate can be exercised independently of the signature.
+//
+// The same declaration under every stamp: what changes between the cases is the
+// classification, which is the whole point of gating on it.
+func missFixture(t *testing.T, shapeName string) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("miss/iface.go", 1, 1))
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Load", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
+				m.Return(storefixture.Named("bool"))
+			})
+		}).
+		Build()
+	stamp(s, "Load", shapeName)
+	return s
+}
+
+// relationalFixture is a method whose effect is out of band beside the method
+// that observes it, with the partner named by the given identifier.
+func relationalFixture(t *testing.T, partner string) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("fx", "example.com/fx").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("fx/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Touch", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Observed", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("int"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Touch" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{suite.MixinSideEffect}, "test")
+			if partner != "" {
+				shape.MixinParamKey(suite.MixinSideEffect, suite.MixinSideEffectParam).
+					Set(bag, partner, "test")
+			}
+		}
+	}
+	return s
+}
+
+// mixinFixture attaches the named mixin to a method, with an optional parameter
+// value, so selection can be exercised without a whole corpus package.
+//
+// One declaration under every classification: what changes between the cases is
+// the stamp, which is what the gate reads.
+func mixinFixture(t *testing.T, mixinName, param string) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Load", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	if mixinName == "" {
+		return s
+	}
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Load" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{mixinName}, "test")
+			if param != "" {
+				shape.MixinParamKey(mixinName, mixinParamOf(mixinName)).Set(bag, param, "test")
+			}
+		}
+	}
+	return s
+}
+
+// mixinParamOf names the parameter each gated mixin reads, so the fixture does
+// not restate the pairing the generator already declares.
+func mixinParamOf(mixinName string) string {
+	if mixinName == suite.MixinTimeout {
+		return suite.MixinTimeoutParam
+	}
+	return suite.MixinOrderAfterParam
+}
+
+// missShapeFixture stamps a lookup classification onto a method returning only
+// the given slot, which is what a source directive overriding a detector
+// produces: an authority above the annotator, and invisible to this generator.
+func missShapeFixture(t *testing.T, ret *sdk.TypeRef) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Load", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(ret)
+			})
+		}).
+		Build()
+	stamp(s, "Load", readerwithbool.Name)
+	return s
+}
+
+// missNoFlagFixture returns two values and no bool, so nothing flags the miss
+// and every slot carries it.
+func missNoFlagFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("miss/iface.go", 1, 1))
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Struct("Meta", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("miss/iface.go", 1, 1))
+			b.Field("Revision", storefixture.Named("int"), nil)
+		}).
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Load", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
+				m.Return(storefixture.PkgNamed("example.com/miss", "Meta"))
+			})
+		}).
+		Build()
+	stamp(s, "Load", pointerreader.Name)
+	return s
+}
+
+// missNoInputFixture is the same shape with nothing after the context, so the
+// miss has nowhere to come from.
+func missNoInputFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("miss/iface.go", 1, 1))
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Load", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
+				m.Return(storefixture.Named("bool"))
+			})
+		}).
+		Build()
+	stamp(s, "Load", readerwithbool.Name)
 	return s
 }
 

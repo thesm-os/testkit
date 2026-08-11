@@ -25,6 +25,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out readertest/ pkg=readertest
 //testkit:stub
+//testkit:suite
 type Reader interface {
 	Get(ctx context.Context, key string) (Value, error)
 }

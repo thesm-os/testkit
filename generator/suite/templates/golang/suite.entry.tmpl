@@ -58,7 +58,7 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 			t.Parallel()
 {{- range $ck := $m.Checks }}
 			cfg.run(t, {{ printf "%q" $ck.Path }}, {{ printf "%q" $ck.Subtest }}, func(tb {{ renderExpr (external "testing" "TB") }}) {
-				{{ $ck.Func }}{{ $.TypeArgs }}(tb, cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }})
+				{{ $ck.Func }}{{ $.TypeArgs }}(tb, {{ if $ck.NeedsClock }}cfg.clock, {{ end }}cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }})
 			})
 {{- end }}
 			for _, c := range cfg.on{{ $m.Name }} {

@@ -303,8 +303,11 @@ func withChecks(
 ) []Method {
 	out := make([]Method, 0, len(methods))
 	for _, m := range methods {
-		kept := make([]*Check, 0, 5)
-		for _, ck := range signatureChecks(c, iface, f, m) {
+		kept := make([]*Check, 0, 6)
+		family := signatureChecks(c, iface, f, m)
+		family = append(family, detectorChecks(c, iface, f, m)...)
+		family = append(family, mixinChecks(c, iface, f, m, methods)...)
+		for _, ck := range family {
 			if missing, field, ok := undeliverable(f, ck); ok {
 				ctx.Diag.Warnf(iface.Pos(),
 					"%s: %s.%s takes %s, %s, so its "+

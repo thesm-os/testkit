@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/receivercollision"
 )
 
@@ -398,6 +399,17 @@ func StoreWithoutDouble() StoreOption {
 	return func(c *storeConfig) { c.withoutDouble = true }
 }
 
+// StoreWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func StoreWithClock(c clock.Clock) StoreOption {
+	return func(cfg *storeConfig) { cfg.clock = c }
+}
+
 // StoreWithFixture replaces the derived inputs.
 func StoreWithFixture(f StoreFixture) StoreOption {
 	return func(c *storeConfig) { c.Fixture = f }
@@ -476,6 +488,7 @@ type storeConfig struct {
 	Fixture       StoreFixture
 	subjects      []namedStoreSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject receivercollision.Store) error
 	// seedIsDerived is what lets a failed seed name the right culprit. The
 	// derived seed and a consumer's are the same field, and the advice for one
@@ -490,6 +503,7 @@ type storeConfig struct {
 func newStoreConfig(opts ...StoreOption) *storeConfig {
 	c := &storeConfig{
 		Fixture: DefaultStoreFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	// Derived: Put is classified writer, so the interface
@@ -555,4 +569,4 @@ func (c *storeConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance f324ff69cd33f233f383ccab0eba9ec249af99119c680bb6bea2327b01033fe9
+// testkit:provenance 2b36566efb9e0d169924bba9251fafec5f1f142eb310b5711a776368ed7e9cef

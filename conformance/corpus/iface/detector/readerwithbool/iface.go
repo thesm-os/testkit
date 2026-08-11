@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out readerwithbooltest/ pkg=readerwithbooltest
 //testkit:stub
+//testkit:suite
 type ReaderWithBool interface {
 	Load(ctx context.Context, key string) (Value, bool)
 }

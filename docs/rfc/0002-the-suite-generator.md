@@ -269,6 +269,18 @@ The seed returns an error rather than swallowing one: a seed that failed quietly
 leaves every check after it running against an empty subject, passing and
 asserting nothing.
 
+`ServiceWithClock` is the fourth, and belongs to the first job rather than
+being a fifth: it supplies something derivation cannot reach. Any check that
+reads time measures on the run's clock, never the wall clock — generated code
+calling `time.Now` has the machine it runs on as part of its subject, and fails
+a correct implementation on a loaded box while passing a slow one on an idle
+box. The default is `clock.RealClock()`, so an implementation taking no clock is
+measured as it would have been. An implementation that does take one is built
+with the same `clock.TestClock` in the consumer's own factory, and then a
+duration budget is a claim about the time the implementation means to spend —
+settled exactly, in no wall-clock time, which is also what makes the check's
+failure direction provable at all.
+
 ### Worked example: source to output
 
 The fixture is `conformance/corpus/iface/mixin/validates`. Everything below is in

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/validates"
 )
 
@@ -376,6 +377,17 @@ func MixedWithoutDouble() MixedOption {
 	return func(c *mixedConfig) { c.withoutDouble = true }
 }
 
+// MixedWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func MixedWithClock(c clock.Clock) MixedOption {
+	return func(cfg *mixedConfig) { cfg.clock = c }
+}
+
 // MixedWithFixture replaces the derived inputs.
 func MixedWithFixture(f MixedFixture) MixedOption {
 	return func(c *mixedConfig) { c.Fixture = f }
@@ -454,6 +466,7 @@ type mixedConfig struct {
 	Fixture       MixedFixture
 	subjects      []namedMixedSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject validates.Mixed) error
 	// seedIsDerived is what lets a failed seed name the right culprit. The
 	// derived seed and a consumer's are the same field, and the advice for one
@@ -468,6 +481,7 @@ type mixedConfig struct {
 func newMixedConfig(opts ...MixedOption) *mixedConfig {
 	c := &mixedConfig{
 		Fixture: DefaultMixedFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	// Derived: Store is classified writer, so the interface
@@ -533,4 +547,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7232eb28afa5da5701d46fc09096348f0eb5077ac950cff32e2228babf2fbce6
+// testkit:provenance a176d49c892be4628e45f5c6de6f3c3b943dc013164f27f0ac45c714d96221bb

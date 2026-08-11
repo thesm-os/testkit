@@ -20,6 +20,7 @@ type Meta struct{ Revision int }
 //
 //testkit:out lookuptest/ pkg=lookuptest
 //testkit:stub
+//testkit:suite
 type Lookup interface {
 	Inspect(key string) (Value, Meta, bool)
 }

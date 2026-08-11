@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/embedded"
 )
 
@@ -206,6 +207,17 @@ func BaseWithoutDouble() BaseOption {
 	return func(c *baseConfig) { c.withoutDouble = true }
 }
 
+// BaseWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func BaseWithClock(c clock.Clock) BaseOption {
+	return func(cfg *baseConfig) { cfg.clock = c }
+}
+
 // BaseWithFixture replaces the derived inputs.
 func BaseWithFixture(f BaseFixture) BaseOption {
 	return func(c *baseConfig) { c.Fixture = f }
@@ -259,6 +271,7 @@ type baseConfig struct {
 	Fixture       BaseFixture
 	subjects      []namedBaseSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Base) error
 	without       map[string]struct{}
 	onPing        []namedBasePingCheck
@@ -267,6 +280,7 @@ type baseConfig struct {
 func newBaseConfig(opts ...BaseOption) *baseConfig {
 	c := &baseConfig{
 		Fixture: DefaultBaseFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -510,6 +524,17 @@ func CloserWithoutDouble() CloserOption {
 	return func(c *closerConfig) { c.withoutDouble = true }
 }
 
+// CloserWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func CloserWithClock(c clock.Clock) CloserOption {
+	return func(cfg *closerConfig) { cfg.clock = c }
+}
+
 // CloserWithFixture replaces the derived inputs.
 func CloserWithFixture(f CloserFixture) CloserOption {
 	return func(c *closerConfig) { c.Fixture = f }
@@ -563,6 +588,7 @@ type closerConfig struct {
 	Fixture       CloserFixture
 	subjects      []namedCloserSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Closer) error
 	without       map[string]struct{}
 	onClose       []namedCloserCloseCheck
@@ -571,6 +597,7 @@ type closerConfig struct {
 func newCloserConfig(opts ...CloserOption) *closerConfig {
 	c := &closerConfig{
 		Fixture: DefaultCloserFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -1048,6 +1075,17 @@ func ComposedWithoutDouble() ComposedOption {
 	return func(c *composedConfig) { c.withoutDouble = true }
 }
 
+// ComposedWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func ComposedWithClock(c clock.Clock) ComposedOption {
+	return func(cfg *composedConfig) { cfg.clock = c }
+}
+
 // ComposedWithFixture replaces the derived inputs.
 func ComposedWithFixture(f ComposedFixture) ComposedOption {
 	return func(c *composedConfig) { c.Fixture = f }
@@ -1125,6 +1163,7 @@ type composedConfig struct {
 	Fixture       ComposedFixture
 	subjects      []namedComposedSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Composed) error
 	without       map[string]struct{}
 	onGet         []namedComposedGetCheck
@@ -1135,6 +1174,7 @@ type composedConfig struct {
 func newComposedConfig(opts ...ComposedOption) *composedConfig {
 	c := &composedConfig{
 		Fixture: DefaultComposedFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -1188,4 +1228,4 @@ func (c *composedConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4f5fe0d6d7b712197fcdf3d8ba11dbb9feccc140c9c14ff3c7b2e1098882ba26
+// testkit:provenance 3d51118ec91a1a384316decf149d759c924d946ae8c6f861985d1992d56a9fe5

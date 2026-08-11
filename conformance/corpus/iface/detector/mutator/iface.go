@@ -18,6 +18,7 @@ import (
 //
 //testkit:out mutatortest/ pkg=mutatortest
 //testkit:stub
+//testkit:suite
 type Mutator interface {
 	Touch(ctx context.Context, key string)
 }

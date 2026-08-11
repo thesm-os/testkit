@@ -1,0 +1,51 @@
+{{- /*
+The first check that calls a second method. Which one is not guessed: the mixin
+names it through a sibling param the shape resolver rewrote into a qualified
+name and the projection cut back to the local form, because the call site
+already holds the subject it is on.
+*/ -}}
+{{- define "suite.check.sideeffect" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .Func }} asserts the call changes what {{ $p.Name }} observes.
+//
+// Fails when: {{ $p.Name }} reports the same thing before and after
+// {{ $m.Name }}. The whole content of the mixin is that the effect is out of
+// band — {{ $m.Name }} says only whether it failed — so a subject that accepted
+// the call and did nothing satisfies every other check in this file.
+//
+// Both observations run against one subject, which is why this cannot be two
+// checks: what is compared is the difference, and a fresh subject per check
+// would have nothing to differ from.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if or $m.TakesContext $p.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	{{ range $i, $r := $p.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}beforeErr{{ else }}before{{ end }}{{ end }} := subject.{{ $p.Name }}({{ template "suite.partnerargs" $ }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, beforeErr,
+		"{{ $p.Name }} must be observable before {{ $m.Name }} runs")
+
+	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, err,
+		"{{ $m.Name }} must succeed for its effect to be observable")
+
+	{{ range $i, $r := $p.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}afterErr{{ else }}after{{ end }}{{ end }} := subject.{{ $p.Name }}({{ template "suite.partnerargs" $ }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, afterErr,
+		"{{ $p.Name }} must still be observable after {{ $m.Name }} runs")
+
+	{{ renderExpr (external $.Runtime "NotEqual") }}(tb, after, before,
+		"{{ $m.Name }} must change what {{ $p.Name }} observes")
+}
+{{- end -}}
+
+{{- /*
+The partner's own arguments, from the fixture fields its parameters resolved to.
+Its own rather than the method's: the two share a field wherever they name a
+parameter alike at one type, and differ wherever they do not.
+*/ -}}
+{{- define "suite.partnerargs" -}}
+{{- if (.Partner).TakesContext }}ctx{{ range .PartnerArgs }}, {{ . }}{{ end }}
+{{- else }}{{ range $i, $a := .PartnerArgs }}{{ if $i }}, {{ end }}{{ $a }}{{ end }}{{ end }}
+{{- end -}}

@@ -42,7 +42,8 @@ func TestRankedContract(t *testing.T) {
 				s := subject.(*genericboundtest.InMemory[int, genericbound.Score])
 				s.Set(fixture.Key, genericbound.Score{Points: 1})
 				return nil
-			}),
+			},
+		),
 		genericboundtest.RankedOnRank[int, genericbound.Score]("returns what was set",
 			func(tb testing.TB, subject genericbound.Ranked[int, genericbound.Score], key int) {
 				tb.Helper()

@@ -26,6 +26,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out streamconsumertest/ pkg=streamconsumertest
 //testkit:stub
+//testkit:suite
 type Source interface {
 	Next(ctx context.Context) (Value, bool, error)
 }
@@ -34,6 +35,7 @@ type Source interface {
 //
 //testkit:out streamconsumertest/ pkg=streamconsumertest
 //testkit:stub
+//testkit:suite
 type StreamConsumer interface {
 	// Ingest takes one non-context parameter and returns one value plus an
 	// error. Both counts are load-bearing: a second parameter or a second

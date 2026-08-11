@@ -26,6 +26,7 @@ type Value struct {
 //
 //testkit:out compositewritertest/ pkg=compositewritertest
 //testkit:stub
+//testkit:suite
 type CompositeWriter interface {
 	Store(ctx context.Context, v Value) (Value, error)
 }

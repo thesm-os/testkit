@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/genericbound"
 )
 
@@ -311,6 +312,17 @@ func RankedWithoutDouble[K genericbound.Ordered, V any]() RankedOption[K, V] {
 	return func(c *rankedConfig[K, V]) { c.withoutDouble = true }
 }
 
+// RankedWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func RankedWithClock[K genericbound.Ordered, V any](c clock.Clock) RankedOption[K, V] {
+	return func(cfg *rankedConfig[K, V]) { cfg.clock = c }
+}
+
 // RankedWithFixture replaces the derived inputs.
 func RankedWithFixture[K genericbound.Ordered, V any](f RankedFixture[K, V]) RankedOption[K, V] {
 	return func(c *rankedConfig[K, V]) { c.Fixture = f }
@@ -376,6 +388,7 @@ type rankedConfig[K genericbound.Ordered, V any] struct {
 	Fixture       RankedFixture[K, V]
 	subjects      []namedRankedSubject[K, V]
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject genericbound.Ranked[K, V]) error
 	without       map[string]struct{}
 	onRank        []namedRankedRankCheck[K, V]
@@ -385,6 +398,7 @@ type rankedConfig[K genericbound.Ordered, V any] struct {
 func newRankedConfig[K genericbound.Ordered, V any](opts ...RankedOption[K, V]) *rankedConfig[K, V] {
 	c := &rankedConfig[K, V]{
 		Fixture: DefaultRankedFixture[K, V](),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -438,4 +452,4 @@ func (c *rankedConfig[K, V]) run(t *testing.T, path, name string, fn func(tb tes
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4cf06713aabee9424450b68660c6ac0f1037bdb7e7f7bb842258c3fd76712a0d
+// testkit:provenance 00da090b67b9bc736eafd8e3872f847cb76cf69a6bd0d9353b6c8068e1fc25ed

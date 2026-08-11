@@ -29,6 +29,17 @@ func {{ .IfaceName }}WithoutDouble{{ renderTypeParams .TypeParams }}() {{ .Iface
 	return func(c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) { c.withoutDouble = true }
 }
 {{ end }}
+// {{ .IfaceName }}WithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func {{ .IfaceName }}WithClock{{ renderTypeParams .TypeParams }}(c {{ renderType .ClockRef }}) {{ .IfaceName }}Option{{ .TypeArgs }} {
+	return func(cfg *{{ lower .IfaceName }}Config{{ .TypeArgs }}) { cfg.clock = c }
+}
+
 // {{ .IfaceName }}WithFixture replaces the derived inputs.
 func {{ .IfaceName }}WithFixture{{ renderTypeParams .TypeParams }}(f {{ .Fixture.TypeName }}{{ .TypeArgs }}) {{ .IfaceName }}Option{{ .TypeArgs }} {
 	return func(c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) { c.Fixture = f }
@@ -87,7 +98,8 @@ type {{ lower .IfaceName }}Config{{ renderTypeParams .TypeParams }} struct {
 {{- if .Double }}
 	withoutDouble bool
 {{- end }}
-	seed func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) error
+	clock {{ renderType .ClockRef }}
+	seed  func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) error
 {{- if .Seed }}
 	// seedIsDerived is what lets a failed seed name the right culprit. The
 	// derived seed and a consumer's are the same field, and the advice for one
@@ -103,6 +115,7 @@ type {{ lower .IfaceName }}Config{{ renderTypeParams .TypeParams }} struct {
 func new{{ .IfaceName }}Config{{ renderTypeParams .TypeParams }}(opts ...{{ .IfaceName }}Option{{ .TypeArgs }}) *{{ lower .IfaceName }}Config{{ .TypeArgs }} {
 	c := &{{ lower .IfaceName }}Config{{ .TypeArgs }}{
 		Fixture: {{ .Fixture.CtorName }}{{ .TypeArgs }}(),
+		clock:   {{ renderExpr (external (printf "%s/clock" .Runtime) "RealClock") }}(),
 		without: map[string]struct{}{},
 	}
 {{- if .Seed }}

@@ -25,6 +25,7 @@ type Payload struct{ Key, Body string }
 //
 //testkit:out nilsafetest/ pkg=nilsafetest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Store takes a pointer, which is what makes nil expressible. A
 	// value parameter would leave the law with no nil to pass.

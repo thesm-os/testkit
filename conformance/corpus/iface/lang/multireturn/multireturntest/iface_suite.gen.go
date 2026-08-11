@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/lang/multireturn"
 )
 
@@ -64,7 +65,7 @@ func DefaultWideFixture() WideFixture {
 
 // AssertWideContract runs every generated check against every declared subject.
 //
-//	Checks:   9 across 3 methods, per subject
+//	Checks:   10 across 3 methods, per subject
 //	Subjects: declare each with WideSubject
 //	Double:   every subject runs a second time wrapped in WideStub, so
 //	          anything the wrapper fails that the subject passes is the double
@@ -135,6 +136,9 @@ func runWideChecks(
 			})
 			cfg.run(t, "Triple/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
 				AssertWideTripleToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.ID)
+			})
+			cfg.run(t, "Triple/reports a miss", "reports a miss", func(tb testing.TB) {
+				AssertWideTripleReportsAMiss(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.IDOther)
 			})
 			for _, c := range cfg.onTriple {
 				cfg.run(t, "Triple"+"/"+c.name, c.name, func(tb testing.TB) {
@@ -300,6 +304,33 @@ func AssertWideTripleToleratesNilContext(tb testing.TB, subject multireturn.Wide
 	_, _, _ = subject.Triple(ctx, id)
 }
 
+// AssertWideTripleReportsAMiss asserts an absent input is reported as false with the zero
+// value beside it.
+//
+// Fails when: Triple reports ok for an input derived to be absent, or
+// reports a miss while returning something other than the zero. A caller who
+// checks the flag and a caller who checks the value must not disagree about
+// whether the read found anything.
+func AssertWideTripleReportsAMiss(tb testing.TB, subject multireturn.Wide, id string) {
+	tb.Helper()
+	ctx := tb.Context()
+	r0, r1, r2 := subject.Triple(ctx, id)
+	if r2 {
+		tb.Fatalf("Triple found the input it was given; supply one it " +
+			"misses through WideWithFixture")
+	}
+	{
+		var zero string
+		testkit.Equal(tb, r0, zero,
+			"Triple must return the zero value when it reports a miss")
+	}
+	{
+		var zero int
+		testkit.Equal(tb, r1, zero,
+			"Triple must return the zero value when it reports a miss")
+	}
+}
+
 // AssertWideNoErrorSmoke asserts NoError survives a call with derived inputs.
 //
 // Fails when: NoError panics. The weakest check in this file and the one
@@ -356,6 +387,17 @@ func WideSubject(name string, factory func() multireturn.Wide) WideOption {
 // every check. Decline it where the double is not used.
 func WideWithoutDouble() WideOption {
 	return func(c *wideConfig) { c.withoutDouble = true }
+}
+
+// WideWithClock supplies the clock every time-reading check measures on.
+//
+// Defaults to the real one, so an implementation that does not take a clock
+// behaves as it would have. Supply a [clock.TestClock] — the same one the
+// factory builds the subject with — and a budget becomes a claim about the time
+// the implementation means to spend rather than about how loaded the machine
+// was.
+func WideWithClock(c clock.Clock) WideOption {
+	return func(cfg *wideConfig) { cfg.clock = c }
 }
 
 // WideWithFixture replaces the derived inputs.
@@ -435,6 +477,7 @@ type wideConfig struct {
 	Fixture       WideFixture
 	subjects      []namedWideSubject
 	withoutDouble bool
+	clock         clock.Clock
 	seed          func(ctx context.Context, subject multireturn.Wide) error
 	without       map[string]struct{}
 	onQuad        []namedWideQuadCheck
@@ -445,6 +488,7 @@ type wideConfig struct {
 func newWideConfig(opts ...WideOption) *wideConfig {
 	c := &wideConfig{
 		Fixture: DefaultWideFixture(),
+		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
 	for _, o := range opts {
@@ -498,4 +542,4 @@ func (c *wideConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3c41af68265709fed9b11119c4e9638c9d563a20db102dea274f4fec84cd9b95
+// testkit:provenance 6e738dc8e904cb10e6aa944a32bf7b1f641a769990909200047b07a0a2ff1cb8

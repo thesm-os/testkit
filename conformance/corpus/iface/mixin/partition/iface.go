@@ -26,7 +26,7 @@ type Mixed interface {
 	// Put is partitioned: two keys in different partitions never interfere.
 	// The law needs a partition parameter distinct from the key, or there is
 	// nothing to isolate by.
-	//testkit:mixin partition
+	//testkit:mixin partition read=Read
 	//testkit:fault partition=Partition
 	Put(ctx context.Context, partition, key, value string) error
 

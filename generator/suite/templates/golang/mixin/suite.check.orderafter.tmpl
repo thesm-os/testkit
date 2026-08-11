@@ -1,0 +1,28 @@
+{{- /*
+The prerequisite comes back qualified from the shape resolver and is cut to its
+local name, because the call site already holds the subject the method is on.
+*/ -}}
+{{- define "suite.check.orderafter" -}}
+{{ $m := .Method }}
+{{ $prereq := $m.MixinPartner "orderafter" "fn" }}
+// {{ .Func }} asserts the call is refused before {{ $prereq }} has run.
+//
+// Fails when: {{ $m.Name }} succeeds on a subject {{ $prereq }} was never called
+// on. An ordering constraint nothing enforces is a comment: the second caller to
+// get it wrong finds out in production, and the first one wrote the code that
+// looks correct.
+//
+// A fresh subject rather than the seeded one, so the prerequisite genuinely has
+// not run — which is why this check builds its own rather than taking what the
+// harness hands every other check.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if $m.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
+	{{ renderExpr (external $.Runtime "Error") }}(tb, err,
+		"{{ $m.Name }} must be refused until {{ $prereq }} has run")
+}
+{{- end -}}

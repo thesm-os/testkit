@@ -13,6 +13,14 @@
 // {{ $m.Name }} with exactly one — which leaves everything about *several* to a
 // check written here, including the empty call no derivation reaches.
 {{- end }}
+{{- if and $m.ReturnsError $m.ValueReturns (not $m.HasInput) }}
+//
+// {{ $m.Name }} returns a value beside its error and takes nothing to vary, so no
+// "an error carries the zero value" check is generated for it. That check reaches
+// the failure it is about by choosing an input that misses, and this signature
+// offers none — a generated one could only demand failure from a correct
+// implementation. Write it here against a subject this package can break.
+{{- end }}
 type {{ $m.CheckType }}{{ renderTypeParams $.TypeParams }} func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType $c.IfaceRef }}{{ $c.TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }})
 {{ end }}

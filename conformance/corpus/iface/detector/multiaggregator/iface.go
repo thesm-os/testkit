@@ -18,6 +18,7 @@ import (
 //
 //testkit:out multiaggregatortest/ pkg=multiaggregatortest
 //testkit:stub
+//testkit:suite
 type MultiAggregator interface {
 	Stats(ctx context.Context) (int, int, error)
 }

@@ -80,6 +80,12 @@ func TestGoTemplates(t *testing.T) {
 			"signature/suite.check.deadline.tmpl",
 			"signature/suite.check.nilcontext.tmpl",
 			"signature/suite.check.zeroonerror.tmpl",
+			"detector/suite.check.misszero.tmpl",
+			"detector/suite.check.missflag.tmpl",
+			"mixin/suite.check.nilsafe.tmpl",
+			"mixin/suite.check.timeout.tmpl",
+			"mixin/suite.check.orderafter.tmpl",
+			"mixin/suite.check.sideeffect.tmpl",
 		} {
 			testkit.True(t, hasTemplate(t, name), name+" must ship")
 		}

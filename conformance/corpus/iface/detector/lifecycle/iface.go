@@ -22,6 +22,7 @@ var ErrClosed = errors.New("lifecycle: closed")
 //
 //testkit:out lifecycletest/ pkg=lifecycletest
 //testkit:stub
+//testkit:suite
 type Lifecycle interface {
 	Close(ctx context.Context) error
 }
