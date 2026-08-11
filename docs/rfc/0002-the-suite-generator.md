@@ -196,6 +196,12 @@ calling the interface's own writer, which is also what makes the cross-method
 checks free: read-after-write is the writer followed by the reader, and
 delete-removes is the writer, the deleter, then the reader.
 
+All three writer detectors, not `writer` alone. They differ only in how many
+non-context arguments they take — `writer` one, `compositewriter` two,
+`multiargwriter` three or more — and the seed passes whatever the method
+declares, so arity is not something it has to know. `mutator` is excluded despite
+writing: it returns nothing, so a seed through one cannot report its own failure.
+
 A read-only interface over external state has no writer and is the case that
 needs a seed hook. The generated documentation says which of the two it is, so a
 reader is never left wondering whether a check was omitted or merely unstated.
@@ -218,10 +224,22 @@ law to assert does not make the signature unknown.
 stand-in, which is what the self-check rests on — and it applies to a consumer's
 checks as much as to the generated ones.
 
-### The option API has three jobs
+### The option API has one required job and three escape hatches
 
 The consumer cannot reach the generator, so the generated options are the entire
-extension surface. Three operations, no more:
+extension surface.
+
+**Name the implementations.** `ServiceSubject(name, factory)`, repeated once per
+implementation that claims to satisfy the interface. This is the one option a
+consumer always writes, and it is not an escape hatch: which implementations
+exist is the single fact no amount of derivation can recover from the source.
+Plural and named because that is what a conformance suite is for — one statement
+of the contract, run against every subject, so a check written once covers all of
+them rather than being restated per implementation, which is where the statements
+drift.
+
+The three that follow are for what a run got wrong, and a suite that needs none
+of them is the design working.
 
 **Supply what derivation cannot reach.** A seed for a writer-less interface, an
 authorised context for `scope`, a stale version for `cas`. One override struct
@@ -238,12 +256,18 @@ the consumer's only recourse is to stop running the suite — which is the failu
 this whole design exists to avoid.
 
 ```go
-servicetest.AssertServiceContract(t, inmemory,
-    servicetest.ServiceSeed(func(ctx context.Context, s allshapes.Service) { … }),
+servicetest.AssertServiceContract(t,
+    servicetest.ServiceSubject("in-memory", newInMemory),
+    servicetest.ServiceSubject("postgres", newPostgres),
+    servicetest.ServiceSeed(func(ctx context.Context, s allshapes.Service) error { … }),
     servicetest.ServiceOnGet("second read is served from cache", myCheck),
     servicetest.ServiceWithout("Delete/deleteremoves"),
 )
 ```
+
+The seed returns an error rather than swallowing one: a seed that failed quietly
+leaves every check after it running against an empty subject, passing and
+asserting nothing.
 
 ### Worked example: source to output
 
@@ -643,17 +667,8 @@ func inmemory() allshapes.Service { return allshapes.NewInMemoryService() }
 
 func TestServiceContract(t *testing.T) {
     t.Parallel()
-    servicetest.AssertServiceContract(t, inmemory)
-}
-
-// The same suite against the double wrapping the real implementation. Anything
-// the wrapper fails that the subject passes is the double lying — which is what
-// makes a generated double trustworthy, and it needs nothing generated for it.
-func TestServiceContract_Double(t *testing.T) {
-    t.Parallel()
-    servicetest.AssertServiceContract(t, func() allshapes.Service {
-        return servicetest.NewServiceStub(t, servicetest.ServiceStubDelegateTo(inmemory()))
-    })
+    servicetest.AssertServiceContract(t,
+        servicetest.ServiceSubject("in-memory", inmemory))
 }
 
 // Present because Put carries //testkit:bench and //testkit:fuzz in the
@@ -662,9 +677,19 @@ func BenchmarkServiceContract(b *testing.B) { servicetest.BenchmarkServiceContra
 func FuzzServicePut(f *testing.F)           { servicetest.FuzzServicePut(f, inmemory) }
 ```
 
-No options at all in the ordinary case. That is the acceptance test for this
-design, and the measure it is held to: an option a consumer has to write is a
-derivation that has not been done.
+One option, naming the one thing the source does not say. That is the acceptance
+test for this design and the measure it is held to: every *other* option a
+consumer writes is a derivation that has not been done.
+
+The double is not in that file and should not be. `AssertServiceContract` runs
+the whole contract a second time against each subject wrapped in
+`ServiceStub` — derived from the `//testkit:stub` on the same interface, read off
+the double's queued emit value rather than its directive, because a directive
+says what was asked for and the queue says what was produced. Anything the
+wrapper fails that the subject passes is the double lying, which is what makes a
+generated double trustworthy. `ServiceWithoutDouble()` declines the second pass
+where the double is not used; an interface carrying no `//testkit:stub` generates
+neither the run nor the option.
 
 ### Composition and generics
 
@@ -681,6 +706,19 @@ generated receiver binds. A generic interface's entry point carries the type
 parameters; the generated self-check instantiates at the witnesses the source
 names, because a Go test function cannot take type parameters.
 
+Foreign embedding is generated rather than refused. eidos carries the embed's
+type-checked method set on the embed itself, so `io.Closer`'s `Close` reaches the
+double and the harness with no declaration in the run — and a loaded declaration
+still wins where there is one, which is what makes the local and foreign fixtures
+have to agree.
+
+A variadic method's checks witness exactly one element, because a fixture holds
+one value per parameter. That is a narrowing rather than a defect — everything
+about *several*, including the empty call, is a claim only the author can make —
+but it is invisible in a check's signature, where `keys string` reads like an
+ordinary parameter. The generated check type and fixture field both say so, so
+the limit is legible where a consumer meets it rather than recorded here alone.
+
 ### The model tier is a sibling generator, not a second harness
 
 `engine/model` is the runtime and `engine/model/law` the property library;
@@ -694,7 +732,8 @@ implementation the consumer supplies, so it attaches as an option on the same
 entry point rather than as a harness a team has to remember separately:
 
 ```go
-servicetest.AssertServiceContract(t, inmemory,
+servicetest.AssertServiceContract(t,
+    servicetest.ServiceSubject("in-memory", inmemory),
     servicetest.ServiceModelChecks(newReference))
 ```
 

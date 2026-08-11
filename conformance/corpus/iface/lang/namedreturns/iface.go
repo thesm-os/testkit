@@ -18,6 +18,7 @@ import (
 //
 //testkit:out namedreturnstest/ pkg=namedreturnstest
 //testkit:stub
+//testkit:suite
 type Service interface {
 	Named(ctx context.Context, id string) (item string, err error)
 	Unnamed(ctx context.Context, id string) (string, error)

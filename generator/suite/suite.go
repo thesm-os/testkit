@@ -136,6 +136,18 @@ type Subject struct {
 	// and a symbol into a qualified reference and registers the import, so a
 	// path is all a template needs.
 	Runtime string
+
+	// TypeParams is the source interface's type-parameter list in declaration
+	// form, which `renderTypeParams` spells as `[K comparable, V any]`. Empty
+	// for a non-generic interface, where the helper renders nothing.
+	TypeParams []*sdk.EmitTypeParam
+
+	// TypeArgs is the same list in use position — `[K, V]`, or empty.
+	//
+	// Every generated identifier naming a type that carries parameters has to
+	// carry it too, since a generic type cannot be referenced bare. That
+	// includes the subject: `Store` alone is not a type, `Store[K, V]` is.
+	TypeArgs string
 }
 
 // Check is one generated assertion.
@@ -215,6 +227,16 @@ type Method struct {
 	// of it, and so is a consumer's, which is what lets them compose.
 	CheckType string
 
+	// ArgFields names the fixture field each of the method's non-context
+	// parameters is supplied from, in order.
+	//
+	// The fixture's names rather than the parameters' own, because two methods
+	// naming one parameter at different types get a field each. Carried on the
+	// method so the extension point's call site and the generated checks read
+	// one answer: they did not, and a consumer's check was handed the other
+	// method's value.
+	ArgFields []string
+
 	// Checks are the generated assertions for this method, in the order the
 	// entry point runs them.
 	Checks []*Check
@@ -236,6 +258,21 @@ func (m Method) CallArgs() []golang.Param {
 		return m.Params[1:]
 	}
 	return m.Params
+}
+
+// VariadicParam returns the method's variadic parameter, or nil.
+//
+// Go allows at most one and only in final position, so one answer covers the
+// signature. Present so the generated file can state a narrowing a reader would
+// otherwise have to infer: the fixture derives one value per parameter, so a
+// generated check calls a variadic method with exactly one element.
+func (m Method) VariadicParam() *golang.Param {
+	for i := range m.Params {
+		if m.Params[i].Variadic {
+			return &m.Params[i]
+		}
+	}
+	return nil
 }
 
 // ValueReturns returns the result slots that are not the error, which is what
@@ -328,9 +365,9 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		// every check was dropped for want of an input used to be the other
 		// half of this, and is no longer reachable: a check is dropped only
 		// when its meaning is the value it is handed, and smoke never is.
-		methods := methodsOf(c, iface, set)
+		methods := methodsOf(iface, set)
 		fixture := fixtureOf(ctx, iface, methods)
-		methods = withDerivableChecks(ctx, iface, fixture, methods)
+		methods = withChecks(c, ctx, iface, fixture, methods)
 		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, &Contract{
 			BaseEmit:  sdk.EmitBase(c, iface),
 			Subject:   subjectOf(iface),
@@ -405,15 +442,13 @@ func resolveMethods(ctx *sdk.GeneratorContext, iface *sdk.Interface) (sdk.Method
 // Driven off the resolved set rather than the declarations: an interface that
 // embeds another declares none of what it inherits, and a harness reading only
 // declarations would cover half a contract without saying it had.
-func methodsOf(c *sdk.Provenance, iface *sdk.Interface, set sdk.MethodSetResult) []Method {
+func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	out := make([]Method, 0, len(set.Methods))
 	for _, src := range set.Methods {
-		m := Method{
+		out = append(out, Method{
 			Sig:       golang.SigOf(src),
 			CheckType: iface.Name + src.Name + "Check",
-		}
-		m.Checks = signatureChecks(c, iface, m)
-		out = append(out, m)
+		})
 	}
 	return out
 }
@@ -425,12 +460,12 @@ func methodsOf(c *sdk.Provenance, iface *sdk.Interface, set sdk.MethodSetResult)
 // read, and its one directive adds the eleventh.
 // They are also the half no [engine/model/law] property covers, which is what
 // makes them unambiguously this tier's (docs/adr/0018).
-func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, m Method) []*Check {
+func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method) []*Check {
 	// The sample values for the ordinary checks, and the second set for the one
 	// that has to miss. A zero-value check called with the value the subject was
 	// seeded with succeeds, and then asserts nothing.
-	args := fixtureArgs(m, false)
-	other := fixtureArgs(m, true)
+	args := fixtureArgs(f, m, false)
+	other := fixtureArgs(f, m, true)
 
 	base := func(kind sdk.Kind, subtest, suffix string, with []string, derived bool) *Check {
 		return &Check{
@@ -486,23 +521,28 @@ func doubleOf(queued map[sdk.Node]*stub.Stub, iface *sdk.Interface) *Double {
 // subjectOf names the interface every emit value for it is about.
 func subjectOf(iface *sdk.Interface) Subject {
 	return Subject{
-		IfaceName: iface.Name,
-		IfaceRef:  golang.RefFor(iface.Name, iface.Package),
-		Runtime:   Module,
+		IfaceName:  iface.Name,
+		IfaceRef:   golang.RefFor(iface.Name, iface.Package),
+		Runtime:    Module,
+		TypeParams: golang.TypeParamDecls(iface.TypeParams),
+		TypeArgs:   golang.TypeParamNames(iface.TypeParams),
 	}
 }
 
 // fixtureArgs names the fixture field per parameter the method takes after its
 // context, taking the second value of each when alternate is set.
-func fixtureArgs(m Method, alternate bool) []string {
+func fixtureArgs(f Fixture, m Method, alternate bool) []string {
 	args := m.CallArgs()
 	out := make([]string, 0, len(args))
 	for _, p := range args {
+		// The fixture's own name for the field, not the parameter's: two
+		// methods naming one parameter at different types get one field each,
+		// and a check has to reach its own.
+		name := f.FieldFor(p)
 		if alternate {
-			out = append(out, p.Field+OtherSuffix)
-			continue
+			name += OtherSuffix
 		}
-		out = append(out, p.Field)
+		out = append(out, name)
 	}
 	return out
 }

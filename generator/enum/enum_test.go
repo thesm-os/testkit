@@ -747,3 +747,48 @@ func fixture(name, underlying string, opts ...func(*storefixture.EnumBuilder)) *
 	})
 	return b
 }
+
+// The generated file names the package its subject lives in, and a declaration
+// can outlive the record of where it came from.
+func TestPackageNameFallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("derives the name from the path when the run recorded no package", func(t *testing.T) {
+		t.Parallel()
+		// A package clause differs from a path's last segment often enough that
+		// the loaded node is asked first — `example.com/cfg/v2` is package
+		// `cfg`. But a declaration whose package this run never recorded still
+		// has to name something, and the path is the only thing left that
+		// knows.
+		//
+		// Asserted on the projection rather than on a rendered file: routing
+		// composes an output package from the same record, so a fixture missing
+		// one has nothing to render into.
+		testkit.Equal(t, apiOf(t, unloadedPackage()).PackageName, "unloaded",
+			"the path answers where the package node cannot")
+	})
+}
+
+// apiOf drives the plugin over b and returns the queued API projection.
+func apiOf(t *testing.T, b *storefixture.Builder) *enum.API {
+	t.Helper()
+	s := b.Build()
+	plugintest.Generate(t, enum.New(), s)
+	for _, p := range s.Emit().PendingOriginSlots() {
+		if a, ok := p.Item.(*enum.API); ok {
+			return a
+		}
+	}
+	t.Fatal("the run queued no enum API")
+	return nil
+}
+
+// unloadedPackage points its enum at a package path the run never recorded,
+// which is what a partial load leaves behind.
+func unloadedPackage() *storefixture.Builder {
+	b := numeric()
+	for _, e := range b.PackageNode().Enums {
+		e.Package = "example.com/unloaded"
+	}
+	return b
+}

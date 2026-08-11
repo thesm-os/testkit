@@ -390,7 +390,10 @@ func MixedWithFixture(f MixedFixture) MixedOption {
 // Returning an error rather than swallowing one. A seed that failed quietly
 // leaves every check after it asserting nothing and reporting success.
 func MixedSeed(fn func(ctx context.Context, subject validates.Mixed) error) MixedOption {
-	return func(c *mixedConfig) { c.seed = fn }
+	return func(c *mixedConfig) {
+		c.seed = fn
+		c.seedIsDerived = false
+	}
 }
 
 // MixedOnStore adds a named check to Store.
@@ -452,6 +455,10 @@ type mixedConfig struct {
 	subjects      []namedMixedSubject
 	withoutDouble bool
 	seed          func(ctx context.Context, subject validates.Mixed) error
+	// seedIsDerived is what lets a failed seed name the right culprit. The
+	// derived seed and a consumer's are the same field, and the advice for one
+	// is useless for the other.
+	seedIsDerived bool
 	without       map[string]struct{}
 	onStore       []namedMixedStoreCheck
 	onValidate    []namedMixedValidateCheck
@@ -468,6 +475,7 @@ func newMixedConfig(opts ...MixedOption) *mixedConfig {
 	c.seed = func(ctx context.Context, subject validates.Mixed) error {
 		return subject.Store(ctx, c.Fixture.V)
 	}
+	c.seedIsDerived = true
 	for _, o := range opts {
 		o(c)
 	}
@@ -486,13 +494,20 @@ func (c *mixedConfig) subject(
 	if c.seed != nil {
 		// Reported rather than ignored. A seed that silently failed would leave
 		// every check after it running against an empty subject — passing, and
-		// asserting nothing. The message names the two ways to fix it because
-		// the cause is always one of them: the value is not one this subject
-		// accepts, or the write itself is broken.
+		// asserting nothing.
+		//
+		// Which seed ran decides what the message can usefully say. The derived
+		// one fails for one of two reasons and both are fixable from here, so it
+		// names them. A seed the caller supplied is theirs, and telling them to
+		// supply one is advice they already took.
 		if err := c.seed(tb.Context(), s); err != nil {
-			tb.Fatalf("seeding through Store failed: %v; "+
-				"supply a value it accepts through MixedWithFixture, or a "+
-				"whole seed through MixedSeed", err)
+			if c.seedIsDerived {
+				tb.Fatalf("seeding through Store failed: %v; "+
+					"supply a value it accepts through MixedWithFixture, or a "+
+					"whole seed through MixedSeed", err)
+			} else {
+				tb.Fatalf("the seed supplied through MixedSeed failed: %v", err)
+			}
 		}
 	}
 	if wrap != nil {
@@ -518,4 +533,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 61c4c26e0abaed3b94c9914b4b6cffbe2744a81177864db135ba415e518f889d
+// testkit:provenance 7232eb28afa5da5701d46fc09096348f0eb5077ac950cff32e2228babf2fbce6

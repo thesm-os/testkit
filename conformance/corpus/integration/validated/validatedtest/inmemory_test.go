@@ -26,11 +26,26 @@ func TestStoreContract(t *testing.T) {
 
 	validatedtest.AssertStoreContract(t,
 		validatedtest.StoreSubject("in-memory", func() validated.Store {
-			return validated.NewInMemory()
+			return validatedtest.NewInMemory()
 		}),
 
 		// A domain rule no classification implies. It runs against every
 		// subject and through the double, from this one statement.
+		// The seed writes AccountDefaults, whose ID is UUID-shaped; the derived
+		// key the reader's checks are handed is "test-id". They cannot agree,
+		// so the hit path is one only a check reading the seeded account's own
+		// identifier reaches — which is the shape of every read-after-write
+		// claim, and the reason the classification that states it is the model
+		// tier's rather than something derivable here.
+		validatedtest.StoreOnGet("returns the account Put stored", func(
+			tb testing.TB, subject validated.Store, id string,
+		) {
+			tb.Helper()
+			want := validated.AccountDefaults()
+			got, err := subject.Get(tb.Context(), want.ID)
+			testkit.NoError(tb, err, "a stored account is found by its own identifier")
+			testkit.Equal(tb, got, want, "and comes back whole")
+		}),
 		validatedtest.StoreOnPut("refuses an address with no @",
 			func(tb testing.TB, subject validated.Store, a validated.Account) {
 				tb.Helper()
@@ -38,7 +53,7 @@ func TestStoreContract(t *testing.T) {
 				// literal restating every field goes stale the moment one is
 				// added, and would then be refused for the wrong reason.
 				bad := validatedtest.NewAccountFrom(a).WithEmail("no-at-sign").Build()
-				testkit.ErrorIs(tb, subject.Put(tb.Context(), bad), validated.ErrInvalid,
+				testkit.ErrorIs(tb, subject.Put(tb.Context(), bad), validatedtest.ErrInvalid,
 					"Put must refuse an account whose email is not one")
 			}),
 	)

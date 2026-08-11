@@ -21,6 +21,7 @@ var ErrDivideByZero = errors.New("nocontext: divide by zero")
 //
 //testkit:out nocontexttest/ pkg=nocontexttest
 //testkit:stub
+//testkit:suite
 type Calculator interface {
 	Add(a, b int) int
 	Divide(a, b int) (int, error)

@@ -28,6 +28,7 @@ type Session struct{ ID string }
 //
 //testkit:out receivercollisiontest/ pkg=receivercollisiontest
 //testkit:stub
+//testkit:suite
 type Store interface {
 	// Put is the writer form: one parameter, named for its type.
 	Put(ctx context.Context, s Session) error

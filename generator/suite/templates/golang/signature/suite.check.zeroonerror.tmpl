@@ -5,7 +5,7 @@
 // Fails when: {{ $m.Name }} returns a non-zero result alongside a non-nil
 // error. A caller who checks the error and a caller who checks the value must
 // not disagree about whether the call succeeded.
-func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 {{- if $m.TakesContext }}

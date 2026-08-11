@@ -611,8 +611,13 @@ func witnessesOf(ctx *sdk.GeneratorContext, iface *sdk.Interface) []sdk.Ref {
 	if len(iface.TypeParams) == 0 {
 		return nil
 	}
-	if pinned, ok := pinnedWitnesses(ctx, iface); ok {
-		return pinned
+	// The directive is read here rather than inside, so the reader is the one
+	// that already knows there is one: Generate walks only interfaces carrying
+	// it, and a nil guard one call down would be a branch no input can reach.
+	if dir := iface.Directive(DirectiveName); dir != nil {
+		if pinned, ok := pinnedWitnesses(ctx, iface, dir); ok {
+			return pinned
+		}
 	}
 	return golang.Witnesses(iface.TypeParams)
 }
@@ -627,19 +632,12 @@ func witnessesOf(ctx *sdk.GeneratorContext, iface *sdk.Interface) []sdk.Ref {
 // Each name is lifted by [golang.RefFor], which renders a predeclared type
 // bare and qualifies anything else against the source package — the companion
 // lives in an external test package and reaches nothing there unqualified.
-func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *sdk.Interface) ([]sdk.Ref, bool) {
+func pinnedWitnesses(ctx *sdk.GeneratorContext, iface *sdk.Interface, dir *sdk.Directive) ([]sdk.Ref, bool) {
 	// The first directive of this name rather than the first carrying the key.
 	// The schema denies negation but does not forbid a second `//testkit:stub`
 	// line, so a source putting the witness list on that second line now gets
 	// derived witnesses where it once got pinned ones. Both answers are silent,
 	// and the shorter rule is the one every source in the corpus writes.
-	// Unreachable from Generate, which walks only interfaces carrying the
-	// directive; kept because the alternative is a nil dereference if the walk
-	// is ever widened.
-	dir := iface.Directive(DirectiveName)
-	if dir == nil {
-		return nil, false
-	}
 	raw, given := dir.KV[WitnessKey]
 	if !given {
 		return nil, false

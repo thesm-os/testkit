@@ -1,11 +1,15 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// Package embedded is the language-axis fixture for an interface embedding another, so the method set is larger than the
-// declaration.
+// Package embedded is the language-axis fixture for an interface embedding
+// another, so the method set is larger than the declaration.
 //
-// This axis varies the Go type system rather than the classification, so
-// these break generators independently of any directive.
+// This axis varies the Go type system rather than the classification, so these
+// break generators independently of any directive.
+//
+// Every embed here is declared in this package. [embeddedforeign] holds the same
+// shape with the embed coming from outside the run, and the two must agree —
+// which is the property having both is for.
 package embedded
 
 import (
@@ -22,6 +26,7 @@ var ErrUnreachable = errors.New("embedded: unreachable")
 //
 //testkit:out embeddedtest/ pkg=embeddedtest
 //testkit:stub
+//testkit:suite
 type Base interface {
 	// Ping carries a fault directive so an embedding interface's double is
 	// checked for helpers generated from a method it never declared. A
@@ -34,6 +39,7 @@ type Base interface {
 //
 //testkit:out embeddedtest/ pkg=embeddedtest
 //testkit:stub
+//testkit:suite
 type Closer interface {
 	Close(ctx context.Context) error
 }
@@ -44,6 +50,7 @@ type Closer interface {
 //
 //testkit:out embeddedtest/ pkg=embeddedtest
 //testkit:stub
+//testkit:suite
 type Composed interface {
 	Base
 	Closer

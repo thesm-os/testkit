@@ -180,6 +180,11 @@ type ErrType struct {
 
 	// Fields are the exported fields a message is expected to carry.
 	Fields []Field
+
+	// decl is the declaration this was projected from, carried so the anchor
+	// comes from what errTypesOf already found rather than from a second scan
+	// that could disagree with it.
+	decl *sdk.Struct
 }
 
 // Checked reports whether any field carries a value a check can write, which
@@ -248,7 +253,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Name, pkg.Path, DirectiveName, ErrPrefix, ErrorMethod)
 			continue
 		}
-		anchor := anchorOf(ctx, pkg, found)
+		anchor := anchorOf(ctx, pkg.Path, found, types)
 		value := &Tests{
 			BaseEmit:     sdk.EmitBase(c, anchor),
 			RuntimePaths: GoRuntime(),
@@ -298,35 +303,26 @@ func sentinelsByPackage(ctx *sdk.GeneratorContext) map[string][]Sentinel {
 //
 // Layout builds the filename from the origin's source basename, so the anchor
 // decides where the checks land. The first sentinel in source order, or failing
-// that the first error type, puts them beside the declarations they are about.
+// that the error type [errTypesOf] found first, puts them beside the
+// declarations they are about.
 //
-// The package itself is the last resort rather than a nil answer. Every caller
-// has already refused a package declaring neither, so this only settles which
-// file the checks land in — and a package node carries the position of a file
-// in it, which is a worse filename than a declaration's but not a missing one.
+// The error type comes from what that function already resolved rather than
+// from a second scan. The two asked different questions once — one read the
+// promoted method set, the other only the declarations — so a package whose
+// only error type inherits its contract was found to have one and then anchored
+// nowhere, and its checks were dropped without a diagnostic.
 //
-// Error-ness is asked of the promoted method set, the same question
-// [errTypesOf] asks. Reading declared methods alone answered differently for a
-// type whose Error is inherited, which is the dominant Go idiom for a family of
-// custom errors: the package was found to have an error contract and then
-// anchored nowhere, so its checks were dropped without a diagnostic.
-func anchorOf(ctx *sdk.GeneratorContext, pkg *sdk.Package, found []Sentinel) sdk.Node {
+// One of the two is always available: the caller refuses a package declaring
+// neither before it gets here.
+func anchorOf(ctx *sdk.GeneratorContext, pkg string, found []Sentinel, types []ErrType) sdk.Node {
 	if len(found) > 0 {
 		for _, v := range ctx.Reader.Variables().Slice() {
-			if v.Package == pkg.Path && v.Name == found[0].Name {
+			if v.Package == pkg && v.Name == found[0].Name {
 				return v
 			}
 		}
 	}
-	for _, s := range ctx.Reader.Structs().Slice() {
-		if s.Package != pkg.Path {
-			continue
-		}
-		if methods, _ := methodSetOf(ctx, s); golang.ImplementsError(methods) {
-			return s
-		}
-	}
-	return pkg
+	return types[0].decl
 }
 
 // prefixOf resolves what every sentinel's message must begin with, or empty
@@ -406,6 +402,7 @@ func errTypesOf(ctx *sdk.GeneratorContext, pkg string) []ErrType {
 			HasUnwrap:  golang.IsUnwrapMethod(sdk.MethodByName(methods, UnwrapMethod)),
 			CauseField: causeFieldOf(fields),
 			Fields:     fieldsOf(fields),
+			decl:       s,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })

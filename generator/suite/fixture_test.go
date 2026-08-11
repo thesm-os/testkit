@@ -8,7 +8,11 @@ import (
 
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/mutator"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/sdk"
 
@@ -29,8 +33,8 @@ func TestStructSample(t *testing.T) {
 		// implementation that silently drops a field passes every check built
 		// from a sample that never set it.
 		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "V")
-		testkit.Contains(t, f.Sample.Text, "Key:", "the sample sets Key")
-		testkit.Contains(t, f.Sample.Text, "Body:", "and Body, which eidos would have left")
+		testkit.Equal(t, partNames(f), []string{"Key", "Body"},
+			"every exported field is set, not only the first eidos would take")
 	})
 
 	t.Run("makes the second value differ in every field", func(t *testing.T) {
@@ -38,8 +42,10 @@ func TestStructSample(t *testing.T) {
 		// Two values differing in one field are indistinguishable to a subject
 		// keyed on another.
 		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "V")
-		testkit.Contains(t, f.Other.Text, "other-key", "the alternate differs in Key")
-		testkit.Contains(t, f.Other.Text, "other-body", "and in Body")
+		for _, p := range f.Parts {
+			testkit.False(t, p.Sample.Text == p.Other.Text,
+				"the two values differ in "+p.Name)
+		}
 	})
 
 	t.Run("skips a field no literal can be written for", func(t *testing.T) {
@@ -47,9 +53,22 @@ func TestStructSample(t *testing.T) {
 		// The fields around it still discriminate, and refusing here would drop
 		// every check the parameter feeds.
 		f := fieldOf(t, contractIn(t, partlyDerivable(t)).Fixture, "P")
-		testkit.True(t, f.OK(), "a struct with one underivable field still yields a sample")
-		testkit.Contains(t, f.Sample.Text, "Name:", "the settable field is set")
-		testkit.False(t, containsText(f.Sample.Text, "Hook"), "the func field is not")
+		testkit.True(t, f.OK(), "a struct with one underivable field still yields a value")
+		testkit.Equal(t, partNames(f), []string{"Name"},
+			"the settable field is set and the func field is left at its zero")
+	})
+
+	t.Run("keeps the reference a nested struct field needs", func(t *testing.T) {
+		t.Parallel()
+		// Go forbids type elision in a struct field's value, so `{Inner: {F:
+		// "x"}}` is not a composite literal — it is a compile error. Only the
+		// backend knows how to spell `Inner` for the file being written and to
+		// register the import it needs, which is why a part carries a
+		// [golang.Sample] rather than the text of one.
+		f := fieldOf(t, contractIn(t, nestedStruct(t)).Fixture, "O")
+		inner := partNamed(t, f, "Inner")
+		testkit.True(t, inner.Sample.Ref != nil, "the nested type is carried, not flattened to text")
+		testkit.True(t, inner.Sample.Composite, "and recorded as a composite rather than a conversion")
 	})
 }
 
@@ -113,6 +132,30 @@ func TestSeed(t *testing.T) {
 			"the seed writes the fixture's own sample")
 	})
 
+	t.Run("writes through a writer of any arity", func(t *testing.T) {
+		t.Parallel()
+		// The three writer detectors differ only in how many non-context
+		// arguments they take, and the seed passes whatever the method declares
+		// — so arity is not something it has to know. Keying on `writer` alone
+		// left `Put(ctx, key, v)` unable to seed itself, which is the ordinary
+		// keyed store.
+		for _, name := range []string{compositewriter.Name, multiargwriter.Name} {
+			got := contractIn(t, keyedWriter(t, name)).Seed
+			testkit.True(t, got != nil, name+" seeds the subject")
+			testkit.Equal(t, got.Args, []string{"Key", "V"},
+				"and is handed every argument it declares")
+		}
+	})
+
+	t.Run("declines a writer that cannot report its own failure", func(t *testing.T) {
+		t.Parallel()
+		// A mutator writes and returns nothing, so a seed through one fails
+		// silently — and every check after it then runs against an empty
+		// subject, passing and asserting nothing.
+		testkit.True(t, contractIn(t, voidWriter(t)).Seed == nil,
+			"a seed with no error return is no seed")
+	})
+
 	t.Run("is absent where no method is classified writer", func(t *testing.T) {
 		t.Parallel()
 		// A read-only interface over external state, which is the case a
@@ -122,28 +165,48 @@ func TestSeed(t *testing.T) {
 	})
 }
 
-// Two parameters sharing a name and differing in type cannot both live in one
-// fixture field, and the guard has to see composite types to say so.
-func TestFixtureNameCollision(t *testing.T) {
+// A fixture field is a parameter name *at a type*. Two methods naming one
+// parameter alike is ordinary Go, and the interface that does it is legitimate
+// source rather than something to complain about.
+func TestFixtureKeying(t *testing.T) {
 	t.Parallel()
 
-	t.Run("reports two composite types under one name", func(t *testing.T) {
-		t.Parallel()
-		// QName is empty for every composite ref, so a guard comparing QNames
-		// found []byte and []string equal — blind to exactly the shapes it
-		// exists for.
-		got := plugintest.Generate(t, suite.New(), collidingFixture(t)).Diagnostics()
-		testkit.Len(t, got, 1, "a name carrying two types is reported once")
-		testkit.Contains(t, got[0].Message, "rename one parameter", "the message says what to do")
-	})
-
-	t.Run("takes one field for a name two methods share", func(t *testing.T) {
+	t.Run("takes one field for a name two methods share at one type", func(t *testing.T) {
 		t.Parallel()
 		// A `key string` on the reader and one on the deleter are the same
 		// value as far as a conformance run is concerned; separate fields would
 		// let a consumer override one and silently not the other.
 		testkit.Len(t, contractIn(t, sharedKey(t)).Fixture.Fields, 1,
 			"one field serves both methods")
+	})
+
+	t.Run("holds both where one name carries two types", func(t *testing.T) {
+		t.Parallel()
+		// Keyed on the name alone, the fixture held one of them and handed it
+		// to the method taking the other, which does not compile. The earlier
+		// answer was a diagnostic telling the author to rename a parameter,
+		// which is bad advice about correct source.
+		testkit.Len(t, contractIn(t, collidingFixture(t)).Fixture.Fields, 2,
+			"two types under one name are two fields")
+	})
+
+	t.Run("reports nothing about it", func(t *testing.T) {
+		t.Parallel()
+		got := plugintest.Generate(t, suite.New(), collidingFixture(t)).Diagnostics()
+		testkit.Len(t, got, 0, "there is nothing wrong with the source")
+	})
+
+	t.Run("qualifies every contested spelling, not just the later one", func(t *testing.T) {
+		t.Parallel()
+		// Both, so neither is privileged by the order the walk happened to
+		// take — and by the method rather than the type, because a composite
+		// has no name to spell and `KeySlice` would be one this package
+		// invented.
+		f := contractIn(t, collidingFixture(t)).Fixture
+		for _, want := range []string{"GetKey", "PutKey"} {
+			_, ok := f.Field(want)
+			testkit.True(t, ok, "the fixture declares "+want)
+		}
 	})
 }
 
@@ -168,8 +231,19 @@ func TestUnderivableParameter(t *testing.T) {
 
 	t.Run("drops only the check whose meaning is the value", func(t *testing.T) {
 		t.Parallel()
-		testkit.False(t, hasCheckIn(t, sliceFixture(t), "Get", "an error carries the zero value"),
+		// A func is the type nothing can write down: there is no literal for
+		// it, and no wider run produces one.
+		testkit.False(t, hasCheckIn(t, funcParamFixture(t), "Get", "an error carries the zero value"),
 			"the miss check needs a value derivation could reach")
+	})
+
+	t.Run("keeps it for a composite eidos can write down", func(t *testing.T) {
+		t.Parallel()
+		// A slice used to be underivable and now is not, so the drop is a
+		// property of the element rather than of composites. Asserting the
+		// positive is what keeps the guard from quietly widening back.
+		testkit.True(t, hasCheckIn(t, sliceFixture(t), "Get", "an error carries the zero value"),
+			"a []byte is a value the fixture can supply")
 	})
 
 	t.Run("still emits a fixture field for it", func(t *testing.T) {
@@ -188,6 +262,79 @@ func TestUnderivableParameter(t *testing.T) {
 	})
 }
 
+// A variadic method takes many and its checks pass one, which is a narrowing
+// the generated file has to say out loud.
+//
+// Nothing about the derivation is wrong — a fixture holds one value per
+// parameter and `...T`'s element type is T — but a reader meeting
+// `AssertFinderFindSmoke(tb, subject, keys)` has no way to see that `Find` was
+// declared variadic, and would take the one-element call for the whole claim.
+func TestVariadicIsAnnounced(t *testing.T) {
+	t.Parallel()
+
+	t.Run("marks the field derived from a variadic parameter", func(t *testing.T) {
+		t.Parallel()
+		f := fieldOf(t, contractIn(t, variadicFixture(t)).Fixture, "Keys")
+		testkit.True(t, f.Variadic, "the field holds one element of a list")
+	})
+
+	t.Run("leaves an ordinary parameter unmarked", func(t *testing.T) {
+		t.Parallel()
+		// Or the note would appear on every field and mean nothing.
+		f := fieldOf(t, contractIn(t, variadicFixture(t)).Fixture, "Limit")
+		testkit.False(t, f.Variadic, "a fixed parameter is not narrowed")
+	})
+
+	t.Run("names the parameter on the method", func(t *testing.T) {
+		t.Parallel()
+		// Go permits one variadic parameter, in final position, so one answer
+		// covers the signature.
+		m := methodNamed(t, contractIn(t, variadicFixture(t)), "Find")
+		got := m.VariadicParam()
+		testkit.True(t, got != nil, "Find declares one")
+		testkit.Equal(t, got.Name, "keys", "and it is the one the source named")
+	})
+
+	t.Run("answers nil for a method with none", func(t *testing.T) {
+		t.Parallel()
+		m := methodNamed(t, contractIn(t, mixed(t)), "Read")
+		testkit.True(t, m.VariadicParam() == nil, "Read takes a fixed list")
+	})
+}
+
+// Two reasons a value is missing, and only one of them is the author's to fix.
+//
+// A func admits no literal under any run. A type in a package the patterns did
+// not reach admits one perfectly well — the run simply did not look. Reporting
+// the second as settled sends an author to change source that is already
+// correct, so the diagnostic reads the refusal rather than assuming.
+func TestUndeliverableReason(t *testing.T) {
+	t.Parallel()
+
+	t.Run("calls a func a type with no literal", func(t *testing.T) {
+		t.Parallel()
+		f := fieldOf(t, contractIn(t, funcParamFixture(t)).Fixture, "Fn")
+		testkit.Equal(t, f.Reason(), "which no literal can be written for",
+			"nothing about a wider run changes this answer")
+	})
+
+	t.Run("calls an unloaded type a gap in this run", func(t *testing.T) {
+		t.Parallel()
+		f := fieldOf(t, contractIn(t, unloadedParamFixture(t)).Fixture, "T")
+		testkit.Equal(t, f.Reason(), "which this run did not resolve, so no value was derived for it",
+			"a run reaching the declaring package would derive one")
+	})
+
+	t.Run("says so in the diagnostic", func(t *testing.T) {
+		t.Parallel()
+		// The reason is only worth deriving if it reaches the author.
+		got := plugintest.Generate(t, suite.New(), unloadedParamFixture(t)).Diagnostics()
+		testkit.Len(t, got, 1, "the dropped check is reported once")
+		testkit.Assert(t, got[0].Message).Contains("which this run did not resolve",
+			"the diagnostic carries the refusal, not a fixed phrase")
+	})
+}
+
 // fieldOf returns the fixture's field of that name, failing when absent.
 func fieldOf(t *testing.T, f suite.Fixture, name string) suite.FixtureField {
 	t.Helper()
@@ -198,14 +345,64 @@ func fieldOf(t *testing.T, f suite.Fixture, name string) suite.FixtureField {
 	return got
 }
 
-// containsText reports whether the sample text mentions a field.
-func containsText(text, want string) bool {
-	for i := 0; i+len(want) <= len(text); i++ {
-		if text[i:i+len(want)] == want {
-			return true
+// partNames returns the fields a composed value sets, in order.
+func partNames(f suite.FixtureField) []string {
+	out := make([]string, 0, len(f.Parts))
+	for _, p := range f.Parts {
+		out = append(out, p.Name)
+	}
+	return out
+}
+
+// methodNamed returns the contract's method of that name, failing when absent.
+func methodNamed(t *testing.T, c *suite.Contract, name string) suite.Method {
+	t.Helper()
+	for _, m := range c.Methods {
+		if m.Name == name {
+			return m
 		}
 	}
-	return false
+	t.Fatalf("the contract carries no method %q", name)
+	return suite.Method{}
+}
+
+// partNamed returns the composed part of that name, failing when absent.
+func partNamed(t *testing.T, f suite.FixtureField, name string) suite.FixturePart {
+	t.Helper()
+	for _, p := range f.Parts {
+		if p.Name == name {
+			return p
+		}
+	}
+	t.Fatalf("the value composes no part %q; it sets %v", name, partNames(f))
+	return suite.FixturePart{}
+}
+
+// nestedStruct declares a struct one of whose fields is itself a struct, which
+// is the shape a value carried as text cannot spell.
+func nestedStruct(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("nest", "example.com/nest").
+		Struct("Leaf", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("nest/iface.go", 1, 1))
+			b.Field("F", storefixture.Named("string"), nil)
+		}).
+		Struct("Outer", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("nest/iface.go", 1, 1))
+			b.Field("Name", storefixture.Named("string"), nil)
+			b.Field("Inner", storefixture.PkgNamed("example.com/nest", "Leaf"), nil)
+		}).
+		Interface("Nested", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("nest/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("o", storefixture.PkgNamed("example.com/nest", "Outer"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
 }
 
 // partlyDerivable declares a struct with one settable field and one that no
@@ -278,6 +475,66 @@ func seeded(t *testing.T) *sdk.Store {
 	return s
 }
 
+// keyedWriter is a store whose write takes a key beside its value, stamped with
+// the given shape.
+//
+// `Put(ctx, key, v) error` is what compositewriter matches; the third argument
+// pushes it to multiargwriter. The stamp is set by hand rather than detected,
+// for the reason [seeded] gives: plugintest drives one plugin, so the shape
+// annotator does not run.
+func keyedWriter(t *testing.T, shapeName string) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("kv", "example.com/kv").
+		Struct("Payload", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("kv/iface.go", 1, 1))
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("kv/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Param("v", storefixture.PkgNamed("example.com/kv", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stamp(s, "Put", shapeName)
+	return s
+}
+
+// voidWriter is a mutator: it writes and returns nothing, so it cannot report a
+// failed seed.
+func voidWriter(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("mut", "example.com/mut").
+		Interface("Mutator", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("mut/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Set", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.Named("string"))
+			})
+		}).
+		Build()
+	stamp(s, "Set", mutator.Name)
+	return s
+}
+
+// stamp sets the shape meta the annotator would have written for one method.
+func stamp(s *sdk.Store, method, shapeName string) {
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == method {
+				shape.MetaShape.Set(m.EnsureMeta(), shapeName, "test")
+			}
+		}
+	}
+}
+
 // sharedKey declares one parameter name across two methods at one type.
 func sharedKey(t *testing.T) *sdk.Store {
 	t.Helper()
@@ -323,6 +580,7 @@ func TestWhollyUnderivableStruct(t *testing.T) {
 		// second is a sample.
 		f := fieldOf(t, contractIn(t, opaqueStruct(t)).Fixture, "P")
 		testkit.False(t, f.OK(), "a struct with no settable field derives nothing")
+		testkit.False(t, f.Composed(), "and composes no value")
 	})
 
 	t.Run("keeps the checks that never read it", func(t *testing.T) {
@@ -379,4 +637,47 @@ func opaqueWriter(t *testing.T) *sdk.Store {
 		}
 	}
 	return s
+}
+
+// FieldFor is how a check names the field its argument lands in, and it has to
+// be total: a caller composing an argument list should not have to prove the
+// fixture holds every parameter first.
+func TestFieldFor(t *testing.T) {
+	t.Parallel()
+
+	t.Run("names the field a parameter was grouped into", func(t *testing.T) {
+		t.Parallel()
+		f := contractIn(t, collidingFixture(t)).Fixture
+		p := paramOf(t, contractIn(t, collidingFixture(t)), "Get", "key")
+		testkit.Equal(t, f.FieldFor(p), "GetKey",
+			"a contested name resolves to the qualified field")
+	})
+
+	t.Run("falls back to the parameter's own name", func(t *testing.T) {
+		t.Parallel()
+		// Unreached from the generator, which only ever asks about parameters
+		// of the methods the fixture was built from. What the fallback buys is
+		// that a wrong answer is a name a reader can find rather than the empty
+		// string, which would compose `cfg.Fixture.` into generated source.
+		f := contractIn(t, mixed(t)).Fixture
+		testkit.Equal(t, f.FieldFor(golang.Param{Field: "Absent"}), "Absent",
+			"a parameter the fixture never saw answers as itself")
+	})
+}
+
+// paramOf returns the named parameter of the named method.
+func paramOf(t *testing.T, c *suite.Contract, method, param string) golang.Param {
+	t.Helper()
+	for _, m := range c.Methods {
+		if m.Name != method {
+			continue
+		}
+		for _, p := range m.Params {
+			if p.Name == param {
+				return p
+			}
+		}
+	}
+	t.Fatalf("no parameter %q on %s", param, method)
+	return golang.Param{}
 }

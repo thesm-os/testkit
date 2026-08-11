@@ -19,20 +19,20 @@ per implementation, which is where the statements drift.
 {{- end }}
 //	Extend:   {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ $.IfaceName }}On{{ $m.Name }}{{ end }}
 //	Drop:     {{ .IfaceName }}Without, by the path each check reports under
-func {{ .EntryName }}(t *{{ renderExpr (external "testing" "T") }}, opts ...{{ .IfaceName }}Option) {
+func {{ .EntryName }}{{ renderTypeParams .TypeParams }}(t *{{ renderExpr (external "testing" "T") }}, opts ...{{ .IfaceName }}Option{{ .TypeArgs }}) {
 	t.Helper()
-	cfg := new{{ .IfaceName }}Config(opts...)
+	cfg := new{{ .IfaceName }}Config{{ .TypeArgs }}(opts...)
 	if len(cfg.subjects) == 0 {
 		t.Fatalf("{{ .EntryName }} was given no subject; declare one with " +
 			"{{ .IfaceName }}Subject(name, factory)")
 	}
 	for _, s := range cfg.subjects {
-		run{{ .IfaceName }}Checks(t, cfg, s.name, s.factory, nil)
+		run{{ .IfaceName }}Checks{{ .TypeArgs }}(t, cfg, s.name, s.factory, nil)
 {{- if .Double }}
 		if !cfg.withoutDouble {
-			run{{ .IfaceName }}Checks(t, cfg, s.name+" through the double", s.factory,
-				func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}) {{ renderType .IfaceRef }} {
-					return {{ .Double.CtorName }}(tb, {{ .Double.DelegateToName }}(subject))
+			run{{ .IfaceName }}Checks{{ .TypeArgs }}(t, cfg, s.name+" through the double", s.factory,
+				func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) {{ renderType .IfaceRef }}{{ .TypeArgs }} {
+					return {{ .Double.CtorName }}{{ .TypeArgs }}(tb, {{ .Double.DelegateToName }}{{ .TypeArgs }}(subject))
 				})
 		}
 {{- end }}
@@ -43,12 +43,12 @@ func {{ .EntryName }}(t *{{ renderExpr (external "testing" "T") }}, opts ...{{ .
 //
 // wrap is applied after the subject is built and seeded, so a wrapper is
 // transparent to the seed and every failure it causes is its own.
-func run{{ .IfaceName }}Checks(
+func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 	t *{{ renderExpr (external "testing" "T") }},
-	cfg *{{ lower .IfaceName }}Config,
+	cfg *{{ lower .IfaceName }}Config{{ .TypeArgs }},
 	label string,
-	factory func() {{ renderType .IfaceRef }},
-	wrap func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}) {{ renderType .IfaceRef }},
+	factory func() {{ renderType .IfaceRef }}{{ .TypeArgs }},
+	wrap func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) {{ renderType .IfaceRef }}{{ .TypeArgs }},
 ) {
 	t.Helper()
 	t.Run(label, func(t *{{ renderExpr (external "testing" "T") }}) {
@@ -58,12 +58,12 @@ func run{{ .IfaceName }}Checks(
 			t.Parallel()
 {{- range $ck := $m.Checks }}
 			cfg.run(t, {{ printf "%q" $ck.Path }}, {{ printf "%q" $ck.Subtest }}, func(tb {{ renderExpr (external "testing" "TB") }}) {
-				{{ $ck.Func }}(tb, cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }})
+				{{ $ck.Func }}{{ $.TypeArgs }}(tb, cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }})
 			})
 {{- end }}
 			for _, c := range cfg.on{{ $m.Name }} {
 				cfg.run(t, {{ printf "%q" $m.Name }}+"/"+c.name, c.name, func(tb {{ renderExpr (external "testing" "TB") }}) {
-					c.fn(tb, cfg.subject(tb, factory, wrap){{ range $m.CallArgs }}, cfg.Fixture.{{ .Field }}{{ end }})
+					c.fn(tb, cfg.subject(tb, factory, wrap){{ range $m.ArgFields }}, cfg.Fixture.{{ . }}{{ end }})
 				})
 			}
 		})

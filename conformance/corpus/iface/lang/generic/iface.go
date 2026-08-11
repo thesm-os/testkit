@@ -18,6 +18,7 @@ import (
 //
 //testkit:out generictest/ pkg=generictest
 //testkit:stub
+//testkit:suite
 type Store[K comparable, V any] interface {
 	Get(ctx context.Context, key K) (V, error)
 	Put(ctx context.Context, key K, value V) error

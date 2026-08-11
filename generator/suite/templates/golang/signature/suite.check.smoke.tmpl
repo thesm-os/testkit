@@ -5,7 +5,7 @@
 // Fails when: {{ $m.Name }} panics. The weakest check in this file and the one
 // that catches the most — a method that panics on a derived value is one no
 // other check here reaches.
-func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 	defer func() {

@@ -260,22 +260,55 @@ func TestRender(t *testing.T) {
 
 	t.Run("the toolchain accepts what it emits", func(t *testing.T) {
 		t.Parallel()
-		gen := golangtest.Render(t, backendgolang.New(), mixedPackage(t), suite.New()).
+		gen := golangtest.Render(t, backendgolang.New(), packageOf(t, mixed(t)), suite.New()).
 			WithSource(golangtest.GoFile("validates/iface.go", mixedSource())).
+			WithRequire(suite.Module, filepath.Join("..", ".."))
+		gen.AssertCompiles(t)
+		gen.AssertVets(t)
+	})
+
+	t.Run("spells the type of a nested struct field", func(t *testing.T) {
+		t.Parallel()
+		// Go forbids type elision in a struct field's value, so `{Inner: {F:
+		// "x"}}` is a compile error rather than a composite literal. Nothing in
+		// the projection can catch that — the derived value looks well-formed
+		// right up until the toolchain reads it, which is why this is a render
+		// case and not an assertion about Parts.
+		gen := golangtest.Render(t, backendgolang.New(), packageOf(t, nestedStruct(t)), suite.New()).
+			WithSource(golangtest.GoFile("nest/iface.go", nestedSource())).
 			WithRequire(suite.Module, filepath.Join("..", ".."))
 		gen.AssertCompiles(t)
 		gen.AssertVets(t)
 	})
 }
 
-// mixedPackage is [mixed] as a package node, for the render path.
-func mixedPackage(t *testing.T) *sdk.Package {
+// packageOf is a store's single package node, for the render path.
+func packageOf(t *testing.T, s *sdk.Store) *sdk.Package {
 	t.Helper()
-	for _, p := range mixed(t).Nodes().Packages().Items() {
+	for _, p := range s.Nodes().Packages().Items() {
 		return p
 	}
 	t.Fatal("fixture has no package")
 	return nil
+}
+
+// nestedSource is the hand-written half [nestedStruct] projects.
+func nestedSource() string {
+	return `package nest
+
+import "context"
+
+type Leaf struct{ F string }
+
+type Outer struct {
+	Name  string
+	Inner Leaf
+}
+
+type Nested interface {
+	Put(ctx context.Context, o Outer) error
+}
+`
 }
 
 // mixedSource is the hand-written half the generated harness is compiled
@@ -341,7 +374,8 @@ func callbackFixture(t *testing.T) *sdk.Store {
 		Build()
 }
 
-// sliceFixture takes a slice, which eidos derives no sample for.
+// sliceFixture takes a slice beside a value return, which is the shape whose
+// miss check turns on whether eidos can write the element down.
 func sliceFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	return storefixture.New().
@@ -352,6 +386,64 @@ func sliceFixture(t *testing.T) *sdk.Store {
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 				m.Param("key", storefixture.Slice(storefixture.Named("byte")))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// funcParamFixture takes a func beside a value return: a type no literal can be
+// written for, on a method that would otherwise owe a miss check.
+func funcParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Col", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("fn", storefixture.Func(nil, nil))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// variadicFixture declares `...T` beside a fixed parameter, so the narrowing is
+// distinguishable from a note the generator puts on everything.
+func variadicFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Finder", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Find", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("limit", storefixture.Named("int"))
+				m.Variadic("keys", storefixture.Named("string"))
+				m.Return(storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// unloadedParamFixture takes a named type from a package the store never
+// declares, which is what a narrow `run` pattern produces in real use.
+func unloadedParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Col", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("t", storefixture.PkgNamed("example.com/elsewhere", "Thing"))
 				m.Return(storefixture.Named("string"))
 				m.Return(storefixture.Named("error"))
 			})
@@ -524,4 +616,48 @@ func withDouble(t *testing.T) *sdk.Store {
 	}
 	plugintest.Generate(t, stub.New(), s)
 	return s
+}
+
+// A cyclic embed is illegal Go and unreachable from a real frontend, but the
+// walk reports it and the harness has to say something useful rather than
+// treating the interface as complete.
+func TestCyclicEmbed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("warns and generates what the walk did reach", func(t *testing.T) {
+		t.Parallel()
+		// The walk breaks the cycle only after the interface it points back at
+		// has contributed, so the set is short of nothing — which is why this
+		// is a warning and the harness is still emitted.
+		s := cyclicEmbed(t)
+		got := plugintest.Generate(t, suite.New(), s).Diagnostics()
+		testkit.Len(t, got, 2, "one warning per interface in the cycle")
+		testkit.Contains(t, got[0].Message, "through a cycle", "and it says which fault it is")
+		testkit.True(t, len(s.Emit().PendingOriginSlots()) > 0,
+			"a set short of nothing is still worth a harness")
+	})
+}
+
+// cyclicEmbed declares two interfaces embedding each other.
+func cyclicEmbed(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Interface("A", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("cfg/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Embed(storefixture.PkgNamed("example.com/cfg", "B"))
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Interface("B", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("cfg/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Embed(storefixture.PkgNamed("example.com/cfg", "A"))
+			i.Method("Close", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
 }

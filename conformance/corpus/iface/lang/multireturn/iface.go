@@ -17,6 +17,7 @@ import (
 //
 //testkit:out multireturntest/ pkg=multireturntest
 //testkit:stub
+//testkit:suite
 type Wide interface {
 	Quad(ctx context.Context, id string) (string, int, bool, error)
 	Triple(ctx context.Context, id string) (string, int, bool)

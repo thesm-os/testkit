@@ -6,7 +6,14 @@
 // Every generated check for {{ $m.Name }} is a value of it, and so is one you
 // write — so they compose, reorder, and each runs standalone. testing.TB rather
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
-type {{ $m.CheckType }} func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType $c.IfaceRef }}
+{{- with $m.VariadicParam }}
+//
+// {{ .Name }} is one element of {{ $m.Name }}'s variadic parameter, not the list.
+// The fixture derives one value per parameter, so every generated check calls
+// {{ $m.Name }} with exactly one — which leaves everything about *several* to a
+// check written here, including the empty call no derivation reaches.
+{{- end }}
+type {{ $m.CheckType }}{{ renderTypeParams $.TypeParams }} func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType $c.IfaceRef }}{{ $c.TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }})
 {{ end }}
 // {{ $.Fixture.TypeName }} holds every input the generated checks run against.
@@ -21,26 +28,29 @@ type {{ $m.CheckType }} func(tb {{ renderExpr (external "testing" "TB") }}, subj
 // every generated check that needed it was dropped rather than emitted against
 // a value nobody could write. Supply one through {{ $.IfaceName }}WithFixture
 // and the check a consumer writes has something to use.
-type {{ $.Fixture.TypeName }} struct {
-{{- range $.Fixture.Fields }}
-	{{ .Name }} {{ renderType .Type }}
-	{{ .OtherName }} {{ renderType .Type }}
+type {{ $.Fixture.TypeName }}{{ renderTypeParams $.TypeParams }} struct {
+{{- range $i, $f := $.Fixture.Fields }}
+{{- if $f.Variadic }}
+{{ if $i }}
+{{ end }}	// {{ $f.Name }} is one element of a variadic parameter, not the list. Every
+	// generated check passes it alone; what a method does with several is a
+	// claim only a check written by hand can make.
+{{- end }}
+	{{ $f.Name }} {{ renderType $f.Type }}
+	{{ $f.OtherName }} {{ renderType $f.Type }}
 {{- end }}
 }
 
 // {{ $.Fixture.CtorName }} is what this run derived. Replace any field through
 // {{ $.IfaceName }}WithFixture; the rest keep these values.
-func {{ $.Fixture.CtorName }}() {{ $.Fixture.TypeName }} {
-	return {{ $.Fixture.TypeName }}{
+func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.TypeName }}{{ $.TypeArgs }} {
+	return {{ $.Fixture.TypeName }}{{ $.TypeArgs }}{
 {{- range $.Fixture.Fields }}
-{{- if .Companion }}
-		{{ .Name }}: {{ renderExpr .Companion }}(),
-{{- if .Other.OK }}
-		{{ .OtherName }}: {{ template "suite.sample" .Other }},
+{{- if .OK }}
+		{{ .Name }}: {{ if .Companion }}{{ renderExpr .Companion }}(){{ else }}{{ template "suite.value" (.Choose false) }}{{ end }},
+{{- if or .Composed .Other.OK }}
+		{{ .OtherName }}: {{ template "suite.value" (.Choose true) }},
 {{- end }}
-{{- else if .OK }}
-		{{ .Name }}: {{ template "suite.sample" .Sample }},
-		{{ .OtherName }}: {{ template "suite.sample" .Other }},
 {{- end }}
 {{- end }}
 	}
@@ -55,9 +65,22 @@ func {{ $.Fixture.CtorName }}() {{ $.Fixture.TypeName }} {
 {{- end -}}
 
 {{- /*
-suite.sample spells one derived value. A composite literal and a conversion are
-not interchangeable, and which applies is a property of the type rather than of
-the value — so the projection records it and this reads it back.
+suite.value spells one derived value, whole or composed from its fields. A
+struct is composed rather than carried as text because a field whose own type is
+a struct needs its type spelled beside its braces, and only the backend knows
+how to spell it for this file and register the import it needs.
+*/ -}}
+{{- define "suite.value" -}}
+{{- if .Parts }}{{ renderType .Type }}{
+{{- range $i, $p := .Parts }}{{ if $i }}, {{ end }}{{ $p.Name }}: {{ template "suite.sample" $p.Value }}{{ end -}} }
+{{- else }}{{ template "suite.sample" .Value }}{{ end }}
+{{- end -}}
+
+{{- /*
+suite.sample spells one value the derivation carried whole. A composite literal
+and a conversion are not interchangeable, and which applies is a property of the
+type rather than of the value — so the projection records it and this reads it
+back.
 */ -}}
 {{- define "suite.sample" -}}
 {{- if not .Ref }}{{ .Text }}

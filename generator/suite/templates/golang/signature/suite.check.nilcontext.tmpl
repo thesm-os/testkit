@@ -6,7 +6,7 @@
 // succeeding is correct — a nil context reaches production through a caller
 // that forgot one, and a panic turns that into an outage rather than a failed
 // request.
-func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 	defer func() {

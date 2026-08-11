@@ -39,6 +39,7 @@ type Score struct {
 //
 //testkit:out genericboundtest/ pkg=genericboundtest
 //testkit:stub witness=int,Score
+//testkit:suite
 type Ranked[K Ordered, V any] interface {
 	Rank(ctx context.Context, key K) (V, error)
 	Reset(ctx context.Context) error

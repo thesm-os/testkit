@@ -17,6 +17,7 @@ import (
 //
 //testkit:out variadictest/ pkg=variadictest
 //testkit:stub
+//testkit:suite
 type Finder interface {
 	Find(ctx context.Context, keys ...string) ([]string, error)
 	FindWithLimit(ctx context.Context, limit int, keys ...string) ([]string, error)

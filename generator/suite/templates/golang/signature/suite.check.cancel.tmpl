@@ -11,7 +11,7 @@
 // The error rather than merely its presence is what separates this from the
 // deadline check. Asserting only that something came back makes the two one
 // check written twice.
-func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 	ctx, cancel := {{ renderExpr (external "context" "WithCancel") }}(tb.Context())

@@ -11,7 +11,7 @@
 // The deadline is the zero time, which is unconditionally in the past. No clock
 // is read: a generated check that consults the wall clock is one whose subject
 // is partly the machine it runs on.
-func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 	ctx, cancel := {{ renderExpr (external "context" "WithDeadline") }}(tb.Context(), {{ renderExpr (external "time" "Time") }}{})

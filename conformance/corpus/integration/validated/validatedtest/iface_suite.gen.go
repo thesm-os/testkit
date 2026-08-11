@@ -355,7 +355,10 @@ func StoreWithFixture(f StoreFixture) StoreOption {
 // Returning an error rather than swallowing one. A seed that failed quietly
 // leaves every check after it asserting nothing and reporting success.
 func StoreSeed(fn func(ctx context.Context, subject validated.Store) error) StoreOption {
-	return func(c *storeConfig) { c.seed = fn }
+	return func(c *storeConfig) {
+		c.seed = fn
+		c.seedIsDerived = false
+	}
 }
 
 // StoreOnPut adds a named check to Put.
@@ -405,6 +408,10 @@ type storeConfig struct {
 	subjects      []namedStoreSubject
 	withoutDouble bool
 	seed          func(ctx context.Context, subject validated.Store) error
+	// seedIsDerived is what lets a failed seed name the right culprit. The
+	// derived seed and a consumer's are the same field, and the advice for one
+	// is useless for the other.
+	seedIsDerived bool
 	without       map[string]struct{}
 	onPut         []namedStorePutCheck
 	onGet         []namedStoreGetCheck
@@ -420,6 +427,7 @@ func newStoreConfig(opts ...StoreOption) *storeConfig {
 	c.seed = func(ctx context.Context, subject validated.Store) error {
 		return subject.Put(ctx, c.Fixture.A)
 	}
+	c.seedIsDerived = true
 	for _, o := range opts {
 		o(c)
 	}
@@ -438,13 +446,20 @@ func (c *storeConfig) subject(
 	if c.seed != nil {
 		// Reported rather than ignored. A seed that silently failed would leave
 		// every check after it running against an empty subject — passing, and
-		// asserting nothing. The message names the two ways to fix it because
-		// the cause is always one of them: the value is not one this subject
-		// accepts, or the write itself is broken.
+		// asserting nothing.
+		//
+		// Which seed ran decides what the message can usefully say. The derived
+		// one fails for one of two reasons and both are fixable from here, so it
+		// names them. A seed the caller supplied is theirs, and telling them to
+		// supply one is advice they already took.
 		if err := c.seed(tb.Context(), s); err != nil {
-			tb.Fatalf("seeding through Put failed: %v; "+
-				"supply a value it accepts through StoreWithFixture, or a "+
-				"whole seed through StoreSeed", err)
+			if c.seedIsDerived {
+				tb.Fatalf("seeding through Put failed: %v; "+
+					"supply a value it accepts through StoreWithFixture, or a "+
+					"whole seed through StoreSeed", err)
+			} else {
+				tb.Fatalf("the seed supplied through StoreSeed failed: %v", err)
+			}
 		}
 	}
 	if wrap != nil {
@@ -470,4 +485,4 @@ func (c *storeConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance c0ed2652c7380626419a1343f3ed0031bc7554200dbcc489e8f019e3b5a93d99
+// testkit:provenance d7d58d25912b4c0afe95569ed7bc0218c1ac2a58cff09fbc63ecea83149381f6

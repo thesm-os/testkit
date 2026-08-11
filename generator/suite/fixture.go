@@ -8,6 +8,8 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/sdk"
 
@@ -34,9 +36,26 @@ type FixtureField struct {
 	// registers whatever import it needs.
 	Type sdk.Ref
 
-	// Sample and Other are the two derived values. Other is derived to differ
-	// from Sample rather than trusted to.
+	// Sample and Other are the two derived values, for a parameter whose type
+	// yields one whole. Empty for a struct, whose value is composed from Parts.
 	Sample, Other golang.Sample
+
+	// Parts is the per-field pair for a struct parameter, in declaration order.
+	//
+	// A struct's value is composed rather than carried as text, because a field
+	// whose own type is a struct needs its type spelled beside its braces — and
+	// only the backend knows how to spell it for this file, and to register the
+	// import it needs. Text alone renders `{F: "x"}`, which is not a value.
+	Parts []FixturePart
+
+	// Variadic reports that the parameter this field was derived from was
+	// declared `...T`, so the field holds one element rather than the list the
+	// method takes.
+	//
+	// Carried only to be said out loud in the generated file. Nothing about the
+	// derivation changes — [golang.Param] keeps Type as the element type, which
+	// is the type of the one value a check is handed.
+	Variadic bool
 
 	// Companion calls the type's `<Type>Defaults()`, and wins over Sample where
 	// the source declares one.
@@ -49,6 +68,53 @@ type FixtureField struct {
 	Companion *sdk.Expr
 }
 
+// FixturePart is one field of a composed struct value.
+type FixturePart struct {
+	// Name is the field's identifier in the composite literal.
+	Name string
+
+	// Sample and Other are the two values for it.
+	Sample, Other golang.Sample
+}
+
+// Composed reports whether this field's value is built from Parts rather than
+// carried whole.
+func (f FixtureField) Composed() bool { return len(f.Parts) > 0 }
+
+// FixtureValue is one of a field's two values, flattened for rendering.
+//
+// The template needs "this field's sample" and "this field's alternate" spelled
+// identically, and text/template cannot pass which one it wants down to a
+// sub-template. Choosing here keeps one spelling instead of two loops that
+// could drift.
+type FixtureValue struct {
+	Type  sdk.Ref
+	Value golang.Sample
+	Parts []FixtureValuePart
+}
+
+// FixtureValuePart is one field of a composed [FixtureValue].
+type FixtureValuePart struct {
+	Name  string
+	Value golang.Sample
+}
+
+// Choose flattens this field to one of its two values.
+func (f FixtureField) Choose(alternate bool) FixtureValue {
+	out := FixtureValue{Type: f.Type, Value: f.Sample}
+	if alternate {
+		out.Value = f.Other
+	}
+	for _, p := range f.Parts {
+		v := p.Sample
+		if alternate {
+			v = p.Other
+		}
+		out.Parts = append(out.Parts, FixtureValuePart{Name: p.Name, Value: v})
+	}
+	return out
+}
+
 // OtherName is the identifier of the companion field.
 func (f FixtureField) OtherName() string { return f.Name + OtherSuffix }
 
@@ -59,7 +125,22 @@ func (f FixtureField) OtherName() string { return f.Name + OtherSuffix }
 // channel, a func, a type from a package the run never read — yields neither,
 // and the one check whose meaning is the value is dropped rather than emitted
 // against something nobody could write.
-func (f FixtureField) OK() bool { return f.Companion != nil || (f.Sample.OK() && f.Other.OK()) }
+func (f FixtureField) OK() bool {
+	return f.Companion != nil || f.Composed() || (f.Sample.OK() && f.Other.OK())
+}
+
+// Reason phrases why nothing could be derived for this field.
+//
+// Only [golang.RefusedNoLiteral] is a fact about the type. The rest describe
+// this run's own input — a package the patterns did not reach, a walk that hit
+// its budget — and reporting one of those as settled sends an author to change
+// source that is already correct.
+func (f FixtureField) Reason() string {
+	if f.Sample.Refusal.Incomplete() {
+		return "which this run did not resolve, so no value was derived for it"
+	}
+	return "which no literal can be written for"
+}
 
 // Fixture is the derived input set for one interface.
 type Fixture struct {
@@ -71,6 +152,27 @@ type Fixture struct {
 	CtorName string
 
 	Fields []FixtureField
+
+	// groups records which parameter each field was derived from, so a check
+	// can name the field its own argument landed in — which is not the
+	// parameter's name wherever two types contest one.
+	groups []paramGroup
+}
+
+// FieldFor names the fixture field a method's parameter is supplied from.
+//
+// Falls back to the parameter's own name, which is what the fixture calls a
+// field no other method contests. Every caller asks about a parameter of a
+// method the fixture was built from, so the fallback answers the same thing the
+// loop would — and a `""` would compose `cfg.Fixture.` into generated source
+// rather than failing where a reader could see it.
+func (f Fixture) FieldFor(p golang.Param) string {
+	for _, g := range f.groups {
+		if g.param.Field == p.Field && g.param.Source.Equal(p.Source) {
+			return g.name
+		}
+	}
+	return p.Field
 }
 
 // Field returns the field of that name, and whether one was derived.
@@ -85,83 +187,139 @@ func (f Fixture) Field(name string) (FixtureField, bool) {
 
 // fixtureOf derives one input per distinct parameter across the method set.
 //
-// Keyed by the parameter's exported field name rather than per method, because
-// a `key string` on the reader and a `key string` on the deleter are the same
-// value as far as a conformance run is concerned — and giving them separate
-// fields would let a consumer override one and silently not the other.
-//
-// A name carried by two parameters of different types is a collision the
-// generated struct cannot hold. It is reported rather than resolved: renaming
-// one field would produce a fixture whose names no longer match the source, and
-// picking a winner would silently check one method against the other's value.
+// Which parameters share a field, and how a name two types contest is spelled,
+// is [groupParams]. What is decided here is what each group is filled with: the
+// type's `<Type>Defaults()` where the source declares one, the composed parts of
+// a struct, and the derived pair otherwise.
 func fixtureOf(ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method) Fixture {
 	f := Fixture{
 		TypeName: iface.Name + "Fixture",
 		CtorName: "Default" + iface.Name + "Fixture",
 	}
-	seen := map[string]golang.Param{}
-	for _, m := range methods {
-		for _, p := range m.CallArgs() {
-			prior, dup := seen[p.Field]
-			if dup {
-				// [node.TypeRef.Equal] rather than comparing QNames. QName is
-				// empty for every composite ref, so `[]byte` and `[]string`
-				// compared equal and the diagnostic could never fire for
-				// exactly the shapes it exists for. Equal is structural.
-				if !prior.Source.Equal(p.Source) {
-					ctx.Diag.Errorf(iface.Pos(),
-						"%s: interface %q takes %q as %s in one method and %s in another; "+
-							"the derived fixture cannot hold both, so rename one parameter",
-						Name, iface.Name, p.Field,
-						golang.Display(prior.Source), golang.Display(p.Source))
-				}
-				continue
-			}
-			seen[p.Field] = p
-
-			sample, other := sampleFor(p, ctx.Reader)
-			f.Fields = append(f.Fields, FixtureField{
-				Name:      p.Field,
-				Type:      p.Type,
-				Sample:    sample,
-				Other:     other,
-				Companion: companionFor(ctx, p.Source),
-			})
-		}
+	f.groups = groupParams(methods)
+	for _, g := range f.groups {
+		sample, other := sampleFor(g.param, ctx.Reader)
+		f.Fields = append(f.Fields, FixtureField{
+			Name:      g.name,
+			Type:      g.param.Type,
+			Variadic:  g.param.Variadic,
+			Sample:    sample,
+			Other:     other,
+			Parts:     partsFor(g.param, ctx.Reader),
+			Companion: companionFor(ctx, g.param.Source),
+		})
 	}
 	return f
 }
 
-// withDerivableChecks drops every check whose inputs the fixture could not
-// derive, and the methods left with none.
+// paramGroup is one fixture field: a parameter name at one type, and the first
+// method that introduced it.
+type paramGroup struct {
+	// name is the field's identifier, which is the parameter's own where no
+	// other method takes that name at a different type.
+	name string
+
+	// method is the first method in method-set order to take this pair, which
+	// is what disambiguates a name two types share.
+	method string
+
+	param golang.Param
+}
+
+// groupParams collects the interface's parameters into one field per name and
+// type, in method-set order.
+//
+// # Why the pair rather than the name
+//
+// A `key string` on the reader and one on the deleter are the same value as far
+// as a conformance run is concerned, and giving them separate fields would let a
+// consumer override one and silently not the other.
+//
+// But a name is not a type. `Put(ctx, s Session)` beside `Get(ctx, s string)` is
+// ordinary Go — nothing stops two methods naming their parameters alike — and a
+// fixture keyed on the name alone holds one of them and hands it to the method
+// that takes the other, which does not compile. An earlier version diagnosed
+// that and told the author to rename a parameter, which is bad advice about
+// correct source.
+//
+// # How a shared name is disambiguated
+//
+// By the method that introduced each type, not by the type itself: a composite
+// has no name to spell, and `SSlice` would be a spelling this package invented.
+// `PutS` and `GetS` name something the reader can find in the source. Only a
+// contested name is qualified; a name carrying one type keeps it.
+//
+// The qualified spelling can in principle meet an uncontested parameter
+// literally named `PutS`. Nothing here detects that, and nothing needs to: two
+// fields of one name is a struct the toolchain refuses, so the cost is a
+// compile error over generated source rather than a check quietly handed the
+// wrong value.
+func groupParams(methods []Method) []paramGroup {
+	var groups []paramGroup
+	byField := map[string]int{}
+	for _, m := range methods {
+		for _, p := range m.CallArgs() {
+			if findGroup(groups, p) {
+				continue
+			}
+			groups = append(groups, paramGroup{name: p.Field, method: m.Name, param: p})
+			byField[p.Field]++
+		}
+	}
+	// Qualify every group whose parameter name another type also claims, so
+	// neither spelling is privileged by the order the walk happened to take.
+	for i := range groups {
+		if byField[groups[i].param.Field] > 1 {
+			groups[i].name = groups[i].method + groups[i].param.Field
+		}
+	}
+	return groups
+}
+
+// findGroup reports whether a group already holds this parameter's name and
+// type.
+func findGroup(groups []paramGroup, p golang.Param) bool {
+	for _, g := range groups {
+		if g.param.Field == p.Field && g.param.Source.Equal(p.Source) {
+			return true
+		}
+	}
+	return false
+}
+
+// withChecks selects each method's family and drops what the fixture cannot
+// supply.
+//
+// One pass rather than two, and after the fixture exists: a check names the
+// field it is handed, and which field that is depends on whether another method
+// contests the parameter's name.
 //
 // A check handed a value that cannot be written down is a check that does not
-// compile, and one handed the zero value where a real one was meant passes
-// against a subject that does nothing. Dropping is the honest answer, and the
-// generated file names each absence with the parameter that caused it — the way
-// builder already explains a setter it could not check.
-func withDerivableChecks(
-	ctx *sdk.GeneratorContext, iface *sdk.Interface, f Fixture, methods []Method,
+// compile, and one handed a zero where a real value was meant passes against a
+// subject that does nothing. Dropping is the honest answer, and the generated
+// file names each absence with the parameter that caused it.
+func withChecks(
+	c *sdk.Provenance, ctx *sdk.GeneratorContext, iface *sdk.Interface, f Fixture, methods []Method,
 ) []Method {
 	out := make([]Method, 0, len(methods))
 	for _, m := range methods {
-		kept := make([]*Check, 0, len(m.Checks))
-		for _, c := range m.Checks {
-			if missing, ok := undeliverable(f, c); ok {
+		kept := make([]*Check, 0, 5)
+		for _, ck := range signatureChecks(c, iface, f, m) {
+			if missing, field, ok := undeliverable(f, ck); ok {
 				ctx.Diag.Warnf(iface.Pos(),
-					"%s: %s.%s takes %s, which no literal can be written for, so its "+
+					"%s: %s.%s takes %s, %s, so its "+
 						"%q check is not generated; supply one through %sWithFixture "+
 						"and write the check as %sOn%s",
-					Name, iface.Name, m.Name, missing, c.Subtest,
+					Name, iface.Name, m.Name, missing, field.Reason(), ck.Subtest,
 					iface.Name, iface.Name, m.Name)
 				continue
 			}
-			kept = append(kept, c)
+			kept = append(kept, ck)
 		}
 		// No emptiness guard: smoke is emitted for every method and needs no
-		// derived input, so a method always keeps at least one check. A guard
-		// here would be a branch no input can reach.
+		// derived input, so a method always keeps at least one check.
 		m.Checks = kept
+		m.ArgFields = fixtureArgs(f, m, false)
 		out = append(out, m)
 	}
 	return out
@@ -175,9 +333,9 @@ func withDerivableChecks(
 // derived for is left at that zero rather than omitted. So a method taking a
 // callback still gets its context family, and only the check whose semantics
 // depend on the value goes.
-func undeliverable(f Fixture, c *Check) (string, bool) {
+func undeliverable(f Fixture, c *Check) (string, FixtureField, bool) {
 	if !c.NeedsDerivedInput {
-		return "", false
+		return "", FixtureField{}, false
 	}
 	// The alternate is a companion of its sample, so both are derivable or
 	// neither is; looking the base name up answers for the pair.
@@ -203,14 +361,35 @@ func undeliverable(f Fixture, c *Check) (string, bool) {
 // Nesting is left to [golang.SampleRefFor], so a struct inside a struct gets
 // eidos's one-field form: the field that matters is the parameter's own.
 func sampleFor(p golang.Param, r golang.Resolver) (sample, alternate golang.Sample) {
+	return golang.SampleRefFor(p.Source, p.Name, r)
+}
+
+// partsFor composes a struct parameter's value field by field.
+//
+// Every exported field it can, which is where this departs from
+// [golang.SampleRefFor] — and deliberately. That function sets the first
+// settable field and says why: a sample exists to be distinguishable, and one
+// field achieves that while staying readable. Right for a builder, where the
+// value is handed to a setter and read straight back.
+//
+// A conformance suite asks a different question. An implementation that
+// silently drops a field passes every check built from a sample that never set
+// it, and two values differing in one field are indistinguishable to a subject
+// keyed on another. Discrimination is the point here, and readability is the
+// thing to trade for it.
+//
+// The per-field values are still eidos's — only the policy of how many to set
+// is testkit's, and that is a testing decision rather than a fact about Go.
+// Each is carried as a [golang.Sample] rather than as text, so a field whose own
+// type is a struct keeps the reference the backend needs to spell it.
+func partsFor(p golang.Param, r golang.Resolver) []FixturePart {
 	decl, resolved := r.Resolve(p.Source)
 	s, ok := decl.(*sdk.Struct)
 	if !resolved || !ok {
-		return golang.SampleRefFor(p.Source, p.Name, r)
+		return nil
 	}
 
-	ref := golang.FromNode(p.Source)
-	var one, other []string
+	var parts []FixturePart
 	for _, f := range golang.ExportedFields(s) {
 		inner, innerAlt := golang.SampleRefFor(f.Type, f.Name, r)
 		if !inner.OK() {
@@ -220,14 +399,9 @@ func sampleFor(p golang.Param, r golang.Resolver) (sample, alternate golang.Samp
 			// parameter feeds.
 			continue
 		}
-		one = append(one, f.Name+": "+inner.Text)
-		other = append(other, f.Name+": "+innerAlt.Text)
+		parts = append(parts, FixturePart{Name: f.Name, Sample: inner, Other: innerAlt})
 	}
-	if len(one) == 0 {
-		return golang.Sample{}, golang.Sample{}
-	}
-	return golang.Sample{Ref: ref, Text: "{" + strings.Join(one, ", ") + "}", Composite: true},
-		golang.Sample{Ref: ref, Text: "{" + strings.Join(other, ", ") + "}", Composite: true}
+	return parts
 }
 
 // companionFor returns a call to the type's `<Type>Defaults()` function, or nil
@@ -282,17 +456,39 @@ func companionFor(ctx *sdk.GeneratorContext, t *sdk.TypeRef) *sdk.Expr {
 // which is meant.
 func seedOf(f Fixture, methods []Method) *Seed {
 	for _, m := range methods {
-		if shape.Get(m.Source.Meta()) != writer.Name || !m.ReturnsError() {
+		if !writesSomething(m) || !m.ReturnsError() {
 			continue
 		}
-		args := fixtureArgs(m, false)
-		if missing, ok := undeliverableArgs(f, args); ok {
-			_ = missing
+		args := fixtureArgs(f, m, false)
+		if _, _, undeliverable := undeliverableArgs(f, args); undeliverable {
 			continue
 		}
 		return &Seed{Method: m, Args: args}
 	}
 	return nil
+}
+
+// writesSomething reports whether the shape annotator classified this method as
+// a write.
+//
+// Three detectors rather than one. They differ only in arity — `writer` takes a
+// single non-context argument, `compositewriter` two, `multiargwriter` three or
+// more — and the seed passes whatever the method declares, so arity is not
+// something it has to know. Keying on `writer` alone left a `Put(ctx, key, v)`
+// interface unable to seed itself, which is the ordinary keyed store.
+//
+// `mutator` is deliberately absent even though it writes: it returns nothing, so
+// a seed through one cannot report its own failure, and a seed that fails
+// silently leaves every check after it asserting against an empty subject. That
+// exclusion is [Seed]'s error return restated, and [seedOf]'s ReturnsError guard
+// would refuse it anyway.
+func writesSomething(m Method) bool {
+	switch shape.Get(m.Source.Meta()) {
+	case writer.Name, compositewriter.Name, multiargwriter.Name:
+		return true
+	default:
+		return false
+	}
 }
 
 // Seed is the write a harness populates each fresh subject with.
@@ -304,13 +500,14 @@ type Seed struct {
 	Args []string
 }
 
-// undeliverableArgs names the first argument the fixture cannot supply.
-func undeliverableArgs(f Fixture, args []string) (string, bool) {
+// undeliverableArgs names the first argument the fixture cannot supply, with
+// the field it would have come from so a caller can say why.
+func undeliverableArgs(f Fixture, args []string) (string, FixtureField, bool) {
 	for _, name := range args {
 		field, found := f.Field(strings.TrimSuffix(name, OtherSuffix))
 		if !found || !field.OK() {
-			return name, true
+			return name, field, true
 		}
 	}
-	return "", false
+	return "", FixtureField{}, false
 }

@@ -1,25 +1,28 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// Package embeddedforeign is the language-axis fixture for an embedded
-// interface the generator cannot reach.
+// Package embeddedforeign is the language-axis fixture for an interface
+// embedding one from a package outside the run.
 //
-// Embedded method sets are flattened by resolving each embed against the
-// interfaces the run loaded. A standard-library interface is not among them,
-// and neither is one from any package outside the run's scope — which is the
-// ordinary case in real code rather than an exotic one.
+// Embedding a standard-library interface is ordinary code rather than an exotic
+// case, and it used to cost this fixture everything: embeds were flattened by
+// resolving each against the interfaces the run had loaded, `io.Closer` was
+// never among them, and both generators declined the whole interface — a double
+// missing a method does not satisfy the interface it doubles, and a harness over
+// part of a contract passes an implementation that fails the rest.
 //
-// No double is generated. One missing a method does not satisfy the interface
-// it doubles, so it cannot be passed anywhere that interface is expected —
-// which is the whole of what a double is for, and recording faithfully is
-// worth nothing if nothing can accept it. A warning names the embed so the
-// absence is attributable rather than mysterious.
+// The frontend had the answer the whole time. It type-checks the embed to
+// validate it and knows the method set; only the node graph was narrowed to the
+// run's own source. eidos now carries the type-checked projection on the embed
+// itself, so a foreign method set is completed from what the compiler already
+// computed and a loaded declaration still wins where there is one.
 //
-// The frontend type-checks the embedded interface and knows its method set;
-// it is the node graph that carries only the run's own source. Closing that
-// gap upstream is what would let this fixture generate.
+// What this fixture proves is that the completion reaches the output: Close
+// arrives from [io.Closer] with no declaration in this package, and the double,
+// the harness and the harness's own checks all carry it beside Read.
 //
-// [embedded] holds the resolvable path; this holds the other one.
+// [embedded] holds the same shape with every embed declared locally. The two
+// must agree, which is the point of having both.
 package embeddedforeign
 
 import (
@@ -28,10 +31,11 @@ import (
 )
 
 // Stream embeds a standard-library interface alongside a method of its own.
-// Close comes from [io.Closer] and cannot be projected; Read can.
+// Close comes from [io.Closer]; Read is declared here.
 //
 //testkit:out embeddedforeigntest/ pkg=embeddedforeigntest
 //testkit:stub
+//testkit:suite
 type Stream interface {
 	io.Closer
 

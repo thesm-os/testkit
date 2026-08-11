@@ -248,6 +248,18 @@ checks:
     - label: empty-body-interface-satisfier
       func_glob: "Reset"
       file_glob: "fault/fault_strategy.go"
+    # A generated conformance check asserts a property of a subject, and its
+    # failure arm — the recover(), the "you supplied an input that hits"
+    # Fatalf — fires only against a subject deliberately broken to reach it.
+    # Reaching them for real means writing a violating implementation per check
+    # per fixture, which is the hand-written proof docs/rfc/0002 exists to
+    # replace: the generated companion output drives every check against a
+    # complying subject and a violating one, and removes this entry when it
+    # ships. The happy path of each check is covered by the corpus contract
+    # runs; what is skipped is the arm no correct subject takes.
+    - label: assertion-failure-arms
+      func_glob: "*"
+      file_glob: "**/*_suite.gen.go"
     - label: assertion-failure-arms
       func_glob: "*ehaviour*"
       file_glob: "stub/behaviour.go"
