@@ -1,0 +1,12 @@
+{{- /*
+One law, instantiated at the interface's types and filled per its manifest.
+The composite spans lines because a law is read next to its failure output,
+and a one-line literal with four closures in it cannot be.
+*/ -}}
+{{- define "model.law" -}}
+{{ renderExpr .Ctor }}[{{ renderType (index .Args 0) }}{{ range slice .Args 1 }}, {{ renderType . }}{{ end }}]{
+{{- range .Fields }}
+		{{ render . }},
+{{- end }}
+	}
+{{- end -}}

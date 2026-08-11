@@ -1,0 +1,37 @@
+{{- /*
+The proof of the emission, run from the external test package the way a
+consumer would. It certifies what the generator produced — the derived
+reference and its inert bodies — not any consumer's subject, which is why it
+is generated here instead of asked of every package that arms the tier.
+*/ -}}
+{{- define "model.companion" -}}
+{{ $c := . }}
+// Test{{ .IfaceName }}ModelReference holds the reference to the tier it
+// anchors: two independent instances driven through the full property, one as
+// subject and one as oracle. A failure here is the derivation's own — before
+// any consumer's implementation is in the room.
+//
+// The supplied-option path rides along, so the option, the config and the
+// constructor are all exercised by the file that ships them.
+func Test{{ .IfaceName }}ModelReference(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+	{{ renderExpr (external .ModelPkg "Check") }}(t, {{ renderExpr (external .HarnessPkg .PropertyName) }}(
+		{{ renderExpr (external .HarnessPkg .RefCtorName) }},
+		{{ renderExpr (external .HarnessPkg .ReferenceOptionName) }}({{ renderExpr (external .HarnessPkg .RefCtorName) }}),
+	))
+}
+{{ if .Inert }}
+// Test{{ .IfaceName }}ModelReferenceInertBodies calls what the sequences
+// never do. An inert body's whole contract is answering zero values whatever
+// it is handed; a panic here would ambush the first consumer who reaches the
+// reference through the interface.
+func Test{{ .IfaceName }}ModelReferenceInertBodies(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+	fx := {{ renderExpr (external .HarnessPkg .FixtureCtor) }}()
+	r := {{ renderExpr (external .HarnessPkg .RefCtorName) }}()
+{{- range $p := .Inert }}
+	{{ $p.Assign }}r.{{ $p.Method }}({{ if $p.TakesCtx }}t.Context(){{ end }}{{ range $i, $f := $p.ArgFields }}{{ if or $i $p.TakesCtx }}, {{ end }}fx.{{ $f }}{{ end }})
+{{- end }}
+}
+{{ end }}
+{{- end -}}

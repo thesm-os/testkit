@@ -1,0 +1,10 @@
+{{- /*
+A predicate answers a yes/no about state both sides share, so the answers must
+agree at every step.
+*/ -}}
+{{- define "model.action.predicate" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func(s {{ renderType .Iface }}) bool {
+					return s.{{ .Method }}()
+				})
+{{- end -}}

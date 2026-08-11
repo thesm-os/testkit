@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/testkit/generator/defaults"
 	"go.thesmos.sh/testkit/generator/enum"
 	"go.thesmos.sh/testkit/generator/fault"
+	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/sentinel"
 	"go.thesmos.sh/testkit/generator/stub"
 	"go.thesmos.sh/testkit/generator/suite"
@@ -77,6 +78,7 @@ func Generators() []sdk.Plugin {
 	return []sdk.Plugin{
 		builder.New(),
 		enum.New(),
+		model.New(),
 		sentinel.New(),
 		stub.New(),
 		suite.New(),

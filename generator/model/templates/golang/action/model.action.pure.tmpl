@@ -1,0 +1,10 @@
+{{- /*
+A pure call takes no context by shape; both sides answer and the answers must
+agree.
+*/ -}}
+{{- define "model.action.pure" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func(s {{ renderType .Iface }}) {{ renderType .Value }} {
+					return s.{{ .Method }}()
+				})
+{{- end -}}

@@ -1,0 +1,535 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+package model_test
+
+import (
+	"strings"
+	"testing"
+
+	"go.thesmos.sh/eidos/core/diag"
+	"go.thesmos.sh/eidos/eidostest/plugintest"
+	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/model"
+	"go.thesmos.sh/testkit/generator/suite"
+)
+
+// TestConformance holds the plugin to the pipeline's own contract.
+func TestConformance(t *testing.T) {
+	t.Parallel()
+	plugintest.RunSuite(t, model.New())
+}
+
+// TestBindings walks the derivation for the corpus's own fixture shape: a
+// stamped writer carrying the validates mixin, its partner, and a reader.
+func TestBindings(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, mixed(t))
+
+	t.Run("drives the reader and the writer", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, len(b.Actions), 2, "two methods map to actions")
+		testkit.Equal(t, b.Actions[0].Method, "Store", "in declaration order")
+		testkit.Equal(t, b.Actions[0].KindName, sdk.Kind("model.action.writer"),
+			"the writer renders through its shape's template")
+		testkit.Equal(t, b.Actions[1].Method, "Read", "the reader follows")
+	})
+
+	t.Run("excludes the partner with its reason", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, len(b.Skipped), 1, "one method is not driven")
+		testkit.Equal(t, b.Skipped[0].Method, "Validate",
+			"the method the mixin references")
+		testkit.Assert(t, b.Skipped[0].Reason).Contains("validates.fn",
+			"naming the stamp that claims it")
+	})
+
+	t.Run("derives the map reference", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, b.Reference.Supplied(), "nothing was named, so it is derived")
+		testkit.Equal(t, b.Reference.KeyField, "Key",
+			"keyed on the one string field matching the reader's key")
+		testkit.Equal(t, len(b.Adapter), 3, "every method has an adapter body")
+		testkit.Equal(t, b.Adapter[0].Op, "Put", "the writer delegates")
+		testkit.Equal(t, b.Adapter[2].Op, "Get", "the reader delegates")
+		testkit.True(t, b.Adapter[1].Op == "" && b.Adapter[1].Reason != "",
+			"the partner is inert, with why")
+	})
+
+	t.Run("draws from the fixture pools", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, b.Keys.Field, "Key", "keys are the reader's fixture pair")
+		testkit.Equal(t, b.Keys.OtherField, "KeyOther", "with the companion beside it")
+		testkit.Equal(t, b.Values.Field, "V", "values are the writer's")
+	})
+}
+
+// TestSuppliedReference pins the escape hatch: ref= replaces the derivation
+// wholesale, so nothing else needs to be derivable.
+func TestSuppliedReference(t *testing.T) {
+	t.Parallel()
+
+	s := mixed(t, storefixture.KV(model.RefKey, "NewFake"))
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Supplied(), "the directive named the constructor")
+	testkit.Equal(t, len(b.Adapter), 0, "and no adapter is generated over it")
+
+	t.Run("an empty value is no supply", func(t *testing.T) {
+		t.Parallel()
+		// `ref=` with nothing after it reads as a slip, not a choice; the
+		// derivation proceeds as though the key were absent.
+		b := bindingsOf(t, mixed(t, storefixture.KV(model.RefKey, "")))
+		testkit.False(t, b.Reference.Supplied(), "the empty value fell through to derivation")
+	})
+
+	t.Run("a reader alone draws no values", func(t *testing.T) {
+		t.Parallel()
+		// The pool declarations are conditional on use because an unused local
+		// is a compile error in every generated file. ref= is what makes a
+		// one-sided interface reachable at all.
+		s := storefixture.New().
+			Package("ro", "example.com/ro").
+			Interface("Fetcher", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("ro/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("suite"))
+				i.Directive(storefixture.Directive("model",
+					storefixture.KV(model.RefKey, "NewFake")))
+				i.Method("Fetch", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Param("key", storefixture.Named("string"))
+					m.Return(storefixture.Named("string"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		stampShape(s, "Fetch", "reader", "string", "string")
+		b := bindingsOf(t, s)
+		testkit.True(t, b.UsesKeys(), "the reader draws keys")
+		testkit.False(t, b.UsesValues(), "and nothing draws values")
+	})
+
+	t.Run("a writer alone draws no keys", func(t *testing.T) {
+		t.Parallel()
+		s := storefixture.New().
+			Package("wo", "example.com/wo").
+			Interface("Sink", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("wo/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("suite"))
+				i.Directive(storefixture.Directive("model",
+					storefixture.KV(model.RefKey, "NewFake")))
+				i.Method("Push", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Param("v", storefixture.Named("string"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		stampShape(s, "Push", "writer", "", "string")
+		b := bindingsOf(t, s)
+		testkit.True(t, b.UsesValues(), "the writer draws values")
+		testkit.False(t, b.UsesKeys(), "and nothing draws keys")
+	})
+}
+
+// TestRenderSurface hits what only the templates otherwise read, so a rename
+// that breaks the template's field lookup fails here with a name rather than
+// in the backend with a short file.
+func TestRenderSurface(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, mixed(t))
+	testkit.Equal(t, b.Kind(), model.KindBindings, "the bindings render as themselves")
+	testkit.Equal(t, b.Actions[0].Kind(), b.Actions[0].KindName,
+		"an action renders through its shape's template")
+	testkit.Equal(t, b.ModelPkg(), model.ModelPkg, "the runner's import path")
+	testkit.Equal(t, b.RefPkg(), model.RefPkg, "the oracle's import path")
+	testkit.Equal(t, b.TierName(), model.TierName, "the path the run reports under")
+	testkit.True(t, b.UsesKeys() && b.UsesValues(),
+		"a reader and a writer draw from both pools")
+
+	t.Run("the miss prefix follows the routed package", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, b.MissPrefix(), "mixed",
+			"provisional before Layout: the interface's own spelling")
+		b := bindingsOf(t, mixed(t))
+		b.SetOutputPackages(map[string]string{"": "example.com/validates/validatestest"})
+		testkit.Equal(t, b.MissPrefix(), "validatestest",
+			"and the routed package once Layout resolved it")
+		b.SetOutputPackages(map[string]string{})
+		testkit.Equal(t, b.MissPrefix(), "validatestest",
+			"a partial map on a later call clears nothing")
+	})
+}
+
+// TestUnmappableMethods holds the skip arms to their reasons: an unstamped
+// method, one stamped outside the table, and one that cannot forward to the
+// oracle are all listed — never silently absent from the sequences.
+func TestUnmappableMethods(t *testing.T) {
+	t.Parallel()
+
+	s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
+		// Unstamped: the annotator classified nothing.
+		i.Method("Ping", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Return(storefixture.Named("error"))
+		})
+		// Stamped with vocabulary this build's table has never heard of — the
+		// state a detector landing upstream is in until the row lands.
+		i.Method("Weird", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Return(storefixture.Named("error"))
+		})
+		// Stamped and driven, but with no context to forward to the oracle.
+		i.Method("Len", func(m *storefixture.MethodBuilder) {
+			m.Return(storefixture.Named("int"))
+			m.Return(storefixture.Named("error"))
+		})
+	})
+	stampShape(s, "Weird", "not-a-shape", "", "")
+	stampShape(s, "Len", "aggregator", "", "int")
+	// A mixin the registry has never heard of exercises the partner scan's
+	// miss arm without disturbing the real one.
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == "Ping" {
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"not-a-mixin"}, "test")
+			}
+		}
+	}
+	b := bindingsOf(t, s)
+
+	reasons := map[string]string{}
+	for _, sk := range b.Skipped {
+		reasons[sk.Method] = sk.Reason
+	}
+	testkit.Assert(t, reasons["Ping"]).Contains("no shape",
+		"the unstamped method names the classification gap")
+	testkit.Assert(t, reasons["Weird"]).Contains("not-a-shape",
+		"the unmapped stamp names the shape nothing drives")
+
+	inert := map[string]string{}
+	for _, am := range b.Adapter {
+		if am.Op == "" {
+			inert[am.Sig.Name] = am.Reason
+		}
+	}
+	testkit.Assert(t, inert["Len"]).Contains("no context",
+		"a driven method the oracle cannot serve is inert, with why")
+	testkit.Assert(t, inert["Ping"]).Contains("shape",
+		"an unclassified method is inert too")
+}
+
+// TestDiagnostics holds every refusal to a message naming what fixes it.
+func TestDiagnostics(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an interface with no harness", func(t *testing.T) {
+		t.Parallel()
+		s := storefixture.New().
+			Package("bare", "example.com/bare").
+			Interface("Bare", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("bare/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("model"))
+				i.Method("Get", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Param("key", storefixture.Named("string"))
+					m.Return(storefixture.Named("string"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		got := plugintest.Generate(t, model.New(), s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("//testkit:suite",
+			"naming the directive that creates the projection this binds onto")
+	})
+
+	t.Run("a generic interface", func(t *testing.T) {
+		t.Parallel()
+		s := storefixture.New().
+			Package("gen", "example.com/gen").
+			Interface("Store", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("gen/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("suite"))
+				i.Directive(storefixture.Directive("model"))
+				i.TypeParam("V", nil)
+				i.Method("Put", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Param("v", storefixture.TypeParamRef("V"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		plugintest.Generate(t, suite.New(), s)
+		got := plugintest.Generate(t, model.New(), s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("generic",
+			"the property and the reference land at concrete types")
+	})
+
+	t.Run("no reader-writer pair to model", func(t *testing.T) {
+		t.Parallel()
+		s := readerOnly(t)
+		plugintest.Generate(t, suite.New(), s)
+		got := plugintest.Generate(t, model.New(), s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("ref=",
+			"naming the key that supplies what derivation cannot")
+	})
+
+	t.Run("a qualified ref constructor", func(t *testing.T) {
+		t.Parallel()
+		s := mixed(t, storefixture.KV(model.RefKey, "other.NewFake"))
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("own package",
+			"the generator cannot invent an import path for a foreign qualifier")
+	})
+
+	t.Run("no method maps to an action", func(t *testing.T) {
+		t.Parallel()
+		s := storefixture.New().
+			Package("un", "example.com/un").
+			Interface("Opaque", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("un/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("suite"))
+				i.Directive(storefixture.Directive("model"))
+				i.Method("Do", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("drive",
+			"sequences over nothing assert nothing")
+	})
+
+	t.Run("reader and writer disagree about the value", func(t *testing.T) {
+		t.Parallel()
+		s := kvStore(t, "example.com/kv.Doc", "string")
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("one map cannot model",
+			"two value types cannot share one oracle")
+	})
+
+	t.Run("the value declares no struct to key on", func(t *testing.T) {
+		t.Parallel()
+		s := kvStore(t, "string", "string")
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("no struct declaration",
+			"a predeclared value type carries no key field")
+	})
+
+	t.Run("no field carries the key type", func(t *testing.T) {
+		t.Parallel()
+		s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"N", "int"})
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("no field",
+			"nothing to project a key out of")
+	})
+
+	t.Run("several fields tie without a conventional name", func(t *testing.T) {
+		t.Parallel()
+		s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"A", "string"}, field{"B", "string"})
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("several fields",
+			"an arbitrary pick would key the oracle on a guess")
+	})
+}
+
+// TestConventionalKeyFieldBreaksTheTie pins the preference order: among
+// several fields of the key's type, ID outranks everything, because that is
+// the name an author gives the field that is the identity.
+func TestConventionalKeyFieldBreaksTheTie(t *testing.T) {
+	t.Parallel()
+
+	s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+		field{"Name", "string"}, field{"ID", "string"})
+	b := bindingsOf(t, s)
+	testkit.Equal(t, b.Reference.KeyField, "ID", "the conventional spelling wins")
+}
+
+// field is one struct field of a kvStore fixture.
+type field struct{ name, typ string }
+
+// kvStore declares a reader over readV and a writer taking writeV, plus the
+// Doc struct where either names it — the smallest interface the reference
+// derivation walks all the way.
+func kvStore(t *testing.T, readV, writeV string, fields ...field) *sdk.Store {
+	t.Helper()
+	f := storefixture.New().Package("kv", "example.com/kv")
+	if len(fields) > 0 {
+		f = f.Struct("Doc", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("kv/iface.go", 1, 1))
+			for _, fl := range fields {
+				b.Field(fl.name, storefixture.Named(fl.typ), nil)
+			}
+		})
+	}
+	s := f.Interface("Store", func(i *storefixture.InterfaceBuilder) {
+		i.Pos(sdk.At("kv/iface.go", 1, 1))
+		i.Directive(storefixture.Directive("suite"))
+		i.Directive(storefixture.Directive("model"))
+		i.Method("Get", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("key", storefixture.Named("string"))
+			m.Return(typeOf(readV))
+			m.Return(storefixture.Named("error"))
+		})
+		i.Method("Put", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("v", typeOf(writeV))
+			m.Return(storefixture.Named("error"))
+		})
+	}).Build()
+	stampShape(s, "Get", "reader", "string", readV)
+	stampShape(s, "Put", "writer", "", writeV)
+	return s
+}
+
+// typeOf spells a fixture type from its stamp form.
+func typeOf(q string) *sdk.TypeRef {
+	if idx := strings.LastIndexByte(q, '.'); idx >= 0 {
+		return storefixture.PkgNamed(q[:idx], q[idx+1:])
+	}
+	return storefixture.Named(q)
+}
+
+// bindingsOf runs suite then model over the store and returns what model
+// queued, failing where it queued nothing.
+func bindingsOf(t *testing.T, s *sdk.Store) *model.Bindings {
+	t.Helper()
+	generateBoth(t, s)
+	for _, p := range s.Emit().PendingOriginSlots() {
+		if b, ok := p.Item.(*model.Bindings); ok {
+			return b
+		}
+	}
+	t.Fatal("the run queued no bindings")
+	return nil
+}
+
+// generateBoth runs the two generators in bucket order, the way the pipeline
+// does: model reads the projection suite queues.
+func generateBoth(t *testing.T, s *sdk.Store) *diag.Sink {
+	t.Helper()
+	plugintest.Generate(t, suite.New(), s)
+	return plugintest.Generate(t, model.New(), s)
+}
+
+// mixed is the corpus fixture in store form, stamped the way the annotator
+// stamps it: a writer carrying the validates mixin, the validator it names,
+// and a reader.
+func mixed(t *testing.T, opts ...storefixture.DirectiveOption) *sdk.Store {
+	t.Helper()
+	return mixedWith(t, nil, opts...)
+}
+
+// mixedWith is [mixed] plus extra methods, for the fixtures that probe what an
+// unmappable method does to an otherwise ordinary interface.
+func mixedWith(
+	t *testing.T,
+	extra func(i *storefixture.InterfaceBuilder),
+	opts ...storefixture.DirectiveOption,
+) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("validates", "example.com/validates").
+		Struct("Payload", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("validates/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("validates/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model", opts...))
+			i.Method("Store", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Validate", func(m *storefixture.MethodBuilder) {
+				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Read", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			if extra != nil {
+				extra(i)
+			}
+		}).
+		Build()
+
+	stampShape(s, "Store", "writer", "", "example.com/validates.Payload")
+	stampShape(s, "Read", "reader", "string", "example.com/validates.Payload")
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Store" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{"validates"}, "test")
+			shape.MixinParamKey("validates", "fn").
+				Set(bag, "example.com/validates.Validate", "test")
+		}
+	}
+	return s
+}
+
+// readerOnly declares one stamped reader — nothing for a map to model.
+func readerOnly(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("ro", "example.com/ro").
+		Interface("Fetcher", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("ro/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Fetch", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampShape(s, "Fetch", "reader", "string", "string")
+	return s
+}
+
+// stampShape sets what the annotator would have written for one method.
+func stampShape(s *sdk.Store, method, shapeName, keyType, valueType string) {
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != method {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaShape.Set(bag, shapeName, "test")
+			if keyType != "" {
+				shape.MetaKeyType.Set(bag, keyType, "test")
+			}
+			if valueType != "" {
+				shape.MetaValueType.Set(bag, valueType, "test")
+			}
+		}
+	}
+}

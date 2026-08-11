@@ -1,0 +1,174 @@
+{{- /*
+The whole model tier for one interface: the contract option, the property, the
+derived reference, and its adapter. One file so deleting the directive deletes
+the tier — and the engine dependency with it.
+*/ -}}
+{{- define "model.bindings" -}}
+{{ $b := . }}
+// {{ .OptionName }} runs random sequences of {{ .IfaceName }}'s methods against every
+// subject and a known-good in-memory reference side by side, comparing after
+// every call. Pass it to {{ .EntryName }}; it reports under
+// "{{ .TierName }}", and {{ .IfaceName }}Without("{{ .TierName }}") declines it.
+//
+{{- if .Reference.Supplied }}
+//	Reference: supplied through //testkit:model ref=
+{{- else }}
+//	Reference: derived — a keyed map over the {{ .Values.Field }} fixture pair,
+//	           keyed on {{ .Reference.KeyField }}; {{ .IfaceName }}ModelReference replaces it
+{{- end }}
+//	Sequences: {{ range $i, $a := .Actions }}{{ if $i }}, {{ end }}{{ $a.Method }} ({{ $a.Shape }}){{ end }}
+{{- with .Laws }}
+//	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ end }}
+{{- end }}
+{{- with .Skipped }}
+//	Not driven:
+{{- range . }}
+//	           {{ .Method }} — {{ .Reason }}
+{{- end }}
+{{- end }}
+{{- with .Unbound }}
+//	Not bound:
+{{- range . }}
+//	           {{ .Method }} — {{ .Reason }}
+{{- end }}
+{{- end }}
+func {{ .OptionName }}(opts ...{{ .OptionTypeName }}) {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) {
+		c.extensions = append(c.extensions, {{ lower .IfaceName }}ContractExtension{
+			name: "{{ .TierName }}",
+			run: func(t *{{ renderExpr (external "testing" "T") }}, _ string, factory func() {{ renderType .IfaceRef }}, _ *{{ lower .IfaceName }}Config) {
+				{{ renderExpr (external .ModelPkg "Check") }}(t, {{ .PropertyName }}(factory, opts...))
+			},
+		})
+	}
+}
+
+// {{ .PropertyName }} builds the property the option runs — exported because a
+// bespoke harness composes from here: model.Check for a test, model.MakeFuzz
+// for a coverage-guided fuzz target, both over this one derivation.
+func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .OptionTypeName }}) func(*{{ renderExpr (external .ModelPkg "T") }}) {
+	cfg := new{{ .IfaceName }}ModelConfig(opts...)
+	fx := {{ .FixtureCtor }}()
+{{- if .UsesKeys }}
+	// The pools are the fixture pair, not fresh randomness: two keys collide
+	// constantly, which is what makes a read revisit a write. A wide pool
+	// passes every comparison over a history with no collisions in it.
+	keys := {{ renderExpr (external .ModelPkg "SampledFrom") }}([]{{ renderType .Keys.Type }}{fx.{{ .Keys.Field }}, fx.{{ .Keys.OtherField }}})
+{{- end }}
+{{- if .UsesValues }}
+	values := {{ renderExpr (external .ModelPkg "SampledFrom") }}([]{{ renderType .Values.Type }}{fx.{{ .Values.Field }}, fx.{{ .Values.OtherField }}})
+{{- end }}
+	reference := cfg.reference
+	if reference == nil {
+{{- if .Reference.Supplied }}
+		reference = {{ renderExpr .Reference.SuppliedCtor }}
+{{- else }}
+		reference = {{ .Reference.CtorName }}
+{{- end }}
+	}
+{{- if .Laws }}
+	// The laws the classifications earned, each reporting under its AUTO-
+	// identifier when it fails. Observational: a law never mutates, so running
+	// them inside the sequences is safe for every step that follows.
+	laws := {{ renderExpr (external .ModelPkg "NewRegistry") }}[{{ renderType .IfaceRef }}]()
+{{- range .Laws }}
+	laws.Add({{ render . }})
+{{- end }}
+{{- end }}
+	return {{ renderExpr (external .ModelPkg "Property") }}(factory,
+		{{ renderExpr (external .ModelPkg "WithReference") }}(reference),
+{{- if .Laws }}
+		{{ renderExpr (external .ModelPkg "WithLaws") }}(laws),
+{{- end }}
+		{{ renderExpr (external .ModelPkg "WithActions") }}(
+{{- range .Actions }}
+			{{ render . }},
+{{- end }}
+		),
+	)
+}
+{{ if not .Reference.Supplied }}
+// {{ .Reference.MissName }} is what the reference reports for a key nothing
+// wrote. Only its presence is compared — a subject reports its own miss
+// sentinel, and the run asks whether both sides missed, not how they spelled
+// it.
+var {{ .Reference.MissName }} = {{ renderExpr (external "errors" "New") }}("{{ .MissPrefix }}: the model reference holds nothing under the key")
+
+// {{ .KeyOfName }} projects a value's identity — the one derivation the
+// reference keys on and every keyed law reuses, so the two cannot disagree
+// about which field is the key.
+func {{ .KeyOfName }}(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type }} {
+	return v.{{ .Reference.KeyField }}
+}
+
+// {{ .Reference.TypeName }} adapts the shipped map oracle to {{ .IfaceName }}.
+// Deliberately simple: its correctness is read, not tested.
+type {{ .Reference.TypeName }} struct {
+	store *{{ renderExpr (external .RefPkg "MapStore") }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}]
+}
+
+func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
+	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg "NewMapStore") }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}](
+		{{ .KeyOfName }},
+		{{ .Reference.MissName }},
+	)}
+}
+{{ range .Adapter }}
+{{- if .Op }}
+func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params" .Sig }}) {{ template "model.results" .Sig }} {
+	return r.store.{{ .Op }}({{ range $i, $p := .Sig.Params }}{{ if $i }}, {{ end }}{{ $p.Name }}{{ end }})
+}
+{{ else }}
+// {{ .Sig.Name }} is inert: {{ .Reason }}. The laws that would compare the
+// subject against an inert body are not bound.
+func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params" .Sig }}) {{ template "model.zeroresults" .Sig }}
+{{ end }}
+{{- end }}
+{{- end }}
+// {{ .OptionTypeName }} configures the model run.
+type {{ .OptionTypeName }} func(*{{ .ConfigName }})
+
+// {{ .IfaceName }}ModelReference replaces the derived reference — for an
+// interface whose semantics outrun its shape.
+func {{ .IfaceName }}ModelReference(factory func() {{ renderType .IfaceRef }}) {{ .OptionTypeName }} {
+	return func(c *{{ .ConfigName }}) { c.reference = factory }
+}
+
+type {{ .ConfigName }} struct {
+	reference func() {{ renderType .IfaceRef }}
+}
+
+func new{{ .IfaceName }}ModelConfig(opts ...{{ .OptionTypeName }}) *{{ .ConfigName }} {
+	c := &{{ .ConfigName }}{}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+{{- end -}}
+
+{{- /*
+model.params spells a signature's parameter list verbatim.
+*/ -}}
+{{- define "model.params" -}}
+{{- range $i, $p := .Params }}{{ if $i }}, {{ end }}{{ $p.Name }} {{ renderType $p.Type }}{{ end -}}
+{{- end -}}
+
+{{- /*
+model.results spells the return clause for a delegating body.
+*/ -}}
+{{- define "model.results" -}}
+{{- if eq (len .Returns) 1 }}{{ renderType (index .Returns 0).Type }}
+{{- else if .Returns }}({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ renderType $r.Type }}{{ end }})
+{{- end -}}
+{{- end -}}
+
+{{- /*
+model.zeroresults names every return so an inert body is one naked return of
+zero values, whatever the signature — no per-type zero spelling to get wrong.
+*/ -}}
+{{- define "model.zeroresults" -}}
+{{- if .Returns }}({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}r{{ $i }} {{ renderType $r.Type }}{{ end }}) { return }
+{{- else }}{}
+{{- end -}}
+{{- end -}}
