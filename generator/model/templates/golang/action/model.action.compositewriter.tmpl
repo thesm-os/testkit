@@ -1,0 +1,10 @@
+{{- /*
+A composite writer draws the key beside the value — both from the shared
+pools, so the keys collide with every read and the values with every law.
+*/ -}}
+{{- define "model.action.compositewriter" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, keys, values,
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}, v {{ renderType .Value }}) error {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k, v)
+				})
+{{- end -}}

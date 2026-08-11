@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		pointintimetest.MixedSubject("in-memory", func() pointintime.Mixed {
 			return pointintimetest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		pointintimetest.MixedModel(),
 		pointintimetest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject pointintime.Mixed, key string,
 		) {

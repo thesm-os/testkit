@@ -47,6 +47,7 @@ const (
 	mixinDefaultOnError    = "defaultonerror"
 	mixinDeleteRemoves     = "deleteremoves"
 	mixinEventually        = "eventually"
+	mixinHooks             = "hooks"
 	mixinIdempotent        = "idempotent"
 	mixinInjectionSafe     = "injectionsafe"
 	mixinLeakFree          = "leakfree"
@@ -56,17 +57,23 @@ const (
 	mixinMonotonicWrites   = "monotonicwrites"
 	mixinOverMatch         = "overmatch"
 	mixinNoDuplicates      = "noduplicates"
+	mixinOrderAfter        = "orderafter"
+	mixinPartition         = "partition"
 	mixinPermutation       = "permutation"
 	mixinPointInTime       = "pointintime"
 	mixinPoisonable        = "poisonable"
 	mixinReadAfterWrite    = "readafterwrite"
 	mixinReadYourWrites    = "readyourwrites"
+	mixinSample            = "sample"
 	mixinScheduled         = "scheduled"
+	mixinSideEffect        = "sideeffect"
 	mixinSnapshotIsolation = "snapshotisolation"
 	mixinStableOrder       = "stableorder"
 	mixinSticky            = "sticky"
 	mixinStreamReflects    = "streamreflectsmutations"
 	mixinTamperEvident     = "tamperevident"
+	mixinValidates         = "validates"
+	mixinWrappedVia        = "wrappedvia"
 	mixinTimeaware         = "timeaware"
 	mixinTimeout           = "timeout"
 	mixinTotal             = "total"
@@ -485,6 +492,18 @@ var rules = []Rule{
 	{
 		Law:   lawid.IdempotentWrite,
 		Needs: []string{mixinIdempotent, shapeWriter},
+		Fields: []Field{
+			{Name: fieldWrite, Kind: KindRole, From: roleSelf},
+			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			observed("Observe"),
+		},
+	},
+	{
+		// The same claim on a keyed put. Without this row a composite writer
+		// carrying `idempotent` selected nothing at all — not even an unbound
+		// header line — which is the silence docs/adr/0017 forbids.
+		Law:   lawid.IdempotentWrite,
+		Needs: []string{mixinIdempotent, shapeCompositeWriter},
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},

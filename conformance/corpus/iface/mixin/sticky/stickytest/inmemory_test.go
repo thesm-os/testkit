@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		stickytest.MixedSubject("in-memory", func() sticky.Mixed {
 			return stickytest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		stickytest.MixedModel(),
 		stickytest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject sticky.Mixed, key string,
 		) {

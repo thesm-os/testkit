@@ -27,6 +27,9 @@ func TestMixedContract(t *testing.T) {
 		readafterwritetest.MixedSubject("in-memory", func() readafterwrite.Mixed {
 			return readafterwritetest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		readafterwritetest.MixedModel(),
 		readafterwritetest.MixedSeed(func(ctx context.Context, subject readafterwrite.Mixed) error {
 			return subject.Write(ctx, fixture.Key, fixture.Value)
 		}),

@@ -25,7 +25,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -49,6 +49,19 @@ const KindBindings sdk.Kind = "model.bindings"
 // ActionKindPrefix composes each action's emit kind — `model.action.<shape>` —
 // which is the template that renders its constructor call.
 const ActionKindPrefix = "model.action."
+
+// The two shared pool locals the generated property declares. Every draw in
+// the file goes through one of them, which is what keeps a law's values
+// colliding with the sequences it runs beside.
+const (
+	poolKeys   = "keys"
+	poolValues = "values"
+)
+
+// shapeCompositeWriter is the one detector spelling this plugin branches on
+// beyond its template dispatch: the keyed put draws from both pools and
+// selects the keyed oracle.
+const shapeCompositeWriter = "compositewriter"
 
 // Plugin is the model-tier generator: it turns an interface's classifications
 // into a property-based state-machine run inside the generated contract entry.
@@ -192,17 +205,18 @@ func (*Bindings) TierName() string { return TierName }
 // UsesValues reports whether any action draws from the values pool.
 func (b *Bindings) UsesValues() bool {
 	for _, a := range b.Actions {
-		if a.Pool == "values" {
+		if a.Pool == poolValues {
 			return true
 		}
 	}
 	return false
 }
 
-// UsesKeys reports whether any action draws from the keys pool.
+// UsesKeys reports whether any action draws from the keys pool. A composite
+// writer draws from both, whatever its Pool says.
 func (b *Bindings) UsesKeys() bool {
 	for _, a := range b.Actions {
-		if a.Pool == "keys" {
+		if a.Pool == poolKeys || a.Shape == shapeCompositeWriter {
 			return true
 		}
 	}
@@ -230,12 +244,39 @@ type Reference struct {
 	// reports for a key nothing wrote.
 	TypeName, CtorName, MissName string
 
-	// KeyField is the field of the value type the oracle keys on.
+	// Oracle names which shipped store the adapter wraps.
+	Oracle Oracle
+
+	// KeyField is the field of the value type the map oracle keys on, empty
+	// for the keyed oracle, whose key is an argument.
 	KeyField string
 }
 
+// Oracle names a shipped reference implementation the adapter can wrap.
+type Oracle string
+
+// The two store models Go interfaces declare: a value that carries its own
+// key, and a key passed beside the value.
+const (
+	OracleMap   Oracle = "map"
+	OracleKeyed Oracle = "keyed"
+)
+
 // Supplied reports that the directive named the reference.
 func (r Reference) Supplied() bool { return r.SuppliedCtor != nil }
+
+// StoreType is the wrapped oracle's type name, and "New" + StoreType its
+// constructor — the naming convention `ref` keeps, relied on here so the
+// template asks one question instead of branching twice.
+func (r Reference) StoreType() string {
+	if r.Oracle == OracleKeyed {
+		return "KeyedStore"
+	}
+	return "MapStore"
+}
+
+// Keyed reports the keyed-put oracle, whose constructor takes no projection.
+func (r Reference) Keyed() bool { return r.Oracle == OracleKeyed }
 
 // Action is one method, driven and compared.
 type Action struct {
@@ -465,14 +506,11 @@ func bindingsOf(
 	}
 
 	partners := partnerMethods(iface)
-	var keyed, valued *suite.Method
+	var keyed, valued, composite *suite.Method
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if role, partner := partners[m.Name]; partner {
-			b.Skipped = append(b.Skipped, Skip{
-				Method: m.Name,
-				Reason: "referenced as the " + role + " partner, whose checks the harness owns",
-			})
+			b.Skipped = append(b.Skipped, Skip{Method: m.Name, Reason: role})
 			continue
 		}
 		a, skip := actionOf(b, m)
@@ -486,6 +524,8 @@ func bindingsOf(
 			keyed = m
 		case "writer":
 			valued = m
+		case shapeCompositeWriter:
+			composite = m
 		}
 	}
 
@@ -497,10 +537,10 @@ func bindingsOf(
 		return nil, false
 	}
 
-	if !referenceOf(ctx, iface, harness, b, keyed, valued, partners) {
+	if !referenceOf(ctx, iface, harness, b, keyed, valued, composite, partners) {
 		return nil, false
 	}
-	poolsOf(b, keyed, valued)
+	poolsOf(b, keyed, valued, composite)
 	lawsOf(b, harness, partners, keyed)
 	return b, true
 }
@@ -527,12 +567,25 @@ func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
 	}
 	switch name {
 	case "reader":
-		a.Pool = "keys"
+		a.Pool = poolKeys
 		a.Key = m.CallArgs()[0].Type
 		a.Value = m.Returns[0].Type
 	case "writer":
-		a.Pool = "values"
+		a.Pool = poolValues
 		a.Value = m.CallArgs()[0].Type
+		// A writer whose mixin assigns it an oracle operation is one whose
+		// argument is a key — a delete, not a put — and drawing values would
+		// feed it strings no writer ever stored.
+		for _, mixin := range m.Mixins {
+			if _, assigned := tiers.KeyedStoreMixinOp(mixin); assigned {
+				a.Pool = poolKeys
+			}
+		}
+	case shapeCompositeWriter:
+		// Draws from both pools: the key beside the value is the shape.
+		a.Pool = poolValues
+		a.Key = m.CallArgs()[0].Type
+		a.Value = m.CallArgs()[1].Type
 	case "aggregator", "pure", "predicate":
 		if m.HasResults() {
 			a.Value = m.Returns[0].Type
@@ -544,12 +597,19 @@ func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
 }
 
 // referenceOf fills the reference, or reports what would let one be derived.
+//
+// Two oracles cover the two store models Go interfaces actually declare. A
+// composite writer — Put(ctx, k, v) — selects the keyed store, and needs no
+// key projection: the key is an argument. A plain writer — Store(ctx, v) —
+// selects the map, keyed on the one field of the value that holds the key.
+// The composite wins where both appear, because a keyed oracle can host a
+// value write only inertly while the reverse loses the delete.
 func referenceOf(
 	ctx *sdk.GeneratorContext,
 	iface *sdk.Interface,
 	harness *suite.Contract,
 	b *Bindings,
-	keyed, valued *suite.Method,
+	keyed, valued, composite *suite.Method,
 	partners map[string]string,
 ) bool {
 	if named, given := directiveValue(iface, RefKey); given {
@@ -561,6 +621,35 @@ func referenceOf(
 			return false
 		}
 		b.Reference = Reference{SuppliedCtor: sdk.NewExternal(iface.Package, named)}
+		return true
+	}
+
+	lower := strings.ToLower(harness.IfaceName[:1]) + harness.IfaceName[1:]
+	names := Reference{
+		TypeName: lower + "ModelReference",
+		// Exported: the generated companion lands in the external test
+		// package and proves the oracle from there, the way a consumer
+		// would — and a consumer comparing against it gets the same door.
+		CtorName: "New" + harness.IfaceName + "ModelReference",
+		MissName: lower + "ModelMiss",
+	}
+
+	if keyed != nil && composite != nil {
+		keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
+		readV, _ := shape.MetaValueType.Get(keyed.Source.Meta())
+		putK, _ := shape.MetaKeyType.Get(composite.Source.Meta())
+		putV, _ := shape.MetaValueType.Get(composite.Source.Meta())
+		if keyQ != putK || readV == "" || readV != putV {
+			ctx.Diag.Errorf(iface.Pos(),
+				"%s: %q reads (%s → %s) where its keyed writer takes (%s, %s), "+
+					"which one store cannot model; name a constructor with "+
+					"//testkit:%s %s=<constructor>",
+				Name, iface.Name, keyQ, readV, putK, putV, DirectiveName, RefKey)
+			return false
+		}
+		names.Oracle = OracleKeyed
+		b.Reference = names
+		b.Adapter = adapterOf(harness, partners, OracleKeyed)
 		return true
 	}
 
@@ -592,17 +681,10 @@ func referenceOf(
 		return false
 	}
 
-	lower := strings.ToLower(harness.IfaceName[:1]) + harness.IfaceName[1:]
-	b.Reference = Reference{
-		TypeName: lower + "ModelReference",
-		// Exported: the generated companion lands in the external test
-		// package and proves the oracle from there, the way a consumer
-		// would — and a consumer comparing against it gets the same door.
-		CtorName: "New" + harness.IfaceName + "ModelReference",
-		MissName: lower + "ModelMiss",
-		KeyField: field,
-	}
-	b.Adapter = adapterOf(harness, partners)
+	names.Oracle = OracleMap
+	names.KeyField = field
+	b.Reference = names
+	b.Adapter = adapterOf(harness, partners, OracleMap)
 	return true
 }
 
@@ -649,18 +731,18 @@ func keyFieldOf(ctx *sdk.GeneratorContext, valueQ, keyQ string) (string, string)
 
 // adapterOf builds the delegation table: every method forwards to the oracle's
 // matching operation or holds an inert body.
-func adapterOf(harness *suite.Contract, partners map[string]string) []AdapterMethod {
+func adapterOf(harness *suite.Contract, partners map[string]string, oracle Oracle) []AdapterMethod {
 	out := make([]AdapterMethod, 0, len(harness.Methods))
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		am := AdapterMethod{Sig: m.Sig}
 		switch role, partner := partners[m.Name]; {
 		case partner:
-			am.Reason = "it is the " + role + " partner, which the sequences never call"
+			am.Reason = role
 		case !m.TakesContext():
 			am.Reason = "it takes no context to forward to the oracle"
 		default:
-			if op, modelled := tiers.MapStoreOp(shape.Get(m.Source.Meta())); modelled {
+			if op, modelled := oracleOp(oracle, m); modelled {
 				am.Op = op
 			} else {
 				am.Reason = "the oracle does not model its shape"
@@ -671,10 +753,29 @@ func adapterOf(harness *suite.Contract, partners map[string]string) []AdapterMet
 	return out
 }
 
+// oracleOp resolves one method's delegation for the chosen oracle: a mixin
+// assignment first — the stamp says what a method is for, outranking what it
+// looks like — then the oracle's shape table.
+func oracleOp(oracle Oracle, m *suite.Method) (string, bool) {
+	if oracle == OracleKeyed {
+		for _, name := range m.Mixins {
+			if op, assigned := tiers.KeyedStoreMixinOp(name); assigned {
+				return op, true
+			}
+		}
+		return tiers.KeyedStoreOp(shape.Get(m.Source.Meta()))
+	}
+	return tiers.MapStoreOp(shape.Get(m.Source.Meta()))
+}
+
 // poolsOf fills the shared pools from the fixture fields the harness already
 // derived — the same values its checks and seed use, so the sequences keep
 // hitting the keys the rest of the file talks about.
-func poolsOf(b *Bindings, keyed, valued *suite.Method) {
+//
+// The composite writer supplies the value pool where one exists: a plain
+// writer beside it is usually a delete or a touch, whose one argument is a
+// key, and a values pool drawn from that would feed keys to every value slot.
+func poolsOf(b *Bindings, keyed, valued, composite *suite.Method) {
 	if keyed != nil {
 		arg := keyed.CallArgs()[0]
 		b.Keys = Pool{
@@ -683,7 +784,15 @@ func poolsOf(b *Bindings, keyed, valued *suite.Method) {
 			Type:       arg.Type,
 		}
 	}
-	if valued != nil {
+	switch {
+	case composite != nil:
+		arg := composite.CallArgs()[1]
+		b.Values = Pool{
+			Field:      composite.ArgFields[1],
+			OtherField: composite.ArgFields[1] + suite.OtherSuffix,
+			Type:       arg.Type,
+		}
+	case valued != nil:
 		arg := valued.CallArgs()[0]
 		b.Values = Pool{
 			Field:      valued.ArgFields[0],
@@ -693,21 +802,28 @@ func poolsOf(b *Bindings, keyed, valued *suite.Method) {
 	}
 }
 
-// partnerMethods maps each method referenced as a mixin's sibling parameter to
-// the `<mixin>.<param>` that claims it.
+// partnerMethods maps each method excluded by a mixin's sibling reference to
+// the `<mixin>.<param>: <reason>` that claims it.
 //
-// A partner's stamp says what the method is for, which outranks what it looks
-// like: a validator is writer-shaped, and a sequence that drives it as a
-// writer asserts nothing its smoke check does not. The registry is consulted
-// for which parameters are sibling references rather than values — that is
-// the annotator's vocabulary, not a spelling this plugin owns.
+// Only the references whose role overrides their shape exclude: a validator
+// is writer-shaped, and a sequence that drives it as a writer corrupts the
+// reference with stores the subject never made. Most references name an
+// ordinary method — a put that is a writer — and those stay in the sequences;
+// [tiers.PartnerDriven] is the classification, held total by the census. The
+// registry is consulted for which parameters are sibling references rather
+// than values — that is the annotator's vocabulary, not a spelling this
+// plugin owns.
 func partnerMethods(iface *sdk.Interface) map[string]string {
 	out := map[string]string{}
 	for _, m := range iface.Methods {
 		for _, name := range shape.Mixins(m.Meta()) {
 			for _, p := range siblingParams(name) {
-				if v, ok := shape.MixinParamKey(name, p).Get(m.Meta()); ok && v != "" {
-					out[golang.LocalName(v)] = name + "." + p
+				v, ok := shape.MixinParamKey(name, p).Get(m.Meta())
+				if !ok || v == "" {
+					continue
+				}
+				if driven, reason := tiers.PartnerDriven(name, p); !driven {
+					out[golang.LocalName(v)] = "the " + name + "." + p + " partner — " + reason
 				}
 			}
 		}

@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		defaultonerrortest.MixedSubject("in-memory", func() defaultonerror.Mixed {
 			return defaultonerrortest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		defaultonerrortest.MixedModel(),
 		defaultonerrortest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject defaultonerror.Mixed, key string,
 		) {

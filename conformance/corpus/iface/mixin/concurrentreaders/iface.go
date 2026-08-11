@@ -23,6 +23,7 @@ import (
 //testkit:out concurrentreaderstest/ pkg=concurrentreaderstest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Get is driven concurrently against Put. Reads alone cannot violate
 	// this, so the interface has to carry the writer that contends with them.

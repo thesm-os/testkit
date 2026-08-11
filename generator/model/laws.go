@@ -4,6 +4,9 @@
 package model
 
 import (
+	"strings"
+
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
@@ -29,9 +32,11 @@ type LawBinding struct {
 	ID string
 
 	// Ctor is the law struct, qualified; Args are its type arguments after
-	// the subject, resolved against the interface.
+	// the subject, resolved against the interface. Ptr addresses the literal,
+	// for a stateful law whose Check lives on the pointer.
 	Ctor *sdk.Expr
 	Args []sdk.Ref
+	Ptr  bool
 
 	// Fields fill the struct, each through its name's template.
 	Fields []*LawField
@@ -63,6 +68,10 @@ type LawField struct {
 	// actions and the derived reference already draw from, which is the
 	// one-derivation rule inside the file.
 	Pool, KeyOfName string
+
+	// Const is a constant field's qualified value — a sentinel the
+	// declaration stamped, rendered where a manifest names its stamp key.
+	Const *sdk.Expr
 }
 
 // Kind returns the field's template key.
@@ -85,7 +94,7 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			continue
 		}
 		for _, r := range tiers.Select(classificationsOf(m), paramsOf(m)) {
-			if binding, ok := lawOf(b, r, m, keyed); ok {
+			if binding, ok := lawOf(b, harness, r, m, keyed); ok {
 				b.Laws = append(b.Laws, binding)
 			}
 		}
@@ -93,7 +102,7 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 }
 
 // lawOf fills one rule, false where [Bindings.Unbound] records why not.
-func lawOf(b *Bindings, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool) {
+func lawOf(b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool) {
 	spec, specified := tiers.BindingFor(r.Law)
 	if !specified {
 		b.Unbound = append(b.Unbound, Skip{
@@ -107,6 +116,7 @@ func lawOf(b *Bindings, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool
 		BaseEmit: b.BaseEmit,
 		ID:       r.Law,
 		Ctor:     sdk.NewExternal(LawPkg, spec.Type),
+		Ptr:      spec.Ptr,
 		// The subject leads every law's argument list; the spec spells only
 		// what follows it.
 		Args: []sdk.Ref{b.IfaceRef},
@@ -121,7 +131,7 @@ func lawOf(b *Bindings, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool
 	}
 
 	for _, f := range r.Fields {
-		field, reason := lawFieldOf(b, f, m, keyed)
+		field, reason := lawFieldOf(b, harness, f, m, keyed)
 		if reason != "" {
 			b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
 			return nil, false
@@ -135,7 +145,7 @@ func lawOf(b *Bindings, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool
 
 // lawFieldOf fills one manifest entry: a field, nil for one the law defaults,
 // or the reason nothing can fill it.
-func lawFieldOf(b *Bindings, f tiers.Field, m, keyed *suite.Method) (*LawField, string) {
+func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *suite.Method) (*LawField, string) {
 	field := &LawField{
 		BaseEmit: b.BaseEmit,
 		KindName: sdk.Kind(LawFieldKindPrefix + f.Name),
@@ -150,13 +160,43 @@ func lawFieldOf(b *Bindings, f tiers.Field, m, keyed *suite.Method) (*LawField, 
 		// The law's Check defaults it; a generated value would be a second
 		// opinion about a number the law already owns.
 		return nil, ""
+	case tiers.KindTrace:
+		// The runner binds the trace on any law implementing TraceBinder;
+		// a generated value would race the binding it already gets.
+		return nil, ""
+	case tiers.KindSupplied:
+		if f.Optional {
+			// The manifest says zero is sound: the law reads the field's
+			// absence as the claim's unrefined form, so the binding omits it
+			// and the option that would fill it stays a consumer's choice.
+			return nil, ""
+		}
+		return nil, f.Name + " waits on the " + f.From + " option, which no generated value can stand in for"
 	case tiers.KindRole:
-		role, reason := roleMethod(f.From, m, keyed)
+		role, reason := roleMethod(b, harness, f.From, m, keyed)
 		if reason != "" {
 			return nil, f.Name + " " + reason
 		}
+		if len(role.CallArgs()) > 1 {
+			// The role templates compose a single-input closure; a composite
+			// call would render with the wrong arity and fail in whichever
+			// package armed it.
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes several inputs no single-value closure composes"
+		}
 		field.Method = role.Name
 		field.TakesCtx = role.TakesContext()
+		return field, ""
+	case tiers.KindConstant:
+		value, ok := stampValue(m, f.From)
+		if !ok {
+			return nil, f.Name + " reads the " + f.From + " stamp, which this declaration does not carry"
+		}
+		pkg, name, qualified := splitQualified(value)
+		if !qualified {
+			return nil, f.Name + "'s stamp names " + value + ", which carries no package to import it from"
+		}
+		field.Const = sdk.NewExternal(pkg, name)
 		return field, ""
 	case tiers.KindGenerator:
 		field.Pool = f.From
@@ -167,14 +207,14 @@ func lawFieldOf(b *Bindings, f tiers.Field, m, keyed *suite.Method) (*LawField, 
 		}
 		field.KeyOfName = b.KeyOfName()
 		return field, ""
-	case tiers.KindConstant, tiers.KindTrace, tiers.KindSupplied:
-		return nil, f.Name + " is a " + string(f.Kind) + " field, which nothing renders"
 	}
 	return nil, f.Name + " has the unknown kind " + string(f.Kind)
 }
 
-// roleMethod resolves a manifest role to the method whose call fills it.
-func roleMethod(from string, m, keyed *suite.Method) (*suite.Method, string) {
+// roleMethod resolves a manifest role to the method whose call fills it:
+// the selecting method itself, a shape family, or a partner the selecting
+// method's own stamp names.
+func roleMethod(b *Bindings, harness *suite.Contract, from string, m, keyed *suite.Method) (*suite.Method, string) {
 	switch from {
 	case "self":
 		return m, ""
@@ -184,7 +224,36 @@ func roleMethod(from string, m, keyed *suite.Method) (*suite.Method, string) {
 		}
 		return keyed, ""
 	}
+	if mixin, param, ok := strings.Cut(from, "."); ok && !strings.HasPrefix(from, "family.") {
+		v, stamped := shape.MixinParamKey(mixin, param).Get(m.Source.Meta())
+		if !stamped || v == "" {
+			return nil, "names " + from + ", which the selecting method does not stamp"
+		}
+		role := methodOf(harness, golang.LocalName(v))
+		if role == nil {
+			return nil, "names " + from + " = " + v + ", which is not a method of " + b.IfaceName
+		}
+		return role, ""
+	}
 	return nil, "names " + from + ", which nothing resolves"
+}
+
+// stampValue reads one classification parameter off the selecting method, by
+// the raw key the manifest spells — the annotator's own composition, reached
+// through the registry rather than respelled.
+func stampValue(m *suite.Method, key string) (string, bool) {
+	v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(m.Source.Meta())
+	return v, ok && v != ""
+}
+
+// splitQualified splits a resolver-qualified name into its package path and
+// trailing identifier.
+func splitQualified(v string) (pkg, name string, ok bool) {
+	i := strings.LastIndexByte(v, '.')
+	if i <= 0 || i == len(v)-1 {
+		return "", "", false
+	}
+	return v[:i], v[i+1:], true
 }
 
 // classificationsOf is the method's whole set, in one namespace: its detector

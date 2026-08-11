@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/suite"
 )
@@ -348,6 +349,125 @@ func TestDiagnostics(t *testing.T) {
 		testkit.Assert(t, got[0].Message).Contains("several fields",
 			"an arbitrary pick would key the oracle on a guess")
 	})
+}
+
+// TestKeyedReference walks the keyed-put derivation: a composite writer
+// selects the keyed store, needs no projection, and the delete's mixin — not
+// its shape — names its oracle operation.
+func TestKeyedReference(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, keyedStore(t, "example.com/kv.ErrGone"))
+
+	t.Run("the composite writer selects the keyed oracle", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, b.Reference.Keyed(), "the key is an argument, not a projection")
+		testkit.Equal(t, b.Reference.StoreType(), "KeyedStore", "and the store is the keyed one")
+		testkit.Equal(t, b.Reference.KeyField, "", "with no field to project")
+	})
+
+	t.Run("the delete delegates by its mixin, not its shape", func(t *testing.T) {
+		t.Parallel()
+		ops := map[string]string{}
+		for _, am := range b.Adapter {
+			ops[am.Sig.Name] = am.Op
+		}
+		testkit.Equal(t, ops["Del"], "Delete", "writer-shaped, delete-stamped")
+		testkit.Equal(t, ops["Put"], "Put", "the composite put delegates as itself")
+		testkit.Equal(t, ops["Get"], "Get", "and the reader reads")
+	})
+
+	t.Run("the delete draws keys, the put draws both", func(t *testing.T) {
+		t.Parallel()
+		pools := map[string]string{}
+		for _, a := range b.Actions {
+			pools[a.Method] = a.Pool
+		}
+		testkit.Equal(t, pools["Del"], "keys", "a delete's argument is a key")
+		testkit.Equal(t, b.Values.Field, "Value", "values come from the put's second argument")
+		testkit.True(t, b.UsesKeys() && b.UsesValues(), "both pools are declared")
+	})
+
+	t.Run("the sentinel binds from the stamp", func(t *testing.T) {
+		t.Parallel()
+		var bound *model.LawBinding
+		for _, l := range b.Laws {
+			if l.ID == lawid.DeleteReturnsNotFound {
+				bound = l
+			}
+		}
+		testkit.True(t, bound != nil, "the delete law binds")
+		testkit.Equal(t, bound.Fields[0].Method, "Get",
+			"Read resolves through the deleteremoves.read partner stamp")
+		testkit.True(t, bound.Fields[2].Const != nil,
+			"Sentinel renders the stamped constant")
+		testkit.Equal(t, bound.Kind(), sdk.Kind("model.law"),
+			"a binding renders through the one law template")
+		testkit.Equal(t, bound.Fields[0].ModelPkg(), model.ModelPkg,
+			"and its closures reach the runner's package")
+	})
+}
+
+// TestUnqualifiedSentinelIsRefused pins the constant renderer's refusal: a
+// stamp without a package is a name the generator cannot import.
+func TestUnqualifiedSentinelIsRefused(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, keyedStore(t, "ErrGone"))
+	unbound := map[string]string{}
+	for _, u := range b.Unbound {
+		unbound[u.Method] = u.Reason
+	}
+	testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("no package",
+		"the refusal names what the stamp is missing")
+}
+
+// keyedStore is the keyed-put fixture: a reader, a composite writer, and a
+// delete-stamped plain writer, with the delete law's stamps carried.
+func keyedStore(t *testing.T, sentinel string) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("kv", "example.com/kv").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("kv/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Param("value", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Del", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampShape(s, "Get", "reader", "string", "string")
+	stampShape(s, "Put", "compositewriter", "string", "string")
+	stampShape(s, "Del", "writer", "string", "")
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Del" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{"deleteremoves"}, "test")
+			shape.MixinParamKey("deleteremoves", "read").
+				Set(bag, "example.com/kv.Get", "test")
+			shape.MixinParamKey("deleteremoves", "sentinel").
+				Set(bag, sentinel, "test")
+		}
+	}
+	return s
 }
 
 // TestConventionalKeyFieldBreaksTheTie pins the preference order: among

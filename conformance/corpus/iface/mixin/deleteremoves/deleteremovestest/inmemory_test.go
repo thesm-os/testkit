@@ -27,6 +27,9 @@ func TestMixedContract(t *testing.T) {
 		deleteremovestest.MixedSubject("in-memory", func() deleteremoves.Mixed {
 			return deleteremovestest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		deleteremovestest.MixedModel(),
 		deleteremovestest.MixedSeed(func(ctx context.Context, subject deleteremoves.Mixed) error {
 			return subject.Put(ctx, fixture.Key, fixture.Value)
 		}),

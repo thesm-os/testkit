@@ -16,17 +16,23 @@ package deleteremoves
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrGone is what Read reports for a key nothing holds — the contract's own
+// sentinel, which the delete law compares against.
+var ErrGone = errors.New("deleteremoves: not found")
 
 // Mixed is the fixture interface.
 //
 //testkit:out deleteremovestest/ pkg=deleteremovestest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Delete must make the key unreadable. Without Read the law has no
 	// observation to make, and without Put there is nothing to delete.
-	//testkit:mixin deleteremoves
+	//testkit:mixin deleteremoves read=Read sentinel=ErrGone
 	Delete(ctx context.Context, key string) error
 
 	// Put establishes the key the delete removes.

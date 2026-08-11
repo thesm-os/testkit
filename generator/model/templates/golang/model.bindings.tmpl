@@ -12,6 +12,9 @@ the tier — and the engine dependency with it.
 //
 {{- if .Reference.Supplied }}
 //	Reference: supplied through //testkit:model ref=
+{{- else if .Reference.Keyed }}
+//	Reference: derived — a keyed store over the {{ .Keys.Field }} and
+//	           {{ .Values.Field }} fixture pairs; {{ .IfaceName }}ModelReference replaces it
 {{- else }}
 //	Reference: derived — a keyed map over the {{ .Values.Field }} fixture pair,
 //	           keyed on {{ .Reference.KeyField }}; {{ .IfaceName }}ModelReference replaces it
@@ -94,6 +97,7 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 // it.
 var {{ .Reference.MissName }} = {{ renderExpr (external "errors" "New") }}("{{ .MissPrefix }}: the model reference holds nothing under the key")
 
+{{ if .Reference.KeyField -}}
 // {{ .KeyOfName }} projects a value's identity — the one derivation the
 // reference keys on and every keyed law reuses, so the two cannot disagree
 // about which field is the key.
@@ -101,15 +105,18 @@ func {{ .KeyOfName }}(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type 
 	return v.{{ .Reference.KeyField }}
 }
 
-// {{ .Reference.TypeName }} adapts the shipped map oracle to {{ .IfaceName }}.
+{{ end -}}
+// {{ .Reference.TypeName }} adapts the shipped {{ .Reference.StoreType }} oracle to {{ .IfaceName }}.
 // Deliberately simple: its correctness is read, not tested.
 type {{ .Reference.TypeName }} struct {
-	store *{{ renderExpr (external .RefPkg "MapStore") }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}]
+	store *{{ renderExpr (external .RefPkg .Reference.StoreType) }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}]
 }
 
 func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
-	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg "NewMapStore") }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}](
+	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg (printf "New%s" .Reference.StoreType)) }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}](
+{{- if not .Reference.Keyed }}
 		{{ .KeyOfName }},
+{{- end }}
 		{{ .Reference.MissName }},
 	)}
 }

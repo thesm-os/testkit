@@ -29,6 +29,9 @@ func TestMixedContract(t *testing.T) {
 		concurrentreaderstest.MixedSubject("in-memory", func() concurrentreaders.Mixed {
 			return concurrentreaderstest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		concurrentreaderstest.MixedModel(),
 		concurrentreaderstest.MixedSeed(func(ctx context.Context, subject concurrentreaders.Mixed) error {
 			return subject.Put(ctx, fixture.Key, fixture.Value)
 		}),

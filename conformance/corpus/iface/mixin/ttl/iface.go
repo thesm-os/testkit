@@ -33,6 +33,7 @@ type Value struct{ Key, Body string }
 //testkit:out ttltest/ pkg=ttltest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Put stores a value, starting its lifetime.
 	Put(ctx context.Context, v Value) error

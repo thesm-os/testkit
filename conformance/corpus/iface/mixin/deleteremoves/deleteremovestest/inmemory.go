@@ -9,14 +9,20 @@ package deleteremovestest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/deleteremoves"
 )
 
-// ErrNotFound is what Read reports for a key nothing holds — including one that
-// was deleted, which is the mixin's whole claim.
-var ErrNotFound = errors.New("deleteremovestest: not found")
+// ErrNotFound answers to the contract's own sentinel, so a caller checking
+// [deleteremoves.ErrGone] and one checking this agree. It wraps rather than
+// aliases — a subject may say more than the contract, never less.
+//
+// Previously a bare local: the contract gained its own sentinel when the
+// delete law started comparing against it, and a subject reporting a miss the
+// contract cannot recognise fails that law — correctly.
+var ErrNotFound = fmt.Errorf("deleteremovestest: %w", deleteremoves.ErrGone)
 
 // InMemory is the implementation the generated conformance harness is run
 // against.

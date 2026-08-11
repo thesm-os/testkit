@@ -29,6 +29,12 @@ type Binding struct {
 	// Args are the type arguments after the subject, in the struct's own
 	// declaration order.
 	Args []BindArg
+
+	// Ptr marks a stateful law — one whose Check keeps memory across calls
+	// behind a pointer receiver, so the composite literal must be addressed.
+	// The gate holds it to the struct's method set by reflection: a value
+	// type with no Check method is a law that must be bound by pointer.
+	Ptr bool
 }
 
 // BindArg names one type argument, resolved by the generator against the
@@ -65,5 +71,11 @@ func Bound() []string {
 //
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var bindings = map[string]Binding{
-	lawid.WriteObservable: {Type: "WriteObservable", Args: []BindArg{BindValue, BindKey}},
+	lawid.Cacheable:             {Type: "Cacheable", Args: []BindArg{BindKey, BindValue}},
+	lawid.DefaultOnError:        {Type: "DefaultOnError", Args: []BindArg{BindKey, BindValue}},
+	lawid.DeleteReturnsNotFound: {Type: "DeleteReturnsNotFound", Args: []BindArg{BindKey, BindValue}},
+	lawid.PointInTime:           {Type: "PointInTime", Args: []BindArg{BindKey, BindValue}},
+	lawid.ReadAfterWrite:        {Type: "ReadAfterWrite", Args: []BindArg{BindKey, BindValue}},
+	lawid.Sticky:                {Type: "Sticky", Args: []BindArg{BindKey, BindValue}, Ptr: true},
+	lawid.WriteObservable:       {Type: "WriteObservable", Args: []BindArg{BindValue, BindKey}},
 }

@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		causaltest.MixedSubject("in-memory", func() causal.Mixed {
 			return causaltest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		causaltest.MixedModel(),
 		causaltest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject causal.Mixed, key string,
 		) {

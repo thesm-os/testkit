@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		ttltest.MixedSubject("in-memory", func() ttl.Mixed {
 			return ttltest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		ttltest.MixedModel(),
 		ttltest.MixedOnRead("reports the declared sentinel for an absent key", func(
 			tb testing.TB, subject ttl.Mixed, key string,
 		) {

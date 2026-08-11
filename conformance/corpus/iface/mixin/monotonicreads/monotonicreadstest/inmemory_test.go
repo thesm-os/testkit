@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		monotonicreadstest.MixedSubject("in-memory", func() monotonicreads.Mixed {
 			return monotonicreadstest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		monotonicreadstest.MixedModel(),
 		monotonicreadstest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject monotonicreads.Mixed, key string,
 		) {

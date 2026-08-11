@@ -89,3 +89,53 @@ var mapStoreOps = map[string]string{
 	shapeAggregator:   "Count",
 	shapeStreamReader: "List",
 }
+
+// KeyedStoreOp returns the [engine/model/ref.KeyedStore] method a shape
+// delegates to — the keyed-put oracle, chosen where the interface's writer
+// takes the key beside the value.
+//
+// A plain writer has no row: a keyed store cannot place a value whose key is
+// not an argument, so a writer-shaped method under this oracle runs inert
+// unless a mixin says what it is — see [KeyedStoreMixinOp].
+func KeyedStoreOp(shape string) (string, bool) {
+	op, ok := keyedStoreOps[shape]
+	return op, ok
+}
+
+// KeyedStoreShapes returns every shape the keyed oracle models, sorted, for
+// the census that holds each value to a method the oracle declares.
+func KeyedStoreShapes() []string {
+	out := make([]string, 0, len(keyedStoreOps))
+	for s := range keyedStoreOps {
+		out = append(out, s)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// KeyedStoreMixinOp returns the oracle method a mixin assigns to its carrier,
+// where the shape alone says too little.
+//
+// The one row is the delete: Delete(ctx, k) is writer-shaped — one
+// non-context parameter — and nothing in the signature distinguishes it from
+// a put. The deleteremoves mixin is what states the semantics, and the stamp
+// outranks the shape the way a partner reference does.
+func KeyedStoreMixinOp(mixin string) (string, bool) {
+	op, ok := keyedStoreMixinOps[mixin]
+	return op, ok
+}
+
+// The keyed oracle's tables, method names spelled here for the reason
+// mapStoreOps spells its own.
+//
+//nolint:gochecknoglobals,goconst // lookup tables, read-only after init; the
+var (
+	keyedStoreOps = map[string]string{
+		shapeReader:          "Get",
+		shapeCompositeWriter: "Put",
+		shapeAggregator:      "Count",
+	}
+	keyedStoreMixinOps = map[string]string{
+		mixinDeleteRemoves: "Delete",
+	}
+)

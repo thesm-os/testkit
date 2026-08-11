@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/validates/iface.go
 // Plugins:   golang 1.0.0, model 0.1.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/validates/...
+// Command:   testkit run ./corpus/iface/mixin/...
 
 package validatestest
 
@@ -28,7 +28,7 @@ import (
 //	Sequences: Store (writer), Read (reader)
 //	Laws:      AUTO-WRITE-OBSERVABLE
 //	Not driven:
-//	           Validate — referenced as the validates.fn partner, whose checks the harness owns
+//	           Validate — the validates.fn partner — a validator, whose call proves nothing its smoke check does not
 func MixedModel(opts ...MixedModelOption) MixedOption {
 	return func(c *mixedConfig) {
 		c.extensions = append(c.extensions, mixedContractExtension{
@@ -98,7 +98,7 @@ func mixedModelKeyOf(v validates.Payload) string {
 	return v.Key
 }
 
-// mixedModelReference adapts the shipped map oracle to Mixed.
+// mixedModelReference adapts the shipped MapStore oracle to Mixed.
 // Deliberately simple: its correctness is read, not tested.
 type mixedModelReference struct {
 	store *ref.MapStore[string, validates.Payload]
@@ -115,7 +115,7 @@ func (r *mixedModelReference) Store(ctx context.Context, v validates.Payload) er
 	return r.store.Put(ctx, v)
 }
 
-// Validate is inert: it is the validates.fn partner, which the sequences never call. The laws that would compare the
+// Validate is inert: the validates.fn partner — a validator, whose call proves nothing its smoke check does not. The laws that would compare the
 // subject against an inert body are not bound.
 func (r *mixedModelReference) Validate(v validates.Payload) (r0 error) { return }
 
@@ -145,4 +145,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f3bb54fd873544aa4fa2b431852625ead43829a15d04db91e1bf78a382cec5ec
+// testkit:provenance c0a1cc2fc9e0cace1e63cc166af4d345f54ef321753cd62bcd5714a57ebce94c

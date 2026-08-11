@@ -25,6 +25,7 @@ type Value struct{ Key, Body string }
 //testkit:out readyourwritestest/ pkg=readyourwritestest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Store is the write the read is judged against.
 	Store(ctx context.Context, v Value) error

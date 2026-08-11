@@ -202,6 +202,13 @@ func TestEveryBindingRowMatchesItsLaw(t *testing.T) {
 		testkit.True(t, instantiated, id+"'s census entry is instantiated")
 		testkit.Equal(t, len(b.Args)+1, strings.Count(args, ",")+1,
 			id+"'s row supplies one argument per type parameter after the subject")
+
+		// A stateful law keeps memory behind a pointer receiver, so its value
+		// type has no Check — and a row that gets Ptr wrong renders a literal
+		// that fails to compile in whichever package arms it first.
+		_, valueHasCheck := typ.MethodByName("Check")
+		testkit.Equal(t, b.Ptr, !valueHasCheck,
+			id+"'s row addresses the literal exactly when the law is stateful")
 	}
 }
 
