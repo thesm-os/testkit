@@ -455,3 +455,26 @@ func TestStickyUnderARefinedEquivalence(t *testing.T) {
 		})
 	})
 }
+
+// TestPointInTimePair holds the one mirrored reader law to the conduct
+// contract on [law.Law]: the disturbance lands on both sides, so the pair the
+// next action compares saw the same calls.
+func TestPointInTimePair(t *testing.T) {
+	t.Parallel()
+
+	type store struct{ disturbed bool }
+	l := law.PointInTime[*store, string, int]{
+		Read:    func(_ *rapid.T, _ *store, _ string) (int, error) { return 7, nil },
+		Keys:    rapid.Just("k"),
+		Disturb: func(_ *rapid.T, s *store, _ string) { s.disturbed = true },
+	}
+	rapid.Check(t, func(rt *rapid.T) {
+		sut, ref := &store{}, &store{}
+		if err := l.Check(rt, sut, ref); err != nil {
+			rt.Fatal(err)
+		}
+		if !sut.disturbed || !ref.disturbed {
+			rt.Fatal("the disturbance missed a side: the pair has diverged")
+		}
+	})
+}

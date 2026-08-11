@@ -99,11 +99,16 @@ func (Conservative[T, V]) ID() string { return lawid.Conservative }
 func (Conservative[T, V]) REQID() string { return "" }
 
 // Check verifies Sum(state) is invariant across one Write.
-func (l Conservative[T, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l Conservative[T, V]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "Conservative_value")
 	before := l.Sum(rt, sut)
 	if err := l.Write(rt, sut, v); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The accepted write lands on both sides — the mirrored half of the
+	// [Law] conduct contract.
+	if err := mirror("Conservative", func() error { return l.Write(rt, ref, v) }); err != nil {
+		return err
 	}
 	after := l.Sum(rt, sut)
 	if before != after {
@@ -138,7 +143,7 @@ func (Windowed[T, K]) REQID() string { return "" }
 
 // Check increments a key, confirms the count rose, advances past the
 // window, and confirms the increment decayed.
-func (l Windowed[T, K]) Check(rt *rapid.T, sut, _ T) error {
+func (l Windowed[T, K]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "Windowed_key")
 	before, err := l.Count(rt, sut, k)
 	if err != nil {
@@ -146,6 +151,12 @@ func (l Windowed[T, K]) Check(rt *rapid.T, sut, _ T) error {
 	}
 	if incErr := l.Incr(rt, sut, k); incErr != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The accepted increment lands on both sides — the mirrored half of the
+	// [Law] conduct contract. Advance stays unmirrored: the clock is the
+	// environment both sides already live under.
+	if mErr := mirror("Windowed", func() error { return l.Incr(rt, ref, k) }); mErr != nil {
+		return mErr
 	}
 	within, err := l.Count(rt, sut, k)
 	if err != nil {

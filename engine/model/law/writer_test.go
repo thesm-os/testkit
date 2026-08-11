@@ -82,6 +82,78 @@ func TestIdempotentWrite(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("both writes land on both sides of a real pair", func(t *testing.T) {
+		t.Parallel()
+		// The reason is [WriteObservable]'s: the runner interleaves laws with
+		// differential actions over one shared pair, and a write reaching
+		// only the subject is the next action's false divergence.
+		l := law.IdempotentWrite[*wkv, string, string]{
+			Write:   func(rt *rapid.T, w *wkv, v string) error { return w.put(rt, v) },
+			Values:  rapid.Just("v"),
+			Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &wkv{}, &wkv{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if _, ok := ref.data["v"]; !ok {
+				rt.Fatal("the reference never saw the write: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a subject refusing its repeat is reported", func(t *testing.T) {
+		t.Parallel()
+		// The first write is the precondition; the second is the claim. A
+		// subject that errors on the repeat has not absorbed it.
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, sutCalls := &wkv{}, 0
+			l := law.IdempotentWrite[*wkv, string, string]{
+				Write: func(rt *rapid.T, w *wkv, v string) error {
+					if w == sut {
+						if sutCalls++; sutCalls == 2 {
+							return errors.New("refused")
+						}
+					}
+					return w.put(rt, v)
+				},
+				Values:  rapid.Just("v"),
+				Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+			}
+			if err := l.Check(rt, sut, &wkv{}); err == nil {
+				rt.Fatal("expected the refused repeat to be reported")
+			}
+		})
+	})
+
+	t.Run("a reference refusing either mirror is reported", func(t *testing.T) {
+		t.Parallel()
+		// Both refusal arms, because they are different accusations: the
+		// first says the reference rejects what the subject accepted, the
+		// second that it will not absorb the repeat idempotence is about.
+		for refuseAt := 1; refuseAt <= 2; refuseAt++ {
+			rapid.Check(t, func(rt *rapid.T) {
+				ref, refCalls := &wkv{}, 0
+				l := law.IdempotentWrite[*wkv, string, string]{
+					Write: func(rt *rapid.T, w *wkv, v string) error {
+						if w == ref {
+							if refCalls++; refCalls == refuseAt {
+								return errors.New("refused")
+							}
+						}
+						return w.put(rt, v)
+					},
+					Values:  rapid.Just("v"),
+					Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+				}
+				if err := l.Check(rt, &wkv{}, ref); err == nil {
+					rt.Fatalf("expected the reference's refusal #%d to be reported", refuseAt)
+				}
+			})
+		}
+	})
 }
 
 func TestAtomicWrite(t *testing.T) {
@@ -247,6 +319,55 @@ func TestWriteObservable(t *testing.T) {
 			s := &wstore{drop: true}
 			if err := l.Check(rt, s, s); err == nil {
 				rt.Fatal("expected dropped write to be caught")
+			}
+		})
+	})
+
+	t.Run("the write lands on both sides of a real pair", func(t *testing.T) {
+		t.Parallel()
+		// The runner interleaves laws with differential actions over one
+		// shared (sut, ref) pair, so a write reaching only the subject is
+		// the next action's false divergence. Every other subtest here
+		// passes the same store twice, which is exactly the arrangement
+		// that cannot see this.
+		l := law.WriteObservable[*wstore, string, string]{
+			Write:  func(_ *rapid.T, s *wstore, v string) error { return s.write(v) },
+			Read:   func(_ *rapid.T, s *wstore, k string) (string, error) { return s.read(k) },
+			Values: rapid.SampledFrom([]string{"a", "b", "c"}),
+			KeyOf:  func(v string) string { return v },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &wstore{}, &wstore{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			for k := range sut.data {
+				if _, err := ref.read(k); err != nil {
+					rt.Fatalf("the reference never saw %q: the pair has diverged", k)
+				}
+			}
+		})
+	})
+
+	t.Run("a reference refusing the mirrored write is reported", func(t *testing.T) {
+		t.Parallel()
+		l := law.WriteObservable[*wstore, string, string]{
+			Write: func(_ *rapid.T, s *wstore, v string) error {
+				if s.drop {
+					return errors.New("refused")
+				}
+				return s.write(v)
+			},
+			Read:   func(_ *rapid.T, s *wstore, k string) (string, error) { return s.read(k) },
+			Values: rapid.SampledFrom([]string{"a", "b", "c"}),
+			KeyOf:  func(v string) string { return v },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			// drop doubles as a refusal switch here: the subject accepts,
+			// the reference refuses, and the divergence is the law's to
+			// report rather than the next action's to misattribute.
+			if err := l.Check(rt, &wstore{}, &wstore{drop: true}); err == nil {
+				rt.Fatal("expected the refusing reference to be reported")
 			}
 		})
 	})
@@ -987,5 +1108,152 @@ func TestWriterLawPreconditionsAndViolations(t *testing.T) {
 				rt.Fatalf("an unchanged state is not a transition: %v", err)
 			}
 		})
+	})
+}
+
+// The pair tests below hold the three mirrored writer laws to the conduct
+// contract on [law.Law]: every mutation the subject accepts lands on the
+// reference, and a refusal is the law's to report. Each law's other subtests
+// pass one store as both sides, which is exactly the arrangement that cannot
+// see a desynchronized pair.
+
+func TestAtomicWritePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the accepted write lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.AtomicWrite[*wkv, string, string]{
+			Write:   func(rt *rapid.T, w *wkv, v string) error { return w.put(rt, v) },
+			Values:  rapid.Just("v"),
+			Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &wkv{}, &wkv{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if _, ok := ref.data["v"]; !ok {
+				rt.Fatal("the reference never saw the write: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			ref := &wkv{}
+			l := law.AtomicWrite[*wkv, string, string]{
+				Write: func(rt *rapid.T, w *wkv, v string) error {
+					if w == ref {
+						return errors.New("refused")
+					}
+					return w.put(rt, v)
+				},
+				Values:  rapid.Just("v"),
+				Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
+			}
+			if err := l.Check(rt, &wkv{}, ref); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+func TestValidTransitionPair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the accepted write lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.ValidTransition[*wkv, string, int]{
+			Write:   func(rt *rapid.T, w *wkv, v string) error { return w.put(rt, v) },
+			Values:  rapid.Just("v"),
+			Observe: func(_ *rapid.T, w *wkv) int { return len(w.data) },
+			Allowed: func(from, to int) bool { return to >= from },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &wkv{}, &wkv{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if len(ref.data) == 0 {
+				rt.Fatal("the reference never saw the write: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			ref := &wkv{}
+			l := law.ValidTransition[*wkv, string, int]{
+				Write: func(rt *rapid.T, w *wkv, v string) error {
+					if w == ref {
+						return errors.New("refused")
+					}
+					return w.put(rt, v)
+				},
+				Values:  rapid.Just("v"),
+				Observe: func(_ *rapid.T, w *wkv) int { return len(w.data) },
+				Allowed: func(from, to int) bool { return to >= from },
+			}
+			if err := l.Check(rt, &wkv{}, ref); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+func TestInjectionSafePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both stores land on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.InjectionSafe[*injStore]{
+			Store:       func(_ *rapid.T, s *injStore, k, v string) error { return s.store(k, v) },
+			Load:        func(_ *rapid.T, s *injStore, k string) (string, error) { return s.load(k) },
+			Payloads:    injectionVectors,
+			CanaryKey:   "canary",
+			CanaryValue: "safe",
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &injStore{}, &injStore{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if _, err := ref.load("canary"); err != nil {
+				rt.Fatal("the reference never saw the canary: the pair has diverged")
+			}
+			if _, err := ref.load("injectionsafe_target"); err != nil {
+				rt.Fatal("the reference never saw the payload: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a reference refusing either mirror is reported", func(t *testing.T) {
+		t.Parallel()
+		// Both arms: the canary mirror and the payload mirror are separate
+		// stores, and each refusal must surface as the law's own report.
+		for refuseAt := 1; refuseAt <= 2; refuseAt++ {
+			rapid.Check(t, func(rt *rapid.T) {
+				ref, refCalls := &injStore{}, 0
+				l := law.InjectionSafe[*injStore]{
+					Store: func(_ *rapid.T, s *injStore, k, v string) error {
+						if s == ref {
+							if refCalls++; refCalls == refuseAt {
+								return errors.New("refused")
+							}
+						}
+						return s.store(k, v)
+					},
+					Load:        func(_ *rapid.T, s *injStore, k string) (string, error) { return s.load(k) },
+					Payloads:    injectionVectors,
+					CanaryKey:   "canary",
+					CanaryValue: "safe",
+				}
+				if err := l.Check(rt, &injStore{}, ref); err == nil {
+					rt.Fatalf("expected the reference's refusal #%d to be reported", refuseAt)
+				}
+			})
+		}
 	})
 }

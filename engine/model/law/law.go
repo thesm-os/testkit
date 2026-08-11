@@ -4,10 +4,10 @@
 // Package law defines type-parametric algebraic invariants for
 // property-based state-machine testing.
 //
-// Each [Law] encodes a single algebraic property that is checked
-// observationally — laws read from the SUT and reference but never
-// write. State mutation happens in [model.Action] handlers; laws
-// verify that the mutation was correct.
+// Each [Law] encodes a single algebraic property. Most check it
+// observationally; a law that must write to state its claim keeps the
+// differential pair synchronized — the conduct contract on [Law] names
+// the four ways, and [mirror] is the one write-through laws share.
 //
 // Laws receive [rapid.T] to draw fresh samples per check, integrating
 // with rapid's shrinking and generation.
@@ -25,12 +25,26 @@ import (
 
 // Law is a type-parametric invariant checked after every action.
 //
-// CONTRACT: Laws must be observational. They may read from the SUT
-// and reference but must NEVER mutate state. State mutation belongs
-// exclusively in [model.Action] handlers. This separation ensures
-// laws don't inject invisible operations between commands, don't
-// pollute state across iterations, and are safe for mutation testing
-// (Pillar 8) where laws validate that synthetic bugs are detectable.
+// CONTRACT: a law must leave the (sut, ref) pair as synchronized as it
+// found it. The runner interleaves laws with a differential action
+// stream over one shared pair, so a mutation reaching only one side
+// surfaces as the next action's false divergence — a failure naming
+// the subject for a state the law created. Four conducts satisfy the
+// contract, and every law in this package is one of them:
+//
+//   - observational: reads only. Most laws.
+//   - mirrored: every mutation the subject accepts lands on the
+//     reference too, through [mirror], and a refusal is reported as
+//     the divergence it is.
+//   - self-cleaning: mutates and restores within one Check — an
+//     acquire released, a put deleted, a transaction rolled back.
+//   - isolated: builds its own subjects through a Factory field and
+//     never touches the pair.
+//
+// A law that can satisfy none of these — one that corrupts or kills
+// the subject to make its observation — must not be registered against
+// a shared pair at all; the conformance gate's conduct census is what
+// keeps the generator from binding one.
 //
 // Check receives [rapid.T] so laws can draw fresh samples per
 // invocation, integrating with rapid's shrinking.
@@ -44,6 +58,19 @@ type Law[T any] interface {
 
 	// Check verifies the law holds. Must not mutate sut or ref.
 	Check(rt *rapid.T, sut, ref T) error
+}
+
+// mirror applies to the reference a mutation the subject accepted.
+//
+// The mirrored-conduct half of the [Law] contract, spelled once: a
+// write-through law calls this after every mutation the subject took,
+// and a reference that refuses is reported by the law — not left for
+// the next action to misattribute to the subject.
+func mirror(law string, apply func() error) error {
+	if err := apply(); err != nil {
+		return fmt.Errorf("%s: the reference refused what the subject accepted: %w", law, err)
+	}
+	return nil
 }
 
 // StatefulLaw extends [Law] with access to the current step count.

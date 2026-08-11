@@ -462,3 +462,116 @@ func TestAggregatorLawPreconditionsAndViolations(t *testing.T) {
 		})
 	})
 }
+
+// The pair tests below hold the two mirrored aggregator laws to the conduct
+// contract on [law.Law]: every mutation the subject accepts lands on the
+// reference, and a refusal is the law's to report.
+
+func TestConservativePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the accepted write lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		refSaw := 0
+		l := law.Conservative[*aggSUT, int]{
+			Sum: func(_ *rapid.T, a *aggSUT) int64 { return a.sum },
+			Write: func(_ *rapid.T, a *aggSUT, _ int) error {
+				if a.sum == 0 { // the reference starts empty; the subject at 100
+					refSaw++
+				}
+				return nil
+			},
+			Values: rapid.IntRange(0, 10),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			refSaw = 0
+			if err := l.Check(rt, &aggSUT{sum: 100}, &aggSUT{}); err != nil {
+				rt.Fatal(err)
+			}
+			if refSaw != 1 {
+				rt.Fatal("the reference never saw the write: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			ref := &aggSUT{}
+			l := law.Conservative[*aggSUT, int]{
+				Sum: func(_ *rapid.T, a *aggSUT) int64 { return a.sum },
+				Write: func(_ *rapid.T, a *aggSUT, _ int) error {
+					if a == ref {
+						return errors.New("refused")
+					}
+					return nil
+				},
+				Values: rapid.IntRange(0, 10),
+			}
+			if err := l.Check(rt, &aggSUT{sum: 100}, ref); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+func TestWindowedPair(t *testing.T) {
+	t.Parallel()
+
+	window := 10 * time.Second
+
+	t.Run("the accepted increment lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.Windowed[*ref.RollingCounter[string], string]{
+			Incr: func(rt *rapid.T, c *ref.RollingCounter[string], k string) error { return c.Incr(rt.Context(), k) },
+			Count: func(rt *rapid.T, c *ref.RollingCounter[string], k string) (int, error) {
+				return c.Count(rt.Context(), k)
+			},
+			Keys:   rapid.Just("k"),
+			Window: window,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			var mu sync.Mutex
+			nowT := time.Unix(0, 0)
+			now := func() time.Time { mu.Lock(); defer mu.Unlock(); return nowT }
+			l.Advance = func(d time.Duration) { mu.Lock(); nowT = nowT.Add(d); mu.Unlock() }
+			sut := ref.NewRollingCounter[string](window, now)
+			oracle := ref.NewRollingCounter[string](window, now)
+			if err := l.Check(rt, sut, oracle); err != nil {
+				rt.Fatal(err)
+			}
+			// Both counters advanced past the window together, so both must
+			// have decayed to the same answer — a count the reference never
+			// received would already have diverged before the decay.
+			sutN, _ := sut.Count(rt.Context(), "k")
+			refN, _ := oracle.Count(rt.Context(), "k")
+			if sutN != refN {
+				rt.Fatalf("the pair diverged: sut=%d ref=%d", sutN, refN)
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		type counter struct{ n int }
+		rapid.Check(t, func(rt *rapid.T) {
+			refC := &counter{}
+			l := law.Windowed[*counter, string]{
+				Count: func(_ *rapid.T, s *counter, _ string) (int, error) { return s.n, nil },
+				Incr: func(_ *rapid.T, s *counter, _ string) error {
+					if s == refC {
+						return errors.New("refused")
+					}
+					s.n++
+					return nil
+				},
+				Advance: func(time.Duration) {},
+				Keys:    rapid.Just("k"),
+				Window:  time.Second,
+			}
+			if err := l.Check(rt, &counter{}, refC); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}

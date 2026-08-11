@@ -45,14 +45,25 @@ func (IdempotentWrite[T, V, Obs]) REQID() string { return "" }
 // The law mutates state (it writes twice). Idempotence is a write-
 // side property; checking it requires writing — but the second
 // Write must not change anything visible to Observe.
-func (l IdempotentWrite[T, V, Obs]) Check(rt *rapid.T, sut, _ T) error {
+//
+// Both writes land on both sides, for the reason [WriteObservable.Check]
+// states: the runner interleaves laws with a differential action stream
+// over one shared pair, and a write reaching only the subject is the next
+// action's false divergence.
+func (l IdempotentWrite[T, V, Obs]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "IdempotentWrite_value")
 	if err := l.Write(rt, sut, v); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
+	if err := mirror("IdempotentWrite", func() error { return l.Write(rt, ref, v) }); err != nil {
+		return err
+	}
 	before := l.Observe(rt, sut)
 	if err := l.Write(rt, sut, v); err != nil {
 		return fmt.Errorf("IdempotentWrite: value %v: second write errored: %v", v, err)
+	}
+	if err := mirror("IdempotentWrite", func() error { return l.Write(rt, ref, v) }); err != nil {
+		return err
 	}
 	after := l.Observe(rt, sut)
 	if diff := cmp.Diff(before, after); diff != "" {
@@ -84,10 +95,21 @@ func (WriteObservable[T, V, K]) REQID() string { return "" }
 
 // Check writes a value and verifies the paired reader returns it
 // under the value's key.
-func (l WriteObservable[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
+//
+// The write lands on both sides. The runner interleaves laws with a
+// differential action stream over one shared (sut, ref) pair, so a
+// write that reached only the subject would surface as the next
+// action's false divergence — a failure naming the subject for a
+// state the law created. Mirroring keeps the invariant every law in
+// the interleaved run must preserve: both sides have seen the same
+// call sequence.
+func (l WriteObservable[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "WriteObservable_value")
 	if err := l.Write(rt, sut, v); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if err := mirror("WriteObservable", func() error { return l.Write(rt, ref, v) }); err != nil {
+		return err
 	}
 	got, err := l.Read(rt, sut, l.KeyOf(v))
 	if err != nil {
@@ -212,14 +234,24 @@ func (InjectionSafe[T]) REQID() string { return "" }
 
 // Check stores a canary and an injection vector, then verifies the
 // vector round-trips verbatim and the canary is undisturbed.
-func (l InjectionSafe[T]) Check(rt *rapid.T, sut, _ T) error {
+func (l InjectionSafe[T]) Check(rt *rapid.T, sut, ref T) error {
 	const target = "injectionsafe_target"
 	if err := l.Store(rt, sut, l.CanaryKey, l.CanaryValue); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
+	// Each accepted store lands on both sides — the mirrored half of the
+	// [Law] conduct contract.
+	if err := mirror("InjectionSafe", func() error {
+		return l.Store(rt, ref, l.CanaryKey, l.CanaryValue)
+	}); err != nil {
+		return err
+	}
 	payload := l.Payloads.Draw(rt, "InjectionSafe_payload")
 	if err := l.Store(rt, sut, target, payload); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if err := mirror("InjectionSafe", func() error { return l.Store(rt, ref, target, payload) }); err != nil {
+		return err
 	}
 	got, err := l.Load(rt, sut, target)
 	if err != nil {
@@ -313,12 +345,15 @@ func (AtomicWrite[T, V, Obs]) ID() string { return lawid.AtomicWrite }
 func (AtomicWrite[T, V, Obs]) REQID() string { return "" }
 
 // Check verifies that errored writes leave state unchanged.
-func (l AtomicWrite[T, V, Obs]) Check(rt *rapid.T, sut, _ T) error {
+func (l AtomicWrite[T, V, Obs]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "AtomicWrite_value")
 	before := l.Observe(rt, sut)
 	err := l.Write(rt, sut, v)
 	if err == nil {
-		return nil
+		// The accepted write lands on both sides — the mirrored half of the
+		// [Law] conduct contract. The erroring arm mirrors nothing: the claim
+		// there is that the subject did not mutate either.
+		return mirror("AtomicWrite", func() error { return l.Write(rt, ref, v) })
 	}
 	after := l.Observe(rt, sut)
 	if diff := cmp.Diff(before, after); diff != "" {
@@ -351,11 +386,16 @@ func (ValidTransition[T, V, S]) ID() string { return lawid.ValidTransition }
 func (ValidTransition[T, V, S]) REQID() string { return "" }
 
 // Check verifies any post-write state was reachable from the prior.
-func (l ValidTransition[T, V, S]) Check(rt *rapid.T, sut, _ T) error {
+func (l ValidTransition[T, V, S]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "ValidTransition_value")
 	before := l.Observe(rt, sut)
 	if err := l.Write(rt, sut, v); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The accepted write lands on both sides — the mirrored half of the
+	// [Law] conduct contract.
+	if err := mirror("ValidTransition", func() error { return l.Write(rt, ref, v) }); err != nil {
+		return err
 	}
 	after := l.Observe(rt, sut)
 	if before == after {

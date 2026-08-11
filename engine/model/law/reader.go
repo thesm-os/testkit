@@ -109,11 +109,16 @@ func (PointInTime[T, K, V]) REQID() string { return "" }
 
 // Check verifies stability of consecutive reads under optional
 // concurrent disturbance.
-func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "PointInTime_key")
 	v1, err1 := l.Read(rt, sut, k)
 	if l.Disturb != nil {
+		// The disturbance lands on both sides — the mirrored half of the
+		// [Law] conduct contract. Disturb reports nothing, so there is no
+		// refusal to relay; a divergence it causes is the next action's to
+		// find, on a pair that at least saw the same calls.
 		l.Disturb(rt, sut, k)
+		l.Disturb(rt, ref, k)
 	}
 	v2, err2 := l.Read(rt, sut, k)
 	if (err1 == nil) != (err2 == nil) {
