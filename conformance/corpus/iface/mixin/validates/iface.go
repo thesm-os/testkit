@@ -25,6 +25,7 @@ type Payload struct{ Key, Body string }
 //
 //testkit:out validatestest/ pkg=validatestest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Store rejects what Validate refuses. The fn parameter resolves to a
 	// sibling, so Validate has to exist here for the reference to bind.

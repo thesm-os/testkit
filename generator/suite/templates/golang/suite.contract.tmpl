@@ -1,0 +1,67 @@
+{{- define "suite.contract" -}}
+{{ $c := . }}
+{{- range $m := .Methods }}
+// {{ $m.CheckType }} is one assertion about {{ $m.Name }}.
+//
+// Every generated check for {{ $m.Name }} is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type {{ $m.CheckType }} func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType $c.IfaceRef }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }})
+{{ end }}
+// {{ $.Fixture.TypeName }} holds every input the generated checks run against.
+//
+// Derived from each method's parameter names and types. Every field has a
+// companion holding a second, different value: a check comparing a result
+// against a single input passes whenever the subject happened to be seeded with
+// it, and a miss check whose key happens to hit asserts nothing.
+//
+// A field whose type admits no literal — a func, a channel, a type from a
+// package this run never read — is declared and left at its zero value, and
+// every generated check that needed it was dropped rather than emitted against
+// a value nobody could write. Supply one through {{ $.IfaceName }}WithFixture
+// and the check a consumer writes has something to use.
+type {{ $.Fixture.TypeName }} struct {
+{{- range $.Fixture.Fields }}
+	{{ .Name }} {{ renderType .Type }}
+	{{ .OtherName }} {{ renderType .Type }}
+{{- end }}
+}
+
+// {{ $.Fixture.CtorName }} is what this run derived. Replace any field through
+// {{ $.IfaceName }}WithFixture; the rest keep these values.
+func {{ $.Fixture.CtorName }}() {{ $.Fixture.TypeName }} {
+	return {{ $.Fixture.TypeName }}{
+{{- range $.Fixture.Fields }}
+{{- if .Companion }}
+		{{ .Name }}: {{ renderExpr .Companion }}(),
+{{- if .Other.OK }}
+		{{ .OtherName }}: {{ template "suite.sample" .Other }},
+{{- end }}
+{{- else if .OK }}
+		{{ .Name }}: {{ template "suite.sample" .Sample }},
+		{{ .OtherName }}: {{ template "suite.sample" .Other }},
+{{- end }}
+{{- end }}
+	}
+}
+
+{{ template "suite.entry" $c }}
+
+{{ range $m := .Methods }}{{ range $ck := $m.Checks }}
+{{ render $ck }}
+{{ end }}{{ end }}
+{{- template "suite.options" $c }}
+{{- end -}}
+
+{{- /*
+suite.sample spells one derived value. A composite literal and a conversion are
+not interchangeable, and which applies is a property of the type rather than of
+the value — so the projection records it and this reads it back.
+*/ -}}
+{{- define "suite.sample" -}}
+{{- if not .Ref }}{{ .Text }}
+{{- else if .Composite }}{{ renderType .Ref }}{{ .Text }}
+{{- else }}{{ renderType .Ref }}({{ .Text }})
+{{- end }}
+{{- end -}}

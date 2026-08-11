@@ -1,0 +1,152 @@
+{{- /*
+The option API has three jobs and no more: supply what derivation could not
+reach, add a check no classification implies, and drop one that is wrong for a
+subject. A consumer cannot reach the generator, so this is the whole ceiling on
+extensibility.
+*/ -}}
+{{- define "suite.options" -}}
+{{ $c := . }}
+// {{ .IfaceName }}Option configures a contract run.
+type {{ .IfaceName }}Option func(*{{ lower .IfaceName }}Config)
+
+// {{ .IfaceName }}Subject declares an implementation to hold to the contract.
+//
+// Repeat it for every implementation that claims to satisfy the interface — an
+// in-memory one, the one backed by a database, the one behind a network. Every
+// check and every option is stated once and runs against all of them, which is
+// what a conformance suite is for.
+func {{ .IfaceName }}Subject(name string, factory func() {{ renderType .IfaceRef }}) {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) {
+		c.subjects = append(c.subjects, named{{ .IfaceName }}Subject{name, factory})
+	}
+}
+{{ if .Double }}
+// {{ .IfaceName }}WithoutDouble declines the second run through {{ .Double.TypeName }}.
+//
+// The double run proves the stand-in is faithful, and costs a second pass over
+// every check. Decline it where the double is not used.
+func {{ .IfaceName }}WithoutDouble() {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) { c.withoutDouble = true }
+}
+{{ end }}
+// {{ .IfaceName }}WithFixture replaces the derived inputs.
+func {{ .IfaceName }}WithFixture(f {{ .Fixture.TypeName }}) {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) { c.Fixture = f }
+}
+
+// {{ .IfaceName }}Seed replaces the derived seed.
+//
+// For an interface with no writer to seed itself through, which is the one
+// input a conformance run cannot derive: a reader over an empty subject
+// asserts nothing.
+//
+// Returning an error rather than swallowing one. A seed that failed quietly
+// leaves every check after it asserting nothing and reporting success.
+func {{ .IfaceName }}Seed(fn func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}) error) {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) { c.seed = fn }
+}
+{{ range $m := .Methods }}
+// {{ $c.IfaceName }}On{{ $m.Name }} adds a named check to {{ $m.Name }}.
+func {{ $c.IfaceName }}On{{ $m.Name }}(name string, fn {{ $m.CheckType }}) {{ $c.IfaceName }}Option {
+	return func(c *{{ lower $c.IfaceName }}Config) {
+		c.on{{ $m.Name }} = append(c.on{{ $m.Name }}, named{{ $c.IfaceName }}{{ $m.Name }}Check{name, fn})
+	}
+}
+{{ end }}
+// {{ .IfaceName }}Without drops generated checks by the path each reports under.
+//
+// For a subject that legitimately violates one. Without this the only recourse
+// is to stop running the suite, which costs every other check in the file — so
+// a dropped check is reported as skipped rather than silently omitted.
+func {{ .IfaceName }}Without(paths ...string) {{ .IfaceName }}Option {
+	return func(c *{{ lower .IfaceName }}Config) {
+		for _, p := range paths {
+			c.without[p] = struct{}{}
+		}
+	}
+}
+{{ range $m := .Methods }}
+type named{{ $c.IfaceName }}{{ $m.Name }}Check struct {
+	name string
+	fn   {{ $m.CheckType }}
+}
+{{ end }}
+type named{{ .IfaceName }}Subject struct {
+	name    string
+	factory func() {{ renderType .IfaceRef }}
+}
+
+type {{ lower .IfaceName }}Config struct {
+	Fixture  {{ .Fixture.TypeName }}
+	subjects []named{{ .IfaceName }}Subject
+{{- if .Double }}
+	withoutDouble bool
+{{- end }}
+	seed    func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}) error
+	without map[string]struct{}
+{{- range $m := .Methods }}
+	on{{ $m.Name }} []named{{ $c.IfaceName }}{{ $m.Name }}Check
+{{- end }}
+}
+
+func new{{ .IfaceName }}Config(opts ...{{ .IfaceName }}Option) *{{ lower .IfaceName }}Config {
+	c := &{{ lower .IfaceName }}Config{
+		Fixture: {{ .Fixture.CtorName }}(),
+		without: map[string]struct{}{},
+	}
+{{- if .Seed }}
+	// Derived: {{ .Seed.Method.Name }} is classified writer, so the interface
+	// populates itself and a reader has something to read.
+	c.seed = func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}) error {
+		return subject.{{ .Seed.Method.Name }}(ctx{{ range .Seed.Args }}, c.Fixture.{{ . }}{{ end }})
+	}
+{{- end }}
+	for _, o := range opts {
+		o(c)
+	}
+	return c
+}
+
+// subject builds a fresh implementation and seeds it, so every check runs
+// against state no other check touched.
+func (c *{{ lower .IfaceName }}Config) subject(
+	tb {{ renderExpr (external "testing" "TB") }},
+	factory func() {{ renderType .IfaceRef }},
+	wrap func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}) {{ renderType .IfaceRef }},
+) {{ renderType .IfaceRef }} {
+	tb.Helper()
+	s := factory()
+	if c.seed != nil {
+		// Reported rather than ignored. A seed that silently failed would leave
+		// every check after it running against an empty subject — passing, and
+		// asserting nothing. The message names the two ways to fix it because
+		// the cause is always one of them: the value is not one this subject
+		// accepts, or the write itself is broken.
+		if err := c.seed(tb.Context(), s); err != nil {
+			tb.Fatalf("seeding through {{ if .Seed }}{{ .Seed.Method.Name }}{{ else }}the supplied seed{{ end }} failed: %v; "+
+				"supply a value it accepts through {{ .IfaceName }}WithFixture, or a "+
+				"whole seed through {{ .IfaceName }}Seed", err)
+		}
+	}
+	if wrap != nil {
+		s = wrap(tb, s)
+	}
+	return s
+}
+
+// run executes one check unless it was dropped, reporting the drop rather than
+// silently omitting it.
+func (c *{{ lower .IfaceName }}Config) run(t *{{ renderExpr (external "testing" "T") }}, path, name string, fn func(tb {{ renderExpr (external "testing" "TB") }})) {
+	t.Helper()
+	if _, dropped := c.without[path]; dropped {
+		t.Run(name, func(t *{{ renderExpr (external "testing" "T") }}) {
+			t.Skipf("dropped through {{ .IfaceName }}Without(%q)", path)
+		})
+		return
+	}
+	t.Run(name, func(t *{{ renderExpr (external "testing" "T") }}) {
+		t.Parallel()
+		fn(t)
+	})
+}
+{{- end -}}

@@ -1,0 +1,21 @@
+{{- define "suite.check.nilcontext" -}}
+{{ $m := .Method }}
+// {{ .Func }} asserts {{ $m.Name }} does not panic on a nil context.
+//
+// Fails when: {{ $m.Name }} panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func {{ .Func }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("{{ $m.Name }} panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx {{ renderExpr (external "context" "Context") }}
+	{{ template "suite.call" . }}
+}
+{{- end -}}

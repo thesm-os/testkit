@@ -16,6 +16,7 @@ import (
 	"go.thesmos.sh/testkit/generator/fault"
 	"go.thesmos.sh/testkit/generator/sentinel"
 	"go.thesmos.sh/testkit/generator/stub"
+	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // Annotator returns the shape annotator configured with every classification
@@ -78,6 +79,7 @@ func Generators() []sdk.Plugin {
 		enum.New(),
 		sentinel.New(),
 		stub.New(),
+		suite.New(),
 	}
 }
 

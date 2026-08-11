@@ -4,9 +4,12 @@
 package generator_test
 
 import (
+	"maps"
 	"testing"
+	"text/template"
 
 	"go.thesmos.sh/eidos/eidostest/plugintest"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator"
@@ -49,6 +52,82 @@ func TestAllContainsEveryGenerator(t *testing.T) {
 			t.Errorf("generator %q is registered but absent from All", g.Name())
 		}
 	}
+}
+
+// Every function a shipped template calls has to be one somebody in the run
+// provides — the plugin's own funcmap, or the backend's reserved set.
+//
+// [plugintest.RunSuite] does not ask this. It parses each template with every
+// unresolved name stubbed, deliberately, so that it judges syntax alone; a
+// template calling a function nobody registers therefore parses, ships, and
+// fails midway through Render in the consumer's build, naming the merged tree
+// rather than the file.
+//
+// Asserted over the set rather than beside each plugin, because it is one
+// question with one answer and five copies would be five things to remember
+// when a sixth generator arrives.
+func TestEveryTemplateFuncResolves(t *testing.T) {
+	t.Parallel()
+
+	for _, p := range generator.All() {
+		t.Run(p.Name(), func(t *testing.T) {
+			t.Parallel()
+			plugintest.AssertTemplateFuncsResolve(t, p, reservedFuncs(), golang.Language)
+		})
+	}
+}
+
+// reservedFuncs is everything the Go backend brings to a template, assembled
+// from the three places it is reachable from.
+//
+// The assertion parses each template with this map, and parsing resolves names
+// without calling bodies — so a placeholder binds as well as the real function,
+// and a variadic one binds against every call shape a template can write.
+//
+// Two of the three sources are authoritative. plugintest exports the canonical
+// reserved names, and lang/golang exports the shared Go conventions the backend
+// layers on top. [backendExtras] is the third and is hand-kept, because the
+// backend keeps that category unexported — see its own docblock.
+func reservedFuncs() template.FuncMap {
+	out := template.FuncMap{}
+	for _, name := range plugintest.ReservedTemplateFuncNames() {
+		out[name] = placeholderFunc
+	}
+	for _, name := range backendExtras {
+		out[name] = placeholderFunc
+	}
+	maps.Copy(out, golang.FuncMap())
+	return out
+}
+
+// placeholderFunc stands in for a backend helper whose body this check never
+// calls. Variadic and untyped so it binds against any call a template writes:
+// what is under test is whether the *name* resolves.
+func placeholderFunc(...any) any { return nil }
+
+// backendExtras names the overrideable helpers the Go backend registers —
+// naming, meta-read, string and debug — which every plugin template may call.
+//
+// Hand-kept, and the only hand-kept list here. `extrasFuncMap` is unexported
+// and `plugintest.ReservedTemplateFuncNames` reports the canonical set only, so
+// there is no accessor to read. The drift this admits is loud rather than
+// silent: a helper eidos adds is one this list lacks, which fails the check for
+// a template that is in fact correct — someone fixes it the same day. The
+// opposite list, of names a template calls, is the one that drifts silently,
+// and that half is read from the parser.
+//
+// Reported upstream; delete this and pass the accessor when one ships.
+//
+//nolint:gochecknoglobals // immutable lookup table.
+var backendExtras = []string{
+	// Naming.
+	"pascal", "camel", "snake", "screaming", "exported",
+	// Meta read.
+	"meta", "metaBool", "metaStr", "hasMeta", "metaEq",
+	// String.
+	"join", "title", "upper", "lower", "trim", "split", "default", "coalesce",
+	// Debug.
+	"origin", "explain",
 }
 
 // The shape plugin is three annotators. Registering fewer is silent in a way

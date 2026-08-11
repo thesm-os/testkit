@@ -111,7 +111,7 @@ func {{ $stub }}Strict{{ renderTypeParams .TypeParams }}() {{ $stub }}Option{{ .
 //
 // This is what lets one generated suite run against both the double and the
 // production type, which is the point of conformance testing.
-func {{ $stub }}DelegateTo{{ renderTypeParams .TypeParams }}(impl {{ renderExpr .IfaceRef }}{{ .TypeArgs }}) {{ $stub }}Option{{ .TypeArgs }} {
+func {{ .DelegateToName }}{{ renderTypeParams .TypeParams }}(impl {{ renderExpr .IfaceRef }}{{ .TypeArgs }}) {{ $stub }}Option{{ .TypeArgs }} {
 	return func(s *{{ $stub }}{{ .TypeArgs }}) {
 {{- range .Methods }}
 		s.{{ .OnField }}.Func(impl.{{ .Name }})
@@ -202,7 +202,7 @@ var _ {{ renderExpr .IfaceRef }}{{ template "stub.doublewitness" . }} = (*{{ $st
 // expectations when the test ends, so an unmet Times is reported without the
 // caller remembering to check. A nil tb skips that, which is what benchmarks
 // and non-test callers want.
-func New{{ $stub }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $stub }}Option{{ .TypeArgs }}) *{{ $stub }}{{ .TypeArgs }} {
+func {{ .CtorName }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, opts ...{{ $stub }}Option{{ .TypeArgs }}) *{{ $stub }}{{ .TypeArgs }} {
 	s := &{{ $stub }}{{ .TypeArgs }}{
 {{- range .Methods }}
 		{{ .OnField }}: &{{ .StubType }}{{ $.TypeArgs }}{MethodStub: {{ renderExpr (external $.RuntimeStub "NewMethodStub") }}[{{ .CallType }}{{ $.TypeArgs }}](tb, "{{ $iface }}.{{ .Name }}")},

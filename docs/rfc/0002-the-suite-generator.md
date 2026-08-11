@@ -9,40 +9,59 @@ date: 2026-08-07
 
 ## Summary
 
-`suite` reads a Go interface and emits a tier-1 conformance harness into the
-consumer's own package: one assertion per classification the annotator stamped,
-a benchmark harness over the same projection, and a typed extension point per
-method so a team builds the rest of its suite on top of the generated one rather
-than beside it.
+`suite` reads a Go interface and emits a conformance harness into the consumer's
+own package: everything the interface's shape and classifications imply about how
+an implementation must behave, derived rather than configured, with a typed
+extension point for what derivation cannot reach.
 
-[ADR-0017](../adr/0017-every-classification-owes-an-assertion.md) fixes the
-obligation — every classification owes an assertion. This RFC is the design that
-discharges it: what the generator reads, how an assertion is selected, what the
-emitted file contains, and how each assertion is shown to be capable of failing.
+Two further generators read the same projection, each opted into per method
+through its own directive. `bench` turns a `//testkit:bench` operation into a
+measured loop with the budgets the directive declares; `fuzz` turns a
+`//testkit:fuzz` operation into a target seeded from the same values the
+assertions use.
+
+[ADR-0018](../adr/0018-one-tier-owns-each-classification.md) fixes the floor —
+every classification owes an assertion in exactly one tier, and this generator
+owns the cheap one. This RFC is the design that discharges that share and goes
+past it: a classification is not the unit of a conformance suite, it is one
+contributor to a method's family of checks, and most of that family comes from
+the signature.
 
 ## Problem
 
-A generated conformance harness has to answer four questions, and getting any of
+A generated conformance harness has to answer five questions, and getting any of
 them wrong makes the output worse than nothing.
 
 **What does it assert?** The vocabulary is seventy-two classifications on three
 orthogonal axes, arriving as metadata on a callable. Nothing in a stamp says what
 to assert about it.
 
-**Can each assertion fail?** An assertion that cannot fail raises coverage and
-certifies nothing, so the gap it leaves is invisible precisely where someone went
-looking for it. Reading generated code does not settle this; only running it
-against a subject that violates the property does.
+**Is it dense enough to mean anything?** A file that asserts one property per
+declared classification, and nothing about a method that declares none, is a
+smoke test wearing the word *conformance*. Substitutability is a claim about the
+interface as a whole, and most of the evidence for it comes from the signature
+and from sequences across methods, not from directives.
 
-**What does a consumer add, and what do they need to know first?** The generated
-assertions cover what a classification implies. Everything specific to the
-subject is the consumer's, and the shape of the extension point decides how much
-of the generator's internal vocabulary they have to learn before writing one
-line.
+**What does the consumer have to configure before it runs?** Every value a
+harness makes the author supply is a value the annotator may already know. A
+harness needing a page of wiring per interface is configured once, for the first
+interface, and skipped thereafter.
 
-**What does it cost to wire up?** A harness that needs a page of configuration
-per interface before it asserts anything real will be configured once, for the
-first interface, and skipped thereafter.
+**Can each check fail?** A check that cannot fail raises coverage and certifies
+nothing, so the gap it leaves is invisible precisely where someone went looking
+for it. Reading generated code does not settle this; only running it against a
+subject that violates the property does.
+
+**What does a consumer add, and what do they need to know first?** They write
+implementations and extensions, never plugins. The shape of the extension point
+therefore decides the whole ceiling on extensibility, and how much of the
+generator's vocabulary has to be learned before writing one line.
+
+**What belongs here rather than in the model tier?** `engine/model/law` already
+implements seventy-one properties, and their names line up with the
+classification vocabulary almost row for row. A design that reimplements them as
+templates ships sixty-odd properties twice, in two languages, with nothing
+relating the copies.
 
 ## Design
 
@@ -60,16 +79,22 @@ iface.go ──frontend──▶ node.Interface, node.Method, node.TypeRef
                        shape.mixins, shape.mixin.<name>.<param>
                        shape.contracts, shape.contract.<name>.role
                                         shape.contract.<name>.partner.<role>
-         ──suite─────▶ per-method projection, assertion selection
+                                        shape.contract.<name>.param.<key>
+         ──suite─────▶ per-method projection, check selection
          ──layout────▶ target directory, filename, package
          ──backend───▶ the rendered file
 ```
 
 Placement is `sdk.GeneratorComposition`, one bucket after `stub`'s
-`GeneratorFoundation`, and it declares `Requires: [stub]`. That ordering is what
-lets it read stub's queued emit values to learn the double's constructor and
-option identifiers rather than re-deriving them; two derivations of one
-identifier are two chances to name a symbol stub never emitted.
+`GeneratorFoundation`.
+
+**The projection is generator-internal and stays that way.** Three modes read it,
+which is exactly the shape that tempts a design into publishing an intermediate
+representation so the modes can be split further. Nothing resembling an operation
+table appears in a consumer's package: they receive concrete, typed, readable Go.
+A mode needing something the projection cannot give grows its own local shape
+rather than widening the shared one — because every field of a leaked IR that we
+later regret is a breaking change in someone else's repository.
 
 ### The directive
 
@@ -77,268 +102,105 @@ identifier are two chances to name a symbol stub never emitted.
 negation: a suite exists where one is declared, so deleting the line is the
 suppression and a negated form has nothing to act on
 ([ADR-0016](../adr/0016-directives-are-positive-only.md)). It is the plugin's
-only directive — the classification vocabulary that decides *what* is asserted
+only directive — the classification vocabulary that decides *what* is checked
 belongs to the annotator, and re-declaring any of it here would be free to drift
 from the registries the corpus gate measures against.
 
-One key. `bench=off` suppresses the benchmark harness for a subject whose cost is
-not a contract, leaving the assertions; the benchmark half is otherwise emitted
-because it derives from the same projection at no additional analysis.
+No keys. Benchmarks and fuzz targets are opted into per method, through
+`//testkit:bench` and `//testkit:fuzz`, each declared by the generator that
+reads it. A budget is a property of one hot path and a corpus is a cost
+somebody chose to pay, so the method is the grain — an interface-level key
+here could never say "fuzz Put but not Close" — and directive ownership stays
+where the house rule puts it: the plugin that reads the stamps is the plugin
+that declares the schema, with no other plugin's mode riding on this one's
+line. An earlier draft had suppressive `bench=off` / `fuzz=off` keys here
+instead; the fuzz section records why that lost.
 
-A second directive, `//testkit:bench`, carries per-method budgets. It is
-method-scoped because a budget is a property of one hot path, and it batches its
-properties onto one line rather than spending a directive name on each
-([RFC-0001](0001-testkit-as-a-generator-platform.md)):
+Everything else the generator needs it reads: the shape stamps for what to check,
+`//testkit:out` and `pkg=` for where the file lands, and the source signature for
+the rest.
 
-```go
-//testkit:bench allocs=0 p99=500us mean=100us mem=4KiB
-```
+### The unit is the method, not the classification
 
-| Key | Gates | Backed by |
-|---|---|---|
-| `allocs=N` | allocations per operation; `0` is an alloc-free hot path | `Contract.AllocsMax` |
-| `p99=D` | 99th-percentile nanoseconds per operation | `Contract.LatencyMax` |
-| `mean=D` | mean nanoseconds per operation | a new `Contract` method; reported today, not gated |
-| `mem=B` | bytes allocated per operation | a new `Contract` method over `MemStats.TotalAlloc` |
+A method's checks come from four sources, and only the third is a classification:
 
-Without the directive a method's benchmark measures and reports; with it, each
-key present becomes a ceiling that fails the run. A budget nobody declared is a
-number the generator invented, so there is no default ceiling.
+1. **The signature.** A context parameter earns cancellation, deadline and
+   nil-context checks. An error return earns a zero-value-on-error check. Every
+   method earns a smoke call. None of this needs a directive, and it is most of
+   the volume.
+2. **The detector.** One stamp per callable, adding what is specific to the shape
+   — a `reader` misses, a `streamreader` honours `break`, a `poisonaccessor` is
+   clean when fresh.
+3. **Each mixin and contract it carries.** The direct form of the declared law.
+4. **The extension point**, typed, whether or not anything filled it.
 
-`p99` rather than `latency` names what `Contract.LatencyMax` actually gates —
-`reference/generators/bench.md` describes it as a mean ceiling, and the code
-compares the 99th percentile. `mem` reads `MemStats.TotalAlloc` beside the
-`Mallocs` reading `allocs` already takes, so the two share one stop-the-world
-read.
+And the interface as a whole earns **cross-method checks** — those of them a
+fixed sequence can witness. Read-after-write, delete-removes and
+lifecycle-after-close are all `engine/model/law` properties and belong to the
+model tier; what stays here is the pairing the projection derives and hands to
+that tier as a binding.
 
-The directive is independent of `//testkit:stub`. Where both are present the
-generated suite additionally runs the subject through the double, which is what
-proves the double faithful; where only `suite` is present that half is not
-emitted, and the header says so.
+Making the classification the unit is what produced a first draft asserting four
+things about a three-method interface. Source 1 alone owes ten of it, before
+any directive is read — which is also why the tier boundary costs the suite far
+less than it appears to. Handing every law-backed classification to the model
+tier removes at most one check per declaration; the signature-derived family is
+untouched.
 
-Everything else the generator needs it reads: the shape stamps for what to
-assert, `//testkit:out` and `pkg=` for where the file lands, and the source
-signature for the rest.
+### Derivation first
 
-### Worked example: source to output
-
-The fixture is `conformance/corpus/iface/mixin/validates`. Everything below is in
-the repo except the `//testkit:suite` line, which is what this design adds to
-every fixture that is to carry a suite:
-
-```go
-// Payload is what Validate accepts or refuses.
-type Payload struct{ Key, Body string }
-
-//testkit:out validatestest/ pkg=validatestest
-//testkit:stub
-//testkit:suite
-type Mixed interface {
-    // Store rejects what Validate refuses.
-    //testkit:mixin validates fn=Validate
-    Store(ctx context.Context, v Payload) error
-
-    // Validate is the predicate fn names.
-    Validate(v Payload) error
-
-    // Read proves a rejected value was not stored.
-    Read(ctx context.Context, key string) (Payload, error)
-}
-```
-
-What the annotator stamps on it, as produced by a run of the pipeline
-`conformance/gate` assembles:
-
-| Method | `shape` | `key_type` | `value_type` | `mixins` | params |
-|---|---|---|---|---|---|
-| `Store` | `writer` | — | `…validates.Payload` | `[validates]` | `mixin.validates.fn = Validate` |
-| `Validate` | `writer` | — | `…validates.Payload` | `[]` | — |
-| `Read` | `reader` | `string` | `…validates.Payload` | `[]` | — |
-
-Two things in that table are load-bearing and neither is obvious from the source.
-`Validate` is classified `writer`, not left unclassified — the writer detector
-matches `func(V) error` whether or not a context leads. And `mixin.validates.fn`
-holds the bare source name, which the generator turns into a call on the same
-subject.
-
-Selection is a function of the stamp and the signature, and nothing else:
-
-| Method | Rule | Assertion |
-|---|---|---|
-| `Store` | mixin `validates`, partner `Validate` | what the validator rejects, the method rejects |
-| `Store` | `writer` with a context parameter and an error return | a cancelled context is reported |
-| `Validate` | `writer`, but no context parameter | none — the shape's assertion needs a context to cancel |
-| `Read` | `reader` with a context parameter and an error return | a cancelled context is reported |
-| `Read` | `reader`, error return | an error is accompanied by the zero value |
-
-The emitted primary file, `validatestest/iface_suite.gen.go`. Proposed:
+The design goal is that a consumer supplies nothing. Measured against the prior
+art, that is achievable: every option in the previous generation's wiring is a
+value the stamps already carry.
 
 ```go
-// MixedStoreCheck is one assertion about Store. Every check this file generates
-// for Store is one, so a consumer's own composes with them, runs standalone, or
-// replaces one.
-type MixedStoreCheck func(tb testing.TB, subject validates.Mixed, v validates.Payload)
-
-// AssertMixedStoreValidates asserts Store refuses what Validate refuses.
-//
-// Fails when: Store accepts a value its own validator rejects. Also fails when
-// the value handed in is one Validate accepts — the assertion would otherwise
-// pass by having nothing to test — so supply a rejected value via
-// MixedFixtureOf.
-//
-// This is the direct form of the mixin. It witnesses one value; that every
-// rejected value is refused is the model tier's claim, not this one's.
-func AssertMixedStoreValidates(tb testing.TB, subject validates.Mixed, v validates.Payload) {
-    tb.Helper()
-    if err := subject.Validate(v); err == nil {
-        tb.Fatalf("Validate accepted the value this check treats as invalid; " +
-            "supply one it rejects via MixedFixtureOf")
-    }
-    if err := subject.Store(tb.Context(), v); err == nil {
-        tb.Errorf("Store accepted a value Validate rejects")
-    }
-}
-
-// AssertMixedContract runs every generated assertion against implementations
-// produced by factory.
-//
-//    Checks:  4 across 2 of 3 methods
-//    Shapes:  writer (Store, Validate), reader (Read)
-//    Mixins:  validates (Store → Validate)
-//    Silent:  Validate — writer, but no context parameter to cancel
-//    Extend:  MixedOnStore, MixedOnValidate, MixedOnRead, MixedCheck
-func AssertMixedContract(t *testing.T, factory func() validates.Mixed, opts ...MixedOption) {
-    t.Helper()
-    cfg := newMixedConfig(opts...)
-    t.Run("Store", func(t *testing.T) {
-        t.Parallel()
-        t.Run("validates", func(t *testing.T) {
-            t.Parallel()
-            AssertMixedStoreValidates(t, factory(), cfg.fixture.Invalid)
-        })
-        t.Run("reports a cancelled context", func(t *testing.T) { /* … */ })
-    })
-    t.Run("Read", func(t *testing.T) { /* … */ })
-    for _, c := range cfg.extra {
-        t.Run(c.name, func(t *testing.T) { t.Parallel(); c.fn(t, factory()) })
-    }
-}
+// What v1 made the consumer write:
+servicetest.ServiceOnGet(suite.AssertReturnsSentinel[Service, string, Item]("nonexistent", ErrNotFound)),
+servicetest.ServiceOnDelete(suite.AssertDeleteSucceeds[Service, string]("seed")),
+servicetest.ServiceOnCount(suite.AssertAggregatorConsistent[Service, int](3)),
+servicetest.ServiceOnClose(suite.AssertLifecycleSucceeds[Service]()),
+servicetest.ServiceOnList(suite.AssertStreamCompletes[Service, Item]()),
+servicetest.ServiceOnErr(suite.AssertPoisonAccessorNilOnFresh[Service]()),
+// …eleven in total
 ```
 
-The subtest for a classification is named for the classification —
-[ADR-0015](../adr/0015-subtest-names-carry-the-classification.md) — and the one
-for a structural property is named descriptively, which that record carves out.
+`ErrNotFound` is on the `errors` mixin stamp. `AssertLifecycleSucceeds` takes no
+data at all — the `lifecycle` shape is its whole input, as it is for
+`AssertStreamCompletes` and `AssertPoisonAccessorNilOnFresh`. `"nonexistent"` is
+a miss key, derived to differ from the hit key. `3` is how many values the seed
+wrote. Eleven lines of wiring, none of them information the run did not already
+hold.
 
-And the wiring a developer writes:
+The type parameters are the second artefact of the same mistake. `[Service,
+string, Item]` is erasure: the helper lived in a shipped package, could not name
+the consumer's types, and made the consumer name them back. Generated beside the
+subject there is nothing to erase
+([ADR-0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md)), so the
+same check reads:
 
 ```go
-func TestMixedContract(t *testing.T) {
-    t.Parallel()
-    validatestest.AssertMixedContract(t, validates.NewInMemory)
-}
+servicetest.AssertServiceGetReturnsSentinel(t, subject, "nonexistent")
 ```
 
-### The assertion catalogue
+and cannot be instantiated at the wrong types, because there are none.
 
-Seventy-two classifications, one corpus directory each. `‡` marks an assertion
-materially weaker than the model tier's form for the same classification, which
-obliges the generated documentation to say so. `†` marks one whose failure is
-only observable under `-race`.
+### The interface seeds itself
 
-**Detectors (20).** The assertion follows from the signature. Every shape with a
-context parameter and an error return carries *reports a cancelled context*; the
-rows below add what is specific to the shape.
+Pre-population looks like the one thing derivation cannot reach — a reader over
+an empty subject asserts nothing, and only the author knows how to fill it.
 
-| Detector | Specific assertion |
-|---|---|
-| `reader` | an error is accompanied by the zero value |
-| `readernoerror` | an unknown key yields the zero value |
-| `readerwithbool` | `ok == false` is accompanied by the zero value |
-| `lookup` | `ok == false` is accompanied by zero values in both slots |
-| `pointerreader` | a nil pointer is accompanied by an error |
-| `multireader` | an error is accompanied by zero values in every slot |
-| `batchreader` | one result per key requested, in order |
-| `writer`, `compositewriter`, `multiargwriter` | cancellation only |
-| `mutator` | a sample value does not panic ‡ |
-| `deleter` | cancellation only |
-| `aggregator`, `multiaggregator` | cancellation only |
-| `streamreader` | the sequence honours `break`, and drains without yielding an error |
-| `streamconsumer` | cancellation only |
-| `lifecycle` | cancellation only |
-| `voidlifecycle` | a call does not panic ‡ |
-| `pure` | a call does not panic ‡ |
-| `predicate` | a call does not panic ‡ |
-| `poisonaccessor` | a freshly constructed subject reports no error |
+It is derivable for any interface that carries a writer. The stamps name it:
+`Put(ctx, Item)` is a `writer` whose `shape.value_type` is `Item`, and
+`golang.SampleRefFor` produces an `Item` to write. The suite seeds itself by
+calling the interface's own writer, which is also what makes the cross-method
+checks free: read-after-write is the writer followed by the reader, and
+delete-removes is the writer, the deleter, then the reader.
 
-**Mixins (28).** The directive states the law; the assertion is its direct form.
+A read-only interface over external state has no writer and is the case that
+needs a seed hook. The generated documentation says which of the two it is, so a
+reader is never left wondering whether a check was omitted or merely unstated.
 
-| Mixin | Assertion |
-|---|---|
-| `atomic` | after a failing call, observable state equals a fresh subject's |
-| `bounded` | the result lies within the declared bound |
-| `cacheable` | two reads of one key agree ‡ |
-| `concurrent` | concurrent callers do not race † |
-| `concurrentreaders` | concurrent readers do not race † |
-| `crdtmerge` | two replicas merged in opposite orders converge |
-| `deleteremoves` | a read after delete reports not-found |
-| `deprecated` | the call still works — deprecation is not removal |
-| `errors` | the declared sentinel is returned for the miss input |
-| `eventually` | the observation converges within the deadline |
-| `hooks` | a registered callback fires |
-| `idempotent` | the second call does not newly fail ‡ |
-| `integrationonly` | assertions are emitted behind the integration guard, so an unset environment yields no subtest rather than a passing one |
-| `lifecycleafterclose` | a read after close reports closed |
-| `monotonic` | two samples do not decrease ‡ |
-| `nilsafe` | zero-value inputs do not panic |
-| `orderafter` | calling before the prerequisite fails |
-| `partition` | writes to two partitions do not interfere ‡ |
-| `pure` | two independently constructed subjects agree |
-| `readafterwrite` | a write is visible to the named reader |
-| `retrysucceeds` | the call succeeds within the declared attempts |
-| `sample` | the named builder produces a value the method accepts |
-| `scope` | an unauthorised call is refused and an authorised one is not |
-| `sideeffect` | the named observation changes across the call |
-| `streamreflectsmutations` | a written value appears in the stream |
-| `timeout` | the call completes within the declared budget |
-| `validates` | what the named validator rejects, the method rejects |
-| `wrappedvia` | the returned error wraps the named target |
-
-**Contracts (24).** Roles and partners come from the stamps; the assertion is the
-protocol's minimal round trip.
-
-| Contract | Assertion |
-|---|---|
-| `appender` | appending grows the sequence |
-| `batch-writer` | a batch write succeeds and reports per-item outcomes |
-| `cache` | a miss populates the backing store |
-| `cas` | a stale version is refused |
-| `circuit-breaker` | the breaker opens after the declared failures |
-| `cursor` | advancing after close fails |
-| `if-absent` | a second write for one key is refused |
-| `if-match` | a non-matching predicate refuses the write |
-| `leader-election` | after campaign the subject leads; after resign it does not |
-| `lease` | acquire, release, acquire succeeds; acquire twice fails |
-| `outbox` | an appended message reaches the subscriber |
-| `pagination` | the cursor advances and terminates |
-| `persister` | a written value is readable |
-| `pool` | a get after a put yields an item |
-| `publisher` | a published message reaches a subscriber |
-| `rate-limit` | exceeding the declared burst is refused |
-| `saga` | a failed step runs its compensation |
-| `singleflight` | concurrent identical calls collapse to one † |
-| `transaction` | the call leaves no partial effect on failure |
-| `tx` | begin then commit persists; begin then rollback discards |
-| `updater` | an update is visible to the named reader |
-| `upserter` | a second upsert wins |
-| `watcher` | a trigger reaches the watcher |
-| `workflow` | a declared transition is permitted and an undeclared one refused |
-
-Fifteen of the twenty-four contracts name a partner callable, which the shape
-resolver rewrites from a source name into a qualified one and back-stamps onto
-the partner. Both halves are prerequisites for contract assertions and neither is
-available today — see Open questions.
-
-### Assertions and extensions are the same type
+### Checks and extensions are the same type
 
 Per method, one named type over the failure-recording interface and the method's
 own concrete parameters:
@@ -347,71 +209,276 @@ own concrete parameters:
 type MixedStoreCheck func(tb testing.TB, subject validates.Mixed, v validates.Payload)
 ```
 
-Every generated assertion for that method is a value of it, and so is a
-consumer's, so they compose and reorder and each can run standalone. The
-parameters are concrete — `validates.Payload`, not a type parameter — which is
-what generating into the consumer's package buys
-([ADR-0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md)). An
-assertion in a shipped package cannot name the method it calls and has to erase
-it behind a closure and type parameters; one generated beside the subject does
-not.
+Every generated check for that method is a value of it, and so is a consumer's —
+so they compose, reorder, and each runs standalone. A method the generator has
+nothing classification-specific to say about gets the same treatment: having no
+law to assert does not make the signature unknown.
 
-A method the generator has nothing to assert about gets the same treatment.
-Having no property to assert does not make the signature unknown:
+`testing.TB` rather than `*testing.T` is what makes a check drivable by a
+stand-in, which is what the self-check rests on — and it applies to a consumer's
+checks as much as to the generated ones.
+
+### The option API has three jobs
+
+The consumer cannot reach the generator, so the generated options are the entire
+extension surface. Three operations, no more:
+
+**Supply what derivation cannot reach.** A seed for a writer-less interface, an
+authorised context for `scope`, a stale version for `cas`. One override struct
+rather than one option per assertion, because the values are shared across checks
+and a per-assertion option makes the consumer state each one twice.
+
+**Add a check no classification implies.** A named function of the method's check
+type. Named, so it reports beside the generated ones rather than as an anonymous
+subtest.
+
+**Drop or replace a generated check by name.** A check that is wrong for one
+subject must be removable without abandoning the other twenty-six. Without this,
+the consumer's only recourse is to stop running the suite — which is the failure
+this whole design exists to avoid.
 
 ```go
-type MixedValidateCheck func(tb testing.TB, subject validates.Mixed, v validates.Payload)
+servicetest.AssertServiceContract(t, inmemory,
+    servicetest.ServiceSeed(func(ctx context.Context, s allshapes.Service) { … }),
+    servicetest.ServiceOnGet("second read is served from cache", myCheck),
+    servicetest.ServiceWithout("Delete/deleteremoves"),
+)
 ```
 
-`testing.TB` rather than `*testing.T` is what makes an assertion drivable by a
-stand-in, which is what the next section rests on — and it applies to the
-consumer's assertions as much as the generated ones.
+### Worked example: source to output
 
-### One fixture, derived, overridable
-
-Every assertion needs inputs. They are derived from the parameter's name and type
-through `generator/internal/samples`, collected in one struct, and threaded
-through assertions and benchmarks alike:
+The fixture is `conformance/corpus/iface/mixin/validates`. Everything below is in
+the repo except the `//testkit:suite` line:
 
 ```go
-type MixedFixture struct {
-    Key     string           // "test-key"
-    Missing string           // "other-key" — derived to differ from Key
-    Payload validates.Payload
-    Invalid validates.Payload // the zero value
+type Payload struct{ Key, Body string }
+
+//testkit:out validatestest/ pkg=validatestest
+//testkit:stub
+//testkit:suite
+type Mixed interface {
+    //testkit:mixin validates fn=Validate
+    Store(ctx context.Context, v Payload) error
+
+    Validate(v Payload) error
+
+    Read(ctx context.Context, key string) (Payload, error)
 }
 ```
 
-One override point rather than one per assertion, and the miss key is derived to
-differ from the hit key rather than trusted to. A suite runs with no options at
-all; `MixedFixtureOf` replaces what the derivation cannot know.
+What the annotator stamps, dumped from a run of the pipeline `conformance/gate`
+assembles:
 
-### Outputs
+```
+Store      shape=writer  key=        value=…/validates.Payload  mixins=[validates]
+    mixin.validates.fn = "go.thesmos.sh/…/iface/mixin/validates.Mixed.Validate"
+Validate   shape=writer  key=        value=…/validates.Payload  mixins=[]
+Read       shape=reader  key=string  value=…/validates.Payload  mixins=[]
+```
 
-| Tag | Suffix | Contents |
+Two things there are load-bearing and neither is visible in the source.
+`Validate` is classified `writer`, not left unclassified — the writer detector
+matches `func(V) error` whether or not a context leads. And
+`mixin.validates.fn` holds the **fully-qualified method name**, not the bare one
+the author wrote: the shape resolver rewrites it, and the generator recovers
+`Validate` through `golang.LocalName` exactly as `generator/stub` already does
+for `orderafter`.
+
+Selection is a function of the stamps and the signature, and nothing else:
+
+| Method | Source | Check |
 |---|---|---|
-| `""` | `_suite.gen.go` | contract entry point, benchmark harness, per-method assertions and check types, fixture, options |
-| `test` | `_suite.gen_test.go` | per assertion, a complying subject and a violating one |
+| `Store` | signature | smoke, cancellation, deadline, nil context |
+| `Store` | mixin `validates` → `Validate` | refuses what the validator refuses |
+| `Validate` | signature, no context | smoke only |
+| `Read` | signature | smoke, cancellation, deadline, nil context |
+| `Read` | detector `reader` | an error is accompanied by the zero value; a miss key reports not-found |
+| interface | writer + reader | read-after-write |
 
-Suffixes follow `<source-basename>_<generator>.gen.go` and
-`<source-basename>_<generator>.gen_test.go`, which `stub` and `builder` use and
-`reference/layout.md` documents. `enum` and `sentinel` deviate from it.
+Fourteen checks across three methods, of which exactly one came from a directive.
 
-Benchmarks share the primary file because they share the projection: one plugin,
-one analysis, `AssertMixedContract` and `BenchmarkMixedContract` as siblings.
-They assert nothing until a ceiling is supplied, because a budget nobody declared
-is a number the generator invented.
+### Which tier owns which classification
 
-### How an assertion is shown to fail
+[ADR-0018](../adr/0018-one-tier-owns-each-classification.md) assigns each
+classification to exactly one tier, by a rule rather than a judgement:
 
-An assertion is emitted as a body over `testing.TB` and a benchmark as a body
-over `testkit.BenchTB`, each with its `t.Run` or `b.Run` wrapper separate and
-taking the concrete type. The interfaces are what a stand-in can satisfy;
-`*testing.T` and `*testing.B` are not.
+> The suite tier implements no property `engine/model/law` already carries.
+> Where a law exists, the classification is the model tier's. Where none does,
+> the suite tier owns it — unless the claim cannot be stated against one subject
+> making a fixed call, in which case neither tier covers it and the gate fails.
 
-So the generated test file drives every assertion twice — against a subject
-configured to comply, and one configured to violate — and asserts the second
-fails. Proposed:
+That rule is mechanical, so it needs a machine-readable mapping: one entry per
+classification naming its law ID or `none`. A test asserts every name
+`gate.Registered()` returns has an entry, and that every entry naming a law
+names one `law` registers. Without it the assignment becomes the per-classification
+opinion ADR-0017 correctly refused.
+
+**Signature-derived checks are unaffected.** Smoke, cancellation, deadline,
+nil-context and zero-on-error are the suite's for every method regardless of what
+it declares, because no law carries them and none needs a reference.
+
+**Detectors (20).** The suite owns the shape check for a detector `law` does not
+reach; the rest add a model binding.
+
+| Detector | Tier | Check, or law |
+|---|---|---|
+| `reader` | suite | an error is accompanied by the zero value |
+| `readernoerror` | suite | an unknown key yields the zero value |
+| `readerwithbool` | suite | `ok == false` is accompanied by the zero value |
+| `lookup` | suite | `ok == false` is accompanied by zero values in both slots |
+| `pointerreader` | suite | a nil pointer is accompanied by an error |
+| `multireader` | suite | an error is accompanied by zero values in every slot |
+| `batchreader` | suite | one result per key requested, in order |
+| `mutator` | suite | a sample value does not panic |
+| `streamconsumer` | suite | a consumed sequence is drained |
+| `voidlifecycle` | suite | a call does not panic |
+| `writer`, `compositewriter`, `multiargwriter` | model | `AUTO-WRITE-OBSERVABLE` |
+| `aggregator`, `multiaggregator` | model | `AUTO-COUNT-EQUALS-REFERENCE` |
+| `streamreader` | model | `AUTO-STREAM-COMPLETION` |
+| `lifecycle` | model | `AUTO-LIFECYCLE-RESPECTS-CONTEXT` |
+| `pure` | model | `AUTO-PURE-DETERMINISTIC` |
+| `predicate` | model | `AUTO-PREDICATE-CONSISTENT` |
+| `poisonaccessor` | model | `AUTO-POISON-NIL-ON-FRESH` |
+
+**Mixins (28).**
+
+| Mixin | Tier | Check, or law |
+|---|---|---|
+| `deprecated` | suite | the check logs the replacement and skips |
+| `errors` | suite | the declared sentinel is returned for the miss input |
+| `hooks` | suite | a registered callback fires |
+| `integrationonly` | suite | checks sit behind the integration guard, so an unset environment yields no subtest rather than a passing one |
+| `nilsafe` | suite | zero-value inputs do not panic |
+| `orderafter` | suite | calling before the prerequisite fails |
+| `partition` | suite | writes to two partitions do not interfere |
+| `retrysucceeds` | suite | the call succeeds within the declared attempts |
+| `sample` | suite | the named builder produces a value the method accepts |
+| `scope` | suite | an unauthorised call is refused and an authorised one is not |
+| `sideeffect` | suite | the named observation changes across the call |
+| `timeout` | suite | the call completes within the declared budget |
+| `validates` | suite | what the named validator rejects, the method rejects |
+| `wrappedvia` | suite | the returned error wraps the named target |
+| `concurrent`, `concurrentreaders` | suite | concurrent callers do not race — observable only under `-race` |
+| `atomic` | model | `AUTO-ATOMIC-WRITE` |
+| `bounded` | model | `AUTO-AGGREGATOR-BOUNDED` |
+| `cacheable` | model | `AUTO-CACHEABLE` |
+| `crdtmerge` | model | `AUTO-CRDT-MERGE` |
+| `deleteremoves` | model | `AUTO-DELETE-RETURNS-NOT-FOUND` |
+| `eventually` | model | `AUTO-EVENTUAL-CONVERGENCE` |
+| `idempotent` | model | `AUTO-IDEMPOTENT-WRITE` |
+| `lifecycleafterclose` | model | `AUTO-LIFECYCLE-AFTER-CLOSE` |
+| `monotonic` | model | `AUTO-MONOTONIC-NON-DECREASING` |
+| `pure` | model | `AUTO-PURE-DETERMINISTIC` |
+| `readafterwrite` | model | `AUTO-READ-AFTER-WRITE` |
+| `streamreflectsmutations` | model | `AUTO-STREAM-REFLECTS-MUTATIONS` |
+
+**Contracts (24).**
+
+| Contract | Tier | Check, or law |
+|---|---|---|
+| `batch-writer` | suite | a batch write succeeds and reports per-item outcomes |
+| `if-absent` | suite | a second write for one key is refused |
+| `if-match` | suite | a non-matching predicate refuses the write |
+| `outbox` | suite | an appended message reaches the subscriber |
+| `appender` | model | `AUTO-APPEND-ONLY-GROWS` |
+| `cache` | model | `AUTO-CACHEABLE` |
+| `cas` | model | `AUTO-CAS-ATOMIC-ONE-WINNER` |
+| `cursor` | model | `AUTO-CURSOR-NEXT-AFTER-CLOSE` |
+| `lease` | model | `AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS` |
+| `pagination` | model | `AUTO-PAGINATOR-NO-DUPLICATES` |
+| `persister` | model | `AUTO-PERSISTER-RETRIEVABLE` |
+| `pool` | model | `AUTO-POOL-BALANCED` |
+| `publisher` | model | `AUTO-PUBLISHER-DELIVERS` |
+| `saga` | model | `AUTO-SAGA-FULL-COMPENSATION` |
+| `singleflight` | model | `AUTO-SINGLEFLIGHT-COALESCES` |
+| `transaction` | model | `AUTO-TRANSACTION-ROLLBACK` |
+| `updater` | model | `AUTO-UPDATER-REPLACES` |
+| `upserter` | model | `AUTO-UPSERTER-IDEMPOTENT` |
+| `watcher` | model | `AUTO-WATCHER-RETURNS-ON-CHANGE` |
+| `workflow` | model | `AUTO-VALID-TRANSITION` |
+| `circuit-breaker` | **neither** | needs a call that fails on demand; no law |
+| `leader-election` | **neither** | needs two subjects; no law |
+| `rate-limit` | **neither** | needs controlled time; no law |
+| `tx` | **neither** | needs accumulated begin/commit/rollback state; no law |
+
+Four classifications are owned by no tier, and under ADR-0018 that fails the
+gate — correctly. Each is a law to write, not a suite check to invent: a
+one-shot `circuit-breaker` check with no way to induce a failure passes against
+every implementation, including a broken one.
+
+Fifteen of the twenty-four contracts name a partner callable, which the resolver
+rewrites into a qualified name and back-stamps onto the partner. Both halves are
+prerequisites for contract checks in either tier, and both are available.
+
+### One template file per classification
+
+Seventy-two checks cannot live in one template. The backend supports the split,
+and the mechanism decides the emit model rather than the other way round.
+
+**Every `.tmpl` under the tree is loaded, at any depth.** `collectTmplFiles`
+walks the plugin's filesystem with `fs.WalkDir(fsys, ".")`, and `sdk/golang`
+hands the backend an FS already rooted at `templates/golang`. Subdirectories
+work — but the embed pattern has to be the recursive directory form, because
+`//go:embed templates/golang/*.tmpl` reaches one level only:
+
+```go
+//go:embed templates/golang
+var goTemplatesFS embed.FS
+```
+
+**Every file's defines merge into one tree per run**, so a define in one file is
+reachable from any other with no import and no registration. Only the emit kinds
+need a define named exactly `Kind()`.
+
+**But a template reference is a string literal.** `{{ template "x" . }}` cannot
+take an expression, so seventy-two classifications cannot be dispatched by
+composing a name in the template. `{{ render . }}` can, because it looks the name
+up from the item's `Kind()`:
+
+```go
+func (s *renderState) renderInto(w io.Writer, n emit.Node) error {
+    kind := string(n.Kind())
+    if s.tmpl.Lookup(kind) == nil {
+        return fmt.Errorf("%w: %s", ErrTemplateMissing, kind)
+    }
+    return s.tmpl.ExecuteTemplate(w, kind, n)
+}
+```
+
+So **each check is its own emit kind**, and the entry template ranges over a
+method's checks calling `render`. They need no separate queueing: they are a
+`[]sdk.Node` field on the one value queued per interface, and `render` is
+re-entrant, so a check may render sub-nodes of its own.
+
+```
+generator/suite/templates/golang/
+  suite.file.tmpl                    define "suite.file"    ← emit kind
+  suite.tests.tmpl                   define "suite.tests"   ← emit kind
+  suite.entry.tmpl                   suite.fixture.tmpl
+  suite.options.tmpl                 suite.signature.tmpl
+  detector/suite.check.reader.tmpl   define "suite.check.reader"
+  mixin/suite.check.validates.tmpl   define "suite.check.mixin.validates"
+  contract/suite.check.tx.tmpl       define "suite.check.contract.tx"
+```
+
+Uniqueness is **run-wide across plugins**, over both the define names and each
+file's path relative to `templates/golang` — two plugins shipping `entry.tmpl`
+collide at merge and the run writes nothing — so every filename and every define
+carries the plugin's name. `fragment.` is the one reserved prefix.
+
+The kind string is composed once, in Go, from the classification name the
+projection already read. A test asserts that for every name `gate.Registered()`
+returns, the merged tree holds a template of the composed kind — which fails at
+build rather than midway through a consumer's render.
+
+### How a check is shown to fail
+
+A check is emitted as a body over `testing.TB` with its `t.Run` wrapper separate.
+The interface is what a stand-in can satisfy; `*testing.T` is not.
+
+So the generated test file drives every check twice — against a subject
+configured to comply and one configured to violate — and asserts the second
+fails:
 
 ```go
 func TestMixedStoreValidatesFails(t *testing.T) {
@@ -428,58 +495,214 @@ func TestMixedStoreValidatesFails(t *testing.T) {
 ```
 
 The violating subject is a configuration of the generated double rather than a
-hand-written twin, so the proof accompanies the assertion instead of trailing it
+hand-written twin, so the proof accompanies the check instead of trailing it
 across seventy fixtures, and it is one property away from the complying subject.
+Where the interface declares no `//testkit:stub`, this half is not emitted and
+the header says so.
 
-This is the mechanical form of ADR-0015's requirement that a broken fixture fail
-the classification it claims to: calling one exported assertion directly is
-failure identity, with no name matching in between.
+This is the mechanical form of
+[ADR-0015](../adr/0015-subtest-names-carry-the-classification.md)'s requirement
+that a broken fixture fail the classification it claims to: calling one exported
+check directly is failure identity, with no name matching in between.
 
-One stand-in serves both halves. `testkit.FailableTB` satisfies `testing.TB` and
-`testkit.BenchTB`: `Loop` returns true a bounded number of times, `ReportMetric`
-records rather than prints, and a violated ceiling lands in `Msg` instead of
-failing the run. `contract.go` states that `BenchTB` exists so the machinery can
-be tested without a real benchmark harness, and this is what makes that true
-from outside the package as well as inside it.
+### Benchmarks and fuzzing are separate plugins
 
-Two assertions in a benchmark's shape are not symmetric. That an allocating body
-violates `AllocsMax(0)` is robust; that a non-allocating one satisfies it is not,
-because `runtime.ReadMemStats` reads process-wide counters and a parallel test
-contributes to them. The generated demonstration asserts the first direction
-only.
+`bench` and `fuzz` are their own generators at `sdk.GeneratorCrossCutting`, one
+bucket after `suite`.
+
+Separate, because each is deletable in six months without taking the others down,
+each declares its own capabilities and runs its own conformance suite, and a
+consumer registers only what they want. The two grains of opting in are
+different answers to different questions: dropping `fuzz.New()` from `All()`
+decides whether the mode exists in a build at all, and `//testkit:fuzz` on a
+method decides where a registered mode applies.
+
+**The rule that makes it safe: `suite` computes the projection and queues it;
+`bench` and `fuzz` read that value, never the source.** Two derivations of one
+thing are two chances to disagree, and a benchmark seeded differently from the
+assertion it mirrors is a disagreement nothing reports. `generator/fault` already
+does exactly this against `stub`, through `sdk.PendingByOrigin`.
+
+Two hazards ride along:
+
+- **The orphan file.** `FileFor` is lookup-or-create, so a contributor emitting
+  where `suite` did not creates a file alone — fuzz targets hanging off an
+  interface with no suite. The type assertion on suite's pending value *is* the
+  guard.
+- **`Requires` resolves within a bucket only.** eidos's sorter, verbatim:
+  `// Cross-bucket or simply absent — silently ignored at this layer.` The
+  dependency is expressed by choosing the later bucket. `Requires: [suite]`
+  documents the intent and orders nothing.
+
+Each owns its outputs rather than sharing suite's suffix. Sharing means two
+constants that must move in lockstep, and the three have wildly different run
+costs — separate files make `-run`, `-bench` and `-fuzz` scoping fall out instead
+of being fought.
+
+`//testkit:bench` is `bench`'s directive, method-scoped because a budget is a
+property of one hot path, batching its properties onto one line:
+
+```go
+//testkit:bench allocs=0 p99=500us mean=100us mem=4KiB
+```
+
+| Key | Gates | Backed by |
+|---|---|---|
+| `allocs=N` | allocations per operation; `0` is an alloc-free hot path | `Contract.AllocsMax` |
+| `p99=D` | 99th-percentile nanoseconds per operation | `Contract.LatencyMax` |
+| `mean=D` | mean nanoseconds per operation | a new `Contract` method |
+| `mem=B` | bytes allocated per operation | a new `Contract` method over `MemStats.TotalAlloc` |
+
+The directive's presence is the opt-in: a bare `//testkit:bench` measures and
+reports, and each key present becomes a ceiling. A budget nobody declared is a
+number the generator invented, so there is no default. Where a double exists
+the benchmark drives `MixedStubBenchMode`, which `stub` already emits.
+
+### Which methods earn a fuzz target
+
+The ones that ask and can: `//testkit:fuzz` on the method is the ask, and Go's
+constraint decides the can.
+
+**The directive decides existence.** Method-scoped, no keys, negation denied —
+a target exists where one is declared, and deleting the line is the
+suppression, exactly as for the suite itself.
+
+**Go's constraint decides feasibility.** `f.Fuzz` accepts basic types only, so
+an annotated method qualifies iff every non-context parameter is one of those,
+or is a struct whose exported fields decompose to them — `Store(ctx,
+Payload{Key, Body string})` fuzzes as two strings and reconstructs. An
+annotated method that does not decompose — a func, a channel, an interface in
+a parameter — is a **diagnostic at the directive**, not a silent skip: the
+author asked, so "asked and impossible" is an error with a position, where the
+earlier default-on form could only leave a comment in a file nobody was
+reading for one.
+
+**The stamps decide the body.** `nilsafe` becomes "no input panics"; `bounded`,
+"the result stays in range"; `pure`, "same input, same output"; `validates`, the
+implication below. Absent any of them the target still runs the method, and Go's
+fuzzer still finds panics, hangs and OOMs — worth having on any exported method.
+
+```go
+func FuzzMixedStore(f *testing.F, factory func() validates.Mixed) {
+    f.Add("test-key", "test-body")   // seeds from the same fixture the checks use
+    f.Fuzz(func(t *testing.T, key, body string) {
+        s := factory()
+        v := validates.Payload{Key: key, Body: body}
+        if err := s.Validate(v); err != nil {
+            testkit.Error(t, s.Store(t.Context(), v),
+                "Store accepted what Validate refused")
+        }
+    })
+}
+```
+
+**The rejected alternative: emit for every decomposable method, `fuzz=off` to
+decline.** Its argument was ADR-0017's, and at full strength: whether a method
+is a trust boundary is the strongest signal there is and it has no owner, so
+coverage that depends on a remembered directive reintroduces the silent
+omission that record exists to prevent. That argument is real, and it lost on
+the costs a generated assertion does not have. A check runs in microseconds
+per suite; a fuzz target is CI minutes and a corpus **per method**, which
+makes unasked-for targets on all six methods a bill nobody itemised, and the
+interface-scoped `fuzz=off` could not spell the case teams actually have —
+fuzz the two parsers, skip the four accessors. What survives of the omission
+concern is the feasibility diagnostic above — opt-in converts "silently not
+fuzzable" into an error the author sees — and the residue is accepted as a
+cost: an unannotated trust boundary gets no target, and this paragraph is the
+record that the trade was made knowingly rather than by default.
+
+Fuzzing is the only mode that witnesses **many values**. Checks witness one; the
+model tier witnesses many sequences but costs a reference implementation most
+subjects will never have. That is most of the distance between "some assertions"
+and a conformance suite, at a fraction of the model tier's price.
+
+One consequence: **a fuzz target cannot be driven through the double.** A stub
+returns configured answers regardless of input, so fuzzing it proves nothing. Its
+factory parameter takes the consumer's real implementation and says so.
+
+### Outputs
+
+| Plugin | Tag | Suffix | Contents |
+|---|---|---|---|
+| `suite` | `""` | `_suite.gen.go` | entry point, per-method checks and check types, fixture, options |
+| `suite` | `test` | `_suite.gen_test.go` | per check, a complying subject and a violating one |
+| `bench` | `""` | `_bench.gen.go` | per-method and whole-contract benchmark helpers |
+| `fuzz` | `""` | `_fuzz.gen.go` | per annotated method, a seeded target helper |
+
+Suffixes follow `<source-basename>_<generator>.gen.go`, which `stub` and
+`builder` use and `reference/layout.md` documents. `enum` and `sentinel` deviate.
+
+Benchmark and fuzz helpers are exported functions taking `*testing.B` and
+`*testing.F`, called from the consumer's own `_test.go` — Go requires the target
+itself to live there, and it is the same pattern `stub` already uses.
+
+### What a consumer writes
+
+```go
+func inmemory() allshapes.Service { return allshapes.NewInMemoryService() }
+
+func TestServiceContract(t *testing.T) {
+    t.Parallel()
+    servicetest.AssertServiceContract(t, inmemory)
+}
+
+// The same suite against the double wrapping the real implementation. Anything
+// the wrapper fails that the subject passes is the double lying — which is what
+// makes a generated double trustworthy, and it needs nothing generated for it.
+func TestServiceContract_Double(t *testing.T) {
+    t.Parallel()
+    servicetest.AssertServiceContract(t, func() allshapes.Service {
+        return servicetest.NewServiceStub(t, servicetest.ServiceStubDelegateTo(inmemory()))
+    })
+}
+
+// Present because Put carries //testkit:bench and //testkit:fuzz in the
+// source; a method without the directive gets no helper to call.
+func BenchmarkServiceContract(b *testing.B) { servicetest.BenchmarkServiceContract(b, inmemory) }
+func FuzzServicePut(f *testing.F)           { servicetest.FuzzServicePut(f, inmemory) }
+```
+
+No options at all in the ordinary case. That is the acceptance test for this
+design, and the measure it is held to: an option a consumer has to write is a
+derivation that has not been done.
 
 ### Composition and generics
 
 The axes are orthogonal, so a method carrying a detector, a mixin and a contract
-owes all three assertions in one file without collision. The four fixtures under
+owes all three families in one file without collision. The four fixtures under
 `corpus/iface/composite` — `batched-mixins`, `leased-idempotent-writer`,
 `paginated-reader`, `tx-with-retry` — are where that is proven.
 
-The nine fixtures under `corpus/iface/lang` prove the emission survives Go's type
+The ten fixtures under `corpus/iface/lang` prove the emission survives Go's type
 system rather than any classification: embedding, foreign embedding, generics,
-opaque constraints, named returns, multiple returns, variadics, and a method with
-no context. A generic interface's entry point carries the type parameters; the
-generated self-check instantiates at the witnesses the source names, because a Go
-test function cannot take type parameters.
+opaque constraints, a function-typed parameter, named returns, multiple returns,
+variadics, a method with no context, and a parameter named for the identifier a
+generated receiver binds. A generic interface's entry point carries the type
+parameters; the generated self-check instantiates at the witnesses the source
+names, because a Go test function cannot take type parameters.
 
-### The model tier attaches to the same entry point
+### The model tier is a sibling generator, not a second harness
 
-Tiers 2–3 attach as an option rather than as a second harness, so a team runs one
-conformance suite:
+`engine/model` is the runtime and `engine/model/law` the property library;
+nothing binds `law.ReadAfterWrite[Mixed, string, Payload]{Read: …, Keys: …}` to a
+concrete interface. That binding is per-interface, concrete, and derivable from
+exactly the stamps read here — which is why `suite` was drifting into owning it.
+
+A `model` generator reads suite's queued projection the way `bench` and `fuzz`
+do, and emits the bindings plus the runner call. It is gated on a reference
+implementation the consumer supplies, so it attaches as an option on the same
+entry point rather than as a harness a team has to remember separately:
 
 ```go
-validatestest.AssertMixedContract(t, factory,
-    validatestest.MixedModelChecks(newReference),
-    validatestest.MixedOnStore(myOwnCheck),
-)
+servicetest.AssertServiceContract(t, inmemory,
+    servicetest.ServiceModelChecks(newReference))
 ```
 
 The alternative — the model generator declaring suite's output suffix so both
-compose the same target and render into one file — works, but couples two plugins
-through a constant that must move in lockstep, and a plugin holding two roles
-sorts ahead of every generator regardless of what it declares it requires, so its
-contributions render above suite's. The option form has neither problem and stays
-reversible.
+compose the same target — works, but couples two plugins through a constant that
+must move in lockstep, and a plugin holding two roles sorts ahead of every
+generator regardless of what it requires, so its contributions render above
+suite's. The option form has neither problem and stays reversible.
 
 ## What is decided
 
@@ -488,30 +711,51 @@ reversible.
 | [0004](../adr/0004-consume-only-the-annotator-plugin.md) | Consume only eidos's annotator plugin |
 | [0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md) | Generate per-shape helpers into the consumer |
 | [0015](../adr/0015-subtest-names-carry-the-classification.md) | Subtest names carry the classification |
-| [0017](../adr/0017-every-classification-owes-an-assertion.md) | Every classification owes an assertion |
+| [0018](../adr/0018-one-tier-owns-each-classification.md) | One tier owns each classification |
+
+## What the design rests on
+
+- **The shape resolver and validator are registered.** All 24 contract checks
+  need partner references rewritten into qualified names and back-stamped onto
+  the partner, and `shape.Plugin` is three annotators rather than one.
+  `generator.Annotators()` registers every companion, so both hold today. The
+  same change moved `mixin.orderafter.fn` from a bare name to a qualified one,
+  which `generator/stub` already reads through `golang.LocalName`.
+- **Consumers never write plugins.** testkit generates; consumers write
+  implementations and extensions. The generated option API is therefore the whole
+  extensibility ceiling, which is why it has three jobs rather than one.
+- **`Contract` gates p99, not the mean.** `//testkit:bench p99=` names what
+  `Contract.LatencyMax` compares. `reference/generators/bench.md` describes a
+  `//testkit:latency` directive as a mean ceiling and a separate
+  `//testkit:percentiles`; neither exists, and one directive naming the statistic
+  it gates replaces both.
+- **`mean=` and `mem=` need `Contract` methods that do not exist.** `AllocsMax`
+  and `LatencyMax` are the whole surface today.
 
 ## Open questions
 
-- **The shape resolver is not registered.** `generator.Annotators()` registers
-  `shape.New()` but not `shape.Resolver()`, which runs one priority bucket later.
-  Without it, contract partner references keep their raw source names, no
-  back-stamping occurs — so only the declaring side of a contract carries the
-  membership — and unknown roles and unresolvable partners are never diagnosed.
-  Every contract assertion depends on both. `gate.Compare` cannot see the gap,
-  because it measures which classifications were stamped and the declaring side
-  stamps one. Registering the resolver also changes what `generator/stub` reads
-  from `mixin.orderafter.fn`, from a bare name to a qualified one.
-- **Concurrency assertions need `-race` to fail.** Three classifications carry
-  `†`. `make check` runs `mod`, `lint`, `test`, `coverage` and `branch`; `test
-  race` is a separate target. Either it joins the check stages or those three
-  assertions are decoration in the default gate.
-- **Whether allocation budgets should be a directive.** Benchmarks measure until
-  a ceiling is supplied as an option. A directive carrying budgets the way
-  `bounded` carries value bounds would make them part of the source contract, and
-  is what separates tier 4 as measurement from tier 4 as a gate.
-- **Several assertions need inputs no stamp describes.** `scope` needs an
-  authorised context and an unauthorised sentinel; `cas` needs a stale version;
-  `if-match` needs a failing predicate. The fixture struct is assumed sufficient.
-  Where it is not, the assertion has to fail loudly on an unsupplied input rather
-  than pass vacuously, which makes it a check on the wiring as much as on the
-  subject.
+- **Four classifications are owned by no tier.** `circuit-breaker`,
+  `leader-election`, `rate-limit` and `tx` have no law and no honest single-call
+  form. Under ADR-0018 the gate fails until each has one, and the work is a law
+  rather than a suite check — but nothing yet says which of the four is worth
+  writing first.
+- **The classification-to-law mapping has no home.** ADR-0018's rule is
+  mechanical only if the mapping is data a test can check. It could live beside
+  the suite generator, beside `law`, or in the gate that measures both. The
+  third is where the union is already computed.
+- **Concurrency checks need `-race` to fail.** `concurrent` and
+  `concurrentreaders` are the suite's, and both are observable only under the
+  race detector. `make check` runs `mod`, `lint`, `test`, `coverage` and
+  `branch`; `test race` is a separate target. Either it joins the check stages
+  or those two are decoration in the default gate.
+- **A writer-less interface cannot seed itself.** The seed hook covers it, and a
+  hook is an option — which the acceptance test above says is a derivation not
+  done. Whether that is a genuine exception or a signal that seeding should come
+  from a sibling interface in the same package is unresolved.
+- **Some suite checks need inputs no stamp describes.** `scope` needs an
+  authorised context and an unauthorised sentinel; `if-match` needs a failing
+  predicate. `shape.contract.<name>.param.<key>` carries what the directive
+  declared and is the first place to look, but it cannot carry a value the author
+  did not write. Where the override struct is not enough either, the check has to
+  fail loudly on an unsupplied input rather than pass vacuously — and if it
+  cannot, the classification belongs in the "owned by no tier" list above.

@@ -1,0 +1,20 @@
+{{- /*
+suite.call and suite.callerr spell the call itself. Two forms because a check
+that inspects the error binds it and one that only needs the call not to panic
+discards every result — and a signature may return nothing at all.
+*/ -}}
+{{- define "suite.call" -}}
+{{- $m := .Method -}}
+{{- if $m.HasResults }}{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}_{{ end }} = {{ end }}subject.{{ $m.Name }}({{ template "suite.args" . }})
+{{- end -}}
+
+{{- define "suite.callerr" -}}
+{{- $m := .Method -}}
+{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
+{{- end -}}
+
+{{- define "suite.args" -}}
+{{- $m := .Method -}}
+{{- if $m.TakesContext }}ctx{{ range $m.CallArgs }}, {{ .Name }}{{ end }}
+{{- else }}{{ range $i, $p := $m.CallArgs }}{{ if $i }}, {{ end }}{{ $p.Name }}{{ end }}{{ end }}
+{{- end -}}

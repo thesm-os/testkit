@@ -291,6 +291,16 @@ type Stub struct {
 	// TypeName is the stub struct's identifier — `<Iface><Suffix>`.
 	TypeName string
 
+	// CtorName and DelegateToName are the double's constructor and the option
+	// that wraps a real implementation.
+	//
+	// Fields rather than something each reader composes from TypeName. The
+	// templates spell them, and so does any generator building a call to
+	// them — the conformance harness runs itself a second time through the
+	// double, and two derivations of one identifier are two chances to name a
+	// symbol this plugin never emitted.
+	CtorName, DelegateToName string
+
 	// IfaceName is the source interface's identifier, used in the
 	// generated doc comments.
 	IfaceName string
@@ -501,15 +511,17 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		// kind and output tag, and a second append is where the two would drift.
 		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface,
 			&Stub{
-				BaseEmit:     base,
-				RuntimePaths: GoRuntime(),
-				TypeName:     typeName,
-				IfaceName:    iface.Name,
-				IfaceRef:     sdk.NewExternal(iface.Package, iface.Name),
-				Methods:      methods,
-				TypeParams:   golang.TypeParamDecls(iface.TypeParams),
-				TypeArgs:     golang.TypeParamNames(iface.TypeParams),
-				Witnesses:    witnesses,
+				BaseEmit:       base,
+				RuntimePaths:   GoRuntime(),
+				TypeName:       typeName,
+				CtorName:       "New" + typeName,
+				DelegateToName: typeName + "DelegateTo",
+				IfaceName:      iface.Name,
+				IfaceRef:       sdk.NewExternal(iface.Package, iface.Name),
+				Methods:        methods,
+				TypeParams:     golang.TypeParamDecls(iface.TypeParams),
+				TypeArgs:       golang.TypeParamNames(iface.TypeParams),
+				Witnesses:      witnesses,
 			},
 			&Tests{
 				BaseEmit:     sdk.EmitBaseTagged(base, GoTestOutputTag),

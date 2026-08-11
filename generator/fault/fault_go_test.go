@@ -79,10 +79,13 @@ func TestGoFuncMap(t *testing.T) {
 		// builtin already does exactly that — so the templates call the builtin
 		// and this plugin registers nothing in its place.
 		//
-		// That every name the templates *do* call resolves is no longer asserted
-		// here. [plugintest.RunSuite] reads the call sites from the parser, so a
-		// hand-kept list — which this was, and which had already fallen behind —
-		// is strictly worse than the check the conformance suite now runs.
+		// That every name the templates *do* call resolves is asserted over the
+		// whole plugin set, in plugins_test.go, by reading the call sites from
+		// the parser. It is not part of [plugintest.RunSuite], which parses each
+		// template with every unresolved name stubbed so that it judges syntax
+		// alone — so a hand-kept list here would have been the only thing
+		// standing between a template and a render failure in a consumer's
+		// build, and a hand-kept list drifts in the direction that ships.
 		funcs := fault.New().TemplateFuncs(golang.Language)
 		_, custom := funcs[fault.Name+sdkgolang.FuncPrefixSeparator+"ref"]
 		testkit.False(t, custom, "ref is the backend's external builtin, not a plugin helper")
