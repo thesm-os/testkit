@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // StreamReentrancy checks that iterating a StreamReader-shaped method
@@ -22,7 +24,7 @@ type StreamReentrancy[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamReentrancy[T, V]) ID() string { return "AUTO-STREAM-REENTRANT" }
+func (StreamReentrancy[T, V]) ID() string { return lawid.StreamReentrant }
 
 // REQID returns an empty string (auto-derived law).
 func (StreamReentrancy[T, V]) REQID() string { return "" }
@@ -58,11 +60,14 @@ func sortByString[V any](s []V) {
 // StreamReader (limit defaults to 10000 in the runner).
 type StreamCompletion[T any, V any] struct {
 	Drain func(*rapid.T, T) ([]V, error)
+	// Limit bounds the drain so a non-terminating stream fails rather than
+	// hangs. Zero defaults to 10000, which is the claim: a drain that needs
+	// more than that has not terminated in any sense a test can wait for.
 	Limit int
 }
 
 // ID returns the stable identifier for this law.
-func (StreamCompletion[T, V]) ID() string { return "AUTO-STREAM-COMPLETION" }
+func (StreamCompletion[T, V]) ID() string { return lawid.StreamCompletion }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamCompletion[T, V]) REQID() string { return "" }
@@ -93,7 +98,7 @@ type StreamNoDuplicates[T any, V any, H comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamNoDuplicates[T, V, H]) ID() string { return "AUTO-STREAM-NO-DUPLICATES" }
+func (StreamNoDuplicates[T, V, H]) ID() string { return lawid.StreamNoDuplicates }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamNoDuplicates[T, V, H]) REQID() string { return "" }
@@ -125,7 +130,7 @@ type StreamStableOrder[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamStableOrder[T, V]) ID() string { return "AUTO-STREAM-STABLE-ORDER" }
+func (StreamStableOrder[T, V]) ID() string { return lawid.StreamStableOrder }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamStableOrder[T, V]) REQID() string { return "" }
@@ -154,7 +159,7 @@ type StreamPermutation[T any, V any, H comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamPermutation[T, V, H]) ID() string { return "AUTO-STREAM-PERMUTATION" }
+func (StreamPermutation[T, V, H]) ID() string { return lawid.StreamPermutation }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamPermutation[T, V, H]) REQID() string { return "" }
@@ -197,7 +202,7 @@ type StreamOverMatch[T any, V any, H comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamOverMatch[T, V, H]) ID() string { return "AUTO-STREAM-OVER-MATCH" }
+func (StreamOverMatch[T, V, H]) ID() string { return lawid.StreamOverMatch }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamOverMatch[T, V, H]) REQID() string { return "" }
@@ -238,7 +243,7 @@ type StreamReflectsMutations[T any, V any, H comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (StreamReflectsMutations[T, V, H]) ID() string { return "AUTO-STREAM-REFLECTS-MUTATIONS" }
+func (StreamReflectsMutations[T, V, H]) ID() string { return lawid.StreamReflectsMutations }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamReflectsMutations[T, V, H]) REQID() string { return "" }

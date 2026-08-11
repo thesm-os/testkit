@@ -9,6 +9,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/core/trace"
 )
 
@@ -54,7 +55,7 @@ type MonotonicReads[T any, K comparable] struct {
 func (l *MonotonicReads[T, K]) BindTrace(t *trace.Trace) { l.Trace = t }
 
 // ID returns the stable identifier for this law.
-func (*MonotonicReads[T, K]) ID() string { return "AUTO-MONOTONIC-READS" }
+func (*MonotonicReads[T, K]) ID() string { return lawid.MonotonicReads }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*MonotonicReads[T, K]) REQID() string { return "" }
@@ -95,7 +96,7 @@ type ReadYourWrites[T any, K comparable] struct {
 func (l *ReadYourWrites[T, K]) BindTrace(t *trace.Trace) { l.Trace = t }
 
 // ID returns the stable identifier for this law.
-func (*ReadYourWrites[T, K]) ID() string { return "AUTO-READ-YOUR-WRITES" }
+func (*ReadYourWrites[T, K]) ID() string { return lawid.ReadYourWrites }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*ReadYourWrites[T, K]) REQID() string { return "" }
@@ -142,7 +143,7 @@ type MonotonicWrites[T any, K comparable] struct {
 func (l *MonotonicWrites[T, K]) BindTrace(t *trace.Trace) { l.Trace = t }
 
 // ID returns the stable identifier for this law.
-func (*MonotonicWrites[T, K]) ID() string { return "AUTO-MONOTONIC-WRITES" }
+func (*MonotonicWrites[T, K]) ID() string { return lawid.MonotonicWrites }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*MonotonicWrites[T, K]) REQID() string { return "" }
@@ -185,7 +186,7 @@ type WritesFollowReads[T any, K comparable] struct {
 func (l *WritesFollowReads[T, K]) BindTrace(t *trace.Trace) { l.Trace = t }
 
 // ID returns the stable identifier for this law.
-func (*WritesFollowReads[T, K]) ID() string { return "AUTO-WRITES-FOLLOW-READS" }
+func (*WritesFollowReads[T, K]) ID() string { return lawid.WritesFollowReads }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*WritesFollowReads[T, K]) REQID() string { return "" }

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // DeadlineRespecting verifies an operation invoked with a
@@ -41,7 +43,7 @@ type DeadlineRespecting[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (DeadlineRespecting[T]) ID() string { return "AUTO-DEADLINE-RESPECTING" }
+func (DeadlineRespecting[T]) ID() string { return lawid.DeadlineRespecting }
 
 // REQID returns an empty string (auto-derived).
 func (DeadlineRespecting[T]) REQID() string { return "" }

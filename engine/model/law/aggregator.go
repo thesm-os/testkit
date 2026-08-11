@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // AggregatorBounded verifies that an Aggregator-class method's
@@ -21,7 +23,7 @@ type AggregatorBounded[T any, R interface{ ~int | ~int64 | ~float64 }] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (AggregatorBounded[T, R]) ID() string { return "AUTO-AGGREGATOR-BOUNDED" }
+func (AggregatorBounded[T, R]) ID() string { return lawid.AggregatorBounded }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (AggregatorBounded[T, R]) REQID() string { return "" }
@@ -50,7 +52,7 @@ type Associative[T any, V any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (Associative[T, V, Obs]) ID() string { return "AUTO-ASSOCIATIVE" }
+func (Associative[T, V, Obs]) ID() string { return lawid.Associative }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Associative[T, V, Obs]) REQID() string { return "" }
@@ -91,7 +93,7 @@ type Conservative[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (Conservative[T, V]) ID() string { return "AUTO-CONSERVATIVE" }
+func (Conservative[T, V]) ID() string { return lawid.Conservative }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Conservative[T, V]) REQID() string { return "" }
@@ -129,7 +131,7 @@ type Windowed[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (Windowed[T, K]) ID() string { return "AUTO-WINDOWED" }
+func (Windowed[T, K]) ID() string { return lawid.Windowed }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Windowed[T, K]) REQID() string { return "" }

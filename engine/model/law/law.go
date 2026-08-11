@@ -19,6 +19,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // Law is a type-parametric invariant checked after every action.
@@ -69,7 +71,7 @@ type ReadAfterWrite[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (ReadAfterWrite[T, K, V]) ID() string { return "AUTO-READ-AFTER-WRITE" }
+func (ReadAfterWrite[T, K, V]) ID() string { return lawid.ReadAfterWrite }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (ReadAfterWrite[T, K, V]) REQID() string { return "" }
@@ -102,7 +104,7 @@ type DeleteReturnsNotFound[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (DeleteReturnsNotFound[T, K, V]) ID() string { return "AUTO-DELETE-RETURNS-NOT-FOUND" }
+func (DeleteReturnsNotFound[T, K, V]) ID() string { return lawid.DeleteReturnsNotFound }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (DeleteReturnsNotFound[T, K, V]) REQID() string { return "" }
@@ -132,7 +134,7 @@ type CountEqualsReference[T any, R comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CountEqualsReference[T, R]) ID() string { return "AUTO-COUNT-EQUALS-REFERENCE" }
+func (CountEqualsReference[T, R]) ID() string { return lawid.CountEqualsReference }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CountEqualsReference[T, R]) REQID() string { return "" }
@@ -173,7 +175,7 @@ type CRDTMerge[T any, V any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CRDTMerge[T, V, Obs]) ID() string { return "AUTO-CRDT-MERGE" }
+func (CRDTMerge[T, V, Obs]) ID() string { return lawid.CRDTMerge }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CRDTMerge[T, V, Obs]) REQID() string { return "" }

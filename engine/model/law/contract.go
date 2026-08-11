@@ -13,6 +13,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // PersisterRetrievable verifies that the value returned by a
@@ -26,7 +28,7 @@ type PersisterRetrievable[T any, V any, ID comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PersisterRetrievable[T, V, ID]) ID() string { return "AUTO-PERSISTER-RETRIEVABLE" }
+func (PersisterRetrievable[T, V, ID]) ID() string { return lawid.PersisterRetrievable }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PersisterRetrievable[T, V, ID]) REQID() string { return "" }
@@ -61,7 +63,7 @@ type UpdaterReplaces[T any, V any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (UpdaterReplaces[T, V, K]) ID() string { return "AUTO-UPDATER-REPLACES" }
+func (UpdaterReplaces[T, V, K]) ID() string { return lawid.UpdaterReplaces }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (UpdaterReplaces[T, V, K]) REQID() string { return "" }
@@ -100,7 +102,7 @@ type UpserterIdempotent[T any, V any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (UpserterIdempotent[T, V, K]) ID() string { return "AUTO-UPSERTER-IDEMPOTENT" }
+func (UpserterIdempotent[T, V, K]) ID() string { return lawid.UpserterIdempotent }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (UpserterIdempotent[T, V, K]) REQID() string { return "" }
@@ -140,7 +142,7 @@ type CASAtomicOneWinner[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CASAtomicOneWinner[T, V]) ID() string { return "AUTO-CAS-ATOMIC-ONE-WINNER" }
+func (CASAtomicOneWinner[T, V]) ID() string { return lawid.CASAtomicOneWinner }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CASAtomicOneWinner[T, V]) REQID() string { return "" }
@@ -186,7 +188,7 @@ type AppenderMonotonicOffsets[T any, V any, Off interface{ ~int | ~int64 }] stru
 }
 
 // ID returns the stable identifier for this law.
-func (*AppenderMonotonicOffsets[T, V, Off]) ID() string { return "AUTO-APPENDER-MONOTONIC-OFFSETS" }
+func (*AppenderMonotonicOffsets[T, V, Off]) ID() string { return lawid.AppenderMonotonicOffsets }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*AppenderMonotonicOffsets[T, V, Off]) REQID() string { return "" }
@@ -214,15 +216,18 @@ func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, _ T) error
 // The consumer threads a shared call counter through Compute; the
 // law inspects the counter after running M concurrent calls.
 type SingleflightCoalesces[T any, K comparable, V any] struct {
-	Call     func(ctx context.Context, sut T, k K, compute func() V) (V, error)
-	Compute  func() V
-	Keys     *rapid.Generator[K]
+	Call    func(ctx context.Context, sut T, k K, compute func() V) (V, error)
+	Compute func() V
+	Keys    *rapid.Generator[K]
+	// Parallel is how many concurrent calls contend for one key. Zero
+	// defaults to 8 — coalescing is only observable under contention, and a
+	// pair of callers may serialise by luck.
 	Parallel int
 	Counter  *int // pointer the Compute closure increments
 }
 
 // ID returns the stable identifier for this law.
-func (SingleflightCoalesces[T, K, V]) ID() string { return "AUTO-SINGLEFLIGHT-COALESCES" }
+func (SingleflightCoalesces[T, K, V]) ID() string { return lawid.SingleflightCoalesces }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (SingleflightCoalesces[T, K, V]) REQID() string { return "" }
@@ -265,7 +270,7 @@ type TransactionRollbackOnError[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (TransactionRollbackOnError[T, K, V]) ID() string { return "AUTO-TRANSACTION-ROLLBACK" }
+func (TransactionRollbackOnError[T, K, V]) ID() string { return lawid.TransactionRollback }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (TransactionRollbackOnError[T, K, V]) REQID() string { return "" }
@@ -305,7 +310,7 @@ type LeaseDoubleAcquireBlocks[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (LeaseDoubleAcquireBlocks[T, K]) ID() string { return "AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS" }
+func (LeaseDoubleAcquireBlocks[T, K]) ID() string { return lawid.LeaseDoubleAcquireBlocks }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LeaseDoubleAcquireBlocks[T, K]) REQID() string { return "" }
@@ -338,14 +343,17 @@ func (l LeaseDoubleAcquireBlocks[T, K]) Check(rt *rapid.T, sut, _ T) error {
 // never signals termination fails the law instead of looping
 // forever. MaxPages ≤ 0 defaults to 1000.
 type PaginatorNoDuplicates[T any, V any, K comparable, C any] struct {
-	Page     func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
-	Start    C
-	KeyOf    func(V) K
+	Page  func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
+	Start C
+	KeyOf func(V) K
+
+	// MaxPages bounds the walk so a paginator that never reports
+	// exhaustion fails rather than loops. Zero defaults to 1000.
 	MaxPages int
 }
 
 // ID returns the stable identifier for this law.
-func (PaginatorNoDuplicates[T, V, K, C]) ID() string { return "AUTO-PAGINATOR-NO-DUPLICATES" }
+func (PaginatorNoDuplicates[T, V, K, C]) ID() string { return lawid.PaginatorNoDuplicates }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PaginatorNoDuplicates[T, V, K, C]) REQID() string { return "" }
@@ -388,13 +396,16 @@ func (l PaginatorNoDuplicates[T, V, K, C]) Check(rt *rapid.T, sut, _ T) error {
 // asserts the resumed items equal the corresponding suffix of the
 // first walk. MaxPages ≤ 0 defaults to 1000.
 type PaginatorResumable[T any, V any, C any] struct {
-	Page     func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
-	Start    C
+	Page  func(rt *rapid.T, sut T, cursor C) (items []V, next C, more bool)
+	Start C
+
+	// MaxPages bounds both walks, as in PaginatorNoDuplicates.
+	// Zero defaults to 1000.
 	MaxPages int
 }
 
 // ID returns the stable identifier for this law.
-func (PaginatorResumable[T, V, C]) ID() string { return "AUTO-PAGINATOR-RESUMABLE" }
+func (PaginatorResumable[T, V, C]) ID() string { return lawid.PaginatorResumable }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PaginatorResumable[T, V, C]) REQID() string { return "" }
@@ -447,15 +458,20 @@ func (l PaginatorResumable[T, V, C]) Check(rt *rapid.T, sut, _ T) error {
 // publishes one drawn message, and asserts each subscriber drained
 // it at least once.
 type PublisherDelivers[T any, M comparable, Sub any] struct {
-	Subscribe   func(rt *rapid.T, sut T) (Sub, error)
-	Publish     func(rt *rapid.T, sut T, msg M) error
-	Drain       func(rt *rapid.T, sut T, sub Sub) ([]M, error)
-	Messages    *rapid.Generator[M]
+	Subscribe func(rt *rapid.T, sut T) (Sub, error)
+	Publish   func(rt *rapid.T, sut T, msg M) error
+	Drain     func(rt *rapid.T, sut T, sub Sub) ([]M, error)
+	Messages  *rapid.Generator[M]
+
+	// Subscribers is how many subscribe before the publish. Zero
+	// defaults to 3 — one subscriber cannot distinguish delivery from
+	// fan-out, and two cannot distinguish fan-out from a broadcast that
+	// happens to reach both.
 	Subscribers int
 }
 
 // ID returns the stable identifier for this law.
-func (PublisherDelivers[T, M, Sub]) ID() string { return "AUTO-PUBLISHER-DELIVERS" }
+func (PublisherDelivers[T, M, Sub]) ID() string { return lawid.PublisherDelivers }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PublisherDelivers[T, M, Sub]) REQID() string { return "" }
@@ -519,12 +535,15 @@ const (
 // exactly-once; nil to skip), then counts how many copies each
 // subscriber drained and checks the count against Mode.
 type PublisherDeliveryBound[T any, M comparable, Sub any] struct {
-	Subscribe   func(rt *rapid.T, sut T) (Sub, error)
-	Publish     func(rt *rapid.T, sut T, msg M) error
-	Redeliver   func(rt *rapid.T, sut T, msg M)
-	Drain       func(rt *rapid.T, sut T, sub Sub) ([]M, error)
-	Messages    *rapid.Generator[M]
-	Mode        DeliveryMode
+	Subscribe func(rt *rapid.T, sut T) (Sub, error)
+	Publish   func(rt *rapid.T, sut T, msg M) error
+	Redeliver func(rt *rapid.T, sut T, msg M)
+	Drain     func(rt *rapid.T, sut T, sub Sub) ([]M, error)
+	Messages  *rapid.Generator[M]
+	Mode      DeliveryMode
+
+	// Subscribers is how many subscribe before the publish, as in
+	// PublisherDelivers. Zero defaults to 3.
 	Subscribers int
 }
 
@@ -532,13 +551,13 @@ type PublisherDeliveryBound[T any, M comparable, Sub any] struct {
 func (l PublisherDeliveryBound[T, M, Sub]) ID() string {
 	switch l.Mode {
 	case DeliveryAtLeastOnce:
-		return "AUTO-PUBLISHER-AT-LEAST-ONCE"
+		return lawid.PublisherAtLeastOnce
 	case DeliveryAtMostOnce:
-		return "AUTO-PUBLISHER-AT-MOST-ONCE"
+		return lawid.PublisherAtMostOnce
 	case DeliveryExactlyOnce:
-		return "AUTO-PUBLISHER-EXACTLY-ONCE"
+		return lawid.PublisherExactlyOnce
 	default:
-		return "AUTO-PUBLISHER-DELIVERY"
+		return lawid.PublisherDelivery
 	}
 }
 
@@ -626,7 +645,7 @@ type TransactionNoMidTxVisibility[T any, Tx any, K comparable, V any] struct {
 
 // ID returns the stable identifier for this law.
 func (TransactionNoMidTxVisibility[T, Tx, K, V]) ID() string {
-	return "AUTO-TRANSACTION-NO-MID-TX-VISIBILITY"
+	return lawid.TransactionNoMidTxVisibility
 }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
@@ -691,7 +710,7 @@ type LeaseReleasedOnCancel[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (LeaseReleasedOnCancel[T, K]) ID() string { return "AUTO-LEASE-RELEASED-ON-CANCEL" }
+func (LeaseReleasedOnCancel[T, K]) ID() string { return lawid.LeaseReleasedOnCancel }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LeaseReleasedOnCancel[T, K]) REQID() string { return "" }
@@ -750,7 +769,7 @@ type WatcherReturnsOnChange[T any, W any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (WatcherReturnsOnChange[T, W, K, V]) ID() string { return "AUTO-WATCHER-RETURNS-ON-CHANGE" }
+func (WatcherReturnsOnChange[T, W, K, V]) ID() string { return lawid.WatcherReturnsOnChange }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (WatcherReturnsOnChange[T, W, K, V]) REQID() string { return "" }

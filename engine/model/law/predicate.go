@@ -7,6 +7,8 @@ import (
 	"fmt"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // PredicateConsistency checks that a Predicate-shaped method returns
@@ -21,7 +23,7 @@ type PredicateConsistency[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PredicateConsistency[T]) ID() string { return "AUTO-PREDICATE-CONSISTENT" }
+func (PredicateConsistency[T]) ID() string { return lawid.PredicateConsistent }
 
 // REQID returns an empty string (auto-derived law).
 func (PredicateConsistency[T]) REQID() string { return "" }

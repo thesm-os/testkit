@@ -9,6 +9,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // Roundtrip verifies Inverse(F(x)) == x for the consumer-supplied
@@ -21,7 +23,7 @@ type Roundtrip[T any, X any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (Roundtrip[T, X]) ID() string { return "AUTO-ROUNDTRIP" }
+func (Roundtrip[T, X]) ID() string { return lawid.Roundtrip }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Roundtrip[T, X]) REQID() string { return "" }
@@ -53,7 +55,7 @@ type LossyRoundtrip[T any, X any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (LossyRoundtrip[T, X]) ID() string { return "AUTO-LOSSY-ROUNDTRIP" }
+func (LossyRoundtrip[T, X]) ID() string { return lawid.LossyRoundtrip }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LossyRoundtrip[T, X]) REQID() string { return "" }
@@ -89,7 +91,7 @@ type TotalOver[T any, X any, R comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (TotalOver[T, X, R]) ID() string { return "AUTO-TOTAL-OVER" }
+func (TotalOver[T, X, R]) ID() string { return lawid.TotalOver }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (TotalOver[T, X, R]) REQID() string { return "" }

@@ -9,6 +9,8 @@ import (
 	"slices"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // TxnOp is one read or write observation inside a transaction: the
@@ -272,7 +274,7 @@ type SnapshotIsolationG0[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (SnapshotIsolationG0[T, K]) ID() string { return "AUTO-SNAPSHOT-ISOLATION-G0" }
+func (SnapshotIsolationG0[T, K]) ID() string { return lawid.SnapshotIsolationG0 }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (SnapshotIsolationG0[T, K]) REQID() string { return "" }
@@ -290,7 +292,7 @@ type SnapshotIsolationG1[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (SnapshotIsolationG1[T, K]) ID() string { return "AUTO-SNAPSHOT-ISOLATION-G1" }
+func (SnapshotIsolationG1[T, K]) ID() string { return lawid.SnapshotIsolationG1 }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (SnapshotIsolationG1[T, K]) REQID() string { return "" }
@@ -308,7 +310,7 @@ type SnapshotIsolationG2[T any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (SnapshotIsolationG2[T, K]) ID() string { return "AUTO-SNAPSHOT-ISOLATION-G2" }
+func (SnapshotIsolationG2[T, K]) ID() string { return lawid.SnapshotIsolationG2 }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (SnapshotIsolationG2[T, K]) REQID() string { return "" }

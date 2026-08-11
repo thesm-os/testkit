@@ -5,11 +5,13 @@ package law_test
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/core/equivalence"
 	"go.thesmos.sh/testkit/engine/model/law"
 )
 
@@ -68,7 +70,6 @@ func TestDefaultOnError(t *testing.T) {
 				return 0, errors.New("boom")
 			},
 			Default: 0,
-			Eq:      func(a, b int) bool { return a == b },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, &cacheableSUT{}, &cacheableSUT{}); err != nil {
@@ -85,7 +86,6 @@ func TestDefaultOnError(t *testing.T) {
 				return 99, errors.New("boom")
 			},
 			Default: 0,
-			Eq:      func(a, b int) bool { return a == b },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, &cacheableSUT{}, &cacheableSUT{}); err == nil {
@@ -105,7 +105,6 @@ func TestSticky(t *testing.T) {
 			Read: func(_ *rapid.T, _ *cacheableSUT, _ string) (int, error) {
 				return 42, nil
 			},
-			Eq: func(a, b int) bool { return a == b },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, &cacheableSUT{}, &cacheableSUT{}); err != nil {
@@ -341,7 +340,6 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 		l := law.DefaultOnError[int, string, int]{
 			Read:    func(*rapid.T, int, string) (int, error) { return 42, errors.New("failed") },
 			Default: 0,
-			Eq:      func(a, b int) bool { return a == b },
 			Keys:    rapid.Just("k"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
@@ -357,7 +355,6 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 			ok := law.DefaultOnError[int, string, int]{
 				Read:    func(*rapid.T, int, string) (int, error) { return 7, nil },
 				Default: 0,
-				Eq:      func(a, b int) bool { return a == b },
 				Keys:    rapid.Just("k"),
 			}
 			if err := ok.Check(rt, 0, 0); err != nil {
@@ -380,7 +377,6 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 			reads := 0
 			l := &law.Sticky[int, string, int]{
 				Read: func(*rapid.T, int, string) (int, error) { reads++; return reads, nil },
-				Eq:   func(a, b int) bool { return a == b },
 				Keys: rapid.Just("k"),
 			}
 			_ = l.Check(rt, 0, 0) // records first
@@ -394,12 +390,67 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 		t.Parallel()
 		l := &law.Sticky[int, string, int]{
 			Read: func(*rapid.T, int, string) (int, error) { return 0, errors.New("absent") },
-			Eq:   func(a, b int) bool { return a == b },
 			Keys: rapid.Just("k"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, 0, 0); err != nil {
 				rt.Fatalf("a refused read is a precondition: %v", err)
+			}
+		})
+	})
+}
+
+// TestStickyUnderARefinedEquivalence covers the other half of the Eq field:
+// nil is strict, and a supplied chain is the escape hatch for a value that
+// legitimately moves.
+//
+// Without this, only the default is exercised, and a law whose chain was
+// ignored — compared strictly regardless of what the consumer supplied —
+// would pass every test here while failing every real subject that needed the
+// refinement. The two subtests are the same subject read twice; only the
+// equivalence differs, so the chain is the only thing that can explain the
+// difference in verdict.
+func TestStickyUnderARefinedEquivalence(t *testing.T) {
+	t.Parallel()
+
+	type reading struct {
+		Value    int
+		ReadAtNS int64
+	}
+	// The same resolved value, stamped at a different instant each read —
+	// which is the shape of every cached record that carries when it was
+	// served.
+	read := func() func(*rapid.T, int, string) (reading, error) {
+		var n int64
+		return func(*rapid.T, int, string) (reading, error) {
+			n++
+			return reading{Value: 42, ReadAtNS: n}, nil
+		}
+	}
+
+	t.Run("strict equality rejects a moving timestamp", func(t *testing.T) {
+		t.Parallel()
+		l := &law.Sticky[int, string, reading]{Read: read(), Keys: rapid.Just("k")}
+		rapid.Check(t, func(rt *rapid.T) {
+			_ = l.Check(rt, 0, 0)
+			if err := l.Check(rt, 0, 0); err == nil {
+				rt.Fatal("strict equality must see the second reading as a change")
+			}
+		})
+	})
+
+	t.Run("ignoring the stamp accepts it", func(t *testing.T) {
+		t.Parallel()
+		l := &law.Sticky[int, string, reading]{
+			Read: read(),
+			Keys: rapid.Just("k"),
+			Eq: equivalence.NewChain().
+				Add(equivalence.IgnoreFields(reflect.TypeFor[reading](), "ReadAtNS")),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			_ = l.Check(rt, 0, 0)
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("the resolved value did not change: %v", err)
 			}
 		})
 	})

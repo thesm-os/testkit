@@ -11,6 +11,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // defaultXSSTokens are literal tag-openers a correct HTML escaper
@@ -33,7 +35,7 @@ type IdempotentWrite[T any, V any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (IdempotentWrite[T, V, Obs]) ID() string { return "AUTO-IDEMPOTENT-WRITE" }
+func (IdempotentWrite[T, V, Obs]) ID() string { return lawid.IdempotentWrite }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (IdempotentWrite[T, V, Obs]) REQID() string { return "" }
@@ -75,7 +77,7 @@ type WriteObservable[T any, V any, K comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (WriteObservable[T, V, K]) ID() string { return "AUTO-WRITE-OBSERVABLE" }
+func (WriteObservable[T, V, K]) ID() string { return lawid.WriteObservable }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (WriteObservable[T, V, K]) REQID() string { return "" }
@@ -116,7 +118,7 @@ type TamperEvident[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (TamperEvident[T, V]) ID() string { return "AUTO-TAMPER-EVIDENT" }
+func (TamperEvident[T, V]) ID() string { return lawid.TamperEvident }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (TamperEvident[T, V]) REQID() string { return "" }
@@ -156,7 +158,7 @@ type XSSSafe[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (XSSSafe[T]) ID() string { return "AUTO-XSS-SAFE" }
+func (XSSSafe[T]) ID() string { return lawid.XSSSafe }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (XSSSafe[T]) REQID() string { return "" }
@@ -203,7 +205,7 @@ type InjectionSafe[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (InjectionSafe[T]) ID() string { return "AUTO-INJECTION-SAFE" }
+func (InjectionSafe[T]) ID() string { return lawid.InjectionSafe }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (InjectionSafe[T]) REQID() string { return "" }
@@ -256,7 +258,7 @@ type CommutativeWrite[T any, V any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CommutativeWrite[T, V, Obs]) ID() string { return "AUTO-COMMUTATIVE-WRITE" }
+func (CommutativeWrite[T, V, Obs]) ID() string { return lawid.CommutativeWrite }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CommutativeWrite[T, V, Obs]) REQID() string { return "" }
@@ -305,7 +307,7 @@ type AtomicWrite[T any, V any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (AtomicWrite[T, V, Obs]) ID() string { return "AUTO-ATOMIC-WRITE" }
+func (AtomicWrite[T, V, Obs]) ID() string { return lawid.AtomicWrite }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (AtomicWrite[T, V, Obs]) REQID() string { return "" }
@@ -343,7 +345,7 @@ type ValidTransition[T any, V any, S comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (ValidTransition[T, V, S]) ID() string { return "AUTO-VALID-TRANSITION" }
+func (ValidTransition[T, V, S]) ID() string { return lawid.ValidTransition }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (ValidTransition[T, V, S]) REQID() string { return "" }

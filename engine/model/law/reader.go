@@ -10,6 +10,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/equivalence"
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // Cacheable verifies that repeated calls with the same key on the
@@ -24,7 +27,7 @@ type Cacheable[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (Cacheable[T, K, V]) ID() string { return "AUTO-CACHEABLE" }
+func (Cacheable[T, K, V]) ID() string { return lawid.Cacheable }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Cacheable[T, K, V]) REQID() string { return "" }
@@ -55,11 +58,16 @@ type DefaultOnError[T any, K comparable, V any] struct {
 	Read    func(*rapid.T, T, K) (V, error)
 	Keys    *rapid.Generator[K]
 	Default V
-	Eq      func(V, V) bool
+
+	// Eq is the equivalence the observed value is held to. Nil is strict
+	// deep equality, which is the right default and the reason a generated
+	// binding leaves this unset; supply a chain where the value carries a
+	// field strict equality would wrongly reject, such as a timestamp.
+	Eq *equivalence.Chain
 }
 
 // ID returns the stable identifier for this law.
-func (DefaultOnError[T, K, V]) ID() string { return "AUTO-DEFAULT-ON-ERROR" }
+func (DefaultOnError[T, K, V]) ID() string { return lawid.DefaultOnError }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (DefaultOnError[T, K, V]) REQID() string { return "" }
@@ -71,8 +79,9 @@ func (l DefaultOnError[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 	if err == nil {
 		return nil
 	}
-	if !l.Eq(v, l.Default) {
-		return fmt.Errorf("DefaultOnError: key %v: err=%v but value %v != default %v", k, err, v, l.Default)
+	if diff := l.Eq.Diff(l.Default, v); diff != "" {
+		return fmt.Errorf("DefaultOnError: key %v: err=%v but the value is not the default (-default +got):\n%s",
+			k, err, diff)
 	}
 	return nil
 }
@@ -93,7 +102,7 @@ type PointInTime[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PointInTime[T, K, V]) ID() string { return "AUTO-POINT-IN-TIME" }
+func (PointInTime[T, K, V]) ID() string { return lawid.PointInTime }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PointInTime[T, K, V]) REQID() string { return "" }
@@ -128,14 +137,19 @@ func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 // invocations. Sticky is a [StatefulLaw] in spirit but accepts the
 // step argument implicitly via internal state.
 type Sticky[T any, K comparable, V any] struct {
-	Read  func(*rapid.T, T, K) (V, error)
-	Keys  *rapid.Generator[K]
-	Eq    func(V, V) bool
+	Read func(*rapid.T, T, K) (V, error)
+	Keys *rapid.Generator[K]
+
+	// Eq is the equivalence successive reads are held to. Nil is strict
+	// deep equality; supply a chain where a value legitimately carries a
+	// field that moves between reads.
+	Eq *equivalence.Chain
+
 	first map[K]V // populated by Check
 }
 
 // ID returns the stable identifier for this law.
-func (*Sticky[T, K, V]) ID() string { return "AUTO-STICKY" }
+func (*Sticky[T, K, V]) ID() string { return lawid.Sticky }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*Sticky[T, K, V]) REQID() string { return "" }
@@ -151,8 +165,8 @@ func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 		l.first = make(map[K]V)
 	}
 	if prior, ok := l.first[k]; ok {
-		if !l.Eq(prior, v) {
-			return fmt.Errorf("sticky law: key %v: first=%v, now=%v", k, prior, v)
+		if diff := l.Eq.Diff(prior, v); diff != "" {
+			return fmt.Errorf("sticky law: key %v: the resolved value changed (-first +now):\n%s", k, diff)
 		}
 		return nil
 	}
@@ -175,7 +189,7 @@ type MonotonicNonDecreasing[T any, R any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (*MonotonicNonDecreasing[T, R]) ID() string { return "AUTO-MONOTONIC-NON-DECREASING" }
+func (*MonotonicNonDecreasing[T, R]) ID() string { return lawid.MonotonicNonDecreasing }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*MonotonicNonDecreasing[T, R]) REQID() string { return "" }

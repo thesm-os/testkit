@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // ScheduledFiresAfterAdvance verifies that scheduled tasks fire
@@ -40,7 +42,7 @@ type ScheduledFiresAfterAdvance[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (ScheduledFiresAfterAdvance[T]) ID() string { return "AUTO-SCHEDULED-FIRES-AFTER-ADVANCE" }
+func (ScheduledFiresAfterAdvance[T]) ID() string { return lawid.ScheduledFiresAfterAdvance }
 
 // REQID returns an empty string (auto-derived).
 func (ScheduledFiresAfterAdvance[T]) REQID() string { return "" }

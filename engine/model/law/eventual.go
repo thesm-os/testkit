@@ -9,6 +9,9 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/equivalence"
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // CheckEventualConvergence verifies the convergence contract over
@@ -64,19 +67,28 @@ func CheckEventualConvergence[S any](pre, post []S, merge func(a, b S) S, equal 
 // runs Sync (the SUT's anti-entropy), snapshots again, and
 // delegates to [CheckEventualConvergence].
 type EventualConvergence[T any, V any, S any] struct {
-	Factory  func() T
+	Factory func() T
+
+	// Replicas is how many instances receive the write stream. Zero defaults
+	// to 3: two replicas cannot exhibit a merge that is order-dependent.
 	Replicas int
+
 	Write    func(*rapid.T, T, V) error
 	Values   *rapid.Generator[V]
 	Settle   func(rt *rapid.T, replicas []T)
 	Sync     func(rt *rapid.T, replicas []T) error
 	Snapshot func(*rapid.T, T) S
 	Merge    func(a, b S) S
-	Equal    func(a, b S) bool
+
+	// Equal is the equivalence converged snapshots are held to. Nil is
+	// strict deep equality, which is what a generated binding leaves it as;
+	// supply a chain where a snapshot carries per-replica bookkeeping — a
+	// node identifier, a vector clock — that convergence does not erase.
+	Equal *equivalence.Chain
 }
 
 // ID returns the stable identifier for this law.
-func (EventualConvergence[T, V, S]) ID() string { return "AUTO-EVENTUAL-CONVERGENCE" }
+func (EventualConvergence[T, V, S]) ID() string { return lawid.EventualConvergence }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (EventualConvergence[T, V, S]) REQID() string { return "" }
@@ -114,5 +126,18 @@ func (l EventualConvergence[T, V, S]) Check(rt *rapid.T, _, _ T) error {
 	for i, r := range replicas {
 		post[i] = l.Snapshot(rt, r)
 	}
-	return CheckEventualConvergence(pre, post, l.Merge, l.Equal)
+	// Adapted rather than passed through: CheckEventualConvergence is
+	// exported and takes a typed predicate, which is the right surface for a
+	// caller driving it by hand. The Chain is the generated binding's side of
+	// the same question.
+	//
+	// Left nil where no chain was supplied, rather than adapted to one that
+	// compares strictly. Both answer the same question, but the nil arm
+	// reports the diff that says which field diverged, and a converged-state
+	// failure with no diff is the hardest kind to act on.
+	var equal func(a, b S) bool
+	if l.Equal != nil {
+		equal = func(a, b S) bool { return l.Equal.Equal(a, b) }
+	}
+	return CheckEventualConvergence(pre, post, l.Merge, equal)
 }

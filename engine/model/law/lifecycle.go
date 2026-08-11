@@ -11,6 +11,8 @@ import (
 	"runtime"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // IdempotentLifecycle verifies that calling the lifecycle method
@@ -22,7 +24,7 @@ type IdempotentLifecycle[T any, Obs any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (IdempotentLifecycle[T, Obs]) ID() string { return "AUTO-IDEMPOTENT-LIFECYCLE" }
+func (IdempotentLifecycle[T, Obs]) ID() string { return lawid.IdempotentLifecycle }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (IdempotentLifecycle[T, Obs]) REQID() string { return "" }
@@ -52,14 +54,20 @@ func (l IdempotentLifecycle[T, Obs]) Check(rt *rapid.T, sut, _ T) error {
 // runtime.NumGoroutine before and after the cycle and flags a
 // growth exceeding Tolerance.
 type LeakFree[T any] struct {
-	Open      func(*rapid.T, T) error
-	Close     func(*rapid.T, T) error
-	Cycles    int
+	Open  func(*rapid.T, T) error
+	Close func(*rapid.T, T) error
+	// Cycles is how many open/close rounds to run. Zero defaults to 16 — a
+	// leak of one goroutine per cycle needs repetition to rise above the
+	// scheduler's own noise.
+	Cycles int
+	// Tolerance is the goroutine growth treated as noise rather than a leak.
+	// Zero defaults to 4, which absorbs the runtime's own background workers
+	// without absorbing a per-cycle leak.
 	Tolerance int
 }
 
 // ID returns the stable identifier for this law.
-func (LeakFree[T]) ID() string { return "AUTO-LEAK-FREE" }
+func (LeakFree[T]) ID() string { return lawid.LeakFree }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LeakFree[T]) REQID() string { return "" }
@@ -104,7 +112,7 @@ type LifecycleRespectsContext[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (LifecycleRespectsContext[T]) ID() string { return "AUTO-LIFECYCLE-RESPECTS-CONTEXT" }
+func (LifecycleRespectsContext[T]) ID() string { return lawid.LifecycleRespectsContext }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LifecycleRespectsContext[T]) REQID() string { return "" }
@@ -133,7 +141,7 @@ type PoisonNilOnFresh[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PoisonNilOnFresh[T]) ID() string { return "AUTO-POISON-NIL-ON-FRESH" }
+func (PoisonNilOnFresh[T]) ID() string { return lawid.PoisonNilOnFresh }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PoisonNilOnFresh[T]) REQID() string { return "" }
@@ -156,7 +164,7 @@ type PoisonIdempotentRead[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PoisonIdempotentRead[T]) ID() string { return "AUTO-POISON-IDEMPOTENT-READ" }
+func (PoisonIdempotentRead[T]) ID() string { return lawid.PoisonIdempotentRead }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PoisonIdempotentRead[T]) REQID() string { return "" }
@@ -185,11 +193,13 @@ func (l PoisonIdempotentRead[T]) Check(rt *rapid.T, sut, _ T) error {
 type PoisonConsistent[T any] struct {
 	Poison func(*rapid.T, T)
 	Probe  func(*rapid.T, T) error
-	Reads  int
+	// Reads is how many times to probe the poisoned state. Zero defaults to
+	// 3: two agreeing reads can agree by accident, three rarely do.
+	Reads int
 }
 
 // ID returns the stable identifier for this law.
-func (PoisonConsistent[T]) ID() string { return "AUTO-POISON-CONSISTENT" }
+func (PoisonConsistent[T]) ID() string { return lawid.PoisonConsistent }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PoisonConsistent[T]) REQID() string { return "" }
@@ -226,7 +236,7 @@ type LifecycleAfterCloseSentinel[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (LifecycleAfterCloseSentinel[T]) ID() string { return "AUTO-LIFECYCLE-AFTER-CLOSE" }
+func (LifecycleAfterCloseSentinel[T]) ID() string { return lawid.LifecycleAfterClose }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LifecycleAfterCloseSentinel[T]) REQID() string { return "" }

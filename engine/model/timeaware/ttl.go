@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // TTLExpiryAfterAdvance verifies a TTL-bound store removes its
@@ -44,7 +46,7 @@ type TTLExpiryAfterAdvance[T any, K comparable, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (TTLExpiryAfterAdvance[T, K, V]) ID() string { return "AUTO-TTL-EXPIRY" }
+func (TTLExpiryAfterAdvance[T, K, V]) ID() string { return lawid.TTLExpiry }
 
 // REQID returns an empty string (auto-derived).
 func (TTLExpiryAfterAdvance[T, K, V]) REQID() string { return "" }

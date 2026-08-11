@@ -8,6 +8,8 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // PureDeterminism checks that a Pure-shaped method returns the same
@@ -26,7 +28,7 @@ type PureDeterminism[T any, R any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PureDeterminism[T, R]) ID() string { return "AUTO-PURE-DETERMINISTIC" }
+func (PureDeterminism[T, R]) ID() string { return lawid.PureDeterministic }
 
 // REQID returns an empty string (auto-derived law).
 func (PureDeterminism[T, R]) REQID() string { return "" }

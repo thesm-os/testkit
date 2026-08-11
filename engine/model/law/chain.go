@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/engine/model/history"
 )
 
@@ -37,7 +38,7 @@ type AppendOnlyHistoryGrows[T any, K comparable, Entry any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (*AppendOnlyHistoryGrows[T, K, Entry]) ID() string { return "AUTO-APPEND-ONLY-GROWS" }
+func (*AppendOnlyHistoryGrows[T, K, Entry]) ID() string { return lawid.AppendOnlyGrows }
 
 // REQID returns an empty string (auto-derived).
 func (*AppendOnlyHistoryGrows[T, K, Entry]) REQID() string { return "" }
@@ -85,7 +86,7 @@ type AppendOnlyNoDrops[T any, K comparable, Entry any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (AppendOnlyNoDrops[T, K, Entry]) ID() string { return "AUTO-APPEND-ONLY-NO-DROPS" }
+func (AppendOnlyNoDrops[T, K, Entry]) ID() string { return lawid.AppendOnlyNoDrops }
 
 // REQID returns an empty string (auto-derived).
 func (AppendOnlyNoDrops[T, K, Entry]) REQID() string { return "" }
@@ -128,7 +129,7 @@ type HashChainIntegrityViaVerify[T any] struct {
 // counters index, and what a failure report prints as LawID. Sharing one
 // across two laws makes a skip hit both and a report unable to say which
 // fired.
-func (HashChainIntegrityViaVerify[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY-VERIFY" }
+func (HashChainIntegrityViaVerify[T]) ID() string { return lawid.HashChainIntegrityVerify }
 
 // REQID returns an empty string (auto-derived).
 func (HashChainIntegrityViaVerify[T]) REQID() string { return "" }
@@ -156,7 +157,7 @@ type HashChainIntegrityViaErr[T any] struct {
 
 // ID returns the stable identifier for this law. See
 // [HashChainIntegrityViaVerify.ID] for why the two are not the same string.
-func (HashChainIntegrityViaErr[T]) ID() string { return "AUTO-HASH-CHAIN-INTEGRITY-ERR" }
+func (HashChainIntegrityViaErr[T]) ID() string { return lawid.HashChainIntegrityErr }
 
 // REQID returns an empty string (auto-derived).
 func (HashChainIntegrityViaErr[T]) REQID() string { return "" }
@@ -184,7 +185,7 @@ type ReplayDeterminism[T any, K comparable, Entry any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (ReplayDeterminism[T, K, Entry]) ID() string { return "AUTO-REPLAY-DETERMINISTIC" }
+func (ReplayDeterminism[T, K, Entry]) ID() string { return lawid.ReplayDeterministic }
 
 // REQID returns an empty string (auto-derived).
 func (ReplayDeterminism[T, K, Entry]) REQID() string { return "" }
@@ -227,7 +228,7 @@ type ReplayRespectsCausality[T any, K comparable, Entry any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (ReplayRespectsCausality[T, K, Entry]) ID() string { return "AUTO-REPLAY-CAUSAL-ORDERING" }
+func (ReplayRespectsCausality[T, K, Entry]) ID() string { return lawid.ReplayCausalOrdering }
 
 // REQID returns an empty string (auto-derived).
 func (ReplayRespectsCausality[T, K, Entry]) REQID() string { return "" }

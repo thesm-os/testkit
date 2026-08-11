@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	"pgregory.net/rapid"
+
+	"go.thesmos.sh/testkit/core/lawid"
 )
 
 // PoolBalancedGetPut verifies that the running Get-vs-Put delta
@@ -24,7 +26,7 @@ type PoolBalancedGetPut[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PoolBalancedGetPut[T]) ID() string { return "AUTO-POOL-BALANCED" }
+func (PoolBalancedGetPut[T]) ID() string { return lawid.PoolBalanced }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PoolBalancedGetPut[T]) REQID() string { return "" }
@@ -51,7 +53,7 @@ type PoolLeakFree[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (PoolLeakFree[T]) ID() string { return "AUTO-POOL-LEAK-FREE" }
+func (PoolLeakFree[T]) ID() string { return lawid.PoolLeakFree }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (PoolLeakFree[T]) REQID() string { return "" }
@@ -72,7 +74,7 @@ type CursorCloseIdempotent[T any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CursorCloseIdempotent[T]) ID() string { return "AUTO-CURSOR-CLOSE-IDEMPOTENT" }
+func (CursorCloseIdempotent[T]) ID() string { return lawid.CursorCloseIdempotent }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CursorCloseIdempotent[T]) REQID() string { return "" }
@@ -95,7 +97,7 @@ type CursorNextAfterCloseSentinel[T any, V any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (CursorNextAfterCloseSentinel[T, V]) ID() string { return "AUTO-CURSOR-NEXT-AFTER-CLOSE" }
+func (CursorNextAfterCloseSentinel[T, V]) ID() string { return lawid.CursorNextAfterClose }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CursorNextAfterCloseSentinel[T, V]) REQID() string { return "" }
@@ -125,7 +127,7 @@ type TwoPhaseNoRollbackAfterCommit[T any, Tx any] struct {
 
 // ID returns the stable identifier for this law.
 func (TwoPhaseNoRollbackAfterCommit[T, Tx]) ID() string {
-	return "AUTO-TWO-PHASE-ROLLBACK-AFTER-COMMIT"
+	return lawid.TwoPhaseRollbackAfterCommit
 }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
@@ -167,7 +169,7 @@ type TwoPhaseCommitOrRollback[T any, Tx any] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (TwoPhaseCommitOrRollback[T, Tx]) ID() string { return "AUTO-TWO-PHASE-MUTEX" }
+func (TwoPhaseCommitOrRollback[T, Tx]) ID() string { return lawid.TwoPhaseMutex }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (TwoPhaseCommitOrRollback[T, Tx]) REQID() string { return "" }
@@ -205,7 +207,7 @@ type SagaFullCompensation[T any, Obs comparable] struct {
 }
 
 // ID returns the stable identifier for this law.
-func (SagaFullCompensation[T, Obs]) ID() string { return "AUTO-SAGA-FULL-COMPENSATION" }
+func (SagaFullCompensation[T, Obs]) ID() string { return lawid.SagaFullCompensation }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (SagaFullCompensation[T, Obs]) REQID() string { return "" }

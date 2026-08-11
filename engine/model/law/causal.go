@@ -9,6 +9,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/core/trace"
 )
 
@@ -109,7 +110,7 @@ type CausalOrdering[T any, K comparable] struct {
 func (l *CausalOrdering[T, K]) BindTrace(t *trace.Trace) { l.Trace = t }
 
 // ID returns the stable identifier for this law.
-func (*CausalOrdering[T, K]) ID() string { return "AUTO-CAUSAL-ORDERING" }
+func (*CausalOrdering[T, K]) ID() string { return lawid.CausalOrdering }
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*CausalOrdering[T, K]) REQID() string { return "" }
