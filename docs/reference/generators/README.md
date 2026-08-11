@@ -4,7 +4,7 @@ A generator reads Go declarations and writes the test infrastructure you would o
 
 testkit supplies generators and annotator configuration. Parsing Go, the intermediate representation, typed metadata, slot ordering, determinism, caching and the file sink all come from [eidos](https://go.thesmos.sh/eidos); see [ADR-0003](../../adr/0003-adopt-eidos-as-the-codegen-substrate.md) and [ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md). Generators do not inspect Go types directly. They read the three classification axes eidos's shape annotator stamps — detector for the signature, contract for the multi-callable protocol, mixin for the declared guarantees — and decide what to emit from those.
 
-**Status.** Four generators ship: `stub`, `builder`, `enum`, `sentinel`. The rest (`suite`, `bench`, `model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed and not implemented; their pages describe a planned shape and say so at the top.
+**Status.** Five generators ship: `stub`, `builder`, `enum`, `sentinel`, `suite`. Three more — `bench`, `fuzz`, `model` — are designed in [RFC-0003](../../rfc/0003-the-projection-consumers.md) and not implemented; their pages track that design and say so at the top. The rest (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are planned; their pages describe an intended shape.
 
 ## Opting in
 
@@ -50,6 +50,7 @@ Project-wide conventions live in `.testkit.yaml`; see [Configuration](../configu
 | [`builder`](builder.md) | A struct carrying `//testkit:builder` | A fluent fixture builder with shape-aware setters, `Mutate`, `Clone` |
 | [`enum`](enum.md) | A typed constant block carrying `//testkit:enum` | `String`, `Parse`, `Values`, `IsValid`, the text marshallers, and the checks that hold them to the declaration |
 | [`sentinel`](sentinel.md) | A package carrying `//testkit:sentinel` | Checks over the package's error contract — prefix, uniqueness, non-overlap, custom-error invariants |
+| [`suite`](suite.md) | An interface carrying `//testkit:suite` | A conformance harness: every check the interface's signature and classifications imply, a derived fixture and seed, and a typed extension point |
 
 ## Directives
 
@@ -63,6 +64,7 @@ Project-wide conventions live in `.testkit.yaml`; see [Configuration](../configu
 | `//testkit:sentinel-no-overlap-with` | package | `sentinel` | Name another package this one's sentinels must stay distinct from. Repeats; each line unions. |
 | `//testkit:default` | struct field | `defaults` | Seed one field's value in a generated constructor. |
 | `//testkit:fault` | interface method | `fault` | Name the errors a double should offer one-shot helpers for. |
+| `//testkit:suite` | interface | `suite` | Generate the conformance harness. No keys; deleting the line is the suppression. |
 
 A directive name may be registered once per run, so `//testkit:default` and `//testkit:fault` are owned by their own plugins rather than by the generators that consume them. That is what lets more than one generator read the same stamp without depending on each other being registered.
 
@@ -78,6 +80,7 @@ Every generator declares a filename suffix, and the layout phase composes `<sour
 | `builder` | `_builder.gen.go` | `_builder.gen_test.go` |
 | `enum` | `.enum_gen.go` | `.enum_test.go` |
 | `sentinel` | `.gen_test.go` | — |
+| `suite` | `_suite.gen.go` | `_suite.gen_test.go` (reserved for the self-check) |
 
 Override with `//testkit:out`, usually once at package scope:
 
@@ -99,8 +102,9 @@ A suffix ending `_test.go` gets the external test package shift for free — the
 ## Adoption order
 
 1. **`stub`** — the runtime substrate. Install once per interface.
-2. **`builder`** — replaces inline composite-literal construction in tests.
-3. **`enum`** and **`sentinel`** — static checks with no runtime dependency; the quickest win in an existing tree.
+2. **`suite`** — the conformance harness over the same interfaces; the double from step 1 powers its second run.
+3. **`builder`** — replaces inline composite-literal construction in tests.
+4. **`enum`** and **`sentinel`** — static checks with no runtime dependency; the quickest win in an existing tree.
 
 See [Adoption](../../how-to/adoption.md) for the incremental guide.
 

@@ -15,8 +15,9 @@ testkit validate benchmarks
 ## What it checks
 
 1. Every `func Benchmark*(b *testing.B)` function contains
-   a `testkit.StartContract` or `testutil.StartContract`
-   call
+   a `testkit.StartContract` call — the [bench
+   generator](../generators/bench.md)'s outputs satisfy
+   this by construction
 2. Every `StartContract` chain includes at least one of
    `AllocsMax` or `LatencyMax` (a contract without
    ceilings is vacuous)
