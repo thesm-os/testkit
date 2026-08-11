@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/sample/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/...
+// Command:   testkit run ./corpus/iface/mixin/sample/...
 
 package sampletest_test
 
@@ -144,6 +144,123 @@ func TestMixedStubProcess(t *testing.T) {
 	})
 }
 
+// mixedStubNewInputSubject binds NewInput into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubNewInputSubject(tb testing.TB) stub.Subject[sampletest.MixedNewInputCall, sampletest.MixedNewInputReturn] {
+	tb.Helper()
+	s := sampletest.NewMixedStub(tb)
+	return stub.Subject[sampletest.MixedNewInputCall, sampletest.MixedNewInputReturn]{
+		Stub: s.OnNewInput.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			_, _ = s.NewInput(a0)
+		},
+		Result: func() sampletest.MixedNewInputReturn {
+			var a0 context.Context
+			got0, got1 := s.NewInput(a0)
+			return sampletest.MixedNewInputReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnNewInput.Func(func(_ context.Context) (string, error) {
+				mark()
+				var z0 string
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			_, r1 := s.NewInput(a0)
+			return r1
+		},
+	}
+}
+
+// TestMixedStubNewInput pins how NewInput answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubNewInput(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "NewInput", mixedStubNewInputSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := sampletest.NewMixedStub(t)
+		var want0 string
+		var want1 error
+		s.OnNewInput.Returns(want0, want1)
+		var a0 context.Context
+		got0, got1 := s.NewInput(a0)
+		testkit.Equal(t, got0, want0, "NewInput must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "NewInput must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := sampletest.NewMixedStub(t)
+		var a0 context.Context
+		_, _ = s.NewInput(a0)
+		got := s.OnNewInput.AssertCalledOnce(t, "NewInput must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := sampletest.NewMixedStub(t)
+		var seen []sampletest.MixedNewInputCall
+		s.OnNewInput.OnRecord(func(c sampletest.MixedNewInputCall) { seen = append(seen, c) })
+		var a0 context.Context
+		_, _ = s.NewInput(a0)
+		_, _ = s.NewInput(a0)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per NewInput call")
+	})
+
+	t.Run("wires WithMixedNewInput at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := sampletest.NewMixedStub(t, sampletest.WithMixedNewInput(func(_ context.Context) (string, error) {
+			called = true
+			var z0 string
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		_, _ = s.NewInput(a0)
+		testkit.True(t, called, "WithMixedNewInput must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := sampletest.NewMixedStub(t)
+		var want0 string
+		var want1 error
+		s.OnNewInput.Returns(want0, want1)
+		var a0 context.Context
+		_, _ = s.NewInput(a0)
+		s.ResetCalls()
+		got0, got1 := s.NewInput(a0)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
 // mixedStubDouble describes how to build a MixedStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -219,7 +336,24 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		_, r1 := s.Process(a0, a1)
 		testkit.ErrorIs(t, r1, want, "Process must surface the wrapped answer")
 	})
+
+	t.Run("forwards NewInput to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		_, _ = s.NewInput(a0)
+		inner.OnNewInput.AssertCalledOnce(t, "NewInput must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what NewInput answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("NewInput-delegate")
+		inner.OnNewInput.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		_, r1 := s.NewInput(a0)
+		testkit.ErrorIs(t, r1, want, "NewInput must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 720023a3c0f740ca2ea402026bb56b620a9bd5182e6cf8fcc1b7e8a902dd12b2
+// testkit:provenance 71c4fd3b6821e3a7663025cb599e48a52d3f599a8e86755f82d4a038a4b114b1

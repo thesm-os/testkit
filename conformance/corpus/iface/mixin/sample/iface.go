@@ -22,9 +22,16 @@ import (
 //
 //testkit:out sampletest/ pkg=sampletest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Process takes an input the mixin pins. The parameter is the point: with
 	// no argument there is nothing for a sample to replace.
-	//testkit:mixin sample
+	//testkit:mixin sample builder=NewInput
 	Process(ctx context.Context, input string) (string, error)
+
+	// NewInput is the builder the mixin names. It sits on the interface
+	// because that is where the sibling resolver looks: a mixin on a method
+	// resolves its partner against the owner's method list, so a package-level
+	// factory would not be found however well it fitted.
+	NewInput(ctx context.Context) (string, error)
 }

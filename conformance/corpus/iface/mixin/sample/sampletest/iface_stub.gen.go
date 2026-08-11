@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/sample/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/...
+// Command:   testkit run ./corpus/iface/mixin/sample/...
 
 package sampletest
 
@@ -24,6 +24,17 @@ import (
 type MixedProcessCall struct {
 	Ctx    context.Context
 	Input  string
+	Result string
+	Err    error
+}
+
+// MixedNewInputCall records one invocation of Mixed.NewInput.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedNewInputCall struct {
+	Ctx    context.Context
 	Result string
 	Err    error
 }
@@ -63,6 +74,39 @@ func (s *MixedProcessStub) Func(fn func(context.Context, string) (string, error)
 	return s
 }
 
+// MixedNewInputStub controls how the double answers NewInput and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedNewInputStub struct {
+	*stub.MethodStub[MixedNewInputCall]
+
+	fn       func(context.Context) (string, error)
+	fallback *MixedNewInputReturn
+}
+
+// MixedNewInputReturn holds the fixed answer configured through Returns.
+type MixedNewInputReturn struct {
+	Result string
+	Err    error
+}
+
+// Returns pins a fixed result for every call to NewInput. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedNewInputStub) Returns(result string, err error) *MixedNewInputStub {
+	s.fallback = &MixedNewInputReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for NewInput, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedNewInputStub) Func(fn func(context.Context) (string, error)) *MixedNewInputStub {
+	s.fn = fn
+	return s
+}
+
 // --- MixedStub ---
 
 // MixedStubOption configures a [MixedStub] at construction time.
@@ -83,6 +127,7 @@ func MixedStubStrict() MixedStubOption {
 func MixedStubDelegateTo(impl sample.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnProcess.Func(impl.Process)
+		s.OnNewInput.Func(impl.NewInput)
 	}
 }
 
@@ -125,12 +170,20 @@ func WithMixedProcess(fn func(context.Context, string) (string, error)) MixedStu
 	return func(s *MixedStub) { s.OnProcess.Func(fn) }
 }
 
+// WithMixedNewInput sets NewInput's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedNewInput(fn func(context.Context) (string, error)) MixedStubOption {
+	return func(s *MixedStub) { s.OnNewInput.Func(fn) }
+}
+
 // MixedStub is a recording test double for Mixed.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type MixedStub struct {
-	OnProcess *MixedProcessStub
+	OnProcess  *MixedProcessStub
+	OnNewInput *MixedNewInputStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -155,10 +208,12 @@ var _ sample.Mixed = (*MixedStub)(nil)
 // and non-test callers want.
 func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
-		OnProcess: &MixedProcessStub{MethodStub: stub.NewMethodStub[MixedProcessCall](tb, "Mixed.Process")},
+		OnProcess:  &MixedProcessStub{MethodStub: stub.NewMethodStub[MixedProcessCall](tb, "Mixed.Process")},
+		OnNewInput: &MixedNewInputStub{MethodStub: stub.NewMethodStub[MixedNewInputCall](tb, "Mixed.NewInput")},
 	}
 	s.all = []stub.Configurable{
 		s.OnProcess.MethodStub,
+		s.OnNewInput.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -227,5 +282,38 @@ func (s *MixedStub) Process(ctx context.Context, input string) (string, error) {
 	return r.Result, r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *MixedNewInputStub) invoke(ctx context.Context) func() MixedNewInputReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedNewInputReturn {
+		r0, r1 := s.fn(ctx)
+		return MixedNewInputReturn{Result: r0, Err: r1}
+	}
+}
+
+// NewInput records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) NewInput(ctx context.Context) (string, error) {
+	call := MixedNewInputCall{Ctx: ctx}
+	r := stub.Answer(s.OnNewInput.MethodStub, &call, stub.Arms[MixedNewInputCall, MixedNewInputReturn]{
+		Invoke:   s.OnNewInput.invoke(ctx),
+		Fallback: s.OnNewInput.fallback,
+		Fault:    func(err error) MixedNewInputReturn { return MixedNewInputReturn{Err: err} },
+		Stamp: func(c *MixedNewInputCall, r MixedNewInputReturn) {
+			c.Result = r.Result
+			c.Err = r.Err
+		},
+	})
+	return r.Result, r.Err
+}
+
 // testkit: end of generated content.
-// testkit:provenance 3c7da308f3de0d08c7d33862a3a0afb754210995ea2a60ba81c66007205493cf
+// testkit:provenance 218dbe8eb1fe9beaa4c8e1310b21158c1600e08dc99efc25bc8eec3a4630c090

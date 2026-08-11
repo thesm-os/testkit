@@ -457,6 +457,80 @@ func TestRelationalMixin(t *testing.T) {
 	})
 }
 
+// A sample check passes the builder's output straight to the method, so the two
+// have to fit — checked rather than assumed, since a mismatch is a generated
+// call the toolchain refuses and a render error is a file that came out short.
+func TestSampleCheck(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits where the builder produces what the method takes", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(t, hasCheckIn(t, sampleFixture(t, "string", 1), "Process", "sample"),
+			"one parameter fed by one produced value of the same type")
+	})
+
+	t.Run("emits nothing where the types disagree", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, hasCheckIn(t, sampleFixture(t, "int", 1), "Process", "sample"),
+			"a builder producing an int cannot feed a string parameter")
+	})
+
+	t.Run("emits nothing where the builder produces several values", func(t *testing.T) {
+		t.Parallel()
+		// Which one feeds the parameter is a guess, and the mixin names the
+		// builder without saying — the ambiguity partition needed an axis for.
+		testkit.False(t, hasCheckIn(t, sampleFixture(t, "string", 2), "Process", "sample"),
+			"two produced values and one parameter is a pairing nothing states")
+	})
+}
+
+// Isolation is a claim about two writes not reaching each other, and every way
+// of getting it slightly wrong produces a check that cannot fail.
+//
+// Two drafts of this shipped-in-progress before the axis existed: one varied
+// every parameter, so the writes never collided on a key; one held the payload,
+// so an implementation ignoring partitions clobbered the first write with an
+// identical value. Both passed against a store with a single flat namespace,
+// which is the one subject the check exists to reject.
+func TestPartitionCheck(t *testing.T) {
+	t.Parallel()
+
+	t.Run("varies the axis and the payload, holds the key", func(t *testing.T) {
+		t.Parallel()
+		ck := checkNamed(t, contractIn(t, partitionFixture(t, "part")), "Put", "partition")
+		testkit.Equal(t, ck.SecondCall, []string{"partOther", "key", "valueOther"},
+			"only the axis and the payload differ between the two writes")
+		testkit.Equal(t, ck.CompareAgainst, "value",
+			"and the read is held up to the first write's payload")
+	})
+
+	t.Run("emits nothing where no axis is named", func(t *testing.T) {
+		t.Parallel()
+		// Without it the check has to guess which parameter isolates, and every
+		// guess produces one that passes for a subject ignoring partitions.
+		testkit.False(t, hasCheckIn(t, partitionFixture(t, ""), "Put", "partition"),
+			"an unnamed axis is one no check should invent")
+	})
+
+	t.Run("emits nothing where the axis names no parameter", func(t *testing.T) {
+		t.Parallel()
+		// eidos validates this and reports it, so a run never reaches here —
+		// but a check varying a parameter the method does not take would not
+		// compile, and a render error is a file that came out short.
+		testkit.False(t, hasCheckIn(t, partitionFixture(t, "absent"), "Put", "partition"),
+			"an axis outside the parameter list is nothing to vary")
+	})
+
+	t.Run("emits nothing where every parameter identifies the slot", func(t *testing.T) {
+		t.Parallel()
+		// Writer and reader taking the same list leaves no payload, so the two
+		// writes differ in where they land and in nothing else — there is
+		// nothing for the read to be wrong about.
+		testkit.False(t, hasCheckIn(t, payloadlessPartitionFixture(t), "Put", "partition"),
+			"a write carrying no value has no isolation to demonstrate")
+	})
+}
+
 // Two reasons a value is missing, and only one of them is the author's to fix.
 //
 // A func admits no literal under any run. A type in a package the patterns did
@@ -656,6 +730,120 @@ func missFixture(t *testing.T, shapeName string) *sdk.Store {
 		Build()
 	stamp(s, "Load", shapeName)
 	return s
+}
+
+// sampleFixture is a single-parameter method beside a builder producing
+// produces values of the given type.
+func sampleFixture(t *testing.T, built string, produces int) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("sp", "example.com/sp").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("sp/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Process", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("input", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("NewInput", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				for range produces {
+					m.Return(storefixture.Named(built))
+				}
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Process" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{suite.MixinSample}, "test")
+			shape.MixinParamKey(suite.MixinSample, suite.MixinSampleParam).
+				Set(bag, "NewInput", "test")
+		}
+	}
+	return s
+}
+
+// partitionFixture is a partitioned write beside its reader, with the isolation
+// axis named by the given parameter.
+func partitionFixture(t *testing.T, axis string) *sdk.Store {
+	t.Helper()
+	return partitionStore(t, axis, true)
+}
+
+// payloadlessPartitionFixture is a write whose every parameter the reader also
+// takes, so nothing distinguishes what was written from where.
+func payloadlessPartitionFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return partitionStore(t, "part", false)
+}
+
+// partitionStore builds the fixture, optionally giving the write a payload the
+// reader does not share.
+func partitionStore(t *testing.T, axis string, payload bool) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("pt", "example.com/pt").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("pt/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("part", storefixture.Named("string"))
+				m.Param("key", storefixture.Named("string"))
+				if payload {
+					m.Param("value", storefixture.Named("string"))
+				}
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Read", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("part", storefixture.Named("string"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Put" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{suite.MixinPartition}, "test")
+			shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionRead).
+				Set(bag, "Read", "test")
+			if axis != "" {
+				shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionAxis).
+					Set(bag, axis, "test")
+			}
+		}
+	}
+	return s
+}
+
+// checkNamed returns the method's check reporting under subtest.
+func checkNamed(t *testing.T, c *suite.Contract, method, subtest string) *suite.Check {
+	t.Helper()
+	for _, m := range c.Methods {
+		if m.Name != method {
+			continue
+		}
+		for _, ck := range m.Checks {
+			if ck.Subtest == subtest {
+				return ck
+			}
+		}
+	}
+	t.Fatalf("%s carries no %q check", method, subtest)
+	return nil
 }
 
 // relationalFixture is a method whose effect is out of band beside the method

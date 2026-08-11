@@ -1,151 +1,228 @@
 # Suite
 
-> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
+A conformance harness is what an implementation is held to. The `suite`
+generator reads an annotated interface and emits everything the interface's
+shape and classifications imply about how an implementation must behave —
+derived rather than configured, with a typed extension point for what
+derivation cannot reach. Passing the harness is the claim that one
+implementation can stand in for another.
 
-Tier 1 conformance. Reads a Go interface, classifies each method into a *shape* by signature pattern, and emits an `Assert<Iface>Contract(t, factory, opts...)` test harness.
+The unit is the method, not the classification. A method's checks come from
+four sources, and only the third involves a directive:
 
-The generated suite evaluates implementations against two layers of contracts:
+1. **The signature.** A context parameter earns cancellation, deadline and
+   nil-context checks; an error return earns a zero-value-on-error check;
+   every method earns a smoke call. This is most of the volume and needs no
+   annotation.
+2. **The detector.** The shape stamp adds what is specific to it — a
+   `reader` misses, a `lookup`'s `ok == false` comes with zero values.
+3. **Each mixin and contract the method carries** adds the direct form of
+   its declared law.
+4. **The extension point**, typed, whether or not anything filled it.
 
-1. **Baseline contracts:** Auto-detected invariants derived from the method's shape (e.g., a `Reader` must return consistent reads; a `Writer` must succeed on the first try).
-2. **Directive contracts:** Orthogonal behaviors triggered by `//testkit:` annotations (e.g., `//testkit:idempotent`, `//testkit:concurrent`, `//testkit:atomic`).
+The interface as a whole earns cross-method checks a fixed sequence can
+witness — read-after-write is the writer followed by the reader. Law-backed
+classifications belong to the model tier, not here; see
+[which tier owns what](#which-classifications-this-tier-asserts).
 
-A `factory func() Iface` is the single required injection. Every subtest constructs a fresh implementation per run, ensuring perfect state isolation and safe parallel execution.
-
-## Directive
+## The directive
 
 ```go
-//go:generate testkit suite -o storetest/store_spec.gen_test.go Store
+//testkit:suite
+type Mixed interface { ... }
 ```
 
-`suite` accepts exactly one type argument and emits a single test file (`_test.go`).
+No keys, no positional argument, and the negated form is denied — a suite
+exists where one is declared, so deleting the line is the suppression.
+Everything else the generator needs it reads: the shape stamps for what to
+check, `//testkit:out` and `pkg=` for where the file lands, and the source
+signature for the rest.
 
-## The Conformance Pattern
+## Where the output goes
 
-The generated entry points support the **Multi-Implementation Conformance Pattern**. This is the load-bearing pattern for database migrations, refactoring, and verifying mocks against real implementations. You write the contract suite wiring *once*, and run it against *N* implementations.
+| Tag | Suffix | Contents |
+|---|---|---|
+| *(primary)* | `_suite.gen.go` | The harness: entry point, per-method checks and check types, fixture, options. |
+| `test` | `_suite.gen_test.go` | Declared and reserved for the self-check that proves each check can fail; not yet emitted. |
 
-### Single-Implementation Driver
+Both route with `//testkit:out`, usually once at package scope. The corpus
+convention pairs the suite with the same interface's `//testkit:stub` in one
+`<pkg>test` package.
+
+## What it generates
+
+The worked example throughout is the conformance fixture
+`conformance/corpus/iface/mixin/validates`:
 
 ```go
-func AssertStoreContract(
-    t *testing.T, 
-    factory StoreFactory, 
-    opts ...suite.Option,
+type Payload struct{ Key, Body string }
+
+//testkit:out validatestest/ pkg=validatestest
+//testkit:stub
+//testkit:suite
+type Mixed interface {
+    //testkit:mixin validates fn=Validate
+    Store(ctx context.Context, v Payload) error
+
+    Validate(v Payload) error
+
+    Read(ctx context.Context, key string) (Payload, error)
+}
+```
+
+One directive beyond `suite` itself, and the generated harness carries ten
+checks across the three methods — the signature family supplies nine of
+them.
+
+### The check types
+
+```go
+type MixedStoreCheck func(tb testing.TB, subject validates.Mixed, v validates.Payload)
+type MixedReadCheck  func(tb testing.TB, subject validates.Mixed, key string)
+```
+
+One named type per method, over the failure-recording interface and the
+method's own concrete parameters. Every generated check is a value of it,
+and so is a consumer's — which is what lets them compose, reorder, and run
+standalone. `testing.TB` rather than `*testing.T` is what makes a check
+drivable by a stand-in such as [`testkit.FailableTB`](../primitives/failure.md).
+
+### The exported checks
+
+```go
+func AssertMixedStoreSmoke(tb testing.TB, subject validates.Mixed, v validates.Payload)
+func AssertMixedStoreCancels(tb testing.TB, subject validates.Mixed, v validates.Payload)
+func AssertMixedStoreHonoursDeadline(tb testing.TB, subject validates.Mixed, v validates.Payload)
+func AssertMixedStoreToleratesNilContext(tb testing.TB, subject validates.Mixed, v validates.Payload)
+func AssertMixedReadZeroOnError(tb testing.TB, subject validates.Mixed, key string)
+// ...
+```
+
+Exported so a consumer can run one in isolation, and so a self-check can
+drive it against a violating stand-in and prove it fails. Generated beside
+the subject at concrete types, there are no type parameters to erase
+([ADR-0012](../../adr/0012-generate-per-shape-helpers-into-the-consumer.md)).
+Subtest names carry the classification they assert
+([ADR-0015](../../adr/0015-subtest-names-carry-the-classification.md)).
+
+### The fixture
+
+```go
+type MixedFixture struct {
+    V        validates.Payload
+    VOther   validates.Payload
+    Key      string
+    KeyOther string
+}
+
+func DefaultMixedFixture() MixedFixture
+```
+
+One field per parameter, derived from the parameter's name and type, with a
+paired alternate: a check comparing a result against a single input passes
+whenever the subject happened to be seeded with it, and a miss check whose
+key happens to hit asserts nothing. Struct parameters compose per field. A
+type the source declares a `<Type>Defaults()` companion for uses it for the
+sample half.
+
+A field whose type admits no literal — a func, a channel, a type the run
+never read — is declared and left at its zero value, and every check that
+needed it is **dropped rather than emitted against a value nobody could
+write**. Supply one through `MixedWithFixture` to restore them.
+
+### The seed
+
+The interface seeds itself: where it declares a writer (`writer`,
+`compositewriter` or `multiargwriter`), each fresh subject is populated
+through it with fixture values before the checks run — which is also what
+makes read-after-write free. A writer-less interface has no derivable seed;
+`MixedSeed` supplies one, and it returns an error rather than swallowing
+one, because a seed that failed quietly leaves every later check asserting
+against an empty subject.
+
+### The entry point
+
+```go
+func AssertMixedContract(t *testing.T, opts ...MixedOption)
+```
+
+Runs every check against every declared subject, each subtest against a
+fresh subject. The generated docblock is a report: how many checks, across
+how many methods, which options extend or drop them, and whether the double
+run applies.
+
+## Options
+
+```go
+validatestest.AssertMixedContract(t,
+    validatestest.MixedSubject("in-memory", newInMemory),
+    validatestest.MixedSubject("postgres", newPostgres),
 )
 ```
 
-### Multi-Implementation Driver
+| Option | Effect |
+|---|---|
+| `MixedSubject(name, factory)` | Declare an implementation. The one option a consumer always writes — which implementations exist is the single fact derivation cannot recover. |
+| `MixedWithFixture(f)` | Replace any subset of the derived inputs; unset fields keep their derived values. |
+| `MixedSeed(fn)` | Supply the seed a writer-less interface cannot derive. |
+| `MixedOn<Method>(name, fn)` | Add a named check of the method's check type. It reports beside the generated ones. |
+| `MixedWithout(paths...)` | Drop generated checks by path — `"Store/reports a cancelled context"` — without abandoning the rest. |
+| `MixedWithoutDouble()` | Decline the second, double-wrapped run. |
 
-```go
-func AssertStoreContractAcrossImpls(
-    t *testing.T, 
-    factories []StoreNamedFactory, 
-    opts ...suite.Option,
-)
-```
+The acceptance measure this generator is held to: a suite that needs only
+`Subject` is the design working — every further option is either a fact the
+source cannot state or a derivation not yet done.
 
-This driver runs the exact same contract suite once per provided factory, wrapped in `t.Run(Name, ...)`.
+## The double run
 
-## Auto-detected Baseline Contracts
+Where the interface also carries `//testkit:stub`, every subject runs twice:
+once plain, once wrapped in the generated double in delegate mode. Anything
+the wrapper fails that the subject passes is the double lying — which is
+what makes a generated double trustworthy. The double is read off the stub
+generator's queued output, never re-derived from its directive. An
+interface without `//testkit:stub` generates neither the run nor the
+option.
 
-Each method is classified by `shape.Detect` from its signature (see [Shapes](shapes.md)). The shape dictates which `suite.Assert<Shape>Baseline` is invoked.
+## Which classifications this tier asserts
 
-Regardless of shape, every method that accepts a `context.Context` automatically receives:
+[ADR-0018](../../adr/0018-one-tier-owns-each-classification.md) assigns each
+classification to exactly one tier by rule: **the suite tier implements no
+property `engine/model/law` already carries.** Where a law exists the
+classification is the model tier's; what stays here is the
+signature-derived family, the shapes the law catalogue does not reach, and
+the classifications whose direct form is a fixed call sequence. The full
+per-classification tables live in
+[RFC-0002](../../rfc/0002-the-suite-generator.md); the generated header
+records which tier owns each check the file carries.
 
-- `<Method> / smoke` — fail-fast bare invocation with sample args.
-- `<Method> / respects context` — asserts `ctx.Done()` halts execution and returns a context error.
-- `<Method> / respects deadline` — asserts a pre-expired context fails immediately.
-- `<Method> / nil context` — asserts `nil` context does not panic.
+## Generic interfaces
 
-Shape baselines add deeper semantics:
+The harness is generic where the interface is — the entry point and check
+types carry the interface's type parameters, and the consumer's factory
+fixes them at the call site. The self-check half, which must instantiate at
+concrete witnesses, lands with the reserved `test` output.
 
-- **Reader:** Asserts `consistent reads` (repeated calls return identical values).
-- **StreamReader:** Asserts it `completes` (terminates), is `reentrant` (two iterators yield equal sequences), and `respects break` (early return from a `for` loop halts production cleanly).
-- **Aggregator:** Asserts `count consistency` (stable across immediate re-reads).
-
-### Smoke Test Recovery & `//testkit:sample`
-
-Smoke tests invoke methods with zero-value inputs. If an implementation panics on zero-value inputs (e.g., an ID parameter cannot be empty), the smoke test gracefully `t.Skip`s instead of failing the suite, emitting a diagnostic message to guide the developer.
-
-To eliminate the skip and run the smoke test, use the `//testkit:sample` directive to inject a valid builder function for the parameter:
-
-```go
-//testkit:sample SampleRecord
-Put(ctx context.Context, item Record) error
-```
-
-The generator synthesizes a call to `SampleRecord(impl)` to populate the argument in smoke tests and benchmark hot-paths.
-
-## Directive-driven Subtests
-
-Directives layer orthogonal constraints on top of the shape baseline.
-
-| Directive | Subtest Emitted | Behavior |
-|-----------|-----------------|----------|
-| `errors ErrX [ErrY...]` | `<Method> / returns <Err>` | Calls method with zero-value, asserts `errors.Is(err, ErrX)`. |
-| `wrapped-via ErrX` | `<Method> / wrapped-via` | Asserts the returned error wraps `ErrX` via `errors.Is`. |
-| `nilsafe` | `<Method> / nilsafe` | Asserts `nil` pointers don't panic. |
-| `pure` | `<Method> / pure` | Asserts the method has no side effects and results match across impls. |
-| `idempotent` | `<Method> / idempotent` | Asserts repeated calls produce the identical result. |
-| `cacheable` | `<Method> / cacheable` | Asserts deterministic input → output mapping (implies `pure`). |
-| `monotonic` | `<Method> / monotonic` | Asserts results are non-decreasing across consecutive calls. |
-| `concurrent` | `<Method> / concurrent` | Stress-runs the method from 16x25 goroutines; asserts no race. |
-| `concurrent-readers`| `<Method> / concurrent-readers` | Parallel reads, serialized writes fanout. |
-| `atomic` | `<Method> / atomic` | Asserts all-or-nothing semantics on failure paths. |
-| `timeout D` | `<Method> / timeout` | Asserts completion within duration `D`. |
-
-### Cross-Method Directives
-
-These directives emit paired-method subtests. They declare how a write on one method causally affects a read on another.
-
-| Directive | Subtest Emitted |
-|-----------|-----------------|
-| `read-after-write <Reader>` | After this writer, the named reader returns the exact written value. |
-| `delete-removes <Reader>` | After this deleter, the named reader returns the not-found sentinel. |
-| `stream-reflects-mutations <Stream>`| After this writer, the named stream method yields the written value. |
-| `lifecycle-after-close <Reader>` | After this close, the named reader returns the closed sentinel. |
-| `crdt-merge <Other>` | Two impls applying ops in opposite orders converge to equal state. |
-
-## Injecting State via `suite.Option`
-
-Because `Assert<Iface>Contract` tests your implementation as a black box, it needs help putting the implementation into a state where certain invariants can be tested. For example, you cannot test "Read Consistent" on a database that is entirely empty.
-
-You inject state into the driver via `suite.Option` values:
-
-### `suite.WithPrePopulate(func(impl T))`
-
-The most critical option. The driver wraps your factory: before handing a fresh implementation to any subtest, it calls your `PrePopulate` closure to seed the database with known data. Reader baselines and `pure` subtests rely on this state existing.
-
-```go
-AssertStoreContract(t, factory, 
-    suite.WithPrePopulate(func(s basic.Store) {
-        _ = s.Put(context.Background(), basic.Item{ID: "known-1"})
-    }),
-)
-```
-
-### `suite.WithInvalidFactory(func() T)`
-
-Used by Mutator and Lifecycle shapes to test the "Reject Invalid" baseline. You supply a factory that produces an implementation fundamentally incapable of succeeding (e.g., a database connection with a bad password), and the suite asserts that writes predictably fail.
-
-### `suite.WithRetryFactory(func() T)`
-
-When a method is marked `//testkit:retry-succeeds-on-attempt N`, you must provide an implementation that simulates a transient network failure, returning errors for N-1 calls before succeeding.
-
-## Layout Conventions
-
-A typical interface generates into a `<pkg>test/` sub-package to prevent test dependencies from polluting the production binary.
-
-**What goes where:**
+## Layout conventions
 
 | File | Owner | Contents |
-|------|-------|----------|
-| `*_spec.gen_test.go` | Generator | The generated suite harness (DO NOT EDIT). |
-| `*_stub.gen.go` | Generator | The generated recording stub (DO NOT EDIT). |
-| `sample_helpers.go` | Developer | Hand-written `func TestSampleX(_ Iface) X` builder functions for `//testkit:sample`. |
-| `spec_test.go` | Developer | Hand-written test functions wiring `Assert<Iface>Contract` with the factory and `suite.Option` injections. |
+|---|---|---|
+| `iface.go` | Developer | The interface, its directives, the package-scope routing |
+| `<pkg>test/iface_suite.gen.go` | Generator | The harness. Do not edit. |
+| `<pkg>test/iface_stub.gen.go` | Generator | The double the second run wraps subjects in. |
+| `<pkg>test/inmemory_test.go` | Developer | The wiring: subjects, extensions, drops. |
+
+## Planned additions
+
+[RFC-0003](../../rfc/0003-the-projection-consumers.md) commissions two
+additions to this generator's surface: an init-time **subject registry**
+(`RegisterMixedSubject`) so the bench, fuzz and model consumers can generate
+their own entry points, and a generic **extension seam** those consumers
+register runners through. Neither is emitted yet.
 
 ## See also
 
-- [Shape Classification](shapes.md) — The 21 signature shapes.
-- [Generators / bench](bench.md) — Tier 4 performance benchmarking.
-- [Generators / stub](stub.md) — How the companion stub interacts with the suite.
+- [Stub](stub.md) — the double the second run wraps subjects in.
+- [Bench](bench.md), [Fuzz](fuzz.md), [Model](model.md) — the consumers of
+  this generator's projection, designed in RFC-0003.
+- [RFC-0002](../../rfc/0002-the-suite-generator.md) — the design record and
+  the full classification-to-tier tables.

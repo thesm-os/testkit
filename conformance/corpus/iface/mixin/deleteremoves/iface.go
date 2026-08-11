@@ -22,6 +22,7 @@ import (
 //
 //testkit:out deleteremovestest/ pkg=deleteremovestest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Delete must make the key unreadable. Without Read the law has no
 	// observation to make, and without Put there is nothing to delete.

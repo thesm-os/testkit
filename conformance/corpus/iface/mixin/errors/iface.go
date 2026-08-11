@@ -34,6 +34,7 @@ var (
 //
 //testkit:out errorstest/ pkg=errorstest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Get reports [ErrNotFound] and nothing else for a miss. The sentinel has
 	// to be declared in the package for the assertion to reference it.

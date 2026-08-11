@@ -22,6 +22,7 @@ import (
 //
 //testkit:out readafterwritetest/ pkg=readafterwritetest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Read must observe what Write stored. The write parameter names the
 	// writer, so the pair has to be in one interface — this is the fixture

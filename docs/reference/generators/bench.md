@@ -1,142 +1,99 @@
 # Bench
 
-> **Status: planned.** This generator is not implemented. No directive is registered for it, and `testkit run` does not produce the output described below. This page records the intended design so adoption can be planned against a stable target — the directive, the output paths and the generated surface may all differ once it ships.
+> **Status: designed, not implemented.**
+> [RFC-0003](../../rfc/0003-the-projection-consumers.md) fixes this
+> generator's design. No directive is registered yet and `testkit run` does
+> not produce the outputs below; where this page and the RFC differ, the RFC
+> is the authority.
 
-Tier 4 conformance. Reads a Go interface, classifies each method into a *shape* by signature pattern, and emits a `Benchmark<Iface>Contract(b, factory, opts...)` harness.
+The `bench` generator turns a `//testkit:bench` method into a measured loop
+holding the budgets the directive declares, backed by the shipped
+[`testkit.Contract`](../primitives/benchmarking.md) runtime — `StartContract`,
+chained ceilings, `Loop`, `End`. It reads the projection the
+[suite generator](suite.md) queues, so the benchmark's subject is seeded the
+same way and fed the same fixture values the assertions use: a budget
+regression and an assertion failure point at the same call with the same
+input.
 
-The generated `bench` harness evaluates implementations against three layers of performance contracts:
-
-1. **Baseline throughput:** Auto-emitted `hot-path` and `concurrent-4` sub-benchmarks for every method.
-2. **Deterministic budget gates:** Opt-in directives (e.g., `//testkit:allocs 0`, `//testkit:latency 100us`) that fail the CI run if an implementation violates performance ceilings.
-3. **Shape-specific plug-ins:** Extensible `BenchOn<Method>` hooks to inject domain-specific load tests (e.g., measuring a `Reader` against 10,000 keys instead of just 1).
-
-A `factory func() Iface` is the single required injection. Every per-method benchmark constructs a fresh implementation via the factory, isolating state across runs.
-
-## Directive
-
-```go
-//go:generate testkit bench -o storetest/store_bench.gen_test.go Store
-```
-
-`bench` accepts exactly one type argument and emits a single test file (`_test.go`).
-
-## The Conformance Pattern
-
-Like the `suite` generator, `bench` produces entry points designed for the **Multi-Implementation Conformance Pattern**.
+## The directive
 
 ```go
-func BenchmarkStoreContract(
-    b *testing.B, 
-    factory StoreFactory, 
-    opts ...StoreBenchOption,
-)
+//testkit:bench allocs=0 p99=500us
+Read(ctx context.Context, key string) (Payload, error)
 ```
 
-You write the benchmark wiring once. By passing different factories (e.g., `InMemoryStore`, `RedisStore`, `PostgresStore`), you instantly generate a comparative performance matrix across all your implementations.
+Method-scoped, because a budget is a property of one hot path. The
+directive's presence is the opt-in: a bare `//testkit:bench` measures and
+reports, and each key present becomes a ceiling. There is no default budget
+— a budget nobody declared is a number the generator invented.
 
-## Auto-Emitted Primitives
+| Key | Gates | Backed by |
+|---|---|---|
+| `allocs=N` | allocations per operation | `Contract.AllocsMax` — shipped |
+| `p99=D` | 99th-percentile latency per operation | `Contract.LatencyMax` — shipped |
+| `mean=D` | mean latency per operation | `Contract.MeanMax` — commissioned |
+| `mem=B` | bytes allocated per operation | `Contract.BytesMax` — commissioned |
 
-Every method is classified by `shape.Detect` from its signature (see [Shapes](shapes.md)). Based on this shape, the generator emits default sub-benchmarks without requiring any consumer code.
+Percentile ceilings carry a sample floor: below one hundred iterations the
+metric is reported, not enforced, so a short `-benchtime` run cannot fail a
+budget the data cannot support.
 
-For every non-skipped method, the harness emits:
+## What it generates
 
-- `<Method> / hot-path` — Single-goroutine `b.Loop()` measurement reporting `ns/op` and `allocs/op`.
-- `<Method> / concurrent-4` — `b.RunParallel`-style throughput measurement at a parallelism of 4.
-
-> **Note on Lifecycle Shapes:** `Lifecycle`, `VoidLifecycle`, and `Unknown` shapes skip the `concurrent-4` emission by default. Concurrent invocation of `Init()` or `Close()` on a shared implementation is rarely safe.
-
-### The Zero-Allocation Guarantee
-
-The auto-emitted benchmark helpers are strictly optimized. The harness guarantees zero allocations from the testing infrastructure inside the timed `b.Loop()` and `b.RunParallel` blocks. Every reported allocation (`allocs/op`) belongs strictly to your implementation.
-
-### Smoke Values & `//testkit:sample`
-
-To benchmark a method, the generator must pass arguments to it. By default, it synthesizes zero-value literals. If your method fast-fails on zero values (e.g., `if id == "" { return ErrInvalid }`), you will inadvertently benchmark the error path instead of the success path.
-
-Use the `//testkit:sample` directive to provide a valid builder function:
+Per annotated method, an exported measured-loop body into `_bench.gen.go` —
+seeded through the interface's own writer, arguments from the fixture, no
+zero values:
 
 ```go
-//testkit:sample SampleRecord
-Put(ctx context.Context, item Record) error
+func BenchmarkMixedRead(b *testing.B, factory func() validates.Mixed) {
+    subject := factory()
+    fx := DefaultMixedFixture()
+    if err := subject.Store(b.Context(), fx.V); err != nil {
+        b.Fatalf("seed: %v", err)
+    }
+    c := testkit.StartContract(b).AllocsMax(0).LatencyMax(500 * time.Microsecond)
+    for c.Loop() {
+        _, _ = subject.Read(b.Context(), fx.Key)
+    }
+    c.End()
+}
 ```
 
-The generator will invoke `SampleRecord()` once, outside the timed loop, and feed the valid result into the hot-path continuously.
-
-## Opt-in Budget Gates (CI Enforcement)
-
-The most powerful feature of the `bench` generator is turning performance metrics into hard CI failures. You apply these gates via directives on the interface methods.
-
-| Directive | Sub-benchmark Emitted | Behavior |
-|-----------|-----------------------|----------|
-| `//testkit:allocs N` | `<Method> / allocs-within-N` | Fails the benchmark when `allocs/op` exceeds `N`. `N=0` enforces an alloc-free hot-path. |
-| `//testkit:latency D` | `<Method> / latency-within-D` | Fails the benchmark when the mean `ns/op` exceeds the duration ceiling `D` (e.g., `100us`). |
-| `//testkit:percentiles pX=D...` | `<Method> / percentiles` | Records the duration distribution and reports percentiles (e.g., `p50`, `p95`, `p99`) via `b.ReportMetric()`. Fails if any budgeted percentile exceeds its ceiling (e.g., `p99=500us`). |
-
-When a method carries these directives, the generator emits the corresponding `allocs-within` or `latency-within` gate tests. These gates are strict assertions—if the implementation violates the budget, the `go test -bench` command exits non-zero.
-
-## Injecting State via `BenchOption`
-
-Like `suite`, you configure the benchmark harness by passing `StoreBenchOption` values into the entry point.
-
-### `StoreBenchPrePopulate(func(impl T))`
-
-Because you cannot benchmark a `Get` method on an empty database, you must seed state. `PrePopulate` registers a one-shot seeder that runs against every freshly-instantiated implementation *before* the per-method benchmarks observe it.
-
-**Crucially**, the cost of `PrePopulate` is paid *outside* the timed `b.Loop()`. It does not pollute your `ns/op` measurements.
+And into `_bench.gen_test.go`, the entry point `go test -bench` discovers,
+ranging the suite's subject registry — the consumer registers
+implementations once and writes no benchmark shims:
 
 ```go
-BenchmarkStoreContract(b, factory, 
-    storetest.StoreBenchPrePopulate(func(ctx context.Context, s basic.Store) {
-        _ = s.Put(ctx, basic.Item{ID: "known-1"})
-    }),
-)
+func BenchmarkMixedContract(b *testing.B) // b.Run per subject per annotated method
 ```
 
-### Shape-Specific Plug-ins
+`-bench 'MixedContract/in-memory/Read'` scopes to one subject's one method.
+An empty registry skips with the one-line instruction that fills it.
 
-You can override the auto-emitted hot-paths or add new load profiles by injecting primitives into the `<Iface>BenchOn<Method>` slots. These slots are strongly typed by the method's detected shape.
+There is no per-method option surface: with the entry generated and the
+bodies exported, a custom benchmark is a plain `Benchmark*` function in the
+consumer's own file.
 
-```go
-BenchmarkStoreContract(b, factory,
-    storetest.StoreBenchOnGet(
-        // Override the auto-emitted hot-path to use a specific seeded key
-        bench.ReaderHotPath[basic.Store, string, basic.Item]("known-1"),
-    ),
-)
-```
+## The double
 
-### Free-Form Custom Benchmarks
+The measured subject is the consumer's implementation — a stub answers from
+a table and benchmarking it prices nothing. In delegate mode the generated
+helper constructs the double with `<Iface>StubBenchMode()`, which disables
+call recording, so the wrapped run prices the delegation and not the
+ledger; the delta between plain and wrapped runs is the double's overhead,
+measured rather than asserted.
 
-For measurements outside the shape vocabulary (e.g., multi-method scenarios like reading while writing), use the `Custom` extension point:
+## Layout conventions
 
-```go
-storetest.StoreBenchCustom("read-write-contention", func(b *testing.B, s basic.Store) {
-    // Custom b.RunParallel block...
-})
-```
-
-## Integration with Stubs
-
-When your factory returns a generated `testkit stub` (often used to benchmark the overhead of decorators or intermediate layers), the `bench` harness automatically triggers the stub's `BenchMode()`.
-
-In `BenchMode`, the stub disables all call recording and expectation tracking. The per-call overhead drops to near-zero, ensuring your benchmark reflects the underlying implementation's speed, not the testkit recorder's overhead.
-
-## Layout Conventions
-
-A typical interface generates its bench harness into a `<pkg>test/` sub-package.
-
-**What goes where:**
-
-| File | Owner | Contents |
-|------|-------|----------|
-| `*_bench.gen_test.go` | Generator | The generated benchmark harness (DO NOT EDIT). |
-| `bench_test.go` | Developer | Hand-written `func Benchmark<Iface>Contract(b *testing.B)` wiring the harness with the factory and `BenchOption` injections. |
-| `sample_helpers.go` | Developer | Hand-written `func TestSampleX(_ Iface) X` builder functions for `//testkit:sample`. |
-
-Keep `bench_test.go` separated from `spec_test.go` (the Tier 1 suite). Benchmarks often require different environment conditions, build tags, or execution flags (e.g., `-benchmem`).
+| Tag | Suffix | Contents |
+|---|---|---|
+| *(primary)* | `_bench.gen.go` | The exported measured-loop bodies. |
+| `test` | `_bench.gen_test.go` | The registry-ranging `Benchmark<Iface>Contract` entry. |
 
 ## See also
 
-- [Primitives / Benchmarking](../primitives/benchmarking.md) — How to write custom `StartContract` primitives.
-- [Shape Classification](shapes.md) — The 21 signature shapes that drive the defaults.
-- [Generators / suite](suite.md) — Tier 1 conformance testing.
+- [Primitives / Benchmarking](../primitives/benchmarking.md) — the
+  `Contract` runtime the generated bodies drive.
+- [Suite](suite.md) — the projection and registry this generator reads.
+- [RFC-0003](../../rfc/0003-the-projection-consumers.md) — the design
+  record, including the commissioned `Contract` additions.

@@ -22,6 +22,7 @@ import (
 //
 //testkit:out idempotenttest/ pkg=idempotenttest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Put must be safe to repeat. The law compares state after one call with
 	// state after two, so a reader is required to make that comparison.

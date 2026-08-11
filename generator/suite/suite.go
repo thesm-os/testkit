@@ -14,9 +14,12 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/hooks"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/integrationonly"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/nilsafe"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/partition"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
 	"go.thesmos.sh/eidos/sdk"
@@ -80,6 +83,9 @@ const (
 	KindTimeout    sdk.Kind = "suite.check.timeout"
 	KindOrderAfter sdk.Kind = "suite.check.orderafter"
 	KindSideEffect sdk.Kind = "suite.check.sideeffect"
+	KindPartition  sdk.Kind = "suite.check.partition"
+	KindHooks      sdk.Kind = "suite.check.hooks"
+	KindSample     sdk.Kind = "suite.check.sample"
 )
 
 // Plugin is the conformance-suite generator.
@@ -261,6 +267,40 @@ type Check struct {
 	// Method is the signature under check.
 	Method Method
 
+	// Extra names fixture fields the check needs beyond the method's own
+	// parameters, each with the identifier it binds to in the signature.
+	//
+	// A check is ordinarily handed one value per parameter, which is enough
+	// when the claim is about a single call. Isolation is not: two partitions
+	// that never interfere is a statement about two writes, and the second one
+	// needs a value the method's own parameter list cannot carry.
+	Extra []ExtraArg
+
+	// SecondCall names the identifiers a two-write check passes to its second
+	// call, in declaration order and without the context.
+	//
+	// Separate from Extra because the two answer different questions: Extra is
+	// what the signature gains, SecondCall is what the call spells. Deriving
+	// one from the other in a template meant asking which identifiers carried a
+	// suffix, which is a rule reconstructed from spelling rather than read.
+	SecondCall []string
+
+	// CompareAgainst is the identifier a two-write check holds its read up to:
+	// the payload written where the read should not reach.
+	//
+	// Named here rather than indexed out of Extra in a template, because
+	// arithmetic in a template is a rule a reader has to reconstruct and the
+	// backend's function set has nothing to do it with.
+	CompareAgainst string
+
+	// Callback is the func-typed parameter a registration partner takes, in
+	// the form a generated literal has to spell.
+	//
+	// Present because a hook check has to *construct* the thing it registers,
+	// not merely name it: the callback's own signature is what a func literal
+	// declares, and nothing else in the projection carries it.
+	Callback *CallbackSig
+
 	// Partner is the second callable a relational classification names, with
 	// PartnerArgs the identifiers a call to it is handed.
 	//
@@ -274,6 +314,31 @@ type Check struct {
 
 // Kind returns [Check.KindName].
 func (c *Check) Kind() sdk.Kind { return c.KindName }
+
+// CallbackSig is a func-typed parameter's own signature.
+//
+// Types without names, which is all a func literal needs: `func(string) {}` is
+// legal Go, and inventing identifiers for parameters the body ignores would put
+// names in generated source that answer to nothing in the source it came from.
+type CallbackSig struct {
+	// Name is the identifier the registration partner declares the parameter
+	// under, used only in the diagnostic.
+	Name string
+
+	// Params and Returns are the callback's own signature.
+	Params, Returns []sdk.Ref
+}
+
+// ExtraArg is one fixture field a check takes beyond the method's parameters.
+type ExtraArg struct {
+	// Name is the identifier the generated signature binds it to, and Field
+	// the fixture field the entry point reads it from.
+	Name, Field string
+
+	// Type is the parameter's type, rendered through the backend so the file
+	// registers whatever import it needs.
+	Type sdk.Ref
+}
 
 // Method is one method of the subject interface, with the naming this generator
 // adds to the shared signature projection.
@@ -620,6 +685,10 @@ func mixinParamsOf(bag *sdk.Bag) map[string]string {
 		{MixinOrderAfter, MixinOrderAfterParam},
 		{MixinTimeout, MixinTimeoutParam},
 		{MixinSideEffect, MixinSideEffectParam},
+		{MixinPartition, MixinPartitionRead},
+		{MixinPartition, MixinPartitionAxis},
+		{MixinHooks, MixinHooksParam},
+		{MixinSample, MixinSampleParam},
 	}
 	var out map[string]string
 	for _, w := range wanted {
@@ -705,6 +774,13 @@ const (
 	MixinOrderAfterParam = orderafter.ParamFn
 	MixinSideEffect      = sideeffect.Name
 	MixinSideEffectParam = sideeffect.ParamObserve
+	MixinPartition       = partition.Name
+	MixinPartitionRead   = partition.ParamRead
+	MixinPartitionAxis   = partition.ParamAxis
+	MixinHooks           = hooks.Name
+	MixinHooksParam      = hooks.ParamRegister
+	MixinSample          = sample.Name
+	MixinSampleParam     = sample.ParamBuilder
 )
 
 // missShapes are the classifications whose absence signal is a value rather
@@ -773,6 +849,145 @@ func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method
 // attempt count to read, `integrationonly` is a build tag rather than an
 // assertion, and `deprecated` is a fact about a method rather than a claim about
 // its behaviour — it is stated in the generated documentation instead.
+// builds reports whether the partner produces a value the method accepts.
+//
+// Checked rather than assumed, because the check's whole content is passing one
+// to the other: a builder returning something the method does not take gives a
+// call that will not compile, and a render error is a file that came out short.
+//
+// One parameter and one produced value. With several of either, which feeds
+// which is a guess — the mixin names the builder and says nothing about the
+// slot, and that is exactly the ambiguity `partition` needed an axis to settle.
+func builds(m, builder Method) bool {
+	args, produced := m.CallArgs(), builder.ValueReturns()
+	if len(args) != 1 || len(produced) != 1 {
+		return false
+	}
+	return args[0].Source.Equal(produced[0].Source)
+}
+
+// callbackParam returns the func-typed parameter a registration partner takes.
+//
+// Exactly one, and it must be a func: `OnEvent(fn func(string))` is a
+// registration, `OnEvent(name string)` is something else the annotator happened
+// to be pointed at. A partner that is not a registration generates no check
+// rather than a literal the toolchain refuses.
+func callbackParam(partner Method) (*CallbackSig, bool) {
+	args := partner.CallArgs()
+	if len(args) != 1 {
+		return nil, false
+	}
+	src := args[0].Source
+	if src == nil || src.TypeKind != sdk.TypeRefFunc {
+		return nil, false
+	}
+
+	sig := &CallbackSig{Name: args[0].Name}
+	for _, p := range src.FuncParams {
+		sig.Params = append(sig.Params, golang.FromNode(p))
+	}
+	for _, r := range src.FuncReturns {
+		sig.Returns = append(sig.Returns, golang.FromNode(r))
+	}
+	return sig, true
+}
+
+// partitionCheck builds the isolation check, or reports that this method cannot
+// state it.
+//
+// Isolation is a claim about two writes not reaching each other, so the check
+// writes the same everything under two values of one parameter and reads one
+// back. Which parameter that is has to be said: `Put(ctx, partition, key, v)`
+// and `Read(ctx, partition, key)` share both, the types are identical, and
+// nothing else distinguishes the axis from the key.
+//
+// An earlier version varied every parameter instead, which is why the axis is
+// worth insisting on — the two writes then never collided on a key, and the
+// check passed against an implementation ignoring partitions entirely. A check
+// that cannot fail is worse than no check, so a method naming no axis generates
+// nothing rather than something that looks like coverage.
+func partitionCheck(
+	f Fixture, m, read Method, base func(sdk.Kind, string, string, []string) *Check,
+) (*Check, bool) {
+	axis, named := m.MixinParam(MixinPartition, MixinPartitionAxis)
+	if !named {
+		return nil, false
+	}
+	args, spellable := partnerArgs(f, m, read)
+	if !spellable {
+		return nil, false
+	}
+
+	// One extra per parameter, but only the axis takes its alternate: holding
+	// the key fixed is what makes the two writes collide, which is the whole
+	// premise. eidos validates that the axis names a parameter, so a miss here
+	// is a method the annotator never saw.
+	var (
+		extra   []ExtraArg
+		second  = make([]string, 0, len(m.CallArgs()))
+		payload string
+		isAxis  bool
+	)
+	// Which parameters the reader shares is what separates an identifier from a
+	// payload: Read takes the partition and the key, so `value` is what Put
+	// carries rather than what it addresses.
+	shared := map[string]bool{}
+	for _, p := range read.CallArgs() {
+		shared[f.FieldFor(p)] = true
+	}
+
+	for _, p := range m.CallArgs() {
+		isTheAxis := p.Name == axis
+		// Hold every identifier so the two writes land on the same slot, and
+		// vary every payload so an overwrite is visible. Holding the payload
+		// too was the second near-miss: a subject ignoring partitions clobbers
+		// the first write with an identical value, and the read still returns
+		// what the check expects.
+		if !isTheAxis && shared[f.FieldFor(p)] {
+			second = append(second, p.Name)
+			continue
+		}
+		field, found := f.Field(f.FieldFor(p))
+		if !found || !field.OK() {
+			// No second value is no second write worth making.
+			return nil, false
+		}
+		ident := OtherIdent(p.Name)
+		extra = append(extra, ExtraArg{Name: ident, Field: field.OtherName(), Type: p.Type})
+		second = append(second, ident)
+		if isTheAxis {
+			isAxis = true
+			continue
+		}
+		// A parameter that is neither the axis nor an identifier is the
+		// payload, and the read is held up to the first write's copy of it:
+		// what Read must return, rather than what it must not. Both are the
+		// same claim, and this one also fails a subject returning nothing.
+		payload = p.Name
+	}
+	if !isAxis {
+		return nil, false
+	}
+
+	if payload == "" {
+		// Every parameter identifies the slot, so the two writes differ in
+		// where they land and in nothing else — there is no value for the read
+		// to be wrong about.
+		return nil, false
+	}
+
+	ck := base(KindPartition, MixinPartition, "IsolatesPartitions", fixtureArgs(f, m, false))
+	ck.Extra, ck.SecondCall, ck.CompareAgainst = extra, second, payload
+	ck.Partner, ck.PartnerArgs = &read, args
+	return ck, true
+}
+
+// OtherIdent names the identifier a check binds a field's alternate to.
+//
+// Derived from the parameter so a reader meets `partitionOther` beside
+// `partition` and does not have to look up which of two values is which.
+func OtherIdent(name string) string { return name + OtherSuffix }
+
 // partnerArgs names the identifiers a call to the partner is handed, and
 // whether the check can spell them all.
 //
@@ -853,6 +1068,23 @@ func mixinChecks(
 		ck := base(KindTimeout, MixinTimeout, "CompletesInBudget", fixtureArgs(f, m, false))
 		ck.NeedsClock = true
 		out = append(out, ck)
+	}
+	if p := partnerOf(methods, m, MixinSample, MixinSampleParam); p != nil && builds(m, *p) {
+		ck := base(KindSample, MixinSample, "AcceptsASampledInput", nil)
+		ck.Partner = p
+		out = append(out, ck)
+	}
+	if p := partnerOf(methods, m, MixinHooks, MixinHooksParam); p != nil {
+		if cb, ok := callbackParam(*p); ok {
+			ck := base(KindHooks, MixinHooks, "FiresRegisteredHooks", fixtureArgs(f, m, false))
+			ck.Partner, ck.Callback = p, cb
+			out = append(out, ck)
+		}
+	}
+	if p := partnerOf(methods, m, MixinPartition, MixinPartitionRead); p != nil {
+		if ck, ok := partitionCheck(f, m, *p, base); ok {
+			out = append(out, ck)
+		}
 	}
 	if p := partnerOf(methods, m, MixinSideEffect, MixinSideEffectParam); p != nil && p.ReturnsError() {
 		// The observation is the check, so a partner that cannot report its own

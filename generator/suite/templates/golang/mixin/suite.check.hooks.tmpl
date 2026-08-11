@@ -1,0 +1,40 @@
+{{- /*
+The only check that constructs the thing it passes. A registration takes a
+callback, so its own signature has to be spelled — parameter types without
+names, which is all a func literal needs and avoids inventing identifiers the
+body ignores.
+*/ -}}
+{{- define "suite.check.hooks" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .Func }} asserts a callback registered through {{ $p.Name }} runs.
+//
+// Fails when: {{ $m.Name }} completes without invoking what {{ $p.Name }}
+// registered. A registration nobody calls is the failure this mixin exists for,
+// and it is invisible to every check derived from the signature: {{ $p.Name }}
+// accepts the callback and returns either way.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if $m.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	var fired bool
+	subject.{{ $p.Name }}(func({{ range $i, $t := .Callback.Params }}{{ if $i }}, {{ end }}{{ renderType $t }}{{ end }}){{ if .Callback.Returns }} ({{ range $i, $t := .Callback.Returns }}{{ if $i }}, {{ end }}{{ renderType $t }}{{ end }}){{ end }} {
+		fired = true
+{{- range .Callback.Returns }}
+		var zero {{ renderType . }}
+		_ = zero
+{{- end }}
+{{- if .Callback.Returns }}
+		return {{ range $i, $t := .Callback.Returns }}{{ if $i }}, {{ end }}*new({{ renderType $t }}){{ end }}
+{{- end }}
+	})
+
+	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, err,
+		"{{ $m.Name }} must succeed for its hooks to have run")
+	{{ renderExpr (external $.Runtime "True") }}(tb, fired,
+		"{{ $m.Name }} must invoke what {{ $p.Name }} registered")
+}
+{{- end -}}

@@ -22,6 +22,7 @@ import (
 //
 //testkit:out cacheabletest/ pkg=cacheabletest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Get may be cached. The law is that caching is unobservable: two reads
 	// agree whether or not the second was served from memory.

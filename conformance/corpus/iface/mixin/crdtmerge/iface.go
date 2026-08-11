@@ -23,6 +23,7 @@ import (
 //
 //testkit:out crdtmergetest/ pkg=crdtmergetest
 //testkit:stub
+//testkit:suite
 type Replica interface {
 	Items(ctx context.Context) ([]string, error)
 }

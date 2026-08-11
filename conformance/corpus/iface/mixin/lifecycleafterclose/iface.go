@@ -26,6 +26,7 @@ var ErrClosed = errors.New("lifecycleafterclose: closed")
 //
 //testkit:out lifecycleafterclosetest/ pkg=lifecycleafterclosetest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Close is the teardown the law measures from.
 	//testkit:mixin lifecycleafterclose

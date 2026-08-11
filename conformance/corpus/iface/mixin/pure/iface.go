@@ -18,6 +18,7 @@ package pure
 //
 //testkit:out puretest/ pkg=puretest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Derive takes an input and returns a result computed from it alone. A
 	// context parameter would suggest I/O, which is what purity excludes.

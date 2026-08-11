@@ -22,6 +22,7 @@ import (
 //
 //testkit:out hookstest/ pkg=hookstest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Fire invokes whatever OnEvent registered. Without a registration
 	// method there is no way to observe that it did.

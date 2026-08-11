@@ -22,6 +22,7 @@ import (
 //
 //testkit:out concurrenttest/ pkg=concurrenttest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Bump is driven concurrently by the generated stress. The law is the
 	// absence of a race, so the method must mutate something.

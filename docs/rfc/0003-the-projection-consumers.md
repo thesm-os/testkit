@@ -28,6 +28,10 @@ registration per interface — the generated packages carry their own
 `Benchmark*` and `Fuzz*` entry points, and no consumer ever writes a
 per-method shim.
 
+A source-to-output walkthrough accompanies this RFC:
+[the worked example](0003-the-projection-consumers.example.md) renders every
+proposed output for one corpus fixture, marked shipped versus proposed.
+
 ## Problem
 
 **The projection is a cross-plugin API in fact, with no stated rules.**
@@ -45,7 +49,10 @@ docblocks are explicit: `Registry` is "populated by the generator with
 auto-derived laws"; `model/action`'s package doc says "the generator emits one
 call per detected method"; `model/domhint` describes "the model generator's
 analysis" and a `//testkit:domain-gen` directive no plugin declares. The runtime
-shipped; its counterpart is a docblock promise.
+shipped; its counterpart is a docblock promise. `testkit.Contract` is in the
+same position one tier down: zero call sites outside its own tests, while
+`reference/validators/benchmarks.md` mandates a `StartContract` in every
+benchmark — a mandate nothing generated can currently satisfy.
 
 **ADR-0018's floor is unenforceable until the bindings exist.** The ADR assigns
 every law-backed classification to the model tier, and the gate fails a
@@ -135,7 +142,7 @@ never used, so a corpus finding cannot be replayed against the harness.
 | Reader | Takes from the projection | Takes from source |
 |---|---|---|
 | `bench` | `Subject`, `Fixture` (loop arguments), `Seed`, `Double`, `Method.Sig` | `//testkit:bench` stamps |
-| `fuzz` | `Subject`, `Fixture` (`Sample`/`Other` → corpus), `Method.Sig` | `//testkit:fuzz` stamps, `validates`/`nilsafe`/`pure`/`bounded` stamps for the body |
+| `fuzz` | `Subject`, `Fixture` (`Sample`/`Other` → corpus), `Method.Sig`; the enum generator's queued value (variant seeds) | `//testkit:fuzz` stamps; `validates`/`nilsafe`/`pure`/`bounded` stamps for the body; `bounded` params for off-by-one seeds |
 | `model` | `Subject`, `Fixture`, `Seed`, `Methods` (naming, signatures) | shape stamps (law selection is the model tier's own read) |
 
 `model` takes classifications from the source rather than the projection
@@ -202,6 +209,22 @@ a generated entry beside a consumer-written one runs the contract twice
 silently. One test function per interface is the floor Go leaves, and it is
 where the consumer's intent is declared.
 
+### Generics: everything lands at the witnesses
+
+A generic interface breaks every concrete surface this design generates: a
+`Fuzz*` or `Benchmark*` entry cannot take type parameters, a package-level
+registry cannot store an uninstantiated factory, and the derived adapter and
+law bindings need real types. RFC-0002 already crossed this bridge for the
+suite self-check — a Go test function cannot be generic, so the self-check
+instantiates at the witnesses the source names — and the satellites inherit
+the same rule wholesale: the registry, every generated entry point, the
+adapter, the action set and the law registry are emitted **once per witness
+instantiation**, disambiguated the way the self-check already disambiguates
+its witnesses. A generic interface carrying `//testkit:bench` or
+`//testkit:fuzz` with no witness to instantiate at is a **diagnostic at the
+directive** — asked and impossible, the same rule fuzz applies to a
+non-decomposable parameter.
+
 ### bench
 
 `//testkit:bench` is method-scoped — a budget is a property of one hot path —
@@ -232,6 +255,15 @@ not an open question: two methods over state `Contract` already tracks
 tests, so the plugin ships all four keys at once. `mem=` stays despite
 overlapping `allocs=` — one large allocation and many small ones are different
 regressions, and each ceiling names one.
+
+One more `Contract` change rides along: **percentile ceilings get a sample
+floor**. `End` today enforces `p99` whenever `len(durations) > 0`, and a
+99th percentile over three iterations is the maximum of three noisy numbers
+— a gate that fires on scheduler luck. The commissioned rule: below a
+minimum sample count (one hundred iterations), the contract reports the
+metric and skips percentile enforcement with a note, so a short `-benchtime`
+run cannot fail a budget the data cannot support. `allocs=` and `mem=` are
+per-op averages and enforce at any count.
 
 Per annotated method, one exported measured-loop body into `_bench.gen.go` —
 the manual path, and the function the generated entry calls:
@@ -315,11 +347,36 @@ field, a func, a channel or an interface is infeasibility — and on an
 a silent skip. The author asked; "asked and impossible" is an error with a
 line number.
 
-**The corpus is the fixture.** Two `f.Add` seeds per target — the projection's
-`Sample` and `Other` for each parameter, a composed struct contributing its
-`Parts` in declaration order. The same values the checks assert with, so a
-crashing input found by the fuzzer replays against the harness with no
-translation, and the corpus regenerates identically with the run.
+**The corpus starts at the fixture and is grown by derivation.** The first
+two seeds are the projection's `Sample` and `Other` per parameter — a
+composed struct contributing its `Parts` in declaration order — so a
+crashing input replays against the harness with no translation. The rest of
+the seed set is derived, four sources deep:
+
+- **The boundary alphabet, varied one parameter at a time.** From the
+  `Sample` base, each parameter cycles through its type's boundary set —
+  strings: empty, single rune, long, multi-byte unicode, format-hostile
+  (embedded NUL, newline, `%s`, `../`); integers: `0`, `1`, `-1`, the type's
+  min and max; floats: `0`, `-0.0`, `NaN`, `±Inf` — plus one whole-tuple
+  zero-value seed, which for a `validates` method is usually the first
+  rejected input the fuzzer meets. Vary-one, never the cross-product: every
+  seed runs as a regression subtest per registered subject in plain
+  `go test`, so the corpus budget is `O(params × boundary set)`, not
+  exponential.
+- **Off-by-one seeds from the stamps.** A `bounded` parameter seeds exactly
+  `min`, `max`, `min-1`, `max+1`, read from `shape.mixin.bounded.<param>` —
+  the four inputs the classification itself says are interesting.
+- **Enum variants from the enum projection.** A parameter whose type the
+  enum generator classified seeds one value per declared variant, read from
+  that generator's queued value through `sdk.PendingByOrigin` — the same
+  cross-plugin mechanism as the suite projection, and the strongest seed
+  source there is: the fuzzer starts from the full valid vocabulary and
+  mutates outward. A `Companion` (`<Type>Defaults()`) contributes the same
+  way where declared.
+- **Provenance on every line.** Each `f.Add` carries a comment naming its
+  rule — `// fixture:sample`, `// bounded:max+1`, `// enum:StatusActive` —
+  so a seed that starts failing states its claim without archaeology, the
+  corpus analogue of the report header.
 
 **The stamps decide the body.** Absent any of them the target still calls the
 method — Go's fuzzer finds panics, hangs and out-of-memory on any exported
@@ -374,6 +431,16 @@ by bytewise agreement. The growing corpus lands where Go puts it,
 `testdata/fuzz/FuzzMixedStore/` beside the target — in the consumer's tree,
 under their ownership; `prune` matches generated suffixes and never enters
 `testdata/`.
+
+**What the fuzzer learns is promoted, not lost.** Go accumulates interesting
+inputs in the per-machine cache corpus (`$GOCACHE/fuzz`) and commits nothing
+but crashers. A `fuzz-promote` make target closes that loop: run each target
+for a short burst, then copy the cache-corpus entries into
+`testdata/fuzz/<Target>/`, where every promoted input becomes a committed
+regression subtest and the next machine's fuzzing starts from this one's
+coverage. Operational work beside the existing gates, not generator work —
+the generator's corpus is the floor, the promoted corpus is the compounding
+interest.
 
 **Why targets stay per-method.** There is no `FuzzMixedContract` because Go
 has no aggregate form: `testing.F` has no sub-targets, `f.Fuzz` may be called
@@ -450,6 +517,11 @@ entry — `AssertMixedContract` — under rapid's default iteration count, and t
 existing controls apply to them unchanged: `MixedWithout("model/AUTO-…")` drops
 one law for one consumer, by the same path syntax every other check uses.
 
+They run against each subject's **plain form only**. The stub-wrapped second
+pass is the suite tier's honesty check on the double; driving law sequences
+through the delegate wrapper would re-test that wrapper at model prices and
+say nothing new about the subject.
+
 RFC-0002 sketched the attachment as `ServiceModelChecks(newReference)` —
 consumer-gated, because at sketch time the reference was assumed to be theirs
 to write. `model/ref` is why the gate moved: the reference is derivable for
@@ -464,22 +536,48 @@ the ADR-0018 mapping, instantiated at the interface's concrete types with the
 projection's method names:
 
 ```go
-// Generated into _model.gen.go.
-func mixedModelLaws() *model.Registry[validates.Mixed] {
+// Generated into _model.gen.go. gens is the shared generator derivation.
+func mixedModelLaws(gens mixedModelGens) *model.Registry[validates.Mixed] {
     r := model.NewRegistry[validates.Mixed]()
-    r.Add(law.ReadAfterWrite[validates.Mixed, string, validates.Payload]{ /* wired */ })
+    r.Add(law.ReadAfterWrite[validates.Mixed, string, validates.Payload]{
+        Read: func(rt *rapid.T, s validates.Mixed, k string) (validates.Payload, error) {
+            return s.Read(rt.Context(), k)
+        },
+        Keys: gens.keys,
+    })
     // …one Add per mapped classification the interface declares
     return r
 }
 ```
 
+**How a binding is filled.** Fifty-odd law types do not get fifty-odd bespoke
+derivations. Every exported field of every law struct is one of four kinds,
+and each kind has exactly one source:
+
+| Field kind | Examples | Source |
+|---|---|---|
+| Role closure | `Read`, `Count`, `Collect`, `Call` | the method carrying the stamp that selected the law; the body is the call, with signature-driven collapses — an `iter.Seq2` return becomes a collect loop, a variadic parameter passes one element |
+| Generator | `Keys`, `Values` | the shared generator derivation, never re-derived |
+| Constant | `Sentinel`, bounds, budgets | the classification's own parameter stamps — the sentinel from the `errors` mixin, the range from `shape.mixin.bounded.<param>`, contract knobs from `shape.contract.<name>.param.<key>` |
+| Trace handle | `Trace` on the per-client laws | nothing — the runner calls `BindTrace` on any law implementing `TraceBinder` |
+
+The rule is enforced, not remembered: the gate's classification-to-law
+mapping carries a **field manifest** per law — each exported field's kind and
+source — and a reflection test walks every registered law type and fails on
+any field the manifest does not name. A law that gains a field breaks the
+gate loudly instead of being zero-filled silently. The template consequence
+falls out: bindings render from a handful of per-kind spellings keyed on the
+signature family, not from one template per law.
+
 **The action set.** One `model.Action` per method, through the `action`
 constructor matching its detector or contract — `action.Reader` for a
 `reader`, `action.Writer` for a `writer`, `action.CompareAndSwap` for the
 `cas` role, `action.Unknown` as the explicit escape hatch for a method no
-detector claims. Input generators come from the stamps: `shape.key_type
-string` becomes a string generator; an opaque domain type goes through
-`domhint` (below).
+detector claims. **Partner-role methods are excluded**, from the action set
+as from the reference: the suite tier owns a partner's checks, and a random
+`Validate` call in a law sequence asserts nothing its smoke check does not.
+Input generators come from the stamps: `shape.key_type string` becomes a
+string generator; an opaque domain type goes through `domhint` (below).
 
 **The generators, derived once.** Keys draw from a small sampled set and the
 value type's key field — `shape.key_type` names it — is pinned to the *same*
@@ -533,7 +631,8 @@ whole reference onto the consumer is the all-or-nothing this dissolves:
   `ref.MapStore[K, V]`, `cas` to `ref.AtomicCell`, `lease` to
   `ref.LeaseTracker`, `pool` to `ref.BalancedPool`, `appender` to
   `ref.AppendOnly`, `saga` to `ref.CompensatingSaga`, `singleflight` to
-  `ref.Coalescer`. Methods the oracle does not model get typed inert bodies —
+  `ref.Coalescer` — and where several match, the cluster rule below decides.
+  Methods the oracle does not model get typed inert bodies —
   and the laws that would compare the SUT against the reference *on those
   methods* are not bound, because a comparison against an inert body is a law
   that fails every correct implementation. Reference-free laws
@@ -549,6 +648,52 @@ whole reference onto the consumer is the all-or-nothing this dissolves:
   the option that would arm it. A declared classification whose law never ran
   is a skip in the test output, counted and greppable — never silence. That is
   ADR-0017 discharged at runtime, not only at codegen.
+
+**Clusters: how oracles compose.** A real interface matches more than one
+oracle — a keyed store that also declares `cas` matches `MapStore` and
+`AtomicCell` — and picking per method would compare states nothing relates.
+The rule is mechanical:
+
+1. **Clusters are connected components** over the interface's methods, with
+   two edge kinds: a contract's partner declarations
+   (`shape.contract.<name>.partner.<role>` — explicit in the stamps), and
+   detector-family agreement on (`shape.key_type`, `shape.value_type`).
+   Methods no edge reaches are their own singleton.
+2. **One oracle per cluster**, chosen from the mapping as the candidate
+   modelling the largest subset of the cluster's methods; a tie breaks
+   toward the contract's oracle, because the contract states more about its
+   methods than a detector does — the same specificity precedence
+   directive-override gives users over annotators. The same precedence
+   applies one level down: a method referenced as another method's mixin
+   partner (`shape.mixin.validates.fn` names a validator, not a store
+   write) takes its **partner role** and runs inert in the adapter — its
+   detector stamp says what it looks like, the partner stamp says what it
+   is for, and the more specific claim wins.
+3. **A law arms iff the cluster's oracle models every method the law
+   touches.** This subsumes per-method arming: methods the oracle does not
+   model run inert, and a law spanning what the oracle cannot relate —
+   read-after-write through a CAS cell the map knows nothing about — skips
+   visibly rather than comparing fictions.
+4. The adapter is one struct, one field per cluster, each method delegating
+   to its cluster's oracle; the state for saturation hashing and the
+   exhaustive check is the tuple of cluster oracles, folded per cluster.
+5. The report header prints the cluster map — cluster, oracle, modelled and
+   inert methods — so every skipped law's reason is one line above it.
+
+A cluster whose laws skip is the signal an oracle is worth writing, and
+because the shape-to-oracle mapping is data in the gate, closing that gap is
+a `ref` addition plus a mapping row — never a generator change.
+
+**The fresh-state probe.** Every comparison law assumes subject and
+reference start observably equal, and a consumer factory that returns a
+pre-populated subject breaks that silently — a correct implementation
+failing `AUTO-READ-AFTER-WRITE` on data the oracle never saw. So a third
+probe joins the family: before any model run, fold the readers over a fresh
+subject and a fresh reference and compare. Divergence skips every
+reference-comparing law with the diagnosis — `"factory returns a non-empty
+subject: supply MixedModelReference or an empty factory"` — and the
+self-consistency laws still run, because they assume nothing about the
+starting state.
 
 **The concurrent path.** Where the shape matches a prebuilt Porcupine model —
 `linearize.KV[K, V]` for the CRUD family, `AppendLog`, `CASCell`, `Counter`,
@@ -596,9 +741,27 @@ crossed with derived values, no rapid draws. State identity:
 generated `TestMixedModelExhaustive` in `_model.gen_test.go` threads a
 `(subject, reference)` pair as the BMC state, applies each action to both,
 and checks one invariant at every reached state — observable agreement — per
-registered subject, at a modest default depth. Where the random path samples,
+registered subject, at a modest default depth. Its invariant is
+subject-versus-reference agreement, so it is emitted under the same
+condition as the mutation self-check: only where the reference is
+derivable. Where the random path samples,
 this proves absence within bounds and returns the shortest counterexample
 sequence when it cannot.
+
+The check is guarded twice, because an unsound exhaustive search is worse
+than none — it stamps *proven* on a space it never actually explored:
+
+- *At codegen*, the alphabet must be constructible and non-trivial. A method
+  whose fixture field was dropped as underivable is excluded and the header
+  says so; an alphabet with no state-changing action explores exactly one
+  state, so the check is suppressed entirely rather than emitted as a proof
+  of nothing.
+- *At runtime*, a determinism probe precedes the search: replay the full
+  alphabet twice from fresh state and compare the observational folds.
+  Divergence skips the check naming the first divergent action —
+  `"subject nondeterministic at Touch: bounded search unsound"` — because
+  `Apply`'s determinism contract is the subject's to honour, and the probe
+  turns a violation into a diagnosis instead of a phantom counterexample.
 
 **The report header.** The generated entry's docblock is a per-method table
 of what the run derived — the detector or contract behind each action, every
@@ -615,17 +778,20 @@ is exactly what a state-machine run amplifies into visibility. An opt-in
 option nobody discovers is coverage nobody gets; the shape stamp is the
 opt-in, and `MixedWithout("model/goroutine-leaks")` is the exit.
 
-**Vacuity is measured, and enforced where inputs are controlled.**
-`Registry.Coverage()` returns per-law `ran` and `fired` counts, and the
-generated runner reads them after every run. A law with `ran == 0` **fails**
-— a law that never executed is a wiring defect, deterministically
-reproducible. A law with `fired == 0` — it ran, but its precondition never
-occurred — **logs** in a consumer's run, because rare preconditions are
-legitimate there, and **fails in the conformance corpus**, where the
-fixtures are ours and a never-firing law is a vacuous binding. The gate
-reads the same counts through `WithCoverageSink`: enforcement lives where
-the inputs are controlled, and the consumer gets the signal without the
-flake.
+**Vacuity is enforced where it is measurable.** `Registry.Coverage()`
+returns per-law `ran` and `fired` counts, and `fired` counts **violations**
+— in a passing run it is zero by definition, so it cannot witness "the
+precondition never occurred". Three consequences. A law with `ran == 0`
+fails everywhere: a law that never executed is a wiring defect,
+deterministically reproducible. Non-vacuity proper is enforced through the
+mutation self-check, where `fired` means what a gate needs: every bound law
+must fire against at least one wired operator, which is the measurable form
+of "this law can detect a violation". And the precondition question — did
+the run ever reach the state the law speaks about — needs a signal the
+runtime does not yet carry: a `law.ErrNotApplicable` sentinel a `Check` may
+return plus a third `Coverage` counter, **commissioned by this RFC**
+alongside the `Contract` ceilings. Until it lands, the saturation hash is
+the only proxy for a run that never left its corner of the state space.
 
 #### The integration matrix
 
@@ -745,7 +911,7 @@ open questions say why.
 | `fuzz` | `""` | `_fuzz.gen.go` | per annotated method, the exported per-input property |
 | `fuzz` | `test` | `_fuzz.gen_test.go` | one `Fuzz<Iface><Method>` entry per annotated method, over the registry |
 | `model` | `""` | `_model.gen.go` | property builder, law registry, action set, derived reference adapter, concurrent config, extension registration, model options |
-| `model` | `test` | `_model.gen_test.go` | the mutation self-check (where a reference is derivable), `Fuzz<Iface>Model`, `Test<Iface>ModelExhaustive` |
+| `model` | `test` | `_model.gen_test.go` | `Fuzz<Iface>Model`; the mutation self-check and `Test<Iface>ModelExhaustive`, both only where a reference is derivable — each certifies subject-versus-reference agreement, so neither can exist without one |
 
 All follow `<source-basename>_<generator>.gen.go`, so the repository's
 existing patterns — licence excludes, coverage, `.gitattributes` — match with
@@ -805,6 +971,13 @@ the mutation harness runs the law suite once per wired operator.
 drop by path: `MixedWithout("model")` removes the tier per call site, and the
 skip reporting keeps the removal visible in output rather than silent.
 
+**Short mode is honoured, tier by tier.** Under `testing.Short()` the
+exhaustive search, the mutation self-check and the concurrent path skip with
+named skips; the sequential law run stays, because it is the assertion
+ADR-0017 says a declared classification owes and it is the cheap one. A
+`-short` run therefore still discharges the floor — what it sheds is proof
+depth, visibly, never the owed assertions.
+
 ## What is decided
 
 | ADR | Decision |
@@ -859,14 +1032,21 @@ table is the index, not the argument.
 
 | Question | Decision | Where |
 |---|---|---|
-| `mean=` / `mem=` have no runtime backing | `Contract.MeanMax` and `Contract.BytesMax` are commissioned build-order: they land first, `FailableTB`-tested, and the plugin ships all four keys at once. `mem=` stays beside `allocs=` — one large allocation and many small ones are different regressions | bench |
-| Where do the mappings live | Classification-to-law and shape-to-oracle are the same kind of data and live together in the conformance gate, each closed by a test: every model-owned classification names a law that registers, every derivable shape names an oracle that exists. The gate already computes the union both tests need | design; ADR-0018 |
+| `mean=` / `mem=` have no runtime backing | `Contract.MeanMax` and `Contract.BytesMax` are commissioned build-order: they land first, `FailableTB`-tested, and the plugin ships all four keys at once. `mem=` stays beside `allocs=` — one large allocation and many small ones are different regressions. Percentile ceilings gain a sample floor: below one hundred iterations the metric is reported, not enforced | bench |
+| Where do the mappings live | Classification-to-law and shape-to-oracle are the same kind of data and live together in the conformance gate, each closed by a test: every model-owned classification names a law that registers, every derivable shape names an oracle that exists. The mapping also carries each oracle's modelled-role set (what the cluster rule selects on) and each law's field manifest (what the reflection test closes) | design; ADR-0018 |
+| What if several oracles match | Clusters: connected components over partner declarations and key/value agreement; one oracle per cluster, chosen by modelled-method count with ties to the contract; partner-referenced methods take their partner role; a law arms iff the oracle models every method it touches; the header prints the cluster map | model |
 | Can an aggregate fuzz target exist | No — no `f.Run`, one `f.Fuzz` per target, per-signature corpus, and `-fuzz` refuses multi-target patterns. Per-method targets for input space; one `Fuzz<Iface>Model` per interface for sequence space | fuzz; model |
-| Does `bmc` get bound | Yes. The fixture pair is the deterministic action alphabet, the observational read-back fold is the state hash, and `Test<Iface>ModelExhaustive` proves absence within bounds per registered subject | model |
+| Does `bmc` get bound | Yes. The fixture pair is the deterministic action alphabet, the observational read-back fold is the state hash, and `Test<Iface>ModelExhaustive` proves absence within bounds per registered subject — guarded by alphabet feasibility at codegen and a replay-twice determinism probe at runtime | model |
 | Clock-shaped laws have no stamp | The binding is specified now and blocked on one commissioned upstream stamp — a `clocked` mixin on the annotator's side of the fence, per ADR-0004. Until it lands, the generated header names the unbound checker family | integration matrix |
-| Where is vacuity enforced | `ran == 0` fails everywhere; `fired == 0` logs in consumer runs and fails in the conformance corpus, read through `WithCoverageSink`. Enforcement lives where the inputs are controlled | model |
+| Where is vacuity enforced | `ran == 0` fails everywhere; non-vacuity proper is the mutation self-check's job — every law must fire against a wired operator, because `fired` counts violations and is zero in any passing run. Precondition-occurrence needs a commissioned `law.ErrNotApplicable` sentinel plus a third `Coverage` counter | model |
 | Do subjects get compared to each other | No. Substitutability is defined by the contract's laws, not bytewise agreement; each subject checks its own property per fuzz input | fuzz |
+| How is the corpus seeded | Fixture pair for replay symmetry, then derivation: a vary-one boundary alphabet, `bounded` off-by-ones, enum-variant seeds via the enum projection, provenance comments per seed; a `fuzz-promote` target commits what the cache corpus learns | fuzz |
 | Is the contract's test entry generated too | No. Run-scoped options, `t.Parallel` policy and build-tag guards are consumer decisions, and a generated entry beside a written one double-runs silently | registration |
+| How do generic interfaces work | Everything lands at the witnesses: registry, entries, adapter and laws are emitted per witness instantiation, the suite self-check's own rule; annotated-but-witnessless is a diagnostic at the directive | generics |
+| What if a factory returns a non-empty subject | The fresh-state probe compares observable folds of fresh subject and fresh reference before the run; divergence skips the comparison laws with a diagnosis, and self-consistency laws still run | model |
+| Do laws run through the double | No — plain subjects only. The wrapped pass is the suite tier's honesty check on the double; law sequences through the wrapper re-test the wrapper at model prices | model |
+| Are partner-role methods in the action set | No — excluded from the action set as from the reference; the suite tier owns a partner's checks | model |
+| Does `-short` skip the model tier | The proof tiers skip with named skips — exhaustive, mutation, concurrent; the sequential law run stays, because it is the owed assertion and the cheap one | model |
 
 ## Deferred
 
@@ -882,3 +1062,9 @@ table is the index, not the argument.
   about the consumer's architecture, not any declaration the generator
   reads; the runtime surface stays consumer-facing. If contract partner
   stamps ever span interfaces, this is the section to reopen.
+- **Seeding `Fuzz<Iface>Model` from rapid's failure files.** The
+  sequence-space target starts seedless. rapid persists failing bitstreams,
+  and if those files are byte-compatible with what `MakeFuzz` consumes,
+  known-hard action sequences could be promoted into its corpus. Deferred
+  until the failfile format is verified against `MakeFuzz`'s input — an
+  incompatible promotion would seed noise and report it as coverage.

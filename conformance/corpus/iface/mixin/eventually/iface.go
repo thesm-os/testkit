@@ -22,6 +22,7 @@ import (
 //
 //testkit:out eventuallytest/ pkg=eventuallytest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Publish is not observable on return. The law is that it becomes so,
 	// which needs a settle step and a read to observe after it.

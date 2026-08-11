@@ -22,6 +22,7 @@ import (
 //
 //testkit:out retrysucceedstest/ pkg=retrysucceedstest
 //testkit:stub
+//testkit:suite
 type Mixed interface {
 	// Call fails transiently before succeeding. The law drives it repeatedly,
 	// so a method that either always works or never does cannot host it.
