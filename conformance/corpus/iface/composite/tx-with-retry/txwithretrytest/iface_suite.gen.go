@@ -82,6 +82,9 @@ func DefaultTxWithRetryFixture() TxWithRetryFixture {
 //
 //   - lifecycle, on Begin, Commit, Rollback
 //   - tx, on Begin, Commit, Rollback
+//
+// //testkit:model on the interface derives that reference, and the
+// TxWithRetryModel option it generates runs them here under "model".
 func AssertTxWithRetryContract(t *testing.T, opts ...TxWithRetryOption) {
 	t.Helper()
 	cfg := newTxWithRetryConfig(opts...)
@@ -177,6 +180,28 @@ func runTxWithRetryChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through TxWithRetryWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -512,6 +537,34 @@ type namedTxWithRetrySubject struct {
 	factory func() txwithretry.TxWithRetry
 }
 
+// txwithretryContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type txwithretryContractExtension struct {
+	// name is the path this reports under, and the one TxWithRetryWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// txwithretryConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() txwithretry.TxWithRetry,
+		cfg *txwithretryConfig,
+	)
+}
+
 type txwithretryConfig struct {
 	Fixture       TxWithRetryFixture
 	subjects      []namedTxWithRetrySubject
@@ -519,6 +572,7 @@ type txwithretryConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject txwithretry.TxWithRetry) error
 	without       map[string]struct{}
+	extensions    []txwithretryContractExtension
 	onBegin       []namedTxWithRetryBeginCheck
 	onCommit      []namedTxWithRetryCommitCheck
 	onRollback    []namedTxWithRetryRollbackCheck
@@ -564,11 +618,21 @@ func (c *txwithretryConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through TxWithRetryWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *txwithretryConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *txwithretryConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through TxWithRetryWithout(%q)", path)
 		})
@@ -581,4 +645,4 @@ func (c *txwithretryConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance d85b907c60ef88e947120eb9967f394667c5f8c4c24df234d9ee78375bd679fb
+// testkit:provenance 1a9a1da5c14a6d072728eb95cb9cea16e73b5d667d1e3323489998374cafc663

@@ -60,6 +60,9 @@ func DefaultBaseFixture() BaseFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - lifecycle, on Ping
+//
+// //testkit:model on the interface derives that reference, and the
+// BaseModel option it generates runs them here under "model".
 func AssertBaseContract(t *testing.T, opts ...BaseOption) {
 	t.Helper()
 	cfg := newBaseConfig(opts...)
@@ -113,6 +116,28 @@ func runBaseChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through BaseWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -274,6 +299,34 @@ type namedBaseSubject struct {
 	factory func() embedded.Base
 }
 
+// baseContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type baseContractExtension struct {
+	// name is the path this reports under, and the one BaseWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// baseConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() embedded.Base,
+		cfg *baseConfig,
+	)
+}
+
 type baseConfig struct {
 	Fixture       BaseFixture
 	subjects      []namedBaseSubject
@@ -281,6 +334,7 @@ type baseConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Base) error
 	without       map[string]struct{}
+	extensions    []baseContractExtension
 	onPing        []namedBasePingCheck
 }
 
@@ -324,11 +378,21 @@ func (c *baseConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through BaseWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *baseConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *baseConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through BaseWithout(%q)", path)
 		})
@@ -384,6 +448,9 @@ func DefaultCloserFixture() CloserFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - lifecycle, on Close
+//
+// //testkit:model on the interface derives that reference, and the
+// CloserModel option it generates runs them here under "model".
 func AssertCloserContract(t *testing.T, opts ...CloserOption) {
 	t.Helper()
 	cfg := newCloserConfig(opts...)
@@ -437,6 +504,28 @@ func runCloserChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through CloserWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -598,6 +687,34 @@ type namedCloserSubject struct {
 	factory func() embedded.Closer
 }
 
+// closerContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type closerContractExtension struct {
+	// name is the path this reports under, and the one CloserWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// closerConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() embedded.Closer,
+		cfg *closerConfig,
+	)
+}
+
 type closerConfig struct {
 	Fixture       CloserFixture
 	subjects      []namedCloserSubject
@@ -605,6 +722,7 @@ type closerConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Closer) error
 	without       map[string]struct{}
+	extensions    []closerContractExtension
 	onClose       []namedCloserCloseCheck
 }
 
@@ -648,11 +766,21 @@ func (c *closerConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through CloserWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *closerConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *closerConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through CloserWithout(%q)", path)
 		})
@@ -727,6 +855,9 @@ func DefaultComposedFixture() ComposedFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - lifecycle, on Ping, Close
+//
+// //testkit:model on the interface derives that reference, and the
+// ComposedModel option it generates runs them here under "model".
 func AssertComposedContract(t *testing.T, opts ...ComposedOption) {
 	t.Helper()
 	cfg := newComposedConfig(opts...)
@@ -825,6 +956,28 @@ func runComposedChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through ComposedWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -1180,6 +1333,34 @@ type namedComposedSubject struct {
 	factory func() embedded.Composed
 }
 
+// composedContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type composedContractExtension struct {
+	// name is the path this reports under, and the one ComposedWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// composedConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() embedded.Composed,
+		cfg *composedConfig,
+	)
+}
+
 type composedConfig struct {
 	Fixture       ComposedFixture
 	subjects      []namedComposedSubject
@@ -1187,6 +1368,7 @@ type composedConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject embedded.Composed) error
 	without       map[string]struct{}
+	extensions    []composedContractExtension
 	onGet         []namedComposedGetCheck
 	onPing        []namedComposedPingCheck
 	onClose       []namedComposedCloseCheck
@@ -1232,11 +1414,21 @@ func (c *composedConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through ComposedWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *composedConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *composedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through ComposedWithout(%q)", path)
 		})
@@ -1249,4 +1441,4 @@ func (c *composedConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 938762b64c69e5f3eb5d7526ecb2e8a68c75112a90a6ec1313935faf6749406e
+// testkit:provenance 19babe0a25f62bc7a61f33054786c78ba067675f99a941f03b8b54500e691e01

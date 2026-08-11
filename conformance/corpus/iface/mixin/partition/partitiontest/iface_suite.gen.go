@@ -80,6 +80,9 @@ func DefaultMixedFixture() MixedFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - multiargwriter, on Put
+//
+// //testkit:model on the interface derives that reference, and the
+// MixedModel option it generates runs them here under "model".
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -160,6 +163,28 @@ func runMixedChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through MixedWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -457,6 +482,34 @@ type namedMixedSubject struct {
 	factory func() partition.Mixed
 }
 
+// mixedContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type mixedContractExtension struct {
+	// name is the path this reports under, and the one MixedWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// mixedConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() partition.Mixed,
+		cfg *mixedConfig,
+	)
+}
+
 type mixedConfig struct {
 	Fixture       MixedFixture
 	subjects      []namedMixedSubject
@@ -468,6 +521,7 @@ type mixedConfig struct {
 	// is useless for the other.
 	seedIsDerived bool
 	without       map[string]struct{}
+	extensions    []mixedContractExtension
 	onPut         []namedMixedPutCheck
 	onRead        []namedMixedReadCheck
 }
@@ -524,11 +578,21 @@ func (c *mixedConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through MixedWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *mixedConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through MixedWithout(%q)", path)
 		})
@@ -541,4 +605,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7b7c8eda4c2cb37231eb204dc6bf7e8d47284aa45c343980e7e64f53c6fed00b
+// testkit:provenance 969771da2025fe45e60b4669c6dff3e1dcdcb5e629ab60045aea42817d3c2475

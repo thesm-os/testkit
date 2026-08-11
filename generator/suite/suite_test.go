@@ -147,6 +147,31 @@ func TestCheckPaths(t *testing.T) {
 	})
 }
 
+// TestExtensionSlot holds the three declarations a generated sibling needs to
+// add a body of checks to the one entry point.
+//
+// Parse-only, because what is at stake is the shape rather than the toolchain's
+// opinion of it — [TestRender] already compiles this fixture. A slot missing any
+// of the three does not fail here as a missing declaration; it fails in the
+// sibling's own package, one commit later, as a name nobody declared.
+func TestExtensionSlot(t *testing.T) {
+	t.Parallel()
+
+	src := golangtest.Render(t, backendgolang.New(), packageOf(t, mixed(t)), suite.New()).
+		File(t, "validates/iface_suite.gen.go")
+
+	// On the config rather than at package level. Options run before the first
+	// subtest and nothing writes it afterwards, which is what lets every subject
+	// read it in parallel; a package-level slot would be shared across every
+	// call in the package instead of scoped to one.
+	src.AssertField(t, "mixedConfig", "extensions", "[]mixedContractExtension")
+	src.AssertField(t, "mixedContractExtension", "name", "string")
+
+	// Read from two places — the generated checks, and whatever an extension
+	// reports under a path this file has never heard of.
+	src.AssertMethod(t, "mixedConfig", "dropped")
+}
+
 // An interface whose method set cannot be completed is refused: a harness over
 // part of a contract reports success for an implementation that fails the rest.
 func TestIncompleteMethodSet(t *testing.T) {

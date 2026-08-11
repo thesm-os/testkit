@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/contract/chain/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/contract/...
+// Command:   testkit run ./corpus/...
 
 package chaintest
 
@@ -88,6 +88,9 @@ func DefaultContractFixture() ContractFixture {
 //   - chain, on Append, Replay, Verify
 //   - aggregator, on Replay
 //   - lifecycle, on Verify
+//
+// //testkit:model on the interface derives that reference, and the
+// ContractModel option it generates runs them here under "model".
 func AssertContractContract(t *testing.T, opts ...ContractOption) {
 	t.Helper()
 	cfg := newContractConfig(opts...)
@@ -183,6 +186,28 @@ func runContractChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through ContractWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -519,6 +544,34 @@ type namedContractSubject struct {
 	factory func() chain.Contract
 }
 
+// contractContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type contractContractExtension struct {
+	// name is the path this reports under, and the one ContractWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// contractConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() chain.Contract,
+		cfg *contractConfig,
+	)
+}
+
 type contractConfig struct {
 	Fixture       ContractFixture
 	subjects      []namedContractSubject
@@ -530,6 +583,7 @@ type contractConfig struct {
 	// is useless for the other.
 	seedIsDerived bool
 	without       map[string]struct{}
+	extensions    []contractContractExtension
 	onAppend      []namedContractAppendCheck
 	onReplay      []namedContractReplayCheck
 	onVerify      []namedContractVerifyCheck
@@ -587,11 +641,21 @@ func (c *contractConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through ContractWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *contractConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through ContractWithout(%q)", path)
 		})
@@ -604,4 +668,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance e54db3c7543bbf38e60017fd1cb7c1e8315a77c12997dc0923af820dda3486e1
+// testkit:provenance 79d73038d0c57ee3fb9f1bee13e4a7f5506fd82555d587a38557fd4c2b876b08

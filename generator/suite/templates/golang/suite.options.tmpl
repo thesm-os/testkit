@@ -92,6 +92,34 @@ type named{{ .IfaceName }}Subject{{ renderTypeParams .TypeParams }} struct {
 	factory func() {{ renderType .IfaceRef }}{{ .TypeArgs }}
 }
 
+// {{ lower .IfaceName }}ContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type {{ lower .IfaceName }}ContractExtension{{ renderTypeParams .TypeParams }} struct {
+	// name is the path this reports under, and the one {{ .IfaceName }}Without drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// {{ lower .IfaceName }}Config.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *{{ renderExpr (external "testing" "T") }},
+		subject string,
+		factory func() {{ renderType .IfaceRef }}{{ .TypeArgs }},
+		cfg *{{ lower .IfaceName }}Config{{ .TypeArgs }},
+	)
+}
+
 type {{ lower .IfaceName }}Config{{ renderTypeParams .TypeParams }} struct {
 	Fixture  {{ .Fixture.TypeName }}{{ .TypeArgs }}
 	subjects []named{{ .IfaceName }}Subject{{ .TypeArgs }}
@@ -106,7 +134,8 @@ type {{ lower .IfaceName }}Config{{ renderTypeParams .TypeParams }} struct {
 	// is useless for the other.
 	seedIsDerived bool
 {{- end }}
-	without map[string]struct{}
+	without    map[string]struct{}
+	extensions []{{ lower .IfaceName }}ContractExtension{{ .TypeArgs }}
 {{- range $m := .Methods }}
 	on{{ $m.Name }} []named{{ $c.IfaceName }}{{ $m.Name }}Check{{ $c.TypeArgs }}
 {{- end }}
@@ -170,11 +199,21 @@ func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through {{ .IfaceName }}Without.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) run(t *{{ renderExpr (external "testing" "T") }}, path, name string, fn func(tb {{ renderExpr (external "testing" "TB") }})) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *{{ renderExpr (external "testing" "T") }}) {
 			t.Skipf("dropped through {{ .IfaceName }}Without(%q)", path)
 		})

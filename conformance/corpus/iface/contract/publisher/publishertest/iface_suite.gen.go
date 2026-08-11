@@ -80,6 +80,9 @@ func DefaultContractFixture() ContractFixture {
 //   - writer, on Publish
 //   - publisher, on Publish, Subscribe
 //   - aggregator, on Subscribe
+//
+// //testkit:model on the interface derives that reference, and the
+// ContractModel option it generates runs them here under "model".
 func AssertContractContract(t *testing.T, opts ...ContractOption) {
 	t.Helper()
 	cfg := newContractConfig(opts...)
@@ -154,6 +157,28 @@ func runContractChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through ContractWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -403,6 +428,34 @@ type namedContractSubject struct {
 	factory func() publisher.Contract
 }
 
+// contractContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type contractContractExtension struct {
+	// name is the path this reports under, and the one ContractWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// contractConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() publisher.Contract,
+		cfg *contractConfig,
+	)
+}
+
 type contractConfig struct {
 	Fixture       ContractFixture
 	subjects      []namedContractSubject
@@ -414,6 +467,7 @@ type contractConfig struct {
 	// is useless for the other.
 	seedIsDerived bool
 	without       map[string]struct{}
+	extensions    []contractContractExtension
 	onPublish     []namedContractPublishCheck
 	onSubscribe   []namedContractSubscribeCheck
 }
@@ -470,11 +524,21 @@ func (c *contractConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through ContractWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *contractConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through ContractWithout(%q)", path)
 		})
@@ -487,4 +551,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance eaef9ffc01e00f20465c7cf73ef6623230508963953bd5d6639be8bf8576e4b9
+// testkit:provenance 9eaa7fe19af9542d75627902529b8decabf54ae0edd618894c585cb2a191c371

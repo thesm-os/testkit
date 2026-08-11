@@ -66,6 +66,9 @@ func DefaultSourceFixture() SourceFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - multiaggregator, on Next
+//
+// //testkit:model on the interface derives that reference, and the
+// SourceModel option it generates runs them here under "model".
 func AssertSourceContract(t *testing.T, opts ...SourceOption) {
 	t.Helper()
 	cfg := newSourceConfig(opts...)
@@ -119,6 +122,28 @@ func runSourceChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through SourceWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -280,6 +305,34 @@ type namedSourceSubject struct {
 	factory func() streamconsumer.Source
 }
 
+// sourceContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type sourceContractExtension struct {
+	// name is the path this reports under, and the one SourceWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// sourceConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() streamconsumer.Source,
+		cfg *sourceConfig,
+	)
+}
+
 type sourceConfig struct {
 	Fixture       SourceFixture
 	subjects      []namedSourceSubject
@@ -287,6 +340,7 @@ type sourceConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject streamconsumer.Source) error
 	without       map[string]struct{}
+	extensions    []sourceContractExtension
 	onNext        []namedSourceNextCheck
 }
 
@@ -330,11 +384,21 @@ func (c *sourceConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through SourceWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *sourceConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *sourceConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through SourceWithout(%q)", path)
 		})
@@ -445,6 +509,28 @@ func runStreamConsumerChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through StreamConsumerWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -606,6 +692,34 @@ type namedStreamConsumerSubject struct {
 	factory func() streamconsumer.StreamConsumer
 }
 
+// streamconsumerContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type streamconsumerContractExtension struct {
+	// name is the path this reports under, and the one StreamConsumerWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// streamconsumerConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() streamconsumer.StreamConsumer,
+		cfg *streamconsumerConfig,
+	)
+}
+
 type streamconsumerConfig struct {
 	Fixture       StreamConsumerFixture
 	subjects      []namedStreamConsumerSubject
@@ -613,6 +727,7 @@ type streamconsumerConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject streamconsumer.StreamConsumer) error
 	without       map[string]struct{}
+	extensions    []streamconsumerContractExtension
 	onIngest      []namedStreamConsumerIngestCheck
 }
 
@@ -656,11 +771,21 @@ func (c *streamconsumerConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through StreamConsumerWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *streamconsumerConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *streamconsumerConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through StreamConsumerWithout(%q)", path)
 		})
@@ -673,4 +798,4 @@ func (c *streamconsumerConfig) run(t *testing.T, path, name string, fn func(tb t
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6f4f33e30feaceea2ba2f50230f33f4fe5c19e6b49e885b0f21fa03b078b17e1
+// testkit:provenance ede836dc83f66345effba0beb51199da059771f74a2f3b0a4ef3f2120f2a0c35

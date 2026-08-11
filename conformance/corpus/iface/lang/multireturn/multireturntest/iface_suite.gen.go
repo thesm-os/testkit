@@ -168,6 +168,28 @@ func runWideChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through WideWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -480,6 +502,34 @@ type namedWideSubject struct {
 	factory func() multireturn.Wide
 }
 
+// wideContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type wideContractExtension struct {
+	// name is the path this reports under, and the one WideWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// wideConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() multireturn.Wide,
+		cfg *wideConfig,
+	)
+}
+
 type wideConfig struct {
 	Fixture       WideFixture
 	subjects      []namedWideSubject
@@ -487,6 +537,7 @@ type wideConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject multireturn.Wide) error
 	without       map[string]struct{}
+	extensions    []wideContractExtension
 	onQuad        []namedWideQuadCheck
 	onTriple      []namedWideTripleCheck
 	onNoError     []namedWideNoErrorCheck
@@ -532,11 +583,21 @@ func (c *wideConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through WideWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *wideConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *wideConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through WideWithout(%q)", path)
 		})
@@ -549,4 +610,4 @@ func (c *wideConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)
 }
 
 // testkit: end of generated content.
-// testkit:provenance 014260ff0794e48050185cdbd536fc41b1260ae642480f9897f2fc8db0bfc399
+// testkit:provenance f4da8f6c7b48c75288e564210d157750e9385a88f6231237ca2592ad3b5cf80a

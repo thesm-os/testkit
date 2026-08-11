@@ -65,6 +65,9 @@ func DefaultWriterFixture() WriterFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - writer, on Put
+//
+// //testkit:model on the interface derives that reference, and the
+// WriterModel option it generates runs them here under "model".
 func AssertWriterContract(t *testing.T, opts ...WriterOption) {
 	t.Helper()
 	cfg := newWriterConfig(opts...)
@@ -118,6 +121,28 @@ func runWriterChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through WriterWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -280,6 +305,34 @@ type namedWriterSubject struct {
 	factory func() writer.Writer
 }
 
+// writerContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type writerContractExtension struct {
+	// name is the path this reports under, and the one WriterWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// writerConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() writer.Writer,
+		cfg *writerConfig,
+	)
+}
+
 type writerConfig struct {
 	Fixture       WriterFixture
 	subjects      []namedWriterSubject
@@ -291,6 +344,7 @@ type writerConfig struct {
 	// is useless for the other.
 	seedIsDerived bool
 	without       map[string]struct{}
+	extensions    []writerContractExtension
 	onPut         []namedWriterPutCheck
 }
 
@@ -346,11 +400,21 @@ func (c *writerConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through WriterWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *writerConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *writerConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through WriterWithout(%q)", path)
 		})
@@ -363,4 +427,4 @@ func (c *writerConfig) run(t *testing.T, path, name string, fn func(tb testing.T
 }
 
 // testkit: end of generated content.
-// testkit:provenance 723cf6017fad0aa6f70da8c5ee54aabca6ce10f6d339c5ac74ce978b83fa0a65
+// testkit:provenance a758bb81c8f68259f8a99df5c844bf54126bc3e422e1a2864aa323cdbd548793

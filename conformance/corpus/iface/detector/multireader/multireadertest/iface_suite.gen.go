@@ -121,6 +121,28 @@ func runMultiReaderChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through MultiReaderWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -307,6 +329,34 @@ type namedMultiReaderSubject struct {
 	factory func() multireader.MultiReader
 }
 
+// multireaderContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type multireaderContractExtension struct {
+	// name is the path this reports under, and the one MultiReaderWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// multireaderConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() multireader.MultiReader,
+		cfg *multireaderConfig,
+	)
+}
+
 type multireaderConfig struct {
 	Fixture       MultiReaderFixture
 	subjects      []namedMultiReaderSubject
@@ -314,6 +364,7 @@ type multireaderConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject multireader.MultiReader) error
 	without       map[string]struct{}
+	extensions    []multireaderContractExtension
 	onGetWithMeta []namedMultiReaderGetWithMetaCheck
 }
 
@@ -357,11 +408,21 @@ func (c *multireaderConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through MultiReaderWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *multireaderConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *multireaderConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through MultiReaderWithout(%q)", path)
 		})
@@ -374,4 +435,4 @@ func (c *multireaderConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance eef2ff74878be2396f56e51e98fdc4496754a3a7ae824bc5a549c90eca64b5b2
+// testkit:provenance 95fd3e00aa8d728256d6190270372ec5b09f99dacad0edf3f7486f5c2962eead

@@ -107,6 +107,28 @@ func runPointerReaderChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through PointerReaderWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -245,6 +267,34 @@ type namedPointerReaderSubject struct {
 	factory func() pointerreader.PointerReader
 }
 
+// pointerreaderContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type pointerreaderContractExtension struct {
+	// name is the path this reports under, and the one PointerReaderWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// pointerreaderConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() pointerreader.PointerReader,
+		cfg *pointerreaderConfig,
+	)
+}
+
 type pointerreaderConfig struct {
 	Fixture       PointerReaderFixture
 	subjects      []namedPointerReaderSubject
@@ -252,6 +302,7 @@ type pointerreaderConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject pointerreader.PointerReader) error
 	without       map[string]struct{}
+	extensions    []pointerreaderContractExtension
 	onFind        []namedPointerReaderFindCheck
 }
 
@@ -295,11 +346,21 @@ func (c *pointerreaderConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through PointerReaderWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *pointerreaderConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *pointerreaderConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through PointerReaderWithout(%q)", path)
 		})
@@ -312,4 +373,4 @@ func (c *pointerreaderConfig) run(t *testing.T, path, name string, fn func(tb te
 }
 
 // testkit: end of generated content.
-// testkit:provenance 56dc9ba4f3f06a122782b5cf300be03c9b0398cf59ec54793cf5e3cde3c28b7a
+// testkit:provenance 4aace3e668944cbda5b29601c1b863b8c508ed9f461cda1ab2c7904cffbd0e8f

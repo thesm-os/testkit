@@ -40,6 +40,9 @@ per implementation, which is where the statements drift.
 {{- range . }}
 //   - {{ .Name }}, on {{ .MethodList }}
 {{- end }}
+//
+// //testkit:model on the interface derives that reference, and the
+// {{ $.IfaceName }}Model option it generates runs them here under "model".
 {{- end }}
 {{- if .Unfalsifiable }}
 //
@@ -102,6 +105,28 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 				})
 			}
 		})
-{{ end }}	})
+{{ end }}
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *{{ renderExpr (external "testing" "T") }}) {
+						t.Skipf("dropped through {{ .IfaceName }}Without(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *{{ renderExpr (external "testing" "T") }}) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
+	})
 }
 {{- end -}}

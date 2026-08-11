@@ -107,6 +107,28 @@ func runReaderWithBoolChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through ReaderWithBoolWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -250,6 +272,34 @@ type namedReaderWithBoolSubject struct {
 	factory func() readerwithbool.ReaderWithBool
 }
 
+// readerwithboolContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type readerwithboolContractExtension struct {
+	// name is the path this reports under, and the one ReaderWithBoolWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// readerwithboolConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() readerwithbool.ReaderWithBool,
+		cfg *readerwithboolConfig,
+	)
+}
+
 type readerwithboolConfig struct {
 	Fixture       ReaderWithBoolFixture
 	subjects      []namedReaderWithBoolSubject
@@ -257,6 +307,7 @@ type readerwithboolConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject readerwithbool.ReaderWithBool) error
 	without       map[string]struct{}
+	extensions    []readerwithboolContractExtension
 	onLoad        []namedReaderWithBoolLoadCheck
 }
 
@@ -300,11 +351,21 @@ func (c *readerwithboolConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through ReaderWithBoolWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *readerwithboolConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *readerwithboolConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through ReaderWithBoolWithout(%q)", path)
 		})
@@ -317,4 +378,4 @@ func (c *readerwithboolConfig) run(t *testing.T, path, name string, fn func(tb t
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4d2f2c2e82f5c005df7911e8f9d4c358b694cffbb81507f7a32d073a8419b497
+// testkit:provenance dd5d1738e2d9818a91072173adeb5e65b2c89579db6c46d2b0ffb25bff7c83ec

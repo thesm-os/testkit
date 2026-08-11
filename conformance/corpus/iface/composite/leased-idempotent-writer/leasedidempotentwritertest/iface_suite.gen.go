@@ -74,6 +74,9 @@ func DefaultLeasedWriterFixture() LeasedWriterFixture {
 //   - writer, on Acquire, Release
 //   - idempotent, on Acquire
 //   - lease, on Acquire, Release
+//
+// //testkit:model on the interface derives that reference, and the
+// LeasedWriterModel option it generates runs them here under "model".
 func AssertLeasedWriterContract(t *testing.T, opts ...LeasedWriterOption) {
 	t.Helper()
 	cfg := newLeasedWriterConfig(opts...)
@@ -148,6 +151,28 @@ func runLeasedWriterChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through LeasedWriterWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -397,6 +422,34 @@ type namedLeasedWriterSubject struct {
 	factory func() leasedidempotentwriter.LeasedWriter
 }
 
+// leasedwriterContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type leasedwriterContractExtension struct {
+	// name is the path this reports under, and the one LeasedWriterWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// leasedwriterConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() leasedidempotentwriter.LeasedWriter,
+		cfg *leasedwriterConfig,
+	)
+}
+
 type leasedwriterConfig struct {
 	Fixture       LeasedWriterFixture
 	subjects      []namedLeasedWriterSubject
@@ -408,6 +461,7 @@ type leasedwriterConfig struct {
 	// is useless for the other.
 	seedIsDerived bool
 	without       map[string]struct{}
+	extensions    []leasedwriterContractExtension
 	onAcquire     []namedLeasedWriterAcquireCheck
 	onRelease     []namedLeasedWriterReleaseCheck
 }
@@ -464,11 +518,21 @@ func (c *leasedwriterConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through LeasedWriterWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *leasedwriterConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *leasedwriterConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through LeasedWriterWithout(%q)", path)
 		})
@@ -481,4 +545,4 @@ func (c *leasedwriterConfig) run(t *testing.T, path, name string, fn func(tb tes
 }
 
 // testkit: end of generated content.
-// testkit:provenance 760f9a73f5be8a3c15d5d6b37d21d6935b823aebf447b68e19007590c7b42c2c
+// testkit:provenance 88778371469d41261672ca62511d0a41ef8497d0d4d67f123e2760e8bd45e368

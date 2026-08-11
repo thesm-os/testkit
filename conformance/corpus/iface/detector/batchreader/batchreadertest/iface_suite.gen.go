@@ -125,6 +125,28 @@ func runBatchReaderChecks(
 				})
 			}
 		})
+
+		// The extra bodies of checks this run was given, each reporting under its
+		// own name and dropped by it.
+		//
+		// The plain subject only. The wrapped pass exists to prove the double
+		// faithful and the per-method checks above already do that, so running one
+		// through the wrapper prices the wrapper and says nothing new about the
+		// subject.
+		if wrap == nil {
+			for _, e := range cfg.extensions {
+				if cfg.dropped(e.name) {
+					t.Run(e.name, func(t *testing.T) {
+						t.Skipf("dropped through BatchReaderWithout(%q)", e.name)
+					})
+					continue
+				}
+				t.Run(e.name, func(t *testing.T) {
+					t.Parallel()
+					e.run(t, label, factory, cfg)
+				})
+			}
+		}
 	})
 }
 
@@ -333,6 +355,34 @@ type namedBatchReaderSubject struct {
 	factory func() batchreader.BatchReader
 }
 
+// batchreaderContractExtension is a body of checks a generated sibling adds through an option.
+//
+// A sibling declares the option and closes over whatever configures it, so
+// everything that varies per run is typed and private to the file that owns it
+// — this file understands only the name and the call. Nothing arrives except
+// through an option, which is what keeps the set fixed before the first subtest
+// starts.
+type batchreaderContractExtension struct {
+	// name is the path this reports under, and the one BatchReaderWithout drops
+	// it by. Anything nested beneath it is the extension's own to name.
+	name string
+
+	// run takes the factory rather than a subject. One that drives sequences
+	// builds a subject per iteration, and one that compares against a reference
+	// needs the unseeded subject a factory returns — which
+	// batchreaderConfig.subject is not.
+	//
+	// Called once per subject, in parallel, sharing the config. Anything it
+	// mutates has to be built inside the call: state captured when the option
+	// was declared is state two subjects write at once.
+	run func(
+		t *testing.T,
+		subject string,
+		factory func() batchreader.BatchReader,
+		cfg *batchreaderConfig,
+	)
+}
+
 type batchreaderConfig struct {
 	Fixture       BatchReaderFixture
 	subjects      []namedBatchReaderSubject
@@ -340,6 +390,7 @@ type batchreaderConfig struct {
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject batchreader.BatchReader) error
 	without       map[string]struct{}
+	extensions    []batchreaderContractExtension
 	onGetAll      []namedBatchReaderGetAllCheck
 }
 
@@ -383,11 +434,21 @@ func (c *batchreaderConfig) subject(
 	return s
 }
 
+// dropped reports whether a path was declined through BatchReaderWithout.
+//
+// Named rather than inlined because the drop set is read from two places: here,
+// and by whatever registered through the seam — which reports under paths this
+// file has never heard of and must answer the same question about them.
+func (c *batchreaderConfig) dropped(path string) bool {
+	_, ok := c.without[path]
+	return ok
+}
+
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *batchreaderConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)) {
 	t.Helper()
-	if _, dropped := c.without[path]; dropped {
+	if c.dropped(path) {
 		t.Run(name, func(t *testing.T) {
 			t.Skipf("dropped through BatchReaderWithout(%q)", path)
 		})
@@ -400,4 +461,4 @@ func (c *batchreaderConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance c9739e50392eee1d72737390ce34700a662b82c6c0d32582766c54095ba9c483
+// testkit:provenance 2a1b632c4c78850de77a9287a85494e593a55b465b24cba8f6fb16e0163ffccc
