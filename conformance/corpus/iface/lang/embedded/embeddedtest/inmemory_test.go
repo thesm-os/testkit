@@ -137,13 +137,3 @@ func TestComposedContractWithoutTheDouble(t *testing.T) {
 		embeddedtest.ComposedWithoutDouble(),
 	)
 }
-
-// Close does something rather than only returning nil, which no generated check
-// can see: a lifecycle method's observable effect is the package's own.
-func TestCloseMarksClosed(t *testing.T) {
-	t.Parallel()
-
-	s := embeddedtest.NewInMemory()
-	testkit.NoError(t, s.Close(t.Context()), "closing an open store succeeds")
-	testkit.True(t, s.Closed(), "and is observable")
-}

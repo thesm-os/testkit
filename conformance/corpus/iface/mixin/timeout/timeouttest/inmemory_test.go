@@ -27,6 +27,16 @@ func TestMixedContract(t *testing.T) {
 		timeouttest.MixedSubject("in-memory", func() timeout.Mixed {
 			return timeouttest.NewInMemory()
 		}),
+		timeouttest.MixedOnSlow("answers at once when it has nothing to wait for", func(
+			tb testing.TB, subject timeout.Mixed, key string,
+		) {
+			tb.Helper()
+			// A subject with no delay never reaches its clock, which is the
+			// path the budget check cannot exercise: that one measures a
+			// subject built to spend, and this one is built to spend nothing.
+			testkit.NoError(tb, subject.Slow(tb.Context(), key),
+				"a subject with no delay answers without waiting")
+		}),
 	)
 }
 
@@ -73,24 +83,6 @@ func TestBudgetIsMeasuredOnTheRunsClock(t *testing.T) {
 	})
 }
 
-// A delayed call abandons its wait when the caller gives up, rather than
-// finishing and reporting success to nobody.
-func TestSlowAbandonsItsDelayWhenTheContextIsDone(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	clk := clock.NewTestClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
-
-	go func() {
-		clk.AwaitWaiters(1)
-		cancel()
-	}()
-
-	err := timeouttest.WithDelay(clk, time.Hour).Slow(ctx, "key")
-	testkit.ErrorIs(t, err, context.Canceled,
-		"a caller that gave up is told so rather than waited out")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()
@@ -102,4 +94,29 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		timeouttest.MixedWithout("Slow/smoke"),
 		timeouttest.MixedWithoutDouble(),
 	)
+}
+
+// A caller who gives up is not left waiting on a clock nobody will advance.
+//
+// Driven here rather than through the harness: a subject built to wait hangs
+// every check the run makes against it, so the state this needs is one only a
+// test holding the subject on its own can put it in.
+func TestSlowAbandonsItsWaitWhenTheCallerGivesUp(t *testing.T) {
+	t.Parallel()
+
+	clk := clock.NewTestClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))
+	subject := timeouttest.WithDelay(clk, time.Hour)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- subject.Slow(ctx, "k") }()
+
+	// The wait is on the test clock, so nothing but the cancellation can end
+	// it — which is what makes the assertion about the subject rather than
+	// about how long the test was willing to sit there.
+	clk.AwaitWaiters(1)
+	cancel()
+
+	testkit.ErrorIs(t, <-done, context.Canceled,
+		"the wait ends where the caller did, not where the clock would have")
 }

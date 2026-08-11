@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/cacheable/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package cacheabletest
 
@@ -58,6 +58,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnGet
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - cacheable, on Get
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -362,4 +369,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 31e5fac9b21b820e76f56ce8db3100f8238d4e6b71cac0f0ab1e6ee38fded24d
+// testkit:provenance 6366dc6ce3d5078ce45aac1f52b7d713ba562fb38db5c62914666f64f278d4f4

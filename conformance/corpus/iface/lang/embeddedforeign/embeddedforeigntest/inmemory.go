@@ -75,14 +75,6 @@ func (s *InMemory) Close() error {
 	return nil
 }
 
-// Closed reports whether Close has run, which the interface does not expose and
-// a check therefore cannot reach.
-func (s *InMemory) Closed() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.closed
-}
-
 // Put stores a value, so a test can seed a stream whose interface declares no
 // writer to seed itself through.
 func (s *InMemory) Put(key, value string) {

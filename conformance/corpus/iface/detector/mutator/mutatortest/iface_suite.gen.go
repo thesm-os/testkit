@@ -56,6 +56,13 @@ func DefaultMutatorFixture() MutatorFixture {
 //	          lying. MutatorWithoutDouble declines it.
 //	Extend:   MutatorOnTouch
 //	Drop:     MutatorWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - mutator, on Touch — write it with MutatorOnTouch
 func AssertMutatorContract(t *testing.T, opts ...MutatorOption) {
 	t.Helper()
 	cfg := newMutatorConfig(opts...)
@@ -291,4 +298,4 @@ func (c *mutatorConfig) run(t *testing.T, path, name string, fn func(tb testing.
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4fc23d85e8df7e0e25b4938d26bbc2b2e10ccad850268380931d6b50c8c74475
+// testkit:provenance 4a57a7d22f1eb601afc81c2118d529c71aaf9ecf6d50e1c8c582a28e483ef9c0

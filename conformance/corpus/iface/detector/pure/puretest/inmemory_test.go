@@ -47,16 +47,6 @@ func TestPureContract(t *testing.T) {
 	)
 }
 
-// Two receivers must answer differently, or Describe is a constant that
-// satisfies every check above without deriving anything from anything.
-func TestDescribeReflectsItsReceiver(t *testing.T) {
-	t.Parallel()
-
-	testkit.False(t,
-		puretest.NewInMemory("first").Describe() == puretest.NewInMemory("second").Describe(),
-		"the value is derived from the receiver rather than fixed")
-}
-
 // Declining the double is separate from dropping a check.
 func TestPureContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

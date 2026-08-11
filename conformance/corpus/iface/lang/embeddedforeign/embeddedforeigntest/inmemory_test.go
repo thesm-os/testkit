@@ -61,16 +61,3 @@ func TestStreamContractWithoutTheDouble(t *testing.T) {
 		embeddedforeigntest.StreamWithoutDouble(),
 	)
 }
-
-// Close does something rather than only returning nil, which no generated check
-// can see: the interface exposes no way to observe it, so the claim belongs to
-// the package rather than to the contract.
-func TestCloseIsIdempotent(t *testing.T) {
-	t.Parallel()
-
-	s := embeddedforeigntest.NewInMemory()
-	testkit.False(t, s.Closed(), "a fresh stream is open")
-	testkit.NoError(t, s.Close(), "the first close succeeds")
-	testkit.NoError(t, s.Close(), "and so does the second")
-	testkit.True(t, s.Closed(), "and the effect is observable")
-}

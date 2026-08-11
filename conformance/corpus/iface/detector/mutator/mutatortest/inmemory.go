@@ -41,11 +41,3 @@ func (s *InMemory) Touch(ctx context.Context, key string) {
 	defer s.mu.Unlock()
 	s.touched[key]++
 }
-
-// Touches reports how often a key was touched, which the interface exposes no
-// way to observe — a void method's whole effect is out of band.
-func (s *InMemory) Touches(key string) int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.touched[key]
-}

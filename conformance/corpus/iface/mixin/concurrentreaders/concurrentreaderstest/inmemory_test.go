@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/concurrency"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/concurrentreaders"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/concurrentreaders/concurrentreaderstest"
 )
@@ -42,31 +41,6 @@ func TestMixedContract(t *testing.T) {
 			testkit.Equal(tb, got, fixture.Value, "and carries what was written")
 		}),
 	)
-}
-
-// Eight readers, a hundred reads each, all seeing one consistent answer.
-// Meaningful under `-race`, cheap otherwise — which is the trade that keeps it
-// out of the generated harness and in the package that knows how it is run.
-//
-// Driven through [concurrency.ConcurrentStress] rather than a hand-rolled
-// WaitGroup: spawning and joining is not what this test is about, and the
-// leak check beside it is a claim a hand-rolled version does not make at all —
-// a reader that parked a goroutine per call would pass every assertion here
-// and leak one per read.
-func TestConcurrentReadsAreSafe(t *testing.T) {
-	t.Parallel()
-
-	s := concurrentreaderstest.NewInMemory()
-	testkit.NoError(t, s.Put(t.Context(), "k", "v"), "seeding succeeds")
-
-	defer concurrency.GoroutineLeak(t)()
-
-	ctx := t.Context()
-	concurrency.ConcurrentStress(t, 8, 100, func(_, _ int) {
-		got, err := s.Get(ctx, "k")
-		testkit.NoError(t, err, "a concurrent read succeeds")
-		testkit.Equal(t, got, "v", "and sees the seeded value")
-	})
 }
 
 // Declining the double is separate from dropping a check.

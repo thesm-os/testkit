@@ -26,6 +26,13 @@ var _ poisonaccessor.PoisonAccessor = (*InMemory)(nil)
 // NewInMemory returns a healthy subject.
 func NewInMemory() *InMemory { return &InMemory{} }
 
+// Poisoned returns a subject that has already failed.
+//
+// The latch is what the shape is about, and Err is the only method — so nothing
+// a caller does can put a healthy subject into the failed state. A factory can,
+// which is what lets the run hold both to the same check.
+func Poisoned() *InMemory { return &InMemory{poisoned: true} }
+
 // Err reports the latched state and never clears it, which is the shape: the
 // failure outlives the call that caused it, so an accessor that reset on read
 // would be a queue rather than a latch.
@@ -41,20 +48,4 @@ func (s *InMemory) Err() error {
 		return poisonaccessor.ErrPoisoned
 	}
 	return nil
-}
-
-// Poison latches the failure, which nothing on the interface can do: an
-// accessor reads state, and something else has to have put it there.
-func (s *InMemory) Poison() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.poisoned = true
-}
-
-// Calls reports how often Err was asked, so a test can show the latch is read
-// rather than computed once.
-func (s *InMemory) Calls() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.callCount
 }

@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/scope/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package scopetest
 
@@ -73,6 +73,20 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnSet, MixedOnGet
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - scope, on Set — write it with MixedOnSet
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - multiargwriter, on Set
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -503,4 +517,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 22e5f086c6d2ddb2a65ea5c5c9a2c3303b1d5e4c70a0d32c6f83e9f49e63bd87
+// testkit:provenance be738955609d247457ccea014aee2be02973d0408dcc315030402fa578e1e495

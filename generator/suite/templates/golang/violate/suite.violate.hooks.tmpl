@@ -1,0 +1,12 @@
+{{- /*
+A stand-in that never fires what was registered.
+*/ -}}
+{{- define "suite.violate.hooks" -}}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in takes the registration and forgets it. A check that let that pass
+// would report a working hook for a subject where nothing ever runs.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{- template "suite.violate.permissive" . }}
+}
+{{- end -}}

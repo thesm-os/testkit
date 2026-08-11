@@ -8,9 +8,9 @@ the three consumers emits from that value.
 Provenance is marked throughout: excerpts under **(shipped)** exist in
 `conformance/corpus/iface/mixin/validates/validatestest` today; everything
 else is the proposal rendered by hand, in exactly the form the corpus will
-hold once the plugins land. The two `//testkit:bench` / `//testkit:fuzz`
-lines on the source are example additions — the shipped fixture does not
-carry them yet.
+hold once the plugins land. The `//testkit:bench`, `//testkit:fuzz` and
+`//testkit:model` lines on the source are example additions — the shipped
+fixture does not carry them yet.
 
 ## The source
 
@@ -22,6 +22,7 @@ var ErrInvalid = errors.New("validates: invalid payload")
 //testkit:out validatestest/ pkg=validatestest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
     //testkit:mixin validates fn=Validate
     //testkit:fuzz
@@ -226,8 +227,9 @@ learns between runs.
 
 ## model
 
-**Reads:** the shape stamps (its own read — law selection is the model
-tier's), and the projection's fixture, seed and naming.
+**Reads:** the `//testkit:model` stamp that arms it; the shape stamps (its
+own read — law selection is the model tier's); and the projection's fixture,
+seed and naming.
 
 **The cluster map**, derived first. Edges: `Store` and `Read` agree on
 (`key=string` via the reader, `value=Payload`) — one CRUD cluster.

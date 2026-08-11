@@ -53,6 +53,13 @@ func DefaultLifecycleFixture() LifecycleFixture {
 //	          lying. LifecycleWithoutDouble declines it.
 //	Extend:   LifecycleOnClose
 //	Drop:     LifecycleWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Close
 func AssertLifecycleContract(t *testing.T, opts ...LifecycleOption) {
 	t.Helper()
 	cfg := newLifecycleConfig(opts...)
@@ -334,4 +341,4 @@ func (c *lifecycleConfig) run(t *testing.T, path, name string, fn func(tb testin
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1574d41559604f036af7b45a269e244964f8819d8b1f0fe5824efea15cb6a629
+// testkit:provenance 6f31d2e95fef7162eaf7c02564510cf1190d5cef57e5de31566ffbfefc837716

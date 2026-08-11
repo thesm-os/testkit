@@ -59,6 +59,13 @@ func DefaultAggregatorFixture() AggregatorFixture {
 //	          lying. AggregatorWithoutDouble declines it.
 //	Extend:   AggregatorOnCount
 //	Drop:     AggregatorWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - aggregator, on Count
 func AssertAggregatorContract(t *testing.T, opts ...AggregatorOption) {
 	t.Helper()
 	cfg := newAggregatorConfig(opts...)
@@ -340,4 +347,4 @@ func (c *aggregatorConfig) run(t *testing.T, path, name string, fn func(tb testi
 }
 
 // testkit: end of generated content.
-// testkit:provenance aeaca465cea1a9c90fb2172713c8bc025ea99311c2dd332cebcbba9a438b0594
+// testkit:provenance c37571c13916828056ad68c306cdf0a473c7a1a1ac39c4df754e232b4d98b03e

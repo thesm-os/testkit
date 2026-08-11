@@ -51,6 +51,13 @@ func DefaultStreamReaderFixture() StreamReaderFixture {
 //	          lying. StreamReaderWithoutDouble declines it.
 //	Extend:   StreamReaderOnList
 //	Drop:     StreamReaderWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - streamreader, on List
 func AssertStreamReaderContract(t *testing.T, opts ...StreamReaderOption) {
 	t.Helper()
 	cfg := newStreamReaderConfig(opts...)
@@ -286,4 +293,4 @@ func (c *streamreaderConfig) run(t *testing.T, path, name string, fn func(tb tes
 }
 
 // testkit: end of generated content.
-// testkit:provenance f4230d4cbe4b40b1998e887edda7870a9acc01383cd07bed3f904411345d43fa
+// testkit:provenance f3654b4674ee03e900d2ecb3e4c470de7bfb4eaf13ad34ae27cfbf1eb8ca20a2

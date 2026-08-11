@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/readafterwrite/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package readafterwritetest
 
@@ -69,6 +69,14 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnRead, MixedOnWrite
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - readafterwrite, on Read
+//   - compositewriter, on Write
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -499,4 +507,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 221cc70a4f753309a28031f449eb3f6815e2c9ebaf82d39335553dea6ea8f767
+// testkit:provenance a3decee14ad057201c086155a951a6db804254bb446c592f6311137894679b8b

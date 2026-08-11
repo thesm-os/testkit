@@ -59,6 +59,13 @@ func DefaultMultiAggregatorFixture() MultiAggregatorFixture {
 //	          lying. MultiAggregatorWithoutDouble declines it.
 //	Extend:   MultiAggregatorOnStats
 //	Drop:     MultiAggregatorWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - multiaggregator, on Stats
 func AssertMultiAggregatorContract(t *testing.T, opts ...MultiAggregatorOption) {
 	t.Helper()
 	cfg := newMultiAggregatorConfig(opts...)
@@ -340,4 +347,4 @@ func (c *multiaggregatorConfig) run(t *testing.T, path, name string, fn func(tb 
 }
 
 // testkit: end of generated content.
-// testkit:provenance 03217ab14a6de7583cad41baf16f70e009d1a1cc4c8da2fd126e1746c826112c
+// testkit:provenance 2ee882a3a7af5383cd6c8557c340243e381fb318b957c538edc85a6bb3249859

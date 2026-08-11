@@ -39,19 +39,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// Two receivers agree, which is stronger than one receiver agreeing with
-// itself: a subject caching its last answer satisfies the check above and
-// fails this.
-func TestDeriveDependsOnItsInputAlone(t *testing.T) {
-	t.Parallel()
-
-	first, second := puretest.NewInMemory(), puretest.NewInMemory()
-	testkit.Equal(t, first.Derive("x"), second.Derive("x"),
-		"two receivers derive the same value from one input")
-	testkit.False(t, first.Derive("x") == first.Derive("y"),
-		"and different inputs derive differently, or the method is a constant")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

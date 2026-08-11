@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/integrationonly/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/iface/mixin/integrationonly/...
 
 package integrationonlytest
 
@@ -58,6 +58,20 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnConnect
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - integrationonly, on Connect — write it with MixedOnConnect
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Connect
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -93,6 +107,12 @@ func runMixedChecks(
 
 		t.Run("Connect", func(t *testing.T) {
 			t.Parallel()
+			// Connect reaches something outside this process, so its
+			// checks run where that exists and skip where it does not.
+			// Unset is a skip rather than a pass: a check that succeeded
+			// because its dependency was absent reports coverage it did not
+			// earn.
+			testkit.RequireEnv(t, "TESTKIT_INTEGRATION")
 			cfg.run(t, "Connect/smoke", "smoke", func(tb testing.TB) {
 				AssertMixedConnectSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Dsn)
 			})
@@ -356,4 +376,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6fb1ea1548f25d0fe26430f82c8dddc0ab559e8e8fa5b0fea85e4327b83687ae
+// testkit:provenance 816c0f6e8df6b8257f0adb5f9d5c9d713aa1af273115205e68fa327ad258a0e3

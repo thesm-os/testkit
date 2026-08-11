@@ -1,0 +1,79 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+// Package upsertertest holds the generated harness and double for
+// [go.thesmos.sh/testkit/conformance/corpus/iface/contract/upserter], and the
+// in-memory subject they are run against.
+package upsertertest
+
+import (
+	"context"
+	"errors"
+	"sync"
+
+	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/upserter"
+)
+
+// ErrNotFound reports a key the store does not hold.
+var ErrNotFound = errors.New("upsertertest: no value under that key")
+
+// InMemory is the implementation the generated conformance harness is run
+// against.
+//
+// One map and no branch on presence, which is what makes the write idempotent:
+// `AUTO-UPSERTER-IDEMPOTENT` is the claim that repeating a write leaves
+// observable state where the first left it, and any code path that treated the
+// second differently would be the place that stops being true.
+type InMemory struct {
+	mu     sync.Mutex
+	values map[string]upserter.Value
+}
+
+var _ upserter.Contract = (*InMemory)(nil)
+
+// NewInMemory returns an empty store.
+func NewInMemory() *InMemory { return &InMemory{values: map[string]upserter.Value{}} }
+
+// Put writes a value whether or not the key was held.
+//
+// The same statement for both cases, deliberately. An upsert that inserted and
+// updated through separate paths would have two chances to disagree about what
+// the store holds afterwards, and the whole contract is that it cannot.
+func (s *InMemory) Put(ctx context.Context, v upserter.Value) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values[v.Key] = v
+	return nil
+}
+
+// Get returns the zero value alongside every error it reports, so a caller who
+// checks the error and one who checks the value do not disagree about whether
+// the call succeeded.
+func (s *InMemory) Get(ctx context.Context, key string) (upserter.Value, error) {
+	if err := contextErr(ctx); err != nil {
+		return upserter.Value{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, present := s.values[key]
+	if !present {
+		return upserter.Value{}, ErrNotFound
+	}
+	return v, nil
+}
+
+// contextErr reports a cancelled or expired context, and tolerates a nil one.
+//
+// Nil is not a legal context and reaches production anyway, through a caller
+// that forgot one. Returning an error is a failed request; dereferencing it is
+// an outage, which is why the generated check asks only that this does not
+// panic.
+func contextErr(ctx context.Context) error {
+	if ctx == nil {
+		return errors.New("upsertertest: nil context")
+	}
+	return ctx.Err()
+}

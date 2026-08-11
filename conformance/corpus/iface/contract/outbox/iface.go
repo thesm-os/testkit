@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out outboxtest/ pkg=outboxtest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Append is the outbox contract's append role, and hosts the directive
 	// that names its partners.

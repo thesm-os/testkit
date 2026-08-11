@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out transactiontest/ pkg=transactiontest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Run is the transaction contract's fn role, and hosts the directive
 	// that names its partners.

@@ -139,6 +139,132 @@ func TestContractStubPut(t *testing.T) {
 	})
 }
 
+// contractStubMatchSubject binds Match into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubMatchSubject(tb testing.TB) stub.Subject[ifmatchtest.ContractMatchCall, ifmatchtest.ContractMatchReturn] {
+	tb.Helper()
+	s := ifmatchtest.NewContractStub(tb)
+	return stub.Subject[ifmatchtest.ContractMatchCall, ifmatchtest.ContractMatchReturn]{
+		Stub: s.OnMatch.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 ifmatch.Value
+			_, _ = s.Match(a0, a1)
+		},
+		Result: func() ifmatchtest.ContractMatchReturn {
+			var a0 context.Context
+			var a1 ifmatch.Value
+			got0, got1 := s.Match(a0, a1)
+			return ifmatchtest.ContractMatchReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnMatch.Func(func(_ context.Context, _ ifmatch.Value) (bool, error) {
+				mark()
+				var z0 bool
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 ifmatch.Value
+			_, r1 := s.Match(a0, a1)
+			return r1
+		},
+	}
+}
+
+// TestContractStubMatch pins how Match answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubMatch(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Match", contractStubMatchSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := ifmatchtest.NewContractStub(t)
+		var want0 bool
+		var want1 error
+		s.OnMatch.Returns(want0, want1)
+		var a0 context.Context
+		var a1 ifmatch.Value
+		got0, got1 := s.Match(a0, a1)
+		testkit.Equal(t, got0, want0, "Match must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Match must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := ifmatchtest.NewContractStub(t)
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, _ = s.Match(a0, a1)
+		got := s.OnMatch.AssertCalledOnce(t, "Match must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.V, a1, "the recorded call carries V")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := ifmatchtest.NewContractStub(t)
+		var seen []ifmatchtest.ContractMatchCall
+		s.OnMatch.OnRecord(func(c ifmatchtest.ContractMatchCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, _ = s.Match(a0, a1)
+		_, _ = s.Match(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Match call")
+	})
+
+	t.Run("wires WithContractMatch at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := ifmatchtest.NewContractStub(t, ifmatchtest.WithContractMatch(func(_ context.Context, _ ifmatch.Value) (bool, error) {
+			called = true
+			var z0 bool
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, _ = s.Match(a0, a1)
+		testkit.True(t, called, "WithContractMatch must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := ifmatchtest.NewContractStub(t)
+		var want0 bool
+		var want1 error
+		s.OnMatch.Returns(want0, want1)
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, _ = s.Match(a0, a1)
+		s.ResetCalls()
+		got0, got1 := s.Match(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
 // contractStubDouble describes how to build a ContractStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -214,7 +340,26 @@ func TestContractStubDelegateTo(t *testing.T) {
 		r0 := s.Put(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Put must surface the wrapped answer")
 	})
+
+	t.Run("forwards Match to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, _ = s.Match(a0, a1)
+		inner.OnMatch.AssertCalledOnce(t, "Match must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Match answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Match-delegate")
+		inner.OnMatch.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 ifmatch.Value
+		_, r1 := s.Match(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Match must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance e7002d3c7baf7bea53a739e90c35cb628ba4b5c2469fb466f3af268d3413fa58
+// testkit:provenance d7fcc84833e09eb5d5271ab22ef28159d4d1631b2dfae69ae1dabf614985bedd

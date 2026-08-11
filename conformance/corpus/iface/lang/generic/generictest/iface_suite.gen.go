@@ -64,6 +64,23 @@ func DefaultStoreFixture[K comparable, V any]() StoreFixture[K, V] {
 //	          lying. StoreWithoutDouble declines it.
 //	Extend:   StoreOnGet, StoreOnPut
 //	Drop:     StoreWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - reader, on Get — write it with StoreOnGet
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - compositewriter, on Put
+//
+// Nothing proves these checks are able to fail —
+// the interface is generic, so nothing names the types to prove it with.
 func AssertStoreContract[K comparable, V any](t *testing.T, opts ...StoreOption[K, V]) {
 	t.Helper()
 	cfg := newStoreConfig[K, V](opts...)
@@ -454,4 +471,4 @@ func (c *storeConfig[K, V]) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8c094ca1125b776afb40a76bf7f616bfa404c49ce41e2cdb5d38f4b2c7d0492e
+// testkit:provenance ff53cb4c0add3423da73d34509281d3d0e1c3db082bb2688fae58a5e7bbc5e0e

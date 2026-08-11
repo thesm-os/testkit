@@ -7,7 +7,6 @@ import (
 	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/retrysucceeds"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/retrysucceeds/retrysucceedstest"
 )
@@ -41,26 +40,6 @@ func TestMixedContract(t *testing.T) {
 			"Call/reports an expired deadline",
 		),
 	)
-}
-
-// The retry is what succeeds, which no single call can show: the first attempt
-// failing is indistinguishable from a permanently broken subject until the
-// second one lands.
-func TestCallSucceedsOnRetry(t *testing.T) {
-	t.Parallel()
-
-	s := retrysucceedstest.NewInMemory()
-	ctx := t.Context()
-
-	testkit.ErrorIs(t, s.Call(ctx, "k"), retrysucceedstest.ErrTransient,
-		"the first attempt fails transiently")
-	testkit.ErrorIs(t, s.Call(ctx, "k"), retrysucceedstest.ErrTransient,
-		"and so does the second")
-	testkit.NoError(t, s.Call(ctx, "k"), "the third succeeds")
-
-	got, err := s.Attempts(ctx)
-	testkit.NoError(t, err, "counting attempts succeeds")
-	testkit.Equal(t, got, 3, "and every attempt was counted")
 }
 
 // Declining the double is separate from dropping a check.

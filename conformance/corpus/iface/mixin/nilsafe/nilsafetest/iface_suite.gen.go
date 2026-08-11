@@ -55,6 +55,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnStore
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Store
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -360,4 +367,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5d84f8b03f30ac813c2ab68e8aa6fecad2f292f2c22776a48ee2c1d09860d44b
+// testkit:provenance eec9339770c4808c3a0d751a55275b8e4459345da98dbfb07e249aa2e636e4df

@@ -25,6 +25,7 @@ import "context"
 //
 //testkit:out batchedmixinstest/ pkg=batchedmixinstest
 //testkit:stub
+//testkit:suite
 type Batched interface {
 	// Put carries three mixins on one line. Bare tokens are read as further
 	// names, never as parameters, which is why none of these may take one.

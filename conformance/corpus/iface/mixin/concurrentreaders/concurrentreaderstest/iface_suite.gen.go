@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/concurrentreaders/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package concurrentreaderstest
 
@@ -69,6 +69,20 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnGet, MixedOnPut
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - concurrentreaders, on Get — write it with MixedOnGet
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - compositewriter, on Put
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -499,4 +513,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5f3f359151c6274e30b3a66b7c1859ccc55f02a73f4bbd374e7ed3824cfbbc1d
+// testkit:provenance 8fb09a9e2635efaea8afe7f7fc336531bbce251670eebe27883a04493756f1e9

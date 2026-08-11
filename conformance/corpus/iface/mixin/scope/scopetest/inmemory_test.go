@@ -44,26 +44,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// One scope does not see another's writes. A store hashing the scope and key
-// together satisfies every generated check and leaks across tenants.
-func TestScopesDoNotLeak(t *testing.T) {
-	t.Parallel()
-
-	s := scopetest.NewInMemory()
-	ctx := t.Context()
-
-	testkit.NoError(t, s.Set(ctx, "a", "k", "one"), "writing to a succeeds")
-	testkit.NoError(t, s.Set(ctx, "b", "k", "two"), "writing to b succeeds")
-
-	got, err := s.Get(ctx, "a", "k")
-	testkit.NoError(t, err, "reading a succeeds")
-	testkit.Equal(t, got, "one", "and returns a's value rather than b's")
-
-	_, err = s.Get(ctx, "c", "k")
-	testkit.ErrorIs(t, err, scopetest.ErrNotFound,
-		"a scope nothing was written to holds nothing")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

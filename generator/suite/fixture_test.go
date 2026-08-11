@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
@@ -72,8 +73,16 @@ func TestStructSample(t *testing.T) {
 		// [golang.Sample] rather than the text of one.
 		f := fieldOf(t, contractIn(t, nestedStruct(t)).Fixture, "O")
 		inner := partNamed(t, f, "Inner")
-		testkit.True(t, inner.Sample.Ref != nil, "the nested type is carried, not flattened to text")
-		testkit.True(t, inner.Sample.Composite, "and recorded as a composite rather than a conversion")
+		testkit.True(
+			t,
+			inner.Sample.Ref != nil,
+			"the nested type is carried, not flattened to text",
+		)
+		testkit.True(
+			t,
+			inner.Sample.Composite,
+			"and recorded as a composite rather than a conversion",
+		)
 	})
 }
 
@@ -84,7 +93,11 @@ func TestCompanion(t *testing.T) {
 
 	t.Run("wins over the derived sample", func(t *testing.T) {
 		t.Parallel()
-		f := fieldOf(t, contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture, "V")
+		f := fieldOf(
+			t,
+			contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture,
+			"V",
+		)
 		testkit.True(t, f.Companion != nil, "the companion is used where the source declares one")
 	})
 
@@ -93,7 +106,11 @@ func TestCompanion(t *testing.T) {
 		// A PayloadDefaults taking arguments is a different function that
 		// happens to collide, and calling it would emit a fixture that does not
 		// compile.
-		f := fieldOf(t, contractIn(t, withCompanion(t, "PayloadDefaults", 1, "Payload")).Fixture, "V")
+		f := fieldOf(
+			t,
+			contractIn(t, withCompanion(t, "PayloadDefaults", 1, "Payload")).Fixture,
+			"V",
+		)
 		testkit.True(t, f.Companion == nil, "the signature is checked, not only the name")
 	})
 
@@ -114,7 +131,11 @@ func TestCompanion(t *testing.T) {
 		// One function cannot answer both questions. A companion says "a value
 		// this type accepts"; the alternate says "a value that should not be
 		// found", which is what a miss check needs.
-		f := fieldOf(t, contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture, "V")
+		f := fieldOf(
+			t,
+			contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture,
+			"V",
+		)
 		testkit.True(t, f.Other.OK(), "the alternate is still derived")
 	})
 }
@@ -238,8 +259,11 @@ func TestUnderivableParameter(t *testing.T) {
 		t.Parallel()
 		// A func is the type nothing can write down: there is no literal for
 		// it, and no wider run produces one.
-		testkit.False(t, hasCheckIn(t, funcParamFixture(t), "Get", "an error carries the zero value"),
-			"the miss check needs a value derivation could reach")
+		testkit.False(
+			t,
+			hasCheckIn(t, funcParamFixture(t), "Get", "an error carries the zero value"),
+			"the miss check needs a value derivation could reach",
+		)
 	})
 
 	t.Run("keeps it for a composite eidos can write down", func(t *testing.T) {
@@ -416,7 +440,11 @@ func TestMixinChecks(t *testing.T) {
 		// The resolver rewrites a sibling into a qualified name so it is
 		// unambiguous across packages; a generated call site holds the subject
 		// and cannot spell that form.
-		m := methodNamed(t, contractIn(t, mixinFixture(t, "orderafter", "example.com/miss.Store.Prepare")), "Load")
+		m := methodNamed(
+			t,
+			contractIn(t, mixinFixture(t, "orderafter", "example.com/miss.Store.Prepare")),
+			"Load",
+		)
 		testkit.Equal(t, m.MixinPartner("orderafter", "fn"), "Prepare",
 			"the trailing identifier is what a call site can use")
 	})
@@ -478,8 +506,11 @@ func TestHooksCheck(t *testing.T) {
 		t.Parallel()
 		// `OnEvent(name string)` is something else the directive was aimed at,
 		// and a func literal passed to it would not compile.
-		testkit.False(t, hasCheckIn(t, hooksFixture(t, storefixture.Named("string")), "Fire", "hooks"),
-			"a registration takes a callback, not a name")
+		testkit.False(
+			t,
+			hasCheckIn(t, hooksFixture(t, storefixture.Named("string")), "Fire", "hooks"),
+			"a registration takes a callback, not a name",
+		)
 	})
 
 	t.Run("emits nothing where the partner takes several parameters", func(t *testing.T) {
@@ -599,8 +630,12 @@ func TestUndeliverableReason(t *testing.T) {
 	t.Run("calls an unloaded type a gap in this run", func(t *testing.T) {
 		t.Parallel()
 		f := fieldOf(t, contractIn(t, unloadedParamFixture(t)).Fixture, "T")
-		testkit.Equal(t, f.Reason(), "which this run did not resolve, so no value was derived for it",
-			"a run reaching the declaring package would derive one")
+		testkit.Equal(
+			t,
+			f.Reason(),
+			"which this run did not resolve, so no value was derived for it",
+			"a run reaching the declaring package would derive one",
+		)
 	})
 
 	t.Run("says so in the diagnostic", func(t *testing.T) {
@@ -1393,4 +1428,211 @@ func paramOf(t *testing.T, c *suite.Contract, method, param string) golang.Param
 	}
 	t.Fatalf("no parameter %q on %s", param, method)
 	return golang.Param{}
+}
+
+// A batch read answers once per key, which is the one detector claim about
+// arity rather than absence — and the one the miss family cannot state.
+func TestBatchSizeCheck(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits for a variadic read with a derivable pair", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(
+			t,
+			hasCheckIn(
+				t,
+				batchFixture(t, storefixture.Named("string")),
+				"GetAll",
+				"answers once per key",
+			),
+			"two keys is what distinguishes per-key from at-all",
+		)
+	})
+
+	t.Run("varies the key and holds nothing else", func(t *testing.T) {
+		t.Parallel()
+		ck := checkNamed(
+			t,
+			contractIn(t, batchFixture(t, storefixture.Named("string"))),
+			"GetAll",
+			"answers once per key",
+		)
+		testkit.Equal(t, ck.SecondCall, []string{"keys", "keysOther"},
+			"the call is handed both derived values")
+	})
+
+	t.Run("emits nothing for a shape that is not stamped batchreader", func(t *testing.T) {
+		t.Parallel()
+		// A structural stamp is what says the slice is per-key. Without it a
+		// variadic method returning a slice is any of a dozen things.
+		testkit.False(t, hasCheckIn(t, unstampedBatchFixture(t), "GetAll", "answers once per key"),
+			"an unstamped variadic read owes no count")
+	})
+
+	t.Run("emits nothing where the read takes more than the keys", func(t *testing.T) {
+		t.Parallel()
+		// A second parameter is a batch read of something else — a limit, a
+		// scope — and the count claim is about the keys alone.
+		testkit.False(t, hasCheckIn(t, widerBatchFixture(t), "GetAll", "answers once per key"),
+			"a read taking more than a batch of keys is a different shape")
+	})
+
+	t.Run("emits nothing where the key admits no second value", func(t *testing.T) {
+		t.Parallel()
+		// Two keys is the whole content, and a func-typed key yields none — so
+		// there is no second element to request.
+		testkit.False(
+			t,
+			hasCheckIn(
+				t,
+				batchFixture(t, storefixture.Func(nil, nil)),
+				"GetAll",
+				"answers once per key",
+			),
+			"a key nothing can be written for is one nothing can be varied along",
+		)
+	})
+}
+
+// batchFixture is a variadic read stamped batchreader, keyed on the given type.
+func batchFixture(t *testing.T, key *sdk.TypeRef) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("batch", "example.com/batch").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("batch/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Variadic("keys", key)
+				m.Return(storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stamp(s, "GetAll", batchreader.Name)
+	return s
+}
+
+// widerBatchFixture takes a second parameter beside the batch.
+func widerBatchFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("batch", "example.com/batch").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("batch/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("limit", storefixture.Named("int"))
+				m.Variadic("keys", storefixture.Named("string"))
+				m.Return(storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stamp(s, "GetAll", batchreader.Name)
+	return s
+}
+
+// unstampedBatchFixture is the same shape with no classification on it.
+func unstampedBatchFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("batch", "example.com/batch").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("batch/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Variadic("keys", storefixture.Named("string"))
+				m.Return(storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// Two mixins that name a partner and compare against it: one asks whether the
+// pair agree, the other whether the failure carries what the pair reports.
+func TestPartnerComparisonChecks(t *testing.T) {
+	t.Parallel()
+
+	t.Run("emits where the validator answers about the same value", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(
+			t,
+			hasCheckIn(
+				t,
+				pairFixture(t, "validates", "fn", "Validate", true),
+				"Store",
+				"validates",
+			),
+			"a validator over the writer's own parameter is one the check can call",
+		)
+	})
+
+	t.Run("emits nothing where the validator answers about something else", func(t *testing.T) {
+		t.Parallel()
+		// A check receives the writer's arguments and nothing else.
+		testkit.False(
+			t,
+			hasCheckIn(
+				t,
+				pairFixture(t, "validates", "fn", "Validate", false),
+				"Store",
+				"validates",
+			),
+			"a validator over a different parameter list is one the check cannot call",
+		)
+	})
+
+	t.Run("emits where the cause reports an error and nothing else", func(t *testing.T) {
+		t.Parallel()
+		testkit.True(
+			t,
+			hasCheckIn(t, pairFixture(t, "wrappedvia", "fn", "Cause", true), "Store", "wrappedvia"),
+			"a cause that reports only an error is one the failure can be held up to",
+		)
+	})
+}
+
+// pairFixture is a writer beside a partner the named mixin points at, over the
+// writer's own parameter or over another type.
+func pairFixture(t *testing.T, mixinName, param, partner string, sameType bool) *sdk.Store {
+	t.Helper()
+	over := storefixture.Named("string")
+	if !sameType {
+		over = storefixture.Named("int")
+	}
+	s := storefixture.New().
+		Package("pair", "example.com/pair").
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("pair/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Store", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method(partner, func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				if partner != "Cause" {
+					m.Param("v", over)
+				}
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Store" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaMixins.Set(bag, []string{mixinName}, "test")
+			shape.MixinParamKey(mixinName, param).Set(bag, partner, "test")
+		}
+	}
+	return s
 }

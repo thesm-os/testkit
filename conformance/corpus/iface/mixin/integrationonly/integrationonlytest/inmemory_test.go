@@ -24,28 +24,30 @@ import (
 // one this subject accepts — which is exactly what the generated seed-failure
 // message asks for when it does not.
 func TestMixedContract(t *testing.T) {
-	t.Parallel()
+	// Not parallel, because t.Setenv forbids it — and the variable is the
+	// point: every check on Connect sits behind the integration guard, so a run
+	// that does not set it skips the whole method and exercises nothing.
+	//
+	// Which is what a consumer's integration stage does, and what their unit
+	// stage deliberately does not.
+	t.Setenv("TESTKIT_INTEGRATION", "1")
 
 	integrationonlytest.AssertMixedContract(t,
 		integrationonlytest.MixedSubject("in-memory", func() integrationonly.Mixed {
 			return integrationonlytest.NewInMemory()
 		}),
 		integrationonlytest.MixedWithFixture(reachableFixture()),
+		integrationonlytest.MixedOnConnect("refuses a target it cannot parse", func(
+			tb testing.TB, subject integrationonly.Mixed, dsn string,
+		) {
+			tb.Helper()
+			// The seed supplies a reachable target; this is the other half.
+			// A subject that accepted any string would fail at first use rather
+			// than at configuration, which is the wrong end of the deployment.
+			testkit.Error(tb, subject.Connect(tb.Context(), "not-a-dsn"),
+				"a target with no scheme is refused")
+		}),
 	)
-}
-
-// The connection is observable, which the interface does not expose: Connect
-// reports only whether it failed.
-func TestConnectRecordsTheConnection(t *testing.T) {
-	t.Parallel()
-
-	s := integrationonlytest.NewInMemory()
-	testkit.False(t, s.Connected(), "a fresh subject is disconnected")
-	testkit.NoError(t, s.Connect(t.Context(), "postgres://localhost/db"), "connecting succeeds")
-	testkit.True(t, s.Connected(), "and is observable")
-
-	testkit.ErrorIs(t, integrationonlytest.NewInMemory().Connect(t.Context(), "not-a-dsn"),
-		integrationonlytest.ErrBadDSN, "a malformed target is refused")
 }
 
 // Declining the double is separate from dropping a check.

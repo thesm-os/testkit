@@ -75,7 +75,13 @@ func TestBatchReaderContract(t *testing.T) {
 			// caller cannot tell a short result from a complete one without
 			// comparing lengths, so dropping the absent key silently is worse
 			// than failing.
-			got, err := subject.GetAll(tb.Context(), fixture.Keys, fixture.KeysOther)
+			//
+			// The absent key is named here rather than taken from the fixture's
+			// alternate. A check runs against every declared subject, and one
+			// of them holds both derived keys — so a claim resting on the
+			// alternate being absent is a claim about one subject rather than
+			// about the shape.
+			got, err := subject.GetAll(tb.Context(), fixture.Keys, "held-by-nobody")
 			testkit.ErrorIs(tb, err, batchreadertest.ErrNotFound,
 				"one absent key fails the batch")
 			testkit.True(tb, got == nil, "and nothing is returned beside the error")
@@ -103,5 +109,33 @@ func TestBatchReaderContractWithoutTheDouble(t *testing.T) {
 		}),
 		batchreadertest.BatchReaderWithout("GetAll/smoke"),
 		batchreadertest.BatchReaderWithoutDouble(),
+	)
+}
+
+// The count claim needs both derived keys present; the miss claims need the
+// alternate absent. One fixture cannot be both, so this is a second run rather
+// than a second subject.
+//
+// Which is the option API doing what it exists for: the same statement of the
+// contract, against a subject in a state the first run cannot put it in, with
+// the checks that contradict that state dropped by name rather than by
+// abandoning the harness.
+func TestBatchReaderAnswersPerKeyWhenItHoldsThemAll(t *testing.T) {
+	t.Parallel()
+
+	fixture := batchreadertest.DefaultBatchReaderFixture()
+
+	batchreadertest.AssertBatchReaderContract(t,
+		batchreadertest.BatchReaderSubject("in-memory, holding both keys", func() batchreader.BatchReader {
+			s := batchreadertest.NewInMemory()
+			s.Put(batchreader.Value{Key: fixture.Keys})
+			s.Put(batchreader.Value{Key: fixture.KeysOther})
+			return s
+		}),
+		batchreadertest.BatchReaderWithout(
+			"GetAll/an error carries the zero value",
+			"GetAll/reports a miss",
+			"GetAll/returns nothing rather than a partial answer",
+		),
 	)
 }

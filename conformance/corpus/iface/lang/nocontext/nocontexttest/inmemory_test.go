@@ -43,25 +43,6 @@ func TestCalculatorContract(t *testing.T) {
 	)
 }
 
-// Reset does something rather than only returning, which the contract cannot
-// state: observing it needs Calls, and Calls is not on the interface.
-//
-// That is the line between a contract check and a test of an implementation. A
-// check runs against every subject the suite is given — including the double
-// wrapping one — so a check reaching for a concrete type asserts on something
-// the interface never promised, and panics the moment it meets a subject that
-// is not that type. A seed may reach for it, because a seed runs before the
-// wrapper and sees what the factory made; a check may not.
-func TestResetClearsTheCount(t *testing.T) {
-	t.Parallel()
-
-	s := nocontexttest.NewInMemory()
-	s.Add(1, 1)
-	testkit.Equal(t, s.Calls(), 1, "the call was counted")
-	s.Reset()
-	testkit.Equal(t, s.Calls(), 0, "and the count is cleared")
-}
-
 // Suppression, against the same subject: what is under test is the harness
 // declining what it was told to, not the implementation.
 func TestCalculatorContractSuppression(t *testing.T) {

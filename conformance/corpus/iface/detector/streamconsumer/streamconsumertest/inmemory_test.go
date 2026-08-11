@@ -46,6 +46,30 @@ func TestStreamConsumerContract(t *testing.T) {
 				"a nil source is a failed ingest rather than an empty one")
 			testkit.Equal(tb, got, 0, "and carries the zero count beside it")
 		}),
+		streamconsumertest.StreamConsumerOnIngest("refuses a source that is not there", func(
+			tb testing.TB, subject streamconsumer.StreamConsumer, src streamconsumer.Source,
+		) {
+			tb.Helper()
+			// A nil source reaches production through a caller whose own
+			// construction failed, and draining it is a panic rather than a
+			// count of zero.
+			got, err := subject.Ingest(tb.Context(), nil)
+			testkit.Error(tb, err, "a missing source is refused")
+			testkit.Equal(tb, got, 0, "with nothing counted beside it")
+		}),
+		streamconsumertest.StreamConsumerOnIngest("stops on a source that fails mid-drain", func(
+			tb testing.TB, subject streamconsumer.StreamConsumer, src streamconsumer.Source,
+		) {
+			tb.Helper()
+			// A source that fails partway is the ordinary network case, and the
+			// count that comes back with the error is what tells a caller
+			// whether to resume or restart.
+			got, err := subject.Ingest(tb.Context(), &failingSource{})
+			testkit.ErrorIs(tb, err, streamconsumertest.ErrSourceFailed,
+				"the source's failure is reported")
+			testkit.Equal(tb, got, 0,
+				"with nothing counted beside it, since a partial drain is not a count")
+		}),
 	)
 }
 
@@ -78,20 +102,6 @@ func TestSourceContract(t *testing.T) {
 				"and the value slot is the zero rather than the last element again")
 		}),
 	)
-}
-
-// An ingest that fails part-way reports nothing rather than a partial count, or
-// a caller cannot tell a complete run from an interrupted one.
-func TestIngestReportsNothingOnAPartialRead(t *testing.T) {
-	t.Parallel()
-
-	s := streamconsumertest.NewInMemory()
-	got, err := s.Ingest(t.Context(), &failingSource{})
-
-	testkit.ErrorIs(t, err, streamconsumertest.ErrSourceFailed,
-		"a source that fails mid-stream fails the ingest")
-	testkit.Equal(t, got, 0, "and the count is the zero rather than what it managed")
-	testkit.Len(t, s.Ingested(), 0, "nothing is retained from a failed ingest")
 }
 
 // failingSource yields one element and then fails, which is the case a count

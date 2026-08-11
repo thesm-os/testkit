@@ -9,7 +9,6 @@ package boundedtest
 import (
 	"context"
 	"errors"
-	"strconv"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded"
@@ -45,15 +44,6 @@ func (s *InMemory) List(ctx context.Context) ([]string, error) {
 	out := make([]string, n)
 	copy(out, s.items[:n])
 	return out, nil
-}
-
-// Fill adds n items, so a test can push the collection past its ceiling.
-func (s *InMemory) Fill(n int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	for i := range n {
-		s.items = append(s.items, strconv.Itoa(i))
-	}
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

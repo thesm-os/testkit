@@ -43,11 +43,52 @@ signature for the rest.
 | Tag | Suffix | Contents |
 |---|---|---|
 | *(primary)* | `_suite.gen.go` | The harness: entry point, per-method checks and check types, fixture, options. |
-| `test` | `_suite.gen_test.go` | Declared and reserved for the self-check that proves each check can fail; not yet emitted. |
+| `test` | `_suite.gen_test.go` | The self-check: every generated check driven against a stand-in built to break it. |
 
 Both route with `//testkit:out`, usually once at package scope. The corpus
 convention pairs the suite with the same interface's `//testkit:stub` in one
 `<pkg>test` package.
+
+## Proving a check can fail
+
+A check that cannot fail is worse than none, and no gate reports one — a vacuous
+check passes. The companion output is that gate.
+
+For every generated check it configures the double into an implementation that
+violates exactly that check, drives the check against it, and asserts the
+rejection names the right reason:
+
+```go
+func TestAssertContractPutRefusesADuplicateCanFail(t *testing.T) {
+    t.Parallel()
+
+    fixture := ifabsenttest.DefaultContractFixture()
+    subject := ifabsenttest.NewContractStub(t,
+        ifabsenttest.WithContractPut(func(context.Context, ifabsent.Value) error {
+            return nil // accepts the duplicate, which is the violation
+        }))
+
+    got := testkit.Rejects(t, "a store that accepts every write",
+        func(tb testing.TB) {
+            ifabsenttest.AssertContractPutRefusesADuplicate(tb, subject, fixture.VOther)
+        })
+    testkit.Assert(t, got).Contains("must be refused",
+        "and rejects it for the reason the check is about")
+}
+```
+
+The message is asserted as well as the rejection. A stand-in that failed for
+some unrelated reason would satisfy a guard reading only the fact, which is the
+vacuity the file exists to catch, one level up.
+
+`go test -run CanFail` selects the whole family, so the proof can be a CI stage
+of its own. [`testkit.Rejects`](../primitives/assertions.md) is the same
+primitive for a check you write yourself.
+
+Two shapes get no companion, and the harness header says which: an interface
+declaring no `//testkit:stub` has no stand-in to configure, and a generic one
+has no concrete instantiation to prove against — a `Test` function cannot carry
+type arguments.
 
 ## What it generates
 
@@ -172,6 +213,25 @@ validatestest.AssertMixedContract(t,
 The acceptance measure this generator is held to: a suite that needs only
 `Subject` is the design working — every further option is either a fact the
 source cannot state or a derivation not yet done.
+
+## What a harness says it does not check
+
+The header names every classification the interface declares that the file does
+not assert, in two lists. What a consumer can write themselves goes in one, with
+the extension point to write it with; what needs a reference implementation to
+compare against goes in the other, because telling somebody to hand-write it
+would be telling them to state a property their run cannot reach.
+
+An absent check is a stated boundary rather than a suspected defect. Without it
+a harness reads as a list of checks with its declared classifications invisible,
+and nothing distinguishes one covered elsewhere from one nobody handled.
+
+## Integration-only methods
+
+A method carrying `//testkit:mixin integrationonly` reaches something outside
+the process, so its whole check group sits behind `TESTKIT_INTEGRATION`. Unset
+is a skip rather than a pass: a check that succeeded because its dependency was
+absent reports coverage it did not earn.
 
 ## The double run
 

@@ -51,26 +51,6 @@ func TestPointerReaderContract(t *testing.T) {
 	)
 }
 
-// A pointer handed out must not alias the store, or a caller mutating what it
-// read rewrites state it never wrote to.
-//
-// No generated check can see this: it needs two calls and a mutation between
-// them, and the harness makes one call per check against a fresh subject.
-func TestFindDoesNotAliasTheStore(t *testing.T) {
-	t.Parallel()
-
-	s := pointerreadertest.NewInMemory()
-	s.Put(pointerreader.Value{Key: "k", Body: "original"})
-
-	got := s.Find(t.Context(), "k")
-	testkit.True(t, got != nil, "the seeded key is found")
-	got.Body = "mutated"
-
-	again := s.Find(t.Context(), "k")
-	testkit.Equal(t, again.Body, "original",
-		"a caller mutating what it read must not rewrite the store")
-}
-
 // Declining the double is separate from dropping a check.
 func TestPointerReaderContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

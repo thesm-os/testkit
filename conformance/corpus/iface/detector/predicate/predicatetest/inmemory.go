@@ -35,10 +35,3 @@ func (s *InMemory) IsEmpty() bool {
 	defer s.mu.Unlock()
 	return len(s.items) == 0
 }
-
-// Add appends an item, so a test can move the subject off its initial answer.
-func (s *InMemory) Add(item string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.items = append(s.items, item)
-}

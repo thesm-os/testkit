@@ -1,0 +1,13 @@
+{{- /*
+A stand-in that observes the same thing before and after.
+*/ -}}
+{{- define "suite.violate.sideeffect" -}}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in's observer answers the same thing whichever side of the call it
+// is asked on. A check that let that pass would report an effect for a method
+// that accepted the call and did nothing.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{- template "suite.violate.permissive" . }}
+}
+{{- end -}}

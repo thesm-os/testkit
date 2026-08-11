@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/sample/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/sample/...
+// Command:   testkit run ./corpus/...
 
 package sampletest
 
@@ -71,6 +71,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnProcess, MixedOnNewInput
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - aggregator, on NewInput
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -508,4 +515,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 89a8b40dbcfb7aaaea8a06d08df50fd85145d7cc52fa599f4bfb60630eb7f8b4
+// testkit:provenance b17a60f89526875f6dc5f228c5fd465d3d29da239a375b2a08ef487cfcc7aa66

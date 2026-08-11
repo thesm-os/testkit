@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out txtest/ pkg=txtest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Begin is the tx contract's begin role, and hosts the directive
 	// that names its partners.

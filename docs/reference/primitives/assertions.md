@@ -91,6 +91,39 @@ Use it when several properties of one value are worth stating together. Use the 
 
 `IsError` and `Panics` require the subject to be an `error` and a `func()` respectively; anything else fails the assertion rather than compiling away.
 
+## Asserting that an assertion can fail
+
+A check whose every statement is `NoError` passes against a subject whose
+methods return nil and do nothing. It reads as coverage and asserts nothing —
+the same defect as a check that cannot fail, arriving from the other side. No
+gate reports it, because a vacuous check passes.
+
+`Rejects` names the wrong implementation, drives the check against it, and
+observes the rejection:
+
+```go
+got := testkit.Rejects(t, "a pool with no bound", func(tb testing.TB) {
+    handsOutWhatItHolds(tb, unboundedPool{})
+})
+testkit.Assert(t, got).Contains("the pool it came from is then empty",
+    "and rejects it for the reason the check is about")
+```
+
+It returns the failure message rather than a bool, and that is worth using. A
+stand-in that panics before the check's own assertion runs would satisfy a
+boolean guard while proving nothing — which is the defect it exists to catch,
+one level up.
+
+The check runs on a goroutine of its own and is joined before the call returns:
+a `FailableTB` in Goexit mode implements `Fatal` as `runtime.Goexit` does, which
+is what stops a check running past an assertion it already failed, and Goexit
+needs a goroutine to exit. A panic is deliberately not recovered — a check that
+panics is a defect in the check or in the stand-in, and reporting it as a
+rejection would hide it.
+
+The [suite generator](../generators/suite.md) emits one of these per generated
+check. `Rejects` is the same primitive for a check you write yourself.
+
 ## See also
 
 - [Directive assertions](directive-assertions.md) — the contract-shaped helpers: nil-safety, purity, bounds.

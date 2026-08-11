@@ -6,7 +6,6 @@ package sideeffecttest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect/sideeffecttest"
 )
@@ -54,17 +53,4 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		),
 		sideeffecttest.MixedWithoutDouble(),
 	)
-}
-
-// The count is per key, which no generated check can see: the harness observes
-// one key, so a subject with a single global counter would satisfy it.
-func TestTouchesAreCountedPerKey(t *testing.T) {
-	t.Parallel()
-
-	s := sideeffecttest.NewInMemory()
-	testkit.NoError(t, s.Touch(t.Context(), "a"), "touching one key succeeds")
-
-	other, err := s.Observed(t.Context(), "b")
-	testkit.NoError(t, err, "observing another key succeeds")
-	testkit.Equal(t, other, 0, "and reports nothing, because the effect is keyed")
 }

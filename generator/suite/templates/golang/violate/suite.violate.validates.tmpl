@@ -1,0 +1,11 @@
+{{- /*
+A stand-in that refuses what the validator admits.
+*/ -}}
+{{- define "suite.violate.validates" -}}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in refuses a value its validator accepted. A check that let that\n// pass would report agreement between two halves that disagree, and the\n// validator would be documentation.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{- template "suite.violate.refuses" . }}
+}
+{{- end -}}

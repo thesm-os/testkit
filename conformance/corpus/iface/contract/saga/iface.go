@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out sagatest/ pkg=sagatest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Step is the saga contract's step role, and hosts the directive
 	// that names its partners.

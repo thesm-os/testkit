@@ -35,6 +35,7 @@ var ErrTransient = errors.New("txwithretry: transient commit failure")
 //
 //testkit:out txwithretrytest/ pkg=txwithretrytest
 //testkit:stub
+//testkit:suite
 type TxWithRetry interface {
 	// Begin hosts the tx contract and names both partners.
 	//testkit:contract tx role=begin commit=Commit rollback=Rollback

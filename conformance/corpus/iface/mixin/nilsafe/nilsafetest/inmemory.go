@@ -51,15 +51,6 @@ func (s *InMemory) Store(ctx context.Context, v *nilsafe.Payload) error {
 	return nil
 }
 
-// Stored reports what was written under a key, which the interface exposes no
-// way to observe.
-func (s *InMemory) Stored(key string) (nilsafe.Payload, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	v, ok := s.values[key]
-	return v, ok
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

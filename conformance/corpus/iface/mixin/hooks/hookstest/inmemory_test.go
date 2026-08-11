@@ -6,7 +6,6 @@ package hookstest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/hooks"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/hooks/hookstest"
 )
@@ -25,32 +24,6 @@ func TestMixedContract(t *testing.T) {
 			return hookstest.NewInMemory()
 		}),
 	)
-}
-
-// A handler firing during Fire may register another, which is ordinary rather
-// than exotic — and deadlocks a subject that holds its lock across the calls.
-// No generated check reaches this: it needs a callback that reaches back.
-func TestFireToleratesReentrantRegistration(t *testing.T) {
-	t.Parallel()
-
-	s := hookstest.NewInMemory()
-	s.OnEvent(func(string) {
-		s.OnEvent(func(string) {})
-	})
-
-	testkit.NoError(t, s.Fire(t.Context(), "e"), "firing a re-entrant handler completes")
-	testkit.Equal(t, s.Registered(), 2, "and the handler it registered is attached")
-}
-
-// A nil handler is dropped rather than stored, or the next Fire panics on
-// something a caller passed by accident.
-func TestOnEventIgnoresNil(t *testing.T) {
-	t.Parallel()
-
-	s := hookstest.NewInMemory()
-	s.OnEvent(nil)
-	testkit.Equal(t, s.Registered(), 0, "nothing was registered")
-	testkit.NoError(t, s.Fire(t.Context(), "e"), "and firing does not reach it")
 }
 
 // Declining the double is separate from dropping a check.

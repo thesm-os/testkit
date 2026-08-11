@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/validates/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/...
+// Command:   testkit run ./corpus/iface/mixin/validates/... ./corpus/iface/mixin/wrappedvia/...
 
 package validatestest
 
@@ -69,13 +69,20 @@ func DefaultMixedFixture() MixedFixture {
 
 // AssertMixedContract runs every generated check against every declared subject.
 //
-//	Checks:   10 across 3 methods, per subject
+//	Checks:   11 across 3 methods, per subject
 //	Subjects: declare each with MixedSubject
 //	Double:   every subject runs a second time wrapped in MixedStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnStore, MixedOnValidate, MixedOnRead
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Store, Validate
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -122,6 +129,9 @@ func runMixedChecks(
 			})
 			cfg.run(t, "Store/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
 				AssertMixedStoreToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			cfg.run(t, "Store/validates", "validates", func(tb testing.TB) {
+				AssertMixedStoreAgreesWithValidate(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 			})
 			for _, c := range cfg.onStore {
 				cfg.run(t, "Store"+"/"+c.name, c.name, func(tb testing.TB) {
@@ -241,6 +251,27 @@ func AssertMixedStoreToleratesNilContext(tb testing.TB, subject validates.Mixed,
 	//nolint:staticcheck // passing nil is the check.
 	var ctx context.Context
 	_ = subject.Store(ctx, v)
+}
+
+// AssertMixedStoreAgreesWithValidate asserts Store refuses exactly what Validate does.
+//
+// Fails when: the two disagree about the value the run holds. A subject whose
+// writer accepts what its validator refuses stores what nobody vetted, and one
+// that refuses what the validator admits rejects work that was fine — and
+// neither is visible in a single call to either.
+func AssertMixedStoreAgreesWithValidate(tb testing.TB, subject validates.Mixed, v validates.Payload) {
+	tb.Helper()
+	ctx := tb.Context()
+	verdict := subject.Validate(v)
+	err := subject.Store(ctx, v)
+
+	if verdict == nil {
+		testkit.NoError(tb, err,
+			"Store must accept what Validate admits")
+		return
+	}
+	testkit.Error(tb, err,
+		"Store must refuse what Validate rejects")
 }
 
 // AssertMixedValidateSmoke asserts Validate survives a call with derived inputs.
@@ -547,4 +578,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance a176d49c892be4628e45f5c6de6f3c3b943dc013164f27f0ac45c714d96221bb
+// testkit:provenance cd7a7a619eee0d54d897e830a01ee2cd9af62bed79f02d8d03cdf52182a077a0

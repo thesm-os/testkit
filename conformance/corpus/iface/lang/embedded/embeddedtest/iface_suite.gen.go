@@ -53,6 +53,13 @@ func DefaultBaseFixture() BaseFixture {
 //	          lying. BaseWithoutDouble declines it.
 //	Extend:   BaseOnPing
 //	Drop:     BaseWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Ping
 func AssertBaseContract(t *testing.T, opts ...BaseOption) {
 	t.Helper()
 	cfg := newBaseConfig(opts...)
@@ -370,6 +377,13 @@ func DefaultCloserFixture() CloserFixture {
 //	          lying. CloserWithoutDouble declines it.
 //	Extend:   CloserOnClose
 //	Drop:     CloserWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Close
 func AssertCloserContract(t *testing.T, opts ...CloserOption) {
 	t.Helper()
 	cfg := newCloserConfig(opts...)
@@ -706,6 +720,13 @@ func DefaultComposedFixture() ComposedFixture {
 //	          lying. ComposedWithoutDouble declines it.
 //	Extend:   ComposedOnGet, ComposedOnPing, ComposedOnClose
 //	Drop:     ComposedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Ping, Close
 func AssertComposedContract(t *testing.T, opts ...ComposedOption) {
 	t.Helper()
 	cfg := newComposedConfig(opts...)
@@ -1228,4 +1249,4 @@ func (c *composedConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3d51118ec91a1a384316decf149d759c924d946ae8c6f861985d1992d56a9fe5
+// testkit:provenance 938762b64c69e5f3eb5d7526ecb2e8a68c75112a90a6ec1313935faf6749406e

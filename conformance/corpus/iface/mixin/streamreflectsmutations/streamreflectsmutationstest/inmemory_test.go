@@ -26,67 +26,61 @@ func TestMixedContract(t *testing.T) {
 		sm.MixedSubject("in-memory", func() streamreflectsmutations.Mixed {
 			return sm.NewInMemory()
 		}),
+		sm.MixedOnStream("yields an item added while it is running", func(
+			tb testing.TB, subject streamreflectsmutations.Mixed,
+		) {
+			tb.Helper()
+			// The mixin's whole claim, and one the signature cannot make:
+			// Stream returns a function, so a check that only called it would
+			// assert that a closure was built.
+			testkit.NoError(tb, subject.Add(tb.Context(), "a"), "the first item is added")
+
+			var seen []string
+			for item, err := range subject.Stream(tb.Context()) {
+				testkit.NoError(tb, err, "the sequence yields without failing")
+				seen = append(seen, item)
+				if len(seen) == 1 {
+					testkit.NoError(tb, subject.Add(tb.Context(), "b"),
+						"an item added mid-range is accepted")
+				}
+			}
+			testkit.Contains(tb, seen, "b", "and the run that added it sees it")
+		}),
+		sm.MixedOnStream("stops when the consumer does", func(
+			tb testing.TB, subject streamreflectsmutations.Mixed,
+		) {
+			tb.Helper()
+			// A sequence that ignored the consumer's break would run to the end
+			// of a collection the caller stopped caring about — which for a
+			// stream over a live store is unbounded.
+			for range 3 {
+				testkit.NoError(tb, subject.Add(tb.Context(), "x"), "an item is added")
+			}
+
+			taken := 0
+			for range subject.Stream(tb.Context()) {
+				taken++
+				break
+			}
+			testkit.Equal(tb, taken, 1, "the range stopped where the consumer did")
+		}),
+		sm.MixedOnStream("reports a cancelled context through the sequence", func(
+			tb testing.TB, subject streamreflectsmutations.Mixed,
+		) {
+			tb.Helper()
+			// The only place a cancellation can surface: the signature returns
+			// no error, so the sequence's own error slot is what carries it.
+			ctx, cancel := context.WithCancel(tb.Context())
+			cancel()
+
+			var errs []error
+			for _, err := range subject.Stream(ctx) {
+				errs = append(errs, err)
+			}
+			testkit.Len(tb, errs, 1, "a cancelled caller is answered once")
+			testkit.ErrorIs(tb, errs[0], context.Canceled, "with the cancellation")
+		}),
 	)
-}
-
-// An item added mid-range is yielded to the consumer already ranging. A subject
-// snapshotting at the call satisfies every generated check and misses it.
-func TestStreamYieldsAnItemAddedMidRange(t *testing.T) {
-	t.Parallel()
-
-	s := sm.NewInMemory()
-	ctx := t.Context()
-	testkit.NoError(t, s.Add(ctx, "first"), "seeding succeeds")
-
-	var seen []string
-	for item, err := range s.Stream(ctx) {
-		testkit.NoError(t, err, "a healthy stream yields no per-element error")
-		seen = append(seen, item)
-		if len(seen) == 1 {
-			// The mutation the mixin is named for, from inside the range —
-			// which is also why Stream must not hold its lock across the yield.
-			testkit.NoError(t, s.Add(ctx, "second"), "adding mid-range succeeds")
-		}
-	}
-
-	testkit.Equal(t, seen, []string{"first", "second"},
-		"the stream reflects what was added while it was being read")
-}
-
-// A consumer may stop early, so the implementation must not assume the sequence
-// is drained.
-func TestStreamStopsWhenTheConsumerDoes(t *testing.T) {
-	t.Parallel()
-
-	s := sm.NewInMemory()
-	ctx := t.Context()
-	testkit.NoError(t, s.Add(ctx, "first"), "seeding succeeds")
-	testkit.NoError(t, s.Add(ctx, "second"), "and again")
-
-	var seen int
-	for range s.Stream(ctx) {
-		seen++
-		break
-	}
-	testkit.Equal(t, seen, 1, "the range stopped after one element")
-}
-
-// A cancelled context is reported on the first yield, which is the only place
-// a per-element error can carry it — a caller who never ranges never sees it,
-// and that is the shape rather than a defect.
-func TestStreamReportsACancelledContext(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	var seen int
-	for _, err := range sm.NewInMemory().Stream(ctx) {
-		seen++
-		testkit.ErrorIs(t, err, context.Canceled,
-			"a cancelled stream says so through its element error")
-	}
-	testkit.Equal(t, seen, 1, "and yields nothing else")
 }
 
 // Declining the double is separate from dropping a check.

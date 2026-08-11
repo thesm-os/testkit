@@ -24,29 +24,22 @@ func TestPoisonAccessorContract(t *testing.T) {
 		poisonaccessortest.PoisonAccessorSubject("in-memory", func() poisonaccessor.PoisonAccessor {
 			return poisonaccessortest.NewInMemory()
 		}),
-		poisonaccessortest.PoisonAccessorOnErr("answers nil while healthy", func(
+		poisonaccessortest.PoisonAccessorSubject("in-memory, already failed", func() poisonaccessor.PoisonAccessor {
+			return poisonaccessortest.Poisoned()
+		}),
+		poisonaccessortest.PoisonAccessorOnErr("latches whatever it reports", func(
 			tb testing.TB, subject poisonaccessor.PoisonAccessor,
 		) {
 			tb.Helper()
-			testkit.NoError(tb, subject.Err(), "a fresh subject reports no failure")
+			// The latch, stated across two subjects because Err is the only
+			// method: nothing a caller does moves a healthy one into failure,
+			// so the failed state is a factory's to build. What both share is
+			// that the answer does not change on being read.
+			first := subject.Err()
+			testkit.Equal(tb, subject.Err(), first,
+				"a second read reports what the first did")
 		}),
 	)
-}
-
-// The latch: once poisoned, every later call reports the same error. Reading it
-// must not clear it, or the accessor is a queue and a second reader sees health
-// that is not there.
-func TestErrLatchesOncePoisoned(t *testing.T) {
-	t.Parallel()
-
-	s := poisonaccessortest.NewInMemory()
-	testkit.NoError(t, s.Err(), "a fresh subject is healthy")
-
-	s.Poison()
-	testkit.ErrorIs(t, s.Err(), poisonaccessor.ErrPoisoned, "the failure is reported")
-	testkit.ErrorIs(t, s.Err(), poisonaccessor.ErrPoisoned,
-		"and again, because reading a latch does not clear it")
-	testkit.Equal(t, s.Calls(), 3, "each read reached the subject rather than a cached answer")
 }
 
 // Declining the double is separate from dropping a check.

@@ -13,7 +13,8 @@ Three generators read the projection `suite` queues and emit what the harness
 cannot honestly carry. `bench` turns a `//testkit:bench` method into a measured
 loop holding the budgets the directive declares. `fuzz` turns a `//testkit:fuzz`
 method into a seeded target — the only mode that witnesses many values. `model`
-binds the classifications [ADR-0018](../adr/0018-one-tier-owns-each-classification.md)
+turns a `//testkit:model` interface into bindings of the classifications
+[ADR-0018](../adr/0018-one-tier-owns-each-classification.md)
 assigned to the model tier onto the shipped `engine/model` runtime: per-interface
 law bindings, an action set, a derived reference, a linearizability
 configuration, and a mutation self-check that proves the bound laws can kill
@@ -97,7 +98,8 @@ being fought.
 
 Each plugin also reads two things from the source, through `ctx.Reader` so the
 reads land in its cache key: its **own directive stamps** (`//testkit:bench`,
-`//testkit:fuzz`, `//testkit:domain-gen` — each declared by the plugin that
+`//testkit:fuzz`, `//testkit:model`, `//testkit:domain-gen` — each declared by
+the plugin that
 reads it), and the **shape stamps**, which are the annotator's public
 vocabulary and every generator's to read
 ([ADR-0004](../adr/0004-consume-only-the-annotator-plugin.md)).
@@ -143,7 +145,7 @@ never used, so a corpus finding cannot be replayed against the harness.
 |---|---|---|
 | `bench` | `Subject`, `Fixture` (loop arguments), `Seed`, `Double`, `Method.Sig` | `//testkit:bench` stamps |
 | `fuzz` | `Subject`, `Fixture` (`Sample`/`Other` → corpus), `Method.Sig`; the enum generator's queued value (variant seeds) | `//testkit:fuzz` stamps; `validates`/`nilsafe`/`pure`/`bounded` stamps for the body; `bounded` params for off-by-one seeds |
-| `model` | `Subject`, `Fixture`, `Seed`, `Methods` (naming, signatures) | shape stamps (law selection is the model tier's own read) |
+| `model` | `Subject`, `Fixture`, `Seed`, `Methods` (naming, signatures) | `//testkit:model` stamps; shape stamps (law selection is the model tier's own read) |
 
 `model` takes classifications from the source rather than the projection
 deliberately: the projection's `Check` values carry only the suite tier's
@@ -502,20 +504,44 @@ emits one call per detected method; `domhint`'s doc specifies the
 `//testkit:domain-gen` directive and the emitted option's name. What follows is
 the counterpart those docblocks assume.
 
-#### Emission is derived, and running is the default
+#### Opt-in by directive; running is the default once armed
 
-`model` declares no opt-in directive. Its trigger is the ADR-0018 mapping: it
-emits for every interface where `suite` queued a projection **and** at least
-one declared classification maps to a law — which, because the detector rows
-map too (`writer` → `AUTO-WRITE-OBSERVABLE`, `aggregator` →
-`AUTO-COUNT-EQUALS-REFERENCE`), is nearly every stateful interface. The
-directive already exists: it is the classification line itself, and
-[ADR-0017](../adr/0017-every-classification-owes-an-assertion.md) says what a
-declared classification owes. An owed assertion that is generated but off by
-default is owed on paper, so the bound laws run inside the ordinary contract
-entry — `AssertMixedContract` — under rapid's default iteration count, and the
-existing controls apply to them unchanged: `MixedWithout("model/AUTO-…")` drops
-one law for one consumer, by the same path syntax every other check uses.
+`//testkit:model` is interface-scoped, takes no keys, and denies negation —
+the tier exists where one is declared, and deleting the line is the
+suppression, the same shape as `//testkit:stub` and `//testkit:suite`. The
+plugin emits where the directive stands **and** `suite` queued a projection.
+A directive on an interface `suite` never touched, or on one where no
+declared classification maps to a law, is a **diagnostic at the directive**
+— asked and impossible, the rule every satellite applies.
+
+The directive is what admits the dependency. `_model.gen.go` is a primary,
+non-test output importing `engine/model` — and through it rapid and
+Porcupine — a module requirement none of `suite`'s outputs carry. An
+emission trigger derived from the classifications alone would impose that
+requirement on nearly every stateful interface with no way to decline it
+(the detector rows map too: `writer` → `AUTO-WRITE-OBSERVABLE`,
+`aggregator` → `AUTO-COUNT-EQUALS-REFERENCE`); an earlier form of this
+section did exactly that, and the directive is the exit it lacked.
+
+The cost of the gate is that a model-owned classification can now go
+unasserted, and
+[ADR-0017](../adr/0017-every-classification-owes-an-assertion.md) does not
+allow that to be silent. On an interface carrying model-owned
+classifications and no `//testkit:model`, the suite harness header names the
+tier as unarmed and the one line that arms it — the projection's `Coverage`
+rows already carry per-classification tier ownership, so the header line is
+a render of what `suite` derives today, not a new derivation. The
+conformance gate's floor narrows to match: every model-owned classification
+on a directive-bearing interface must bind a law; on an undirected interface
+it must surface as the named header line. Owed-and-waiting is visible in
+both states; silence remains impossible.
+
+Once armed, running is the default. An owed assertion that is generated but
+off by default is owed on paper, so the bound laws run inside the ordinary
+contract entry — `AssertMixedContract` — under rapid's default iteration
+count, and the existing controls apply to them unchanged:
+`MixedWithout("model/AUTO-…")` drops one law for one consumer, by the same
+path syntax every other check uses.
 
 They run against each subject's **plain form only**. The stub-wrapped second
 pass is the suite tier's honesty check on the double; driving law sequences
@@ -524,10 +550,12 @@ say nothing new about the subject.
 
 RFC-0002 sketched the attachment as `ServiceModelChecks(newReference)` —
 consumer-gated, because at sketch time the reference was assumed to be theirs
-to write. `model/ref` is why the gate moved: the reference is derivable for
-exactly the shapes the oracles cover, and the design rule of the whole platform
-is that a derivation not done is a cost shifted to every consumer. What
-survives of the sketch is the override, not the gate.
+to write. `model/ref` dissolved half of that: the reference is derivable for
+exactly the shapes the oracles cover, and the design rule of the whole
+platform is that a derivation not done is a cost shifted to every consumer.
+What survives of the sketch is the override **and** the gate — the gate
+moved from a consumer-written call in every test file to one directive on
+the source declaration, where every other ask already lives.
 
 #### What one interface gets
 
@@ -708,7 +736,7 @@ runtime's defaults (4 workers, 50 ops, 10s Porcupine budget) stand;
 
 **Opaque types.** A parameter whose type `domhint.RequiresHint` reports
 non-generatable resolves against the hint registry. `//testkit:domain-gen
-<Type> <Func>` — declared by this plugin, the third and last directive this
+<Type> <Func>` — declared by this plugin, the fourth and last directive this
 RFC adds — emits the init-time `domhint.Register` call; the generator also
 emits the typed per-run option `MixedModelWith<Type>Gen(gen)` the `domhint`
 docs specify. An opaque parameter with neither is a **diagnostic at the
@@ -796,12 +824,13 @@ the only proxy for a run that never left its corner of the state space.
 #### The integration matrix
 
 `engine/model` was built for this generator, and the test of that claim is a
-row per subpackage — what the generator emits, on what trigger. Nothing is
+row per subpackage — what the generator emits, on what trigger. Every
+trigger presupposes `//testkit:model` on the interface. Nothing is
 left as a hand-assembled tool.
 
 | Subpackage | The generator emits | Trigger |
 |---|---|---|
-| `model` (runner) | property builder, `Check` run, options assembly, coverage sink, artifact dir | any model-owned classification |
+| `model` (runner) | property builder, `Check` run, options assembly, coverage sink, artifact dir | the directive itself |
 | `model/action` | one constructor call per method | the method's detector or contract stamp |
 | `model/law` | one binding per mapped classification | the ADR-0018 mapping |
 | `model/ref` | the full-interface adapter over the mapped oracle | the shape-to-oracle mapping |
@@ -951,9 +980,11 @@ This file is two declarations, and it grows by zero as methods gain
 annotations. RFC-0002's acceptance measure carries over sharpened: every
 *further* line a consumer writes — a second subject, a
 `MixedModelReference`, a `MixedWithout` — is either a fact the source cannot
-state or a derivation not yet done, and the generated headers say which. The model tier added none of these lines: the laws run
-inside `AssertMixedContract` against the derived reference, and the consumer
-meets them only as subtests — or as the skips that name the option a
+state or a derivation not yet done, and the generated headers say which. The
+model tier added none of these lines — one `//testkit:model` on the source
+declaration armed it, beside the classification lines it acts on — and the
+laws run inside `AssertMixedContract` against the derived reference; the
+consumer meets them only as subtests, or as the skips that name the option a
 classification is waiting on.
 
 **The bill, itemised.** Per interface per subject, the model tier adds one
@@ -965,11 +996,15 @@ alphabet is small by construction and the default depth modest, and
 generated package — against the derived adapter, not per consumer subject —
 the mutation harness runs the law suite once per wired operator.
 `FuzzMixedModel` costs nothing until someone points `-fuzz` at it; in plain
-`go test` it replays seeds only. The generated test dependency set grows by
-`pgregory.net/rapid` and `github.com/anishathalye/porcupine`, which
-`engine/model` already carries. Consumers for whom any of that is too much
-drop by path: `MixedWithout("model")` removes the tier per call site, and the
-skip reporting keeps the removal visible in output rather than silent.
+`go test` it replays seeds only. The generated dependency set grows by the
+`go.thesmos.sh/testkit/engine` module, and through it `pgregory.net/rapid`
+and `github.com/anishathalye/porcupine` — a requirement only the directive
+admits. Consumers for whom any of that is too much have two exits at two
+costs: `MixedWithout("model")` removes the tier per call site and keeps the
+dependency; deleting the `//testkit:model` line removes the emission, the
+files and the `engine` requirement together. The skip reporting and the
+unarmed-tier header line keep either state visible in output rather than
+silent.
 
 **Short mode is honoured, tier by tier.** Under `testing.Short()` the
 exhaustive search, the mutation self-check and the concurrent path skip with
@@ -985,9 +1020,9 @@ depth, visibly, never the owed assertions.
 | [0004](../adr/0004-consume-only-the-annotator-plugin.md) | Classifications are read from the annotator's stamps, never re-declared |
 | [0012](../adr/0012-generate-per-shape-helpers-into-the-consumer.md) | Bindings are generated into the consumer's package at concrete types |
 | [0015](../adr/0015-subtest-names-carry-the-classification.md) | A law reports under its ID; a skipped law names what would arm it |
-| [0016](../adr/0016-directives-are-positive-only.md) | `//testkit:bench`, `//testkit:fuzz`, `//testkit:domain-gen` — presence is the ask; deletion is the suppression |
-| [0017](../adr/0017-every-classification-owes-an-assertion.md) | Model-owned classifications run by default and skip visibly, never silently |
-| [0018](../adr/0018-one-tier-owns-each-classification.md) | The mapping in RFC-0002 is the emission trigger and the mutation-wiring source |
+| [0016](../adr/0016-directives-are-positive-only.md) | `//testkit:bench`, `//testkit:fuzz`, `//testkit:model`, `//testkit:domain-gen` — presence is the ask; deletion is the suppression |
+| [0017](../adr/0017-every-classification-owes-an-assertion.md) | Model-owned classifications run by default on an armed interface; on an unarmed one the harness header names the tier and the directive — visible, never silent |
+| [0018](../adr/0018-one-tier-owns-each-classification.md) | The mapping in RFC-0002 is the law-selection and mutation-wiring source; the emission trigger is `//testkit:model` |
 
 ## What the design rests on
 
@@ -1047,6 +1082,7 @@ table is the index, not the argument.
 | Do laws run through the double | No — plain subjects only. The wrapped pass is the suite tier's honesty check on the double; law sequences through the wrapper re-test the wrapper at model prices | model |
 | Are partner-role methods in the action set | No — excluded from the action set as from the reference; the suite tier owns a partner's checks | model |
 | Does `-short` skip the model tier | The proof tiers skip with named skips — exhaustive, mutation, concurrent; the sequential law run stays, because it is the owed assertion and the cheap one | model |
+| Why is the model tier directive-gated when ADR-0017 owes assertions by default | Because `_model.gen.go` is a primary output importing the `engine` module, and a classification line alone must not impose a module requirement a consumer cannot decline. The unarmed state renders as a named header line from the projection's `Coverage` rows, so the owed assertion is visibly waiting rather than silently absent | model |
 
 ## Deferred
 

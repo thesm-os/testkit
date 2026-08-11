@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/retrysucceeds/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package retrysucceedstest
 
@@ -71,6 +71,21 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnCall, MixedOnAttempts
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - retrysucceeds, on Call — write it with MixedOnCall
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Call
+//   - aggregator, on Attempts
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -478,4 +493,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance ef0bc6611ac5981f7a05ab4994474f2c7d677948a96dc0f0f2064c5eb3da2077
+// testkit:provenance 209ffa7992178ede7508b40238be0ca29c6316b9f6581d8693ecf19367bb67b7

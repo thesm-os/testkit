@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/eventually/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package eventuallytest
 
@@ -78,6 +78,16 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnPublish, MixedOnSettle, MixedOnItems
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Publish
+//   - eventually, on Publish
+//   - lifecycle, on Settle
+//   - aggregator, on Items
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -594,4 +604,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance bc1bfb0f9f7663eeaf34769c3479081f750ae80af54648aa120f576dc8e3bce6
+// testkit:provenance 364377b3a58be23aa313145502603f9924c2e307b749fa293891ee61887a7e0c

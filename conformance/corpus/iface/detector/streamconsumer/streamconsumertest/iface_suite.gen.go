@@ -59,6 +59,13 @@ func DefaultSourceFixture() SourceFixture {
 //	          lying. SourceWithoutDouble declines it.
 //	Extend:   SourceOnNext
 //	Drop:     SourceWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - multiaggregator, on Next
 func AssertSourceContract(t *testing.T, opts ...SourceOption) {
 	t.Helper()
 	cfg := newSourceConfig(opts...)
@@ -378,6 +385,13 @@ func DefaultStreamConsumerFixture() StreamConsumerFixture {
 //	          lying. StreamConsumerWithoutDouble declines it.
 //	Extend:   StreamConsumerOnIngest
 //	Drop:     StreamConsumerWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - streamconsumer, on Ingest — write it with StreamConsumerOnIngest
 func AssertStreamConsumerContract(t *testing.T, opts ...StreamConsumerOption) {
 	t.Helper()
 	cfg := newStreamConsumerConfig(opts...)
@@ -659,4 +673,4 @@ func (c *streamconsumerConfig) run(t *testing.T, path, name string, fn func(tb t
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0df61103d859600aee2763cc8bb8ccf8bfc017e7107d4f1361b5906088342d80
+// testkit:provenance 6f4f33e30feaceea2ba2f50230f33f4fe5c19e6b49e885b0f21fa03b078b17e1

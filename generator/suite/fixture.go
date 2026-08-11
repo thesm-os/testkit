@@ -307,6 +307,7 @@ func withChecks(
 		family := signatureChecks(c, iface, f, m)
 		family = append(family, detectorChecks(c, iface, f, m)...)
 		family = append(family, mixinChecks(c, iface, f, m, methods)...)
+		family = append(family, contractChecks(c, iface, f, m, methods)...)
 		for _, ck := range family {
 			if missing, field, ok := undeliverable(f, ck); ok {
 				ctx.Diag.Warnf(iface.Pos(),

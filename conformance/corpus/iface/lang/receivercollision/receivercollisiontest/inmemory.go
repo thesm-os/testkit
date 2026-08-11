@@ -78,15 +78,6 @@ func (s *InMemory) Touch(ctx context.Context, sess receivercollision.Session) {
 	s.touched[sess.ID] = time.Unix(0, 0)
 }
 
-// Touched reports whether a session was ever touched, so a test can observe
-// that Touch did something rather than only that it returned.
-func (s *InMemory) Touched(id string) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	_, ok := s.touched[id]
-	return ok
-}
-
 // contextErr reports a cancelled or expired context and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

@@ -1,0 +1,24 @@
+{{- /*
+A method that succeeds for the input the check chose to miss.
+
+The check reaches the failure it is about through the alternate value, and
+fatals when the call succeeds instead — so the violation is succeeding, not
+returning a wrong value beside an error.
+*/ -}}
+{{- define "suite.violate.zeroonerror" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in succeeds for the input the check chose so it would miss. A check
+// that let that pass would never reach the comparison it exists to make, and
+// would report success without having compared anything.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+{{- template "suite.violate.zeros" $m }}
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

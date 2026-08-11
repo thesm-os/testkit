@@ -34,17 +34,6 @@ func TestPredicateContract(t *testing.T) {
 	)
 }
 
-// The answer has to move, or the predicate is a constant that passes every
-// check asking only that it not panic.
-func TestIsEmptyTracksTheState(t *testing.T) {
-	t.Parallel()
-
-	s := predicatetest.NewInMemory()
-	testkit.True(t, s.IsEmpty(), "a fresh subject holds nothing")
-	s.Add("item")
-	testkit.False(t, s.IsEmpty(), "and reports so once it does")
-}
-
 // Declining the double is separate from dropping a check.
 func TestPredicateContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

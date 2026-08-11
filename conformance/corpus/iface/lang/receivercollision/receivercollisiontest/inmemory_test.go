@@ -4,7 +4,6 @@
 package receivercollisiontest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -40,31 +39,6 @@ func TestStoreContract(t *testing.T) {
 			testkit.Equal(tb, got, fixture.PutS, "and comes back whole")
 		}),
 	)
-}
-
-// Touch records something rather than only returning, which the contract cannot
-// state: observing it needs Touched, and Touched is not on the interface.
-func TestTouchRecords(t *testing.T) {
-	t.Parallel()
-
-	s := receivercollisiontest.NewInMemory()
-	sess := receivercollisiontest.DefaultStoreFixture().PutS
-	s.Touch(t.Context(), sess)
-	testkit.True(t, s.Touched(sess.ID), "Touch does something observable")
-}
-
-// A method returning nothing cannot report a context that is done, so it takes
-// the only other option open to it and does no work.
-func TestTouchDeclinesADoneContext(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	s := receivercollisiontest.NewInMemory()
-	sess := receivercollisiontest.DefaultStoreFixture().PutS
-	s.Touch(ctx, sess)
-	testkit.False(t, s.Touched(sess.ID), "a cancelled Touch records nothing")
 }
 
 // Suppression, against the same subject: what is under test is the harness

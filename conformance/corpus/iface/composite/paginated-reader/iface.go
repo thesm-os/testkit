@@ -27,6 +27,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out paginatedreadertest/ pkg=paginatedreadertest
 //testkit:stub
+//testkit:suite
 type PaginatedReader interface {
 	// Page is a reader by signature and pagination's reader role by directive.
 	// The cursor parameter is what the contract keys on.

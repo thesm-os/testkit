@@ -46,6 +46,25 @@ func TestMixedContract(t *testing.T) {
 			testkit.NoError(tb, err, "listing succeeds")
 			testkit.Assert(tb, got).Contains("theirs", "the peer's item arrived")
 		}),
+		crdtmergetest.MixedOnMerge("tolerates a peer that is not there", func(
+			tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica,
+		) {
+			tb.Helper()
+			// A nil peer reaches production through a replica that failed to
+			// dial, and merging with nothing is a no-op rather than a panic.
+			testkit.NoError(tb, subject.Merge(tb.Context(), nil),
+				"merging with no peer changes nothing and reports nothing")
+		}),
+		crdtmergetest.MixedOnMerge("reports a peer that cannot be read", func(
+			tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica,
+		) {
+			tb.Helper()
+			// Convergence is a claim about two replicas that both answered. A
+			// merge that swallowed an unreachable peer would report agreement
+			// with something it never read.
+			testkit.ErrorIs(tb, subject.Merge(tb.Context(), failingReplica{}), errPeerUnreadable,
+				"the peer's failure is reported rather than merged over")
+		}),
 	)
 }
 
@@ -60,72 +79,6 @@ func TestReplicaContract(t *testing.T) {
 			return crdtmergetest.NewInMemory()
 		}),
 	)
-}
-
-// Merging in either order arrives at the same set, which is the whole of the
-// mixin and needs four replicas to state.
-func TestMergeConverges(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	left, right := crdtmergetest.NewInMemory(), crdtmergetest.NewInMemory()
-	testkit.NoError(t, left.Add(ctx, "a"), "left diverges")
-	testkit.NoError(t, right.Add(ctx, "b"), "right diverges")
-
-	leftFirst := crdtmergetest.NewInMemory()
-	testkit.NoError(t, leftFirst.Merge(ctx, left), "merging left succeeds")
-	testkit.NoError(t, leftFirst.Merge(ctx, right), "then right")
-
-	rightFirst := crdtmergetest.NewInMemory()
-	testkit.NoError(t, rightFirst.Merge(ctx, right), "merging right succeeds")
-	testkit.NoError(t, rightFirst.Merge(ctx, left), "then left")
-
-	a, err := leftFirst.Items(ctx)
-	testkit.NoError(t, err, "listing one order succeeds")
-	b, err := rightFirst.Items(ctx)
-	testkit.NoError(t, err, "listing the other succeeds")
-	testkit.Equal(t, a, b, "both orders arrive at the same set")
-}
-
-// Merging twice changes nothing, which is the idempotence half of the same
-// property.
-func TestMergeIsIdempotent(t *testing.T) {
-	t.Parallel()
-
-	ctx := t.Context()
-	peer := crdtmergetest.NewInMemory()
-	testkit.NoError(t, peer.Add(ctx, "x"), "the peer has an item")
-
-	s := crdtmergetest.NewInMemory()
-	testkit.NoError(t, s.Merge(ctx, peer), "the first merge succeeds")
-	testkit.NoError(t, s.Merge(ctx, peer), "and so does the second")
-
-	got, err := s.Items(ctx)
-	testkit.NoError(t, err, "listing succeeds")
-	testkit.Equal(t, got, []string{"x"}, "the second merge changed nothing")
-}
-
-// A nil peer is nothing to fold in rather than a crash. It reaches production
-// through a caller that had no replica yet, and it is what the fixture's own
-// derived value is — an interface parameter admits no literal.
-func TestMergeToleratesANilPeer(t *testing.T) {
-	t.Parallel()
-
-	s := crdtmergetest.NewInMemory()
-	testkit.NoError(t, s.Merge(t.Context(), nil), "merging nothing succeeds")
-
-	got, err := s.Items(t.Context())
-	testkit.NoError(t, err, "listing succeeds")
-	testkit.Len(t, got, 0, "and nothing arrived")
-}
-
-// A peer that cannot be read fails the merge rather than half-applying it.
-func TestMergeReportsAFailingPeer(t *testing.T) {
-	t.Parallel()
-
-	s := crdtmergetest.NewInMemory()
-	testkit.ErrorIs(t, s.Merge(t.Context(), failingReplica{}), errPeerUnreadable,
-		"a peer that will not list is a failed merge")
 }
 
 // errPeerUnreadable is what failingReplica reports.

@@ -69,6 +69,19 @@ func TestFinderContract(t *testing.T) {
 			testkit.NoError(tb, err, "a limited lookup succeeds")
 			testkit.Len(tb, got, 1, "and returns no more than the limit")
 		}),
+		// `batchreader` is a structural stamp — variadic in, slice out — and the
+		// count check reads it as the semantic claim that a batch read answers
+		// once per key. This subject is a finder: it returns what it matched,
+		// which is fewer results than keys and no error.
+		//
+		// Dropped rather than reshaped, because the subject is not wrong. It is
+		// the same trade the miss family makes for `(T, bool)`: a shape common
+		// enough to be stamped is not always the thing the stamp's check is
+		// about, and a run that cannot tell them apart should say so by name.
+		variadictest.FinderWithout(
+			"Find/answers once per key",
+			"FindWithLimit/answers once per key",
+		),
 	)
 }
 
@@ -87,6 +100,11 @@ func TestFinderContractWithoutTheDouble(t *testing.T) {
 		variadictest.FinderWithout(
 			"Find/an error carries the zero value",
 			"FindWithLimit/an error carries the zero value",
+			// The same structural stamp and the same finder, so the same two
+			// drops: a run that declines the double still runs every check it
+			// did not drop.
+			"Find/answers once per key",
+			"FindWithLimit/answers once per key",
 		),
 		variadictest.FinderWithoutDouble(),
 	)

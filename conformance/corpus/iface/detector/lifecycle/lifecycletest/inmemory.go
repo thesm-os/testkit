@@ -43,19 +43,6 @@ func (s *InMemory) Close(ctx context.Context) error {
 	return nil
 }
 
-// Read is the later operation that must report the closed sentinel, which is
-// the other half of the shape's law. It is not on the interface: observing
-// teardown needs something teardown affects, and Lifecycle declares only the
-// teardown.
-func (s *InMemory) Read() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return lifecycle.ErrClosed
-	}
-	return nil
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

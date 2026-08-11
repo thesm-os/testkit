@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/sideeffect/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/sideeffect/...
+// Command:   testkit run ./corpus/...
 
 package sideeffecttest
 
@@ -65,6 +65,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnTouch, MixedOnObserved
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Touch
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -527,4 +534,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 08eabe6ef50004386b74d58fc9f91555cf775b258985f9c706ca7c6e0454b9d4
+// testkit:provenance 1af61adbdbe9765f65a6b01242484dc6851451e5a3a4681dfc41f73772cd786e

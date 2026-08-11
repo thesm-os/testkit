@@ -16,7 +16,7 @@ require (
 	github.com/spf13/pflag v1.0.9 // indirect
 	go.thesmos.sh/eidos/backend/golang v1.13.3 // indirect
 	go.thesmos.sh/eidos/frontend/golang v1.14.0 // indirect
-	go.thesmos.sh/eidos/plugins v1.14.1-0.20260811100118-59aeee785372 // indirect
+	go.thesmos.sh/eidos/plugins v1.14.1-0.20260811130503-facbe1723b61 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect

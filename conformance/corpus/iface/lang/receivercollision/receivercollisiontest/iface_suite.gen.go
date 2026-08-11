@@ -76,6 +76,20 @@ func DefaultStoreFixture() StoreFixture {
 //	          lying. StoreWithoutDouble declines it.
 //	Extend:   StoreOnPut, StoreOnGet, StoreOnTouch
 //	Drop:     StoreWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - mutator, on Touch — write it with StoreOnTouch
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Put
 func AssertStoreContract(t *testing.T, opts ...StoreOption) {
 	t.Helper()
 	cfg := newStoreConfig(opts...)
@@ -569,4 +583,4 @@ func (c *storeConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2b36566efb9e0d169924bba9251fafec5f1f142eb310b5711a776368ed7e9cef
+// testkit:provenance 6bf2c7687e01873aa13a952d72f1620668b98740c677003e9304f6592938c8b3

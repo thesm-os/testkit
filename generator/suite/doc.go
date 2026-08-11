@@ -26,9 +26,16 @@
 // [engine/model/law] implements seventy-one properties, and their names line up
 // with eidos's classification vocabulary almost row for row. This generator
 // implements none of them: where a law exists the classification is the model
-// tier's, and the generated file's header says so (docs/adr/0018). What is left
-// here is the signature-derived family, the shapes the law catalogue does not
-// reach, and the classifications whose direct form is a fixed call sequence.
+// tier's (docs/adr/0018). What is left here is the signature-derived family,
+// the shapes the law catalogue does not reach, and the classifications whose
+// direct form is a fixed call sequence.
+//
+// The generated header names what the file does not check, in two lists: what
+// a consumer can write themselves, and what needs a reference implementation
+// and so is not theirs to write. It does not name the tier. A consumer has no
+// reason to know testkit has tiers, and a header telling them to hand-write
+// `deleteremoves` would be telling them to state a property that needs a
+// reference implementation against a run that has none.
 //
 // The division is not about strength. It is about what a tier can state at all:
 // a check for `cas` written where no stale version can be produced passes

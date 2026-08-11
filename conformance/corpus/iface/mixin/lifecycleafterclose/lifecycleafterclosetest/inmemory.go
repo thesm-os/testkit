@@ -58,13 +58,6 @@ func (s *InMemory) Work(ctx context.Context) error {
 	return nil
 }
 
-// Works reports how much work landed, which the interface does not expose.
-func (s *InMemory) Works() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.works
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

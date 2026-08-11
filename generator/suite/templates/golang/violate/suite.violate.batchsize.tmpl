@@ -1,0 +1,22 @@
+{{- /*
+A stand-in answering once however many keys it was given, which is the reader a
+caller zipping keys to results reads every value against the wrong key from.
+*/ -}}
+{{- define "suite.violate.batchsize" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in answers once for a batch of two. A check that let that pass
+// would report a working batch read for a subject whose results no longer line
+// up with the keys that asked for them — and nothing about the value returned
+// says so.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			return {{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}nil{{ else }}make({{ renderType $r.Type }}, 1){{ end }}{{ end }}
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

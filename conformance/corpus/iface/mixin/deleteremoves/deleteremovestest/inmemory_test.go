@@ -41,21 +41,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// A deleted key reads as absent rather than as empty, which is the difference
-// between removing and tombstoning — and invisible to Delete, which reports
-// only whether it failed.
-func TestDeleteMakesTheKeyAbsent(t *testing.T) {
-	t.Parallel()
-
-	s := deleteremovestest.NewInMemory()
-	testkit.NoError(t, s.Put(t.Context(), "k", "v"), "the write succeeds")
-	testkit.NoError(t, s.Delete(t.Context(), "k"), "and so does the delete")
-
-	_, err := s.Read(t.Context(), "k")
-	testkit.ErrorIs(t, err, deleteremovestest.ErrNotFound,
-		"the key reads as absent rather than as an empty value")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

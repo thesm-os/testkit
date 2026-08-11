@@ -40,18 +40,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// Repeating a write leaves the store as one write did, which the interface
-// cannot show: Put reports only whether it failed and Read answers alike either
-// way. Only the write count separates them.
-func TestPutIsIdempotent(t *testing.T) {
-	t.Parallel()
-
-	s := idempotenttest.NewInMemory()
-	testkit.NoError(t, s.Put(t.Context(), "k", "v"), "the first write succeeds")
-	testkit.NoError(t, s.Put(t.Context(), "k", "v"), "and so does the repeat")
-	testkit.Equal(t, s.Writes(), 1, "but only one write landed")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

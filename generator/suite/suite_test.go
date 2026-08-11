@@ -11,6 +11,7 @@ import (
 	"go.thesmos.sh/eidos/eidostest/golangtest"
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
@@ -292,6 +293,79 @@ func TestRender(t *testing.T) {
 		gen.AssertCompiles(t)
 		gen.AssertVets(t)
 	})
+
+	t.Run("compiles every contract-derived check", func(t *testing.T) {
+		t.Parallel()
+		// Three templates that each reach a second method and one that receives
+		// from a channel, which is the shape nothing else in the tree emits.
+		// Selection assertions pass against a template composing a call the
+		// toolchain refuses, and the failure would surface first in a consumer's
+		// build.
+		gen := golangtest.Render(t, backendgolang.New(), packageOf(t, contracted(t)), suite.New()).
+			WithSource(golangtest.GoFile("box/iface.go", contractedSource())).
+			WithRequire(suite.Module, filepath.Join("..", ".."))
+		gen.AssertCompiles(t)
+		gen.AssertVets(t)
+	})
+}
+
+// contracted carries all three suite-owned contracts on one interface, so a
+// render covers each template and the interaction between them.
+func contracted(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := valueStore(t, func(i *storefixture.InterfaceBuilder) {
+		i.Method("Put", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("v", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Return(storefixture.Named("error"))
+		})
+		i.Method("Match", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("v", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Return(storefixture.Named("bool"))
+			m.Return(storefixture.Named("error"))
+		})
+		i.Method("Append", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("v", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Return(storefixture.Named("error"))
+		})
+		i.Method("Subscribe", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Return(storefixture.RecvChan(storefixture.PkgNamed("example.com/box", "Value")))
+			m.Return(storefixture.Named("error"))
+		})
+	})
+	forMethod(s, "Put", func(bag *sdk.Bag) {
+		shape.MetaContracts.Set(bag, []string{suite.ContractIfAbsent, suite.ContractIfMatch}, "test")
+		shape.ContractRoleKey(suite.ContractIfAbsent).Set(bag, suite.ContractIfAbsentRole, "test")
+		shape.ContractRoleKey(suite.ContractIfMatch).Set(bag, suite.ContractIfMatchRole, "test")
+		shape.ContractPartnerKey(suite.ContractIfMatch, suite.ContractIfMatchMatch).
+			Set(bag, "example.com/box.Contract.Match", "test")
+	})
+	stampContract(s, "Append", suite.ContractOutbox, suite.ContractOutboxRole)
+	stampContractPartner(s, "Append", suite.ContractOutbox, suite.ContractOutboxPartner, "Subscribe")
+	return s
+}
+
+// contractedSource is the hand-written half [contracted] projects.
+func contractedSource() string {
+	return `package box
+
+import "context"
+
+type Value struct {
+	Key  string
+	Body string
+}
+
+type Contract interface {
+	Put(ctx context.Context, v Value) error
+	Match(ctx context.Context, v Value) (bool, error)
+	Append(ctx context.Context, v Value) error
+	Subscribe(ctx context.Context) (<-chan Value, error)
+}
+`
 }
 
 // packageOf is a store's single package node, for the render path.

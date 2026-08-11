@@ -75,6 +75,20 @@ func DefaultCalculatorFixture() CalculatorFixture {
 //	          lying. CalculatorWithoutDouble declines it.
 //	Extend:   CalculatorOnAdd, CalculatorOnDivide, CalculatorOnReset
 //	Drop:     CalculatorWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - voidlifecycle, on Reset — write it with CalculatorOnReset
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - pure, on Add
 func AssertCalculatorContract(t *testing.T, opts ...CalculatorOption) {
 	t.Helper()
 	cfg := newCalculatorConfig(opts...)
@@ -392,4 +406,4 @@ func (c *calculatorConfig) run(t *testing.T, path, name string, fn func(tb testi
 }
 
 // testkit: end of generated content.
-// testkit:provenance 991c4a1bb60a53af16cd835cd4562271460b020e0b54b8342281502e5bbab6ab
+// testkit:provenance 2d2b1bb28eab9b82904191d3b238787d07b27c432633e897a2e92f280c2449d2

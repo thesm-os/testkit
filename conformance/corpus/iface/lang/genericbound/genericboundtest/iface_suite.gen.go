@@ -62,6 +62,23 @@ func DefaultRankedFixture[K genericbound.Ordered, V any]() RankedFixture[K, V] {
 //	          lying. RankedWithoutDouble declines it.
 //	Extend:   RankedOnRank, RankedOnReset
 //	Drop:     RankedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - reader, on Rank — write it with RankedOnRank
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Reset
+//
+// Nothing proves these checks are able to fail —
+// the interface is generic, so nothing names the types to prove it with.
 func AssertRankedContract[K genericbound.Ordered, V any](t *testing.T, opts ...RankedOption[K, V]) {
 	t.Helper()
 	cfg := newRankedConfig[K, V](opts...)
@@ -452,4 +469,4 @@ func (c *rankedConfig[K, V]) run(t *testing.T, path, name string, fn func(tb tes
 }
 
 // testkit: end of generated content.
-// testkit:provenance 00da090b67b9bc736eafd8e3872f847cb76cf69a6bd0d9353b6c8068e1fc25ed
+// testkit:provenance 57fb20791fe353ec3bbeea2c881591e07c8f17212223daca12f5bbef31831a9d

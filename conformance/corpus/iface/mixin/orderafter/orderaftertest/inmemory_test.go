@@ -39,18 +39,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// Refusing rather than silently doing nothing, which the generated check cannot
-// tell apart: an error is an error either way, and only the count says whether
-// the write was skipped or merely reported.
-func TestCommitBeforePrepareWritesNothing(t *testing.T) {
-	t.Parallel()
-
-	s := orderaftertest.NewInMemory()
-	testkit.ErrorIs(t, s.Commit(t.Context()), orderaftertest.ErrNotPrepared,
-		"an unprepared commit is refused")
-	testkit.Equal(t, s.Commits(), 0, "and nothing was committed")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

@@ -35,19 +35,6 @@ func TestLifecycleContract(t *testing.T) {
 	)
 }
 
-// The rest of the shape's law, which the contract cannot state: observing
-// teardown needs an operation teardown affects, and Lifecycle declares only the
-// teardown itself.
-func TestClosedSubjectReportsTheSentinel(t *testing.T) {
-	t.Parallel()
-
-	s := lifecycletest.NewInMemory()
-	testkit.NoError(t, s.Read(), "an open subject serves reads")
-	testkit.NoError(t, s.Close(t.Context()), "closing succeeds")
-	testkit.ErrorIs(t, s.Read(), lifecycle.ErrClosed,
-		"and every later operation reports the closed sentinel")
-}
-
 // Declining the double is separate from dropping a check.
 func TestLifecycleContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

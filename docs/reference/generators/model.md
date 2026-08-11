@@ -15,23 +15,38 @@ state-machine testing on [`pgregory.net/rapid`](https://pgregory.net/rapid),
 linearizability checking on
 [`anishathalye/porcupine`](https://github.com/anishathalye/porcupine),
 bounded exhaustive search, and a mutation self-check that proves the bound
-laws can kill injected bugs. Consumers get law-backed conformance with zero
-configuration; everything below is derived from the shape stamps and the
+laws can kill injected bugs. Consumers get law-backed conformance for one
+directive; everything below is derived from the shape stamps and the
 [suite generator](suite.md)'s projection.
 
-## No directive
+## The directive
 
-Emission is derived, not opted into: the generator emits for every
-interface where `suite` queued a projection and at least one declared
-classification maps to a law — which, because detector rows map too
-(`writer` → `AUTO-WRITE-OBSERVABLE`), is nearly every stateful interface.
-The directive already exists: it is the classification line itself, and
-[ADR-0017](../../adr/0017-every-classification-owes-an-assertion.md) says
-what a declared classification owes. The laws run inside the ordinary
-`Assert<Iface>Contract` entry against each subject's plain form; drop by
-path with `<Iface>Without("model/AUTO-…")`.
+```go
+//testkit:model
+type Store interface { ... }
+```
 
-One directive is declared here: `//testkit:domain-gen <Type> <Func>`
+Interface-scoped, no keys, negation denied — the tier exists where one is
+declared, and deleting the line is the suppression, the same shape as
+`//testkit:stub` and `//testkit:suite`. The generator emits where the
+directive stands and `suite` queued a projection; a directive on an
+interface `suite` never touched, or one where no classification maps to a
+law, is a diagnostic at the directive.
+
+The directive is what admits the dependency: the primary output imports the
+`engine` module, and through it rapid and Porcupine — a requirement a
+classification line alone must not impose. On an interface carrying
+model-owned classifications and no `//testkit:model`, the suite harness
+header names the tier as unarmed and the line that arms it, so an owed
+assertion is visibly waiting rather than silently absent
+([ADR-0017](../../adr/0017-every-classification-owes-an-assertion.md)).
+
+Once armed, the laws run inside the ordinary `Assert<Iface>Contract` entry
+against each subject's plain form; drop by path with
+`<Iface>Without("model/AUTO-…")`, or delete the directive to shed the
+emission and the dependency together.
+
+A second directive is declared here: `//testkit:domain-gen <Type> <Func>`
 registers a [`rapid.Generator`](https://pgregory.net/rapid) for an opaque
 domain type the generator cannot synthesize from reflection. An opaque
 parameter with no hint is a diagnostic at the parameter.

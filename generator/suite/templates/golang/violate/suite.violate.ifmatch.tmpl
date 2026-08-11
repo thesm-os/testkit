@@ -1,0 +1,30 @@
+{{- /*
+A writer that refuses what its own predicate admits, which is the disagreement
+the check exists to catch and which neither half shows on its own.
+*/ -}}
+{{- define "suite.violate.ifmatch" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in's predicate admits the value and its writer refuses it. A check
+// that let that pass would report a working conditional write for a subject
+// where the predicate decides nothing.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+{{- range $m.ValueReturns }}
+			var {{ .Local }} {{ renderType .Type }}
+{{- end }}
+			return {{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}{{ renderExpr (external "errors" "New") }}("refusing what the predicate admits"){{ else }}{{ $r.Local }}{{ end }}{{ end }}
+		}),
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
+			// Admitting, which is what makes the writer's refusal a
+			// disagreement rather than the pair agreeing to say no.
+			return {{ range $i, $r := $p.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}nil{{ else }}true{{ end }}{{ end }}
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

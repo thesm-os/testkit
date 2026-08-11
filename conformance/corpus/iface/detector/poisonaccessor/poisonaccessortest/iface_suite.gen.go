@@ -51,6 +51,13 @@ func DefaultPoisonAccessorFixture() PoisonAccessorFixture {
 //	          lying. PoisonAccessorWithoutDouble declines it.
 //	Extend:   PoisonAccessorOnErr
 //	Drop:     PoisonAccessorWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - poisonaccessor, on Err
 func AssertPoisonAccessorContract(t *testing.T, opts ...PoisonAccessorOption) {
 	t.Helper()
 	cfg := newPoisonAccessorConfig(opts...)
@@ -264,4 +271,4 @@ func (c *poisonaccessorConfig) run(t *testing.T, path, name string, fn func(tb t
 }
 
 // testkit: end of generated content.
-// testkit:provenance 88119eef6e1b9e60666daefbeac89f2d58946cc05f01067c6b1018482aa35d63
+// testkit:provenance 103d1f2ef7900d1fdd07b4bc971873af66fc5cf5cc50c2bf9c10776350ed9245

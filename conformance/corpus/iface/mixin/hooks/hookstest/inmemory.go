@@ -59,14 +59,6 @@ func (s *InMemory) Fire(ctx context.Context, event string) error {
 	return nil
 }
 
-// Registered reports how many handlers are attached, which the interface
-// exposes no way to observe.
-func (s *InMemory) Registered() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return len(s.handlers)
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

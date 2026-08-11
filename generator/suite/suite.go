@@ -9,6 +9,7 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
@@ -22,6 +23,8 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/validates"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/wrappedvia"
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
@@ -86,7 +89,16 @@ const (
 	KindPartition  sdk.Kind = "suite.check.partition"
 	KindHooks      sdk.Kind = "suite.check.hooks"
 	KindSample     sdk.Kind = "suite.check.sample"
+	KindValidates  sdk.Kind = "suite.check.validates"
+	KindWrappedVia sdk.Kind = "suite.check.wrappedvia"
 )
+
+// KindBatchSize The emit kind for the remaining detector-derived check.
+//
+// Separate from the miss family because it is about arity rather than about
+// absence: a batch read answers per key, and a subject answering once for many
+// is wrong in a way no zero comparison reaches.
+const KindBatchSize sdk.Kind = "suite.check.batchsize"
 
 // Plugin is the conformance-suite generator.
 //
@@ -168,6 +180,10 @@ type Subject struct {
 	// it answers for a predeclared name too, so one call covers every type an
 	// interface could be named by.
 	IfaceRef sdk.Ref
+
+	// IntegrationEnv is the variable a run sets to include integration-only
+	// checks. See [GoIntegrationEnv].
+	IntegrationEnv string
 
 	// Runtime is testkit's module root, where the assertion helpers the
 	// generated checks call live. The backend's `external` builtin turns a path
@@ -370,6 +386,14 @@ type Method struct {
 	// entry point runs them.
 	Checks []*Check
 
+	// IntegrationOnly reports that this method reaches something outside the
+	// process, so its checks run only where that something exists.
+	//
+	// Carried on the projection rather than asked of the mixin list in a
+	// template, because the template's job is to spell the guard and not to
+	// know which classification implies one.
+	IntegrationOnly bool
+
 	// Mixins names the classifications the annotator attached, and Contracts
 	// the same for contract roles.
 	//
@@ -387,6 +411,19 @@ type Method struct {
 	// worth hiding here is that a sibling param arrives qualified and has to be
 	// cut back down to the local name a generated call can use.
 	mixinParams map[string]string
+
+	// contractRoles holds the role this method fills in each contract it belongs
+	// to, and contractPartners the role-keyed partners beside it.
+	//
+	// Two maps rather than one, because the axis keys its stamps two ways and
+	// flattening them would need a discriminator this would have to invent.
+	// Unexported with accessors for the reason mixinParams is: the composed key
+	// is spelling, and a template should ask a question rather than build one.
+	//
+	// The third stamp a contract can carry — an opaque param — is read by
+	// nothing here: every check calls what it names, and a param is by
+	// definition a value with no callable in it.
+	contractRoles, contractPartners map[string]string
 }
 
 // HasMixin reports whether the annotator attached the named classification.
@@ -529,6 +566,18 @@ type Contract struct {
 	// interface declaring no writer.
 	Seed *Seed
 
+	// Coverage is every classification the interface carries, with the tier
+	// that covers it — which the header states before the checks.
+	Coverage []Coverage
+
+	// Unfalsifiable says why no companion output was generated, empty where one
+	// was.
+	//
+	// Stated in the harness a reader meets rather than left to the absence of a
+	// file, for the reason an uncovered classification is stated: a missing
+	// companion is indistinguishable from a generator that failed to write one.
+	Unfalsifiable string
+
 	// Double is the generated stand-in for this interface, nil where the source
 	// declared no `//testkit:stub`.
 	//
@@ -544,6 +593,50 @@ type Contract struct {
 
 // Kind returns [KindContract].
 func (*Contract) Kind() sdk.Kind { return KindContract }
+
+// Unchecked is every classification the interface declares that this file does
+// not assert.
+//
+// What a consumer needs from the header is not which half of testkit covers
+// what — they have no reason to know testkit has halves — but whether the file
+// forgot something and what to do about it. So the list names the extension
+// point rather than the reason, and the reason lives in testkit's own docs.
+func (c *Contract) Unchecked() []Coverage {
+	out := make([]Coverage, 0, len(c.Coverage))
+	for _, cov := range c.Coverage {
+		if !cov.Checked {
+			out = append(out, cov)
+		}
+	}
+	return out
+}
+
+// Unwritten is what this file does not check and a consumer could.
+func (c *Contract) Unwritten() []Coverage {
+	out := make([]Coverage, 0, len(c.Coverage))
+	for _, cov := range c.Unchecked() {
+		if !cov.Elsewhere() {
+			out = append(out, cov)
+		}
+	}
+	return out
+}
+
+// Elsewhere is what this file does not check and a consumer should not.
+//
+// Split from [Contract.Unwritten] because the advice differs and getting it
+// wrong is worse than saying nothing: a header telling somebody to hand-write
+// `deleteremoves` is telling them to state a property that needs a reference
+// implementation, against a run that has none.
+func (c *Contract) Elsewhere() []Coverage {
+	out := make([]Coverage, 0, len(c.Coverage))
+	for _, cov := range c.Unchecked() {
+		if cov.Elsewhere() {
+			out = append(out, cov)
+		}
+	}
+	return out
+}
 
 // CheckCount reports how many checks the harness runs, for the header a reader
 // meets before them.
@@ -581,15 +674,26 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		methods := methodsOf(iface, set)
 		fixture := fixtureOf(ctx, iface, methods)
 		methods = withChecks(c, ctx, iface, fixture, methods)
-		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, &Contract{
-			BaseEmit:  sdk.EmitBase(c, iface),
-			Subject:   subjectOf(iface),
-			EntryName: "Assert" + iface.Name + "Contract",
-			Fixture:   fixture,
-			Seed:      seedOf(fixture, methods),
-			Double:    doubleOf(doubles, iface),
-			Methods:   methods,
-		}); err != nil {
+		contract := &Contract{
+			BaseEmit:      sdk.EmitBase(c, iface),
+			Subject:       subjectOf(iface),
+			EntryName:     "Assert" + iface.Name + "Contract",
+			Fixture:       fixture,
+			Seed:          seedOf(fixture, methods),
+			Double:        doubleOf(doubles, iface),
+			Methods:       methods,
+			Coverage:      coverageOf(methods),
+			Unfalsifiable: unfalsifiableReason(iface, doubles),
+		}
+		queued := []sdk.EmitNode{contract}
+		if f, provable := falsificationOf(ctx, c, iface, contract); provable {
+			// The companion output, which drives every check against a stand-in
+			// that violates it. Queued beside the harness rather than instead of
+			// it: the two are routed apart by tag, and a run that produced a
+			// harness it could not prove still owes the harness.
+			queued = append(queued, f)
+		}
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, queued...); err != nil {
 			// Wrapped even though the queue names the plugin and the slot: what
 			// it cannot name is which declaration the run was on when it failed,
 			// and that is the only part a reader needs to find the source line.
@@ -659,12 +763,16 @@ func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	out := make([]Method, 0, len(set.Methods))
 	for _, src := range set.Methods {
 		bag := src.Meta()
+		roles, partners := contractDataOf(bag)
 		out = append(out, Method{
-			Sig:         golang.SigOf(src),
-			CheckType:   iface.Name + src.Name + "Check",
-			Mixins:      shape.Mixins(bag),
-			Contracts:   shape.Contracts(bag),
-			mixinParams: mixinParamsOf(bag),
+			Sig:              golang.SigOf(src),
+			CheckType:        iface.Name + src.Name + "Check",
+			Mixins:           shape.Mixins(bag),
+			IntegrationOnly:  slices.Contains(shape.Mixins(bag), MixinIntegrationOnly),
+			Contracts:        shape.Contracts(bag),
+			mixinParams:      mixinParamsOf(bag),
+			contractRoles:    roles,
+			contractPartners: partners,
 		})
 	}
 	return out
@@ -689,6 +797,8 @@ func mixinParamsOf(bag *sdk.Bag) map[string]string {
 		{MixinPartition, MixinPartitionAxis},
 		{MixinHooks, MixinHooksParam},
 		{MixinSample, MixinSampleParam},
+		{MixinValidates, MixinValidatesParam},
+		{MixinWrappedVia, MixinWrappedViaParam},
 	}
 	var out map[string]string
 	for _, w := range wanted {
@@ -755,6 +865,52 @@ func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Metho
 	return out
 }
 
+// batchSizeCheck builds "a batch read answers once per key requested".
+//
+// The one detector claim that is about arity rather than absence, and the one
+// the miss family cannot state: a batch reader answering once for many keys
+// returns a plausible non-empty slice, so every zero comparison passes.
+//
+// Two keys, which is what makes it able to fail at all — the derived pair is
+// exactly the second element a variadic call otherwise never gets. A method
+// whose variadic parameter has no alternate is one the check cannot vary, so
+// nothing is generated rather than a call with one element and an assertion
+// that one came back.
+func batchSizeCheck(
+	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method,
+) (*Check, bool) {
+	if shape.Get(m.Source.Meta()) != batchreader.Name {
+		return nil, false
+	}
+	v := m.VariadicParam()
+	if v == nil || len(m.CallArgs()) != 1 || len(m.ValueReturns()) != 1 {
+		return nil, false
+	}
+	field, found := f.Field(f.FieldFor(*v))
+	if !found || !field.OK() {
+		return nil, false
+	}
+
+	ck := &Check{
+		BaseEmit:          sdk.EmitBase(c, iface),
+		Subject:           subjectOf(iface),
+		KindName:          KindBatchSize,
+		Subtest:           "answers once per key",
+		Func:              "Assert" + iface.Name + m.Name + "AnswersPerKey",
+		Path:              m.Name + "/answers once per key",
+		Args:              fixtureArgs(f, m, false),
+		NeedsDerivedInput: true,
+		Method:            m,
+	}
+	ck.Extra = []ExtraArg{{
+		Name:  OtherIdent(v.Name),
+		Field: field.OtherName(),
+		Type:  v.Type,
+	}}
+	ck.SecondCall = []string{v.Name, OtherIdent(v.Name)}
+	return ck, true
+}
+
 // The mixins this generator generates a check for, and the parameters it reads.
 //
 // Named here rather than taken from eidos's own constants at each use so the
@@ -781,6 +937,10 @@ const (
 	MixinHooksParam      = hooks.ParamRegister
 	MixinSample          = sample.Name
 	MixinSampleParam     = sample.ParamBuilder
+	MixinValidates       = validates.Name
+	MixinValidatesParam  = validates.ParamFn
+	MixinWrappedVia      = wrappedvia.Name
+	MixinWrappedViaParam = wrappedvia.ParamFn
 )
 
 // missShapes are the classifications whose absence signal is a value rather
@@ -812,6 +972,9 @@ var missShapes = map[string]struct{}{
 // choosing an input that is not there, and a method taking nothing after its
 // context offers nowhere to put one.
 func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method) []*Check {
+	if ck, ok := batchSizeCheck(c, iface, f, m); ok {
+		return []*Check{ck}
+	}
 	if _, owned := missShapes[shape.Get(m.Source.Meta())]; !owned || !m.HasInput() {
 		return nil
 	}
@@ -849,6 +1012,74 @@ func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method
 // attempt count to read, `integrationonly` is a build tag rather than an
 // assertion, and `deprecated` is a fact about a method rather than a claim about
 // its behaviour — it is stated in the generated documentation instead.
+// agreementCheck builds "the method refuses what the validator refuses".
+//
+// Agreement rather than rejection, for the reason if-match's is: "what the
+// validator rejects, the method rejects" needs a value the validator rejects,
+// and nothing in the directive says which one that is. What both halves can
+// always be asked is whether they agree on the value the run has.
+//
+// The validator has to answer about the very value the method takes, and to
+// report its verdict as an error — a validator returning something else is a
+// method the directive happened to name.
+func agreementCheck(f Fixture, m, fn Method, base checkBuilder) (*Check, bool) {
+	if !m.ReturnsError() || !fn.ReturnsError() || len(fn.ValueReturns()) > 0 {
+		return nil, false
+	}
+	if !sameArgs(m, fn) {
+		return nil, false
+	}
+	args, spellable := partnerArgs(f, m, fn)
+	if !spellable {
+		return nil, false
+	}
+
+	ck := base(KindValidates, MixinValidates, "AgreesWith"+fn.Name, fixtureArgs(f, m, false))
+	ck.Partner, ck.PartnerArgs = &fn, args
+	return ck, true
+}
+
+// wrappingCheck builds "the failure carries the cause the mixin names".
+//
+// Conditional on the cause being one: a subject with nothing wrong has no
+// wrapped error to show, and demanding one would fail an implementation that is
+// simply healthy. So the check asks the cause first and asserts only when there
+// is something to wrap — which is what makes it able to fail without being able
+// to fail wrongly.
+func wrappingCheck(f Fixture, m, cause Method, base checkBuilder) (*Check, bool) {
+	if !m.ReturnsError() || !cause.ReturnsError() || len(cause.ValueReturns()) > 0 {
+		return nil, false
+	}
+	args, spellable := partnerArgs(f, m, cause)
+	if !spellable {
+		return nil, false
+	}
+
+	ck := base(KindWrappedVia, MixinWrappedVia, "Wraps"+cause.Name, fixtureArgs(f, m, false))
+	ck.Partner, ck.PartnerArgs = &cause, args
+	return ck, true
+}
+
+// sameArgs reports whether two methods take the same parameters after their
+// contexts.
+//
+// Both the types and the fixture fields, because a check receives the method's
+// own arguments and calls the partner with them: two parameters at one type
+// under different names resolve to different fields, and one of them is not in
+// scope.
+func sameArgs(m, other Method) bool {
+	a, b := m.CallArgs(), other.CallArgs()
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if !a[i].Source.Equal(b[i].Source) {
+			return false
+		}
+	}
+	return true
+}
+
 // builds reports whether the partner produces a value the method accepts.
 //
 // Checked rather than assumed, because the check's whole content is passing one
@@ -906,9 +1137,7 @@ func callbackParam(partner Method) (*CallbackSig, bool) {
 // check passed against an implementation ignoring partitions entirely. A check
 // that cannot fail is worse than no check, so a method naming no axis generates
 // nothing rather than something that looks like coverage.
-func partitionCheck(
-	f Fixture, m, read Method, base func(sdk.Kind, string, string, []string) *Check,
-) (*Check, bool) {
+func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, bool) {
 	axis, named := m.MixinParam(MixinPartition, MixinPartitionAxis)
 	if !named {
 		return nil, false
@@ -1026,22 +1255,20 @@ func partnerArgs(f Fixture, m, partner Method) ([]string, bool) {
 // `//testkit:mixin sideeffect` is still a classification — so its absence is a
 // check not generated rather than a fault to report.
 func partnerOf(methods []Method, m Method, mixin, param string) *Method {
-	name := m.MixinPartner(mixin, param)
-	if name == "" {
-		return nil
-	}
-	for i := range methods {
-		if methods[i].Name == name {
-			return &methods[i]
-		}
-	}
-	return nil
+	return methodNamed(methods, m.MixinPartner(mixin, param))
 }
 
-func mixinChecks(
-	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
-) []*Check {
-	base := func(kind sdk.Kind, subtest, suffix string, args []string) *Check {
+// checkBuilder composes the fields every classification-derived check shares,
+// leaving each selector to set only what its own claim needs.
+//
+// A named type rather than a closure literal at each call site: two families
+// select checks the same way and a third would have been a third copy of the
+// same seven fields, which is where two of them drift apart.
+type checkBuilder func(kind sdk.Kind, subtest, suffix string, args []string) *Check
+
+// checkFor binds a builder to one method of one interface.
+func checkFor(c *sdk.Provenance, iface *sdk.Interface, m Method) checkBuilder {
+	return func(kind sdk.Kind, subtest, suffix string, args []string) *Check {
 		return &Check{
 			BaseEmit: sdk.EmitBase(c, iface),
 			Subject:  subjectOf(iface),
@@ -1053,6 +1280,12 @@ func mixinChecks(
 			Method:   m,
 		}
 	}
+}
+
+func mixinChecks(
+	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
+) []*Check {
+	base := checkFor(c, iface, m)
 
 	var out []*Check
 	if m.HasMixin(MixinNilSafe) && m.HasInput() {
@@ -1096,6 +1329,16 @@ func mixinChecks(
 			out = append(out, ck)
 		}
 	}
+	if p := partnerOf(methods, m, MixinValidates, MixinValidatesParam); p != nil {
+		if ck, ok := agreementCheck(f, m, *p, base); ok {
+			out = append(out, ck)
+		}
+	}
+	if p := partnerOf(methods, m, MixinWrappedVia, MixinWrappedViaParam); p != nil {
+		if ck, ok := wrappingCheck(f, m, *p, base); ok {
+			out = append(out, ck)
+		}
+	}
 	if p := m.MixinPartner(MixinOrderAfter, MixinOrderAfterParam); p != "" && m.ReturnsError() {
 		// ReturnsError because the claim is that calling early *fails*, and a
 		// method with nowhere to report failure cannot make it.
@@ -1127,12 +1370,13 @@ func doubleOf(queued map[sdk.Node]*stub.Stub, iface *sdk.Interface) *Double {
 // subjectOf names the interface every emit value for it is about.
 func subjectOf(iface *sdk.Interface) Subject {
 	return Subject{
-		IfaceName:  iface.Name,
-		IfaceRef:   golang.RefFor(iface.Name, iface.Package),
-		Runtime:    Module,
-		ClockRef:   golang.RefFor("Clock", Module+"/clock"),
-		TypeParams: golang.TypeParamDecls(iface.TypeParams),
-		TypeArgs:   golang.TypeParamNames(iface.TypeParams),
+		IfaceName:      iface.Name,
+		IfaceRef:       golang.RefFor(iface.Name, iface.Package),
+		Runtime:        Module,
+		IntegrationEnv: GoIntegrationEnv,
+		ClockRef:       golang.RefFor("Clock", Module+"/clock"),
+		TypeParams:     golang.TypeParamDecls(iface.TypeParams),
+		TypeArgs:       golang.TypeParamNames(iface.TypeParams),
 	}
 }
 

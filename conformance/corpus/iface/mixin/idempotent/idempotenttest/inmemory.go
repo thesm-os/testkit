@@ -32,14 +32,6 @@ var _ idempotent.Mixed = (*InMemory)(nil)
 // NewInMemory returns an empty store.
 func NewInMemory() *InMemory { return &InMemory{items: map[string]string{}} }
 
-// Writes reports how many writes landed, which the interface exposes no way to
-// observe.
-func (s *InMemory) Writes() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.writes
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

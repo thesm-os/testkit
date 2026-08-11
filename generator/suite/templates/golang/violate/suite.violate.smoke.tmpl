@@ -1,0 +1,24 @@
+{{- /*
+A method that panics on a derived value.
+
+The weakest check in the harness and the one that catches the most, so the
+weakest violation is the right one: a panic is what smoke exists to turn into a
+failure rather than a crashed test binary.
+*/ -}}
+{{- define "suite.violate.smoke" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			panic("{{ .IfaceName }}.{{ $m.Name }}: violating the smoke check")
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

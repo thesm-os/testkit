@@ -58,6 +58,13 @@ func DefaultWriterFixture() WriterFixture {
 //	          lying. WriterWithoutDouble declines it.
 //	Extend:   WriterOnPut
 //	Drop:     WriterWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Put
 func AssertWriterContract(t *testing.T, opts ...WriterOption) {
 	t.Helper()
 	cfg := newWriterConfig(opts...)
@@ -356,4 +363,4 @@ func (c *writerConfig) run(t *testing.T, path, name string, fn func(tb testing.T
 }
 
 // testkit: end of generated content.
-// testkit:provenance f8b9c9b8690249ae1c18f161814719108c47b3e1916e9e47a0181354d98efd5b
+// testkit:provenance 723cf6017fad0aa6f70da8c5ee54aabca6ce10f6d339c5ac74ce978b83fa0a65

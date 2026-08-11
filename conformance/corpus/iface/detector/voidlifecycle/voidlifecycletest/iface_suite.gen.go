@@ -51,6 +51,13 @@ func DefaultVoidLifecycleFixture() VoidLifecycleFixture {
 //	          lying. VoidLifecycleWithoutDouble declines it.
 //	Extend:   VoidLifecycleOnStop
 //	Drop:     VoidLifecycleWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - voidlifecycle, on Stop — write it with VoidLifecycleOnStop
 func AssertVoidLifecycleContract(t *testing.T, opts ...VoidLifecycleOption) {
 	t.Helper()
 	cfg := newVoidLifecycleConfig(opts...)
@@ -264,4 +271,4 @@ func (c *voidlifecycleConfig) run(t *testing.T, path, name string, fn func(tb te
 }
 
 // testkit: end of generated content.
-// testkit:provenance d400ea7e8709dd5bf22a1f67c53eb9f50f2a3ea57bb9cc694db5978950256543
+// testkit:provenance 7c025352817588de4fbe1a555e84a58a31d191cd39928485336df8fa3ff75d0f

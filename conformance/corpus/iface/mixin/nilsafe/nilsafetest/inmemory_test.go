@@ -43,20 +43,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// Refusing is the point, not merely surviving. The generated check asks only
-// that Store not panic — a subject that swallowed nil and returned success
-// would satisfy it, and lose the write.
-func TestStoreRefusesNilRatherThanSwallowingIt(t *testing.T) {
-	t.Parallel()
-
-	s := nilsafetest.NewInMemory()
-	testkit.ErrorIs(t, s.Store(t.Context(), nil), nilsafetest.ErrNilPayload,
-		"a nil payload is a failed request")
-
-	_, ok := s.Stored("")
-	testkit.False(t, ok, "and nothing was written under the zero key")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

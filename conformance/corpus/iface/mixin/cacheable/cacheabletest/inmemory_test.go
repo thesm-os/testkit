@@ -40,24 +40,20 @@ func TestMixedContract(t *testing.T) {
 			testkit.NoError(tb, err, "a seeded key is found")
 			testkit.Equal(tb, got, "cached", "and carries what was written")
 		}),
+		cacheabletest.MixedOnGet("answers a repeated read from the cache", func(
+			tb testing.TB, subject cacheable.Mixed, key string,
+		) {
+			tb.Helper()
+			// The mixin's own shape: the second read must agree with the first
+			// without consulting what backs it. Both answers look alike, which
+			// is why one read cannot state this and two can.
+			first, err := subject.Get(tb.Context(), key)
+			testkit.NoError(tb, err, "the first read finds the seeded key")
+			second, err := subject.Get(tb.Context(), key)
+			testkit.NoError(tb, err, "and so does the second")
+			testkit.Equal(tb, second, first, "with the same answer")
+		}),
 	)
-}
-
-// The cache is real, which the interface hides: both reads answer alike, and
-// only the miss count says the second was served without reaching the store.
-func TestRepeatReadsAreServedFromTheCache(t *testing.T) {
-	t.Parallel()
-
-	s := cacheabletest.NewInMemory()
-	s.Put("k", "v")
-
-	first, err := s.Get(t.Context(), "k")
-	testkit.NoError(t, err, "the first read succeeds")
-	second, err := s.Get(t.Context(), "k")
-	testkit.NoError(t, err, "and so does the second")
-
-	testkit.Equal(t, second, first, "both answers agree")
-	testkit.Equal(t, s.Misses(), 1, "and only the first reached the store")
 }
 
 // Declining the double is separate from dropping a check.

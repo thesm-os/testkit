@@ -62,6 +62,13 @@ func DefaultMultiArgWriterFixture() MultiArgWriterFixture {
 //	          lying. MultiArgWriterWithoutDouble declines it.
 //	Extend:   MultiArgWriterOnSet
 //	Drop:     MultiArgWriterWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - compositewriter, on Set
 func AssertMultiArgWriterContract(t *testing.T, opts ...MultiArgWriterOption) {
 	t.Helper()
 	cfg := newMultiArgWriterConfig(opts...)
@@ -360,4 +367,4 @@ func (c *multiargwriterConfig) run(t *testing.T, path, name string, fn func(tb t
 }
 
 // testkit: end of generated content.
-// testkit:provenance ade7243b7a4f76e1304f99e322909980793d91324856d358dd02985c48614437
+// testkit:provenance f32f837badc7878657cc0d1a3c56da504aab6bf1d1dd8bb442e50464916ce823

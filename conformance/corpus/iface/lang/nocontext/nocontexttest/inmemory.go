@@ -58,12 +58,4 @@ func (s *InMemory) Reset() {
 	s.calls = 0
 }
 
-// Calls reports how many operations have run, so a test can observe that Reset
-// did something rather than only that it returned.
-func (s *InMemory) Calls() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.calls
-}
-
 var _ nocontext.Calculator = (*InMemory)(nil)

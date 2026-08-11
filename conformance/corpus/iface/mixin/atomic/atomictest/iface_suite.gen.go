@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/atomic/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package atomictest
 
@@ -73,6 +73,21 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnWrite, MixedOnRead
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - multireader, on Read — write it with MixedOnRead
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - multiargwriter, on Write
+//   - atomic, on Write
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -508,4 +523,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 48343f3e6412dd6491ee3ed86ee7fbab162419d3df34c3319fbabe9329c2fbe6
+// testkit:provenance dff2e791499d16b124cc787b9e229ecfe5e372384be7d2252abdb25586fff122

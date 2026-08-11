@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/hooks/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/hooks/...
+// Command:   testkit run ./corpus/...
 
 package hookstest
 
@@ -67,6 +67,20 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnFire, MixedOnOnEvent
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - mutator, on OnEvent — write it with MixedOnOnEvent
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Fire
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -430,4 +444,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance aeceff8d259582a6641b93dbe8cb9c7ec54df0a9bfbb0fed090d415565a5783e
+// testkit:provenance 77cc54b8613aa906e9b96c9eea18c5e24415ad0e11850d239184e8d99f85b674

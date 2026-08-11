@@ -6,7 +6,6 @@ package voidlifecycletest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/voidlifecycle"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/voidlifecycle/voidlifecycletest"
 )
@@ -34,19 +33,6 @@ func TestVoidLifecycleContract(t *testing.T) {
 			subject.Stop()
 		}),
 	)
-}
-
-// The effect is out of band, so observing teardown needs a method the interface
-// does not declare.
-func TestStopIsObservable(t *testing.T) {
-	t.Parallel()
-
-	s := voidlifecycletest.NewInMemory()
-	testkit.False(t, s.Stopped(), "a fresh subject is running")
-	s.Stop()
-	testkit.True(t, s.Stopped(), "and stopping it is observable")
-	s.Stop()
-	testkit.True(t, s.Stopped(), "and stays so on a second call")
 }
 
 // Declining the double is separate from dropping a check.

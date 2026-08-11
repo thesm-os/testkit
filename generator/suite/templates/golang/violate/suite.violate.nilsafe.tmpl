@@ -1,0 +1,21 @@
+{{- /*
+A stand-in that panics on zero inputs, which is the failure the check exists to
+turn into a report rather than a crashed run.
+*/ -}}
+{{- define "suite.violate.nilsafe" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in panics on the zero values the check supplies. A check that let
+// that pass would leave a method that dereferences its input reported as a
+// crashed run rather than as a failed assertion, with no line naming it.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			panic("{{ .IfaceName }}.{{ $m.Name }}: violating the nilsafe check")
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

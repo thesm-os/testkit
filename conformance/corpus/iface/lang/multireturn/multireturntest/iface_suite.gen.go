@@ -72,6 +72,13 @@ func DefaultWideFixture() WideFixture {
 //	          lying. WideWithoutDouble declines it.
 //	Extend:   WideOnQuad, WideOnTriple, WideOnNoError
 //	Drop:     WideWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - multireader, on Quad — write it with WideOnQuad
 func AssertWideContract(t *testing.T, opts ...WideOption) {
 	t.Helper()
 	cfg := newWideConfig(opts...)
@@ -542,4 +549,4 @@ func (c *wideConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6e738dc8e904cb10e6aa944a32bf7b1f641a769990909200047b07a0a2ff1cb8
+// testkit:provenance 014260ff0794e48050185cdbd536fc41b1260ae642480f9897f2fc8db0bfc399

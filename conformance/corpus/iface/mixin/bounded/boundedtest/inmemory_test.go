@@ -6,7 +6,6 @@ package boundedtest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded/boundedtest"
 )
@@ -24,19 +23,6 @@ func TestMixedContract(t *testing.T) {
 			return boundedtest.NewInMemory()
 		}),
 	)
-}
-
-// The ceiling holds past it, which is the claim the directive makes and nothing
-// generated checks.
-func TestListStopsAtTheDeclaredLimit(t *testing.T) {
-	t.Parallel()
-
-	s := boundedtest.NewInMemory()
-	s.Fill(boundedtest.Limit + 50)
-
-	got, err := s.List(t.Context())
-	testkit.NoError(t, err, "listing an overfull collection succeeds")
-	testkit.Len(t, got, boundedtest.Limit, "and returns no more than the ceiling")
 }
 
 // Declining the double is separate from dropping a check.

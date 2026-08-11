@@ -4,7 +4,6 @@
 package testkit_test
 
 import (
-	"runtime"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -66,32 +65,24 @@ func TestRejects(t *testing.T) {
 		testkit.False(t, reached, "nothing after the failed assertion runs")
 	})
 
-	t.Run("leaves no goroutine behind", func(t *testing.T) {
+	t.Run("joins the check before returning", func(t *testing.T) {
 		t.Parallel()
-		// The goroutine exists only because runtime.Goexit needs one to exit.
-		// It has to be joined before the call returns, or every check driven
-		// through this leaks one and a consumer's leak detector reports it
-		// against their code.
-		defer goroutineLeakGuard(t)()
+		// The goroutine exists only because runtime.Goexit needs one to exit,
+		// and it has to be joined before the call returns — or every check
+		// driven through this leaks one, and a consumer's leak detector reports
+		// it against their code.
+		//
+		// Asserted through a deferred write rather than a goroutine count:
+		// runtime.NumGoroutine is process-wide, so any other parallel test
+		// moves it, and a guard that reads it fails for reasons that have
+		// nothing to do with this call. Goexit runs deferred functions, which
+		// is what makes the flag reliable where a count is not.
+		finished := false
 		testkit.Rejects(t, "the check fails", func(tb testing.TB) {
 			tb.Helper()
+			defer func() { finished = true }()
 			testkit.Equal(tb, 1, 2, "one is not two")
 		})
+		testkit.True(t, finished, "the check finished before Rejects returned")
 	})
-}
-
-// goroutineLeakGuard is [concurrency.GoroutineLeak] restated, because the root
-// package cannot import a package that imports it.
-//
-// Same claim, smaller: the count when the guard is installed has to be the
-// count when it runs.
-func goroutineLeakGuard(tb testing.TB) func() {
-	tb.Helper()
-	before := runtime.NumGoroutine()
-	return func() {
-		tb.Helper()
-		if after := runtime.NumGoroutine(); after > before {
-			tb.Errorf("goroutines leaked: %d before, %d after", before, after)
-		}
-	}
 }

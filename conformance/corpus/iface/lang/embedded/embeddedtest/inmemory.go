@@ -80,14 +80,6 @@ func (s *InMemory) Close(ctx context.Context) error {
 	return nil
 }
 
-// Closed reports whether Close has been called, so a test can observe that it
-// did something rather than only that it returned nil.
-func (s *InMemory) Closed() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.closed
-}
-
 // contextErr reports a cancelled or expired context and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

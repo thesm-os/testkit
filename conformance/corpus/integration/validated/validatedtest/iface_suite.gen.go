@@ -69,6 +69,13 @@ func DefaultStoreFixture() StoreFixture {
 //	          lying. StoreWithoutDouble declines it.
 //	Extend:   StoreOnPut, StoreOnGet
 //	Drop:     StoreWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Put
 func AssertStoreContract(t *testing.T, opts ...StoreOption) {
 	t.Helper()
 	cfg := newStoreConfig(opts...)
@@ -499,4 +506,4 @@ func (c *storeConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9ff6b292a4df5eca49f29a875b593f471885a57c4ce0433afac9ace16f9a4884
+// testkit:provenance 19c5e22c4319e199d4ab51d2d218d0d126719058771f7c5908301a85649b69fb

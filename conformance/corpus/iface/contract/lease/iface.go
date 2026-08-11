@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out leasetest/ pkg=leasetest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Acquire is the lease contract's acquire role, and hosts the directive
 	// that names its partners.

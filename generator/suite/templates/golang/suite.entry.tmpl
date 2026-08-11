@@ -19,6 +19,33 @@ per implementation, which is where the statements drift.
 {{- end }}
 //	Extend:   {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ $.IfaceName }}On{{ $m.Name }}{{ end }}
 //	Drop:     {{ .IfaceName }}Without, by the path each check reports under
+{{- with .Unwritten }}
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+{{- range . }}
+//   - {{ .Name }}, on {{ .MethodList }} — write it with {{ $.IfaceName }}On{{ index .Methods 0 }}
+{{- end }}
+{{- end }}
+{{- with .Elsewhere }}
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+{{- range . }}
+//   - {{ .Name }}, on {{ .MethodList }}
+{{- end }}
+{{- end }}
+{{- if .Unfalsifiable }}
+//
+// Nothing proves these checks are able to fail —
+// {{ .Unfalsifiable }}.
+{{- end }}
 func {{ .EntryName }}{{ renderTypeParams .TypeParams }}(t *{{ renderExpr (external "testing" "T") }}, opts ...{{ .IfaceName }}Option{{ .TypeArgs }}) {
 	t.Helper()
 	cfg := new{{ .IfaceName }}Config{{ .TypeArgs }}(opts...)
@@ -56,6 +83,14 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 {{ range $m := .Methods }}
 		t.Run({{ printf "%q" $m.Name }}, func(t *{{ renderExpr (external "testing" "T") }}) {
 			t.Parallel()
+{{- if $m.IntegrationOnly }}
+			// {{ $m.Name }} reaches something outside this process, so its
+			// checks run where that exists and skip where it does not.
+			// Unset is a skip rather than a pass: a check that succeeded
+			// because its dependency was absent reports coverage it did not
+			// earn.
+			{{ renderExpr (external $.Runtime "RequireEnv") }}(t, {{ printf "%q" $.IntegrationEnv }})
+{{- end }}
 {{- range $ck := $m.Checks }}
 			cfg.run(t, {{ printf "%q" $ck.Path }}, {{ printf "%q" $ck.Subtest }}, func(tb {{ renderExpr (external "testing" "TB") }}) {
 				{{ $ck.Func }}{{ $.TypeArgs }}(tb, {{ if $ck.NeedsClock }}cfg.clock, {{ end }}cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }}{{ range $ck.Extra }}, cfg.Fixture.{{ .Field }}{{ end }})

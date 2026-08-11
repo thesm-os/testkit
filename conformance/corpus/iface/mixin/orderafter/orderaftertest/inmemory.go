@@ -61,14 +61,6 @@ func (s *InMemory) Commit(ctx context.Context) error {
 	return nil
 }
 
-// Commits reports how many commits landed, which the interface exposes no way
-// to observe.
-func (s *InMemory) Commits() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.commits
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

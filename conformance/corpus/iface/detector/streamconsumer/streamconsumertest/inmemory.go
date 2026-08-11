@@ -73,16 +73,6 @@ func (s *InMemory) Ingest(ctx context.Context, src streamconsumer.Source) (int, 
 	return len(taken), nil
 }
 
-// Ingested reports what was taken, which the interface exposes no way to
-// observe — Ingest answers how many, never which.
-func (s *InMemory) Ingested() []streamconsumer.Value {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]streamconsumer.Value, len(s.ingested))
-	copy(out, s.ingested)
-	return out
-}
-
 // SliceSource is the subject the Source contract is run against: a stream over
 // a fixed slice.
 type SliceSource struct {

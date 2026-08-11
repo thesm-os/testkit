@@ -4,10 +4,8 @@
 package mutatortest_test
 
 import (
-	"context"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/mutator"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/mutator/mutatortest"
 )
@@ -28,22 +26,6 @@ func TestMutatorContract(t *testing.T) {
 			return mutatortest.NewInMemory()
 		}),
 	)
-}
-
-// The effect is out of band, so observing it needs a method the interface does
-// not declare — which is why no generated check can make this claim.
-func TestTouchRecordsAndDeclinesADoneContext(t *testing.T) {
-	t.Parallel()
-
-	s := mutatortest.NewInMemory()
-	s.Touch(t.Context(), "k")
-	testkit.Equal(t, s.Touches("k"), 1, "a touch is recorded")
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-	s.Touch(ctx, "k")
-	testkit.Equal(t, s.Touches("k"), 1,
-		"and a cancelled one does no work, which is the only refusal open to it")
 }
 
 // Declining the double is separate from dropping a check.

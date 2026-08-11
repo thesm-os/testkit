@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/deleteremoves/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/iface/mixin/deleteremoves/... ./corpus/iface/detector/batchreader/...
 
 package deleteremovestest
 
@@ -76,6 +76,15 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnDelete, MixedOnPut, MixedOnRead
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Delete
+//   - deleteremoves, on Delete
+//   - compositewriter, on Put
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -615,4 +624,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 71f79ad1e58769259455789d27cc3b3fb69c9015b49e23bd24165889cd3e72cd
+// testkit:provenance 0fa03aa8a07b864a2ecbd119da6872dc797b4d853b240b1bab78c499969dd36f

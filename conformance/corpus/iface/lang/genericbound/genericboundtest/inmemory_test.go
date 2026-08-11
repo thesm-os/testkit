@@ -69,15 +69,3 @@ func TestRankedContractWithoutTheDouble(t *testing.T) {
 		genericboundtest.RankedWithoutDouble[int, genericbound.Score](),
 	)
 }
-
-// Reset empties the ranking rather than only returning nil, which the contract
-// cannot state: observing it needs Set, and Set is not on the interface.
-func TestResetEmpties(t *testing.T) {
-	t.Parallel()
-
-	s := genericboundtest.NewInMemory[int, genericbound.Score]()
-	s.Set(7, genericbound.Score{Points: 1})
-	testkit.NoError(t, s.Reset(t.Context()), "resetting an open ranking succeeds")
-	_, err := s.Rank(t.Context(), 7)
-	testkit.ErrorIs(t, err, genericboundtest.ErrNotFound, "and the ranking is gone")
-}

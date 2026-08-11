@@ -51,6 +51,13 @@ func DefaultPureFixture() PureFixture {
 //	          lying. PureWithoutDouble declines it.
 //	Extend:   PureOnDescribe
 //	Drop:     PureWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - pure, on Describe
 func AssertPureContract(t *testing.T, opts ...PureOption) {
 	t.Helper()
 	cfg := newPureConfig(opts...)
@@ -264,4 +271,4 @@ func (c *pureConfig) run(t *testing.T, path, name string, fn func(tb testing.TB)
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9538185ee5ab86f0e1e85c64f60faf64d6537b2e3d1d1f234fd7d77148bf7e96
+// testkit:provenance 1a637a2b2346ced2a6d68801779fd92d6b78f02e70272bb57cf577f0ef2ae207

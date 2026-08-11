@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/wrappedvia/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/iface/mixin/validates/... ./corpus/iface/mixin/wrappedvia/...
 
 package wrappedviatest
 
@@ -58,13 +58,21 @@ func DefaultMixedFixture() MixedFixture {
 
 // AssertMixedContract runs every generated check against every declared subject.
 //
-//	Checks:   8 across 2 methods, per subject
+//	Checks:   9 across 2 methods, per subject
 //	Subjects: declare each with MixedSubject
 //	Double:   every subject runs a second time wrapped in MixedStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnOpen, MixedOnCause
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Open
+//   - lifecycle, on Cause
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -111,6 +119,9 @@ func runMixedChecks(
 			})
 			cfg.run(t, "Open/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
 				AssertMixedOpenToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Name)
+			})
+			cfg.run(t, "Open/wrappedvia", "wrappedvia", func(tb testing.TB) {
+				AssertMixedOpenWrapsCause(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Name)
 			})
 			for _, c := range cfg.onOpen {
 				cfg.run(t, "Open"+"/"+c.name, c.name, func(tb testing.TB) {
@@ -215,6 +226,27 @@ func AssertMixedOpenToleratesNilContext(tb testing.TB, subject wrappedvia.Mixed,
 	//nolint:staticcheck // passing nil is the check.
 	var ctx context.Context
 	_ = subject.Open(ctx, name)
+}
+
+// AssertMixedOpenWrapsCause asserts a failure from Open carries what Cause reports.
+//
+// Fails when: Open fails without the cause reachable through
+// errors.Is. A caller who wrote `errors.Is(err, target)` against the documented
+// cause gets false, and the branch they wrote for it never runs — which is a
+// defect no assertion about the error's presence catches.
+func AssertMixedOpenWrapsCause(tb testing.TB, subject wrappedvia.Mixed, name string) {
+	tb.Helper()
+	ctx := tb.Context()
+	cause := subject.Cause(ctx)
+	if cause == nil {
+		// Nothing to wrap, so nothing to claim. A subject in good health is not
+		// a subject in breach.
+		return
+	}
+
+	err := subject.Open(ctx, name)
+	testkit.ErrorIs(tb, err, cause,
+		"Open must report Cause's cause where errors.Is can find it")
 }
 
 // AssertMixedCauseSmoke asserts Cause survives a call with derived inputs.
@@ -472,4 +504,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance bd335a279c9b96d614c6d34215f8ff5ab49b99ca2c6bfed9ae1f2481eab06efe
+// testkit:provenance 5affd3e903111d862f42304712acf82111d2c7ec86934468843f3c0ec627bdbe

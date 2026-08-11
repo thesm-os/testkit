@@ -1,0 +1,21 @@
+{{- /*
+A store that accepts every write, which is the difference between "create" and
+"save" and the one thing the if-absent contract is about.
+*/ -}}
+{{- define "suite.violate.ifabsent" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in accepts the second write of one value. A check that let that
+// pass would report success for a store that silently loses whatever the first
+// caller wrote — which satisfies every other check in the harness.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+{{- template "suite.violate.zeros" $m }}
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

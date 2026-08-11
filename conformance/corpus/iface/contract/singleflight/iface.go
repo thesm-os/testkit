@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out singleflighttest/ pkg=singleflighttest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Run is the singleflight contract's fn role, and hosts the directive
 	// that names its partners.

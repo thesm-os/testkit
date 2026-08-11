@@ -89,6 +89,9 @@ func TestGoTemplates(t *testing.T) {
 			"mixin/suite.check.partition.tmpl",
 			"mixin/suite.check.hooks.tmpl",
 			"mixin/suite.check.sample.tmpl",
+			"contract/suite.check.ifabsent.tmpl",
+			"contract/suite.check.ifmatch.tmpl",
+			"contract/suite.check.outbox.tmpl",
 		} {
 			testkit.True(t, hasTemplate(t, name), name+" must ship")
 		}

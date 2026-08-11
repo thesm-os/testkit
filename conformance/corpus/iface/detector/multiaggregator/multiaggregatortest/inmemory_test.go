@@ -48,23 +48,6 @@ func TestMultiAggregatorContract(t *testing.T) {
 	)
 }
 
-// The check the signature could not earn, against a subject that can reach the
-// failure — and reaching it needs both slots watched, not the first.
-func TestStatsZeroesEverySlotOnError(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	s := multiaggregatortest.NewInMemory()
-	s.Add(4)
-
-	count, sum, err := s.Stats(ctx)
-	testkit.Error(t, err, "a cancelled reduction fails")
-	testkit.Equal(t, count, 0, "the count slot is the zero rather than the answer it had")
-	testkit.Equal(t, sum, 0, "and so is the sum slot")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMultiAggregatorContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

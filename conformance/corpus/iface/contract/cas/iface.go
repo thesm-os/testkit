@@ -20,6 +20,7 @@ type Value struct{ Key, Body string }
 //
 //testkit:out castest/ pkg=castest
 //testkit:stub
+//testkit:suite
 type Contract interface {
 	// Put is the cas contract's writer role, and hosts the directive
 	// that names its partners.

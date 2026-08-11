@@ -48,14 +48,6 @@ func (s *InMemory) Connect(ctx context.Context, dsn string) error {
 	return nil
 }
 
-// Connected reports whether Connect succeeded, which the interface does not
-// expose.
-func (s *InMemory) Connected() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.connected
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

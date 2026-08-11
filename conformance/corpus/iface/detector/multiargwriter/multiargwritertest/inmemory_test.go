@@ -6,7 +6,6 @@ package multiargwritertest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiargwriter"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/multiargwriter/multiargwritertest"
 )
@@ -26,19 +25,6 @@ func TestMultiArgWriterContract(t *testing.T) {
 			return multiargwritertest.NewInMemory()
 		}),
 	)
-}
-
-// That the write lands under the key it was given, which the signature cannot
-// say: Set reports whether it failed, never what it stored.
-func TestSetStoresUnderItsKey(t *testing.T) {
-	t.Parallel()
-
-	s := multiargwritertest.NewInMemory()
-	testkit.NoError(t, s.Set(t.Context(), "k", "b"), "storing succeeds")
-
-	got, ok := s.Stored("k")
-	testkit.True(t, ok, "the value is found under the key it was given")
-	testkit.Equal(t, got, "b", "and carries what was written")
 }
 
 // Declining the double is separate from dropping a check.

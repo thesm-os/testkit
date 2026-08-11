@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/streamreflectsmutations/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package streamreflectsmutationstest
 
@@ -65,6 +65,15 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnStream, MixedOnAdd
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - streamreader, on Stream
+//   - streamreflectsmutations, on Stream
+//   - writer, on Add
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -426,4 +435,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7967072b723e2f5b6706d09f352849a74e745a9053dc2b8324181ecc1f3e44d5
+// testkit:provenance 8c72ed00b82eebd991fa3b9ff20599253f8e8beef5bd079b97bb6f5835992d78

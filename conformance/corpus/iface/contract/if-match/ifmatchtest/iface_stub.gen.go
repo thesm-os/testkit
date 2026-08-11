@@ -27,6 +27,18 @@ type ContractPutCall struct {
 	Err error
 }
 
+// ContractMatchCall records one invocation of Contract.Match.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractMatchCall struct {
+	Ctx    context.Context
+	V      ifmatch.Value
+	Result bool
+	Err    error
+}
+
 // --- Per-method configuration ---
 
 // ContractPutStub controls how the double answers Put and records
@@ -61,6 +73,39 @@ func (s *ContractPutStub) Func(fn func(context.Context, ifmatch.Value) error) *C
 	return s
 }
 
+// ContractMatchStub controls how the double answers Match and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractMatchStub struct {
+	*stub.MethodStub[ContractMatchCall]
+
+	fn       func(context.Context, ifmatch.Value) (bool, error)
+	fallback *ContractMatchReturn
+}
+
+// ContractMatchReturn holds the fixed answer configured through Returns.
+type ContractMatchReturn struct {
+	Result bool
+	Err    error
+}
+
+// Returns pins a fixed result for every call to Match. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractMatchStub) Returns(result bool, err error) *ContractMatchStub {
+	s.fallback = &ContractMatchReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for Match, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractMatchStub) Func(fn func(context.Context, ifmatch.Value) (bool, error)) *ContractMatchStub {
+	s.fn = fn
+	return s
+}
+
 // --- ContractStub ---
 
 // ContractStubOption configures a [ContractStub] at construction time.
@@ -81,6 +126,7 @@ func ContractStubStrict() ContractStubOption {
 func ContractStubDelegateTo(impl ifmatch.Contract) ContractStubOption {
 	return func(s *ContractStub) {
 		s.OnPut.Func(impl.Put)
+		s.OnMatch.Func(impl.Match)
 	}
 }
 
@@ -123,12 +169,20 @@ func WithContractPut(fn func(context.Context, ifmatch.Value) error) ContractStub
 	return func(s *ContractStub) { s.OnPut.Func(fn) }
 }
 
+// WithContractMatch sets Match's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractMatch(fn func(context.Context, ifmatch.Value) (bool, error)) ContractStubOption {
+	return func(s *ContractStub) { s.OnMatch.Func(fn) }
+}
+
 // ContractStub is a recording test double for Contract.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type ContractStub struct {
-	OnPut *ContractPutStub
+	OnPut   *ContractPutStub
+	OnMatch *ContractMatchStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -153,10 +207,12 @@ var _ ifmatch.Contract = (*ContractStub)(nil)
 // and non-test callers want.
 func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
-		OnPut: &ContractPutStub{MethodStub: stub.NewMethodStub[ContractPutCall](tb, "Contract.Put")},
+		OnPut:   &ContractPutStub{MethodStub: stub.NewMethodStub[ContractPutCall](tb, "Contract.Put")},
+		OnMatch: &ContractMatchStub{MethodStub: stub.NewMethodStub[ContractMatchCall](tb, "Contract.Match")},
 	}
 	s.all = []stub.Configurable{
 		s.OnPut.MethodStub,
+		s.OnMatch.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -224,5 +280,38 @@ func (s *ContractStub) Put(ctx context.Context, v ifmatch.Value) error {
 	return r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *ContractMatchStub) invoke(ctx context.Context, v ifmatch.Value) func() ContractMatchReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractMatchReturn {
+		r0, r1 := s.fn(ctx, v)
+		return ContractMatchReturn{Result: r0, Err: r1}
+	}
+}
+
+// Match records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) Match(ctx context.Context, v ifmatch.Value) (bool, error) {
+	call := ContractMatchCall{Ctx: ctx, V: v}
+	r := stub.Answer(s.OnMatch.MethodStub, &call, stub.Arms[ContractMatchCall, ContractMatchReturn]{
+		Invoke:   s.OnMatch.invoke(ctx, v),
+		Fallback: s.OnMatch.fallback,
+		Fault:    func(err error) ContractMatchReturn { return ContractMatchReturn{Err: err} },
+		Stamp: func(c *ContractMatchCall, r ContractMatchReturn) {
+			c.Result = r.Result
+			c.Err = r.Err
+		},
+	})
+	return r.Result, r.Err
+}
+
 // testkit: end of generated content.
-// testkit:provenance e3e2ffeade2e2b647a555e16d473a4d3b4b712bdd90c2fbfddbe2844d18c630f
+// testkit:provenance 60ae07495315d9000052dfa9c35ab4d83d1f4daf64c0ea3d79d07a417c49a5c5

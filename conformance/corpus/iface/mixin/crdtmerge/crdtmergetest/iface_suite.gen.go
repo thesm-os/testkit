@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/crdtmerge/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/crdtmerge/...
+// Command:   testkit run ./corpus/...
 
 package crdtmergetest
 
@@ -59,6 +59,13 @@ func DefaultReplicaFixture() ReplicaFixture {
 //	          lying. ReplicaWithoutDouble declines it.
 //	Extend:   ReplicaOnItems
 //	Drop:     ReplicaWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - aggregator, on Items
 func AssertReplicaContract(t *testing.T, opts ...ReplicaOption) {
 	t.Helper()
 	cfg := newReplicaConfig(opts...)
@@ -403,6 +410,15 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnMerge, MixedOnAdd, MixedOnItems
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Merge, Add
+//   - crdtmerge, on Merge
+//   - aggregator, on Items
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -919,4 +935,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8d743ae0afcce290c1b8e563f711094ddf95ab6676940686de4348514c1380ec
+// testkit:provenance d187a053d7d568b0e62f88dd54ad741e603f596a16154b691169a00f7b1fda66

@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/lifecycleafterclose/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package lifecycleafterclosetest
 
@@ -60,6 +60,14 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnClose, MixedOnWork
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - lifecycle, on Close, Work
+//   - lifecycleafterclose, on Close
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -450,4 +458,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 017cd3491f83eea741c58bc0ab7d21aa4482c45b0702a729eaef9c7ea6477141
+// testkit:provenance cb7edc336f18f3f589ef89cc756d0b32889e3f86c13b5c897435791a0469b2f9

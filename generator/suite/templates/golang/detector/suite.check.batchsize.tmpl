@@ -1,0 +1,38 @@
+{{- /*
+The one detector claim about arity rather than absence. A batch reader answering
+once for many keys hands back a plausible non-empty slice, so every zero
+comparison in the miss family passes against it.
+*/ -}}
+{{- define "suite.check.batchsize" -}}
+{{ $m := .Method }}
+// {{ .Func }} asserts {{ $m.Name }} answers once per key it was given.
+//
+// Fails when: a call that answered returned a count different from the number
+// of keys. A reader answering once for two keys hands back something that looks
+// like a result, and a caller zipping the two lists reads every value against
+// the wrong key.
+//
+// Two keys, because one cannot distinguish "per key" from "at all" — which is
+// what the fixture's second value is for. And only for a call that succeeded:
+// the second key is derived to be absent, so a reader that refuses a batch
+// containing a miss is refusing this one, and that is a design the shape allows
+// rather than a defect.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}
+	{{- range .Extra }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if $m.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}got{{ end }}{{ end }} := subject.{{ $m.Name }}({{ if $m.TakesContext }}ctx, {{ end }}{{ range $i, $a := .SecondCall }}{{ if $i }}, {{ end }}{{ $a }}{{ end }})
+	if err != nil {
+		// The second key is the fixture's "should not be found", so a reader
+		// that fails a batch on any miss is refusing this one — which is a
+		// design the shape permits. There is no count to make about a call that
+		// did not answer.
+		return
+	}
+	{{ renderExpr (external $.Runtime "Len") }}(tb, got, 2,
+		"{{ $m.Name }} must answer once per key it was given")
+}
+{{- end -}}

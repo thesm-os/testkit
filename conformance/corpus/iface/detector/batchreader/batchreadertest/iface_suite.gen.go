@@ -59,7 +59,7 @@ func DefaultBatchReaderFixture() BatchReaderFixture {
 
 // AssertBatchReaderContract runs every generated check against every declared subject.
 //
-//	Checks:   5 across 1 method, per subject
+//	Checks:   6 across 1 method, per subject
 //	Subjects: declare each with BatchReaderSubject
 //	Double:   every subject runs a second time wrapped in BatchReaderStub, so
 //	          anything the wrapper fails that the subject passes is the double
@@ -115,6 +115,9 @@ func runBatchReaderChecks(
 			})
 			cfg.run(t, "GetAll/an error carries the zero value", "an error carries the zero value", func(tb testing.TB) {
 				AssertBatchReaderGetAllZeroOnError(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.KeysOther)
+			})
+			cfg.run(t, "GetAll/answers once per key", "answers once per key", func(tb testing.TB) {
+				AssertBatchReaderGetAllAnswersPerKey(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Keys, cfg.Fixture.KeysOther)
 			})
 			for _, c := range cfg.onGetAll {
 				cfg.run(t, "GetAll"+"/"+c.name, c.name, func(tb testing.TB) {
@@ -218,6 +221,33 @@ func AssertBatchReaderGetAllZeroOnError(tb testing.TB, subject batchreader.Batch
 		testkit.Equal(tb, r0, zero,
 			"GetAll must return the zero value alongside an error")
 	}
+}
+
+// AssertBatchReaderGetAllAnswersPerKey asserts GetAll answers once per key it was given.
+//
+// Fails when: a call that answered returned a count different from the number
+// of keys. A reader answering once for two keys hands back something that looks
+// like a result, and a caller zipping the two lists reads every value against
+// the wrong key.
+//
+// Two keys, because one cannot distinguish "per key" from "at all" — which is
+// what the fixture's second value is for. And only for a call that succeeded:
+// the second key is derived to be absent, so a reader that refuses a batch
+// containing a miss is refusing this one, and that is a design the shape allows
+// rather than a defect.
+func AssertBatchReaderGetAllAnswersPerKey(tb testing.TB, subject batchreader.BatchReader, keys string, keysOther string) {
+	tb.Helper()
+	ctx := tb.Context()
+	got, err := subject.GetAll(ctx, keys, keysOther)
+	if err != nil {
+		// The second key is the fixture's "should not be found", so a reader
+		// that fails a batch on any miss is refusing this one — which is a
+		// design the shape permits. There is no count to make about a call that
+		// did not answer.
+		return
+	}
+	testkit.Len(tb, got, 2,
+		"GetAll must answer once per key it was given")
 }
 
 // BatchReaderOption configures a contract run.
@@ -370,4 +400,4 @@ func (c *batchreaderConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance b6ce6e8b5aa86fa949828b65f4d15f521e01f8958e8fffdb5dfbe1d611c90131
+// testkit:provenance c9739e50392eee1d72737390ce34700a662b82c6c0d32582766c54095ba9c483

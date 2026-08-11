@@ -29,6 +29,7 @@ var ErrHeld = errors.New("leasedidempotentwriter: already held")
 //
 //testkit:out leasedidempotentwritertest/ pkg=leasedidempotentwritertest
 //testkit:stub
+//testkit:suite
 type LeasedWriter interface {
 	// Acquire hosts the lease contract and carries the idempotent mixin.
 	// Re-acquiring a lease this caller already holds is a no-op rather than a

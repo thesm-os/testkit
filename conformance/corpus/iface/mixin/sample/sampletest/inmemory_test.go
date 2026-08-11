@@ -38,30 +38,17 @@ func TestMixedContract(t *testing.T) {
 			"Process/smoke",
 			"Process/an error carries the zero value",
 		),
+		sampletest.MixedOnProcess("refuses an input the builder did not produce", func(
+			tb testing.TB, subject sample.Mixed, input string,
+		) {
+			tb.Helper()
+			// The constraint is what makes the mixin worth having: a Process
+			// accepting anything would pair with any builder, and the check
+			// that they fit would hold for a builder producing nonsense.
+			_, err := subject.Process(tb.Context(), "unshaped-"+input)
+			testkit.Error(tb, err, "an input outside the shape is refused")
+		}),
 	)
-}
-
-// The builder samples rather than returning one fixed member of the space, or
-// a suite running it a thousand times exercises one input a thousand times.
-func TestNewInputSamplesRatherThanRepeats(t *testing.T) {
-	t.Parallel()
-
-	s := sampletest.NewInMemory()
-	first, err := s.NewInput(t.Context())
-	testkit.NoError(t, err, "the first sample is produced")
-	second, err := s.NewInput(t.Context())
-	testkit.NoError(t, err, "and so is the second")
-	testkit.False(t, first == second, "consecutive samples differ")
-}
-
-// The refusal is real, which is what the generated check rests on.
-func TestProcessRefusesAnUnsampledInput(t *testing.T) {
-	t.Parallel()
-
-	s := sampletest.NewInMemory()
-	_, err := s.Process(t.Context(), "test-input")
-	testkit.ErrorIs(t, err, sampletest.ErrUnprocessable,
-		"a value the builder did not produce is refused")
 }
 
 // Declining the double is separate from dropping a check.

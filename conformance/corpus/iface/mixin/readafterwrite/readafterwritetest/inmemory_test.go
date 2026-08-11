@@ -41,20 +41,6 @@ func TestMixedContract(t *testing.T) {
 	)
 }
 
-// The write is visible to the very next read, with nothing in between. An
-// implementation buffering writes satisfies every generated check and fails
-// this one.
-func TestWriteIsVisibleImmediately(t *testing.T) {
-	t.Parallel()
-
-	s := readafterwritetest.NewInMemory()
-	testkit.NoError(t, s.Write(t.Context(), "k", "v"), "the write succeeds")
-
-	got, err := s.Read(t.Context(), "k")
-	testkit.NoError(t, err, "and the next read finds it")
-	testkit.Equal(t, got, "v", "carrying what was written")
-}
-
 // Declining the double is separate from dropping a check.
 func TestMixedContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

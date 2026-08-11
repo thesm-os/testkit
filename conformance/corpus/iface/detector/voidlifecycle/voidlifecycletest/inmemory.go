@@ -33,11 +33,3 @@ func (s *InMemory) Stop() {
 	defer s.mu.Unlock()
 	s.stops++
 }
-
-// Stopped reports whether teardown has run, which the interface exposes no way
-// to observe — a void method's whole effect is out of band.
-func (s *InMemory) Stopped() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.stops > 0
-}

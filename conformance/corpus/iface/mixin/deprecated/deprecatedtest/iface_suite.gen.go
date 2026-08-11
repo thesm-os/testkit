@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/deprecated/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package deprecatedtest
 
@@ -65,6 +65,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnOld, MixedOnNew
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - deprecated, on Old — write it with MixedOnOld
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -501,4 +508,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4ae000069cc4e0c00790d615028d5c48481c7e754d2b0c7bf92ab452abd10218
+// testkit:provenance 0be5752deb72751c837e33d44e277d7efa6ca4182faecc373ef92f1cda49c76f

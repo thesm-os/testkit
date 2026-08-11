@@ -412,11 +412,11 @@ reach; the rest add a model binding.
 
 | Contract | Tier | Check, or law |
 |---|---|---|
-| `batch-writer` | suite | a batch write succeeds and reports per-item outcomes |
 | `if-absent` | suite | a second write for one key is refused |
 | `if-match` | suite | a non-matching predicate refuses the write |
 | `outbox` | suite | an appended message reaches the subscriber |
 | `appender` | model | `AUTO-APPEND-ONLY-GROWS` |
+| `batch-writer` | model | `AUTO-ATOMIC-WRITE` |
 | `cache` | model | `AUTO-CACHEABLE` |
 | `cas` | model | `AUTO-CAS-ATOMIC-ONE-WINNER` |
 | `cursor` | model | `AUTO-CURSOR-NEXT-AFTER-CLOSE` |
@@ -436,6 +436,13 @@ reach; the rest add a model binding.
 | `leader-election` | **neither** | needs two subjects; no law |
 | `rate-limit` | **neither** | needs controlled time; no law |
 | `tx` | **neither** | needs accumulated begin/commit/rollback state; no law |
+
+`batch-writer` reads as this tier's until the rule is applied to it. `mode=atomic`
+is the claim that an error leaves observable state unchanged, and
+`AUTO-ATOMIC-WRITE` already implements exactly that — snapshot, write, and on
+failure compare the snapshot back. Discharging it needs an observation of the
+state, which the contract declares no reader role for, and a write that fails on
+demand. So it is the model tier's, by the same rule that placed `atomic` there.
 
 Four classifications are owned by no tier, and under ADR-0018 that fails the
 gate — correctly. Each is a law to write, not a suite check to invent: a

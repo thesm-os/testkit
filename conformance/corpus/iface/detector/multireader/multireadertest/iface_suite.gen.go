@@ -58,6 +58,13 @@ func DefaultMultiReaderFixture() MultiReaderFixture {
 //	          lying. MultiReaderWithoutDouble declines it.
 //	Extend:   MultiReaderOnGetWithMeta
 //	Drop:     MultiReaderWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - multireader, on GetWithMeta — write it with MultiReaderOnGetWithMeta
 func AssertMultiReaderContract(t *testing.T, opts ...MultiReaderOption) {
 	t.Helper()
 	cfg := newMultiReaderConfig(opts...)
@@ -367,4 +374,4 @@ func (c *multireaderConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance 44c786af5a50ce582f97e1f34e013719c519ccc375b5880d130ef3dd650eb3ca
+// testkit:provenance eef2ff74878be2396f56e51e98fdc4496754a3a7ae824bc5a549c90eca64b5b2

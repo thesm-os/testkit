@@ -63,13 +63,6 @@ func (s *InMemory) Put(key, value string) {
 	s.store[key] = value
 }
 
-// Misses reports how many reads reached the store rather than the cache.
-func (s *InMemory) Misses() int {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.misses
-}
-
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

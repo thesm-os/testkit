@@ -27,6 +27,19 @@ const GoTestSuffix = "_suite.gen_test.go"
 // selection address an output by tag, so the two files can be routed apart.
 const GoTestOutputTag = "test"
 
+// GoIntegrationEnv is the variable a run sets to include integration-only
+// checks.
+//
+// One name for every generated suite, so a consumer sets it once rather than
+// per interface. `//testkit:mixin integrationonly` names no variable — the
+// classification says the method reaches something outside the process, and
+// which switch turns that on is a fact about how a team runs their tests.
+//
+// Unset is a skip rather than a pass, which is the whole point: a check that
+// silently succeeded because its dependency was absent is a check that reports
+// coverage it did not earn.
+const GoIntegrationEnv = "TESTKIT_INTEGRATION"
+
 // Module is testkit's own import path, which the generated harness references
 // for its assertion helpers.
 //

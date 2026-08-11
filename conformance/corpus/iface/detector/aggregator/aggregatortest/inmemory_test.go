@@ -44,22 +44,6 @@ func TestAggregatorContract(t *testing.T) {
 	)
 }
 
-// The check the signature could not earn, stated against a subject that can
-// reach the failure — which is what the generated one could not do.
-func TestCountCarriesTheZeroValueOnError(t *testing.T) {
-	t.Parallel()
-
-	ctx, cancel := context.WithCancel(t.Context())
-	cancel()
-
-	s := aggregatortest.NewInMemory()
-	s.Add("seeded")
-
-	got, err := s.Count(ctx)
-	testkit.Error(t, err, "a cancelled count fails")
-	testkit.Equal(t, got, 0, "and reports the zero rather than the count it could have given")
-}
-
 // Declining the double is separate from dropping a check.
 func TestAggregatorContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()

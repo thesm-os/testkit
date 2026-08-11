@@ -36,25 +36,17 @@ func TestMixedContract(t *testing.T) {
 		// is the only outcome. That is the check working; it is dropped only
 		// because Read has no partition to hit until this suite writes one.
 		partitiontest.MixedWithout("Read/an error carries the zero value"),
+		partitiontest.MixedOnRead("reports a key its partition does not hold", func(
+			tb testing.TB, subject partition.Mixed, part, key string,
+		) {
+			tb.Helper()
+			// The miss, which the isolation check never reaches because both of
+			// its reads hit. A store answering for a key nobody wrote is
+			// indistinguishable from one that found it.
+			_, err := subject.Read(tb.Context(), part, key+"-absent")
+			testkit.Error(tb, err, "an unwritten key is a miss")
+		}),
 	)
-}
-
-// Isolation is per partition, not per key: a store hashing the two together
-// would satisfy the generated check and lose the ability to drop a partition.
-func TestPartitionsAreSeparateNamespaces(t *testing.T) {
-	t.Parallel()
-
-	s := partitiontest.NewInMemory()
-	testkit.NoError(t, s.Put(t.Context(), "a", "k", "one"), "writing to a succeeds")
-	testkit.NoError(t, s.Put(t.Context(), "b", "k", "two"), "writing to b succeeds")
-
-	got, err := s.Read(t.Context(), "a", "k")
-	testkit.NoError(t, err, "reading a succeeds")
-	testkit.Equal(t, got, "one", "and returns a's value")
-
-	_, err = s.Read(t.Context(), "c", "k")
-	testkit.ErrorIs(t, err, partitiontest.ErrNotFound,
-		"a partition nothing was written to holds nothing")
 }
 
 // Declining the double is separate from dropping a check.

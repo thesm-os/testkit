@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/concurrent/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package concurrenttest
 
@@ -71,6 +71,21 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnBump, MixedOnCount
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - concurrent, on Bump — write it with MixedOnBump
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - writer, on Bump
+//   - aggregator, on Count
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -478,4 +493,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 11c7a1a711db2484c8ab8178706c85944db762d8b26f1c8bb8eea7defef9a15b
+// testkit:provenance 9cc66aee251b6af7e4c1859354d5bfe55768481373f4048de3126635efa1ca2f

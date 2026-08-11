@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/idempotent/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package idempotenttest
 
@@ -69,6 +69,14 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnPut, MixedOnRead
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What is checked somewhere else
+//
+// These need a reference implementation to compare against, which a suite run
+// has no way to build. Nothing here asserts them and nothing here should:
+//
+//   - compositewriter, on Put
+//   - idempotent, on Put
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -499,4 +507,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9d18cdfa1de770ba2a4ac5e228b1d44915f2953d137f4f499823116c6667cc79
+// testkit:provenance 38de35c512b577dde4fc68819e3f2ad69ad2f86b8243df0db9d06a6d24acbea5

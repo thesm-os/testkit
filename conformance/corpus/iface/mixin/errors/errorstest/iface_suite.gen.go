@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/errors/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package errorstest
 
@@ -58,6 +58,13 @@ func DefaultMixedFixture() MixedFixture {
 //	          lying. MixedWithoutDouble declines it.
 //	Extend:   MixedOnGet
 //	Drop:     MixedWithout, by the path each check reports under
+//
+// # What this file does not check
+//
+// The interface declares these and nothing here asserts them. Each is statable
+// against a subject you can build, so the check is yours to write:
+//
+//   - errors, on Get — write it with MixedOnGet
 func AssertMixedContract(t *testing.T, opts ...MixedOption) {
 	t.Helper()
 	cfg := newMixedConfig(opts...)
@@ -362,4 +369,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 949187a91f8800815004dcddd53dd898c780c8d9548193136e81b3bcc3c8411d
+// testkit:provenance 2ca9d8c932073b766ba46198df0adf043853994524a14bfd62ad37b1ecfa685f

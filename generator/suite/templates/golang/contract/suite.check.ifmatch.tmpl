@@ -1,0 +1,41 @@
+{{- /*
+Agreement rather than refusal. "A non-matching value is refused" needs a value
+the subject's own predicate rejects, and neither the directive nor the signature
+says which one that is — so a derived value the predicate happens to admit would
+turn the check into a demand that a correct implementation fail.
+*/ -}}
+{{- define "suite.check.ifmatch" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .Func }} asserts the write agrees with the predicate that gates it.
+//
+// Fails when: {{ $m.Name }} accepts a value {{ $p.Name }} rejects, or refuses
+// one it admits. The contract is that the predicate decides, and a subject
+// whose writer decides something else is one where {{ $p.Name }} is
+// documentation.
+//
+// Both calls run against one subject, and in that order: the predicate is asked
+// about the state {{ $m.Name }} is about to act on, so asking afterwards would
+// be a question about a different state.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if or $m.TakesContext $p.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	{{ range $i, $r := $p.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}matchErr{{ else }}allowed{{ end }}{{ end }} := subject.{{ $p.Name }}({{ template "suite.partnerargs" $ }})
+{{- if $p.ReturnsError }}
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, matchErr,
+		"{{ $p.Name }} must be answerable for a value {{ $m.Name }} is offered")
+{{- end }}
+
+	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
+	if allowed {
+		{{ renderExpr (external $.Runtime "NoError") }}(tb, err,
+			"{{ $m.Name }} must accept what {{ $p.Name }} admits")
+		return
+	}
+	{{ renderExpr (external $.Runtime "Error") }}(tb, err,
+		"{{ $m.Name }} must refuse what {{ $p.Name }} rejects")
+}
+{{- end -}}
