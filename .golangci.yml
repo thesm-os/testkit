@@ -118,7 +118,11 @@ linters:
             - github.com/google/go-cmp
         # The conformance tier is the corpus and the gate that checks it. It
         # reads eidos's classification registries directly, because coverage is
-        # measured against them rather than declared in a manifest.
+        # measured against them rather than declared in a manifest — and the
+        # law catalogue in `engine`, because it is the only module that sees
+        # the identifiers, the laws and the selection rules at once. That edge
+        # is test-only and this module is unpublished, so it costs no consumer
+        # anything (docs/adr/0005).
         conformance:
           list-mode: strict
           files:
