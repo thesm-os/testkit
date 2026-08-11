@@ -1,0 +1,35 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+// Package readyourwrites is the mixin-axis fixture for the readyourwrites mixin, which
+// declares that a client always observes its own writes.
+//
+// The interface carries a write and a read because the claim relates them:
+// a read alone has nothing to be consistent with, and the generated subtest
+// would pass by having nothing to check.
+//
+// There is no negated form here. eidos declares the mixin directive
+// DenyNegation, because a mixin is opt-in and deleting the directive is
+// the suppression (docs/adr/0016).
+package readyourwrites
+
+import (
+	"context"
+)
+
+// Value is the payload the store holds.
+type Value struct{ Key, Body string }
+
+// Mixed is the fixture interface.
+//
+//testkit:out readyourwritestest/ pkg=readyourwritestest
+//testkit:stub
+//testkit:suite
+type Mixed interface {
+	// Store is the write the read is judged against.
+	Store(ctx context.Context, v Value) error
+
+	// Get reads a key, never returning a version older than this client wrote.
+	//testkit:mixin readyourwrites
+	Get(ctx context.Context, key string) (Value, error)
+}
