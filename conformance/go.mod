@@ -13,6 +13,7 @@ require (
 )
 
 require (
+	github.com/anishathalye/porcupine v1.1.0 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	golang.org/x/mod v0.38.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect

@@ -176,6 +176,35 @@ func TestUnreachableReasonsAreActionable(t *testing.T) {
 	}
 }
 
+// TestEveryBindingRowMatchesItsLaw holds the instantiation column to the
+// shipped structs, both halves.
+//
+// The type name is transcription and a transcription can drift —
+// AUTO-CURSOR-NEXT-AFTER-CLOSE's struct is CursorNextAfterCloseSentinel, so
+// nothing mechanical checks a row but this. The argument count is the sharper
+// edge: WriteObservable is [T, V, K] where ReadAfterWrite is [T, K, V], and a
+// row with the wrong arity renders a file that fails to compile in whichever
+// corpus package arms it first — after the generator ran clean.
+func TestEveryBindingRowMatchesItsLaw(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range tiers.Bound() {
+		b, _ := tiers.BindingFor(id)
+		typ, known := gate.LawTypes[id]
+		testkit.True(t, known, id+" is a law the census maps")
+		if !known {
+			continue
+		}
+
+		name, args, instantiated := strings.Cut(typ.Name(), "[")
+		testkit.Equal(t, b.Type, name,
+			id+"'s row names the struct that reports it")
+		testkit.True(t, instantiated, id+"'s census entry is instantiated")
+		testkit.Equal(t, len(b.Args)+1, strings.Count(args, ",")+1,
+			id+"'s row supplies one argument per type parameter after the subject")
+	}
+}
+
 // TestReportedIDDeclinesANonLaw covers the arm the table itself cannot reach.
 //
 // Every entry in [gate.LawTypes] implements ID, so the refusal is unreachable
