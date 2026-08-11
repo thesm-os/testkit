@@ -15,14 +15,24 @@ import "go.thesmos.sh/testkit/core/lawid"
 const (
 	// Detectors.
 	shapeAggregator      = "aggregator"
+	shapeBatchReader     = "batchreader"
 	shapeCompositeWriter = "compositewriter"
 	shapeLifecycle       = "lifecycle"
+	shapeLookup          = "lookup"
 	shapeMultiAggregator = "multiaggregator"
 	shapeMultiArgWriter  = "multiargwriter"
+	shapeMultiReader     = "multireader"
+	shapeMutator         = "mutator"
+	shapePointerReader   = "pointerreader"
 	shapePoisonAccessor  = "poisonaccessor"
 	shapePredicate       = "predicate"
 	shapePure            = "pure"
+	shapeReader          = "reader"
+	shapeReaderNoError   = "readernoerror"
+	shapeReaderWithBool  = "readerwithbool"
+	shapeStreamConsumer  = "streamconsumer"
 	shapeStreamReader    = "streamreader"
+	shapeVoidLifecycle   = "voidlifecycle"
 	shapeWriter          = "writer"
 
 	// Mixins.
@@ -151,12 +161,14 @@ const (
 	fieldAdvance    = "Advance"
 	fieldCall       = "Call"
 	fieldClose      = "Close"
+	fieldCount      = "Count"
 	fieldDrain      = "Drain"
 	fieldFactory    = "Factory"
 	fieldHash       = "Hash"
 	fieldKeyOf      = "KeyOf"
 	fieldKeys       = "Keys"
 	fieldPartitions = "Partitions"
+	fieldPut        = "Put"
 	fieldRead       = "Read"
 	fieldReplay     = "Replay"
 	fieldSentinel   = "Sentinel"
@@ -216,7 +228,7 @@ func countEquals(shape string) Rule {
 	return Rule{
 		Law:    lawid.CountEqualsReference,
 		Needs:  []string{shape},
-		Fields: []Field{{Name: "Count", Kind: KindRole, From: roleSelf}},
+		Fields: []Field{{Name: fieldCount, Kind: KindRole, From: roleSelf}},
 	}
 }
 
@@ -580,7 +592,7 @@ var rules = []Rule{
 		Law:   lawid.StreamReflectsMutations,
 		Needs: []string{mixinStreamReflects},
 		Fields: []Field{
-			{Name: "Put", Kind: KindRole, From: "streamreflectsmutations.mutate"},
+			{Name: fieldPut, Kind: KindRole, From: "streamreflectsmutations.mutate"},
 			// eidos#20: the mixin names the write half only.
 			{Name: "Delete", Kind: KindRole, From: "streamreflectsmutations.delete"},
 			{Name: fieldDrain, Kind: KindRole, From: roleSelf},
@@ -610,7 +622,7 @@ var rules = []Rule{
 		Law:   lawid.TTLExpiry,
 		Needs: []string{mixinTTL},
 		Fields: []Field{
-			{Name: "Put", Kind: KindRole, From: "ttl.put"},
+			{Name: fieldPut, Kind: KindRole, From: "ttl.put"},
 			{Name: fieldRead, Kind: KindRole, From: "ttl.read"},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
@@ -693,7 +705,7 @@ var rules = []Rule{
 		Fields: []Field{
 			// eidos#20: neither the increment nor the count is named.
 			{Name: "Incr", Kind: KindRole, From: "windowed.incr"},
-			{Name: "Count", Kind: KindRole, From: "windowed.count"},
+			{Name: fieldCount, Kind: KindRole, From: "windowed.count"},
 			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
 			{Name: "Window", Kind: KindConstant, From: paramWindowedWindow},
