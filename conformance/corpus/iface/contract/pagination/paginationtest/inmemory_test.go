@@ -33,7 +33,8 @@ func TestContractContract(t *testing.T) {
 			// The reader role is the only one declared, so nothing is derived
 			// to seed through and the hit path is unreachable without this.
 			subject.(*paginationtest.InMemory).Store(
-				pagination.Value{Key: fixture.Key, Body: "seeded"})
+				pagination.Value{Key: fixture.Key, Body: "seeded"},
+			)
 			return nil
 		}),
 		paginationtest.ContractOnGet("returns what was seeded", func(

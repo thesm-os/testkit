@@ -7,7 +7,7 @@ require (
 	go.thesmos.sh/eidos/backend/golang v1.13.3
 	go.thesmos.sh/eidos/eidostest v1.14.0
 	go.thesmos.sh/eidos/frontend/golang v1.14.0
-	go.thesmos.sh/eidos/plugins v1.14.1-0.20260811130503-facbe1723b61
+	go.thesmos.sh/eidos/plugins v1.14.1-0.20260811163345-5a472f390325
 	go.thesmos.sh/testkit v0.0.0-00010101000000-000000000000
 )
 

@@ -73,7 +73,6 @@ func DefaultTxWithRetryFixture() TxWithRetryFixture {
 // The interface declares these and nothing here asserts them. Each is statable
 // against a subject you can build, so the check is yours to write:
 //
-//   - tx, on Begin, Commit, Rollback — write it with TxWithRetryOnBegin
 //   - retrysucceeds, on Commit — write it with TxWithRetryOnCommit
 //
 // # What is checked somewhere else
@@ -82,6 +81,7 @@ func DefaultTxWithRetryFixture() TxWithRetryFixture {
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - lifecycle, on Begin, Commit, Rollback
+//   - tx, on Begin, Commit, Rollback
 func AssertTxWithRetryContract(t *testing.T, opts ...TxWithRetryOption) {
 	t.Helper()
 	cfg := newTxWithRetryConfig(opts...)
@@ -581,4 +581,4 @@ func (c *txwithretryConfig) run(t *testing.T, path, name string, fn func(tb test
 }
 
 // testkit: end of generated content.
-// testkit:provenance a7355f37f4a5005147723f119e3e573a1ce20044934f7acb2d4669d529f8124f
+// testkit:provenance d85b907c60ef88e947120eb9967f394667c5f8c4c24df234d9ee78375bd679fb

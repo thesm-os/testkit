@@ -66,9 +66,11 @@ func TestLeasedWriterContract(t *testing.T) {
 				"and one that wins can give it back")
 		}),
 		leasedidempotentwritertest.LeasedWriterOnAcquire(
-			"repeats without unbalancing the lease", repeatsWithoutUnbalancing),
+			"repeats without unbalancing the lease", repeatsWithoutUnbalancing,
+		),
 		leasedidempotentwritertest.LeasedWriterOnRelease(
-			"tolerates a key nobody holds", toleratesAnUnheldKey),
+			"tolerates a key nobody holds", toleratesAnUnheldKey,
+		),
 	)
 }
 

@@ -68,19 +68,13 @@ func DefaultContractFixture() ContractFixture {
 //	Extend:   ContractOnBegin, ContractOnCommit, ContractOnRollback
 //	Drop:     ContractWithout, by the path each check reports under
 //
-// # What this file does not check
-//
-// The interface declares these and nothing here asserts them. Each is statable
-// against a subject you can build, so the check is yours to write:
-//
-//   - tx, on Begin, Commit, Rollback — write it with ContractOnBegin
-//
 // # What is checked somewhere else
 //
 // These need a reference implementation to compare against, which a suite run
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 //   - lifecycle, on Begin, Commit, Rollback
+//   - tx, on Begin, Commit, Rollback
 func AssertContractContract(t *testing.T, opts ...ContractOption) {
 	t.Helper()
 	cfg := newContractConfig(opts...)
@@ -580,4 +574,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance fa91a04a4eab1f1fc2f75d249137110a514c59f73fe01478dff374fb43ffa5e8
+// testkit:provenance 9e0564572934c0c3e649bd7e8d3df9501a59d313a92551a8363dbcbbdc415842
