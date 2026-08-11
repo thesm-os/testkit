@@ -45,15 +45,22 @@ const (
 	mixinMonotonicReads    = "monotonicreads"
 	mixinMonotonicWrites   = "monotonicwrites"
 	mixinOverMatch         = "overmatch"
+	mixinNoDuplicates      = "noduplicates"
 	mixinPermutation       = "permutation"
+	mixinPointInTime       = "pointintime"
+	mixinPoisonable        = "poisonable"
 	mixinReadAfterWrite    = "readafterwrite"
+	mixinReadYourWrites    = "readyourwrites"
+	mixinScheduled         = "scheduled"
 	mixinSnapshotIsolation = "snapshotisolation"
 	mixinStableOrder       = "stableorder"
 	mixinSticky            = "sticky"
 	mixinStreamReflects    = "streamreflectsmutations"
 	mixinTamperEvident     = "tamperevident"
 	mixinTimeaware         = "timeaware"
+	mixinTimeout           = "timeout"
 	mixinTotal             = "total"
+	mixinTTL               = "ttl"
 	mixinWindowed          = "windowed"
 	mixinWritesFollowReads = "writesfollowreads"
 	mixinXSSSafe           = "xsssafe"
@@ -104,6 +111,19 @@ const (
 const (
 	paramBatchMode           = "shape.contract.batch-writer.param.mode"
 	paramBoundedLimit        = "shape.mixin.bounded.limit"
+	paramBoundedMin          = "shape.mixin.bounded.min"
+	paramCASMismatch         = "shape.contract.cas.param.mismatch"
+	paramCursorSentinel      = "shape.contract.cursor.param.sentinel"
+	paramDeleteSentinel      = "shape.mixin.deleteremoves.sentinel"
+	paramLeaseHeld           = "shape.contract.lease.param.held"
+	paramLeaseTimeout        = "shape.contract.lease.param.timeout"
+	paramLifecycleSentinel   = "shape.mixin.lifecycleafterclose.sentinel"
+	paramTimeoutDuration     = "shape.mixin.timeout.duration"
+	paramTransactionNotFound = "shape.contract.transaction.param.notfound"
+	paramTTLDuration         = "shape.mixin.ttl.duration"
+	paramTTLNotFound         = "shape.mixin.ttl.notfound"
+	paramTxClosed            = "shape.contract.tx.param.closed"
+	paramWindowedWindow      = "shape.mixin.windowed.window"
 	paramCodecFidelity       = "shape.contract.codec.param.fidelity"
 	paramPublisherMode       = "shape.contract.publisher.param.mode"
 	paramWorkflowTransitions = "shape.contract.workflow.param.transitions"
@@ -349,7 +369,7 @@ var rules = []Rule{
 			// Optional because zero is the floor of the counting shapes this
 			// attaches to; a signed quantity needs the option until eidos
 			// carries a second parameter.
-			{Name: "Min", Kind: KindSupplied, From: "min", Optional: true},
+			{Name: "Min", Kind: KindConstant, From: paramBoundedMin},
 			{Name: "Max", Kind: KindConstant, From: paramBoundedLimit},
 		},
 	},
@@ -412,7 +432,7 @@ var rules = []Rule{
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
 			// eidos#19: no classification names the not-found sentinel, and a
 			// nil one fails every correct subject — so this does not bind.
-			{Name: fieldSentinel, Kind: KindSupplied, From: optNotFound},
+			{Name: fieldSentinel, Kind: KindConstant, From: paramDeleteSentinel},
 		},
 	},
 
@@ -426,8 +446,8 @@ var rules = []Rule{
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
 			// eidos#20: `eventually` names neither the quiet window nor the
 			// anti-entropy round. Settle is skippable; Sync is the law.
-			{Name: "Settle", Kind: KindSupplied, From: "settle", Optional: true},
-			{Name: "Sync", Kind: KindSupplied, From: "sync"},
+			{Name: "Settle", Kind: KindRole, From: "eventually.settle", Optional: true},
+			{Name: "Sync", Kind: KindRole, From: "eventually.sync"},
 			{Name: "Snapshot", Kind: KindRole, From: familyReader},
 			// The join of the replica lattice — the consumer's algebra, and
 			// the one field on this law nothing could derive.
@@ -475,8 +495,8 @@ var rules = []Rule{
 		Fields: []Field{
 			// eidos#20: `leakfree` names neither half of the cycle whose
 			// balance is the whole claim.
-			{Name: "Open", Kind: KindSupplied, From: "open"},
-			{Name: fieldClose, Kind: KindSupplied, From: "close"},
+			{Name: "Open", Kind: KindRole, From: "leakfree.open"},
+			{Name: fieldClose, Kind: KindRole, From: "leakfree.close"},
 			{Name: "Cycles", Kind: KindDefault},
 			{Name: "Tolerance", Kind: KindDefault},
 		},
@@ -488,7 +508,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldClose, Kind: KindRole, From: "lifecycleafterclose.close"},
 			{Name: "Op", Kind: KindRole, From: roleSelf},
-			{Name: fieldSentinel, Kind: KindSupplied, From: optClosed}, // eidos#19
+			{Name: fieldSentinel, Kind: KindConstant, From: paramLifecycleSentinel},
 		},
 	},
 
@@ -551,7 +571,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: "Put", Kind: KindRole, From: "streamreflectsmutations.mutate"},
 			// eidos#20: the mixin names the write half only.
-			{Name: "Delete", Kind: KindSupplied, From: "delete"},
+			{Name: "Delete", Kind: KindRole, From: "streamreflectsmutations.delete"},
 			{Name: fieldDrain, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
 			{Name: fieldHash, Kind: KindHandle, From: handleIdentity},
@@ -564,36 +584,86 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: familyWriter},
 			// eidos#20: neither the tamper nor the verify is named.
-			{Name: "Tamper", Kind: KindSupplied, From: "tamper"},
-			{Name: "Verify", Kind: KindSupplied, From: "verify"},
+			{Name: "Tamper", Kind: KindRole, From: "tamperevident.tamper"},
+			{Name: "Verify", Kind: KindRole, From: "tamperevident.verify"},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
 		},
 	},
 
-	// The clock family. Every one advances a controlled clock, which the
-	// generator wires; every one also needs a duration the mixin does not
-	// carry, which is eidos#21.
+	// The clock family. `timeaware` marks the clock dependency; each claim
+	// carries its own quantity, because a lifetime on stored data and a
+	// deadline on an operation are different promises that happen to share a
+	// clock. Neither rule needs `timeaware` as well: a classification that
+	// names a duration has already said a clock is involved.
 	{
 		Law:   lawid.TTLExpiry,
-		Needs: []string{mixinTimeaware, shapeWriter},
+		Needs: []string{mixinTTL},
 		Fields: []Field{
-			{Name: "Put", Kind: KindRole, From: roleSelf},
-			{Name: fieldRead, Kind: KindRole, From: familyReader},
+			{Name: "Put", Kind: KindRole, From: "ttl.put"},
+			{Name: fieldRead, Kind: KindRole, From: "ttl.read"},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			{Name: "TTL", Kind: KindSupplied, From: "ttl"},
+			{Name: "TTL", Kind: KindConstant, From: paramTTLDuration},
 			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
-			{Name: "NotFound", Kind: KindSupplied, From: optNotFound},
+			{Name: "NotFound", Kind: KindConstant, From: paramTTLNotFound},
 		},
 	},
 	{
+		// `timeout duration=` already states exactly this law's claim — the
+		// callable respects a deadline and returns promptly when the context
+		// expires — so it selects it rather than a second stamp saying the
+		// same thing.
 		Law:   lawid.DeadlineRespecting,
-		Needs: []string{mixinTimeaware, shapeLifecycle},
+		Needs: []string{mixinTimeout},
 		Fields: []Field{
 			{Name: "Op", Kind: KindRole, From: roleSelf},
-			{Name: "Deadline", Kind: KindSupplied, From: "deadline"},
+			{Name: "Deadline", Kind: KindConstant, From: paramTimeoutDuration},
 			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
 			{Name: "AwaitFor", Kind: KindDefault},
+		},
+	},
+	{
+		Law:   lawid.ScheduledFiresAfterAdvance,
+		Needs: []string{mixinScheduled},
+		Fields: []Field{
+			{Name: "Schedule", Kind: KindRole, From: "scheduled.schedule"},
+			// The load-bearing half: a run that cannot count firings reports
+			// every scheduler as correct, including one that fires nothing.
+			{Name: "FiredCount", Kind: KindRole, From: "scheduled.fired"},
+			{Name: "Offsets", Kind: KindGenerator, From: genOffsets},
+			{Name: "N", Kind: KindDefault},
+			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
+		},
+	},
+
+	// The four mixins that completed their families.
+	{
+		Law:   lawid.StreamNoDuplicates,
+		Needs: []string{mixinNoDuplicates},
+		Fields: []Field{
+			{Name: fieldDrain, Kind: KindRole, From: roleSelf},
+			{Name: fieldHash, Kind: KindHandle, From: handleIdentity},
+		},
+	},
+	{
+		// Distinct from `cacheable`, which permits a concurrent write to be
+		// observed by the second read. This one does not.
+		Law:   lawid.PointInTime,
+		Needs: []string{mixinPointInTime},
+		Fields: []Field{
+			{Name: fieldRead, Kind: KindRole, From: roleSelf},
+			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
+			{Name: "Disturb", Kind: KindSupplied, From: "disturb", Optional: true},
+		},
+	},
+	perClient(lawid.ReadYourWrites, mixinReadYourWrites),
+	{
+		Law:   lawid.PoisonConsistent,
+		Needs: []string{mixinPoisonable},
+		Fields: []Field{
+			{Name: "Poison", Kind: KindRole, From: "poisonable.induce"},
+			{Name: "Probe", Kind: KindRole, From: roleSelf},
+			{Name: "Reads", Kind: KindDefault},
 		},
 	},
 
@@ -611,11 +681,11 @@ var rules = []Rule{
 		Needs: []string{mixinWindowed},
 		Fields: []Field{
 			// eidos#20: neither the increment nor the count is named.
-			{Name: "Incr", Kind: KindSupplied, From: "incr"},
-			{Name: "Count", Kind: KindSupplied, From: "count"},
+			{Name: "Incr", Kind: KindRole, From: "windowed.incr"},
+			{Name: "Count", Kind: KindRole, From: "windowed.count"},
 			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			{Name: "Window", Kind: KindSupplied, From: "window"}, // eidos#21
+			{Name: "Window", Kind: KindConstant, From: paramWindowedWindow},
 		},
 	},
 
@@ -669,7 +739,7 @@ var rules = []Rule{
 			{Name: "CAS", Kind: KindRole, From: "cas.writer"},
 			observed(fieldRead),
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			{Name: "Mismatch", Kind: KindSupplied, From: "mismatch"}, // eidos#19
+			{Name: "Mismatch", Kind: KindConstant, From: paramCASMismatch},
 		},
 	},
 
@@ -748,7 +818,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldClose, Kind: KindRole, From: "cursor.close"},
 			{Name: "Next", Kind: KindRole, From: "cursor.next"},
-			{Name: fieldSentinel, Kind: KindSupplied, From: optClosed}, // eidos#19
+			{Name: fieldSentinel, Kind: KindConstant, From: paramCursorSentinel},
 		},
 	},
 	{
@@ -764,7 +834,7 @@ var rules = []Rule{
 			{Name: "Acquire", Kind: KindRole, From: "lease.acquire"},
 			{Name: "Release", Kind: KindRole, From: "lease.release"},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			{Name: "Held", Kind: KindSupplied, From: "held"}, // eidos#19
+			{Name: "Held", Kind: KindConstant, From: paramLeaseHeld},
 		},
 	},
 	{
@@ -774,7 +844,7 @@ var rules = []Rule{
 			{Name: "Acquire", Kind: KindRole, From: "lease.acquire"},
 			{Name: "Free", Kind: KindSupplied, From: "free"},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			{Name: "Timeout", Kind: KindSupplied, From: "timeout"}, // eidos#21
+			{Name: "Timeout", Kind: KindConstant, From: paramLeaseTimeout},
 		},
 	},
 
@@ -883,7 +953,7 @@ var rules = []Rule{
 			{Name: "Run", Kind: KindRole, From: "transaction.fn"},
 			observed(fieldRead),
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			{Name: "NotFound", Kind: KindSupplied, From: optNotFound}, // eidos#19
+			{Name: "NotFound", Kind: KindConstant, From: paramTransactionNotFound},
 		},
 	},
 	{
@@ -968,7 +1038,7 @@ func publisherBound() []Field {
 	return []Field{
 		{Name: "Subscribe", Kind: KindRole, From: "publisher.subscribe"},
 		{Name: "Publish", Kind: KindRole, From: "publisher.publish"},
-		{Name: "Redeliver", Kind: KindSupplied, From: "redeliver", Optional: true}, // eidos#20
+		{Name: "Redeliver", Kind: KindRole, From: "publisher.redeliver", Optional: true},
 		{Name: fieldDrain, Kind: KindSupplied, From: optDrain},
 		{Name: "Messages", Kind: KindGenerator, From: genMessages},
 		{Name: "Mode", Kind: KindConstant, From: paramPublisherMode},
@@ -982,7 +1052,7 @@ func twoPhase() []Field {
 		{Name: "Begin", Kind: KindRole, From: "tx.begin"},
 		{Name: "Commit", Kind: KindRole, From: "tx.commit"},
 		{Name: "Rollback", Kind: KindRole, From: "tx.rollback"},
-		{Name: "Closed", Kind: KindSupplied, From: optClosed}, // eidos#19
+		{Name: "Closed", Kind: KindConstant, From: paramTxClosed},
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/core/equivalence"
 	"go.thesmos.sh/testkit/engine/model/law"
 )
 
@@ -173,6 +174,59 @@ func TestEventualConvergence(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, nil, nil); err == nil {
 				rt.Fatal("expected data-losing sync to be caught")
+			}
+		})
+	})
+
+	t.Run("a supplied equivalence decides what convergence means", func(t *testing.T) {
+		t.Parallel()
+		// Replicas that converge on content while disagreeing on per-replica
+		// bookkeeping — the shape every real anti-entropy protocol has, since
+		// a node identifier or a vector clock survives the merge. Strict
+		// equality calls that a failure, and the whole point of the field is
+		// that the consumer decides otherwise.
+		//
+		// Left nil the law compares strictly, which the subtests above cover.
+		// This one covers the other arm: a chain that is consulted rather
+		// than ignored.
+		l := law.EventualConvergence[*syncReplica, string, []string]{
+			Factory:  func() *syncReplica { return newSyncReplica(false) },
+			Replicas: 2,
+			Write:    func(_ *rapid.T, r *syncReplica, v string) error { r.write(v); return nil },
+			Values:   rapid.SampledFrom([]string{"a", "b"}),
+			Sync:     func(_ *rapid.T, rs []*syncReplica) error { unionSync(rs); return nil },
+			Snapshot: func(_ *rapid.T, r *syncReplica) []string { return r.snapshot() },
+			Merge:    mergeSorted,
+			Equal:    equivalence.NewChain().Add(equivalence.Strict()),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err != nil {
+				rt.Fatalf("a converging sync holds under an explicit relation: %v", err)
+			}
+		})
+	})
+
+	t.Run("a supplied equivalence still catches a losing sync", func(t *testing.T) {
+		t.Parallel()
+		// The guard on the subtest above: a chain that admitted everything
+		// would make it pass for the wrong reason, and the law would report
+		// convergence for a sync that dropped writes.
+		l := law.EventualConvergence[*syncReplica, string, []string]{
+			Factory:  func() *syncReplica { return newSyncReplica(false) },
+			Replicas: 2,
+			Write:    func(_ *rapid.T, r *syncReplica, v string) error { r.write(v); return nil },
+			// Unique, for the reason the no-op subtest above gives: one value
+			// routed to both replicas converges without any sync at all, and
+			// the guard would pass while proving nothing.
+			Values:   uniqueStringGen(),
+			Sync:     func(*rapid.T, []*syncReplica) error { return nil },
+			Snapshot: func(_ *rapid.T, r *syncReplica) []string { return r.snapshot() },
+			Merge:    mergeSorted,
+			Equal:    equivalence.NewChain().Add(equivalence.Strict()),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, nil, nil); err == nil {
+				rt.Fatal("a sync that propagates nothing is a violation under any relation")
 			}
 		})
 	})
