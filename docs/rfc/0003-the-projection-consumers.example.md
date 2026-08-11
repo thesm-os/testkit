@@ -227,9 +227,10 @@ learns between runs.
 
 ## model
 
-**Reads:** the `//testkit:model` stamp that arms it; the shape stamps (its
-own read — law selection is the model tier's); and the projection's fixture,
-seed and naming.
+**Reads:** the `//testkit:model` stamp that arms it; the projection's
+fixture, seed, naming and `Coverage` rows (which law covers which
+classification); and the shape stamps for binding material — roles, partner
+references, classification parameters.
 
 **The cluster map**, derived first. Edges: `Store` and `Read` agree on
 (`key=string` via the reader, `value=Payload`) — one CRUD cluster.

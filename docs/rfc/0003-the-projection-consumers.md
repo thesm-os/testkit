@@ -145,14 +145,22 @@ never used, so a corpus finding cannot be replayed against the harness.
 |---|---|---|
 | `bench` | `Subject`, `Fixture` (loop arguments), `Seed`, `Double`, `Method.Sig` | `//testkit:bench` stamps |
 | `fuzz` | `Subject`, `Fixture` (`Sample`/`Other` → corpus), `Method.Sig`; the enum generator's queued value (variant seeds) | `//testkit:fuzz` stamps; `validates`/`nilsafe`/`pure`/`bounded` stamps for the body; `bounded` params for off-by-one seeds |
-| `model` | `Subject`, `Fixture`, `Seed`, `Methods` (naming, signatures) | `//testkit:model` stamps; shape stamps (law selection is the model tier's own read) |
+| `model` | `Subject`, `Fixture`, `Seed`, `Methods` (naming, signatures), `Coverage` (`Ownership.Law` — which law covers which classification) | `//testkit:model` stamps; shape stamps for binding material — roles, partner references, classification parameters |
 
-`model` takes classifications from the source rather than the projection
-deliberately: the projection's `Check` values carry only the suite tier's
-checks, and a model-owned classification produces none of those — reading
-`Methods[].Checks` for `readafterwrite` would find silence and conclude
-correctly-nothing. The stamps are the annotator's vocabulary; the projection is
-`suite`'s derivation. Each is read where it is owned.
+`model` splits its read along the selection/binding line. **Which law covers
+which classification is the projection's fact**: `suite` already derives it —
+every `Coverage` row carries `Ownership.Law`, the identifier the harness
+header prints — and a second derivation of the same mapping in a second
+plugin is exactly the disagreement this rule exists to prevent, surfacing as
+a header that claims a law the bindings never registered. **What the binding
+is made of is the stamps' fact**: role closures come from the method carrying
+the classification, constants from the classification's own parameters,
+partner references from the contract and mixin stamps — none of which the
+projection carries, because none of it is `suite`'s derivation. The
+`Methods[].Checks` values are a substitute for neither: they carry only the
+suite tier's checks, and a model-owned classification produces none of those.
+The stamps are the annotator's vocabulary; the projection is `suite`'s
+derivation. Each is read where it is owned.
 
 **Stability.** All four plugins compile in one module, so renames and removals
 are the compiler's problem and cost nothing. The hazard is semantic — a field's
@@ -222,10 +230,16 @@ instantiates at the witnesses the source names — and the satellites inherit
 the same rule wholesale: the registry, every generated entry point, the
 adapter, the action set and the law registry are emitted **once per witness
 instantiation**, disambiguated the way the self-check already disambiguates
-its witnesses. A generic interface carrying `//testkit:bench` or
-`//testkit:fuzz` with no witness to instantiate at is a **diagnostic at the
+its witnesses. A generic interface carrying `//testkit:bench`,
+`//testkit:fuzz` or `//testkit:model` with no witness to instantiate at is a
+**diagnostic at the
 directive** — asked and impossible, the same rule fuzz applies to a
 non-decomposable parameter.
+
+The multiplication is the cost, and it is stated rather than hidden: N
+witnesses mean N registries, N entry points, N adapters, N mutation and
+exhaustive runs — and one registration per witness in the consumer's file.
+The witness list is the throttle, and it is the author's to keep short.
 
 ### bench
 
@@ -339,7 +353,7 @@ RFC-0002 records, at full strength, why the emit-everywhere-with-`fuzz=off`
 alternative lost; this RFC inherits that decision and does not reopen it.
 
 **Feasibility is Go's constraint, checked at codegen.** `f.Fuzz` accepts
-`string`, `[]byte`, `bool`, the sized and unsized integer types, and
+`string`, `[]byte`, `bool`, the integer types save `uintptr`, and
 `float32`/`float64`. An annotated method qualifies iff every non-context
 parameter is one of those, or a struct whose exported fields recursively
 decompose to them — `Store(ctx, Payload{Key, Body string})` fuzzes as two
@@ -417,7 +431,7 @@ func FuzzMixedStore(f *testing.F) {
     f.Add("other-key", "other-body")
     f.Fuzz(func(t *testing.T, key, body string) {
         for _, s := range subjects {
-            FuzzMixedStoreInput(t, s.New(), key, body)
+            validatestest.FuzzMixedStoreInput(t, s.New(), key, body)
         }
     })
 }
@@ -559,8 +573,9 @@ the source declaration, where every other ask already lives.
 
 #### What one interface gets
 
-**The law registry.** One binding per (declared classification → law) row of
-the ADR-0018 mapping, instantiated at the interface's concrete types with the
+**The law registry.** One binding per law-owning `Coverage` row of the
+projection — the (classification → law) selection `suite` derives from the
+gate's mapping — instantiated at the interface's concrete types with the
 projection's method names:
 
 ```go
@@ -578,7 +593,7 @@ func mixedModelLaws(gens mixedModelGens) *model.Registry[validates.Mixed] {
 }
 ```
 
-**How a binding is filled.** Fifty-odd law types do not get fifty-odd bespoke
+**How a binding is filled.** Eighty law types do not get eighty bespoke
 derivations. Every exported field of every law struct is one of four kinds,
 and each kind has exactly one source:
 
@@ -624,7 +639,7 @@ builder:
 
 ```go
 // _model.gen.go — one derivation, every harness.
-func mixedModelProperty(factory func() validates.Mixed,
+func MixedModelProperty(factory func() validates.Mixed,
     opts ...MixedModelOption) func(*rapid.T) {
     // actions, laws, reference, generators — assembled here, once
     return model.Property(factory, /* assembled options */)
@@ -633,10 +648,11 @@ func mixedModelProperty(factory func() validates.Mixed,
 
 The contract extension runs it through `model.Check`; the state-space fuzz
 target below runs it through `model.MakeFuzz`; the concurrent path shares
-its generators. One derivation, every harness. The builder is also exported
-as `MixedModelProperty`: it is the composition point a consumer with a
-bespoke harness needs, and hiding it forces them to rebuild the assembly by
-hand.
+its generators. One derivation, every harness. The builder is exported
+because it must be — the state-space fuzz target lives in the external test
+package and reaches it only through the package qualifier — and because it
+is the composition point a consumer with a bespoke harness needs, where an
+unexported assembly would force them to rebuild it by hand.
 
 **The state-space fuzz target.** `_model.gen_test.go` carries one
 `Fuzz<Iface>Model` entry per interface — `f.Fuzz(model.MakeFuzz(prop))` over
@@ -976,8 +992,9 @@ go test -fuzz FuzzMixedStore               # one method's input space
 go test -fuzz FuzzMixedModel               # the interface's sequence space
 ```
 
-This file is two declarations, and it grows by zero as methods gain
-annotations. RFC-0002's acceptance measure carries over sharpened: every
+This file is two declarations. It grows by zero as methods gain
+annotations, and by one registration per witness where the interface is
+generic. RFC-0002's acceptance measure carries over sharpened: every
 *further* line a consumer writes — a second subject, a
 `MixedModelReference`, a `MixedWithout` — is either a fact the source cannot
 state or a derivation not yet done, and the generated headers say which. The
@@ -1027,7 +1044,7 @@ depth, visibly, never the owed assertions.
 ## What the design rests on
 
 - **`sdk.PendingByOrigin` is proven in-repo.** `generator/fault/fault.go:465`
-  and `generator/suite/suite.go:356` both read `stub`'s queued value through
+  and `generator/suite/suite.go:654` both read `stub`'s queued value through
   it today; the three new readers add no mechanism.
 - **The runtime names this generator.** `model.Registry`: "The generator
   populates it with auto-derived laws"; `model/action`'s package doc: "the
@@ -1068,7 +1085,7 @@ table is the index, not the argument.
 | Question | Decision | Where |
 |---|---|---|
 | `mean=` / `mem=` have no runtime backing | `Contract.MeanMax` and `Contract.BytesMax` are commissioned build-order: they land first, `FailableTB`-tested, and the plugin ships all four keys at once. `mem=` stays beside `allocs=` — one large allocation and many small ones are different regressions. Percentile ceilings gain a sample floor: below one hundred iterations the metric is reported, not enforced | bench |
-| Where do the mappings live | Classification-to-law and shape-to-oracle are the same kind of data and live together in the conformance gate, each closed by a test: every model-owned classification names a law that registers, every derivable shape names an oracle that exists. The mapping also carries each oracle's modelled-role set (what the cluster rule selects on) and each law's field manifest (what the reflection test closes) | design; ADR-0018 |
+| Where do the mappings live | Classification-to-law and shape-to-oracle are the same kind of data and live together in the conformance gate, each closed by a test: every model-owned classification names a law that registers, every derivable shape names an oracle that exists. `suite` is the classification-to-law mapping's one reader — it fills `Coverage[].Ownership.Law`, and `model` takes the selection from the projection, so the test closes one derivation rather than checking that two copies agree. The mapping also carries each oracle's modelled-role set (what the cluster rule selects on) and each law's field manifest (what the reflection test closes) | design; ADR-0018 |
 | What if several oracles match | Clusters: connected components over partner declarations and key/value agreement; one oracle per cluster, chosen by modelled-method count with ties to the contract; partner-referenced methods take their partner role; a law arms iff the oracle models every method it touches; the header prints the cluster map | model |
 | Can an aggregate fuzz target exist | No — no `f.Run`, one `f.Fuzz` per target, per-signature corpus, and `-fuzz` refuses multi-target patterns. Per-method targets for input space; one `Fuzz<Iface>Model` per interface for sequence space | fuzz; model |
 | Does `bmc` get bound | Yes. The fixture pair is the deterministic action alphabet, the observational read-back fold is the state hash, and `Test<Iface>ModelExhaustive` proves absence within bounds per registered subject — guarded by alphabet feasibility at codegen and a replay-twice determinism probe at runtime | model |
