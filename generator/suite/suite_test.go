@@ -147,6 +147,142 @@ func TestCheckPaths(t *testing.T) {
 	})
 }
 
+// TestSeamMechanics runs the generated harness's extension slot the way a
+// generated sibling drives it, and holds it to the three facts every tier's
+// cost model rests on: an extension runs once per subject, against the plain
+// form only, and is dropped by its name with a visible skip.
+//
+// The probe is a source file injected into the rendered package — the only
+// vantage that can reach the unexported slot, which is the point of the slot:
+// a consumer cannot. The mechanics are identical text in every generated
+// harness, so one run here proves them for all; each armed package's live
+// proof is the model tier running through the same slot.
+func TestSeamMechanics(t *testing.T) {
+	t.Parallel()
+
+	// The double rides along because AssertTestsPass needs a generated test
+	// file to run, and the falsification companion is the one this fixture
+	// can produce — so the probe's claims run beside the guards that prove
+	// the checks can fail, the way they would in a consumer's package.
+	s := mixed(t)
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		iface.DirectiveList = append(iface.DirectiveList, storefixture.Directive("stub"))
+	}
+	gen := golangtest.Render(t, backendgolang.New(), packageOf(t, s), stub.New(), suite.New()).
+		WithSource(golangtest.GoFile("validates/iface.go", mixedSource())).
+		WithSource(golangtest.GoFile("validates/seam_probe_test.go", seamProbe())).
+		WithRequire(suite.Module, filepath.Join("..", ".."))
+	gen.AssertTestsPass(t)
+}
+
+// seamProbe is the injected internal-package test: a counting extension, two
+// subjects, and the drop path.
+func seamProbe() string {
+	return `package validates
+
+import (
+	"context"
+	"errors"
+	"sync/atomic"
+	"testing"
+)
+
+// memory is the smallest conforming subject the probe can drive.
+type memory struct{ data map[string]Payload }
+
+func newMemory() *memory { return &memory{data: map[string]Payload{}} }
+
+func (m *memory) Store(ctx context.Context, v Payload) error {
+	if ctx == nil {
+		return errors.New("validates: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	m.data[v.Key] = v
+	return nil
+}
+
+func (m *memory) Validate(Payload) error { return nil }
+
+func (m *memory) Read(ctx context.Context, key string) (Payload, error) {
+	if ctx == nil {
+		return Payload{}, errors.New("validates: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return Payload{}, err
+	}
+	v, ok := m.data[key]
+	if !ok {
+		return Payload{}, errors.New("validates: not found")
+	}
+	return v, nil
+}
+
+// counting is the shape a generated sibling registers: an option appending
+// one named body of checks that closes over its own configuration.
+func counting(runs *atomic.Int64) MixedOption {
+	return func(c *mixedConfig) {
+		c.extensions = append(c.extensions, mixedContractExtension{
+			name: "counting",
+			run: func(t *testing.T, subject string, factory func() Mixed, cfg *mixedConfig) {
+				t.Helper()
+				runs.Add(1)
+				if subject == "" {
+					t.Error("the run must be told which subject it is on")
+				}
+				if factory() == nil {
+					t.Error("and must be able to build one")
+				}
+			},
+		})
+	}
+}
+
+// TestSeamRunsOncePerSubject pins the cost model: two subjects, one run each,
+// and none through the double — the wrapped pass proves the stand-in and a
+// tier re-run through it would price the wrapper to say nothing new.
+//
+// The count is read from a cleanup: every subject runs in a parallel subtest,
+// so the assertion on the next line would read zero.
+func TestSeamRunsOncePerSubject(t *testing.T) {
+	t.Parallel()
+
+	var runs atomic.Int64
+	t.Cleanup(func() {
+		if got := runs.Load(); got != 2 {
+			t.Errorf("two subjects must mean two runs, got %d", got)
+		}
+	})
+
+	AssertMixedContract(t,
+		MixedSubject("a", func() Mixed { return newMemory() }),
+		MixedSubject("b", func() Mixed { return newMemory() }),
+		counting(&runs),
+	)
+}
+
+// TestSeamDroppedByName holds an extension to the exit every generated check
+// has: the path it reports under is the one MixedWithout declines.
+func TestSeamDroppedByName(t *testing.T) {
+	t.Parallel()
+
+	var runs atomic.Int64
+	t.Cleanup(func() {
+		if got := runs.Load(); got != 0 {
+			t.Errorf("a dropped extension must not run, got %d runs", got)
+		}
+	})
+
+	AssertMixedContract(t,
+		MixedSubject("a", func() Mixed { return newMemory() }),
+		counting(&runs),
+		MixedWithout("counting"),
+	)
+}
+`
+}
+
 // TestExtensionSlot holds the three declarations a generated sibling needs to
 // add a body of checks to the one entry point.
 //
