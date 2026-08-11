@@ -396,7 +396,18 @@ var rules = []Rule{
 		},
 	},
 
-	perClient(lawid.CausalOrdering, mixinCausal),
+	{
+		// Not the bare per-client shape its three siblings have: causality is
+		// a relation over operations, and no stamp can state which of two
+		// writes precedes the other. The consumer's domain decides.
+		Law:   lawid.CausalOrdering,
+		Needs: []string{mixinCausal},
+		Fields: []Field{
+			{Name: "Classify", Kind: KindHandle, From: handleClassify},
+			{Name: "HappensBefore", Kind: KindSupplied, From: "happens-before"},
+			{Name: "Trace", Kind: KindTrace},
+		},
+	},
 	perClient(lawid.MonotonicReads, mixinMonotonicReads),
 	perClient(lawid.MonotonicWrites, mixinMonotonicWrites),
 	perClient(lawid.WritesFollowReads, mixinWritesFollowReads),
