@@ -10,3 +10,4 @@ it describes how the current tree relates to the previous one.
 | Note | Answers |
 |---|---|
 | [classification-map.md](classification-map.md) | Does every classification testkit had exist in eidos, and on which axis? |
+| [helper-surface.md](helper-surface.md) | Which testkit helpers does generated output reach, and what should change? |
