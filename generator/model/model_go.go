@@ -56,6 +56,10 @@ const (
 	// LinearizePkg holds the Porcupine models and the concurrent action
 	// helpers the derived concurrent leg wires.
 	LinearizePkg = ModelPkg + "/linearize"
+
+	// RootPkg is the runtime module — the kill matrix's failure surrogate
+	// lives there.
+	RootPkg = "go.thesmos.sh/testkit"
 )
 
 // The template tree, embedded through the recursive directory form — the

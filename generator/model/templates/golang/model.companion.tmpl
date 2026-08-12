@@ -30,6 +30,55 @@ func Test{{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T
 	{{ renderExpr (external .HarnessPkg .ConcurrentName) }}(t, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
 }
 {{ end }}
+{{ if .Mutants }}
+{{ $c := . }}
+// Test{{ .IfaceName }}ModelKillsInertMutants measures the tier's teeth: for
+// every driven method, a mutant reference answers zeros there and forwards
+// nothing, and the property must fail it. A mutant that survives means that
+// method's participation in the run checks nothing — a hole in this
+// derivation, not in any consumer's subject. The kill rate this asserts is
+// total: {{ len .Mutants }} of {{ len .Mutants }}.
+func Test{{ .IfaceName }}ModelKillsInertMutants(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+
+	mutants := []struct {
+		method string
+		wrap   func({{ renderType .IfaceRef }}) {{ renderType .IfaceRef }}
+	}{
+{{- range .Mutants }}
+		{{ "{" }}{{ printf "%q" .Method }}, func(s {{ renderType $c.IfaceRef }}) {{ renderType $c.IfaceRef }} {
+			return {{ $c.LowerIface }}ModelMutant{{ .Method }}{s}
+		}},
+{{- end }}
+	}
+	for _, m := range mutants {
+		t.Run(m.method, func(t *{{ renderExpr (external "testing" "T") }}) {
+			t.Parallel()
+			// The failure is the expectation, so the artifacts a real failure
+			// earns — rapid's failfile, the runner's report — are residue
+			// here, not regression seeds; the probe removes what it provoked.
+			surrogate := "{{ .IfaceName }}Mutant" + m.method
+			t.Cleanup(func() {
+				_ = {{ renderExpr (external "os" "RemoveAll") }}({{ renderExpr (external "path/filepath" "Join") }}("testdata", "rapid", surrogate))
+				_ = {{ renderExpr (external "os" "Remove") }}({{ renderExpr (external "path/filepath" "Join") }}(
+					{{ renderExpr (external .ModelPkg "ResolveArtifactDir") }}(""), "failure-"+surrogate+".json"))
+			})
+			f := {{ renderExpr (external .RootPkg "NewFailableTB") }}().WithName(surrogate)
+			{{ renderExpr (external .ModelPkg "Check") }}(f, {{ renderExpr (external .HarnessPkg .PropertyName) }}(func() {{ renderType $c.IfaceRef }} {
+				return m.wrap({{ renderExpr (external .HarnessPkg .RefCtorName) }}())
+			}))
+			{{ renderExpr (external .RootPkg "True") }}(t, f.Failed(),
+				"an inert "+m.method+" must diverge from the clean reference")
+		})
+	}
+}
+{{ range .Mutants }}
+// {{ $c.LowerIface }}ModelMutant{{ .Method }} answers zeros where {{ .Method }} should act.
+type {{ $c.LowerIface }}ModelMutant{{ .Method }} struct{ {{ renderType $c.IfaceRef }} }
+
+func ({{ $c.LowerIface }}ModelMutant{{ .Method }}) {{ .Method }}({{ template "model.mutantparams" .Sig }}) {{ template "model.zeroresults" .Sig }}
+{{ end }}
+{{ end }}
 {{ if .Inert }}
 // Test{{ .IfaceName }}ModelReferenceInertBodies calls what the sequences
 // never do. An inert body's whole contract is answering zero values whatever
@@ -46,4 +95,13 @@ func Test{{ .IfaceName }}ModelReferenceInertBodies(t *{{ renderExpr (external "t
 {{- end }}
 }
 {{ end }}
+{{- end -}}
+
+{{- /*
+model.mutantparams spells a mutant override's parameter list, every name
+blank: an inert body reads nothing, and an unused name is a lint finding in
+a generated file.
+*/ -}}
+{{- define "model.mutantparams" -}}
+{{- range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p.Type }}{{ end -}}
 {{- end -}}

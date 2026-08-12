@@ -5,14 +5,11 @@ package validatestest_test
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/validates"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/validates/validatestest"
-	"go.thesmos.sh/testkit/engine/model"
 )
 
 // The whole wiring a consumer writes: one subject, and the checks the generator
@@ -100,35 +97,4 @@ func TestMixedContractWithSuppliedInputs(t *testing.T) {
 			return subject.Store(ctx, fixture.V)
 		}),
 	)
-}
-
-// dropWrites reports success and stores nothing — the synthetic bug the model
-// tier exists to catch, since every single-call check passes it: Store returns
-// nil, and a read of a key nobody wrote misses on both sides.
-type dropWrites struct{ validates.Mixed }
-
-func (dropWrites) Store(context.Context, validates.Payload) error { return nil }
-
-// The model tier's falsification: the differential run must kill a subject
-// whose writes vanish. This is what the per-method checks cannot see — the
-// defect spans a write and the read that follows it — and a tier that cannot
-// fail this subject is asserting nothing about any.
-func TestMixedModelKillsDroppedWrites(t *testing.T) {
-	t.Parallel()
-
-	// The failure is the expectation, so the artifacts a real failure earns —
-	// rapid's failfile, the runner's failure report — are residue here, not
-	// regression seeds. The probe removes what it provoked.
-	t.Cleanup(func() {
-		_ = os.RemoveAll(filepath.Join("testdata", "rapid", "FailableTB"))
-		_ = os.Remove(filepath.Join("..", "..", "..", "..", "..", "..",
-			".testkit", "artifacts", "failure-FailableTB.json"))
-	})
-
-	f := testkit.NewFailableTB()
-	model.Check(f, validatestest.MixedModelProperty(func() validates.Mixed {
-		return dropWrites{validatestest.NewInMemory()}
-	}))
-	testkit.True(t, f.Failed(),
-		"a subject that drops writes diverges from the reference and must fail")
 }

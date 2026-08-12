@@ -27,7 +27,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.5.1"
+const Version = "0.6.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -521,6 +521,16 @@ type Companion struct {
 	// mutex-guarded store is linearizable, so a red run is the wiring's own.
 	ConcurrentName string
 
+	// Mutants is the kill matrix: one row per driven method, each a
+	// reference whose one method answers zeros and forwards nothing. The
+	// property must fail every row — a mutant that survives means that
+	// method's participation in the run checks nothing, which is a hole in
+	// this derivation rather than in any consumer's subject.
+	Mutants []Mutant
+
+	// LowerIface prefixes the mutant type names.
+	LowerIface string
+
 	// Inert is every adapter method the companion calls once with derived
 	// arguments — proving the body answers, whatever it is handed.
 	Inert []InertProbe
@@ -557,6 +567,18 @@ func (c *Companion) SetOutputPackages(byTag map[string]string) {
 	}
 }
 
+// Mutant is one row of the companion's kill matrix.
+type Mutant struct {
+	// Method is the one method the mutant makes inert; Sig spells the
+	// override.
+	Method string
+	Sig    *golang.Sig
+}
+
+// RootPkg surfaces the runtime module's import path to the template, which
+// reaches the failure surrogate through it.
+func (*Companion) RootPkg() string { return RootPkg }
+
 // InertProbe is one inert method call the companion makes.
 type InertProbe struct {
 	// Method is the call; TakesCtx forwards the test's context.
@@ -585,6 +607,17 @@ func companionOf(c *sdk.Provenance, iface *sdk.Interface, b *Bindings, harness *
 	}
 	if b.Concurrent() {
 		comp.ConcurrentName = b.IfaceName + "ModelConcurrent"
+	}
+	comp.LowerIface = strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:]
+	// One kill-matrix row per driven method: the coherence rule already
+	// guarantees each has a live adapter op, so its inertness is observable —
+	// by the comparison that reads it, or by the read that follows it.
+	sigs := map[string]*golang.Sig{}
+	for _, am := range b.Adapter {
+		sigs[am.Sig.Name] = am.Sig
+	}
+	for _, a := range b.Actions {
+		comp.Mutants = append(comp.Mutants, Mutant{Method: a.Method, Sig: sigs[a.Method]})
 	}
 	for _, am := range b.Adapter {
 		if am.Op != "" {

@@ -901,6 +901,16 @@ func TestCompanionSurface(t *testing.T) {
 	comp.SetOutputPackages(map[string]string{})
 	testkit.Equal(t, comp.HarnessPkg, "example.com/validates/validatestest",
 		"which a partial later map does not clear")
+
+	testkit.Equal(t, len(comp.Mutants), 2,
+		"one kill-matrix row per driven method")
+	testkit.Equal(t, comp.Mutants[0].Method, "Store", "the writer's mutant leads")
+	testkit.Equal(t, comp.Mutants[1].Method, "Read", "the reader's follows")
+	testkit.True(t, comp.Mutants[0].Sig != nil, "each with the override's signature")
+	testkit.Equal(t, comp.ConcurrentName, "MixedModelConcurrent",
+		"and the concurrent leg's proof rides along where the leg derives")
+	testkit.Equal(t, comp.RootPkg(), "go.thesmos.sh/testkit",
+		"the surrogate's import path reaches the template")
 }
 
 // drainStore is the writer-plus-collector fixture: Add and Items, the

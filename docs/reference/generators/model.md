@@ -5,10 +5,11 @@
 > generator's design. What ships today: the directive, the differential
 > property (actions, pools, derived references with their mixin
 > refinements, law bindings with their negation table), the concurrent
-> Porcupine leg, the generated companion that proves the emission, and
-> the consumer options. The
-> fuzz target, the exhaustive search and the mutation kill test are
-> queued. Where this page and the RFC differ, the RFC is the authority.
+> Porcupine leg, the generated companion that proves the emission — the
+> reference's self-conformance, the inert-body probes, and the mutation
+> kill matrix — and the consumer options. The fuzz target and the
+> exhaustive search are queued. Where this page and the RFC differ, the
+> RFC is the authority.
 
 The `model` generator binds the classifications
 [ADR-0018](../../adr/0018-one-tier-owns-each-classification.md) assigns to
@@ -112,11 +113,13 @@ exhaustive search, and codegen feasibility for the action alphabet.
   fixture-derived action alphabet with an observational state hash: proof
   of law absence within bounds, and the shortest counterexample sequence
   when there is none to prove.
-- **The mutation kill test** — wraps the derived reference in each
-  compatible `engine/model/mutation` operator (`DropWrites`,
-  `ReturnWrongValue`, …) and asserts the law suite kills every one. An
-  unkilled operator is a hole in the bindings, not in any consumer's
-  implementation.
+- **The mutation kill matrix** — `Test<Iface>ModelKillsInertMutants`:
+  one mutant per driven method, each a reference whose one method answers
+  zeros and forwards nothing, and the property must fail every one. An
+  unkilled mutant means that method's participation checks nothing — a
+  hole in the derivation, named by method, asserted at a total kill rate.
+  Each probe runs under a named failure surrogate and removes the
+  failfiles and artifacts its expected failure provokes.
 
 The last two are emitted only where the reference is derivable — both
 certify subject-versus-reference agreement. All three, plus the concurrent
