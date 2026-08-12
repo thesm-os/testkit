@@ -69,6 +69,23 @@ func TestLeaseTable(t *testing.T) {
 		testkit.False(t, porcupine.CheckOperations(m, history), "must surface free")
 	})
 
+	t.Run("a nil freeErr speaks the lenient dialect", func(t *testing.T) {
+		t.Parallel()
+		// Giving up what was never taken is ordinary Go to a deferred
+		// caller; with no strict sentinel named, silence is the answer and
+		// an error is the violation.
+		m := linearize.LeaseTable(held, nil)
+		silent := []porcupine.Operation{
+			opCAS(0, "Release", "k", nil, linearize.WriterResult{}),
+		}
+		testkit.True(t, porcupine.CheckOperations(m, silent), "a silent unheld release linearizes")
+		refused := []porcupine.Operation{
+			opCAS(0, "Release", "k", nil, linearize.WriterResult{Err: free}),
+		}
+		testkit.False(t, porcupine.CheckOperations(m, refused),
+			"a refusing one claims a dialect nothing named")
+	})
+
 	t.Run("nil sentinel accepts any non-nil error", func(t *testing.T) {
 		t.Parallel()
 		m := linearize.LeaseTable(nil, nil)

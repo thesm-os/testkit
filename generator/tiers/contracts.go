@@ -58,6 +58,11 @@ type ContractStoreSpec struct {
 	// aggregator-shaped method on a cell can only be asking the cell what it
 	// holds. A shape absent here stays inert, with the header saying so.
 	ShapeOps map[string]string
+
+	// ConcModel names the linearize model the family's concurrent leg
+	// checks against, empty where none derives. The generator wires the
+	// leg only when the model's own op vocabulary resolves from the roles.
+	ConcModel string
 }
 
 // ContractErr is one constructor error argument. NilUnder names a mixin
@@ -129,10 +134,11 @@ const (
 	opAcquire   = "Acquire"
 	opRelease   = "Release"
 
-	roleAppend = "append"
-	roleReplay = "replay"
-	roleVerify = "verify"
-	roleWriter = "writer"
+	roleRelease = "release"
+	roleAppend  = "append"
+	roleReplay  = "replay"
+	roleVerify  = "verify"
+	roleWriter  = "writer"
 
 	opGet    = "Get"
 	opVerify = "Verify"
@@ -146,6 +152,7 @@ var (
 		contractLease: {
 			Store:       "LeaseTracker",
 			TypeArgRole: roleAcquire,
+			ConcModel:   "LeaseTable",
 			Errs: []ContractErr{
 				{
 					Suffix: "Held", Msg: "the model reference already holds the key",

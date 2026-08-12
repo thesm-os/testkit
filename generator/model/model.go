@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.12.1"
+const Version = "0.12.4"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -185,11 +185,16 @@ type Bindings struct {
 	LawPools       []LawPool
 	LawsUseFixture bool
 
-	// ConcReader and ConcWriter are the actions the concurrent leg drives
-	// against the Porcupine keyed-store model, both nil where the leg does
-	// not derive. They point into Actions, so the closures the two legs
-	// spell agree about every method and type.
-	ConcReader, ConcWriter *Action
+	// ConcFamily picks the concurrent leg's model: empty for none, "kv" for
+	// the keyed-store pair, "lease" for the acquire/release table.
+	ConcFamily string
+
+	// ConcReader and ConcWriter are the actions the kv leg drives against
+	// the Porcupine keyed-store model; ConcAcquire and ConcRelease the
+	// lease leg's two. All point into Actions, so the closures the legs
+	// spell agree with the sequential ones about every method and type.
+	ConcReader, ConcWriter   *Action
+	ConcAcquire, ConcRelease *Action
 
 	// PkgName is where Layout routed the file — see [Bindings.SetOutputPackages].
 	PkgName string
@@ -200,7 +205,21 @@ type Bindings struct {
 	// keyed contract would otherwise never declare the pool its laws draw.
 	contractKeySrc     *suite.Method
 	contractKeyedRoles map[string]bool
+
+	// concAcquireName and concReleaseName are the lease leg's role methods,
+	// recorded by the derivation for the action lookup the leg wires.
+	concAcquireName, concReleaseName string
 }
+
+// The lease contract's role spellings, as the directives stamp them, and
+// the concurrent-leg families the template branches on.
+const (
+	roleLeaseAcquire = "acquire"
+	roleLeaseRelease = "release"
+
+	concFamilyKV    = "kv"
+	concFamilyLease = "lease"
+)
 
 // Kind returns [KindBindings].
 func (*Bindings) Kind() sdk.Kind { return KindBindings }
@@ -234,10 +253,21 @@ func (b *Bindings) KeyOfName() string {
 	return strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:] + "ModelKeyOf"
 }
 
-// Concurrent reports whether the linearizability leg derives: a map-shaped
-// pair the Porcupine keyed-store model speaks, unrefined by a claim that
-// changes what a read means.
-func (b *Bindings) Concurrent() bool { return b.ConcReader != nil && b.ConcWriter != nil }
+// Concurrent reports whether a linearizability leg derives: the map-shaped
+// pair the keyed-store model speaks, or a contract family whose own model
+// ships — each unrefined by a claim that changes what its operations mean.
+func (b *Bindings) Concurrent() bool { return b.ConcFamily != "" }
+
+// LeaseHeld is the held sentinel the lease leg's model matches — the same
+// identity the oracle constructor renders.
+func (b *Bindings) LeaseHeld() CtorErr {
+	for _, e := range b.Reference.CtorErrs {
+		if e.Sym != nil || e.Name != "" {
+			return e
+		}
+	}
+	return CtorErr{}
+}
 
 // LinearizePkg surfaces the Porcupine wiring's import path to the templates.
 func (*Bindings) LinearizePkg() string { return LinearizePkg }
@@ -839,6 +869,24 @@ func bindingsOf(
 // same closures; concurrency that never collides checks nothing, which is
 // the mistake the shared pools exist to rule out.
 func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
+	// The lease leg: acquire and release over the shared keys pool, checked
+	// against the lease-table model — the same op vocabulary the model
+	// switches on, and the same lenient release the oracle speaks.
+	if b.concAcquireName != "" && b.UsesKeys() {
+		for _, a := range b.Actions {
+			switch a.Method {
+			case b.concAcquireName:
+				b.ConcAcquire = a
+			case b.concReleaseName:
+				b.ConcRelease = a
+			}
+		}
+		if b.ConcAcquire != nil && b.ConcRelease != nil {
+			b.ConcFamily = concFamilyLease
+			return
+		}
+		b.ConcAcquire, b.ConcRelease = nil, nil
+	}
 	if b.Reference.Oracle != OracleMap || !b.Reference.Derived() || b.Reference.Pins || keyed == nil || valued == nil {
 		return
 	}
@@ -854,7 +902,9 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 		// Half a pair drives nothing Porcupine can order; the leg derives
 		// whole or not at all.
 		b.ConcReader, b.ConcWriter = nil, nil
+		return
 	}
+	b.ConcFamily = concFamilyKV
 }
 
 // actionOf builds one method's action, or says why there is none.
@@ -1233,6 +1283,7 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 					b.contractKeyedRoles[rm.Name] = true
 				}
 			}
+
 			lower := strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:]
 			minted := false
 			for _, e := range spec.Errs {
@@ -1261,6 +1312,15 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 			}
 			b.Reference = names
 			b.Adapter = contractAdapterOf(harness, partners, contract, roles)
+			// The concurrent leg's roles, recorded only for an oracle that
+			// held: a lenified family fell to the twins above, and a leg
+			// wired against a sentinel nothing minted renders nothing valid.
+			if spec.ConcModel == "LeaseTable" && roles[roleLeaseAcquire] != nil &&
+				roles[roleLeaseRelease] != nil {
+
+				b.concAcquireName = roles[roleLeaseAcquire].Name
+				b.concReleaseName = roles[roleLeaseRelease].Name
+			}
 			return true, ""
 		}
 	}

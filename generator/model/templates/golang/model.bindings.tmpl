@@ -42,9 +42,12 @@ the tier — and the engine dependency with it.
 //	           {{ .IfaceName }}ModelValues is the door to a wider pool
 {{- end }}
 {{- end }}
-{{- if .Concurrent }}
+{{- if eq .ConcFamily "kv" }}
 //	Concurrent: {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} interleave across four workers,
 //	           Porcupine-checked against the keyed-store model per key
+{{- else if eq .ConcFamily "lease" }}
+//	Concurrent: {{ .ConcAcquire.Method }} and {{ .ConcRelease.Method }} interleave across four workers,
+//	           Porcupine-checked against the lease-table model per key
 {{- end }}
 {{- with .Laws }}
 //	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ end }}
@@ -137,16 +140,25 @@ func {{ .IfaceName }}ModelFuzz(f *{{ renderExpr (external "testing" "F") }}, fac
 }
 {{ if .Concurrent }}
 // {{ .IfaceName }}ModelConcurrent runs the linearizability leg: four workers
+{{- if eq .ConcFamily "kv" }}
 // interleave {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} over the shared pools, and
 // Porcupine checks the recorded history against the keyed-store model, one
 // key at a time. No reference runs here — linearizability is the oracle —
+{{- else if eq .ConcFamily "lease" }}
+// interleave {{ .ConcAcquire.Method }} and {{ .ConcRelease.Method }} over the shared keys, and
+// Porcupine checks the recorded history against the lease-table model, one
+// key at a time. No reference runs here — linearizability is the oracle —
+{{- end }}
 // and the laws stay with the sequential leg, whose step boundary they need.
 // Exported for the same bespoke harnesses the property serves.
 func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }}, factory func() {{ renderType .IfaceRef }}, opts ...{{ .OptionTypeName }}) {
+{{- if .UsesValues }}
 	cfg := new{{ .IfaceName }}ModelConfig(opts...)
+{{- end }}
 	fx := {{ .FixtureCtor }}()
 {{- template "model.pools" . }}
 	{{ renderExpr (external .ModelPkg "Assert") }}(t, factory,
+{{- if eq .ConcFamily "kv" }}
 		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
 			// The subject's own miss error is not knowable here; nil reads
 			// any non-nil answer on an absent key as a miss. The op spellings
@@ -164,6 +176,26 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 					}),
 			},
 		}),
+{{- else if eq .ConcFamily "lease" }}
+		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
+			// The lease-table model speaks the acquire/release vocabulary at
+			// the oracle's own held identity; the nil free arm is the lenient
+			// release both the oracle and the corpus subject speak. The op
+			// spellings are the model's canonical vocabulary — it switches on
+			// them, and an alias checks nothing.
+			Model: {{ renderExpr (external .LinearizePkg "LeaseTable") }}({{ with .LeaseHeld }}{{ if .Sym }}{{ renderExpr .Sym }}{{ else }}{{ .Name }}{{ end }}{{ end }}, nil),
+			Actions: []{{ renderExpr (external .ModelPkg "ConcurrentAction") }}[{{ renderType .IfaceRef }}]{
+				{{ renderExpr (external .LinearizePkg "ConcurrentWriter") }}({{ renderExpr (external .LinearizePkg "OpAcquire") }}, keys,
+					func({{ if .ConcAcquire.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, k {{ renderType .Keys.Type }}) error {
+						return s.{{ .ConcAcquire.Method }}({{ if .ConcAcquire.TakesCtx }}ctx, {{ end }}k)
+					}, func(k {{ renderType .Keys.Type }}) {{ renderType .Keys.Type }} { return k }),
+				{{ renderExpr (external .LinearizePkg "ConcurrentWriter") }}({{ renderExpr (external .LinearizePkg "OpRelease") }}, keys,
+					func({{ if .ConcRelease.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, k {{ renderType .Keys.Type }}) error {
+						return s.{{ .ConcRelease.Method }}({{ if .ConcRelease.TakesCtx }}ctx, {{ end }}k)
+					}, func(k {{ renderType .Keys.Type }}) {{ renderType .Keys.Type }} { return k }),
+			},
+		}),
+{{- end }}
 	)
 }
 {{ end }}
