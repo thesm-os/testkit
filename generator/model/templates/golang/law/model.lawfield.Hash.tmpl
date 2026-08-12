@@ -1,0 +1,7 @@
+{{- /*
+Hash is identity: the drained values are comparable, so the value is its own
+fingerprint and nothing invents a weaker one.
+*/ -}}
+{{- define "model.lawfield.Hash" -}}
+Hash: func(v {{ renderType .Value }}) {{ renderType .Value }} { return v }
+{{- end -}}

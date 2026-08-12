@@ -1,0 +1,6 @@
+# 2026/08/12 00:13:17.696710 [TestAppenderMonotonicOffsetsPair/the_accepted_append_lands_on_both_sides] [rapid] draw AppenderMonotonicOffsets_value: "v"
+# 2026/08/12 00:13:17.696724 [TestAppenderMonotonicOffsetsPair/the_accepted_append_lands_on_both_sides] AppenderMonotonicOffsets: offset 0 did not exceed previous 0
+# 
+v0.4.8#7942076786341000737
+0x0
+0x0

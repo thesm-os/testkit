@@ -82,3 +82,17 @@ func (m *MapStore[K, V]) List(_ context.Context) iter.Seq2[V, error] {
 		}
 	}
 }
+
+// Values drains every held value in one call — the slice-collector's
+// delegate, beside [MapStore.List]'s iterator form. Order is the map's own;
+// the stream action sorts both sides before comparing, and the order claims
+// live in laws a keyed store does not make.
+func (m *MapStore[K, V]) Values(_ context.Context) ([]V, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]V, 0, len(m.data))
+	for _, v := range m.data {
+		out = append(out, v)
+	}
+	return out, nil
+}

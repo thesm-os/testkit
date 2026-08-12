@@ -214,10 +214,13 @@ func (SagaFullCompensation[T, Obs]) REQID() string { return "" }
 
 // Check observes before and after Run; when Run errored the
 // post-state must equal the pre-state.
-func (l SagaFullCompensation[T, Obs]) Check(rt *rapid.T, sut, _ T) error {
+func (l SagaFullCompensation[T, Obs]) Check(rt *rapid.T, sut, ref T) error {
 	before := l.Observe(rt, sut)
 	if err := l.Run(rt, sut); err == nil {
-		return nil
+		// A completed saga mutated the subject; the same run lands on the
+		// reference — the mirrored half of the [Law] conduct contract. A
+		// failed run compensated itself, and mirrors nothing.
+		return mirror("SagaFullCompensation", func() error { return l.Run(rt, ref) })
 	}
 	after := l.Observe(rt, sut)
 	if before != after {

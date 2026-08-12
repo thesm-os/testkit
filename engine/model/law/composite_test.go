@@ -391,3 +391,47 @@ func TestCompositeLawPreconditionsAndSentinels(t *testing.T) {
 		})
 	})
 }
+
+// TestSagaFullCompensationPair holds the mirrored saga to the conduct
+// contract: a completed run lands on both sides, and a reference that
+// refuses it is reported.
+func TestSagaFullCompensationPair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the completed run lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.SagaFullCompensation[*sagaState, int]{
+			Run:     func(_ *rapid.T, s *sagaState) error { s.count++; return nil },
+			Observe: func(_ *rapid.T, s *sagaState) int { return s.count },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, refS := &sagaState{}, &sagaState{}
+			if err := l.Check(rt, sut, refS); err != nil {
+				rt.Fatal(err)
+			}
+			if refS.count == 0 {
+				rt.Fatal("the reference never saw the run: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			refS := &sagaState{}
+			l := law.SagaFullCompensation[*sagaState, int]{
+				Run: func(_ *rapid.T, s *sagaState) error {
+					if s == refS {
+						return errors.New("refused")
+					}
+					s.count++
+					return nil
+				},
+				Observe: func(_ *rapid.T, s *sagaState) int { return s.count },
+			}
+			if err := l.Check(rt, &sagaState{}, refS); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}

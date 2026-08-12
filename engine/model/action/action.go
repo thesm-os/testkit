@@ -15,6 +15,7 @@ import (
 	"sort"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/engine/model"
@@ -356,7 +357,12 @@ func Stream[T, V any](
 			if sutErr == nil {
 				sortByString(sutItems)
 				sortByString(refItems)
-				if diff := cmp.Diff(refItems, sutItems); diff != "" {
+				// EquateEmpty: a nil drain and an empty one are the same
+				// answer to "what do you hold". Which of the two a subject
+				// spells is an allocation detail no stream claim is about,
+				// and without this the first empty drain of any run fails
+				// on it.
+				if diff := cmp.Diff(refItems, sutItems, cmpopts.EquateEmpty()); diff != "" {
 					return model.ActionResult{
 						Err:    fmt.Errorf("%s: SUT/ref disagree:\n%s", name, diff),
 						Output: sutItems,

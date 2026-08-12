@@ -184,8 +184,23 @@ func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *s
 			return nil, f.Name + " closes over " + role.Name +
 				", which takes several inputs no single-value closure composes"
 		}
+		if (f.Name == "Drain" || f.Name == "Collect") && !returnsSlice(role) {
+			// The drain spelling returns the slice the method returns; an
+			// iterator-shaped method needs a collect loop this build does not
+			// compose.
+			return nil, f.Name + " drains " + role.Name +
+				", which streams through an iterator rather than returning a slice"
+		}
 		field.Method = role.Name
 		field.TakesCtx = role.TakesContext()
+		if f.Name == "Drain" || f.Name == "Collect" {
+			// The drained element type, not the pool's: a collector's slice
+			// element is what the law compares, and the two agree by the
+			// reference derivation's own check.
+			if elem, err := collectorElem(b, role); err == "" {
+				field.Value = elem
+			}
+		}
 		return field, ""
 	case tiers.KindConstant:
 		value, ok := stampValue(m, f.From)
@@ -236,6 +251,12 @@ func roleMethod(b *Bindings, harness *suite.Contract, from string, m, keyed *sui
 		return role, ""
 	}
 	return nil, "names " + from + ", which nothing resolves"
+}
+
+// returnsSlice reports whether the method's first result is a slice.
+func returnsSlice(m *suite.Method) bool {
+	return len(m.Returns) > 0 && m.Returns[0].Source != nil &&
+		shape.GoSliceElem(m.Returns[0].Source) != nil
 }
 
 // stampValue reads one classification parameter off the selecting method, by

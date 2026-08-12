@@ -1,0 +1,20 @@
+# 2026/08/11 23:52:40.449951 [TestMixedContract/in-memory/model] [rapid] draw action: "Items"
+# 2026/08/11 23:52:40.449992 [TestMixedContract/in-memory/model] [semantic] at step 0: Items: SUT/ref disagree:
+#   []stableorder.Value(
+# - 	nil,
+# + 	{},
+#   )
+# 
+#   semantic: SUT vs reference disagreement (action)
+#   [step 0] Items([]) -> err: Items: SUT/ref disagree:
+#   []stableorder.Value(
+# - 	nil,
+# + 	{},
+#   )
+#    <-- FAILED
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
+# 
+v0.4.8#10536027643148668285
+0x1084210842108
+0x0
+0x1

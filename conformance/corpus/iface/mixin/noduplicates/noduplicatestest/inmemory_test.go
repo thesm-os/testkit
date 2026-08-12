@@ -19,6 +19,9 @@ func TestMixedContract(t *testing.T) {
 		noduplicatestest.MixedSubject("in-memory", func() noduplicates.Mixed {
 			return noduplicatestest.NewInMemory()
 		}),
+		// The model tier: random sequences against the derived reference,
+		// reporting under "model" beside the per-method checks.
+		noduplicatestest.MixedModel(),
 		noduplicatestest.MixedOnItems("yields what Add put in, once each", func(
 			tb testing.TB, subject noduplicates.Mixed,
 		) {

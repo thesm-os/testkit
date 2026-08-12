@@ -12,6 +12,9 @@ the tier — and the engine dependency with it.
 //
 {{- if .Reference.Supplied }}
 //	Reference: supplied through //testkit:model ref=
+{{- else if .Reference.Collects }}
+//	Reference: derived — an append-and-drain collection over the
+//	           {{ .Values.Field }} fixture pair; {{ .IfaceName }}ModelReference replaces it
 {{- else if .Reference.Keyed }}
 //	Reference: derived — a keyed store over the {{ .Keys.Field }} and
 //	           {{ .Values.Field }} fixture pairs; {{ .IfaceName }}ModelReference replaces it
@@ -91,12 +94,14 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	)
 }
 {{ if not .Reference.Supplied }}
+{{ if not .Reference.Collects -}}
 // {{ .Reference.MissName }} is what the reference reports for a key nothing
 // wrote. Only its presence is compared — a subject reports its own miss
 // sentinel, and the run asks whether both sides missed, not how they spelled
 // it.
 var {{ .Reference.MissName }} = {{ renderExpr (external "errors" "New") }}("{{ .MissPrefix }}: the model reference holds nothing under the key")
 
+{{ end -}}
 {{ if .Reference.KeyField -}}
 // {{ .KeyOfName }} projects a value's identity — the one derivation the
 // reference keys on and every keyed law reuses, so the two cannot disagree
@@ -109,15 +114,17 @@ func {{ .KeyOfName }}(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type 
 // {{ .Reference.TypeName }} adapts the shipped {{ .Reference.StoreType }} oracle to {{ .IfaceName }}.
 // Deliberately simple: its correctness is read, not tested.
 type {{ .Reference.TypeName }} struct {
-	store *{{ renderExpr (external .RefPkg .Reference.StoreType) }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}]
+	store *{{ renderExpr (external .RefPkg .Reference.StoreType) }}[{{ if not .Reference.Collects }}{{ renderType .Keys.Type }}, {{ end }}{{ renderType .Values.Type }}]
 }
 
 func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
-	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg (printf "New%s" .Reference.StoreType)) }}[{{ renderType .Keys.Type }}, {{ renderType .Values.Type }}](
+	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg (printf "New%s" .Reference.StoreType)) }}[{{ if not .Reference.Collects }}{{ renderType .Keys.Type }}, {{ end }}{{ renderType .Values.Type }}](
+{{- if not .Reference.Collects }}
 {{- if not .Reference.Keyed }}
 		{{ .KeyOfName }},
 {{- end }}
 		{{ .Reference.MissName }},
+{{- end }}
 	)}
 }
 {{ range .Adapter }}

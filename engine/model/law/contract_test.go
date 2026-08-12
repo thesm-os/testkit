@@ -502,7 +502,7 @@ func TestPublisherDelivers(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			b := ref.NewAtLeastOnce[int]()
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, ref.NewAtLeastOnce[int]()); err != nil {
 				rt.Fatal(err)
 			}
 		})
@@ -550,7 +550,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			b := ref.NewAtLeastOnce[int]()
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, ref.NewAtLeastOnce[int]()); err != nil {
 				rt.Fatal(err)
 			}
 		})
@@ -570,7 +570,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			b := ref.NewAtMostOnce[int](4)
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, ref.NewAtMostOnce[int](4)); err != nil {
 				rt.Fatal(err)
 			}
 		})
@@ -595,7 +595,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			b := ref.NewExactlyOnce[int]()
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, ref.NewExactlyOnce[int]()); err != nil {
 				rt.Fatal(err)
 			}
 		})
@@ -1116,12 +1116,20 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 				s := &updaterSUT{}
 				fail := failOnNth(nth)
 				l := law.UpdaterReplaces[*updaterSUT, string, string]{
-					Update: func(*rapid.T, *updaterSUT, string) error { return fail() },
+					// The failure targets the subject's writes: a refusal on
+					// the mirror is the law's report, not a precondition, and
+					// has its own subtest in the pair block.
+					Update: func(_ *rapid.T, u *updaterSUT, _ string) error {
+						if u == s {
+							return fail()
+						}
+						return nil
+					},
 					Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
 					Values: rapid.Just("aa"),
 					KeyOf:  func(v string) string { return v[:1] },
 				}
-				if err := l.Check(rt, s, s); err != nil {
+				if err := l.Check(rt, s, &updaterSUT{}); err != nil {
 					rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 				}
 			})
@@ -1554,7 +1562,7 @@ func TestPublisherDeliversBranches(t *testing.T) {
 		b := &pubsubBox{deliveries: 1}
 		l := mk(b, 3)
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, &pubsubBox{deliveries: 1}); err != nil {
 				rt.Fatalf("every subscriber received the message: %v", err)
 			}
 		})
@@ -1579,7 +1587,7 @@ func TestPublisherDeliversBranches(t *testing.T) {
 		b := &pubsubBox{drainErr: errors.New("io"), deliveries: 1}
 		l := mk(b, 2)
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, b, b); err == nil {
+			if err := l.Check(rt, b, &pubsubBox{deliveries: 1}); err == nil {
 				rt.Fatal("a subscriber whose drain fails is a violation")
 			}
 		})
@@ -1687,7 +1695,7 @@ func TestPublisherDeliveryBoundModes(t *testing.T) {
 		var got error
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &pubsubBox{drainErr: errors.New("io")}
-			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); got == nil {
+			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, &pubsubBox{deliveries: 1}); got == nil {
 				got = err
 			}
 		})
@@ -1949,4 +1957,352 @@ func TestLeaseReleasedOnCancelBranches(t *testing.T) {
 			}
 		})
 	})
+}
+
+// The pair tests below hold every mirrored contract law to the conduct
+// contract on [law.Law]: each mutation the subject accepts lands on the
+// reference, and a refusal is the law's to report. The other subtests pass
+// one store as both sides — the arrangement that cannot see a diverged pair.
+
+func TestPersisterRetrievablePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the accepted save lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.PersisterRetrievable[*persisterSUT, string, int]{
+			Save:   func(rt *rapid.T, s *persisterSUT, v string) (int, error) { return s.save(rt, v) },
+			Read:   func(rt *rapid.T, s *persisterSUT, id int) (string, error) { return s.read(rt, id) },
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &persisterSUT{}, &persisterSUT{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if len(ref.store) == 0 {
+				rt.Fatal("the reference never saw the save: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			ref := &persisterSUT{}
+			l := law.PersisterRetrievable[*persisterSUT, string, int]{
+				Save: func(rt *rapid.T, s *persisterSUT, v string) (int, error) {
+					if s == ref {
+						return 0, errors.New("refused")
+					}
+					return s.save(rt, v)
+				},
+				Read:   func(rt *rapid.T, s *persisterSUT, id int) (string, error) { return s.read(rt, id) },
+				Values: rapid.Just("v"),
+			}
+			if err := l.Check(rt, &persisterSUT{}, ref); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+func TestUpdaterReplacesPair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both updates land on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.UpdaterReplaces[*updaterSUT, string, string]{
+			Update: func(rt *rapid.T, u *updaterSUT, v string) error { return u.write(rt, v) },
+			Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
+			Values: rapid.Just("aa"),
+			KeyOf:  func(v string) string { return v[:1] },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &updaterSUT{}, &updaterSUT{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if _, err := ref.lookup(rt, "a"); err != nil {
+				rt.Fatal("the reference never saw the updates: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a reference refusing either mirror is reported", func(t *testing.T) {
+		t.Parallel()
+		for refuseAt := 1; refuseAt <= 2; refuseAt++ {
+			rapid.Check(t, func(rt *rapid.T) {
+				ref, refCalls := &updaterSUT{}, 0
+				l := law.UpdaterReplaces[*updaterSUT, string, string]{
+					Update: func(rt *rapid.T, u *updaterSUT, v string) error {
+						if u == ref {
+							if refCalls++; refCalls == refuseAt {
+								return errors.New("refused")
+							}
+						}
+						return u.write(rt, v)
+					},
+					Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
+					Values: rapid.Just("aa"),
+					KeyOf:  func(v string) string { return v[:1] },
+				}
+				if err := l.Check(rt, &updaterSUT{}, ref); err == nil {
+					rt.Fatalf("expected the reference's refusal #%d to be reported", refuseAt)
+				}
+			})
+		}
+	})
+}
+
+func TestUpserterIdempotentPair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("both upserts land on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.UpserterIdempotent[*updaterSUT, string, string]{
+			Upsert: func(rt *rapid.T, u *updaterSUT, v string) error { return u.write(rt, v) },
+			Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
+			Values: rapid.Just("aa"),
+			KeyOf:  func(v string) string { return v[:1] },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, ref := &updaterSUT{}, &updaterSUT{}
+			if err := l.Check(rt, sut, ref); err != nil {
+				rt.Fatal(err)
+			}
+			if _, err := ref.lookup(rt, "a"); err != nil {
+				rt.Fatal("the reference never saw the upserts: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a subject refusing its repeat is reported", func(t *testing.T) {
+		t.Parallel()
+		// The first upsert is the precondition; the second is the claim.
+		rapid.Check(t, func(rt *rapid.T) {
+			sut, sutCalls := &updaterSUT{}, 0
+			l := law.UpserterIdempotent[*updaterSUT, string, string]{
+				Upsert: func(rt *rapid.T, u *updaterSUT, v string) error {
+					if u == sut {
+						if sutCalls++; sutCalls == 2 {
+							return errors.New("refused")
+						}
+					}
+					return u.write(rt, v)
+				},
+				Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
+				Values: rapid.Just("aa"),
+				KeyOf:  func(v string) string { return v[:1] },
+			}
+			if err := l.Check(rt, sut, &updaterSUT{}); err == nil {
+				rt.Fatal("expected the refused repeat to be reported")
+			}
+		})
+	})
+
+	t.Run("a reference refusing either mirror is reported", func(t *testing.T) {
+		t.Parallel()
+		for refuseAt := 1; refuseAt <= 2; refuseAt++ {
+			rapid.Check(t, func(rt *rapid.T) {
+				ref, refCalls := &updaterSUT{}, 0
+				l := law.UpserterIdempotent[*updaterSUT, string, string]{
+					Upsert: func(rt *rapid.T, u *updaterSUT, v string) error {
+						if u == ref {
+							if refCalls++; refCalls == refuseAt {
+								return errors.New("refused")
+							}
+						}
+						return u.write(rt, v)
+					},
+					Read:   func(rt *rapid.T, u *updaterSUT, k string) (string, error) { return u.lookup(rt, k) },
+					Values: rapid.Just("aa"),
+					KeyOf:  func(v string) string { return v[:1] },
+				}
+				if err := l.Check(rt, &updaterSUT{}, ref); err == nil {
+					rt.Fatalf("expected the reference's refusal #%d to be reported", refuseAt)
+				}
+			})
+		}
+	})
+}
+
+func TestAppenderMonotonicOffsetsPair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the accepted append lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := &law.AppenderMonotonicOffsets[*ref.MonotonicLog[string], string, int64]{
+			Append: func(rt *rapid.T, s *ref.MonotonicLog[string], v string) (int64, error) {
+				return s.Append(rt.Context(), v)
+			},
+			Values: rapid.Just("v"),
+		}
+		// The law remembers the last offset across iterations, so the pair
+		// persists with it — a fresh log per iteration would restart offsets
+		// under a memory that does not.
+		sut, refLog := ref.NewMonotonicLog[string](), ref.NewMonotonicLog[string]()
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, sut, refLog); err != nil {
+				rt.Fatal(err)
+			}
+			if refLog.Len() == 0 {
+				rt.Fatal("the reference never saw the append: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		refLog := ref.NewMonotonicLog[string]()
+		sut := ref.NewMonotonicLog[string]()
+		l := &law.AppenderMonotonicOffsets[*ref.MonotonicLog[string], string, int64]{
+			Append: func(rt *rapid.T, s *ref.MonotonicLog[string], v string) (int64, error) {
+				if s == refLog {
+					return 0, errors.New("refused")
+				}
+				return s.Append(rt.Context(), v)
+			},
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l.Check(rt, sut, refLog); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+func TestCASAtomicOneWinnerPair(t *testing.T) {
+	t.Parallel()
+
+	// The pair of attempts lands unasserted on the reference: on a
+	// synchronized pair the cell's version arithmetic makes the outcomes
+	// agree, so the landing signal is that the reference's attempt counter
+	// moved at all.
+	type cell struct{ v, attempts int }
+	errStale := errors.New("stale")
+	rapid.Check(t, func(rt *rapid.T) {
+		sut, refCell := &cell{}, &cell{}
+		l := law.CASAtomicOneWinner[*cell, int]{
+			CAS: func(_ *rapid.T, c *cell, version int) error {
+				c.attempts++
+				if version != c.v {
+					return errStale
+				}
+				c.v++
+				return nil
+			},
+			Values:   rapid.Just(0),
+			Mismatch: errStale,
+		}
+		if err := l.Check(rt, sut, refCell); err != nil {
+			rt.Fatal(err)
+		}
+		if refCell.attempts != 2 {
+			rt.Fatalf("the reference saw %d attempts, not the pair: the calls diverged", refCell.attempts)
+		}
+	})
+}
+
+func TestWatcherReturnsOnChangePair(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the mutation lands on both sides", func(t *testing.T) {
+		t.Parallel()
+		l := law.WatcherReturnsOnChange[*watchable, chan int, string, int]{
+			Watch:  func(_ *rapid.T, s *watchable, k string) (chan int, error) { return s.watch(k), nil },
+			Mutate: func(_ *rapid.T, s *watchable, k string, v int) error { s.mutate(k, v); return nil },
+			Next:   nextWatch,
+			Stop:   func(_ chan int) {},
+			Keys:   rapid.Just("k"),
+			Values: rapid.Just(1),
+		}
+		refMutations := 0
+		rapid.Check(t, func(rt *rapid.T) {
+			refMutations = 0
+			sut, refW := newWatchable(false), newWatchable(false)
+			inner := l
+			inner.Mutate = func(_ *rapid.T, s *watchable, k string, v int) error {
+				if s == refW {
+					refMutations++
+				}
+				s.mutate(k, v)
+				return nil
+			}
+			if err := inner.Check(rt, sut, refW); err != nil {
+				rt.Fatal(err)
+			}
+			if refMutations != 1 {
+				rt.Fatal("the reference never saw the mutation: the pair has diverged")
+			}
+		})
+	})
+
+	t.Run("a refusing reference is reported", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			refW := newWatchable(false)
+			l := law.WatcherReturnsOnChange[*watchable, chan int, string, int]{
+				Watch: func(_ *rapid.T, s *watchable, k string) (chan int, error) { return s.watch(k), nil },
+				Mutate: func(_ *rapid.T, s *watchable, k string, v int) error {
+					if s == refW {
+						return errors.New("refused")
+					}
+					s.mutate(k, v)
+					return nil
+				},
+				Next:   nextWatch,
+				Stop:   func(_ chan int) {},
+				Keys:   rapid.Just("k"),
+				Values: rapid.Just(1),
+			}
+			if err := l.Check(rt, newWatchable(false), refW); err == nil {
+				rt.Fatal("expected the refusal to be reported")
+			}
+		})
+	})
+}
+
+// TestPublisherPairRefusals holds the publisher mirrors' three refusal arms:
+// a reference that cannot subscribe, publish or drain is reported by the law
+// rather than left for the next action to misattribute.
+func TestPublisherPairRefusals(t *testing.T) {
+	t.Parallel()
+
+	mkDelivers := func() law.PublisherDelivers[*pubsubBox, string, int] {
+		return law.PublisherDelivers[*pubsubBox, string, int]{
+			Subscribe:   func(_ *rapid.T, s *pubsubBox) (int, error) { return s.sub() },
+			Publish:     func(_ *rapid.T, s *pubsubBox, _ string) error { return s.publish() },
+			Drain:       func(_ *rapid.T, s *pubsubBox, _ int) ([]string, error) { return s.drain("m") },
+			Messages:    rapid.Just("m"),
+			Subscribers: 1,
+		}
+	}
+	mkBound := func() law.PublisherDeliveryBound[*pubsubBox, string, int] {
+		return law.PublisherDeliveryBound[*pubsubBox, string, int]{
+			Subscribe: func(_ *rapid.T, s *pubsubBox) (int, error) { return s.sub() },
+			Publish:   func(_ *rapid.T, s *pubsubBox, _ string) error { return s.publish() },
+			Drain:     func(_ *rapid.T, s *pubsubBox, _ int) ([]string, error) { return s.drain("m") },
+			Redeliver: func(_ *rapid.T, s *pubsubBox, _ string) {},
+			Messages:  rapid.Just("m"),
+			Mode:      law.DeliveryAtLeastOnce,
+		}
+	}
+
+	refusals := []*pubsubBox{
+		{subErr: errors.New("refused"), deliveries: 1},
+		{pubErr: errors.New("refused"), deliveries: 1},
+		{drainErr: errors.New("refused"), deliveries: 1},
+	}
+	for _, refBox := range refusals {
+		l1, l2 := mkDelivers(), mkBound()
+		rapid.Check(t, func(rt *rapid.T) {
+			if err := l1.Check(rt, &pubsubBox{deliveries: 1}, refBox); err == nil {
+				rt.Fatal("PublisherDelivers: expected the refusal to be reported")
+			}
+			if err := l2.Check(rt, &pubsubBox{deliveries: 1}, refBox); err == nil {
+				rt.Fatal("PublisherDeliveryBound: expected the refusal to be reported")
+			}
+		})
+	}
 }

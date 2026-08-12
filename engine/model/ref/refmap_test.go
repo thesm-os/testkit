@@ -114,3 +114,19 @@ func TestMapStore(t *testing.T) {
 		testkit.Equal(t, count, 1, "break after first item")
 	})
 }
+
+// TestMapStoreValues pins the slice drain: everything held, one call, a
+// fresh slice each time.
+func TestMapStoreValues(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	s := ref.NewMapStore(func(v string) string { return v }, errNotFound)
+	testkit.NoError(t, s.Put(ctx, "a"), "first put")
+	testkit.NoError(t, s.Put(ctx, "b"), "second put")
+	testkit.NoError(t, s.Put(ctx, "a"), "an upsert replaces, not appends")
+
+	got, err := s.Values(ctx)
+	testkit.NoError(t, err, "draining succeeds")
+	testkit.Len(t, got, 2, "one value per key")
+}

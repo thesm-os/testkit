@@ -49,14 +49,19 @@ func TestActionForDeclinesTheUnknown(t *testing.T) {
 func TestMapStoreOpsAreDetectorShapes(t *testing.T) {
 	t.Parallel()
 
-	live := map[string]bool{}
+	live := map[string]bool{tiers.ShapeCollector: true}
 	for _, d := range detectors.All() {
 		live[d.Name] = true
+		// The pseudo-shape must never collide with a real detector: it is
+		// the generator's own refinement, and a detector landing upstream
+		// under the same spelling would make one name mean two things.
+		testkit.NotEqual(t, d.Name, tiers.ShapeCollector,
+			"the collector pseudo-shape stays outside the detector vocabulary")
 	}
 	for _, s := range tiers.MapStoreShapes() {
 		op, ok := tiers.MapStoreOp(s)
 		testkit.True(t, ok, s+" is a shape the oracle models")
 		testkit.True(t, op != "", s+"'s delegation names a method")
-		testkit.True(t, live[s], s+" is a shape the annotator stamps")
+		testkit.True(t, live[s], s+" is a shape the annotator stamps or the generator derives")
 	}
 }

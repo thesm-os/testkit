@@ -409,17 +409,33 @@ func TestKeyedReference(t *testing.T) {
 }
 
 // TestUnqualifiedSentinelIsRefused pins the constant renderer's refusal: a
-// stamp without a package is a name the generator cannot import.
+// stamp without a package is a name the generator cannot import — bare or
+// dangling, the two ways a qualifier can fail to be one.
 func TestUnqualifiedSentinelIsRefused(t *testing.T) {
 	t.Parallel()
 
-	b := bindingsOf(t, keyedStore(t, "ErrGone"))
-	unbound := map[string]string{}
-	for _, u := range b.Unbound {
-		unbound[u.Method] = u.Reason
+	for _, sentinel := range []string{"ErrGone", "example.com/kv."} {
+		b := bindingsOf(t, keyedStore(t, sentinel))
+		unbound := map[string]string{}
+		for _, u := range b.Unbound {
+			unbound[u.Method] = u.Reason
+		}
+		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("no package",
+			"the refusal names what the stamp is missing")
 	}
-	testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("no package",
-		"the refusal names what the stamp is missing")
+}
+
+// TestKeyedMismatchIsRefused pins the keyed fork's agreement: the reader and
+// the keyed writer speak one (K, V) pair or nothing models them.
+func TestKeyedMismatchIsRefused(t *testing.T) {
+	t.Parallel()
+
+	s := keyedStore(t, "example.com/kv.ErrGone")
+	stampShape(s, "Get", "reader", "int", "string")
+	got := generateBoth(t, s).Diagnostics()
+	testkit.Equal(t, len(got), 1, "one diagnostic")
+	testkit.Assert(t, got[0].Message).Contains("cannot model",
+		"naming the disagreement and the ref= exit")
 }
 
 // keyedStore is the keyed-put fixture: a reader, a composite writer, and a
@@ -652,4 +668,133 @@ func stampShape(s *sdk.Store, method, shapeName, keyType, valueType string) {
 			}
 		}
 	}
+}
+
+// TestDrainFixtures walks the writer-plus-collector fork both ways: a keyed
+// value upserts and gets the map, a bare value appends and gets the
+// collection — deduplicating exactly where the claim says so.
+func TestDrainFixtures(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a keyed value selects the map", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, drainStore(t, true))
+		testkit.Equal(t, b.Reference.StoreType(), "MapStore",
+			"an ID or Key field means upsert semantics")
+		testkit.Equal(t, b.Reference.KeyField, "Key", "keyed on the conventional field")
+		testkit.False(t, b.Reference.Collects(), "the map is not a collection")
+
+		ops := map[string]string{}
+		for _, am := range b.Adapter {
+			ops[am.Sig.Name] = am.Op
+		}
+		testkit.Equal(t, ops["Items"], "Values", "the collector drains the map's values")
+
+		var bound *model.LawBinding
+		for _, l := range b.Laws {
+			if l.ID == lawid.StreamNoDuplicates {
+				bound = l
+			}
+		}
+		testkit.True(t, bound != nil, "the no-duplicates law binds")
+		testkit.Equal(t, bound.Fields[0].Kind(), bound.Fields[0].KindName,
+			"its drain renders through the field's template")
+	})
+
+	t.Run("a bare value selects the collection, deduplicating by claim", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, drainStore(t, false))
+		testkit.True(t, b.Reference.Collects(), "no identity field, so append-and-drain")
+		testkit.Equal(t, b.Reference.StoreType(), "SetCollection",
+			"the no-duplicates claim refines the log into a set")
+	})
+}
+
+// TestDrainMismatchIsRefused pins the collection fork's one agreement: the
+// writer adds what the collector returns, or nothing models the pair.
+func TestDrainMismatchIsRefused(t *testing.T) {
+	t.Parallel()
+
+	s := drainStore(t, false)
+	stampShape(s, "Add", "writer", "", "example.com/bag.Other")
+	got := generateBoth(t, s).Diagnostics()
+	testkit.Equal(t, len(got), 1, "one diagnostic")
+	testkit.Assert(t, got[0].Message).Contains("cannot model",
+		"naming the disagreement and the ref= exit")
+}
+
+// TestCompanionSurface reaches the second emit value the plugin queues.
+func TestCompanionSurface(t *testing.T) {
+	t.Parallel()
+
+	s := mixed(t)
+	generateBoth(t, s)
+	var comp *model.Companion
+	for _, p := range s.Emit().PendingOriginSlots() {
+		if c, ok := p.Item.(*model.Companion); ok {
+			comp = c
+		}
+	}
+	testkit.True(t, comp != nil, "the proof rides with the bindings")
+	testkit.Equal(t, comp.Kind(), model.KindCompanion, "and renders as itself")
+	testkit.Equal(t, comp.ModelPkg(), model.ModelPkg, "reaching the runner's package")
+	comp.SetOutputPackages(map[string]string{"": "example.com/validates/validatestest"})
+	testkit.Equal(t, comp.HarnessPkg, "example.com/validates/validatestest",
+		"and the bindings through Layout's resolved route")
+	comp.SetOutputPackages(map[string]string{})
+	testkit.Equal(t, comp.HarnessPkg, "example.com/validates/validatestest",
+		"which a partial later map does not clear")
+}
+
+// drainStore is the writer-plus-collector fixture: Add and Items, the
+// noduplicates claim on the collector, and a value type with or without the
+// conventional identity field.
+func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
+	t.Helper()
+	// The decoy is what makes the struct search walk past a non-match: a
+	// store with exactly one struct never exercises the mismatch arm.
+	f := storefixture.New().Package("bag", "example.com/bag").
+		Struct("Decoy", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("bag/iface.go", 1, 1))
+			b.Field("N", storefixture.Named("int"), nil)
+		})
+	valueRef := storefixture.Named("string")
+	valueQ := "string"
+	if keyedValue {
+		f = f.Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("bag/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Body", storefixture.Named("string"), nil)
+		})
+		valueRef = storefixture.PkgNamed("example.com/bag", "Value")
+		valueQ = "example.com/bag.Value"
+	}
+	s := f.Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+		i.Pos(sdk.At("bag/iface.go", 1, 1))
+		i.Directive(storefixture.Directive("suite"))
+		i.Directive(storefixture.Directive("model"))
+		i.Method("Add", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("v", valueRef)
+			m.Return(storefixture.Named("error"))
+		})
+		i.Method("Items", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Return(storefixture.Slice(valueRef))
+			m.Return(storefixture.Named("error"))
+		})
+	}).Build()
+	stampShape(s, "Add", "writer", "", valueQ)
+	stampShape(s, "Items", "aggregator", "", "")
+	// The claim rides on both halves: the drain carries the law, and the
+	// writer exercises the second of the two mixin scans the dedupe
+	// refinement makes.
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == "Add" || m.Name == "Items" {
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"noduplicates"}, "test")
+			}
+		}
+	}
+	return s
 }

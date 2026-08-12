@@ -34,11 +34,20 @@ func (PersisterRetrievable[T, V, ID]) ID() string { return lawid.PersisterRetrie
 func (PersisterRetrievable[T, V, ID]) REQID() string { return "" }
 
 // Check verifies Save-then-Read returns the saved value.
-func (l PersisterRetrievable[T, V, ID]) Check(rt *rapid.T, sut, _ T) error {
+func (l PersisterRetrievable[T, V, ID]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "PersisterRetrievable_value")
 	id, err := l.Save(rt, sut, v)
 	if err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The accepted save lands on both sides — the mirrored half of the [Law]
+	// conduct contract. The reference's own id is its own business: the claim
+	// reads back through the subject's.
+	if mErr := mirror("PersisterRetrievable", func() error {
+		_, saveErr := l.Save(rt, ref, v)
+		return saveErr
+	}); mErr != nil {
+		return mErr
 	}
 	got, err := l.Read(rt, sut, id)
 	if err != nil {
@@ -70,7 +79,7 @@ func (UpdaterReplaces[T, V, K]) REQID() string { return "" }
 
 // Check writes v1 then v2 sharing the same key and verifies the
 // reader sees v2.
-func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
+func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v1 := l.Values.Draw(rt, "UpdaterReplaces_v1")
 	v2 := l.Values.Draw(rt, "UpdaterReplaces_v2")
 	if l.KeyOf(v1) != l.KeyOf(v2) {
@@ -79,8 +88,16 @@ func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
 	if err := l.Update(rt, sut, v1); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
+	// Each accepted update lands on both sides — the mirrored half of the
+	// [Law] conduct contract.
+	if err := mirror("UpdaterReplaces", func() error { return l.Update(rt, ref, v1) }); err != nil {
+		return err
+	}
 	if err := l.Update(rt, sut, v2); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	if err := mirror("UpdaterReplaces", func() error { return l.Update(rt, ref, v2) }); err != nil {
+		return err
 	}
 	got, err := l.Read(rt, sut, l.KeyOf(v2))
 	if err != nil {
@@ -108,10 +125,15 @@ func (UpserterIdempotent[T, V, K]) ID() string { return lawid.UpserterIdempotent
 func (UpserterIdempotent[T, V, K]) REQID() string { return "" }
 
 // Check upserts v twice and verifies the read result is stable.
-func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
+func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "UpserterIdempotent_value")
 	if upsertErr := l.Upsert(rt, sut, v); upsertErr != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// Each accepted upsert lands on both sides — the mirrored half of the
+	// [Law] conduct contract.
+	if err := mirror("UpserterIdempotent", func() error { return l.Upsert(rt, ref, v) }); err != nil {
+		return err
 	}
 	first, readErr := l.Read(rt, sut, l.KeyOf(v))
 	if readErr != nil {
@@ -119,6 +141,9 @@ func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, _ T) error {
 	}
 	if err := l.Upsert(rt, sut, v); err != nil {
 		return fmt.Errorf("upserter law: second upsert errored: %v", err)
+	}
+	if err := mirror("UpserterIdempotent", func() error { return l.Upsert(rt, ref, v) }); err != nil {
+		return err
 	}
 	second, err := l.Read(rt, sut, l.KeyOf(v))
 	if err != nil {
@@ -148,11 +173,18 @@ func (CASAtomicOneWinner[T, V]) ID() string { return lawid.CASAtomicOneWinner }
 func (CASAtomicOneWinner[T, V]) REQID() string { return "" }
 
 // Check races two CAS calls; expects exactly one success.
-func (l CASAtomicOneWinner[T, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l CASAtomicOneWinner[T, V]) Check(rt *rapid.T, sut, ref T) error {
 	v1 := l.Values.Draw(rt, "CASAtomicOneWinner_v1")
 	v2 := l.Values.Draw(rt, "CASAtomicOneWinner_v2")
 	err1 := l.CAS(rt, sut, v1)
 	err2 := l.CAS(rt, sut, v2)
+	// The same pair of attempts lands on both sides — the mirrored half of
+	// the [Law] conduct contract. Outcomes are not compared here: on a
+	// synchronized pair the cell's own version arithmetic makes them agree,
+	// and a divergence is the next action's to find on a pair that at least
+	// saw the same calls.
+	_ = l.CAS(rt, ref, v1)
+	_ = l.CAS(rt, ref, v2)
 	successes := 0
 	if err1 == nil {
 		successes++
@@ -195,11 +227,20 @@ func (*AppenderMonotonicOffsets[T, V, Off]) REQID() string { return "" }
 
 // Check appends a value and verifies the returned offset exceeds
 // the previously-observed offset.
-func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, _ T) error {
+func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "AppenderMonotonicOffsets_value")
 	off, err := l.Append(rt, sut, v)
 	if err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The accepted append lands on both sides — the mirrored half of the
+	// [Law] conduct contract. The reference's offset is its own; the claim
+	// orders the subject's.
+	if mErr := mirror("AppenderMonotonicOffsets", func() error {
+		_, appendErr := l.Append(rt, ref, v)
+		return appendErr
+	}); mErr != nil {
+		return mErr
 	}
 	if l.hasPrev && off <= l.prev {
 		return fmt.Errorf("AppenderMonotonicOffsets: offset %v did not exceed previous %v", off, l.prev)
@@ -234,7 +275,7 @@ func (SingleflightCoalesces[T, K, V]) REQID() string { return "" }
 
 // Check launches N concurrent calls with the same key and asserts
 // the compute counter only advances by 1.
-func (l SingleflightCoalesces[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l SingleflightCoalesces[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "SingleflightCoalesces_key")
 	before := *l.Counter
 	n := l.Parallel
@@ -255,6 +296,9 @@ func (l SingleflightCoalesces[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 	if got > 1 {
 		return fmt.Errorf("SingleflightCoalesces: %d concurrent calls invoked compute %d times (expected ≤1)", n, got)
 	}
+	// One call lands on the reference too — the mirrored half of the [Law]
+	// conduct contract, for a subject that memoizes what it computed.
+	_, _ = l.Call(rt.Context(), ref, k, l.Compute)
 	return nil
 }
 
@@ -478,7 +522,7 @@ func (PublisherDelivers[T, M, Sub]) REQID() string { return "" }
 
 // Check subscribes N handles, publishes one message, and verifies
 // every subscriber received it.
-func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
+func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error {
 	n := l.Subscribers
 	if n <= 0 {
 		n = 3
@@ -494,6 +538,23 @@ func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
 	msg := l.Messages.Draw(rt, "PublisherDelivers_msg")
 	if err := l.Publish(rt, sut, msg); err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The whole cycle lands on both sides — the mirrored half of the [Law]
+	// conduct contract. The reference's subscriber is subscribed, published
+	// to and drained the same way, so what residue a cycle leaves stays
+	// symmetric across the pair.
+	if err := mirror("PublisherDelivers", func() error {
+		refSub, subErr := l.Subscribe(rt, ref)
+		if subErr != nil {
+			return subErr
+		}
+		if pubErr := l.Publish(rt, ref, msg); pubErr != nil {
+			return pubErr
+		}
+		_, drainErr := l.Drain(rt, ref, refSub)
+		return drainErr
+	}); err != nil {
+		return err
 	}
 	for i, sub := range subs {
 		got, err := l.Drain(rt, sut, sub)
@@ -566,7 +627,7 @@ func (PublisherDeliveryBound[T, M, Sub]) REQID() string { return "" }
 
 // Check publishes one message (with an optional redelivery) and
 // verifies each subscriber's delivery count respects Mode.
-func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
+func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error {
 	n := l.Subscribers
 	if n <= 0 {
 		n = 3
@@ -585,6 +646,25 @@ func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, _ T) error {
 	}
 	if l.Redeliver != nil {
 		l.Redeliver(rt, sut, msg)
+	}
+	// The whole cycle lands on both sides — the mirrored half of the [Law]
+	// conduct contract — redelivery included, so the pair's residue stays
+	// symmetric whatever the mode.
+	if err := mirror("PublisherDeliveryBound", func() error {
+		refSub, subErr := l.Subscribe(rt, ref)
+		if subErr != nil {
+			return subErr
+		}
+		if pubErr := l.Publish(rt, ref, msg); pubErr != nil {
+			return pubErr
+		}
+		if l.Redeliver != nil {
+			l.Redeliver(rt, ref, msg)
+		}
+		_, drainErr := l.Drain(rt, ref, refSub)
+		return drainErr
+	}); err != nil {
+		return err
 	}
 	for i, sub := range subs {
 		got, err := l.Drain(rt, sut, sub)
@@ -776,7 +856,7 @@ func (WatcherReturnsOnChange[T, W, K, V]) REQID() string { return "" }
 
 // Check establishes a watch, mutates the watched key, and verifies
 // the watch fires within Timeout.
-func (l WatcherReturnsOnChange[T, W, K, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l WatcherReturnsOnChange[T, W, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "WatcherReturnsOnChange_key")
 	v := l.Values.Draw(rt, "WatcherReturnsOnChange_value")
 	w, err := l.Watch(rt, sut, k)
@@ -786,6 +866,12 @@ func (l WatcherReturnsOnChange[T, W, K, V]) Check(rt *rapid.T, sut, _ T) error {
 	defer l.Stop(w)
 	if mErr := l.Mutate(rt, sut, k, v); mErr != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	// The mutation lands on both sides — the mirrored half of the [Law]
+	// conduct contract. The watch itself stays subject-side: it is the
+	// observation the claim is about, and the deferred stop cleans it.
+	if mErr := mirror("WatcherReturnsOnChange", func() error { return l.Mutate(rt, ref, k, v) }); mErr != nil {
+		return mErr
 	}
 	timeout := l.Timeout
 	if timeout <= 0 {

@@ -1,0 +1,9 @@
+{{- /*
+Collect is Drain under the reentrancy claim's name: the same observation,
+made twice by the law.
+*/ -}}
+{{- define "model.lawfield.Collect" -}}
+Collect: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ([]{{ renderType .Value }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

@@ -56,13 +56,19 @@ func TestUnboundLawIsReported(t *testing.T) {
 	stampShape(s, "List", "streamreader", "", "example.com/validates.Payload")
 	b := bindingsOf(t, s)
 
-	testkit.Equal(t, len(b.Laws), 1, "the bound law still binds")
+	testkit.Equal(t, len(b.Laws), 1, "the writer's law still binds")
+
+	// The streamreader's laws select and refuse: List streams through an
+	// iterator, and the drain spelling returns a slice. Selected-and-refused
+	// is a header line; selected-and-miscompiled would be a consumer's build.
 	unbound := map[string]string{}
 	for _, u := range b.Unbound {
 		unbound[u.Method] = u.Reason
 	}
-	testkit.Assert(t, unbound[lawid.StreamCompletion]).Contains("instantiation",
-		"the stream law waits on its catalogue row, and says so")
+	testkit.Assert(t, unbound[lawid.StreamCompletion]).Contains("iterator",
+		"the drain names what it cannot yet consume")
+	testkit.Assert(t, unbound[lawid.StreamReentrant]).Contains("iterator",
+		"and so does the reentrancy claim")
 }
 
 // TestNoReaderWriterPairAtAll covers the other half of the derivation guard:

@@ -25,6 +25,7 @@ type Value struct{ Key, Body string }
 //testkit:out noduplicatestest/ pkg=noduplicatestest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Add puts an element in for the drain to yield.
 	Add(ctx context.Context, v Value) error

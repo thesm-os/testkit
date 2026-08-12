@@ -78,4 +78,14 @@ var bindings = map[string]Binding{
 	lawid.ReadAfterWrite:        {Type: "ReadAfterWrite", Args: []BindArg{BindKey, BindValue}},
 	lawid.Sticky:                {Type: "Sticky", Args: []BindArg{BindKey, BindValue}, Ptr: true},
 	lawid.WriteObservable:       {Type: "WriteObservable", Args: []BindArg{BindValue, BindKey}},
+
+	// The stream family. The hash argument is the value itself — the drained
+	// values are comparable, so identity is the strongest fingerprint and the
+	// only one nothing has to invent.
+	lawid.StreamCompletion:   {Type: "StreamCompletion", Args: []BindArg{BindValue}},
+	lawid.StreamNoDuplicates: {Type: "StreamNoDuplicates", Args: []BindArg{BindValue, BindValue}},
+	lawid.StreamOverMatch:    {Type: "StreamOverMatch", Args: []BindArg{BindValue, BindValue}},
+	lawid.StreamPermutation:  {Type: "StreamPermutation", Args: []BindArg{BindValue, BindValue}},
+	lawid.StreamReentrant:    {Type: "StreamReentrancy", Args: []BindArg{BindValue}},
+	lawid.StreamStableOrder:  {Type: "StreamStableOrder", Args: []BindArg{BindValue}},
 }

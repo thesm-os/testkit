@@ -72,4 +72,29 @@ func TestEveryMapStoreOpIsAMethod(t *testing.T) {
 		testkit.True(t, gate.HasMethod(store, op),
 			s+" delegates to MapStore."+op+", which exists")
 	}
+
+	keyed := reflect.TypeFor[ref.KeyedStore[string, string]]()
+	for _, s := range tiers.KeyedStoreShapes() {
+		op, _ := tiers.KeyedStoreOp(s)
+		testkit.True(t, gate.HasMethod(keyed, op),
+			s+" delegates to KeyedStore."+op+", which exists")
+	}
+	op, assigned := tiers.KeyedStoreMixinOp("deleteremoves")
+	testkit.True(t, assigned && gate.HasMethod(keyed, op),
+		"the delete assignment names a method the keyed oracle declares")
+
+	// Both collection forms carry the same surface, so one op table serves
+	// the log and the set the dedupe claim refines it into.
+	log := reflect.TypeFor[ref.Collection[string]]()
+	set := reflect.TypeFor[ref.SetCollection[string]]()
+	for _, s := range []string{"writer", tiers.ShapeCollector} {
+		op, ok := tiers.CollectionOp(s)
+		testkit.True(t, ok, s+" is a shape the collection models")
+		testkit.True(t, gate.HasMethod(log, op) && gate.HasMethod(set, op),
+			s+" delegates to "+op+", which both forms declare")
+	}
+	testkit.True(t, tiers.CollectionDedupes("noduplicates"),
+		"the dedupe refinement follows the claim")
+	testkit.False(t, tiers.CollectionDedupes("permutation"),
+		"and only the claim")
 }

@@ -244,8 +244,10 @@ type Reference struct {
 	// reports for a key nothing wrote.
 	TypeName, CtorName, MissName string
 
-	// Oracle names which shipped store the adapter wraps.
+	// Oracle names which shipped store the adapter wraps, and Dedupe its
+	// deduplicating refinement where a mixin claims it.
 	Oracle Oracle
+	Dedupe bool
 
 	// KeyField is the field of the value type the map oracle keys on, empty
 	// for the keyed oracle, whose key is an argument.
@@ -255,11 +257,13 @@ type Reference struct {
 // Oracle names a shipped reference implementation the adapter can wrap.
 type Oracle string
 
-// The two store models Go interfaces declare: a value that carries its own
-// key, and a key passed beside the value.
+// The three store models Go interfaces declare: a value that carries its own
+// key, a key passed beside the value, and an append-and-drain collection with
+// no keys at all.
 const (
-	OracleMap   Oracle = "map"
-	OracleKeyed Oracle = "keyed"
+	OracleMap        Oracle = "map"
+	OracleKeyed      Oracle = "keyed"
+	OracleCollection Oracle = "collection"
 )
 
 // Supplied reports that the directive named the reference.
@@ -269,14 +273,25 @@ func (r Reference) Supplied() bool { return r.SuppliedCtor != nil }
 // constructor — the naming convention `ref` keeps, relied on here so the
 // template asks one question instead of branching twice.
 func (r Reference) StoreType() string {
-	if r.Oracle == OracleKeyed {
+	switch r.Oracle {
+	case OracleKeyed:
 		return "KeyedStore"
+	case OracleCollection:
+		if r.Dedupe {
+			return "SetCollection"
+		}
+		return "Collection"
+	case OracleMap:
 	}
 	return "MapStore"
 }
 
 // Keyed reports the keyed-put oracle, whose constructor takes no projection.
 func (r Reference) Keyed() bool { return r.Oracle == OracleKeyed }
+
+// Collects reports the append-and-drain oracle: one type argument, no keys,
+// no miss sentinel — a drain of nothing is an empty slice, not an error.
+func (r Reference) Collects() bool { return r.Oracle == OracleCollection }
 
 // Action is one method, driven and compared.
 type Action struct {
@@ -506,7 +521,7 @@ func bindingsOf(
 	}
 
 	partners := partnerMethods(iface)
-	var keyed, valued, composite *suite.Method
+	var keyed, valued, composite, collector *suite.Method
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if role, partner := partners[m.Name]; partner {
@@ -526,6 +541,8 @@ func bindingsOf(
 			valued = m
 		case shapeCompositeWriter:
 			composite = m
+		case tiers.ShapeCollector:
+			collector = m
 		}
 	}
 
@@ -537,7 +554,7 @@ func bindingsOf(
 		return nil, false
 	}
 
-	if !referenceOf(ctx, iface, harness, b, keyed, valued, composite, partners) {
+	if !referenceOf(ctx, iface, harness, b, keyed, valued, composite, collector, partners) {
 		return nil, false
 	}
 	poolsOf(b, keyed, valued, composite)
@@ -547,9 +564,27 @@ func bindingsOf(
 
 // actionOf builds one method's action, or says why there is none.
 func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
-	name := shape.Get(m.Source.Meta())
+	name := pseudoShape(m)
 	if name == "" {
 		return nil, "the annotator classified no shape for it"
+	}
+	if name == tiers.ShapeCollector {
+		// The aggregator constructors compare a comparable result, and a
+		// slice is not one; the stream action drains it instead.
+		elem, err := collectorElem(b, m)
+		if err != "" {
+			return nil, err
+		}
+		return &Action{
+			BaseEmit: b.BaseEmit,
+			KindName: sdk.Kind(ActionKindPrefix + tiers.ShapeCollector),
+			Method:   m.Name,
+			Shape:    tiers.ShapeCollector,
+			Ctor:     sdk.NewExternal(actionPkg, "Stream"),
+			Iface:    b.IfaceRef,
+			TakesCtx: m.TakesContext(),
+			Value:    elem,
+		}, ""
 	}
 	ctor, mapped := tiers.ActionFor(name)
 	if !mapped {
@@ -596,6 +631,28 @@ func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
 	return a, ""
 }
 
+// pseudoShape is the detector's spelling, refined by the one fact the
+// annotator does not state: an aggregator returning a slice is a collector,
+// which drains rather than compares.
+func pseudoShape(m *suite.Method) string {
+	name := shape.Get(m.Source.Meta())
+	if name == "aggregator" && returnsSlice(m) {
+		return tiers.ShapeCollector
+	}
+	return name
+}
+
+// collectorElem lifts the collector's element type into a renderable
+// reference.
+func collectorElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
+	elem := shape.GoSliceElem(m.Returns[0].Source)
+	ref, err := golang.RefForQualified(shape.QName(elem), b.IfaceName)
+	if err != nil {
+		return nil, "collects " + shape.QName(elem) + ", which no reference can spell: " + err.Error()
+	}
+	return ref, ""
+}
+
 // referenceOf fills the reference, or reports what would let one be derived.
 //
 // Two oracles cover the two store models Go interfaces actually declare. A
@@ -609,7 +666,7 @@ func referenceOf(
 	iface *sdk.Interface,
 	harness *suite.Contract,
 	b *Bindings,
-	keyed, valued, composite *suite.Method,
+	keyed, valued, composite, collector *suite.Method,
 	partners map[string]string,
 ) bool {
 	if named, given := directiveValue(iface, RefKey); given {
@@ -632,6 +689,44 @@ func referenceOf(
 		// would — and a consumer comparing against it gets the same door.
 		CtorName: "New" + harness.IfaceName + "ModelReference",
 		MissName: lower + "ModelMiss",
+	}
+
+	if keyed == nil && collector != nil && valued != nil {
+		// A value writer beside a collector, nothing keyed to read. The one
+		// agreement to check is that the writer adds what the collector
+		// returns.
+		wroteV, _ := shape.MetaValueType.Get(valued.Source.Meta())
+		elem := shape.QName(shape.GoSliceElem(collector.Returns[0].Source))
+		if wroteV == "" || wroteV != elem {
+			ctx.Diag.Errorf(iface.Pos(),
+				"%s: %q collects %s where its writer adds %s, which one collection "+
+					"cannot model; name a constructor with //testkit:%s %s=<constructor>",
+				Name, iface.Name, elem, wroteV, DirectiveName, RefKey)
+			return false
+		}
+		// A derivable key field means upsert semantics — a second add under
+		// a held key replaces — and the map is the store that models it. A
+		// value with no key is a log entry, deduplicated only where the
+		// noduplicates claim says so. The corpus taught this fork: every
+		// drain fixture whose subject was a keyed map diverged from a log at
+		// the first repeated add, correctly on both sides.
+		if field, keyRef := upsertKeyField(ctx, b, wroteV); field != "" {
+			names.Oracle = OracleMap
+			names.KeyField = field
+			b.Keys.Type = keyRef
+			b.Reference = names
+			b.Adapter = adapterOf(harness, partners, OracleMap)
+			return true
+		}
+		names.Oracle = OracleCollection
+		for _, mixin := range append(append([]string{}, collector.Mixins...), valued.Mixins...) {
+			if tiers.CollectionDedupes(mixin) {
+				names.Dedupe = true
+			}
+		}
+		b.Reference = names
+		b.Adapter = adapterOf(harness, partners, OracleCollection)
+		return true
 	}
 
 	if keyed != nil && composite != nil {
@@ -686,6 +781,33 @@ func referenceOf(
 	b.Reference = names
 	b.Adapter = adapterOf(harness, partners, OracleMap)
 	return true
+}
+
+// upsertKeyField finds the identity field of an unread value type — the
+// conventional ID or Key spelling — and lifts its type, for the writer-plus-
+// drain interfaces whose subjects upsert by it. No reader states the key
+// type, so the convention is the whole signal; a value keyed otherwise falls
+// to the collection oracle, and a log subject with an incidental Key field
+// falls to ref= — the header names the store either way.
+func upsertKeyField(ctx *sdk.GeneratorContext, b *Bindings, valueQ string) (string, sdk.Ref) {
+	for cand := range ctx.Reader.Structs().All() {
+		if cand.Package+"."+cand.Name != valueQ {
+			continue
+		}
+		for _, preferred := range []string{"ID", "Key"} {
+			for _, f := range cand.Fields {
+				if f.Name != preferred {
+					continue
+				}
+				ref, err := golang.RefForQualified(shape.QName(f.Type), b.IfaceName)
+				if err != nil {
+					return "", nil
+				}
+				return f.Name, ref
+			}
+		}
+	}
+	return "", nil
 }
 
 // keyFieldOf finds the one field of the value struct that can hold the key,
@@ -757,15 +879,19 @@ func adapterOf(harness *suite.Contract, partners map[string]string, oracle Oracl
 // assignment first — the stamp says what a method is for, outranking what it
 // looks like — then the oracle's shape table.
 func oracleOp(oracle Oracle, m *suite.Method) (string, bool) {
-	if oracle == OracleKeyed {
+	switch oracle {
+	case OracleKeyed:
 		for _, name := range m.Mixins {
 			if op, assigned := tiers.KeyedStoreMixinOp(name); assigned {
 				return op, true
 			}
 		}
-		return tiers.KeyedStoreOp(shape.Get(m.Source.Meta()))
+		return tiers.KeyedStoreOp(pseudoShape(m))
+	case OracleCollection:
+		return tiers.CollectionOp(pseudoShape(m))
+	case OracleMap:
 	}
-	return tiers.MapStoreOp(shape.Get(m.Source.Meta()))
+	return tiers.MapStoreOp(pseudoShape(m))
 }
 
 // poolsOf fills the shared pools from the fixture fields the harness already

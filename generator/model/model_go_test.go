@@ -83,7 +83,8 @@ func TestGoTemplates(t *testing.T) {
 			}
 			shape := strings.TrimSuffix(rest, ".tmpl")
 			_, known := tiers.ActionFor(shape)
-			testkit.True(t, known, name+" names the "+shape+" shape, which the catalogue drives")
+			testkit.True(t, known || shape == tiers.ShapeCollector,
+				name+" names the "+shape+" shape, which the catalogue drives")
 		}
 	})
 }

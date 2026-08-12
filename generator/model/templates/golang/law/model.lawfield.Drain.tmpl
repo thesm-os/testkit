@@ -1,0 +1,8 @@
+{{- /*
+Drain is the claim's observation: everything the subject holds, in one call.
+*/ -}}
+{{- define "model.lawfield.Drain" -}}
+Drain: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ([]{{ renderType .Value }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

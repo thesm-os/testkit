@@ -1,0 +1,11 @@
+{{- /*
+A collector drains everything both sides hold and compares the whole answer —
+order, duplicates and all, which is exactly what the stream mixins then relax
+per claim.
+*/ -}}
+{{- define "model.action.collector" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) ([]{{ renderType .Value }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }})
+				})
+{{- end -}}

@@ -88,6 +88,7 @@ var mapStoreOps = map[string]string{
 	shapeWriter:       "Put",
 	shapeAggregator:   "Count",
 	shapeStreamReader: "List",
+	ShapeCollector:    "Values",
 }
 
 // KeyedStoreOp returns the [engine/model/ref.KeyedStore] method a shape
@@ -139,3 +140,41 @@ var (
 		mixinDeleteRemoves: "Delete",
 	}
 )
+
+// CollectionOp returns the [engine/model/ref.Collection] method a shape
+// delegates to — the append-and-drain oracle behind the stream mixins, chosen
+// where a value writer stands beside a collector and no reader keys anything.
+//
+// The collector spelling is the derived pseudo-shape [ShapeCollector]: an
+// aggregator whose result is a slice, which the aggregator constructors
+// cannot compare and [engine/model/action.Stream] drains.
+func CollectionOp(shape string) (string, bool) {
+	op, ok := collectionOps[shape]
+	return op, ok
+}
+
+// ShapeCollector is the derived spelling for an aggregator-shaped method
+// returning a slice.
+//
+// A pseudo-shape rather than a detector: eidos classifies the signature as an
+// aggregator, and the slice result is a fact the generator reads off the
+// declaration. It exists so the op tables and the action dispatch can name
+// the case without either inventing annotator vocabulary — the census checks
+// it never collides with a real detector.
+const ShapeCollector = "collector"
+
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var collectionOps = map[string]string{
+	shapeWriter:    "Add",
+	ShapeCollector: "Items",
+}
+
+// CollectionDedupes reports whether the named mixin turns the collection
+// oracle into its deduplicating form.
+//
+// The one row is noduplicates: a subject collapsing repeats is that mixin's
+// whole claim, and a plain log diverges from it — by design — at the second
+// identical add. The stamp refines the oracle the way it refines delegation.
+func CollectionDedupes(mixin string) bool {
+	return mixin == mixinNoDuplicates
+}
