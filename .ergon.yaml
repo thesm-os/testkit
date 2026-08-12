@@ -285,6 +285,13 @@ checks:
     - label: fixed-plugin-set
       func_glob: "run"
       file_glob: "conformance/gate/annotate.go"
+    # Emission builds its pipeline from the same compile-time plugin set as
+    # run above, with the generators added; the Build error arm is equally
+    # unreachable, and the origin fallback guards an emit value the model
+    # plugin only ever queues on interfaces.
+    - label: fixed-plugin-set
+      func_glob: "Emission"
+      file_glob: "conformance/gate/emission.go"
 
   # Example:
   #   skips:

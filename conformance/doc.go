@@ -52,14 +52,13 @@
 //
 // # Hazards
 //
-// Fixtures are declarations only — no implementations. That is deliberate and
-// temporary: a generated suite needs a subject to run against, and a subject
-// with state baked into its constructor is untestable. A suite draws its own
-// keys, so a pre-seeded entry is never the one drawn; and differential testing
-// diverges on the first read, because the reference implementation starts
-// empty and the subject does not.
-//
-// Whatever supplies subjects has to let the caller establish state rather than
-// assuming it, and that mechanism is unresolved. Until it is, the corpus
-// carries no implementations rather than carrying misleading ones.
+// Fixture packages declare interfaces; their subjects live beside the
+// generated harness, in each `<pkg>test` directory's `inmemory.go`. The
+// split is load-bearing both ways: a fixture package stating only a shape
+// can be generated for and compiled, and the in-memory subject is what makes
+// the corpus *run* the generated checks rather than merely emit them. Every
+// subject starts empty and lets the harness establish state — the seed, the
+// sequences, the laws all write before they read — because a subject with
+// state baked into its constructor would collide with the keys the suite
+// draws and diverge from a reference that starts empty.
 package conformance

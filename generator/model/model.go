@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.9.3"
+const Version = "0.10.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -525,7 +525,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		// factory, which the contract run itself drives.
 		queued := []sdk.EmitNode{b}
 		if b.Reference.Derived() {
-			queued = append(queued, companionOf(c, iface, b, harness))
+			queued = append(queued, companionOf(c, iface, b))
 		}
 		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, queued...); err != nil {
 			return fmt.Errorf("%s: queue interface %q: %w", Name, iface.Name, err)
@@ -568,25 +568,10 @@ type Companion struct {
 
 	// LowerIface prefixes the mutant type names.
 	LowerIface string
-
-	// Inert is every adapter method the companion calls once with derived
-	// arguments — proving the body answers, whatever it is handed.
-	Inert []InertProbe
 }
 
 // Kind returns [KindCompanion].
 func (*Companion) Kind() sdk.Kind { return KindCompanion }
-
-// NeedsFixture reports whether any inert probe takes an argument — an unused
-// fixture local is a compile error in a generated file.
-func (c *Companion) NeedsFixture() bool {
-	for _, p := range c.Inert {
-		if len(p.ArgFields) > 0 {
-			return true
-		}
-	}
-	return false
-}
 
 // ModelPkg surfaces the runner's import path to the template.
 func (*Companion) ModelPkg() string { return ModelPkg }
@@ -617,23 +602,8 @@ type Mutant struct {
 // reaches the failure surrogate through it.
 func (*Companion) RootPkg() string { return RootPkg }
 
-// InertProbe is one inert method call the companion makes.
-type InertProbe struct {
-	// Method is the call; TakesCtx forwards the test's context.
-	Method   string
-	TakesCtx bool
-
-	// ArgFields name the fixture fields the call is handed.
-	ArgFields []string
-
-	// Assign discards the call's results — "_, _ = " for two, empty for a
-	// method returning nothing. Spelled here rather than composed in the
-	// template, which has no loop over a count.
-	Assign string
-}
-
 // companionOf derives the companion from the bindings it proves.
-func companionOf(c *sdk.Provenance, iface *sdk.Interface, b *Bindings, harness *suite.Contract) *Companion {
+func companionOf(c *sdk.Provenance, iface *sdk.Interface, b *Bindings) *Companion {
 	comp := &Companion{
 		BaseEmit:            sdk.EmitBaseTagged(sdk.EmitBase(c, iface), GoTestOutputTag),
 		Subject:             b.Subject,
@@ -657,27 +627,7 @@ func companionOf(c *sdk.Provenance, iface *sdk.Interface, b *Bindings, harness *
 	for _, a := range b.Actions {
 		comp.Mutants = append(comp.Mutants, Mutant{Method: a.Method, Sig: sigs[a.Method]})
 	}
-	for _, am := range b.Adapter {
-		if am.Op != "" {
-			continue
-		}
-		m := methodOf(harness, am.Sig.Name)
-		comp.Inert = append(comp.Inert, InertProbe{
-			Method:    am.Sig.Name,
-			TakesCtx:  m.TakesContext(),
-			ArgFields: m.ArgFields,
-			Assign:    discardOf(len(am.Sig.Returns)),
-		})
-	}
 	return comp
-}
-
-// discardOf spells the assignment that drops n results.
-func discardOf(n int) string {
-	if n == 0 {
-		return ""
-	}
-	return strings.Repeat("_, ", n-1) + "_ = "
 }
 
 // methodOf finds one projection method by name; the adapter was built from

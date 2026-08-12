@@ -75,6 +75,13 @@ func Test{{ .IfaceName }}ModelKillsInertMutants(t *{{ renderExpr (external "test
 			}))
 			{{ renderExpr (external .RootPkg "True") }}(t, f.Failed(),
 				"an inert "+m.method+" must diverge from the clean reference")
+			// Identity, not existence: a kill is the differential's own —
+			// an action divergence or a law violation — and a run reddened
+			// by anything else, a panic or a harness fault, is not a kill.
+			msg := f.Msg()
+			{{ renderExpr (external .RootPkg "True") }}(t,
+				{{ renderExpr (external "strings" "Contains") }}(msg, "[semantic]") || {{ renderExpr (external "strings" "Contains") }}(msg, "[invariant]"),
+				"the failure is the run's classified divergence, not a stray panic: "+msg)
 		})
 	}
 }
@@ -85,22 +92,11 @@ type {{ $c.LowerIface }}ModelMutant{{ .Method }} struct{ {{ renderType $c.IfaceR
 func ({{ $c.LowerIface }}ModelMutant{{ .Method }}) {{ .Method }}({{ template "model.mutantparams" .Sig }}) {{ template "model.zeroresults" .Sig }}
 {{ end }}
 {{ end }}
-{{ if .Inert }}
-// Test{{ .IfaceName }}ModelReferenceInertBodies calls what the sequences
-// never do. An inert body's whole contract is answering zero values whatever
-// it is handed; a panic here would ambush the first consumer who reaches the
-// reference through the interface.
-func Test{{ .IfaceName }}ModelReferenceInertBodies(t *{{ renderExpr (external "testing" "T") }}) {
-	t.Parallel()
-{{- if .NeedsFixture }}
-	fx := {{ renderExpr (external .HarnessPkg .FixtureCtor) }}()
-{{- end }}
-	r := {{ renderExpr (external .HarnessPkg .RefCtorName) }}()
-{{- range $p := .Inert }}
-	{{ $p.Assign }}r.{{ $p.Method }}({{ if $p.TakesCtx }}t.Context(){{ end }}{{ range $i, $f := $p.ArgFields }}{{ if or $i $p.TakesCtx }}, {{ end }}fx.{{ $f }}{{ end }})
-{{- end }}
-}
-{{ end }}
+{{- /*
+No probe calls the inert bodies: they are generated naked returns, and a
+test that cannot fail asserts nothing — the audit's own standard. Their
+existence is compiled by the adapter; their reasons print in the header.
+*/ -}}
 {{- end -}}
 
 {{- /*
