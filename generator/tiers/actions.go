@@ -178,3 +178,14 @@ var collectionOps = map[string]string{
 func CollectionDedupes(mixin string) bool {
 	return mixin == mixinNoDuplicates
 }
+
+// MapStorePins reports whether the named mixin turns the map oracle into its
+// resolution-pinning form.
+//
+// The one row is sticky: once a key resolves, it keeps resolving to the same
+// value, and a latest-write-wins map diverges from that — by design — at the
+// first read after an overwrite. The corpus proved the row the day the pools
+// grew wide enough to draw one.
+func MapStorePins(mixin string) bool {
+	return mixin == mixinSticky
+}

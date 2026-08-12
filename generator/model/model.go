@@ -6,6 +6,8 @@ package model
 import (
 	"fmt"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
@@ -25,7 +27,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -212,9 +214,13 @@ func (b *Bindings) UsesValues() bool {
 	return false
 }
 
-// UsesKeys reports whether any action draws from the keys pool. A composite
-// writer draws from both, whatever its Pool says.
+// UsesKeys reports whether anything draws from the keys pool. A composite
+// writer draws from both, whatever its Pool says, and a pinned values pool
+// draws a key for every value.
 func (b *Bindings) UsesKeys() bool {
+	if b.Values.Pin != "" {
+		return true
+	}
 	for _, a := range b.Actions {
 		if a.Pool == poolKeys || a.Shape == shapeCompositeWriter {
 			return true
@@ -223,13 +229,26 @@ func (b *Bindings) UsesKeys() bool {
 	return false
 }
 
-// Pool is one shared value source: a fixture field and its companion.
+// Pool is one shared value source: a fixture field and its companion, and how
+// far past them the draws reach.
 type Pool struct {
-	// Field and OtherField name the fixture fields the pool samples.
+	// Field and OtherField name the fixture fields the pool samples — dotted
+	// where the key rides inside a fixture value rather than beside it.
 	Field, OtherField string
 
 	// Type is the drawn type, for the slice literal's element clause.
 	Type sdk.Ref
+
+	// Wide reports that the pool blends the fixture pair with arbitrary
+	// [model.Make] draws; WhyNarrow is the header's reason where it cannot.
+	Wide      bool
+	WhyNarrow string
+
+	// Pin is the value field overwritten with a keys-pool draw, so every
+	// drawn value lands on a key the reads revisit — empty where the key is
+	// an argument beside the value, or where a restricting claim holds the
+	// pool to values the harness has proven accepted.
+	Pin string
 }
 
 // Reference is how the run builds its oracle.
@@ -244,10 +263,12 @@ type Reference struct {
 	// reports for a key nothing wrote.
 	TypeName, CtorName, MissName string
 
-	// Oracle names which shipped store the adapter wraps, and Dedupe its
-	// deduplicating refinement where a mixin claims it.
+	// Oracle names which shipped store the adapter wraps; Dedupe and Pins are
+	// its deduplicating and resolution-pinning refinements, each where a
+	// mixin claims it.
 	Oracle Oracle
 	Dedupe bool
+	Pins   bool
 
 	// KeyField is the field of the value type the map oracle keys on, empty
 	// for the keyed oracle, whose key is an argument.
@@ -282,6 +303,9 @@ func (r Reference) StoreType() string {
 		}
 		return "Collection"
 	case OracleMap:
+	}
+	if r.Pins {
+		return "StickyStore"
 	}
 	return "MapStore"
 }
@@ -557,7 +581,7 @@ func bindingsOf(
 	if !referenceOf(ctx, iface, harness, b, keyed, valued, composite, collector, partners) {
 		return nil, false
 	}
-	poolsOf(b, keyed, valued, composite)
+	poolsOf(ctx, b, harness, keyed, valued, composite)
 	lawsOf(b, harness, partners, keyed)
 	return b, true
 }
@@ -778,6 +802,14 @@ func referenceOf(
 
 	names.Oracle = OracleMap
 	names.KeyField = field
+	for _, mixin := range keyed.Mixins {
+		// The reader's claim refines the oracle the way the drain's dedupe
+		// claim refines the collection: sticky resolution is a different
+		// store, not a different pool.
+		if tiers.MapStorePins(mixin) {
+			names.Pins = true
+		}
+	}
 	b.Reference = names
 	b.Adapter = adapterOf(harness, partners, OracleMap)
 	return true
@@ -895,13 +927,24 @@ func oracleOp(oracle Oracle, m *suite.Method) (string, bool) {
 }
 
 // poolsOf fills the shared pools from the fixture fields the harness already
-// derived — the same values its checks and seed use, so the sequences keep
-// hitting the keys the rest of the file talks about.
+// derived, then decides how far past them the value draws reach.
 //
 // The composite writer supplies the value pool where one exists: a plain
 // writer beside it is usually a delete or a touch, whose one argument is a
 // key, and a values pool drawn from that would feed keys to every value slot.
-func poolsOf(b *Bindings, keyed, valued, composite *suite.Method) {
+//
+// The keys stay the fixture pair: collision density is what makes a read
+// revisit a write and an overwrite land on held state, and a wide key pool
+// would pass every comparison over a history that never collides. The values
+// widen wherever the claims license it, and — where the value carries its own
+// key — pin that field to the keys pool, so the same key is rewritten under
+// different bodies: the overwrite two fixed fixture values never draw.
+func poolsOf(
+	ctx *sdk.GeneratorContext,
+	b *Bindings,
+	harness *suite.Contract,
+	keyed, valued, composite *suite.Method,
+) {
 	if keyed != nil {
 		arg := keyed.CallArgs()[0]
 		b.Keys = Pool{
@@ -925,7 +968,131 @@ func poolsOf(b *Bindings, keyed, valued, composite *suite.Method) {
 			OtherField: valued.ArgFields[0] + suite.OtherSuffix,
 			Type:       arg.Type,
 		}
+	default:
+		return
 	}
+
+	if restricted := widenValues(ctx, b, harness); restricted {
+		// A restricting claim holds the pool to values the harness has
+		// proven accepted — recombining a proven body with another key is
+		// already a value nothing proved.
+		return
+	}
+	pinValues(ctx, b, keyed, valued, composite)
+}
+
+// pinValues pins the value's key field to the keys pool where the value
+// carries its own key, deriving the pool itself where no reader supplies one.
+//
+// A supplied reference skipped the key-field derivation, so the pin retries
+// it best-effort: found, the wide pool lands on pooled keys the way a derived
+// one does; not found, the pool narrows — wide values keyed afresh would
+// never collide with a key the reads revisit, which is shallower than the
+// fixture pair, not deeper.
+func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite *suite.Method) {
+	pin := b.Reference.KeyField
+	if pin == "" && b.Reference.Supplied() && keyed != nil && valued != nil && composite == nil {
+		keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
+		readV, _ := shape.MetaValueType.Get(keyed.Source.Meta())
+		wroteV, _ := shape.MetaValueType.Get(valued.Source.Meta())
+		if readV != "" && readV == wroteV {
+			pin, _ = keyFieldOf(ctx, readV, keyQ)
+		}
+		if pin == "" {
+			b.Values.Wide = false
+			b.Values.WhyNarrow = "no key field is derivable to pin a wide draw onto the pooled keys"
+			return
+		}
+	}
+	b.Values.Pin = pin
+	if pin != "" && keyed == nil {
+		// The drain path has no reader to supply keys; the fixture values'
+		// own key fields are the colliding set.
+		b.Keys.Field = b.Values.Field + "." + pin
+		b.Keys.OtherField = b.Values.OtherField + "." + pin
+	}
+}
+
+// widenValues decides how far past the fixture pair the values pool reaches,
+// reporting whether a restricting claim made the decision.
+//
+// Wide is the default the contract earns: a writer with no restricting claim
+// accepts any value of its type, so the pool blends the fixture pair with
+// arbitrary draws and a subject refusing one has broken its own claim. A
+// [tiers.ValueRestriction] inverts the license, and a type whose graph this
+// build cannot see to the bottom would arm a [model.Make] panic instead of a
+// deeper run; both keep the pair, and the header says which.
+func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *suite.Contract) bool {
+	drawing := map[string]bool{}
+	for _, a := range b.Actions {
+		if a.Pool == poolValues {
+			drawing[a.Method] = true
+		}
+	}
+	var valueQ string
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		if !drawing[m.Name] {
+			continue
+		}
+		for _, mixin := range m.Mixins {
+			if reason, restricted := tiers.ValueRestriction(mixin); restricted {
+				b.Values.WhyNarrow = "the " + mixin + " claim on " + m.Name + " " + reason
+				return true
+			}
+		}
+		if q, ok := shape.MetaValueType.Get(m.Source.Meta()); ok && q != "" {
+			valueQ = q
+		}
+	}
+	if why := unmakeable(ctx, valueQ, map[string]bool{}); why != "" {
+		b.Values.WhyNarrow = why
+		return false
+	}
+	b.Values.Wide = true
+	return false
+}
+
+// unmakeable reports why [model.Make] cannot be trusted to draw the named
+// type, empty where it can.
+//
+// rapid resolves the type graph at run time and panics on a kind it cannot
+// draw, so the walk here is the mirror of that resolution over what this
+// build can see: a scalar draws, an exported struct field recurses, an
+// unexported one is skipped the way Make skips it, and anything else — a
+// declaration out of reach, an interface, a spelling the frontend does not
+// resolve to a struct — keeps the pool narrow instead of arming a panic.
+func unmakeable(ctx *sdk.GeneratorContext, typeQ string, seen map[string]bool) string {
+	if scalarKinds[typeQ] || seen[typeQ] {
+		return ""
+	}
+	seen[typeQ] = true
+	for cand := range ctx.Reader.Structs().All() {
+		if cand.Package+"."+cand.Name != typeQ {
+			continue
+		}
+		for _, f := range cand.Fields {
+			if r, _ := utf8.DecodeRuneInString(f.Name); !unicode.IsUpper(r) {
+				// Unexported: Make leaves it zero, which draws fine.
+				continue
+			}
+			if why := unmakeable(ctx, shape.QName(f.Type), seen); why != "" {
+				return why
+			}
+		}
+		return ""
+	}
+	return typeQ + " reaches a type this build cannot prove a wide draw serves"
+}
+
+// scalarKinds is the predeclared vocabulary a wide draw serves unconditionally.
+//
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var scalarKinds = map[string]bool{
+	"bool": true, "string": true, "byte": true, "rune": true,
+	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
+	"uintptr": true, "float32": true, "float64": true,
 }
 
 // partnerMethods maps each method excluded by a mixin's sibling reference to

@@ -68,6 +68,15 @@ func TestBindings(t *testing.T) {
 		testkit.Equal(t, b.Keys.OtherField, "KeyOther", "with the companion beside it")
 		testkit.Equal(t, b.Values.Field, "V", "values are the writer's")
 	})
+
+	t.Run("the validates claim narrows the values", func(t *testing.T) {
+		t.Parallel()
+		testkit.False(t, b.Values.Wide, "a validating subject may refuse a raw draw")
+		testkit.Assert(t, b.Values.WhyNarrow).Contains("validates claim on Store",
+			"the header names the claim and its carrier")
+		testkit.Equal(t, b.Values.Pin, "",
+			"and even a recombined fixture body is a value nothing proved accepted")
+	})
 }
 
 // TestSuppliedReference pins the escape hatch: ref= replaces the derivation
@@ -486,6 +495,96 @@ func keyedStore(t *testing.T, sentinel string) *sdk.Store {
 	return s
 }
 
+// TestValuePoolWidth walks the widening decision's arms: the license the
+// claims grant, the pin that keeps a wide draw colliding, and the two ways a
+// pool stays narrow without a restricting claim.
+func TestValuePoolWidth(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a scalar-fielded value goes wide, keyed from the pool", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"ID", "string"}, field{"N", "int"}))
+		testkit.True(t, b.Values.Wide, "nothing in the claims restricts the domain")
+		testkit.Equal(t, b.Values.Pin, "ID", "and every draw lands on a pooled key")
+		testkit.Equal(t, b.Values.WhyNarrow, "", "so there is nothing to explain")
+	})
+
+	t.Run("an unexported field is skipped the way Make skips it", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"ID", "string"}, field{"body", "string"}))
+		testkit.True(t, b.Values.Wide, "Make leaves it zero, which draws fine")
+	})
+
+	t.Run("a field out of reach keeps the pair, pinned", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"ID", "string"}, field{"When", "time.Time"}))
+		testkit.False(t, b.Values.Wide, "a wide draw would arm a run-time panic")
+		testkit.Assert(t, b.Values.WhyNarrow).Contains("time.Time", "naming the reach")
+		testkit.Equal(t, b.Values.Pin, "ID",
+			"recombining proven bodies with pooled keys is still licensed")
+	})
+
+	t.Run("a keyed put widens with no pin", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, keyedStore(t, "example.com/kv.ErrGone"))
+		testkit.True(t, b.Values.Wide, "a scalar value serves a wide draw")
+		testkit.Equal(t, b.Values.Pin, "", "the key is an argument, not a field")
+	})
+
+	t.Run("a supplied reference retries the pin", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStoreWith(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			[]storefixture.DirectiveOption{storefixture.KV(model.RefKey, "NewFake")},
+			field{"ID", "string"}))
+		testkit.True(t, b.Reference.Supplied(), "ref= replaced the derivation")
+		testkit.Equal(t, b.Values.Pin, "ID", "but the pin derives on its own")
+		testkit.True(t, b.Values.Wide, "so the wide pool still lands on pooled keys")
+	})
+
+	t.Run("a supplied reference with no derivable pin narrows", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStoreWith(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			[]storefixture.DirectiveOption{storefixture.KV(model.RefKey, "NewFake")}))
+		testkit.False(t, b.Values.Wide, "wide values keyed afresh never collide")
+		testkit.Assert(t, b.Values.WhyNarrow).Contains("pin a wide draw",
+			"and the header says what is missing")
+	})
+}
+
+// TestStickyRefinement walks the conflict the corpus surfaced the day the
+// pools went wide: a sticky reader refines the oracle to its pinning form,
+// and negates the observability law the writer's shape would otherwise earn —
+// on a sticky store the two claims contradict at the first overwrite.
+func TestStickyRefinement(t *testing.T) {
+	t.Parallel()
+
+	s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc", field{"ID", "string"})
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == "Get" {
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"sticky"}, "test")
+			}
+		}
+	}
+	b := bindingsOf(t, s)
+
+	testkit.True(t, b.Reference.Pins, "the reader's claim refines the oracle")
+	testkit.Equal(t, b.Reference.StoreType(), "StickyStore", "to its pinning form")
+
+	unbound := map[string]string{}
+	for _, u := range b.Unbound {
+		unbound[u.Method] = u.Reason
+	}
+	testkit.Assert(t, unbound[lawid.WriteObservable]).Contains("sticky claim",
+		"the negated law is listed with the contradiction, not silently absent")
+	for _, l := range b.Laws {
+		testkit.NotEqual(t, l.ID, lawid.WriteObservable, "and never bound")
+	}
+}
+
 // TestConventionalKeyFieldBreaksTheTie pins the preference order: among
 // several fields of the key's type, ID outranks everything, because that is
 // the name an author gives the field that is the identity.
@@ -506,19 +605,31 @@ type field struct{ name, typ string }
 // derivation walks all the way.
 func kvStore(t *testing.T, readV, writeV string, fields ...field) *sdk.Store {
 	t.Helper()
+	return kvStoreWith(t, readV, writeV, nil, fields...)
+}
+
+// kvStoreWith is [kvStore] with directive options, for the supplied-reference
+// arms.
+func kvStoreWith(
+	t *testing.T,
+	readV, writeV string,
+	opts []storefixture.DirectiveOption,
+	fields ...field,
+) *sdk.Store {
+	t.Helper()
 	f := storefixture.New().Package("kv", "example.com/kv")
 	if len(fields) > 0 {
 		f = f.Struct("Doc", func(b *storefixture.StructBuilder) {
 			b.Pos(sdk.At("kv/iface.go", 1, 1))
 			for _, fl := range fields {
-				b.Field(fl.name, storefixture.Named(fl.typ), nil)
+				b.Field(fl.name, typeOf(fl.typ), nil)
 			}
 		})
 	}
 	s := f.Interface("Store", func(i *storefixture.InterfaceBuilder) {
 		i.Pos(sdk.At("kv/iface.go", 1, 1))
 		i.Directive(storefixture.Directive("suite"))
-		i.Directive(storefixture.Directive("model"))
+		i.Directive(storefixture.Directive("model", opts...))
 		i.Method("Get", func(m *storefixture.MethodBuilder) {
 			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 			m.Param("key", storefixture.Named("string"))
@@ -690,6 +801,12 @@ func TestDrainFixtures(t *testing.T) {
 		}
 		testkit.Equal(t, ops["Items"], "Values", "the collector drains the map's values")
 
+		testkit.True(t, b.Values.Wide, "the walk recurses through the nested struct")
+		testkit.Equal(t, b.Values.Pin, "Key", "pinned on the upsert field")
+		testkit.Equal(t, b.Keys.Field, b.Values.Field+".Key",
+			"with no reader, the fixture values' own keys are the colliding set")
+		testkit.True(t, b.UsesKeys(), "which the pin draws from")
+
 		var bound *model.LawBinding
 		for _, l := range b.Laws {
 			if l.ID == lawid.StreamNoDuplicates {
@@ -761,10 +878,14 @@ func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
 	valueRef := storefixture.Named("string")
 	valueQ := "string"
 	if keyedValue {
+		// The two Decoy fields make the wide-draw walk recurse into a nested
+		// struct and revisit it — the diamond that exercises the seen set.
 		f = f.Struct("Value", func(b *storefixture.StructBuilder) {
 			b.Pos(sdk.At("bag/iface.go", 1, 1))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Body", storefixture.Named("string"), nil)
+			b.Field("Meta", storefixture.PkgNamed("example.com/bag", "Decoy"), nil)
+			b.Field("More", storefixture.PkgNamed("example.com/bag", "Decoy"), nil)
 		})
 		valueRef = storefixture.PkgNamed("example.com/bag", "Value")
 		valueQ = "example.com/bag.Value"

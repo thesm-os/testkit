@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	// Aliased: a local in this file draws the bare spelling.
+	mixinreg "go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
@@ -184,4 +186,38 @@ func TestRulesHandsOutACopy(t *testing.T) {
 
 	testkit.NotEqual(t, tiers.Rules()[0].Law, "AUTO-TAMPERED",
 		"the catalogue is unchanged by a caller's edit")
+}
+
+// TestLawNegationsNameLiveRows holds the conflict table to both registries:
+// a row naming a retired law is a conflict nothing consults, and one naming a
+// retired mixin is a claim nothing stamps — either way the two laws bind
+// together again and contradict on the first overwrite.
+func TestLawNegationsNameLiveRows(t *testing.T) {
+	t.Parallel()
+
+	liveMixin := map[string]bool{}
+	for _, m := range mixinreg.All() {
+		liveMixin[m.Name] = true
+	}
+	selectable := map[string]bool{}
+	for _, r := range tiers.Rules() {
+		selectable[r.Law] = true
+	}
+	for _, n := range tiers.LawNegations() {
+		testkit.True(t, liveMixin[n.Mixin], n.Mixin+" is a mixin the registry declares")
+		testkit.True(t, selectable[n.Law], n.Law+" is a law some rule selects")
+		testkit.True(t, n.Reason != "", n.Law+"'s row carries a reason a header can print")
+	}
+}
+
+// TestLawNegated pins the lookup's two answers over the sticky row.
+func TestLawNegated(t *testing.T) {
+	t.Parallel()
+
+	reason, negated := tiers.LawNegated(lawid.WriteObservable, "sticky")
+	testkit.True(t, negated, "a sticky read negates write observability")
+	testkit.Assert(t, reason).Contains("resolved key", "with the contradiction spelled")
+
+	_, negated = tiers.LawNegated(lawid.WriteObservable, "causal")
+	testkit.False(t, negated, "and only the claimed conflicts negate")
 }

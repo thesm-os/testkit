@@ -1,12 +1,14 @@
 # Model
 
-> **Status: designed, not implemented — the runtime is shipped.**
+> **Status: the sequential tier is shipped; the deep runs are landing.**
 > [RFC-0003](../../rfc/0003-the-projection-consumers.md) fixes this
-> generator's design. The `engine/model` runtime it binds — the rapid-based
-> runner, the law catalogue, the reference oracles, the Porcupine models —
-> ships today and is usable by hand; the generator that derives the
-> bindings is not implemented. Where this page and the RFC differ, the RFC
-> is the authority.
+> generator's design. What ships today: the directive, the differential
+> property (actions, pools, derived references with their mixin
+> refinements, law bindings with their negation table), the generated
+> companion that proves the emission, and the consumer options. The
+> concurrent Porcupine path, the fuzz target, the exhaustive search and
+> the mutation kill test are queued. Where this page and the RFC differ,
+> the RFC is the authority.
 
 The `model` generator binds the classifications
 [ADR-0018](../../adr/0018-one-tier-owns-each-classification.md) assigns to
@@ -61,9 +63,13 @@ parameter with no hint is a diagnostic at the parameter.
 - **An action set** — one `engine/model/action` constructor call per
   method, matching its detector or contract; partner-role methods are
   excluded (the suite tier owns their checks).
-- **Generators, derived once** — keys from a small sampled set, the value
-  type's key field pinned to the same generator, shared by the sequential,
-  concurrent and exhaustive paths. Collisions are what make the laws fire.
+- **Generators, derived once** — keys from a small sampled set, values
+  blending the fixture pair with arbitrary `model.Make` draws, the value
+  type's key field pinned to the key pool, shared by every path.
+  Collisions are what make the laws fire; the wide bodies are what makes
+  a same-key overwrite carry a body no fixture spells. A claim that
+  narrows the accepted value domain (`validates`, `sample`) keeps the
+  pool to the proven fixture pair, and the header says so.
 - **A derived reference** — an adapter over the matching
   `engine/model/ref` oracle (`MapStore` for the CRUD family, `AtomicCell`
   for `cas`, `LeaseTracker` for `lease`, …), composed per state cluster
@@ -112,12 +118,12 @@ because it is the assertion a declared classification owes.
 
 ## What a consumer writes
 
-Nothing beyond the suite wiring. The laws run inside
-`Assert<Iface>Contract` against every registered subject; the fuzz and
-exhaustive entries read the same registry. The options are the escape
-hatches: `<Iface>ModelReference(factory)` replaces the derived oracle,
-`<Iface>ModelWith<Type>Gen(gen)` supplies an opaque type's generator, and
-the existing `Without` paths drop by law ID.
+Nothing beyond the suite wiring: pass `<Iface>Model()` to the contract
+entry. The options are the escape hatches: `<Iface>ModelReference(factory)`
+replaces the derived oracle, `<Iface>ModelValues(gen)` replaces the values
+pool for a subject whose accepted values a raw draw cannot spell, the
+`ref=` directive key names a constructor where no shipped oracle models
+the shape, and `<Iface>Without("model")` declines the tier.
 
 ## Layout conventions
 

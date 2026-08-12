@@ -260,6 +260,16 @@ checks:
     - label: assertion-failure-arms
       func_glob: "*"
       file_glob: "**/*_suite.gen.go"
+    # A generated model option is a consumer surface: <Iface>ModelValues and
+    # its siblings exist for the subject whose accepted values a raw draw
+    # cannot spell, and no corpus fixture is such a subject — arming one would
+    # mean shipping a fixture the derived pools deliberately cannot serve.
+    # The property, the actions, the laws and the derived reference in the
+    # same file are all driven by the corpus contract runs and the generated
+    # companion; what is skipped is the escape hatch nothing here needs.
+    - label: generated-consumer-options
+      func_glob: "*"
+      file_glob: "**/*_model.gen.go"
     - label: assertion-failure-arms
       func_glob: "*ehaviour*"
       file_glob: "stub/behaviour.go"

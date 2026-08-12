@@ -3,7 +3,11 @@
 
 package tiers
 
-import "slices"
+import (
+	"slices"
+
+	"go.thesmos.sh/testkit/core/lawid"
+)
 
 // Rule selects one law from the classifications a method carries.
 //
@@ -232,3 +236,38 @@ func LawsFor(classification string) []string {
 // struct's own reflection. Neither check can live in this module, which must
 // not depend on `engine` (docs/adr/0005).
 func Rules() []Rule { return slices.Clone(rules) }
+
+// LawNegation is one claim-law conflict: a mixin whose semantics negate a law
+// another classification would earn on the same interface.
+type LawNegation struct {
+	Law, Mixin, Reason string
+}
+
+// LawNegated reports whether the named mixin's claim negates the law, with
+// the reason the generated header prints.
+//
+// Selection composes per method, but a claim holds over the interface: the
+// sticky stamp rides the reader, and it is the writer-earned observability
+// law it negates. The corpus proved the row — the first pool wide enough to
+// draw a same-key overwrite failed one of the two laws whichever way the
+// subject behaved, because on a sticky store they contradict each other.
+func LawNegated(law, mixin string) (string, bool) {
+	for _, n := range lawNegations {
+		if n.Law == law && n.Mixin == mixin {
+			return n.Reason, true
+		}
+	}
+	return "", false
+}
+
+// LawNegations returns every conflict row, for the censuses.
+func LawNegations() []LawNegation { return slices.Clone(lawNegations) }
+
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var lawNegations = []LawNegation{
+	{
+		Law:    lawid.WriteObservable,
+		Mixin:  mixinSticky,
+		Reason: "the sticky claim negates it — a write to a resolved key must not change what a read answers",
+	},
+}

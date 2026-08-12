@@ -66,12 +66,21 @@ func TestCensusCarriesNoRetiredConstructor(t *testing.T) {
 func TestEveryMapStoreOpIsAMethod(t *testing.T) {
 	t.Parallel()
 
+	// Both map forms carry the same surface: the refinement swaps the store,
+	// not the delegation table, so every op a shape reaches on the plain map
+	// must exist on the pinning one.
 	store := reflect.TypeFor[ref.MapStore[string, string]]()
+	sticky := reflect.TypeFor[ref.StickyStore[string, string]]()
 	for _, s := range tiers.MapStoreShapes() {
 		op, _ := tiers.MapStoreOp(s)
 		testkit.True(t, gate.HasMethod(store, op),
 			s+" delegates to MapStore."+op+", which exists")
+		testkit.True(t, gate.HasMethod(sticky, op),
+			s+" delegates to "+op+" on the pinning form too")
 	}
+	testkit.True(t, tiers.MapStorePins("sticky"),
+		"the pinning refinement follows the claim")
+	testkit.False(t, tiers.MapStorePins("validates"), "and only the claim")
 
 	keyed := reflect.TypeFor[ref.KeyedStore[string, string]]()
 	for _, s := range tiers.KeyedStoreShapes() {

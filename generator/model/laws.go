@@ -88,17 +88,42 @@ func (*LawField) ModelPkg() string { return ModelPkg }
 // [Bindings.Unbound] with what it is waiting on — rendered in the header,
 // because a law that quietly failed to bind reads as a claim the run checks.
 func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, keyed *suite.Method) {
+	// Selection composes per method, but a claim holds over the interface —
+	// the sticky stamp rides the reader and negates the writer-earned
+	// observability law — so the conflict scan runs against every method's
+	// mixins, partners included: an excluded method's claim still holds.
+	claims := map[string]bool{}
+	for i := range harness.Methods {
+		for _, name := range harness.Methods[i].Mixins {
+			claims[name] = true
+		}
+	}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if _, partner := partners[m.Name]; partner {
 			continue
 		}
 		for _, r := range tiers.Select(classificationsOf(m), paramsOf(m)) {
+			if reason, negated := negatedBy(claims, r.Law); negated {
+				b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
+				continue
+			}
 			if binding, ok := lawOf(b, harness, r, m, keyed); ok {
 				b.Laws = append(b.Laws, binding)
 			}
 		}
 	}
+}
+
+// negatedBy resolves the first conflict row a held claim triggers, in the
+// table's own order so the generated header is deterministic.
+func negatedBy(claims map[string]bool, law string) (string, bool) {
+	for _, n := range tiers.LawNegations() {
+		if n.Law == law && claims[n.Mixin] {
+			return n.Reason, true
+		}
+	}
+	return "", false
 }
 
 // lawOf fills one rule, false where [Bindings.Unbound] records why not.
