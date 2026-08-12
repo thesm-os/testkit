@@ -23,6 +23,7 @@ import (
 //testkit:out leakfreetest/ pkg=leakfreetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Acquire takes the resource. The mixin names both halves of the cycle
 	// whose balance is the claim.

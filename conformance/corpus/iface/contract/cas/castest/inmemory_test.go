@@ -21,6 +21,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	castest.AssertContractContract(t,
+		castest.ContractModel(),
 		castest.ContractSubject("in-memory", func() cas.Contract {
 			return castest.NewInMemory()
 		}),

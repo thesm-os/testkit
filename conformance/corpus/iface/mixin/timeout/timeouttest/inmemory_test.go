@@ -24,6 +24,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	timeouttest.AssertMixedContract(t,
+		timeouttest.MixedModel(),
 		timeouttest.MixedSubject("in-memory", func() timeout.Mixed {
 			return timeouttest.NewInMemory()
 		}),

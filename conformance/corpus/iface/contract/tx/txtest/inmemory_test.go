@@ -28,6 +28,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	txtest.AssertContractContract(t,
+		txtest.ContractModel(),
 		txtest.ContractSubject("in-memory", func() tx.Contract {
 			return txtest.NewInMemory()
 		}),

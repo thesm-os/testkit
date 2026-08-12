@@ -20,6 +20,7 @@ func TestWriterContract(t *testing.T) {
 	t.Parallel()
 
 	writertest.AssertWriterContract(t,
+		writertest.WriterModel(),
 		writertest.WriterSubject("in-memory", func() writer.Writer {
 			return writertest.NewInMemory()
 		}),

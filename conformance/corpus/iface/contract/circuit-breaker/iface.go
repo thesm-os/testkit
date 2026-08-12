@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out circuitbreakertest/ pkg=circuitbreakertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Run is the circuit-breaker contract's fn role, and hosts the directive
 	// that names its partners.

@@ -23,6 +23,7 @@ import (
 //testkit:out atomictest/ pkg=atomictest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Write applies both fields or neither. Observing one without the other
 	// is the violation, which is why Read has to return them together.

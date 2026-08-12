@@ -22,6 +22,7 @@ func TestPredicateContract(t *testing.T) {
 	t.Parallel()
 
 	predicatetest.AssertPredicateContract(t,
+		predicatetest.PredicateModel(),
 		predicatetest.PredicateSubject("in-memory", func() predicate.Predicate {
 			return predicatetest.NewInMemory()
 		}),

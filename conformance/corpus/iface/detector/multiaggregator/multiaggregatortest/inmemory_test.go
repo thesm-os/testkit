@@ -23,6 +23,7 @@ func TestMultiAggregatorContract(t *testing.T) {
 	t.Parallel()
 
 	multiaggregatortest.AssertMultiAggregatorContract(t,
+		multiaggregatortest.MultiAggregatorModel(),
 		multiaggregatortest.MultiAggregatorSubject("in-memory",
 			func() multiaggregator.MultiAggregator {
 				return multiaggregatortest.NewInMemory()

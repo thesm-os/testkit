@@ -4,11 +4,11 @@
 > [RFC-0003](../../rfc/0003-the-projection-consumers.md) fixes this
 > generator's design. What ships today: the directive, the differential
 > property (actions, pools, derived references with their mixin
-> refinements, law bindings with their negation table), the generated
-> companion that proves the emission, and the consumer options. The
-> concurrent Porcupine path, the fuzz target, the exhaustive search and
-> the mutation kill test are queued. Where this page and the RFC differ,
-> the RFC is the authority.
+> refinements, law bindings with their negation table), the concurrent
+> Porcupine leg, the generated companion that proves the emission, and
+> the consumer options. The
+> fuzz target, the exhaustive search and the mutation kill test are
+> queued. Where this page and the RFC differ, the RFC is the authority.
 
 The `model` generator binds the classifications
 [ADR-0018](../../adr/0018-one-tier-owns-each-classification.md) assigns to
@@ -71,15 +71,22 @@ parameter with no hint is a diagnostic at the parameter.
   narrows the accepted value domain (`validates`, `sample`) keeps the
   pool to the proven fixture pair, and the header says so.
 - **A derived reference** — an adapter over the matching
-  `engine/model/ref` oracle (`MapStore` for the CRUD family, `AtomicCell`
-  for `cas`, `LeaseTracker` for `lease`, …), composed per state cluster
-  where several match, armed per law. Where no oracle maps and none is
-  supplied via `<Iface>ModelReference`, reference-needing laws **skip
-  visibly**, one subtest per law ID naming the option that arms it.
-- **A concurrent path** — where the shape matches a prebuilt
-  `engine/model/linearize` Porcupine model, a `WithConcurrent` wiring with
-  per-key partitioning and the non-linearizable remainder as `-race`
-  stress.
+  `engine/model/ref` oracle: the map for value-carries-key stores, the
+  keyed store for key-beside-value writers, the collection for
+  append-and-drain — each refined by claim (`noduplicates` and `crdtmerge`
+  dedupe, `sticky` pins resolutions, `snapshotisolation` and `chain` force
+  the log over the upsert inference). Where no store models the shape, the
+  **twin floor** stands in: a second instance from the subject's own
+  factory, which catches nondeterminism and hidden shared state but not a
+  subject wrong the same way twice — the header says why the floor was
+  reached, and `ref=` raises it. The sequences drive only what the oracle
+  models; a method the adapter holds inert is skipped by name.
+- **A concurrent path** — where the unrefined map pair derives,
+  `<Iface>ModelConcurrent` runs four workers interleaving the reader and
+  writer over the same shared pools, Porcupine-checking the history
+  against `linearize.KV` per key. It registers beside the sequential leg
+  as `model/concurrent`; the laws stay sequential, whose step boundary
+  they need, and the companion holds the leg to the derived reference.
 - **Chain tracing** — `appender` shapes get the chain action family over a
   partition-keyed `engine/model/history` trace.
 - **Derived leak checking** — `lifecycle` shapes wrap the run in

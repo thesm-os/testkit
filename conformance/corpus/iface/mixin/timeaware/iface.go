@@ -20,6 +20,7 @@ import (
 //testkit:out timeawaretest/ pkg=timeawaretest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Touch records that the key was seen, at whatever the clock reads.
 	Touch(ctx context.Context, key string) error

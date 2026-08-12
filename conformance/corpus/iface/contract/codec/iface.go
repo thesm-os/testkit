@@ -22,6 +22,7 @@ import (
 //testkit:out codectest/ pkg=codectest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Encode is the codec contract's forward role, and hosts the directive
 	// that names its partner and the fidelity it claims.

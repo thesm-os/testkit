@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out leaderelectiontest/ pkg=leaderelectiontest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Campaign is the leader-election contract's campaign role, and hosts the directive
 	// that names its partners.

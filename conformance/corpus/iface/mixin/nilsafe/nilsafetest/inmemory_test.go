@@ -22,6 +22,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	nilsafetest.AssertMixedContract(t,
+		nilsafetest.MixedModel(),
 		nilsafetest.MixedSubject("in-memory", func() nilsafe.Mixed {
 			return nilsafetest.NewInMemory()
 		}),

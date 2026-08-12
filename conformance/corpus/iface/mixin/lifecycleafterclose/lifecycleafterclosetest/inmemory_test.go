@@ -21,6 +21,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	lifecycleafterclosetest.AssertMixedContract(t,
+		lifecycleafterclosetest.MixedModel(),
 		lifecycleafterclosetest.MixedSubject("in-memory", func() lifecycleafterclose.Mixed {
 			return lifecycleafterclosetest.NewInMemory()
 		}),

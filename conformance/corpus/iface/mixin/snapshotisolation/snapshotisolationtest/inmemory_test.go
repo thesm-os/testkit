@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	snapshotisolationtest.AssertMixedContract(t,
+		snapshotisolationtest.MixedModel(),
 		snapshotisolationtest.MixedSubject("in-memory", func() snapshotisolation.Mixed {
 			return snapshotisolationtest.NewInMemory()
 		}),

@@ -5,6 +5,6 @@ totals must agree.
 {{- define "model.action.aggregator" -}}
 {{ renderExpr .Ctor }}({{ printf "%q" .Method }},
 				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) ({{ renderType .Value }}, error) {
-					return s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }})
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }}){{ if .NoError }}, nil{{ end }}
 				})
 {{- end -}}

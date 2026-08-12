@@ -28,6 +28,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	watchertest.AssertContractContract(t,
+		watchertest.ContractModel(),
 		watchertest.ContractSubject("in-memory", func() watcher.Contract {
 			return watchertest.NewInMemory()
 		}),

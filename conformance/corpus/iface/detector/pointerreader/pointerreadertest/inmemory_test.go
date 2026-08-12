@@ -26,6 +26,7 @@ func TestPointerReaderContract(t *testing.T) {
 	fixture := pointerreadertest.DefaultPointerReaderFixture()
 
 	pointerreadertest.AssertPointerReaderContract(t,
+		pointerreadertest.PointerReaderModel(),
 		pointerreadertest.PointerReaderSubject("in-memory", func() pointerreader.PointerReader {
 			return pointerreadertest.NewInMemory()
 		}),

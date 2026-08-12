@@ -23,6 +23,7 @@ import (
 //testkit:out wrappedviatest/ pkg=wrappedviatest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Open wraps whatever Cause returns. The fn parameter resolves to a
 	// sibling, so the cause has to be reachable from this interface.

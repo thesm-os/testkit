@@ -26,6 +26,7 @@ func TestBatchedContract(t *testing.T) {
 	t.Parallel()
 
 	batchedmixinstest.AssertBatchedContract(t,
+		batchedmixinstest.BatchedModel(),
 		batchedmixinstest.BatchedSubject("in-memory", func() batchedmixins.Batched {
 			return batchedmixinstest.NewInMemory()
 		}),

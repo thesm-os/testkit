@@ -23,6 +23,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	sagatest.AssertContractContract(t,
+		sagatest.ContractModel(),
 		sagatest.ContractSubject("in-memory", func() saga.Contract {
 			return sagatest.NewInMemory()
 		}),

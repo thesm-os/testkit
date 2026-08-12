@@ -23,6 +23,7 @@ func TestMixedContract(t *testing.T) {
 	fixture := atomictest.DefaultMixedFixture()
 
 	atomictest.AssertMixedContract(t,
+		atomictest.MixedModel(),
 		atomictest.MixedSubject("in-memory", func() atomic.Mixed {
 			return atomictest.NewInMemory()
 		}),

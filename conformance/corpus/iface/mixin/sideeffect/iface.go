@@ -23,6 +23,7 @@ import (
 //testkit:out sideeffecttest/ pkg=sideeffecttest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Touch returns nothing useful, so its entire effect is out of band. That
 	// is what the mixin declares, and Observed is what makes it visible.

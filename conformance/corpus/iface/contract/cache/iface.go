@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out cachetest/ pkg=cachetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Lookup is the cache contract's cache role, and hosts the directive
 	// that names its partners.

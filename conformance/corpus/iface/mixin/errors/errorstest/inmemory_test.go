@@ -26,6 +26,7 @@ func TestMixedContract(t *testing.T) {
 	fixture := errorstest.DefaultMixedFixture()
 
 	errorstest.AssertMixedContract(t,
+		errorstest.MixedModel(),
 		errorstest.MixedSubject("in-memory", func() errors.Mixed {
 			return errorstest.NewInMemory()
 		}),

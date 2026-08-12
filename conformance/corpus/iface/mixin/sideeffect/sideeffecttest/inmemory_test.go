@@ -25,6 +25,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	sideeffecttest.AssertMixedContract(t,
+		sideeffecttest.MixedModel(),
 		sideeffecttest.MixedSubject("in-memory", func() sideeffect.Mixed {
 			return sideeffecttest.NewInMemory()
 		}),

@@ -27,6 +27,7 @@ func TestReaderNoErrorContract(t *testing.T) {
 	fixture := readernoerrortest.DefaultReaderNoErrorFixture()
 
 	readernoerrortest.AssertReaderNoErrorContract(t,
+		readernoerrortest.ReaderNoErrorModel(),
 		readernoerrortest.ReaderNoErrorSubject("in-memory", func() readernoerror.ReaderNoError {
 			return readernoerrortest.NewInMemory()
 		}),

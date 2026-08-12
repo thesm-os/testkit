@@ -33,6 +33,7 @@ func TestBatchReaderContract(t *testing.T) {
 	fixture := batchreadertest.DefaultBatchReaderFixture()
 
 	batchreadertest.AssertBatchReaderContract(t,
+		batchreadertest.BatchReaderModel(),
 		batchreadertest.BatchReaderSubject("in-memory", func() batchreader.BatchReader {
 			return batchreadertest.NewInMemory()
 		}),

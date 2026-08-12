@@ -22,6 +22,7 @@ import (
 //testkit:out injectionsafetest/ pkg=injectionsafetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Store stores a value and hands back what was stored.
 	//testkit:mixin injectionsafe

@@ -26,6 +26,7 @@ func TestContractContract(t *testing.T) {
 	fixture := paginationtest.DefaultContractFixture()
 
 	paginationtest.AssertContractContract(t,
+		paginationtest.ContractModel(),
 		paginationtest.ContractSubject("in-memory", func() pagination.Contract {
 			return paginationtest.NewInMemory()
 		}),

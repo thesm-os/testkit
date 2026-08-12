@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	leakfreetest.AssertMixedContract(t,
+		leakfreetest.MixedModel(),
 		leakfreetest.MixedSubject("in-memory", func() leakfree.Mixed {
 			return leakfreetest.NewInMemory()
 		}),

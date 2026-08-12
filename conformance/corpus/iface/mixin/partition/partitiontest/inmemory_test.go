@@ -27,6 +27,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	partitiontest.AssertMixedContract(t,
+		partitiontest.MixedModel(),
 		partitiontest.MixedSubject("in-memory", func() partition.Mixed {
 			return partitiontest.NewInMemory()
 		}),

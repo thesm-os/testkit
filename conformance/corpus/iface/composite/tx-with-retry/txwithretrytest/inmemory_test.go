@@ -34,6 +34,7 @@ func TestTxWithRetryContract(t *testing.T) {
 	t.Parallel()
 
 	txwithretrytest.AssertTxWithRetryContract(t,
+		txwithretrytest.TxWithRetryModel(),
 		txwithretrytest.TxWithRetrySubject("in-memory", func() txwithretry.TxWithRetry {
 			return txwithretrytest.NewInMemory(transientCommits)
 		}),

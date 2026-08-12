@@ -15,6 +15,7 @@ package pure
 //testkit:out puretest/ pkg=puretest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Pure interface {
 	Describe() string
 }

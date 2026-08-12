@@ -27,11 +27,16 @@ type Value struct{ Key, Body string }
 //testkit:out streamconsumertest/ pkg=streamconsumertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Source interface {
 	Next(ctx context.Context) (Value, bool, error)
 }
 
 // StreamConsumer is the fixture interface.
+//
+// The model tier is deliberately unarmed: the one method consumes a
+// caller-built stream no derivation can construct, so no action would drive
+// anything. A bespoke harness over the exported property is the way in.
 //
 //testkit:out streamconsumertest/ pkg=streamconsumertest
 //testkit:stub

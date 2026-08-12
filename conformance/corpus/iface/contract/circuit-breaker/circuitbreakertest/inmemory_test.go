@@ -27,6 +27,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	circuitbreakertest.AssertContractContract(t,
+		circuitbreakertest.ContractModel(),
 		circuitbreakertest.ContractSubject("in-memory", func() circuitbreaker.Contract {
 			return circuitbreakertest.NewInMemory(threshold)
 		}),

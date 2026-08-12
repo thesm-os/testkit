@@ -22,6 +22,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	cursortest.AssertContractContract(t,
+		cursortest.ContractModel(),
 		cursortest.ContractSubject("in-memory", func() cursor.Contract {
 			return cursortest.NewInMemory(
 				cursor.Value{Key: "a", Body: "one"},

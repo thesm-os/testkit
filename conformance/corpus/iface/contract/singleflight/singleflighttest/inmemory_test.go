@@ -31,6 +31,7 @@ func TestContractContract(t *testing.T) {
 	clk := clock.NewTestClock(origin)
 
 	singleflighttest.AssertContractContract(t,
+		singleflighttest.ContractModel(),
 		singleflighttest.ContractSubject("in-memory", func() singleflight.Contract {
 			return singleflighttest.NewInMemory(clk)
 		}),

@@ -1,0 +1,17 @@
+{{- /*
+A stream reader hands out an iterator; the closure drains it so both sides'
+whole answers compare — an error mid-stream is the drain's answer.
+*/ -}}
+{{- define "model.action.streamreader" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) ([]{{ renderType .Value }}, error) {
+					var out []{{ renderType .Value }}
+					for v, err := range s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }}) {
+						if err != nil {
+							return nil, err
+						}
+						out = append(out, v)
+					}
+					return out, nil
+				})
+{{- end -}}

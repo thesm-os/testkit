@@ -23,6 +23,7 @@ import (
 //testkit:out scopetest/ pkg=scopetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Set is confined to the named scope. The law reads back from another
 	// scope to prove containment, so a reader is required.

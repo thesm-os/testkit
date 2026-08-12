@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/core/diag"
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
@@ -282,16 +283,6 @@ func TestDiagnostics(t *testing.T) {
 			"the property and the reference land at concrete types")
 	})
 
-	t.Run("no reader-writer pair to model", func(t *testing.T) {
-		t.Parallel()
-		s := readerOnly(t)
-		plugintest.Generate(t, suite.New(), s)
-		got := plugintest.Generate(t, model.New(), s).Diagnostics()
-		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("ref=",
-			"naming the key that supplies what derivation cannot")
-	})
-
 	t.Run("a qualified ref constructor", func(t *testing.T) {
 		t.Parallel()
 		s := mixed(t, storefixture.KV(model.RefKey, "other.NewFake"))
@@ -320,43 +311,81 @@ func TestDiagnostics(t *testing.T) {
 		testkit.Assert(t, got[0].Message).Contains("drive",
 			"sequences over nothing assert nothing")
 	})
+}
+
+// TestTwinFloor walks the fallback that arms what no store models: the
+// reference becomes the subject's own factory, the header carries why, and
+// nothing derived — no adapter, no companion — rides along.
+func TestTwinFloor(t *testing.T) {
+	t.Parallel()
+
+	twinOf := func(t *testing.T, s *sdk.Store) *model.Bindings {
+		t.Helper()
+		b := bindingsOf(t, s)
+		testkit.True(t, b.Reference.Twin(), "the floor is the twin")
+		testkit.False(t, b.Reference.Derived(), "which is not a derivation")
+		testkit.Equal(t, len(b.Adapter), 0, "so no adapter is generated")
+		return b
+	}
+
+	t.Run("a reader alone", func(t *testing.T) {
+		t.Parallel()
+		b := twinOf(t, readerOnly(t))
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("no reader/writer pair",
+			"the header says what was missing")
+	})
 
 	t.Run("reader and writer disagree about the value", func(t *testing.T) {
 		t.Parallel()
-		s := kvStore(t, "example.com/kv.Doc", "string")
-		got := generateBoth(t, s).Diagnostics()
-		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("one map cannot model",
-			"two value types cannot share one oracle")
+		b := twinOf(t, kvStore(t, "example.com/kv.Doc", "string"))
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("where the writer takes",
+			"two value types share no store, but twins compare anything")
 	})
 
 	t.Run("the value declares no struct to key on", func(t *testing.T) {
 		t.Parallel()
-		s := kvStore(t, "string", "string")
-		got := generateBoth(t, s).Diagnostics()
-		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("no struct declaration",
-			"a predeclared value type carries no key field")
+		b := twinOf(t, kvStore(t, "string", "string"))
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("no struct declaration",
+			"naming what the key projection needed")
 	})
 
 	t.Run("no field carries the key type", func(t *testing.T) {
 		t.Parallel()
-		s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
-			field{"N", "int"})
-		got := generateBoth(t, s).Diagnostics()
-		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("no field",
+		b := twinOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"N", "int"}))
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("no field",
 			"nothing to project a key out of")
 	})
 
 	t.Run("several fields tie without a conventional name", func(t *testing.T) {
 		t.Parallel()
-		s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
-			field{"A", "string"}, field{"B", "string"})
-		got := generateBoth(t, s).Diagnostics()
-		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("several fields",
-			"an arbitrary pick would key the oracle on a guess")
+		b := twinOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"A", "string"}, field{"B", "string"}))
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("several fields",
+			"an arbitrary pick would key a real oracle on a guess")
+		testkit.True(t, b.Values.Wide, "and the twin stays wide unpinned — twins agree on misses")
+		testkit.Equal(t, b.Values.Pin, "", "with no field to pin")
+	})
+
+	t.Run("a second writer of another type is skipped by name", func(t *testing.T) {
+		t.Parallel()
+		s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
+			i.Method("StoreRaw", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		})
+		stampShape(s, "StoreRaw", "writer", "", "string")
+		b := bindingsOf(t, s)
+		testkit.Equal(t, b.Reference.StoreType(), "MapStore",
+			"the matching writer still derives the map")
+		reasons := map[string]string{}
+		for _, sk := range b.Skipped {
+			reasons[sk.Method] = sk.Reason
+		}
+		testkit.Assert(t, reasons["StoreRaw"]).Contains("values pool draws",
+			"the odd writer is listed, not miscompiled")
 	})
 }
 
@@ -434,22 +463,29 @@ func TestUnqualifiedSentinelIsRefused(t *testing.T) {
 	}
 }
 
-// TestKeyedMismatchIsRefused pins the keyed fork's agreement: the reader and
-// the keyed writer speak one (K, V) pair or nothing models them.
-func TestKeyedMismatchIsRefused(t *testing.T) {
+// TestKeyedMismatchFallsToTheTwin pins the keyed fork's agreement: the reader
+// and the keyed writer speak one (K, V) pair, or no store models them and the
+// twin floor stands in with the disagreement in the header.
+func TestKeyedMismatchFallsToTheTwin(t *testing.T) {
 	t.Parallel()
 
 	s := keyedStore(t, "example.com/kv.ErrGone")
 	stampShape(s, "Get", "reader", "int", "string")
-	got := generateBoth(t, s).Diagnostics()
-	testkit.Equal(t, len(got), 1, "one diagnostic")
-	testkit.Assert(t, got[0].Message).Contains("cannot model",
-		"naming the disagreement and the ref= exit")
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Twin(), "one store cannot model the pair")
+	testkit.Assert(t, b.Reference.TwinWhy).Contains("keyed writer takes",
+		"and the header spells the disagreement")
 }
 
 // keyedStore is the keyed-put fixture: a reader, a composite writer, and a
 // delete-stamped plain writer, with the delete law's stamps carried.
 func keyedStore(t *testing.T, sentinel string) *sdk.Store {
+	t.Helper()
+	return keyedStoreWith(t, sentinel, nil)
+}
+
+// keyedStoreWith is [keyedStore] plus extra methods.
+func keyedStoreWith(t *testing.T, sentinel string, extra func(i *storefixture.InterfaceBuilder)) *sdk.Store {
 	t.Helper()
 	s := storefixture.New().
 		Package("kv", "example.com/kv").
@@ -474,6 +510,9 @@ func keyedStore(t *testing.T, sentinel string) *sdk.Store {
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.Named("error"))
 			})
+			if extra != nil {
+				extra(i)
+			}
 		}).
 		Build()
 	stampShape(s, "Get", "reader", "string", "string")
@@ -827,17 +866,18 @@ func TestDrainFixtures(t *testing.T) {
 	})
 }
 
-// TestDrainMismatchIsRefused pins the collection fork's one agreement: the
-// writer adds what the collector returns, or nothing models the pair.
-func TestDrainMismatchIsRefused(t *testing.T) {
+// TestDrainMismatchFallsToTheTwin pins the collection fork's one agreement:
+// the writer adds what the collector returns, or no collection models the
+// pair and the twin floor stands in.
+func TestDrainMismatchFallsToTheTwin(t *testing.T) {
 	t.Parallel()
 
 	s := drainStore(t, false)
 	stampShape(s, "Add", "writer", "", "example.com/bag.Other")
-	got := generateBoth(t, s).Diagnostics()
-	testkit.Equal(t, len(got), 1, "one diagnostic")
-	testkit.Assert(t, got[0].Message).Contains("cannot model",
-		"naming the disagreement and the ref= exit")
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Twin(), "one collection cannot model the pair")
+	testkit.Assert(t, b.Reference.TwinWhy).Contains("the writer adds",
+		"and the header spells the disagreement")
 }
 
 // TestCompanionSurface reaches the second emit value the plugin queues.
@@ -918,4 +958,233 @@ func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
 		}
 	}
 	return s
+}
+
+// TestActionShapes walks every detector arm the action derivation covers: one
+// method per shape, each asserted to its template kind, its pools, and its
+// drawn types — plus the shapes that skip, each with the reason the header
+// prints. The store is never rendered, so the types need only be consistent
+// enough for the derivation to read.
+func TestActionShapes(t *testing.T) {
+	t.Parallel()
+
+	str := func() *sdk.TypeRef { return storefixture.Named("string") }
+	ch := storefixture.Named("string")
+	golang.MetaIsChannel.Set(ch.EnsureMeta(), true, "test")
+
+	s := storefixture.New().
+		Package("zoo", "example.com/zoo").
+		Interface("Zoo", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("zoo/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			method := func(name string, params, returns []*sdk.TypeRef) {
+				i.Method(name, func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					for n, p := range params {
+						m.Param(string(rune('a'+n)), p)
+					}
+					for _, r := range returns {
+						m.Return(r)
+					}
+				})
+			}
+			method("Get", []*sdk.TypeRef{str()}, []*sdk.TypeRef{str(), storefixture.Named("error")})
+			method("Put", []*sdk.TypeRef{str()}, []*sdk.TypeRef{storefixture.Named("error")})
+			method("NoErr", []*sdk.TypeRef{str()}, []*sdk.TypeRef{str()})
+			method("Find", []*sdk.TypeRef{str()}, []*sdk.TypeRef{str()})
+			method("Load", []*sdk.TypeRef{str()}, []*sdk.TypeRef{str(), storefixture.Named("bool")})
+			method("Meta", []*sdk.TypeRef{str()}, []*sdk.TypeRef{str(), str(), storefixture.Named("error")})
+			method("GetAll", []*sdk.TypeRef{str()},
+				[]*sdk.TypeRef{storefixture.Slice(str()), storefixture.Named("error")})
+			method("Touch", []*sdk.TypeRef{str()}, nil)
+			method("Stats", nil, []*sdk.TypeRef{str(), str(), storefixture.Named("error")})
+			method("Size", nil, []*sdk.TypeRef{storefixture.Named("int")})
+			method("Iter", nil, []*sdk.TypeRef{str()})
+			method("BadIter", nil, []*sdk.TypeRef{str()})
+			method("Ingest", []*sdk.TypeRef{str()}, []*sdk.TypeRef{storefixture.Named("error")})
+			method("Stop", nil, nil)
+			method("Watch", []*sdk.TypeRef{str()}, []*sdk.TypeRef{ch, storefixture.Named("error")})
+			i.Method("Inspect", func(m *storefixture.MethodBuilder) {
+				m.Param("k", str())
+				m.Return(str())
+				m.Return(str())
+				m.Return(storefixture.Named("bool"))
+			})
+			i.Method("Err", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+
+	for name, shapeName := range map[string]string{
+		"Get": "reader", "Put": "writer", "NoErr": "readernoerror",
+		"Find": "pointerreader", "Load": "readerwithbool", "Meta": "multireader",
+		"GetAll": "batchreader", "Touch": "mutator", "Stats": "multiaggregator",
+		"Size": "aggregator", "Iter": "streamreader", "BadIter": "streamreader",
+		"Ingest": "streamconsumer", "Stop": "voidlifecycle", "Watch": "reader",
+		"Inspect": "lookup", "Err": "poisonaccessor",
+	} {
+		stampShape(s, name, shapeName, "string", "string")
+	}
+	// BadIter deliberately loses its value stamp: the drain has nothing to
+	// spell its elements with.
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == "BadIter" {
+				shape.MetaValueType.Set(m.EnsureMeta(), "", "test")
+			}
+		}
+	}
+
+	b := bindingsOf(t, s)
+	kinds := map[string]sdk.Kind{}
+	pools := map[string]string{}
+	byName := map[string]*model.Action{}
+	for _, a := range b.Actions {
+		kinds[a.Method] = a.KindName
+		pools[a.Method] = a.Pool
+		byName[a.Method] = a
+	}
+	skips := map[string]string{}
+	for _, sk := range b.Skipped {
+		skips[sk.Method] = sk.Reason
+	}
+
+	testkit.Equal(t, kinds["NoErr"], sdk.Kind("model.action.readernoerror"), "the errorless reader")
+	testkit.Equal(t, kinds["Find"], sdk.Kind("model.action.pointerreader"), "the pointer reader")
+	testkit.Equal(t, kinds["Load"], sdk.Kind("model.action.readerwithbool"), "the found-flag reader")
+	testkit.Equal(t, kinds["Meta"], sdk.Kind("model.action.multireader"), "the two-value reader")
+	testkit.Equal(t, kinds["GetAll"], sdk.Kind("model.action.batchreader"), "the batch reader")
+	testkit.Equal(t, kinds["Touch"], sdk.Kind("model.action.mutator"), "the mutator")
+	testkit.Equal(t, kinds["Stats"], sdk.Kind("model.action.multiaggregator"), "the two-value aggregator")
+	testkit.Equal(t, kinds["Iter"], sdk.Kind("model.action.streamreader"), "the iterator drain")
+	testkit.Equal(t, kinds["Stop"], sdk.Kind("model.action.voidlifecycle"), "the void lifecycle")
+	testkit.Equal(t, kinds["Inspect"], sdk.Kind("model.action.lookup"), "the context-free lookup")
+	testkit.Equal(t, kinds["Err"], sdk.Kind("model.action.poisonaccessor"), "the poison accessor")
+
+	testkit.Equal(t, pools["Meta"], "keys", "a multi-reader draws keys")
+	testkit.Equal(t, pools["Touch"], "values", "a mutator draws values")
+	testkit.True(t, byName["Meta"].Value2 != nil, "the second value is spelled")
+	testkit.True(t, byName["Size"].NoError, "an errorless aggregator supplies nil itself")
+	testkit.True(t, byName["GetAll"].Value != nil, "the batch's element is the slice's")
+
+	testkit.Assert(t, skips["Ingest"]).Contains("caller-built stream",
+		"the consumer's stream is nothing a derivation constructs")
+	testkit.Assert(t, skips["BadIter"]).Contains("no stamp",
+		"an unstamped iterator has nothing to spell its elements with")
+	testkit.Assert(t, skips["Watch"]).Contains("live handle",
+		"a channel compares by identity, which two sides never share")
+}
+
+// TestOracleDefeatingClaims pins the eventually arm: reads may lag writes, so
+// every immediate oracle mis-models the subject and the twins stand in.
+func TestOracleDefeatingClaims(t *testing.T) {
+	t.Parallel()
+
+	s := mixed(t)
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == "Read" {
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"eventually"}, "test")
+			}
+		}
+	}
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Twin(), "no immediate store models the lag")
+	testkit.Assert(t, b.Reference.TwinWhy).Contains("lag",
+		"and the header names the claim's slack")
+}
+
+// TestHistoryDrainForcesTheLog pins the drain fork's history arm: a claim
+// whose vocabulary is events outranks the upsert inference an incidental Key
+// field would trigger.
+func TestHistoryDrainForcesTheLog(t *testing.T) {
+	t.Parallel()
+
+	s := drainStore(t, true)
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			// Replacing the fixture's noduplicates claim outright: a history
+			// under a dedupe claim is a different fixture's question.
+			shape.MetaMixins.Set(m.EnsureMeta(), []string{"snapshotisolation"}, "test")
+		}
+	}
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Collects(), "events append; they do not upsert")
+	testkit.False(t, b.Reference.Dedupe, "and identical events repeat")
+}
+
+// TestInertActionsAreSkipped pins the coherence rule between the sequences
+// and the adapter: an action on a method the derived reference holds inert
+// compares the subject against a body answering zeros, and is skipped with
+// the adapter's own reason instead. The corpus proved the rule — a keyed
+// oracle has no drain, and the first driven drain diverged from the inert
+// body's nil at the first held key.
+func TestInertActionsAreSkipped(t *testing.T) {
+	t.Parallel()
+
+	s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
+		i.Method("List", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Return(storefixture.Slice(storefixture.Named("string")))
+			m.Return(storefixture.Named("error"))
+		})
+	})
+	stampShape(s, "List", "aggregator", "", "")
+	b := bindingsOf(t, s)
+	testkit.Equal(t, b.Reference.StoreType(), "KeyedStore", "the pair still derives the keyed oracle")
+	reasons := map[string]string{}
+	for _, sk := range b.Skipped {
+		reasons[sk.Method] = sk.Reason
+	}
+	testkit.Assert(t, reasons["List"]).Contains("holds it inert",
+		"the drain the oracle cannot answer is skipped, not driven against zeros")
+	for _, a := range b.Actions {
+		testkit.NotEqual(t, a.Method, "List", "and never appears in the sequences")
+	}
+}
+
+// TestConcurrentLeg pins where the linearizability leg derives — the
+// unrefined map pair, whose reader and writer the Porcupine keyed-store
+// model speaks — and where it must not: a pin changes what a read means, a
+// keyed put carries its key outside the value, and a twin has no model at
+// all.
+func TestConcurrentLeg(t *testing.T) {
+	t.Parallel()
+
+	t.Run("the map pair derives it over the sequential actions", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc",
+			field{"ID", "string"}))
+		testkit.True(t, b.Concurrent(), "reader and writer, one map, no refinement")
+		testkit.Equal(t, b.ConcReader.Method, "Get", "the reader leg is the sequential reader")
+		testkit.Equal(t, b.ConcWriter.Method, "Put", "and the writer leg the sequential writer")
+	})
+
+	t.Run("a pinning map does not", func(t *testing.T) {
+		t.Parallel()
+		s := kvStore(t, "example.com/kv.Doc", "example.com/kv.Doc", field{"ID", "string"})
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Get" {
+					shape.MetaMixins.Set(m.EnsureMeta(), []string{"sticky"}, "test")
+				}
+			}
+		}
+		b := bindingsOf(t, s)
+		testkit.False(t, b.Concurrent(), "a pinned read is not the keyed-store model's read")
+	})
+
+	t.Run("the keyed store does not", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, keyedStore(t, "example.com/kv.ErrGone"))
+		testkit.False(t, b.Concurrent(), "the keyed put carries no key projection to partition by")
+	})
+
+	t.Run("the twin does not", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, kvStore(t, "string", "string"))
+		testkit.False(t, b.Concurrent(), "a twin has no linearizability model to check against")
+	})
 }

@@ -28,6 +28,7 @@ type Delta struct {
 //testkit:out conservativetest/ pkg=conservativetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Apply moves a quantity without creating or destroying any of it.
 	//testkit:mixin conservative field=Amount

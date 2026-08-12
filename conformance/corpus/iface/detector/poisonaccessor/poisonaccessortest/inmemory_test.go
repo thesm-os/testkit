@@ -21,6 +21,7 @@ func TestPoisonAccessorContract(t *testing.T) {
 	t.Parallel()
 
 	poisonaccessortest.AssertPoisonAccessorContract(t,
+		poisonaccessortest.PoisonAccessorModel(),
 		poisonaccessortest.PoisonAccessorSubject("in-memory", func() poisonaccessor.PoisonAccessor {
 			return poisonaccessortest.NewInMemory()
 		}),

@@ -1,0 +1,10 @@
+{{- /*
+A reader answering with a found flag: the flags must agree, and the values
+where both sides found.
+*/ -}}
+{{- define "model.action.readerwithbool" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Value }}, bool) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k)
+				})
+{{- end -}}

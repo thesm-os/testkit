@@ -25,6 +25,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	crdtmergetest.AssertMixedContract(t,
+		crdtmergetest.MixedModel(),
 		crdtmergetest.MixedSubject("in-memory", func() crdtmerge.Mixed {
 			return crdtmergetest.NewInMemory()
 		}),
@@ -75,6 +76,7 @@ func TestReplicaContract(t *testing.T) {
 	t.Parallel()
 
 	crdtmergetest.AssertReplicaContract(t,
+		crdtmergetest.ReplicaModel(),
 		crdtmergetest.ReplicaSubject("in-memory", func() crdtmerge.Replica {
 			return crdtmergetest.NewInMemory()
 		}),

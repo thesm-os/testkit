@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out paginationtest/ pkg=paginationtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Get is the pagination contract's reader role, and hosts the directive
 	// that names its partners.

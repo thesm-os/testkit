@@ -81,6 +81,7 @@ func TestSourceContract(t *testing.T) {
 	t.Parallel()
 
 	streamconsumertest.AssertSourceContract(t,
+		streamconsumertest.SourceModel(),
 		streamconsumertest.SourceSubject("slice", func() streamconsumer.Source {
 			return streamconsumertest.NewSliceSource(
 				streamconsumer.Value{Key: "a", Body: "one"},

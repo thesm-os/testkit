@@ -25,6 +25,7 @@ func TestStreamReaderContract(t *testing.T) {
 	// No fixture: List takes nothing after its context, so there is no input to
 	// derive and the generated struct is empty.
 	streamreadertest.AssertStreamReaderContract(t,
+		streamreadertest.StreamReaderModel(),
 		streamreadertest.StreamReaderSubject("in-memory", func() streamreader.StreamReader {
 			return streamreadertest.NewInMemory()
 		}),

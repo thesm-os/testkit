@@ -24,6 +24,7 @@ import (
 //testkit:out streamreflectsmutationstest/ pkg=streamreflectsmutationstest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Stream must reflect writes that preceded it. The law needs both a
 	// mutation and a stream, which a read-only interface cannot provide.

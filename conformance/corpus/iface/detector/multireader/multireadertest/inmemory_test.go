@@ -26,6 +26,7 @@ func TestMultiReaderContract(t *testing.T) {
 	fixture := multireadertest.DefaultMultiReaderFixture()
 
 	multireadertest.AssertMultiReaderContract(t,
+		multireadertest.MultiReaderModel(),
 		multireadertest.MultiReaderSubject("in-memory", func() multireader.MultiReader {
 			return multireadertest.NewInMemory()
 		}),

@@ -26,6 +26,7 @@ func TestReaderWithBoolContract(t *testing.T) {
 	fixture := readerwithbooltest.DefaultReaderWithBoolFixture()
 
 	readerwithbooltest.AssertReaderWithBoolContract(t,
+		readerwithbooltest.ReaderWithBoolModel(),
 		readerwithbooltest.ReaderWithBoolSubject("in-memory", func() readerwithbool.ReaderWithBool {
 			return readerwithbooltest.NewInMemory()
 		}),

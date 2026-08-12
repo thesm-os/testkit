@@ -23,6 +23,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	wrappedviatest.AssertMixedContract(t,
+		wrappedviatest.MixedModel(),
 		wrappedviatest.MixedSubject("in-memory", func() wrappedvia.Mixed {
 			return wrappedviatest.NewInMemory()
 		}),

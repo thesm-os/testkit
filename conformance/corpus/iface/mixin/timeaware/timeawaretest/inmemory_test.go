@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	timeawaretest.AssertMixedContract(t,
+		timeawaretest.MixedModel(),
 		timeawaretest.MixedSubject("in-memory", func() timeaware.Mixed {
 			return timeawaretest.NewInMemory()
 		}),

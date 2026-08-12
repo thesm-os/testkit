@@ -11,7 +11,6 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/model"
 )
 
 // TestLawSelection walks the one law the corpus fixture's classifications
@@ -71,8 +70,8 @@ func TestUnboundLawIsReported(t *testing.T) {
 		"and so does the reentrancy claim")
 }
 
-// TestNoReaderWriterPairAtAll covers the other half of the derivation guard:
-// a writer with no reader is as unmappable as a reader with no writer.
+// TestNoReaderWriterPairAtAll covers the other half of the twin floor: a
+// writer with no reader derives no store either, and arms as twins.
 func TestNoReaderWriterPairAtAll(t *testing.T) {
 	t.Parallel()
 
@@ -91,8 +90,8 @@ func TestNoReaderWriterPairAtAll(t *testing.T) {
 		Build()
 	stampShape(s, "Push", "writer", "", "string")
 
-	got := generateBoth(t, s).Diagnostics()
-	testkit.Equal(t, len(got), 1, "one diagnostic")
-	testkit.Assert(t, got[0].Message).Contains(model.RefKey+"=",
-		"naming the key that supplies what derivation cannot")
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Twin(), "no store derives, so the twins stand in")
+	testkit.True(t, b.UsesValues() && !b.UsesKeys(),
+		"and the writer still draws from its pool")
 }

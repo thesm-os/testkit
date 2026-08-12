@@ -1,0 +1,19 @@
+{{- /*
+A multi-argument writer draws each argument from its own fixture pair — a
+per-position pool, so every position keeps colliding — and a shim forwards
+the drawn slice into the typed call.
+*/ -}}
+{{- define "model.action.multiargwriter" -}}
+{{ $a := . -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				{{ renderExpr (external .ModelPkg "Custom") }}(func(t *{{ renderExpr (external .ModelPkg "T") }}) []any {
+					return []any{
+{{- range $i, $arg := .Args }}
+						{{ renderExpr (external $a.ModelPkg "SampledFrom") }}([]{{ renderType $arg.Type }}{fx.{{ $arg.Field }}, fx.{{ $arg.Field }}Other}).Draw(t, {{ printf "%q" (printf "%s_arg%d" $a.Method $i) }}),
+{{- end }}
+					}
+				}),
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, a []any) error {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}{{ range $i, $arg := .Args }}{{ if $i }}, {{ end }}a[{{ $i }}].({{ renderType $arg.Type }}){{ end }})
+				})
+{{- end -}}

@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	commutativetest.AssertMixedContract(t,
+		commutativetest.MixedModel(),
 		commutativetest.MixedSubject("in-memory", func() commutative.Mixed {
 			return commutativetest.NewInMemory()
 		}),

@@ -28,6 +28,7 @@ import (
 //testkit:out integrationonlytest/ pkg=integrationonlytest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Connect reaches outside the process. The mixin gates the generated
 	// subtest behind a build tag rather than asserting anything at runtime.

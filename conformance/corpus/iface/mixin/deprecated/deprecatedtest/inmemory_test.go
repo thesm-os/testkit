@@ -25,6 +25,7 @@ func TestMixedContract(t *testing.T) {
 	fixture := deprecatedtest.DefaultMixedFixture()
 
 	deprecatedtest.AssertMixedContract(t,
+		deprecatedtest.MixedModel(),
 		deprecatedtest.MixedSubject("in-memory", func() deprecated.Mixed {
 			return deprecatedtest.NewInMemory()
 		}),

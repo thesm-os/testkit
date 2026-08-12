@@ -149,8 +149,22 @@ func lawOf(b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.M
 	for _, a := range spec.Args {
 		switch a {
 		case tiers.BindKey:
+			if b.Keys.Type == nil {
+				b.Unbound = append(b.Unbound, Skip{
+					Method: r.Law,
+					Reason: "instantiates at a key type no method here draws",
+				})
+				return nil, false
+			}
 			lb.Args = append(lb.Args, b.Keys.Type)
 		case tiers.BindValue:
+			if b.Values.Type == nil {
+				b.Unbound = append(b.Unbound, Skip{
+					Method: r.Law,
+					Reason: "instantiates at a value type no method here draws",
+				})
+				return nil, false
+			}
 			lb.Args = append(lb.Args, b.Values.Type)
 		}
 	}
@@ -216,6 +230,13 @@ func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *s
 			return nil, f.Name + " drains " + role.Name +
 				", which streams through an iterator rather than returning a slice"
 		}
+		// The Read and Write closures are typed by the pools, so the role
+		// must be the shape the field's template spells at the pools' own
+		// types — a cacheable claim riding a zero-arg drain selects a law
+		// whose Read no closure over that drain can fill.
+		if reason := roleShapeMismatch(b, f.Name, role); reason != "" {
+			return nil, reason
+		}
 		field.Method = role.Name
 		field.TakesCtx = role.TakesContext()
 		if f.Name == "Drain" || f.Name == "Collect" {
@@ -239,6 +260,11 @@ func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *s
 		field.Const = sdk.NewExternal(pkg, name)
 		return field, ""
 	case tiers.KindGenerator:
+		// The pool locals exist exactly where an action draws from them; a
+		// law reaching for one nothing declared is a compile error waiting.
+		if (f.From == poolKeys && !b.UsesKeys()) || (f.From == poolValues && !b.UsesValues()) {
+			return nil, f.Name + " draws from the " + f.From + " pool, which no action here declares"
+		}
 		field.Pool = f.From
 		return field, ""
 	case tiers.KindHandle:
@@ -249,6 +275,37 @@ func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *s
 		return field, ""
 	}
 	return nil, f.Name + " has the unknown kind " + string(f.Kind)
+}
+
+// roleShapeMismatch holds a Read or Write role to the shape its template
+// spells: Read composes `(ctx, K) (V, error)` and Write `(ctx, V) error`,
+// each at the pools' types, so a role of another shape — or of the right
+// shape over other types — renders a closure that fails to compile in
+// whichever package arms it. Empty where the field carries no such contract.
+func roleShapeMismatch(b *Bindings, field string, role *suite.Method) string {
+	keyQ, _ := shape.MetaKeyType.Get(role.Source.Meta())
+	valueQ, _ := shape.MetaValueType.Get(role.Source.Meta())
+	switch field {
+	case "Read":
+		if pseudoShape(role) != shapeReader {
+			return field + " closes over " + role.Name + ", whose shape is " +
+				pseudoShape(role) + " rather than a keyed reader"
+		}
+		if (b.Keys.Q != "" && keyQ != b.Keys.Q) || (b.Values.Q != "" && valueQ != b.Values.Q) {
+			return field + " closes over " + role.Name + ", which reads (" + keyQ +
+				" → " + valueQ + ") beside pools of (" + b.Keys.Q + ", " + b.Values.Q + ")"
+		}
+	case "Write":
+		if pseudoShape(role) != shapeWriter {
+			return field + " closes over " + role.Name + ", whose shape is " +
+				pseudoShape(role) + " rather than a value writer"
+		}
+		if b.Values.Q != "" && valueQ != b.Values.Q {
+			return field + " closes over " + role.Name + ", which takes " + valueQ +
+				" where the values pool draws " + b.Values.Q
+		}
+	}
+	return ""
 }
 
 // roleMethod resolves a manifest role to the method whose call fills it:

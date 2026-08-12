@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out watchertest/ pkg=watchertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Watch is the watcher contract's watch role, and hosts the directive
 	// that names its partners.

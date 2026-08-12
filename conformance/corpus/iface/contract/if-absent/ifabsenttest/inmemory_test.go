@@ -22,6 +22,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	ifabsenttest.AssertContractContract(t,
+		ifabsenttest.ContractModel(),
 		ifabsenttest.ContractSubject("in-memory", func() ifabsent.Contract {
 			return ifabsenttest.NewInMemory()
 		}),

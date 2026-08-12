@@ -29,6 +29,7 @@ func TestLeasedWriterContract(t *testing.T) {
 
 	leasedidempotentwritertest.AssertLeasedWriterContract(
 		t,
+		leasedidempotentwritertest.LeasedWriterModel(),
 		leasedidempotentwritertest.LeasedWriterSubject(
 			"in-memory",
 			func() leasedidempotentwriter.LeasedWriter {

@@ -24,6 +24,7 @@ import (
 //testkit:out crdtmergetest/ pkg=crdtmergetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Replica interface {
 	Items(ctx context.Context) ([]string, error)
 }
@@ -33,6 +34,7 @@ type Replica interface {
 //testkit:out crdtmergetest/ pkg=crdtmergetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Merge folds another replica in. Convergence is a statement about two
 	// merges in opposite orders, so the method has to take a peer rather than

@@ -21,6 +21,7 @@ import (
 //testkit:out windowedtest/ pkg=windowedtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Record adds one occurrence at the clock's current reading.
 	//testkit:mixin windowed incr=Record count=CountIn window=1m

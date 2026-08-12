@@ -28,6 +28,7 @@ type Delta struct {
 //testkit:out commutativetest/ pkg=commutativetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Apply folds one delta in. Swapping two applications changes nothing.
 	//testkit:mixin commutative

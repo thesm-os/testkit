@@ -26,6 +26,7 @@ func TestContractContract(t *testing.T) {
 	fixture := outboxtest.DefaultContractFixture()
 
 	outboxtest.AssertContractContract(t,
+		outboxtest.ContractModel(),
 		outboxtest.ContractSubject("in-memory", func() outbox.Contract {
 			return outboxtest.NewInMemory()
 		}),

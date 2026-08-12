@@ -22,6 +22,7 @@ type Value struct{ Key, Body string }
 //testkit:out batchreadertest/ pkg=batchreadertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type BatchReader interface {
 	GetAll(ctx context.Context, keys ...string) ([]Value, error)
 }

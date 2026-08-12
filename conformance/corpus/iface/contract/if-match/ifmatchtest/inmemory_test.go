@@ -24,6 +24,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	ifmatchtest.AssertContractContract(t,
+		ifmatchtest.ContractModel(),
 		ifmatchtest.ContractSubject("in-memory", func() ifmatch.Contract {
 			return ifmatchtest.NewInMemory()
 		}),

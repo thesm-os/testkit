@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out upsertertest/ pkg=upsertertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Put is the upserter contract's writer role, and hosts the directive
 	// that names its partners.

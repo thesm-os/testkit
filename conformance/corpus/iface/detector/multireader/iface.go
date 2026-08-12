@@ -29,6 +29,7 @@ type Meta struct{ Revision int }
 //testkit:out multireadertest/ pkg=multireadertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type MultiReader interface {
 	GetWithMeta(ctx context.Context, key string) (Value, Meta, error)
 }

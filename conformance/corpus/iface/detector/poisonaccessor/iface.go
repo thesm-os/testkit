@@ -22,6 +22,7 @@ var ErrPoisoned = errors.New("poisonaccessor: poisoned")
 //testkit:out poisonaccessortest/ pkg=poisonaccessortest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type PoisonAccessor interface {
 	Err() error
 }

@@ -33,6 +33,7 @@ func TestMixedContract(t *testing.T) {
 	t.Setenv("TESTKIT_INTEGRATION", "1")
 
 	integrationonlytest.AssertMixedContract(t,
+		integrationonlytest.MixedModel(),
 		integrationonlytest.MixedSubject("in-memory", func() integrationonly.Mixed {
 			return integrationonlytest.NewInMemory()
 		}),

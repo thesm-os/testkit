@@ -24,6 +24,7 @@ func TestContractContract(t *testing.T) {
 	fixture := cachetest.DefaultContractFixture()
 
 	cachetest.AssertContractContract(t,
+		cachetest.ContractModel(),
 		cachetest.ContractSubject("in-memory", func() cache.Contract {
 			return cachetest.NewInMemory()
 		}),

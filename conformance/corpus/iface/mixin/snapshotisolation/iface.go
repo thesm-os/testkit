@@ -31,6 +31,7 @@ type Entry struct {
 //testkit:out snapshotisolationtest/ pkg=snapshotisolationtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Record appends one operation to the history.
 	Record(ctx context.Context, e Entry) error

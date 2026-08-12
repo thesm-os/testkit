@@ -19,6 +19,7 @@ import (
 //testkit:out poisonabletest/ pkg=poisonabletest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Fail drives the subject into the failed state the probe reports.
 	Fail(ctx context.Context) error

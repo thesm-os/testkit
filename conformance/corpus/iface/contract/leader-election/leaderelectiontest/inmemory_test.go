@@ -23,6 +23,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	leaderelectiontest.AssertContractContract(t,
+		leaderelectiontest.ContractModel(),
 		leaderelectiontest.ContractSubject("in-memory", func() leaderelection.Contract {
 			return leaderelectiontest.NewInMemory()
 		}),

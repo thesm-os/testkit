@@ -25,6 +25,7 @@ func TestMixedContract(t *testing.T) {
 	fixture := cacheabletest.DefaultMixedFixture()
 
 	cacheabletest.AssertMixedContract(t,
+		cacheabletest.MixedModel(),
 		cacheabletest.MixedSubject("in-memory", func() cacheable.Mixed {
 			return cacheabletest.NewInMemory()
 		}),

@@ -19,6 +19,7 @@ import (
 //testkit:out aggregatortest/ pkg=aggregatortest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Aggregator interface {
 	Count(ctx context.Context) (int, error)
 }

@@ -26,6 +26,7 @@ func TestLookupContract(t *testing.T) {
 	fixture := lookuptest.DefaultLookupFixture()
 
 	lookuptest.AssertLookupContract(t,
+		lookuptest.LookupModel(),
 		lookuptest.LookupSubject("in-memory", func() lookup.Lookup {
 			return lookuptest.NewInMemory()
 		}),

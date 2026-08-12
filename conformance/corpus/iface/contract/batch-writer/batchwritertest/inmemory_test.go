@@ -25,6 +25,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	batchwritertest.AssertContractContract(t,
+		batchwritertest.ContractModel(),
 		batchwritertest.ContractSubject("in-memory", func() batchwriter.Contract {
 			return batchwritertest.NewInMemory()
 		}),

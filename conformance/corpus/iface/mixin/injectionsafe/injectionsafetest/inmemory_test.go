@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	injectionsafetest.AssertMixedContract(t,
+		injectionsafetest.MixedModel(),
 		injectionsafetest.MixedSubject("in-memory", func() injectionsafe.Mixed {
 			return injectionsafetest.NewInMemory()
 		}),

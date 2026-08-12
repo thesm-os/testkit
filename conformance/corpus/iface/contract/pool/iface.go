@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out pooltest/ pkg=pooltest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Get is the pool contract's get role, and hosts the directive
 	// that names its partners.

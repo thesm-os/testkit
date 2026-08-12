@@ -22,6 +22,7 @@ func TestMutatorContract(t *testing.T) {
 	t.Parallel()
 
 	mutatortest.AssertMutatorContract(t,
+		mutatortest.MutatorModel(),
 		mutatortest.MutatorSubject("in-memory", func() mutator.Mutator {
 			return mutatortest.NewInMemory()
 		}),

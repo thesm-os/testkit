@@ -23,6 +23,7 @@ import (
 //testkit:out partitiontest/ pkg=partitiontest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Put is partitioned: two keys in different partitions never interfere.
 	// The law needs a partition parameter distinct from the key, or there is

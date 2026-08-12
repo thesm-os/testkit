@@ -20,6 +20,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	hookstest.AssertMixedContract(t,
+		hookstest.MixedModel(),
 		hookstest.MixedSubject("in-memory", func() hooks.Mixed {
 			return hookstest.NewInMemory()
 		}),

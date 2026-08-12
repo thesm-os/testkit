@@ -15,6 +15,7 @@ package predicate
 //testkit:out predicatetest/ pkg=predicatetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Predicate interface {
 	IsEmpty() bool
 }

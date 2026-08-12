@@ -22,6 +22,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	persistertest.AssertContractContract(t,
+		persistertest.ContractModel(),
 		persistertest.ContractSubject("in-memory", func() persister.Contract {
 			return persistertest.NewInMemory()
 		}),

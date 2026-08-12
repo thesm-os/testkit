@@ -1,0 +1,11 @@
+{{- /*
+A batch reader draws one to eight keys from the shared pool — repeats
+included, which is what makes a batch revisit its own members — and compares
+the whole answer.
+*/ -}}
+{{- define "model.action.batchreader" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, ks ...{{ renderType .Key }}) ([]{{ renderType .Value }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}ks...)
+				})
+{{- end -}}

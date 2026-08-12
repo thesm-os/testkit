@@ -21,6 +21,7 @@ func TestPureContract(t *testing.T) {
 	t.Parallel()
 
 	puretest.AssertPureContract(t,
+		puretest.PureModel(),
 		puretest.PureSubject("in-memory", func() pure.Pure {
 			return puretest.NewInMemory("first")
 		}),

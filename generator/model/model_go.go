@@ -52,6 +52,10 @@ const (
 	// and LawPkg the law catalogue the registry instantiates from.
 	RefPkg = ModelPkg + "/ref"
 	LawPkg = ModelPkg + "/law"
+
+	// LinearizePkg holds the Porcupine models and the concurrent action
+	// helpers the derived concurrent leg wires.
+	LinearizePkg = ModelPkg + "/linearize"
 )
 
 // The template tree, embedded through the recursive directory form — the

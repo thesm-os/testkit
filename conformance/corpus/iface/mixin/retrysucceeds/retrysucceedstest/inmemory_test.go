@@ -23,6 +23,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	retrysucceedstest.AssertMixedContract(t,
+		retrysucceedstest.MixedModel(),
 		retrysucceedstest.MixedSubject("in-memory", func() retrysucceeds.Mixed {
 			return retrysucceedstest.NewInMemory()
 		}),

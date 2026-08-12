@@ -21,6 +21,11 @@ import (
 
 // Mixed is the fixture interface.
 //
+// The model tier is deliberately unarmed: both methods are the scheduled
+// mixin's own partners — a schedule and a firing count against a clock the
+// sequences never advance — so no action would drive anything. Arming waits
+// on the clock-aware runner.
+//
 //testkit:out scheduledtest/ pkg=scheduledtest
 //testkit:stub
 //testkit:suite

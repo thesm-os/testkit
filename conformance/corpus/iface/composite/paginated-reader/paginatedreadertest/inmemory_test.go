@@ -42,6 +42,7 @@ func TestPaginatedReaderContract(t *testing.T) {
 	t.Parallel()
 
 	paginatedreadertest.AssertPaginatedReaderContract(t,
+		paginatedreadertest.PaginatedReaderModel(),
 		paginatedreadertest.PaginatedReaderSubject("in-memory", func() paginatedreader.PaginatedReader {
 			return paginatedreadertest.NewInMemory(corpus...)
 		}),

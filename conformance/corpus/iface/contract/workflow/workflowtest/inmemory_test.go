@@ -25,6 +25,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	workflowtest.AssertContractContract(t,
+		workflowtest.ContractModel(),
 		workflowtest.ContractSubject("in-memory", func() workflow.Contract {
 			return workflowtest.NewInMemory()
 		}),

@@ -20,6 +20,16 @@ func Test{{ .IfaceName }}ModelReference(t *{{ renderExpr (external "testing" "T"
 		{{ renderExpr (external .HarnessPkg .ReferenceOptionName) }}({{ renderExpr (external .HarnessPkg .RefCtorName) }}),
 	))
 }
+{{ if .ConcurrentName }}
+// Test{{ .IfaceName }}ModelConcurrent holds the linearizability leg to the
+// derived reference: a mutex-guarded store is linearizable, so a red run
+// here is the wiring's own fault — before any consumer's subject is in the
+// room.
+func Test{{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+	{{ renderExpr (external .HarnessPkg .ConcurrentName) }}(t, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
+}
+{{ end }}
 {{ if .Inert }}
 // Test{{ .IfaceName }}ModelReferenceInertBodies calls what the sequences
 // never do. An inert body's whole contract is answering zero values whatever
@@ -27,7 +37,9 @@ func Test{{ .IfaceName }}ModelReference(t *{{ renderExpr (external "testing" "T"
 // reference through the interface.
 func Test{{ .IfaceName }}ModelReferenceInertBodies(t *{{ renderExpr (external "testing" "T") }}) {
 	t.Parallel()
+{{- if .NeedsFixture }}
 	fx := {{ renderExpr (external .HarnessPkg .FixtureCtor) }}()
+{{- end }}
 	r := {{ renderExpr (external .HarnessPkg .RefCtorName) }}()
 {{- range $p := .Inert }}
 	{{ $p.Assign }}r.{{ $p.Method }}({{ if $p.TakesCtx }}t.Context(){{ end }}{{ range $i, $f := $p.ArgFields }}{{ if or $i $p.TakesCtx }}, {{ end }}fx.{{ $f }}{{ end }})

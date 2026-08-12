@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	conservativetest.AssertMixedContract(t,
+		conservativetest.MixedModel(),
 		conservativetest.MixedSubject("in-memory", func() conservative.Mixed {
 			return conservativetest.NewInMemory()
 		}),

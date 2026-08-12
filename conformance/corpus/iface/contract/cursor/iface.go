@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out cursortest/ pkg=cursortest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Next is the cursor contract's next role, and hosts the directive
 	// that names its partners.

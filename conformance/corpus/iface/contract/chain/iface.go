@@ -22,6 +22,7 @@ type Entry struct{ Key, Body string }
 //testkit:out chaintest/ pkg=chaintest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Append is the chain contract's append role, and hosts the directive
 	// that names its partner. The contract requires a replay beside every

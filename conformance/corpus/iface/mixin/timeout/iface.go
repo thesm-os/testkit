@@ -23,6 +23,7 @@ import (
 //testkit:out timeouttest/ pkg=timeouttest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Slow carries the budget as a parameter, because "within a budget" is
 	// not a statement until a duration is named.

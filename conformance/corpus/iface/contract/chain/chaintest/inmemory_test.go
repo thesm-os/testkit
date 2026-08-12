@@ -16,6 +16,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	chaintest.AssertContractContract(t,
+		chaintest.ContractModel(),
 		chaintest.ContractSubject("in-memory", func() chain.Contract {
 			return chaintest.NewInMemory()
 		}),

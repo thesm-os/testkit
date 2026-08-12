@@ -22,6 +22,7 @@ func TestLifecycleContract(t *testing.T) {
 	t.Parallel()
 
 	lifecycletest.AssertLifecycleContract(t,
+		lifecycletest.LifecycleModel(),
 		lifecycletest.LifecycleSubject("in-memory", func() lifecycle.Lifecycle {
 			return lifecycletest.NewInMemory()
 		}),

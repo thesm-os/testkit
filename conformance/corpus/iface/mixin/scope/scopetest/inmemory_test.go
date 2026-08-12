@@ -28,6 +28,7 @@ func TestMixedContract(t *testing.T) {
 	fixture := scopetest.DefaultMixedFixture()
 
 	scopetest.AssertMixedContract(t,
+		scopetest.MixedModel(),
 		scopetest.MixedSubject("in-memory", func() scope.Mixed {
 			return scopetest.NewInMemory()
 		}),

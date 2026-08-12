@@ -1,0 +1,10 @@
+{{- /*
+A pointer reader compares presence first — both nil or both not — and the
+pointed-to values where both answered.
+*/ -}}
+{{- define "model.action.pointerreader" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) {{ renderType .Value }} {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k)
+				})
+{{- end -}}

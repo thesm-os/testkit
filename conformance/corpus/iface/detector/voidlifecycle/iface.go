@@ -15,6 +15,7 @@ package voidlifecycle
 //testkit:out voidlifecycletest/ pkg=voidlifecycletest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type VoidLifecycle interface {
 	Stop()
 }

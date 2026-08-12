@@ -21,6 +21,7 @@ type Value struct{ Key, Body string }
 //testkit:out publishertest/ pkg=publishertest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Contract interface {
 	// Publish is the publisher contract's publish role, and hosts the directive
 	// that names its partners.

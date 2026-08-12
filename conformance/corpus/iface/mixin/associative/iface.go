@@ -29,6 +29,7 @@ type Delta struct {
 //testkit:out associativetest/ pkg=associativetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Apply folds one delta in. Regrouping the folds does not change the total.
 	//testkit:mixin associative

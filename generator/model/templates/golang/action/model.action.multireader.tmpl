@@ -1,0 +1,10 @@
+{{- /*
+A reader answering two values beside the error: both compared where the call
+succeeded on both sides.
+*/ -}}
+{{- define "model.action.multireader" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Value }}, {{ renderType .Value2 }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k)
+				})
+{{- end -}}

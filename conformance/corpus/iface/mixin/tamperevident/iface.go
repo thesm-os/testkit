@@ -19,6 +19,7 @@ import (
 //testkit:out tamperevidenttest/ pkg=tamperevidenttest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Store records a value under its integrity check.
 	//testkit:mixin tamperevident tamper=Corrupt verify=Verify

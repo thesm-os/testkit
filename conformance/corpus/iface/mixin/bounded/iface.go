@@ -23,6 +23,7 @@ import (
 //testkit:out boundedtest/ pkg=boundedtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// List carries the ceiling as a parameter, because the law cannot be
 	// stated without a number to compare against.

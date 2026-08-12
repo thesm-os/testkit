@@ -22,6 +22,7 @@ import (
 //testkit:out xsssafetest/ pkg=xsssafetest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Render escapes a raw value for embedding in markup.
 	//testkit:mixin xsssafe

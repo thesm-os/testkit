@@ -24,6 +24,7 @@ func TestContractContract(t *testing.T) {
 	fixture := publishertest.DefaultContractFixture()
 
 	publishertest.AssertContractContract(t,
+		publishertest.ContractModel(),
 		publishertest.ContractSubject("in-memory", func() publisher.Contract {
 			return publishertest.NewInMemory()
 		}),

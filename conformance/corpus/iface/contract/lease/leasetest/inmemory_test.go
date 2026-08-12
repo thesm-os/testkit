@@ -22,6 +22,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	leasetest.AssertContractContract(t,
+		leasetest.ContractModel(),
 		leasetest.ContractSubject("in-memory", func() lease.Contract {
 			return leasetest.NewInMemory()
 		}),

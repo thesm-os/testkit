@@ -19,6 +19,7 @@ func TestVoidLifecycleContract(t *testing.T) {
 	t.Parallel()
 
 	voidlifecycletest.AssertVoidLifecycleContract(t,
+		voidlifecycletest.VoidLifecycleModel(),
 		voidlifecycletest.VoidLifecycleSubject("in-memory", func() voidlifecycle.VoidLifecycle {
 			return voidlifecycletest.NewInMemory()
 		}),

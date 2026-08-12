@@ -22,6 +22,7 @@ func TestCompositeWriterContract(t *testing.T) {
 	t.Parallel()
 
 	compositewritertest.AssertCompositeWriterContract(t,
+		compositewritertest.CompositeWriterModel(),
 		compositewritertest.CompositeWriterSubject("in-memory",
 			func() compositewriter.CompositeWriter {
 				return compositewritertest.NewInMemory()

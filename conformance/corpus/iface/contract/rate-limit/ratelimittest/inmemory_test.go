@@ -38,6 +38,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	ratelimittest.AssertContractContract(t,
+		ratelimittest.ContractModel(),
 		ratelimittest.ContractSubject("in-memory", func() ratelimit.Contract {
 			return ratelimittest.NewInMemory(clock.NewTestClock(origin), 10, period)
 		}),

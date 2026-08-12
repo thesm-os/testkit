@@ -23,6 +23,7 @@ import (
 //testkit:out deprecatedtest/ pkg=deprecatedtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Old carries no runtime law: the mixin is an annotation the generator
 	// surfaces, so the signature is deliberately unremarkable.

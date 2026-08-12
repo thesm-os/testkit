@@ -23,6 +23,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	sm.AssertMixedContract(t,
+		sm.MixedModel(),
 		sm.MixedSubject("in-memory", func() streamreflectsmutations.Mixed {
 			return sm.NewInMemory()
 		}),

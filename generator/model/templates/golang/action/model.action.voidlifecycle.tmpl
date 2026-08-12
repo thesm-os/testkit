@@ -1,0 +1,10 @@
+{{- /*
+A void lifecycle call returns nothing: it lands on both sides, and what it
+changed is the laws' business.
+*/ -}}
+{{- define "model.action.voidlifecycle" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) {
+					s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }})
+				})
+{{- end -}}

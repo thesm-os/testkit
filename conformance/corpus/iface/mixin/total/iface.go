@@ -22,6 +22,7 @@ import (
 //testkit:out totaltest/ pkg=totaltest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// Classify answers for any input in the declared domain.
 	//testkit:mixin total domain=strings

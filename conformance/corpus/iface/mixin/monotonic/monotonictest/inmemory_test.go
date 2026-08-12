@@ -19,6 +19,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	monotonictest.AssertMixedContract(t,
+		monotonictest.MixedModel(),
 		monotonictest.MixedSubject("in-memory", func() monotonic.Mixed {
 			return monotonictest.NewInMemory()
 		}),

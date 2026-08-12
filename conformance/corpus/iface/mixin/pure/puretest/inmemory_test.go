@@ -21,6 +21,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	puretest.AssertMixedContract(t,
+		puretest.MixedModel(),
 		puretest.MixedSubject("in-memory", func() pure.Mixed {
 			return puretest.NewInMemory()
 		}),

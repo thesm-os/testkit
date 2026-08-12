@@ -21,6 +21,7 @@ func TestMultiArgWriterContract(t *testing.T) {
 	t.Parallel()
 
 	multiargwritertest.AssertMultiArgWriterContract(t,
+		multiargwritertest.MultiArgWriterModel(),
 		multiargwritertest.MultiArgWriterSubject("in-memory", func() multiargwriter.MultiArgWriter {
 			return multiargwritertest.NewInMemory()
 		}),

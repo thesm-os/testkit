@@ -23,6 +23,7 @@ func TestAggregatorContract(t *testing.T) {
 	t.Parallel()
 
 	aggregatortest.AssertAggregatorContract(t,
+		aggregatortest.AggregatorModel(),
 		aggregatortest.AggregatorSubject("in-memory", func() aggregator.Aggregator {
 			return aggregatortest.NewInMemory()
 		}),

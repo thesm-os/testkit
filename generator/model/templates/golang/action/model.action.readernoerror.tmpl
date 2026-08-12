@@ -1,0 +1,10 @@
+{{- /*
+A reader with no error draws a key from the shared pool, calls both sides,
+and compares the whole answer — absence spells itself as the zero value.
+*/ -}}
+{{- define "model.action.readernoerror" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) {{ renderType .Value }} {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k)
+				})
+{{- end -}}

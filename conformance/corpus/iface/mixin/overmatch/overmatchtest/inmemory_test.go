@@ -16,6 +16,7 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	overmatchtest.AssertMixedContract(t,
+		overmatchtest.MixedModel(),
 		overmatchtest.MixedSubject("in-memory", func() overmatch.Mixed {
 			return overmatchtest.NewInMemory()
 		}),

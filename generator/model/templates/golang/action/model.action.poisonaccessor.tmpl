@@ -1,0 +1,10 @@
+{{- /*
+A poison accessor takes nothing by shape; both sides answer and the error
+states must agree.
+*/ -}}
+{{- define "model.action.poisonaccessor" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func(s {{ renderType .Iface }}) error {
+					return s.{{ .Method }}()
+				})
+{{- end -}}

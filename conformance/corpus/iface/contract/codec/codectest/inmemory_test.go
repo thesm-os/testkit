@@ -16,6 +16,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	codectest.AssertContractContract(t,
+		codectest.ContractModel(),
 		codectest.ContractSubject("in-memory", func() codec.Contract {
 			return codectest.NewInMemory()
 		}),

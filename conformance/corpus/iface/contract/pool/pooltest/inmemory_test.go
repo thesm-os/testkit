@@ -24,6 +24,7 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	pooltest.AssertContractContract(t,
+		pooltest.ContractModel(),
 		pooltest.ContractSubject("in-memory", func() pool.Contract {
 			return pooltest.NewInMemory()
 		}),

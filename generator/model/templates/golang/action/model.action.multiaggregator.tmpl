@@ -1,0 +1,10 @@
+{{- /*
+An aggregator answering two values beside the error: both compared where the
+call succeeded on both sides.
+*/ -}}
+{{- define "model.action.multiaggregator" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) ({{ renderType .Value }}, {{ renderType .Value2 }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }})
+				})
+{{- end -}}
