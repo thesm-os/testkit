@@ -98,6 +98,10 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			claims[name] = true
 		}
 	}
+	// One outcome per (law, selecting method): a contract classification
+	// rides every role method, and re-selecting the same rule from each
+	// would register one law twice and print one refusal per carrier.
+	seen := map[string]bool{}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if _, partner := partners[m.Name]; partner {
@@ -105,14 +109,45 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 		}
 		for _, r := range tiers.Select(classificationsOf(m), paramsOf(m)) {
 			if reason, negated := negatedBy(claims, r.Law); negated {
-				b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
+				if !seen[r.Law+"\x00"+reason] {
+					seen[r.Law+"\x00"+reason] = true
+					b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
+				}
 				continue
 			}
-			if binding, ok := lawOf(b, harness, r, m, keyed); ok {
-				b.Laws = append(b.Laws, binding)
+			before := len(b.Unbound)
+			binding, ok := lawOf(b, harness, r, m, keyed)
+			if !ok {
+				// lawOf appended the refusal; keep it only if new.
+				added := b.Unbound[before:]
+				b.Unbound = b.Unbound[:before]
+				for _, u := range added {
+					if !seen[u.Method+"\x00"+u.Reason] {
+						seen[u.Method+"\x00"+u.Reason] = true
+						b.Unbound = append(b.Unbound, u)
+					}
+				}
+				continue
 			}
+			key := r.Law + "\x00bound\x00" + bindingFingerprint(binding)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			b.Laws = append(b.Laws, binding)
 		}
 	}
+}
+
+// bindingFingerprint spells what makes two bindings the same law twice: the
+// methods its fields close over. Two writers earning one law separately are
+// two bindings; one contract riding two roles is one.
+func bindingFingerprint(lb *LawBinding) string {
+	var out strings.Builder
+	for _, f := range lb.Fields {
+		out.WriteString(f.Name + "=" + f.Method + ";")
+	}
+	return out.String()
 }
 
 // negatedBy resolves the first conflict row a held claim triggers, in the

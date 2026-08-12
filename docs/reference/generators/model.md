@@ -76,7 +76,13 @@ parameter with no hint is a diagnostic at the parameter.
   keyed store for key-beside-value writers, the collection for
   append-and-drain — each refined by claim (`noduplicates` and `crdtmerge`
   dedupe, `sticky` pins resolutions, `snapshotisolation` and `chain` force
-  the log over the upsert inference). Where no store models the shape, the
+  the log over the upsert inference). A contract claim outranks the
+  shapes: where its role vocabulary resolves completely — the carrier's
+  `role=`, the partner keys — the contract's own store stands in
+  (`lease` → `LeaseTracker`), its constructor sentinels minted or
+  lenified per the claims, and an oracle whose every sentinel lenifies
+  away falls to the twin, because the kill matrix proved a
+  never-disagreeing store checks nothing. Where no store models the shape, the
   **twin floor** stands in: a second instance from the subject's own
   factory, which catches nondeterminism and hidden shared state but not a
   subject wrong the same way twice — the header says why the floor was
@@ -131,9 +137,13 @@ because it is the assertion a declared classification owes.
 Nothing beyond the suite wiring: pass `<Iface>Model()` to the contract
 entry. The options are the escape hatches: `<Iface>ModelReference(factory)`
 replaces the derived oracle, `<Iface>ModelValues(gen)` replaces the values
-pool for a subject whose accepted values a raw draw cannot spell, the
-`ref=` directive key names a constructor where no shipped oracle models
-the shape, and `<Iface>Without("model")` declines the tier.
+pool wholesale, the `gen=` directive key names a generator constructor in
+the routed package for a value type reflection cannot draw (a pointer
+payload, an invariant-carrying domain type), the `ref=` key names a
+reference constructor where no shipped oracle models the shape, and
+`<Iface>Without("model")` declines the tier. `<Iface>ModelFuzz(f, factory)`
+is the one-line fuzz wiring: the fuzzer's bytes replay as rapid's choice
+stream over the subject's own branches.
 
 ## Layout conventions
 

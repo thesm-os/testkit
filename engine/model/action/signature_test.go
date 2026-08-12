@@ -540,3 +540,40 @@ func TestMultiValueActionsCompareEveryReturn(t *testing.T) {
 		}
 	})
 }
+
+// TestPureVar pins the drawn-input pure comparison: agreement passes, a
+// side-dependent answer is flagged with the drawn arguments in the message.
+func TestPureVar(t *testing.T) {
+	t.Parallel()
+
+	args := rapid.Just([]any{"in"})
+	agree := action.PureVar("Echo", args, func(s string, a []any) any {
+		return s + a[0].(string)
+	})
+	rapid.Check(t, func(rt *rapid.T) {
+		if res := agree.Run(rt, "x", "x"); res.Err != nil {
+			t.Fatalf("identical sides must agree: %v", res.Err)
+		}
+		if res := agree.Run(rt, "x", "y"); res.Err == nil {
+			t.Fatal("differing sides must be flagged")
+		}
+	})
+}
+
+// TestPredicateVar pins the drawn-input predicate comparison.
+func TestPredicateVar(t *testing.T) {
+	t.Parallel()
+
+	args := rapid.Just([]any{2})
+	agree := action.PredicateVar("Even", args, func(s int, a []any) bool {
+		return (s+a[0].(int))%2 == 0
+	})
+	rapid.Check(t, func(rt *rapid.T) {
+		if res := agree.Run(rt, 0, 2); res.Err != nil {
+			t.Fatalf("sides agreeing about parity must pass: %v", res.Err)
+		}
+		if res := agree.Run(rt, 0, 1); res.Err == nil {
+			t.Fatal("sides disagreeing about parity must be flagged")
+		}
+	})
+}

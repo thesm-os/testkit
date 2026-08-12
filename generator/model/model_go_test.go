@@ -83,7 +83,16 @@ func TestGoTemplates(t *testing.T) {
 			}
 			shape := strings.TrimSuffix(rest, ".tmpl")
 			_, known := tiers.ActionFor(shape)
-			testkit.True(t, known || shape == tiers.ShapeCollector,
+			// The pseudo-spellings are the generator's own refinements — the
+			// slice-returning aggregator drains, and a parameterised pure or
+			// predicate call draws its arguments — each selected in actionOf
+			// beside the collector precedent.
+			pseudo := map[string]bool{
+				tiers.ShapeCollector: true,
+				"purevar":            true,
+				"predicatevar":       true,
+			}
+			testkit.True(t, known || pseudo[shape],
 				name+" names the "+shape+" shape, which the catalogue drives")
 		}
 	})

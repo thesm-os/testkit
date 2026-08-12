@@ -5,6 +5,7 @@ package model
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -27,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.7.0"
+const Version = "0.9.3"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -36,6 +37,12 @@ const DirectiveName sdk.DirectiveName = "model"
 // RefKey names a constructor in the source package that builds the reference,
 // for an interface whose shape no shipped oracle models.
 const RefKey = "ref"
+
+// GenKey names a generator constructor in the routed output package —
+// `func() *model.Generator[V]` over the values pool's type — for a value the
+// wide pools cannot draw by reflection, or one whose domain the consumer
+// knows better than any reflection walk.
+const GenKey = "gen"
 
 // TierName is the path the model run reports under inside the contract entry,
 // and the one `<Iface>Without` drops it by.
@@ -99,14 +106,16 @@ func directives() []sdk.DirectiveSchema {
 	return []sdk.DirectiveSchema{
 		sdk.NewDirective(DirectiveName).
 			Describe(
-				"Generates property-based state-machine tests for the annotated " +
-					"interface: random sequences of its methods run against the " +
-					"subject and a known-good in-memory reference side by side, " +
-					"compared after every call. " + RefKey + " names a constructor in " +
-					"the source package returning the interface, for a shape no " +
-					"shipped reference models.",
+				"Generates property-based state-machine tests for the annotated "+
+					"interface: random sequences of its methods run against the "+
+					"subject and a known-good in-memory reference side by side, "+
+					"compared after every call. "+RefKey+" names a constructor in "+
+					"the source package returning the interface, for a shape no "+
+					"shipped reference models. "+GenKey+" names a generator "+
+					"constructor in the routed output package, for a value type "+
+					"the wide pools cannot draw by reflection.",
 			).
-			AllowedKeys(RefKey).
+			AllowedKeys(RefKey, GenKey).
 			On(sdk.NodeKindInterface).
 			DenyNegation().
 			Build(),
@@ -276,6 +285,11 @@ type Pool struct {
 	Type sdk.Ref
 	Q    string
 
+	// GenFunc names the consumer's generator constructor where the gen=
+	// directive key supplied one; the wide arm draws through it instead of
+	// reflection.
+	GenFunc string
+
 	// Wide reports that the pool blends the fixture pair with arbitrary
 	// [model.Make] draws; WhyNarrow is the header's reason where it cannot.
 	Wide      bool
@@ -309,6 +323,15 @@ type Reference struct {
 	Pins    bool
 	TwinWhy string
 
+	// The contract oracle's own surface: ContractStore is the ref type,
+	// ContractName the claim that selected it, ContractArg its one type
+	// argument, and CtorErrs the constructor's error arguments in order —
+	// a named entry is a minted sentinel, an unnamed one renders nil.
+	ContractStore string
+	ContractName  string
+	ContractArg   sdk.Ref
+	CtorErrs      []CtorErr
+
 	// KeyField is the field of the value type the map oracle keys on, empty
 	// for the keyed oracle, whose key is an argument.
 	KeyField string
@@ -329,11 +352,20 @@ const (
 	OracleMap        Oracle = "map"
 	OracleKeyed      Oracle = "keyed"
 	OracleCollection Oracle = "collection"
+	OracleContract   Oracle = "contract"
 	OracleTwin       Oracle = "twin"
 )
 
+// CtorErr is one error argument of a contract oracle's constructor. Name is
+// the generated sentinel's identifier, empty where the slot renders nil.
+type CtorErr struct{ Name, Msg string }
+
 // Supplied reports that the directive named the reference.
 func (r Reference) Supplied() bool { return r.SuppliedCtor != nil }
+
+// IsContract reports the contract oracle: role-stamped delegation over a
+// shipped store whose semantics are the claim's own.
+func (r Reference) IsContract() bool { return r.Oracle == OracleContract }
 
 // Twin reports the twin floor: the subject's own factory stands in.
 func (r Reference) Twin() bool { return r.Oracle == OracleTwin }
@@ -354,6 +386,8 @@ func (r Reference) StoreType() string {
 			return "SetCollection"
 		}
 		return "Collection"
+	case OracleContract:
+		return r.ContractStore
 	case OracleMap, OracleTwin:
 		// The twin has no store; nothing renders the answer.
 	}
@@ -416,12 +450,16 @@ type Action struct {
 	TakesCtx bool
 }
 
-// ActionArg is one drawn argument of a multi-argument writer.
+// ActionArg is one drawn argument of a multi-argument writer or a
+// parameterised pure call.
 type ActionArg struct {
 	// Field is the fixture field the position samples; Type its slice
-	// literal's element clause.
+	// literal's element clause. Wide blends the pair with arbitrary draws —
+	// licensed for pure inputs unconditionally, because a pure call stores
+	// nothing a claim could refuse.
 	Field string
 	Type  sdk.Ref
+	Wide  bool
 }
 
 // ModelPkg surfaces the runner's import path to the action templates whose
@@ -718,7 +756,7 @@ func bindingsOf(
 			b.Skipped = append(b.Skipped, Skip{Method: m.Name, Reason: role})
 			continue
 		}
-		a, skip := actionOf(b, m)
+		a, skip := actionOf(ctx, b, m)
 		if skip != "" {
 			b.Skipped = append(b.Skipped, Skip{Method: m.Name, Reason: skip})
 			continue
@@ -780,7 +818,15 @@ func bindingsOf(
 	if valueSrc == nil && composite == nil {
 		valueSrc = valueFallback
 	}
-	poolsOf(ctx, b, harness, keySrc, valueSrc, composite)
+	genFunc, _ := directiveValue(iface, GenKey)
+	if strings.Contains(genFunc, ".") {
+		ctx.Diag.Errorf(iface.Pos(),
+			"%s: %s=%q on %q carries a qualifier; name a generator constructor "+
+				"in the routed output package",
+			Name, GenKey, genFunc, iface.Name)
+		return nil, false
+	}
+	poolsOf(ctx, b, harness, keySrc, valueSrc, composite, genFunc)
 	lawsOf(b, harness, partners, keyed)
 	concurrentOf(b, keyed, valued)
 	return b, true
@@ -813,7 +859,7 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 }
 
 // actionOf builds one method's action, or says why there is none.
-func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
+func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action, string) {
 	name := pseudoShape(m)
 	if name == "" {
 		return nil, "the annotator classified no shape for it"
@@ -906,13 +952,25 @@ func actionOf(b *Bindings, m *suite.Method) (*Action, string) {
 			a.Value = m.Returns[0].Type
 		}
 		a.NoError = name == shapeAggregator && len(m.Returns) == 1
-		if name != shapeAggregator {
-			// A pure call's closure has no draw handle, so its inputs are
-			// the fixture's own — one honest point per argument; the wide
-			// exploration of a pure function is the fuzz tier's business.
+		if name != shapeAggregator && len(m.CallArgs()) > 0 {
+			// A parameterised pure call drives through the drawn-args
+			// variant: each position draws from its own fixture pair,
+			// blended with arbitrary values wherever the type can be seen
+			// to the bottom — sound unconditionally, because a pure call
+			// stores nothing a claim could refuse.
 			for i, arg := range m.CallArgs() {
-				a.Args = append(a.Args, ActionArg{Field: m.ArgFields[i], Type: arg.Type})
+				a.Args = append(a.Args, ActionArg{
+					Field: m.ArgFields[i],
+					Type:  arg.Type,
+					Wide:  unmakeable(ctx, shape.QName(arg.Source), map[string]bool{}) == "",
+				})
 			}
+			ctor := "PureVar"
+			if name == "predicate" {
+				ctor = "PredicateVar"
+			}
+			a.KindName = sdk.Kind(ActionKindPrefix + name + "var")
+			a.Ctor = sdk.NewExternal(actionPkg, ctor)
 		}
 	case "multiaggregator":
 		a.Value = m.Returns[0].Type
@@ -1016,6 +1074,17 @@ func referenceOf(
 		}
 	}
 
+	// A contract claim outranks the shapes: its roles say what each method
+	// is FOR, and the shipped store carries the claim's own semantics —
+	// which is more than any shape-derived map can promise.
+	handled, lenified := contractOf(b, harness, partners, names)
+	if handled {
+		return true
+	}
+	if lenified != "" {
+		return twin(lenified)
+	}
+
 	if keyed == nil && collector != nil && valued != nil {
 		// A value writer beside a collector, nothing keyed to read. The one
 		// agreement to check is that the writer adds what the collector
@@ -1103,6 +1172,130 @@ func referenceOf(
 	b.Reference = names
 	b.Adapter = adapterOf(harness, partners, OracleMap, readV)
 	return true
+}
+
+// contractOf derives the contract oracle where an interface's stamps resolve
+// a shipped store's whole role vocabulary: the carrier's role= names its own
+// part, the partner keys name the siblings, and every role must land on a
+// method or the family stays underived — half a lease checks nothing a twin
+// does not. The store's one type argument is spoken by the type-arg role's
+// own signature, and the constructor's error arguments are minted sentinels
+// or the lenient nil, per the family's row.
+func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string, names Reference) (bool, string) {
+	for i := range harness.Methods {
+		carrier := &harness.Methods[i]
+		for _, contract := range carrier.Contracts {
+			spec, shipped := tiers.ContractStore(contract)
+			if !shipped {
+				continue
+			}
+			roles := contractRoleMethods(harness, carrier, contract)
+			complete := true
+			for _, role := range tiers.ContractRoles(contract) {
+				complete = complete && roles[role] != nil
+			}
+			src := roles[spec.TypeArgRole]
+			if !complete || src == nil {
+				continue
+			}
+			var arg sdk.Ref
+			switch {
+			case spec.TypeArgResult && len(src.Returns) > 0:
+				arg = src.Returns[0].Type
+			case !spec.TypeArgResult && len(src.CallArgs()) > 0:
+				arg = src.CallArgs()[0].Type
+			}
+			if arg == nil {
+				continue
+			}
+
+			names.Oracle = OracleContract
+			names.ContractStore = spec.Store
+			names.ContractName = contract
+			names.ContractArg = arg
+			lower := strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:]
+			minted := false
+			for _, e := range spec.Errs {
+				ce := CtorErr{Msg: e.Msg}
+				if e.Suffix != "" && !roleClaims(roles[e.Role], e.NilUnder) {
+					ce.Name = lower + "Model" + e.Suffix
+					minted = true
+				}
+				names.CtorErrs = append(names.CtorErrs, ce)
+			}
+			if len(spec.Errs) > 0 && !minted {
+				// Every sentinel lenified away is an oracle that can never
+				// disagree — the kill matrix proved a fully-nil tracker
+				// cannot see its own methods go inert. The twins say so
+				// instead of a store pretending to check.
+				return false, "the claims lenify every sentinel the " + contract +
+					" oracle could disagree with"
+			}
+			b.Reference = names
+			b.Adapter = contractAdapterOf(harness, partners, contract, roles)
+			return true, ""
+		}
+	}
+	return false, ""
+}
+
+// roleClaims reports whether the role's method carries the named mixin — the
+// stamp that flips a constructor sentinel to the oracle's lenient nil.
+func roleClaims(m *suite.Method, mixin string) bool {
+	return m != nil && mixin != "" && slices.Contains(m.Mixins, mixin)
+}
+
+// contractRoleMethods resolves the named contract's roles to methods: the
+// carrier fills its stamped role, and each partner key names a sibling.
+func contractRoleMethods(harness *suite.Contract, carrier *suite.Method, contract string) map[string]*suite.Method {
+	out := map[string]*suite.Method{}
+	if role, ok := shape.ContractRoleKey(contract).Get(carrier.Source.Meta()); ok && role != "" {
+		out[role] = carrier
+	}
+	for _, role := range tiers.ContractRoles(contract) {
+		v, ok := shape.ContractPartnerKey(contract, role).Get(carrier.Source.Meta())
+		if !ok || v == "" {
+			continue
+		}
+		if m := methodOf(harness, golang.LocalName(v)); m != nil {
+			out[role] = m
+		}
+	}
+	return out
+}
+
+// contractAdapterOf builds the role-stamped delegation table: a method
+// filling a role forwards to the role's op, and everything else is inert —
+// the contract oracle models its own vocabulary and nothing beside it.
+func contractAdapterOf(
+	harness *suite.Contract,
+	partners map[string]string,
+	contract string,
+	roles map[string]*suite.Method,
+) []AdapterMethod {
+	opOf := map[string]string{}
+	for role, m := range roles {
+		if op, ok := tiers.ContractRoleOp(contract, role); ok {
+			opOf[m.Name] = op
+		}
+	}
+	out := make([]AdapterMethod, 0, len(harness.Methods))
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		am := AdapterMethod{Sig: m.Sig}
+		switch role, partner := partners[m.Name]; {
+		case partner:
+			am.Reason = role
+		case !m.TakesContext():
+			am.Reason = "it takes no context to forward to the oracle"
+		case opOf[m.Name] == "":
+			am.Reason = "the " + contract + " oracle models only its roles"
+		default:
+			am.Op = opOf[m.Name]
+		}
+		out = append(out, am)
+	}
+	return out
 }
 
 // upsertKeyField finds the identity field of an unread value type — the
@@ -1221,7 +1414,9 @@ func oracleOp(oracle Oracle, m *suite.Method) (string, bool) {
 		op, _ = tiers.CollectionOp(pseudoShape(m))
 	case OracleMap:
 		op, _ = tiers.MapStoreOp(pseudoShape(m))
-	case OracleTwin:
+	case OracleContract, OracleTwin:
+		// The contract adapter resolves by role, not by shape, and the twin
+		// has no adapter at all; neither reaches this table.
 	}
 	return op, false
 }
@@ -1244,6 +1439,7 @@ func poolsOf(
 	b *Bindings,
 	harness *suite.Contract,
 	keyed, valued, composite *suite.Method,
+	genFunc string,
 ) {
 	switch {
 	case keyed != nil:
@@ -1290,7 +1486,7 @@ func poolsOf(
 		return
 	}
 
-	if restricted := widenValues(ctx, b, harness); restricted {
+	if restricted := widenValues(ctx, b, harness, genFunc); restricted {
 		// A restricting claim holds the pool to values the harness has
 		// proven accepted — recombining a proven body with another key is
 		// already a value nothing proved.
@@ -1341,7 +1537,15 @@ func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite 
 // [tiers.ValueRestriction] inverts the license, and a type whose graph this
 // build cannot see to the bottom would arm a [model.Make] panic instead of a
 // deeper run; both keep the pair, and the header says which.
-func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *suite.Contract) bool {
+func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *suite.Contract, genFunc string) bool {
+	// A supplied generator outranks every verdict below: the consumer
+	// authored the domain, which is more than a reflection walk or a claim
+	// scan can ever know.
+	if genFunc != "" {
+		b.Values.GenFunc = genFunc
+		b.Values.Wide = true
+		return false
+	}
 	drawing := map[string]bool{}
 	for _, a := range b.Actions {
 		if a.Pool == poolValues {

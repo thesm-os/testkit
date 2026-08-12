@@ -1,0 +1,11 @@
+{{- /*
+A parameterised predicate is the drawn-input pure call with a yes/no answer.
+*/ -}}
+{{- define "model.action.predicatevar" -}}
+{{ $a := . -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				{{ template "model.actionargs" . }},
+				func(s {{ renderType .Iface }}, a []any) bool {
+					return s.{{ .Method }}({{ range $i, $arg := .Args }}{{ if $i }}, {{ end }}a[{{ $i }}].({{ renderType $arg.Type }}){{ end }})
+				})
+{{- end -}}

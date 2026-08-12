@@ -426,6 +426,113 @@ func TestKeyedReference(t *testing.T) {
 		testkit.True(t, b.UsesKeys() && b.UsesValues(), "both pools are declared")
 	})
 
+	t.Run("an identical second selection binds once", func(t *testing.T) {
+		t.Parallel()
+		// Two delete-stamped writers naming the same read partner select the
+		// delete law twice with one field set; the registry must carry it
+		// once, not report one failure twice.
+		s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
+			i.Method("Del2", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		})
+		stampShape(s, "Del2", "writer", "string", "")
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name != "Del2" {
+					continue
+				}
+				bag := m.EnsureMeta()
+				shape.MetaMixins.Set(bag, []string{"deleteremoves"}, "test")
+				shape.MixinParamKey("deleteremoves", "read").
+					Set(bag, "example.com/kv.Get", "test")
+				shape.MixinParamKey("deleteremoves", "sentinel").
+					Set(bag, "example.com/kv.ErrGone", "test")
+			}
+		}
+		got := bindingsOf(t, s)
+		bound := 0
+		for _, l := range got.Laws {
+			if l.ID == lawid.DeleteReturnsNotFound {
+				bound++
+			}
+		}
+		testkit.Equal(t, bound, 1, "one binding, whichever carrier selected it")
+	})
+
+	t.Run("a partner stamp cleared refuses by name", func(t *testing.T) {
+		t.Parallel()
+		s := keyedStore(t, "example.com/kv.ErrGone")
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Del" {
+					shape.MixinParamKey("deleteremoves", "read").Set(m.EnsureMeta(), "", "test")
+				}
+			}
+		}
+		got := bindingsOf(t, s)
+		unbound := map[string]string{}
+		for _, u := range got.Unbound {
+			unbound[u.Method] = u.Reason
+		}
+		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("does not stamp",
+			"the missing stamp is the named cause")
+	})
+
+	t.Run("a partner naming a non-method refuses by name", func(t *testing.T) {
+		t.Parallel()
+		s := keyedStore(t, "example.com/kv.ErrGone")
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Del" {
+					shape.MixinParamKey("deleteremoves", "read").
+						Set(m.EnsureMeta(), "example.com/kv.Nowhere", "test")
+				}
+			}
+		}
+		got := bindingsOf(t, s)
+		unbound := map[string]string{}
+		for _, u := range got.Unbound {
+			unbound[u.Method] = u.Reason
+		}
+		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("not a method",
+			"the dangling name is the named cause")
+	})
+
+	t.Run("a partner reader off the pools' types refuses by name", func(t *testing.T) {
+		t.Parallel()
+		// The delete's partner is a second reader answering int beside the
+		// string pools, which no generated closure can reconcile — and being
+		// the later declaration it also carries the pools, so the store
+		// falls to the twin while the law refuses on the types.
+		s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
+			i.Method("GetOther", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.Named("int"))
+				m.Return(storefixture.Named("error"))
+			})
+		})
+		stampShape(s, "GetOther", "reader", "string", "int")
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Del" {
+					shape.MixinParamKey("deleteremoves", "read").
+						Set(m.EnsureMeta(), "example.com/kv.GetOther", "test")
+				}
+			}
+		}
+		got := bindingsOf(t, s)
+		unbound := map[string]string{}
+		for _, u := range got.Unbound {
+			unbound[u.Method] = u.Reason
+		}
+		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("beside pools of",
+			"the type disagreement is the named cause")
+	})
+
 	t.Run("the sentinel binds from the stamp", func(t *testing.T) {
 		t.Parallel()
 		var bound *model.LawBinding
@@ -1197,4 +1304,280 @@ func TestConcurrentLeg(t *testing.T) {
 		b := bindingsOf(t, kvStore(t, "string", "string"))
 		testkit.False(t, b.Concurrent(), "a twin has no linearizability model to check against")
 	})
+}
+
+// TestGenSupply pins the gen= key: the consumer's generator constructor
+// replaces reflection as the wide arm — outranking every narrowing verdict,
+// because the consumer authored the domain — and a qualified spelling is
+// refused the way ref='s is.
+func TestGenSupply(t *testing.T) {
+	t.Parallel()
+
+	s := mixed(t, storefixture.KV(model.GenKey, "PayloadGen"))
+	b := bindingsOf(t, s)
+	testkit.Equal(t, b.Values.GenFunc, "PayloadGen", "the supply is recorded")
+	testkit.True(t, b.Values.Wide, "and the pool goes wide through it")
+
+	t.Run("a qualified constructor is refused", func(t *testing.T) {
+		t.Parallel()
+		s := mixed(t, storefixture.KV(model.GenKey, "other.PayloadGen"))
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("routed output package",
+			"naming where the constructor must live")
+	})
+}
+
+// TestParameterisedPureDrawsItsArguments pins the purevar refinement: a pure
+// method with inputs drives through the drawn-args constructor, each position
+// wide where its type can be seen to the bottom.
+func TestParameterisedPureDrawsItsArguments(t *testing.T) {
+	t.Parallel()
+
+	// Pure alone rides the twin floor: on a derived store the oracle holds a
+	// pure method inert and the coherence rule skips its action, so the
+	// drawn-args path is the twin's to prove.
+	s := storefixture.New().
+		Package("fn", "example.com/fn").
+		Interface("Deriver", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("fn/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Derive", func(m *storefixture.MethodBuilder) {
+				m.Param("input", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+			})
+		}).
+		Build()
+	stampShape(s, "Derive", "pure", "", "string")
+	b := bindingsOf(t, s)
+	testkit.True(t, b.Reference.Twin(), "nothing here derives a store")
+
+	var derive *model.Action
+	for _, a := range b.Actions {
+		if a.Method == "Derive" {
+			derive = a
+		}
+	}
+	testkit.True(t, derive != nil, "the parameterised pure call is driven")
+	testkit.Equal(t, derive.KindName, sdk.Kind("model.action.purevar"),
+		"through the drawn-args template")
+	testkit.Equal(t, len(derive.Args), 1, "one drawn position")
+	testkit.True(t, derive.Args[0].Wide,
+		"wide, because a pure call stores nothing a claim could refuse")
+}
+
+// TestContractOracle walks the role-stamped derivation over the lease
+// family: the carrier's role= names its own part, the partner key names the
+// sibling, the store's type argument is the acquire key's, and the
+// constructor's sentinels follow the claims — minted where the strict
+// dialect holds, lenified to the twin where every sentinel would be nil,
+// because the kill matrix proved a never-disagreeing oracle checks nothing.
+func TestContractOracle(t *testing.T) {
+	t.Parallel()
+
+	leased := func(t *testing.T, idempotent bool) *sdk.Store {
+		t.Helper()
+		return leasedWith(t, idempotent, nil)
+	}
+
+	t.Run("the strict dialect derives the tracker", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, leased(t, false))
+		testkit.True(t, b.Reference.IsContract(), "the claim outranks the shapes")
+		testkit.Equal(t, b.Reference.StoreType(), "LeaseTracker", "to its own store")
+		ops := map[string]string{}
+		for _, am := range b.Adapter {
+			ops[am.Sig.Name] = am.Op
+		}
+		testkit.Equal(t, ops["Acquire"], "Acquire", "the carrier delegates by role")
+		testkit.Equal(t, ops["Release"], "Release", "and the partner beside it")
+		testkit.Equal(t, len(b.Reference.CtorErrs), 2, "two constructor slots")
+		testkit.True(t, b.Reference.CtorErrs[0].Name != "", "the held sentinel is minted")
+		testkit.Equal(t, b.Reference.CtorErrs[1].Name, "", "and the release slot stays lenient")
+	})
+
+	t.Run("the idempotent claim lenifies to the twin", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, leased(t, true))
+		testkit.True(t, b.Reference.Twin(), "a never-disagreeing oracle checks nothing")
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("lenify",
+			"and the header says which claims did it")
+	})
+
+	t.Run("non-role methods stay inert on the contract oracle", func(t *testing.T) {
+		t.Parallel()
+		s := leasedWith(t, false, func(i *storefixture.InterfaceBuilder) {
+			i.Method("Count", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Return(storefixture.Named("int"))
+				m.Return(storefixture.Named("error"))
+			})
+		})
+		stampShape(s, "Count", "aggregator", "", "int")
+		b := bindingsOf(t, s)
+		testkit.True(t, b.Reference.IsContract(), "the roles still resolve")
+		inert := map[string]string{}
+		for _, am := range b.Adapter {
+			if am.Op == "" {
+				inert[am.Sig.Name] = am.Reason
+			}
+		}
+		testkit.Assert(t, inert["Count"]).Contains("only its roles",
+			"a method outside the vocabulary is inert, with why")
+	})
+
+	t.Run("selection deduplicates across the role carriers", func(t *testing.T) {
+		t.Parallel()
+		// The classification rides every role method; re-selecting its laws
+		// from each carrier must not register one law twice or print one
+		// refusal per method.
+		s := leasedWith(t, false, nil)
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Release" {
+					shape.MetaContracts.Set(m.EnsureMeta(), []string{"lease"}, "test")
+				}
+			}
+		}
+		b := bindingsOf(t, s)
+		seen := map[string]int{}
+		for _, u := range b.Unbound {
+			seen[u.Method+"\x00"+u.Reason]++
+		}
+		for key, n := range seen {
+			testkit.Equal(t, n, 1, "one refusal per (law, reason): "+key)
+		}
+	})
+
+	t.Run("a partner naming nothing leaves the role unresolved", func(t *testing.T) {
+		t.Parallel()
+		s := leasedWith(t, false, nil)
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Acquire" {
+					shape.ContractPartnerKey("lease", "release").
+						Set(m.EnsureMeta(), "example.com/ls.Nowhere", "test")
+				}
+			}
+		}
+		b := bindingsOf(t, s)
+		testkit.False(t, b.Reference.IsContract(),
+			"a role resolved to nothing derives nothing")
+	})
+
+	t.Run("a carrier without a role stamp falls through", func(t *testing.T) {
+		t.Parallel()
+		s := leasedWith(t, false, nil)
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Acquire" {
+					shape.ContractRoleKey("lease").Set(m.EnsureMeta(), "", "test")
+				}
+			}
+		}
+		got := bindingsOf(t, s)
+		testkit.False(t, got.Reference.IsContract(),
+			"no role, no delegation to hang the oracle on")
+	})
+
+	t.Run("a type-arg role speaking no type falls through", func(t *testing.T) {
+		t.Parallel()
+		s := storefixture.New().
+			Package("ls", "example.com/ls").
+			Interface("Locker", func(i *storefixture.InterfaceBuilder) {
+				i.Pos(sdk.At("ls/iface.go", 1, 1))
+				i.Directive(storefixture.Directive("suite"))
+				i.Directive(storefixture.Directive("model"))
+				// The acquire role takes nothing, so the tracker's type
+				// argument has nowhere to come from.
+				i.Method("Acquire", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Return(storefixture.Named("error"))
+				})
+				i.Method("Release", func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Return(storefixture.Named("error"))
+				})
+			}).
+			Build()
+		stampShape(s, "Acquire", "lifecycle", "", "")
+		stampShape(s, "Release", "lifecycle", "", "")
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name != "Acquire" {
+					continue
+				}
+				bag := m.EnsureMeta()
+				shape.MetaContracts.Set(bag, []string{"lease"}, "test")
+				shape.ContractRoleKey("lease").Set(bag, "acquire", "test")
+				shape.ContractPartnerKey("lease", "release").
+					Set(bag, "example.com/ls.Release", "test")
+			}
+		}
+		got := bindingsOf(t, s)
+		testkit.False(t, got.Reference.IsContract(),
+			"an oracle with no type argument cannot be instantiated")
+	})
+
+	t.Run("an unresolved role falls through to the shapes", func(t *testing.T) {
+		t.Parallel()
+		s := leased(t, false)
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Acquire" {
+					shape.ContractPartnerKey("lease", "release").Set(m.EnsureMeta(), "", "test")
+				}
+			}
+		}
+		b := bindingsOf(t, s)
+		testkit.False(t, b.Reference.IsContract(),
+			"half a lease checks nothing a twin does not")
+	})
+}
+
+// leasedWith builds the lease-contract fixture: a stamped carrier, its
+// release partner, and whatever extra methods a probe needs.
+func leasedWith(
+	t *testing.T,
+	idempotent bool,
+	extra func(i *storefixture.InterfaceBuilder),
+) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("ls", "example.com/ls").
+		Interface("Locker", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("ls/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			for _, name := range []string{"Acquire", "Release"} {
+				i.Method(name, func(m *storefixture.MethodBuilder) {
+					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					m.Param("key", storefixture.Named("string"))
+					m.Return(storefixture.Named("error"))
+				})
+			}
+			if extra != nil {
+				extra(i)
+			}
+		}).
+		Build()
+	stampShape(s, "Acquire", "writer", "", "string")
+	stampShape(s, "Release", "writer", "", "string")
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Acquire" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaContracts.Set(bag, []string{"lease"}, "test")
+			shape.ContractRoleKey("lease").Set(bag, "acquire", "test")
+			shape.ContractPartnerKey("lease", "release").
+				Set(bag, "example.com/ls.Release", "test")
+			if idempotent {
+				shape.MetaMixins.Set(bag, []string{"idempotent"}, "test")
+			}
+		}
+	}
+	return s
 }

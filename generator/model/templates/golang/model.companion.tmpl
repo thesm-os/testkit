@@ -30,16 +30,11 @@ func Test{{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T
 	{{ renderExpr (external .HarnessPkg .ConcurrentName) }}(t, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
 }
 {{ end }}
-// Fuzz{{ .IfaceName }}Model hands the derivation's sequence space to the
-// coverage-guided engine: the fuzzer's bytes replay as rapid's choice
-// stream, hunting the action ordering that breaks a law. A plain `go test`
-// runs the seed as smoke; `go test -fuzz=Fuzz{{ .IfaceName }}Model` digs.
-// A consumer fuzzes their own subject the same way, through
-// {{ .PropertyName }} and [{{ renderExpr (external .ModelPkg "MakeFuzz") }}].
+// Fuzz{{ .IfaceName }}Model holds the fuzz wiring to the derived reference —
+// the same one-line composition a consumer writes over their own subject. A
+// plain `go test` runs the seed as smoke; `-fuzz=Fuzz{{ .IfaceName }}Model` digs.
 func Fuzz{{ .IfaceName }}Model(f *{{ renderExpr (external "testing" "F") }}) {
-	f.Add([]byte{})
-	f.Fuzz({{ renderExpr (external .ModelPkg "MakeFuzz") }}(
-		{{ renderExpr (external .HarnessPkg .PropertyName) }}({{ renderExpr (external .HarnessPkg .RefCtorName) }})))
+	{{ renderExpr (external .HarnessPkg (printf "%sModelFuzz" .IfaceName)) }}(f, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
 }
 {{ if .Mutants }}
 {{ $c := . }}

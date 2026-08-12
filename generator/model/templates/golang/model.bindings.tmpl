@@ -17,6 +17,9 @@ the tier — and the engine dependency with it.
 //	           so a second instance driven identically stands in: twins must
 //	           agree, which catches nondeterminism and hidden shared state but
 //	           not a subject wrong the same way twice; ref= raises the floor
+{{- else if .Reference.IsContract }}
+//	Reference: derived — the {{ .Reference.StoreType }} oracle, which is the
+//	           {{ .Reference.ContractName }} contract's own semantics; {{ .IfaceName }}ModelReference replaces it
 {{- else if .Reference.Collects }}
 //	Reference: derived — an append-and-drain collection over the
 //	           {{ .Values.Field }} fixture pair; {{ .IfaceName }}ModelReference replaces it
@@ -29,7 +32,9 @@ the tier — and the engine dependency with it.
 {{- end }}
 //	Sequences: {{ range $i, $a := .Actions }}{{ if $i }}, {{ end }}{{ $a.Method }} ({{ $a.Shape }}){{ end }}
 {{- if .UsesValues }}
-{{- if .Values.Wide }}
+{{- if .Values.GenFunc }}
+//	Values:    the fixture pair blended with {{ .Values.GenFunc }}'s draws — the gen= supply
+{{- else if .Values.Wide }}
 //	Values:    the fixture pair blended with arbitrary draws{{ if .Values.Pin }}, each keyed
 //	           from the pool{{ end }}; {{ .IfaceName }}ModelValues replaces the pool
 {{- else }}
@@ -115,6 +120,20 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 		),
 	)
 }
+// {{ .IfaceName }}ModelFuzz hands a subject's sequence space to the
+// coverage-guided engine: the fuzzer's bytes replay as rapid's choice
+// stream, so mutating them mutates the action ordering and every drawn
+// input at once — and the engine's coverage feedback climbs the subject's
+// own branches, which is what no fixed seed can do. Wire it from a fuzz
+// target beside the subject:
+//
+//	func Fuzz{{ .IfaceName }}(f *testing.F) {
+//		{{ .IfaceName }}ModelFuzz(f, func() {{ .IfaceName }} { return NewMine() })
+//	}
+func {{ .IfaceName }}ModelFuzz(f *{{ renderExpr (external "testing" "F") }}, factory func() {{ renderType .IfaceRef }}, opts ...{{ .OptionTypeName }}) {
+	f.Add([]byte{})
+	f.Fuzz({{ renderExpr (external .ModelPkg "MakeFuzz") }}({{ .PropertyName }}(factory, opts...)))
+}
 {{ if .Concurrent }}
 // {{ .IfaceName }}ModelConcurrent runs the linearizability leg: four workers
 // interleave {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} over the shared pools, and
@@ -148,7 +167,7 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 }
 {{ end }}
 {{- if .Reference.Derived }}
-{{ if not .Reference.Collects -}}
+{{ if and (not .Reference.Collects) (not .Reference.IsContract) -}}
 // {{ .Reference.MissName }} is what the reference reports for a key nothing
 // wrote. Only its presence is compared — a subject reports its own miss
 // sentinel, and the run asks whether both sides missed, not how they spelled
@@ -165,6 +184,28 @@ func {{ .KeyOfName }}(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type 
 }
 
 {{ end -}}
+{{ if .Reference.IsContract -}}
+{{ range .Reference.CtorErrs }}{{ if .Name -}}
+// {{ .Name }} is the oracle's spelling; only its presence is compared, so a
+// subject reporting its own error under the same state agrees with it.
+var {{ .Name }} = {{ renderExpr (external "errors" "New") }}("{{ $b.MissPrefix }}: {{ .Msg }}")
+
+{{ end }}{{ end -}}
+// {{ .Reference.TypeName }} adapts the shipped {{ .Reference.StoreType }} oracle — the
+// {{ .Reference.ContractName }} contract's own semantics — to {{ .IfaceName }}.
+// Deliberately simple: its correctness is read, not tested.
+type {{ .Reference.TypeName }} struct {
+	store *{{ renderExpr (external .RefPkg .Reference.StoreType) }}[{{ renderType .Reference.ContractArg }}]
+}
+
+func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
+	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg (printf "New%s" .Reference.StoreType)) }}[{{ renderType .Reference.ContractArg }}](
+{{- range .Reference.CtorErrs }}
+		{{ if .Name }}{{ .Name }}{{ else }}nil{{ end }},
+{{- end }}
+	)}
+}
+{{ else -}}
 // {{ .Reference.TypeName }} adapts the shipped {{ .Reference.StoreType }} oracle to {{ .IfaceName }}.
 // Deliberately simple: its correctness is read, not tested.
 type {{ .Reference.TypeName }} struct {
@@ -181,6 +222,7 @@ func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
 {{- end }}
 	)}
 }
+{{ end -}}
 {{ range .Adapter }}
 {{- if .Op }}
 func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params" .Sig }}) {{ template "model.results" .Sig }} {
@@ -240,7 +282,14 @@ colliding without anyone noticing.
 	keys := {{ renderExpr (external .ModelPkg "SampledFrom") }}([]{{ renderType .Keys.Type }}{fx.{{ .Keys.Field }}, fx.{{ .Keys.OtherField }}})
 {{- end }}
 {{- if .UsesValues }}
-{{- if .Values.Wide }}
+{{- if .Values.GenFunc }}
+	// Bodies blend the fixture pair with {{ .Values.GenFunc }}'s draws — the
+	// gen= supply, for a domain no reflection walk can spell.
+	bodies := {{ renderExpr (external .ModelPkg "OneOf") }}(
+		{{ renderExpr (external .ModelPkg "SampledFrom") }}([]{{ renderType .Values.Type }}{fx.{{ .Values.Field }}, fx.{{ .Values.OtherField }}}),
+		{{ .Values.GenFunc }}(),
+	)
+{{- else if .Values.Wide }}
 	// Bodies blend the fixture pair with arbitrary draws: the pair keeps
 	// identical rewrites frequent, the wide arm reaches values no fixture
 	// spells — and nothing in the claims licenses refusing either.

@@ -307,3 +307,59 @@ func VoidLifecycle[T any](
 		},
 	}
 }
+
+// PureVar creates an action for a Pure-shaped method that takes inputs:
+// the args generator draws each position, the shim forwards the slice into
+// the typed call, and both sides' answers must agree. The []any spelling is
+// [MultiArgWriter]'s — one generator cannot speak several types — and the
+// wide draws are sound here unconditionally: a pure call stores nothing, so
+// no claim about accepted values is in play.
+func PureVar[T any](
+	name string,
+	args *rapid.Generator[[]any],
+	call func(T, []any) any,
+) model.Action[T] {
+	return model.Action[T]{
+		Name: name,
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
+			a := args.Draw(rt, name+"_args")
+			sutGot := call(sut, a)
+			refGot := call(ref, a)
+			if diff := cmp.Diff(refGot, sutGot); diff != "" {
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT/ref disagree:\n%s", name, a, diff),
+					Input:  a,
+					Output: sutGot,
+				}
+			}
+			return model.ActionResult{Input: a, Output: sutGot}
+		},
+	}
+}
+
+// PredicateVar creates an action for a Predicate-shaped method that takes
+// inputs — [PureVar]'s shape with a yes/no answer.
+func PredicateVar[T any](
+	name string,
+	args *rapid.Generator[[]any],
+	call func(T, []any) bool,
+) model.Action[T] {
+	return model.Action[T]{
+		Name: name,
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
+			a := args.Draw(rt, name+"_args")
+			sutGot := call(sut, a)
+			refGot := call(ref, a)
+			if sutGot != refGot {
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT=%v, ref=%v", name, a, sutGot, refGot),
+					Input:  a,
+					Output: sutGot,
+				}
+			}
+			return model.ActionResult{Input: a, Output: sutGot}
+		},
+	}
+}

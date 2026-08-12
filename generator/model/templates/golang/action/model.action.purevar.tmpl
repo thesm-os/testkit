@@ -1,0 +1,32 @@
+{{- /*
+A parameterised pure call draws each argument — the fixture pair blended
+with arbitrary values wherever the type can be seen to the bottom — and both
+sides' answers must agree at every drawn point.
+*/ -}}
+{{- define "model.action.purevar" -}}
+{{ $a := . -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				{{ template "model.actionargs" . }},
+				func(s {{ renderType .Iface }}, a []any) any {
+					return s.{{ .Method }}({{ range $i, $arg := .Args }}{{ if $i }}, {{ end }}a[{{ $i }}].({{ renderType $arg.Type }}){{ end }})
+				})
+{{- end -}}
+
+{{- /*
+model.actionargs draws one []any per call: each position from its own
+fixture pair, blended with arbitrary draws where the position says so.
+*/ -}}
+{{- define "model.actionargs" -}}
+{{ $a := . -}}
+{{ renderExpr (external .ModelPkg "Custom") }}(func(t *{{ renderExpr (external .ModelPkg "T") }}) []any {
+					return []any{
+{{- range $i, $arg := .Args }}
+{{- if $arg.Wide }}
+						{{ renderExpr (external $a.ModelPkg "OneOf") }}({{ renderExpr (external $a.ModelPkg "SampledFrom") }}([]{{ renderType $arg.Type }}{fx.{{ $arg.Field }}, fx.{{ $arg.Field }}Other}), {{ renderExpr (external $a.ModelPkg "Make") }}[{{ renderType $arg.Type }}]()).Draw(t, {{ printf "%q" (printf "%s_arg%d" $a.Method $i) }}),
+{{- else }}
+						{{ renderExpr (external $a.ModelPkg "SampledFrom") }}([]{{ renderType $arg.Type }}{fx.{{ $arg.Field }}, fx.{{ $arg.Field }}Other}).Draw(t, {{ printf "%q" (printf "%s_arg%d" $a.Method $i) }}),
+{{- end }}
+{{- end }}
+					}
+				})
+{{- end -}}
