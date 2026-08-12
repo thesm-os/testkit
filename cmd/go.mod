@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/spf13/cobra v1.10.2
-	go.thesmos.sh/eidos v1.14.1
+	go.thesmos.sh/eidos v1.14.2-0.20260812223901-e2f1abbfb812
 	go.thesmos.sh/eidos/cli v1.13.3
 	go.thesmos.sh/testkit v0.0.0-00010101000000-000000000000
 	go.thesmos.sh/testkit/generator v0.0.0
