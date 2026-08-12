@@ -14,9 +14,6 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/lease"
 )
 
-// ErrHeld reports an acquire that lost to a standing holder.
-var ErrHeld = errors.New("leasetest: the lease is already held")
-
 // InMemory is the implementation the generated conformance harness is run
 // against.
 //
@@ -47,7 +44,7 @@ func (s *InMemory) Acquire(ctx context.Context, key string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.held[key] {
-		return ErrHeld
+		return lease.ErrHeld
 	}
 	s.held[key] = true
 	return nil

@@ -1,0 +1,8 @@
+{{- /*
+A string-keyed string write — the shape the injection claim probes.
+*/ -}}
+{{- define "model.lawfield.KVOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k, v string) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}k, v)
+		}
+{{- end -}}

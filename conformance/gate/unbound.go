@@ -3,6 +3,20 @@
 
 package gate
 
+// The chokepoints several laws share, spelled once.
+const (
+	historyDebt = "waits on the history option — a subject that cannot report " +
+		"its own transactions cannot be asked about isolation"
+	drainDebt = "waits on the drain option — the subscription hands back a live " +
+		"channel no generated closure drains honestly"
+	clockDebt   = "waits on the aging-reference clock the isolation design brings"
+	twoPhase    = "waits on a begin that returns the transaction handle commit and rollback thread"
+	pageDebt    = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
+	comparator  = "waits on the supplied comparator its manifest names, which no generated value can stand in for"
+	sessionDebt = "waits on the version stamp eidos#25 brings and the multi-client " +
+		"trace that makes a session guarantee falsifiable"
+)
+
 // UnboundLaws is the debt register the assertion gate carries: model-owned
 // laws the corpus's stamps select, whose engine implementations ship tested,
 // and which no fixture binds — each with the chokepoint that holds it. The
@@ -18,89 +32,61 @@ package gate
 //
 //nolint:gochecknoglobals // a census table, read-only, test-facing.
 var UnboundLaws = map[string]string{
-	// The bindings table has rows for 13 of 83 laws; everything below waits
-	// on its instantiation row — type arguments after the subject — plus,
-	// for many, a law-field template its manifest names and no renderer
-	// spells yet. The engine side of every one ships and is unit-tested.
-	"AUTO-AGGREGATOR-BOUNDED":               rowDebt,
-	"AUTO-APPEND-ONLY-GROWS":                rowDebt,
-	"AUTO-APPEND-ONLY-NO-DROPS":             rowDebt,
-	"AUTO-APPENDER-MONOTONIC-OFFSETS":       rowDebt,
-	"AUTO-ASSOCIATIVE":                      rowDebt,
-	"AUTO-ATOMIC-WRITE":                     rowDebt,
-	"AUTO-CAS-ATOMIC-ONE-WINNER":            rowDebt,
-	"AUTO-CAUSAL-ORDERING":                  rowDebt,
-	"AUTO-COMMUTATIVE-WRITE":                rowDebt,
-	"AUTO-CONSERVATIVE":                     rowDebt,
-	"AUTO-COUNT-EQUALS-REFERENCE":           rowDebt,
-	"AUTO-CRDT-MERGE":                       rowDebt,
-	"AUTO-DEADLINE-RESPECTING":              rowDebt,
-	"AUTO-EVENTUAL-CONVERGENCE":             rowDebt,
-	"AUTO-HASH-CHAIN-INTEGRITY-VERIFY":      rowDebt,
-	"AUTO-IDEMPOTENT-WRITE":                 rowDebt,
-	"AUTO-INJECTION-SAFE":                   rowDebt,
-	"AUTO-LEAK-FREE":                        rowDebt,
-	"AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS":      rowDebt,
-	"AUTO-LEASE-RELEASED-ON-CANCEL":         rowDebt,
-	"AUTO-LIFECYCLE-RESPECTS-CONTEXT":       rowDebt,
-	"AUTO-LOSSY-ROUNDTRIP":                  rowDebt,
-	"AUTO-MONOTONIC-NON-DECREASING":         rowDebt,
-	"AUTO-MONOTONIC-READS":                  rowDebt,
-	"AUTO-MONOTONIC-WRITES":                 rowDebt,
-	"AUTO-PAGINATOR-NO-DUPLICATES":          rowDebt,
-	"AUTO-PAGINATOR-RESUMABLE":              rowDebt,
-	"AUTO-PERSISTER-RETRIEVABLE":            rowDebt,
-	"AUTO-POISON-IDEMPOTENT-READ":           rowDebt,
-	"AUTO-POISON-NIL-ON-FRESH":              rowDebt,
-	"AUTO-POOL-BALANCED":                    rowDebt,
-	"AUTO-POOL-LEAK-FREE":                   rowDebt,
-	"AUTO-PREDICATE-CONSISTENT":             rowDebt,
-	"AUTO-PUBLISHER-AT-LEAST-ONCE":          rowDebt,
-	"AUTO-PUBLISHER-AT-MOST-ONCE":           rowDebt,
-	"AUTO-PUBLISHER-DELIVERS":               rowDebt,
-	"AUTO-PUBLISHER-EXACTLY-ONCE":           rowDebt,
-	"AUTO-PURE-DETERMINISTIC":               rowDebt,
-	"AUTO-READ-YOUR-WRITES":                 rowDebt,
-	"AUTO-REPLAY-CAUSAL-ORDERING":           rowDebt,
-	"AUTO-REPLAY-DETERMINISTIC":             rowDebt,
-	"AUTO-ROUNDTRIP":                        rowDebt,
-	"AUTO-SAGA-FULL-COMPENSATION":           rowDebt,
-	"AUTO-SINGLEFLIGHT-COALESCES":           rowDebt,
-	"AUTO-SNAPSHOT-ISOLATION-G0":            rowDebt,
-	"AUTO-SNAPSHOT-ISOLATION-G1":            rowDebt,
-	"AUTO-SNAPSHOT-ISOLATION-G2":            rowDebt,
-	"AUTO-STREAM-REFLECTS-MUTATIONS":        rowDebt,
-	"AUTO-TOTAL-OVER":                       rowDebt,
-	"AUTO-TRANSACTION-NO-MID-TX-VISIBILITY": rowDebt,
-	"AUTO-TRANSACTION-ROLLBACK":             rowDebt,
-	"AUTO-TWO-PHASE-MUTEX":                  rowDebt,
-	"AUTO-TWO-PHASE-ROLLBACK-AFTER-COMMIT":  rowDebt,
-	"AUTO-UPDATER-REPLACES":                 rowDebt,
-	"AUTO-UPSERTER-IDEMPOTENT":              rowDebt,
+	// Waiting on a consumer-supplied option no generated value can stand in
+	// for — an equality, an order, a projection only a domain knows. Each
+	// reason names the option the generated header points at.
+	"AUTO-CAUSAL-ORDERING":                  "waits on the happens-before option — causality is a relation over operations no stamp can state",
+	"AUTO-EVENTUAL-CONVERGENCE":             "waits on the merge option — the replica lattice's join is the consumer's algebra",
+	"AUTO-LEASE-RELEASED-ON-CANCEL":         "waits on the free option, which no generated value can stand in for",
+	"AUTO-POOL-BALANCED":                    "waits on the stats option, which no generated value can stand in for",
+	"AUTO-POOL-LEAK-FREE":                   "waits on the balanced option, which no generated value can stand in for",
+	"AUTO-REPLAY-CAUSAL-ORDERING":           "waits on the entry-id and depends-on options — a dependency graph over entries is the consumer's causality",
+	"AUTO-SNAPSHOT-ISOLATION-G0":            historyDebt,
+	"AUTO-SNAPSHOT-ISOLATION-G1":            historyDebt,
+	"AUTO-SNAPSHOT-ISOLATION-G2":            historyDebt,
+	"AUTO-STREAM-OVER-MATCH":                comparator,
+	"AUTO-STREAM-PERMUTATION":               comparator,
+	"AUTO-STREAM-STABLE-ORDER":              "waits on the supplied Less its manifest names, which no generated value can stand in for",
+	"AUTO-TRANSACTION-NO-MID-TX-VISIBILITY": "waits on the tx-put option — both mid-transaction writes live on a handle the roles do not reach",
+	"AUTO-WATCHER-RETURNS-ON-CHANGE":        "waits on the next and stop options — both live on the handle Watch returns, which the roles do not reach",
 
-	"AUTO-WINDOWED": rowDebt,
+	// Waiting on a role shape no fixture can declare within the contract's
+	// current vocabulary: a callable-taking call, a handle-returning begin.
+	"AUTO-SAGA-FULL-COMPENSATION":          "waits on a run the mirrored pair can repeat and an observation of compensated state, and the saga's step role offers neither",
+	"AUTO-SINGLEFLIGHT-COALESCES":          "waits on a compute-taking call shape the singleflight fixture's role method does not declare",
+	"AUTO-TRANSACTION-ROLLBACK":            "waits on a run role that accepts the failing body its manifest threads through the transaction",
+	"AUTO-TWO-PHASE-MUTEX":                 twoPhase,
+	"AUTO-TWO-PHASE-ROLLBACK-AFTER-COMMIT": twoPhase,
+	"AUTO-PAGINATOR-NO-DUPLICATES":         pageDebt,
+	"AUTO-PAGINATOR-RESUMABLE":             pageDebt,
+	"AUTO-ATOMIC-WRITE":                    "waits on a single-input atomic write beside a whole-state observation — the fixture pairs several inputs with a two-field read",
 
-	"AUTO-WATCHER-RETURNS-ON-CHANGE": rowDebt,
+	// Waiting on version-coherent draws: a compare-and-swap only wins when
+	// its expected version matches the cell's, and a static pool cannot read
+	// the cell at draw time. The VersionedCell oracle now guards the
+	// differential; the law's paired-attempt shape stays out of reach until
+	// a draw can ask the cell where it stands.
+	"AUTO-CAS-ATOMIC-ONE-WINNER": "waits on version-coherent draws — a static pool cannot read the cell's version at draw time",
 
-	"AUTO-WRITES-FOLLOW-READS": rowDebt,
+	// Waiting on a live subscription drain: the publisher's subscribe hands
+	// back a channel, and a generated closure draining one honestly needs
+	// the delivery design the twin-floor programme scopes.
+	"AUTO-PUBLISHER-AT-LEAST-ONCE": drainDebt,
+	"AUTO-PUBLISHER-AT-MOST-ONCE":  drainDebt,
+	"AUTO-PUBLISHER-DELIVERS":      drainDebt,
+	"AUTO-PUBLISHER-EXACTLY-ONCE":  drainDebt,
 
-	"AUTO-VALID-TRANSITION": rowDebt,
+	// Waiting on runner capability the isolation-and-clock design brings.
+	"AUTO-DEADLINE-RESPECTING": clockDebt,
+	"AUTO-WINDOWED":            clockDebt,
 
-	"AUTO-XSS-SAFE": rowDebt,
+	// Waiting on the append-recording hook.
+	"AUTO-APPEND-ONLY-NO-DROPS": "waits on an append-recording history hook the runner does not offer",
 
-	// These five have instantiation rows and stall one wall later: their
-	// manifests name a supplied comparator or a handle the generator only
-	// knows how to fill with the key projection.
-	"AUTO-STREAM-COMPLETION":   "waits on the KindHandle generalization — its manifest's handle is not the key projection",
-	"AUTO-STREAM-REENTRANT":    "waits on the KindHandle generalization — its manifest's handle is not the key projection",
-	"AUTO-STREAM-OVER-MATCH":   "waits on the supplied comparator its manifest names, which no generated value can stand in for",
-	"AUTO-STREAM-PERMUTATION":  "waits on the supplied comparator its manifest names, which no generated value can stand in for",
-	"AUTO-STREAM-STABLE-ORDER": "waits on the supplied Less its manifest names, which no generated value can stand in for",
-
-	// Has a row; its one fixture is a bare reader, and the row instantiates
-	// at a value type nothing there draws.
-	"AUTO-CACHEABLE": "waits on a cacheable fixture whose shape draws the value type its row instantiates",
+	// Waiting on eidos#25's version stamp and the multi-client runner behind
+	// it: a single-client trace satisfies every session guarantee vacuously.
+	"AUTO-MONOTONIC-READS":     sessionDebt,
+	"AUTO-MONOTONIC-WRITES":    sessionDebt,
+	"AUTO-READ-YOUR-WRITES":    sessionDebt,
+	"AUTO-WRITES-FOLLOW-READS": sessionDebt,
 }
-
-// rowDebt is the register's dominant chokepoint, spelled once.
-const rowDebt = "waits on an instantiation row in the bindings table naming its type arguments"

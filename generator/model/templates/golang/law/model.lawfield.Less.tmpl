@@ -1,0 +1,6 @@
+{{- /*
+The natural order of a builtin scalar — the only order a signature states.
+*/ -}}
+{{- define "model.lawfield.Less" -}}
+{{ .Name }}: func(a, b {{ renderType .Out }}) bool { return a < b }
+{{- end -}}

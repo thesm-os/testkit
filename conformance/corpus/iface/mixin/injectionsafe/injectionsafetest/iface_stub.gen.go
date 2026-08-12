@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/injectionsafe/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package injectionsafetest
 
@@ -22,8 +22,20 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type MixedStoreCall struct {
+	Ctx   context.Context
+	Key   string
+	Value string
+	Err   error
+}
+
+// MixedLoadCall records one invocation of Mixed.Load.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedLoadCall struct {
 	Ctx    context.Context
-	In     string
+	Key    string
 	Result string
 	Err    error
 }
@@ -39,26 +51,58 @@ type MixedStoreCall struct {
 type MixedStoreStub struct {
 	*stub.MethodStub[MixedStoreCall]
 
-	fn       func(context.Context, string) (string, error)
+	fn       func(context.Context, string, string) error
 	fallback *MixedStoreReturn
 }
 
 // MixedStoreReturn holds the fixed answer configured through Returns.
 type MixedStoreReturn struct {
-	Result string
-	Err    error
+	Err error
 }
 
 // Returns pins a fixed result for every call to Store. A Func
 // override and an injected fault both take precedence over it.
-func (s *MixedStoreStub) Returns(result string, err error) *MixedStoreStub {
-	s.fallback = &MixedStoreReturn{Result: result, Err: err}
+func (s *MixedStoreStub) Returns(err error) *MixedStoreStub {
+	s.fallback = &MixedStoreReturn{Err: err}
 	return s
 }
 
 // Func supplies a body for Store, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *MixedStoreStub) Func(fn func(context.Context, string) (string, error)) *MixedStoreStub {
+func (s *MixedStoreStub) Func(fn func(context.Context, string, string) error) *MixedStoreStub {
+	s.fn = fn
+	return s
+}
+
+// MixedLoadStub controls how the double answers Load and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedLoadStub struct {
+	*stub.MethodStub[MixedLoadCall]
+
+	fn       func(context.Context, string) (string, error)
+	fallback *MixedLoadReturn
+}
+
+// MixedLoadReturn holds the fixed answer configured through Returns.
+type MixedLoadReturn struct {
+	Result string
+	Err    error
+}
+
+// Returns pins a fixed result for every call to Load. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedLoadStub) Returns(result string, err error) *MixedLoadStub {
+	s.fallback = &MixedLoadReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for Load, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedLoadStub) Func(fn func(context.Context, string) (string, error)) *MixedLoadStub {
 	s.fn = fn
 	return s
 }
@@ -83,6 +127,7 @@ func MixedStubStrict() MixedStubOption {
 func MixedStubDelegateTo(impl injectionsafe.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnStore.Func(impl.Store)
+		s.OnLoad.Func(impl.Load)
 	}
 }
 
@@ -121,8 +166,15 @@ func MixedStubBenchMode() MixedStubOption {
 // WithMixedStore sets Store's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithMixedStore(fn func(context.Context, string) (string, error)) MixedStubOption {
+func WithMixedStore(fn func(context.Context, string, string) error) MixedStubOption {
 	return func(s *MixedStub) { s.OnStore.Func(fn) }
+}
+
+// WithMixedLoad sets Load's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedLoad(fn func(context.Context, string) (string, error)) MixedStubOption {
+	return func(s *MixedStub) { s.OnLoad.Func(fn) }
 }
 
 // MixedStub is a recording test double for Mixed.
@@ -131,6 +183,7 @@ func WithMixedStore(fn func(context.Context, string) (string, error)) MixedStubO
 // method returns its zero value and records the call.
 type MixedStub struct {
 	OnStore *MixedStoreStub
+	OnLoad  *MixedLoadStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -156,9 +209,11 @@ var _ injectionsafe.Mixed = (*MixedStub)(nil)
 func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
 		OnStore: &MixedStoreStub{MethodStub: stub.NewMethodStub[MixedStoreCall](tb, "Mixed.Store")},
+		OnLoad:  &MixedLoadStub{MethodStub: stub.NewMethodStub[MixedLoadCall](tb, "Mixed.Load")},
 	}
 	s.all = []stub.Configurable{
 		s.OnStore.MethodStub,
+		s.OnLoad.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -197,13 +252,13 @@ func (s *MixedStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *MixedStoreStub) invoke(ctx context.Context, in string) func() MixedStoreReturn {
+func (s *MixedStoreStub) invoke(ctx context.Context, key string, value string) func() MixedStoreReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() MixedStoreReturn {
-		r0, r1 := s.fn(ctx, in)
-		return MixedStoreReturn{Result: r0, Err: r1}
+		r0 := s.fn(ctx, key, value)
+		return MixedStoreReturn{Err: r0}
 	}
 }
 
@@ -213,13 +268,45 @@ func (s *MixedStoreStub) invoke(ctx context.Context, in string) func() MixedStor
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *MixedStub) Store(ctx context.Context, in string) (string, error) {
-	call := MixedStoreCall{Ctx: ctx, In: in}
+func (s *MixedStub) Store(ctx context.Context, key string, value string) error {
+	call := MixedStoreCall{Ctx: ctx, Key: key, Value: value}
 	r := stub.Answer(s.OnStore.MethodStub, &call, stub.Arms[MixedStoreCall, MixedStoreReturn]{
-		Invoke:   s.OnStore.invoke(ctx, in),
+		Invoke:   s.OnStore.invoke(ctx, key, value),
 		Fallback: s.OnStore.fallback,
 		Fault:    func(err error) MixedStoreReturn { return MixedStoreReturn{Err: err} },
 		Stamp: func(c *MixedStoreCall, r MixedStoreReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *MixedLoadStub) invoke(ctx context.Context, key string) func() MixedLoadReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedLoadReturn {
+		r0, r1 := s.fn(ctx, key)
+		return MixedLoadReturn{Result: r0, Err: r1}
+	}
+}
+
+// Load records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Load(ctx context.Context, key string) (string, error) {
+	call := MixedLoadCall{Ctx: ctx, Key: key}
+	r := stub.Answer(s.OnLoad.MethodStub, &call, stub.Arms[MixedLoadCall, MixedLoadReturn]{
+		Invoke:   s.OnLoad.invoke(ctx, key),
+		Fallback: s.OnLoad.fallback,
+		Fault:    func(err error) MixedLoadReturn { return MixedLoadReturn{Err: err} },
+		Stamp: func(c *MixedLoadCall, r MixedLoadReturn) {
 			c.Result = r.Result
 			c.Err = r.Err
 		},
@@ -228,4 +315,4 @@ func (s *MixedStub) Store(ctx context.Context, in string) (string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 05383997cbc7bde5af5ca4a670ecfc501b906932576303bf2ad1c019e9c11ac3
+// testkit:provenance 961a4f41fd4e1abd8d31c5a54ba468aebb6c5b63ad27a404010706c5eadad5fa

@@ -1,0 +1,6 @@
+# 2026/08/12 20:16:13.094157 [TestStreamReflectsMutationsBranches/a_failed_drain_after_put_is_a_violation] [rapid] draw StreamReflectsMutations_value: 1
+# 2026/08/12 20:16:13.094162 [TestStreamReflectsMutationsBranches/a_failed_drain_after_put_is_a_violation] a drain that errors after a successful put is a violation
+# 
+v0.4.8#3784204028229773546
+0x0
+0x0

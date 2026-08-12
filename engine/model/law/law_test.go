@@ -216,7 +216,7 @@ func TestCountEqualsReferenceCheck(t *testing.T) {
 		})
 	})
 
-	t.Run("catches SUT count error", func(t *testing.T) {
+	t.Run("catches a one-sided count error", func(t *testing.T) {
 		t.Parallel()
 		countErr := errors.New("count failed")
 		l := law.CountEqualsReference[*kv, int]{
@@ -230,8 +230,24 @@ func TestCountEqualsReferenceCheck(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			sut := newKV() // empty → error
 			ref := newKV()
+			ref.data["a"] = "v" // ref answers, SUT refuses
 			if err := l.Check(rt, sut, ref); err == nil {
-				rt.Fatal("should catch count error")
+				rt.Fatal("should catch a count only one side refuses")
+			}
+		})
+	})
+
+	t.Run("a count both sides refuse holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		countErr := errors.New("count failed")
+		l := law.CountEqualsReference[*kv, int]{
+			Count: func(_ *rapid.T, _ *kv) (int, error) { return 0, countErr },
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			// A pool both sides have drained refuses both counts identically;
+			// agreement in refusal is agreement.
+			if err := l.Check(rt, newKV(), newKV()); err != nil {
+				rt.Fatalf("matching refusals are agreement: %v", err)
 			}
 		})
 	})

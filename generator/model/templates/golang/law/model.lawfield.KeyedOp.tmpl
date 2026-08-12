@@ -1,0 +1,8 @@
+{{- /*
+A keyed operation whose answer is its error: an acquire, a release.
+*/ -}}
+{{- define "model.lawfield.KeyedOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}k)
+		}
+{{- end -}}

@@ -190,6 +190,11 @@ const (
 	familyReader     = "family.reader"
 	familyWriter     = "family.writer"
 	familyAggregator = "family.aggregator"
+
+	// familyCell is a nullary read of a single-slot subject — `(ctx) (V,
+	// error)` — the observation a cell-shaped law compares against, which
+	// the keyed reader family cannot stand in for.
+	familyCell = "family.cell"
 )
 
 // The handles the generated file constructs and shares.
@@ -201,6 +206,13 @@ const (
 	handleIdentity = "identity-hash"
 	handleOrder    = "natural-order"
 	handleClassify = "trace-classifier"
+
+	// handleObserve is the composed whole-state observation: the batch read
+	// where the interface streams its state, the aggregate where it counts
+	// it, the fixture-keyed read where it stores it. One derivation, because
+	// every law comparing state before and after a mutation must observe the
+	// same way or two laws would disagree about what "the state" is.
+	handleObserve = "observation"
 )
 
 // observed is the read-back every write-family law compares against.
@@ -210,6 +222,15 @@ const (
 // about which method observes the same subject.
 func observed(name string) Field {
 	return Field{Name: name, Kind: KindRole, From: familyReader}
+}
+
+// observation is the whole-state observation a before/after comparison law
+// reads — a handle the generated file composes from whatever the interface
+// offers, where [observed]'s keyed read demands a key the law has no way to
+// choose. Every law spells the field Observe, which is the unity the shared
+// derivation asserts.
+func observation() Field {
+	return Field{Name: "Observe", Kind: KindHandle, From: handleObserve}
 }
 
 // writeObservable is the manifest three writer shapes share.
@@ -262,7 +283,7 @@ func convergent(law, mixin string, extra ...Field) Rule {
 	fields = append(fields,
 		Field{Name: fieldFactory, Kind: KindHandle, From: handleFactory},
 		Field{Name: fieldValues, Kind: KindGenerator, From: genValues},
-		observed("Observe"),
+		observation(),
 	)
 	return Rule{Law: law, Needs: []string{mixin}, Fields: append(fields, extra...)}
 }
@@ -375,7 +396,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			observed("Observe"),
+			observation(),
 		},
 	},
 
@@ -388,7 +409,7 @@ var rules = []Rule{
 			// Optional because zero is the floor of the counting shapes this
 			// attaches to; a signed quantity needs the option until eidos
 			// carries a second parameter.
-			{Name: "Min", Kind: KindConstant, From: paramBoundedMin},
+			{Name: "Min", Kind: KindConstant, From: paramBoundedMin, Optional: true},
 			{Name: "Max", Kind: KindConstant, From: paramBoundedLimit},
 		},
 	},
@@ -495,7 +516,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			observed("Observe"),
+			observation(),
 		},
 	},
 	{
@@ -507,7 +528,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			observed("Observe"),
+			observation(),
 		},
 	},
 	{
@@ -515,7 +536,7 @@ var rules = []Rule{
 		Needs: []string{mixinIdempotent, shapeLifecycle},
 		Fields: []Field{
 			{Name: fieldCall, Kind: KindRole, From: roleSelf},
-			observed("Observe"),
+			observation(),
 		},
 	},
 
@@ -748,7 +769,9 @@ var rules = []Rule{
 		Needs: []string{contractAppender},
 		Fields: []Field{
 			{Name: "Append", Kind: KindRole, From: "appender.fn"},
-			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			// Wide inputs: offset monotonicity holds over any append stream,
+			// and nothing here revisits a key.
+			{Name: fieldValues, Kind: KindGenerator, From: genInputs},
 		},
 	},
 
@@ -761,7 +784,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: "batch-writer.writer"},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			observed("Observe"),
+			observation(),
 		},
 	},
 
@@ -779,7 +802,7 @@ var rules = []Rule{
 		Needs: []string{contractCAS},
 		Fields: []Field{
 			{Name: "CAS", Kind: KindRole, From: "cas.writer"},
-			observed(fieldRead),
+			{Name: fieldRead, Kind: KindRole, From: familyCell},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
 			{Name: "Mismatch", Kind: KindConstant, From: paramCASMismatch},
 		},
@@ -840,7 +863,9 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: "Forward", Kind: KindRole, From: "codec.forward"},
 			{Name: "Inverse", Kind: KindRole, From: "codec.inverse"},
-			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			// Wide inputs rather than the colliding values pool: a roundtrip
+			// is stateless, and the claim is over the domain.
+			{Name: fieldValues, Kind: KindGenerator, From: genInputs},
 		},
 	},
 	{
@@ -850,7 +875,9 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: "Forward", Kind: KindRole, From: "codec.forward"},
 			{Name: "Inverse", Kind: KindRole, From: "codec.inverse"},
-			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			// Wide inputs rather than the colliding values pool: a roundtrip
+			// is stateless, and the claim is over the domain.
+			{Name: fieldValues, Kind: KindGenerator, From: genInputs},
 		},
 	},
 
@@ -969,7 +996,7 @@ var rules = []Rule{
 		Needs: []string{contractSaga},
 		Fields: []Field{
 			{Name: "Run", Kind: KindRole, From: "saga.step"},
-			observed("Observe"),
+			observation(),
 		},
 	},
 
@@ -1065,7 +1092,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: "workflow.fn"},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			observed("Observe"),
+			observation(),
 			// The permitted edges, read from the contract's own parameter —
 			// which is the one place the declaration states them.
 			{Name: "Allowed", Kind: KindConstant, From: paramWorkflowTransitions},

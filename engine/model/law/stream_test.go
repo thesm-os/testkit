@@ -622,16 +622,41 @@ func TestStreamReflectsMutationsBranches(t *testing.T) {
 
 	t.Run("a failed drain after put is a violation", func(t *testing.T) {
 		t.Parallel()
-		s := &setSUT{}
-		l := law.StreamReflectsMutations[*setSUT, int, int]{
-			Put:    put,
-			Drain:  func(*rapid.T, *setSUT) ([]int, error) { return nil, errors.New("closed") },
-			Values: rapid.Just(1),
-			Hash:   hash,
-		}
 		rapid.Check(t, func(rt *rapid.T) {
+			drains := 0
+			s := &setSUT{}
+			l := law.StreamReflectsMutations[*setSUT, int, int]{
+				Put: put,
+				// The baseline count answered, so refusing after the put is
+				// the subject breaking rather than a precondition.
+				Drain: func(rt *rapid.T, s *setSUT) ([]int, error) {
+					drains++
+					if drains > 1 {
+						return nil, errors.New("closed")
+					}
+					return drain(rt, s)
+				},
+				Values: rapid.Just(1),
+				Hash:   hash,
+			}
 			if err := l.Check(rt, s, s); err == nil {
 				rt.Fatal("a drain that errors after a successful put is a violation")
+			}
+		})
+	})
+
+	t.Run("a drain refused before anything ran holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &setSUT{}
+			l := law.StreamReflectsMutations[*setSUT, int, int]{
+				Put:    put,
+				Drain:  func(*rapid.T, *setSUT) ([]int, error) { return nil, errors.New("closed") },
+				Values: rapid.Just(1),
+				Hash:   hash,
+			}
+			if err := l.Check(rt, s, s); err != nil {
+				rt.Fatalf("no baseline count means no claim to compare: %v", err)
 			}
 		})
 	})
@@ -703,7 +728,7 @@ func TestStreamReflectsMutationsBranches(t *testing.T) {
 				Put: put,
 				Drain: func(rt *rapid.T, s *setSUT) ([]int, error) {
 					drains++
-					if drains > 1 {
+					if drains > 2 {
 						return nil, errors.New("stream closed")
 					}
 					return drain(rt, s)

@@ -480,6 +480,20 @@ func TestRapidDistinctAndMapGenerators(t *testing.T) {
 		})
 	})
 
+	t.Run("AdversarialStrings reaches the hostile half", func(t *testing.T) {
+		t.Parallel()
+		// The pool must actually surface an attack: a safety law fed only
+		// arbitrary strings would never probe the claim it binds.
+		hostile := false
+		model.Check(t, func(rt *model.T) {
+			v := model.AdversarialStrings().Draw(rt, "payload")
+			if strings.Contains(v, "<script") || strings.Contains(v, "DROP TABLE") {
+				hostile = true
+			}
+		})
+		testkit.True(t, hostile, "the blend draws hostile payloads alongside arbitrary ones")
+	})
+
 	t.Run("SampledFrom draws only supplied values", func(t *testing.T) {
 		t.Parallel()
 		model.Check(t, func(rt *model.T) {

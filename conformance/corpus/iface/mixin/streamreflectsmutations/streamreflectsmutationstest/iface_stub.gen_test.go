@@ -319,6 +319,126 @@ func TestMixedStubAdd(t *testing.T) {
 	})
 }
 
+// mixedStubRemoveSubject binds Remove into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubRemoveSubject(tb testing.TB) stub.Subject[streamreflectsmutationstest.MixedRemoveCall, streamreflectsmutationstest.MixedRemoveReturn] {
+	tb.Helper()
+	s := streamreflectsmutationstest.NewMixedStub(tb)
+	return stub.Subject[streamreflectsmutationstest.MixedRemoveCall, streamreflectsmutationstest.MixedRemoveReturn]{
+		Stub: s.OnRemove.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 string
+			_ = s.Remove(a0, a1)
+		},
+		Result: func() streamreflectsmutationstest.MixedRemoveReturn {
+			var a0 context.Context
+			var a1 string
+			got0 := s.Remove(a0, a1)
+			return streamreflectsmutationstest.MixedRemoveReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnRemove.Func(func(_ context.Context, _ string) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 string
+			r0 := s.Remove(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestMixedStubRemove pins how Remove answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubRemove(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Remove", mixedStubRemoveSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := streamreflectsmutationstest.NewMixedStub(t)
+		var want0 error
+		s.OnRemove.Returns(want0)
+		var a0 context.Context
+		var a1 string
+		got0 := s.Remove(a0, a1)
+		testkit.Equal(t, got0, want0, "Remove must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := streamreflectsmutationstest.NewMixedStub(t)
+		var a0 context.Context
+		var a1 string
+		_ = s.Remove(a0, a1)
+		got := s.OnRemove.AssertCalledOnce(t, "Remove must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Item, a1, "the recorded call carries Item")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := streamreflectsmutationstest.NewMixedStub(t)
+		var seen []streamreflectsmutationstest.MixedRemoveCall
+		s.OnRemove.OnRecord(func(c streamreflectsmutationstest.MixedRemoveCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 string
+		_ = s.Remove(a0, a1)
+		_ = s.Remove(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Remove call")
+	})
+
+	t.Run("wires WithMixedRemove at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := streamreflectsmutationstest.NewMixedStub(t, streamreflectsmutationstest.WithMixedRemove(func(_ context.Context, _ string) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 string
+		_ = s.Remove(a0, a1)
+		testkit.True(t, called, "WithMixedRemove must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := streamreflectsmutationstest.NewMixedStub(t)
+		var want0 error
+		s.OnRemove.Returns(want0)
+		var a0 context.Context
+		var a1 string
+		_ = s.Remove(a0, a1)
+		s.ResetCalls()
+		got0 := s.Remove(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // mixedStubDouble describes how to build a MixedStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -399,7 +519,26 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		r0 := s.Add(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Add must surface the wrapped answer")
 	})
+
+	t.Run("forwards Remove to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 string
+		_ = s.Remove(a0, a1)
+		inner.OnRemove.AssertCalledOnce(t, "Remove must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Remove answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Remove-delegate")
+		inner.OnRemove.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 string
+		r0 := s.Remove(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Remove must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance f587800380c3891212ea392f56e4e7064eaa9e71896527e798ef39c043e6078a
+// testkit:provenance b114038a8bea71b78b38667ef7de8b6c63ae11f1ed14b484759910eb87d79f8c

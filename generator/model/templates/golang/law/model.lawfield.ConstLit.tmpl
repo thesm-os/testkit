@@ -1,0 +1,6 @@
+{{- /*
+A numeric bound, read off the declaration's own stamp.
+*/ -}}
+{{- define "model.lawfield.ConstLit" -}}
+{{ .Name }}: {{ .Lit }}
+{{- end -}}

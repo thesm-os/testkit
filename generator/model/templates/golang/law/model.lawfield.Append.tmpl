@@ -1,0 +1,8 @@
+{{- /*
+The offset-answering append, called as the role spells it.
+*/ -}}
+{{- define "model.lawfield.Append" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .In }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
+		}
+{{- end -}}

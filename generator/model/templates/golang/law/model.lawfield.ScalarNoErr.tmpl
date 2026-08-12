@@ -1,0 +1,9 @@
+{{- /*
+A nullary scalar observation whose method answers no error: the closure
+supplies the nil the law's spelling threads.
+*/ -}}
+{{- define "model.lawfield.ScalarNoErr" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }}), nil
+		}
+{{- end -}}

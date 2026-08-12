@@ -23,7 +23,7 @@ import (
 // one.
 type InMemory struct {
 	mu      sync.Mutex
-	entries []string
+	entries []appender.Value
 }
 
 var _ appender.Contract = (*InMemory)(nil)
@@ -31,18 +31,19 @@ var _ appender.Contract = (*InMemory)(nil)
 // NewInMemory returns an empty log.
 func NewInMemory() *InMemory { return &InMemory{} }
 
-// Run appends a key to the log.
+// Run appends the value and answers its offset — the position it landed at,
+// which only ever grows.
 //
 // The context is consulted first, so a cancelled caller's entry is not written.
 // An append-only log cannot take one back.
-func (s *InMemory) Run(ctx context.Context, key string) error {
+func (s *InMemory) Run(ctx context.Context, v appender.Value) (int64, error) {
 	if err := contextErr(ctx); err != nil {
-		return err
+		return 0, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.entries = append(s.entries, key)
-	return nil
+	s.entries = append(s.entries, v)
+	return int64(len(s.entries) - 1), nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

@@ -1,0 +1,11 @@
+{{- /*
+The keyed observation: the fixture key every pooled draw revisits, its miss
+read as the zero state — absent and empty compare equal, which is what a
+before/after comparison needs from a key nothing wrote.
+*/ -}}
+{{- define "model.lawfield.ObserveKeyed" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) {{ renderType .Out }} {
+			v, _ := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}fx.{{ .KeyField }})
+			return v
+		}
+{{- end -}}

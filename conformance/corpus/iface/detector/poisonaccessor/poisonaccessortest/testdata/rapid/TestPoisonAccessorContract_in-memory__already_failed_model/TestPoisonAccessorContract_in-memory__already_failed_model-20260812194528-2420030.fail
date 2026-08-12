@@ -1,0 +1,7 @@
+# 2026/08/12 19:45:28.503649 [TestPoisonAccessorContract/in-memory,_already_failed/model] [invariant] AUTO-POISON-NIL-ON-FRESH at step 0: PoisonNilOnFresh: fresh impl reports poison: poisonaccessor: poisoned
+#   invariant: AUTO-POISON-NIL-ON-FRESH
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} poisoned:true callCount:0}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} poisoned:true callCount:0}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestPoisonAccessorContract_in-memory__already_failed_model.json
+# 
+v0.4.8#11049736973066759242

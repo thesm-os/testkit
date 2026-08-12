@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/injectionsafe/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package injectionsafetest_test
 
@@ -33,27 +33,29 @@ func mixedStubStoreSubject(tb testing.TB) stub.Subject[injectionsafetest.MixedSt
 		Call: func() {
 			var a0 context.Context
 			var a1 string
-			_, _ = s.Store(a0, a1)
+			var a2 string
+			_ = s.Store(a0, a1, a2)
 		},
 		Result: func() injectionsafetest.MixedStoreReturn {
 			var a0 context.Context
 			var a1 string
-			got0, got1 := s.Store(a0, a1)
-			return injectionsafetest.MixedStoreReturn{Result: got0, Err: got1}
+			var a2 string
+			got0 := s.Store(a0, a1, a2)
+			return injectionsafetest.MixedStoreReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnStore.Func(func(_ context.Context, _ string) (string, error) {
+			s.OnStore.Func(func(_ context.Context, _ string, _ string) error {
 				mark()
-				var z0 string
-				var z1 error
-				return z0, z1
+				var z0 error
+				return z0
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
 			var a1 string
-			_, r1 := s.Store(a0, a1)
-			return r1
+			var a2 string
+			r0 := s.Store(a0, a1, a2)
+			return r0
 		},
 	}
 }
@@ -72,14 +74,13 @@ func TestMixedStubStore(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := injectionsafetest.NewMixedStub(t)
-		var want0 string
-		var want1 error
-		s.OnStore.Returns(want0, want1)
+		var want0 error
+		s.OnStore.Returns(want0)
 		var a0 context.Context
 		var a1 string
-		got0, got1 := s.Store(a0, a1)
+		var a2 string
+		got0 := s.Store(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "Store must answer with what Returns pinned")
-		testkit.Equal(t, got1, want1, "Store must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -89,10 +90,12 @@ func TestMixedStubStore(t *testing.T) {
 		s := injectionsafetest.NewMixedStub(t)
 		var a0 context.Context
 		var a1 string
-		_, _ = s.Store(a0, a1)
+		var a2 string
+		_ = s.Store(a0, a1, a2)
 		got := s.OnStore.AssertCalledOnce(t, "Store must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.In, a1, "the recorded call carries In")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.Value, a2, "the recorded call carries Value")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -105,15 +108,141 @@ func TestMixedStubStore(t *testing.T) {
 		s.OnStore.OnRecord(func(c injectionsafetest.MixedStoreCall) { seen = append(seen, c) })
 		var a0 context.Context
 		var a1 string
-		_, _ = s.Store(a0, a1)
-		_, _ = s.Store(a0, a1)
+		var a2 string
+		_ = s.Store(a0, a1, a2)
+		_ = s.Store(a0, a1, a2)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Store call")
 	})
 
 	t.Run("wires WithMixedStore at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := injectionsafetest.NewMixedStub(t, injectionsafetest.WithMixedStore(func(_ context.Context, _ string) (string, error) {
+		s := injectionsafetest.NewMixedStub(t, injectionsafetest.WithMixedStore(func(_ context.Context, _ string, _ string) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 string
+		var a2 string
+		_ = s.Store(a0, a1, a2)
+		testkit.True(t, called, "WithMixedStore must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := injectionsafetest.NewMixedStub(t)
+		var want0 error
+		s.OnStore.Returns(want0)
+		var a0 context.Context
+		var a1 string
+		var a2 string
+		_ = s.Store(a0, a1, a2)
+		s.ResetCalls()
+		got0 := s.Store(a0, a1, a2)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
+// mixedStubLoadSubject binds Load into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubLoadSubject(tb testing.TB) stub.Subject[injectionsafetest.MixedLoadCall, injectionsafetest.MixedLoadReturn] {
+	tb.Helper()
+	s := injectionsafetest.NewMixedStub(tb)
+	return stub.Subject[injectionsafetest.MixedLoadCall, injectionsafetest.MixedLoadReturn]{
+		Stub: s.OnLoad.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 string
+			_, _ = s.Load(a0, a1)
+		},
+		Result: func() injectionsafetest.MixedLoadReturn {
+			var a0 context.Context
+			var a1 string
+			got0, got1 := s.Load(a0, a1)
+			return injectionsafetest.MixedLoadReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnLoad.Func(func(_ context.Context, _ string) (string, error) {
+				mark()
+				var z0 string
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 string
+			_, r1 := s.Load(a0, a1)
+			return r1
+		},
+	}
+}
+
+// TestMixedStubLoad pins how Load answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubLoad(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Load", mixedStubLoadSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := injectionsafetest.NewMixedStub(t)
+		var want0 string
+		var want1 error
+		s.OnLoad.Returns(want0, want1)
+		var a0 context.Context
+		var a1 string
+		got0, got1 := s.Load(a0, a1)
+		testkit.Equal(t, got0, want0, "Load must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Load must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := injectionsafetest.NewMixedStub(t)
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Load(a0, a1)
+		got := s.OnLoad.AssertCalledOnce(t, "Load must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := injectionsafetest.NewMixedStub(t)
+		var seen []injectionsafetest.MixedLoadCall
+		s.OnLoad.OnRecord(func(c injectionsafetest.MixedLoadCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Load(a0, a1)
+		_, _ = s.Load(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Load call")
+	})
+
+	t.Run("wires WithMixedLoad at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := injectionsafetest.NewMixedStub(t, injectionsafetest.WithMixedLoad(func(_ context.Context, _ string) (string, error) {
 			called = true
 			var z0 string
 			var z1 error
@@ -121,8 +250,8 @@ func TestMixedStubStore(t *testing.T) {
 		}))
 		var a0 context.Context
 		var a1 string
-		_, _ = s.Store(a0, a1)
-		testkit.True(t, called, "WithMixedStore must install the override")
+		_, _ = s.Load(a0, a1)
+		testkit.True(t, called, "WithMixedLoad must install the override")
 	})
 
 	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
@@ -133,12 +262,12 @@ func TestMixedStubStore(t *testing.T) {
 		s := injectionsafetest.NewMixedStub(t)
 		var want0 string
 		var want1 error
-		s.OnStore.Returns(want0, want1)
+		s.OnLoad.Returns(want0, want1)
 		var a0 context.Context
 		var a1 string
-		_, _ = s.Store(a0, a1)
+		_, _ = s.Load(a0, a1)
 		s.ResetCalls()
-		got0, got1 := s.Store(a0, a1)
+		got0, got1 := s.Load(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
@@ -157,7 +286,8 @@ func mixedStubDouble() stub.Double[injectionsafetest.MixedStoreCall] {
 			Call: func() {
 				var a0 context.Context
 				var a1 string
-				_, _ = s.Store(a0, a1)
+				var a2 string
+				_ = s.Store(a0, a1, a2)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -204,7 +334,8 @@ func TestMixedStubDelegateTo(t *testing.T) {
 	t.Run("forwards Store to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 string
-		_, _ = s.Store(a0, a1)
+		var a2 string
+		_ = s.Store(a0, a1, a2)
 		inner.OnStore.AssertCalledOnce(t, "Store must reach the wrapped implementation")
 	})
 
@@ -216,10 +347,30 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		inner.OnStore.FaultsFor(time.Hour, want)
 		var a0 context.Context
 		var a1 string
-		_, r1 := s.Store(a0, a1)
-		testkit.ErrorIs(t, r1, want, "Store must surface the wrapped answer")
+		var a2 string
+		r0 := s.Store(a0, a1, a2)
+		testkit.ErrorIs(t, r0, want, "Store must surface the wrapped answer")
+	})
+
+	t.Run("forwards Load to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Load(a0, a1)
+		inner.OnLoad.AssertCalledOnce(t, "Load must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Load answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Load-delegate")
+		inner.OnLoad.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 string
+		_, r1 := s.Load(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Load must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance cc9f7c30b6f4c78ee7deb5ec5859e8edfcb20856f16aad696b55295841dc7ac4
+// testkit:provenance 1c007b7ca30d07b3083b21a3507ef0f9b162b9791fd5c095286b576342696e41

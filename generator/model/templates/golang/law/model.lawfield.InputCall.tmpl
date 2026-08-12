@@ -1,0 +1,8 @@
+{{- /*
+A one-input transformation at the role's own domain and range.
+*/ -}}
+{{- define "model.lawfield.InputCall" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, in {{ renderType .In }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}in)
+		}
+{{- end -}}

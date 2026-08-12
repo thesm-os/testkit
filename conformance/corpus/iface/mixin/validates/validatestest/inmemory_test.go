@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/validates"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/validates/validatestest"
+	"go.thesmos.sh/testkit/engine/model"
 )
 
 // The whole wiring a consumer writes: one subject, and the checks the generator
@@ -28,8 +29,20 @@ func TestMixedContract(t *testing.T) {
 			return validatestest.NewInMemory()
 		}),
 		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		validatestest.MixedModel(),
+		// reporting under "model" beside the per-method checks. The values
+		// pool is supplied: the validates claim licenses refusing values no
+		// derivation can predict, so the derived pool keeps to the proven
+		// fixture pair — this consumer knows its own accepted domain and
+		// widens the pool to it, which is exactly the door MixedModelValues
+		// exists to be. Keys stay few so draws keep colliding.
+		validatestest.MixedModel(validatestest.MixedModelValues(model.Custom(
+			func(t *model.T) validates.Payload {
+				return validates.Payload{
+					Key:  model.SampledFrom([]string{"alpha", "beta"}).Draw(t, "key"),
+					Body: model.String().Draw(t, "body"),
+				}
+			},
+		))),
 		validatestest.MixedOnStore("refuses what its own validator refuses", func(
 			tb testing.TB, subject validates.Mixed, v validates.Payload,
 		) {

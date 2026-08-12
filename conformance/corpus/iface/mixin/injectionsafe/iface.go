@@ -5,8 +5,10 @@
 // declares that a value carrying a control sequence is stored and returned
 // as data rather than interpreted.
 //
-// One method is enough here: the claim is about what a single call returns
-// for a hostile or unusual input, not about how two calls relate.
+// The store-and-load pair is the claim's own shape: a hostile value goes in
+// under a key, and what the key answers afterwards is the data that went in —
+// never an interpretation of it. AUTO-INJECTION-SAFE probes exactly that
+// round trip with adversarial payloads on both slots.
 //
 // There is no negated form here. eidos declares the mixin directive
 // DenyNegation, because a mixin is opt-in and deleting the directive is
@@ -24,7 +26,10 @@ import (
 //testkit:suite
 //testkit:model
 type Mixed interface {
-	// Store stores a value and hands back what was stored.
+	// Store keeps the value as data, under the key as data.
 	//testkit:mixin injectionsafe
-	Store(ctx context.Context, in string) (string, error)
+	Store(ctx context.Context, key, value string) error
+
+	// Load answers what Store kept, uninterpreted.
+	Load(ctx context.Context, key string) (string, error)
 }

@@ -23,6 +23,13 @@ import (
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
 type ContractRunCheck func(tb testing.TB, subject workflow.Contract, key string)
 
+// ContractStateCheck is one assertion about State.
+//
+// Every generated check for State is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type ContractStateCheck func(tb testing.TB, subject workflow.Contract, key string)
+
 // ContractFixture holds every input the generated checks run against.
 //
 // Derived from each method's parameter names and types. Every field has a
@@ -51,12 +58,12 @@ func DefaultContractFixture() ContractFixture {
 
 // AssertContractContract runs every generated check against every declared subject.
 //
-//	Checks:   4 across 1 method, per subject
+//	Checks:   9 across 2 methods, per subject
 //	Subjects: declare each with ContractSubject
 //	Double:   every subject runs a second time wrapped in ContractStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. ContractWithoutDouble declines it.
-//	Extend:   ContractOnRun
+//	Extend:   ContractOnRun, ContractOnState
 //	Drop:     ContractWithout, by the path each check reports under
 //
 // # What is checked somewhere else
@@ -118,6 +125,30 @@ func runContractChecks(
 			})
 			for _, c := range cfg.onRun {
 				cfg.run(t, "Run"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+				})
+			}
+		})
+
+		t.Run("State", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "State/smoke", "smoke", func(tb testing.TB) {
+				AssertContractStateSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "State/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertContractStateCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "State/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertContractStateHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "State/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertContractStateToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "State/an error carries the zero value", "an error carries the zero value", func(tb testing.TB) {
+				AssertContractStateZeroOnError(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.KeyOther)
+			})
+			for _, c := range cfg.onState {
+				cfg.run(t, "State"+"/"+c.name, c.name, func(tb testing.TB) {
 					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
 				})
 			}
@@ -222,6 +253,101 @@ func AssertContractRunToleratesNilContext(tb testing.TB, subject workflow.Contra
 	_ = subject.Run(ctx, key)
 }
 
+// AssertContractStateSmoke asserts State survives a call with derived inputs.
+//
+// Fails when: State panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertContractStateSmoke(tb testing.TB, subject workflow.Contract, key string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("State panicked on a derived value (%v); supply one it "+
+				"accepts through ContractWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_, _ = subject.State(ctx, key)
+}
+
+// AssertContractStateCancels asserts State reports a cancelled context as cancelled.
+//
+// Fails when: State returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertContractStateCancels(tb testing.TB, subject workflow.Contract, key string) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	_, err := subject.State(ctx, key)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"State must report a cancelled context as context.Canceled")
+}
+
+// AssertContractStateHonoursDeadline asserts State reports an expired deadline as exceeded.
+//
+// Fails when: State returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertContractStateHonoursDeadline(tb testing.TB, subject workflow.Contract, key string) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	_, err := subject.State(ctx, key)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"State must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertContractStateToleratesNilContext asserts State does not panic on a nil context.
+//
+// Fails when: State panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertContractStateToleratesNilContext(tb testing.TB, subject workflow.Contract, key string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("State panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_, _ = subject.State(ctx, key)
+}
+
+// AssertContractStateZeroOnError asserts an error is accompanied by the zero value.
+//
+// Fails when: State returns a non-zero result alongside a non-nil
+// error. A caller who checks the error and a caller who checks the value must
+// not disagree about whether the call succeeded.
+func AssertContractStateZeroOnError(tb testing.TB, subject workflow.Contract, key string) {
+	tb.Helper()
+	ctx := tb.Context()
+	r0, r1 := subject.State(ctx, key)
+	if r1 == nil {
+		tb.Fatalf("State succeeded; supply inputs it misses through " +
+			"ContractWithFixture")
+	}
+	{
+		var zero string
+		testkit.Equal(tb, r0, zero,
+			"State must return the zero value alongside an error")
+	}
+}
+
 // ContractOption configures a contract run.
 type ContractOption func(*contractConfig)
 
@@ -283,6 +409,13 @@ func ContractOnRun(name string, fn ContractRunCheck) ContractOption {
 	}
 }
 
+// ContractOnState adds a named check to State.
+func ContractOnState(name string, fn ContractStateCheck) ContractOption {
+	return func(c *contractConfig) {
+		c.onState = append(c.onState, namedContractStateCheck{name, fn})
+	}
+}
+
 // ContractWithout drops generated checks by the path each reports under.
 //
 // For a subject that legitimately violates one. Without this the only recourse
@@ -299,6 +432,11 @@ func ContractWithout(paths ...string) ContractOption {
 type namedContractRunCheck struct {
 	name string
 	fn   ContractRunCheck
+}
+
+type namedContractStateCheck struct {
+	name string
+	fn   ContractStateCheck
 }
 
 type namedContractSubject struct {
@@ -347,6 +485,7 @@ type contractConfig struct {
 	without       map[string]struct{}
 	extensions    []contractContractExtension
 	onRun         []namedContractRunCheck
+	onState       []namedContractStateCheck
 }
 
 func newContractConfig(opts ...ContractOption) *contractConfig {
@@ -428,4 +567,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6fe161cd73688fbe8a066df6085628fc5309f1a0741afcd1502546692dd7e6db
+// testkit:provenance be282efec66ce8389da0fd04a0d741e3dc8a79bc7ad381ea2834108984aaff3b

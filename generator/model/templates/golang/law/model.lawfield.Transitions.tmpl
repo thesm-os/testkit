@@ -1,0 +1,16 @@
+{{- /*
+The permitted transitions, parsed from the contract's own stamp — the one
+place the declaration states them.
+*/ -}}
+{{- define "model.lawfield.Transitions" -}}
+{{ .Name }}: func(from, to string) bool {
+			switch {
+{{- range .Pairs }}
+			case from == "{{ index . 0 }}" && to == "{{ index . 1 }}":
+				return true
+{{- end }}
+			default:
+				return false
+			}
+		}
+{{- end -}}

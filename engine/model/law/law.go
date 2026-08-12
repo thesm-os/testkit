@@ -181,13 +181,20 @@ func (CountEqualsReference[T, R]) ID() string { return lawid.CountEqualsReferenc
 func (CountEqualsReference[T, R]) REQID() string { return "" }
 
 // Check verifies the law holds for the given SUT and reference.
+//
+// Error presence is compared, never demanded: a pool both sides have drained
+// refuses both counts identically, and the law holds vacuously — the corpus
+// caught the earlier spelling failing exactly that agreement.
 func (l CountEqualsReference[T, R]) Check(rt *rapid.T, sut, ref T) error {
 	sutN, sutErr := l.Count(rt, sut)
 	refN, refErr := l.Count(rt, ref)
-	if sutErr != nil || refErr != nil {
+	if (sutErr != nil) != (refErr != nil) {
 		//nolint:errorlint // diagnostic message, not wrapping
 		return fmt.Errorf("CountEqualsReference: SUT err=%v, ref err=%v",
 			sutErr, refErr)
+	}
+	if sutErr != nil {
+		return nil //nolint:nilerr // both sides refused; the law vacuously holds
 	}
 	if sutN != refN {
 		return fmt.Errorf("CountEqualsReference: SUT=%v, ref=%v", sutN, refN)

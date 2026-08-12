@@ -11,13 +11,14 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender/appendertest"
 )
 
 // Every generated check for Contract, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   4 checks
+//	Proved:   5 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -34,14 +35,14 @@ func TestAssertContractRunSmokeCanFail(t *testing.T) {
 
 	fixture := appendertest.DefaultContractFixture()
 	subject := appendertest.NewContractStub(t,
-		appendertest.WithContractRun(func(context.Context, string) error {
+		appendertest.WithContractRun(func(context.Context, appender.Value) (int64, error) {
 			panic("Contract.Run: violating the smoke check")
 		}))
 
 	got := testkit.Rejects(t, "a method that panics on a derived value",
 		func(tb testing.TB) {
 			tb.Helper()
-			appendertest.AssertContractRunSmoke(tb, subject, fixture.Key)
+			appendertest.AssertContractRunSmoke(tb, subject, fixture.V)
 		})
 	testkit.Assert(t, got).Contains("panicked on a derived value",
 		"and rejects it for the reason the check is about")
@@ -57,14 +58,15 @@ func TestAssertContractRunCancelsCanFail(t *testing.T) {
 
 	fixture := appendertest.DefaultContractFixture()
 	subject := appendertest.NewContractStub(t,
-		appendertest.WithContractRun(func(context.Context, string) error {
-			return nil
+		appendertest.WithContractRun(func(context.Context, appender.Value) (int64, error) {
+			var r0 int64
+			return r0, nil
 		}))
 
 	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
 		func(tb testing.TB) {
 			tb.Helper()
-			appendertest.AssertContractRunCancels(tb, subject, fixture.Key)
+			appendertest.AssertContractRunCancels(tb, subject, fixture.V)
 		})
 	testkit.Assert(t, got).Contains("must report a cancelled context",
 		"and rejects it for the reason the check is about")
@@ -80,14 +82,15 @@ func TestAssertContractRunHonoursDeadlineCanFail(t *testing.T) {
 
 	fixture := appendertest.DefaultContractFixture()
 	subject := appendertest.NewContractStub(t,
-		appendertest.WithContractRun(func(context.Context, string) error {
-			return nil
+		appendertest.WithContractRun(func(context.Context, appender.Value) (int64, error) {
+			var r0 int64
+			return r0, nil
 		}))
 
 	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
 		func(tb testing.TB) {
 			tb.Helper()
-			appendertest.AssertContractRunHonoursDeadline(tb, subject, fixture.Key)
+			appendertest.AssertContractRunHonoursDeadline(tb, subject, fixture.V)
 		})
 	testkit.Assert(t, got).Contains("must report an expired deadline",
 		"and rejects it for the reason the check is about")
@@ -103,18 +106,42 @@ func TestAssertContractRunToleratesNilContextCanFail(t *testing.T) {
 
 	fixture := appendertest.DefaultContractFixture()
 	subject := appendertest.NewContractStub(t,
-		appendertest.WithContractRun(func(context.Context, string) error {
+		appendertest.WithContractRun(func(context.Context, appender.Value) (int64, error) {
 			panic("Contract.Run: violating the nil-context check")
 		}))
 
 	got := testkit.Rejects(t, "a method that panics on a nil context",
 		func(tb testing.TB) {
 			tb.Helper()
-			appendertest.AssertContractRunToleratesNilContext(tb, subject, fixture.Key)
+			appendertest.AssertContractRunToleratesNilContext(tb, subject, fixture.V)
 		})
 	testkit.Assert(t, got).Contains("panicked on a nil context",
 		"and rejects it for the reason the check is about")
 }
 
+// TestAssertContractRunZeroOnErrorCanFail holds AssertContractRunZeroOnError to being able to fail.
+//
+// The stand-in succeeds for the input the check chose so it would miss. A check
+// that let that pass would never reach the comparison it exists to make, and
+// would report success without having compared anything.
+func TestAssertContractRunZeroOnErrorCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := appendertest.DefaultContractFixture()
+	subject := appendertest.NewContractStub(t,
+		appendertest.WithContractRun(func(context.Context, appender.Value) (int64, error) {
+			var r0 int64
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that succeeds for an input it should miss",
+		func(tb testing.TB) {
+			tb.Helper()
+			appendertest.AssertContractRunZeroOnError(tb, subject, fixture.VOther)
+		})
+	testkit.Assert(t, got).Contains("supply inputs it misses",
+		"and rejects it for the reason the check is about")
+}
+
 // testkit: end of generated content.
-// testkit:provenance ac708b4a883fd35e7698440a1e837cd176d35c9aa32ce7f68f780dc27b67f187
+// testkit:provenance 09193674ed45660d3739b0e6d62739c04aa419256f651c1ca68155a1831db933

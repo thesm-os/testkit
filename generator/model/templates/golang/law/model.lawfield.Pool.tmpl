@@ -1,0 +1,7 @@
+{{- /*
+A law-declared pool, shared by name: every law naming it draws from one
+generator, at one element type the build has already checked.
+*/ -}}
+{{- define "model.lawfield.Pool" -}}
+{{ .Name }}: {{ .Pool }}
+{{- end -}}

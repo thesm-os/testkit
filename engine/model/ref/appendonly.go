@@ -65,7 +65,15 @@ func NewAppendOnly[Entry any](hash ChainHashFunc[Entry]) *AppendOnly[Entry] {
 }
 
 // Append adds an entry to the chain and extends the hash chain.
-func (c *AppendOnly[Entry]) Append(_ context.Context, e Entry) error {
+//
+// A cancelled context refuses the write: the oracle stands opposite subjects
+// whose lifecycle-shaped methods are held to context respect, and a reference
+// that ignored cancellation would fail the very law its adapter is driven
+// through.
+func (c *AppendOnly[Entry]) Append(ctx context.Context, e Entry) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var prev ChainHash
@@ -77,9 +85,15 @@ func (c *AppendOnly[Entry]) Append(_ context.Context, e Entry) error {
 	return nil
 }
 
-// Replay returns all entries in append order.
-func (c *AppendOnly[Entry]) Replay(_ context.Context) iter.Seq2[Entry, error] {
+// Replay returns all entries in append order, or yields the context's own
+// error where the caller has already given up.
+func (c *AppendOnly[Entry]) Replay(ctx context.Context) iter.Seq2[Entry, error] {
 	return func(yield func(Entry, error) bool) {
+		if err := ctx.Err(); err != nil {
+			var zero Entry
+			yield(zero, err)
+			return
+		}
 		c.mu.Lock()
 		// Copy under lock, then yield without holding the lock.
 		entries := make([]Entry, len(c.entries))
@@ -94,8 +108,13 @@ func (c *AppendOnly[Entry]) Replay(_ context.Context) iter.Seq2[Entry, error] {
 }
 
 // Verify recomputes the hash chain from scratch and compares
-// against stored hashes. Returns nil if the chain is intact.
-func (c *AppendOnly[Entry]) Verify(_ context.Context) error {
+// against stored hashes. Returns nil if the chain is intact, and the
+// context's own error where the caller has already given up — the shape the
+// lifecycle law holds every context-taking operation to.
+func (c *AppendOnly[Entry]) Verify(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	var prev ChainHash

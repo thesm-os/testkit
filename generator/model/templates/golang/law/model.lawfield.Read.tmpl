@@ -3,7 +3,7 @@ Read is the observation the claim compares against, keyed the same way the
 sequences key their reads.
 */ -}}
 {{- define "model.lawfield.Read" -}}
-Read: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Value }}, error) {
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Value }}, error) {
 			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}k)
 		}
 {{- end -}}

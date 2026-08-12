@@ -565,7 +565,7 @@ func TestUnqualifiedSentinelIsRefused(t *testing.T) {
 		for _, u := range b.Unbound {
 			unbound[u.Method] = u.Reason
 		}
-		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("no package",
+		testkit.Assert(t, unbound[lawid.DeleteReturnsNotFound]).Contains("neither a qualified symbol",
 			"the refusal names what the stamp is missing")
 	}
 }

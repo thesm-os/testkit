@@ -1,0 +1,7 @@
+{{- /*
+The single anonymous partition: this subject replays one chain, and the law
+iterates exactly it.
+*/ -}}
+{{- define "model.lawfield.Partitions" -}}
+{{ .Name }}: func() []string { return []string{""} }
+{{- end -}}

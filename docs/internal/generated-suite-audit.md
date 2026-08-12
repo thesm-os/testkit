@@ -407,43 +407,35 @@ companion, and `lang/function` produces no output at all.
 
 ## Improvement programme
 
-Ordered; each item names its finding.
+Ordered; each item names its finding. Landed items are struck from the list
+rather than annotated — the register and the gates carry their state now.
 
-1. **Close the union gate (F1).** Extend `conformance/gate` to compare
-   `tiers.Rules()` ownership against actual emission: every model-owned
-   classification stamped in the corpus must have its law bound in at least
-   one fixture; every suite-owned one must emit its named check. Derived from
-   the registries at test time, never a table. This turns F1 from prose into a
-   red build that names each classification, and makes the remaining work
-   enumerable.
-2. **Raise the twin floor (F1).** Teach `referenceOf` the contract-role
+Landed: the union gate (item 1 — `gate.Emission` + `gate.UnboundLaws`, the
+two-way ratchet), the bindings table (item 3 — 38 laws bound, 35 registered
+survivors each naming its true chokepoint), kill-matrix identity and the
+`InertBodies` deletion (item 5's first half; the `mutation`-operator rows
+remain under item 8's wire-or-delete).
+
+1. **Raise the twin floor (F1).** Teach `referenceOf` the contract-role
    oracles that already ship, add contract-role action dispatch, and gate: a
    fixture for a model-owned classification whose reference is a twin fails.
    Interim honesty: report twin runs under `model/twin` so the weaker claim is
    visible in test output.
-3. **Fill the bindings table (F1).** The 60 selected-then-dropped laws, the
-   missing field templates, and the `KindHandle` hardcoding. Every property
-   already has a tested Go implementation in `engine/model/law`; the work is
-   plumbing, not invention.
-4. **Suite fixes (F3).** Suppress/repair `zeroonerror` (shape- and
+2. **Suite fixes (F3).** Suppress/repair `zeroonerror` (shape- and
    mixin-aware; falsify its real claim via `plausibleReturns`); visible skips
    for `wrappedvia`/`batchsize`; sentinels for `if-absent`/`orderafter`;
    per-method `Checked`; gate "checked somewhere else" on the queued model
    emit; emit idempotent-Close, use-after-close, pure-repeat and concurrent
    smoke; `NoError` on the seeded write.
-5. **Kill-matrix identity and semantic mutants (F2).** Assert `Msg()` content
-   per mutant; extend rows beyond inert-method to `engine/model/mutation`'s
-   operators (wrong-value, lossy-stream, dropped-writes kill different
-   comparisons); delete `InertBodies` or replace it with the omission comment.
-6. **Determinism and gates (F2, F5).** Seed rapid in CI or persist the seed on
+3. **Determinism and gates (F2, F5).** Seed rapid in CI or persist the seed on
    failure; a policy for Porcupine `Unknown`; remove the expired `.ergon.yaml`
    skips; wire `ExitCheckDrift` into `make check`; fix `conformance/doc.go`;
    commit `gens.go`.
-7. **Per-fixture identity (F4).** A gate row asserting each detector-axis
+4. **Per-fixture identity (F4).** A gate row asserting each detector-axis
    fixture's method carries the stamp its directory names.
-8. **Delete or wire (F5).** `bmc`, `domhint`, `shrinker`: each gains its
-   consumer within a release or goes. Their doc comments currently claim
-   integrations that do not exist.
+5. **Delete or wire (F5).** `bmc`, `domhint`, `shrinker`, `mutation`: each
+   gains its consumer within a release or goes. Their doc comments currently
+   claim integrations that do not exist.
 
 **The argument against this order.** Item 1 goes red on ~60 classifications
 the day it lands and stays red until 2–3 finish; a standing red gate is a gate

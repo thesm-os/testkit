@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"iter"
+	"slices"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/streamreflectsmutations"
@@ -38,6 +39,25 @@ func (s *InMemory) Add(ctx context.Context, item string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items = append(s.items, item)
+	return nil
+}
+
+// Remove drops one copy of the item, and is the partner the mixin names
+// through `delete=Remove`.
+//
+// One copy, not every copy: the stream admits duplicates, and the law that
+// puts a value and deletes it afterwards must leave the multiset it found —
+// a remove-all would take a stranger's copy with it and desynchronize the
+// pair for every action after.
+func (s *InMemory) Remove(ctx context.Context, item string) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if i := slices.Index(s.items, item); i >= 0 {
+		s.items = slices.Delete(s.items, i, i+1)
+	}
 	return nil
 }
 

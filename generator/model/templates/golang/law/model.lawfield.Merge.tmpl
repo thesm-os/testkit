@@ -1,0 +1,9 @@
+{{- /*
+The replica merge: fold the peer in. The subject satisfies its own peer
+interface, which the compiler holds rather than this template.
+*/ -}}
+{{- define "model.lawfield.Merge" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, dst, src {{ renderType .Iface }}) error {
+			return dst.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}src)
+		}
+{{- end -}}

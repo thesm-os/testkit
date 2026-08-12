@@ -1,0 +1,10 @@
+{{- /*
+The composite write anchored on the fixture key: one (key, value) pair,
+repeated exactly — which is the idempotence claim, restricted to a key every
+other draw revisits.
+*/ -}}
+{{- define "model.lawfield.WriteFixedKey" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .In }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}fx.{{ .KeyField }}, v)
+		}
+{{- end -}}

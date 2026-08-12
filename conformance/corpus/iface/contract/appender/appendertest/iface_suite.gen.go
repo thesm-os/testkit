@@ -21,7 +21,7 @@ import (
 // Every generated check for Run is a value of it, and so is one you
 // write — so they compose, reorder, and each runs standalone. testing.TB rather
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
-type ContractRunCheck func(tb testing.TB, subject appender.Contract, key string)
+type ContractRunCheck func(tb testing.TB, subject appender.Contract, v appender.Value)
 
 // ContractFixture holds every input the generated checks run against.
 //
@@ -36,22 +36,22 @@ type ContractRunCheck func(tb testing.TB, subject appender.Contract, key string)
 // a value nobody could write. Supply one through ContractWithFixture
 // and the check a consumer writes has something to use.
 type ContractFixture struct {
-	Key      string
-	KeyOther string
+	V      appender.Value
+	VOther appender.Value
 }
 
 // DefaultContractFixture is what this run derived. Replace any field through
 // ContractWithFixture; the rest keep these values.
 func DefaultContractFixture() ContractFixture {
 	return ContractFixture{
-		Key:      "test-key",
-		KeyOther: "other-key",
+		V:      appender.Value{Key: "test-key", Body: "test-body"},
+		VOther: appender.Value{Key: "other-key", Body: "other-body"},
 	}
 }
 
 // AssertContractContract runs every generated check against every declared subject.
 //
-//	Checks:   4 across 1 method, per subject
+//	Checks:   5 across 1 method, per subject
 //	Subjects: declare each with ContractSubject
 //	Double:   every subject runs a second time wrapped in ContractStub, so
 //	          anything the wrapper fails that the subject passes is the double
@@ -64,7 +64,6 @@ func DefaultContractFixture() ContractFixture {
 // These need a reference implementation to compare against, which a suite run
 // has no way to build. Nothing here asserts them and nothing here should:
 //
-//   - writer, on Run
 //   - appender, on Run
 //
 // //testkit:model on the interface derives that reference, and the
@@ -105,20 +104,23 @@ func runContractChecks(
 		t.Run("Run", func(t *testing.T) {
 			t.Parallel()
 			cfg.run(t, "Run/smoke", "smoke", func(tb testing.TB) {
-				AssertContractRunSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+				AssertContractRunSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 			})
 			cfg.run(t, "Run/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
-				AssertContractRunCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+				AssertContractRunCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 			})
 			cfg.run(t, "Run/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
-				AssertContractRunHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+				AssertContractRunHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 			})
 			cfg.run(t, "Run/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
-				AssertContractRunToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+				AssertContractRunToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			cfg.run(t, "Run/an error carries the zero value", "an error carries the zero value", func(tb testing.TB) {
+				AssertContractRunZeroOnError(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.VOther)
 			})
 			for _, c := range cfg.onRun {
 				cfg.run(t, "Run"+"/"+c.name, c.name, func(tb testing.TB) {
-					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 				})
 			}
 		})
@@ -152,7 +154,7 @@ func runContractChecks(
 // Fails when: Run panics. The weakest check in this file and the one
 // that catches the most — a method that panics on a derived value is one no
 // other check here reaches.
-func AssertContractRunSmoke(tb testing.TB, subject appender.Contract, key string) {
+func AssertContractRunSmoke(tb testing.TB, subject appender.Contract, v appender.Value) {
 	tb.Helper()
 	defer func() {
 		if r := recover(); r != nil {
@@ -161,7 +163,7 @@ func AssertContractRunSmoke(tb testing.TB, subject appender.Contract, key string
 		}
 	}()
 	ctx := tb.Context()
-	_ = subject.Run(ctx, key)
+	_, _ = subject.Run(ctx, v)
 }
 
 // AssertContractRunCancels asserts Run reports a cancelled context as cancelled.
@@ -175,11 +177,11 @@ func AssertContractRunSmoke(tb testing.TB, subject appender.Contract, key string
 // The error rather than merely its presence is what separates this from the
 // deadline check. Asserting only that something came back makes the two one
 // check written twice.
-func AssertContractRunCancels(tb testing.TB, subject appender.Contract, key string) {
+func AssertContractRunCancels(tb testing.TB, subject appender.Contract, v appender.Value) {
 	tb.Helper()
 	ctx, cancel := context.WithCancel(tb.Context())
 	cancel()
-	err := subject.Run(ctx, key)
+	_, err := subject.Run(ctx, v)
 	testkit.ErrorIs(tb, err, context.Canceled,
 		"Run must report a cancelled context as context.Canceled")
 }
@@ -195,11 +197,11 @@ func AssertContractRunCancels(tb testing.TB, subject appender.Contract, key stri
 // The deadline is the zero time, which is unconditionally in the past. No clock
 // is read: a generated check that consults the wall clock is one whose subject
 // is partly the machine it runs on.
-func AssertContractRunHonoursDeadline(tb testing.TB, subject appender.Contract, key string) {
+func AssertContractRunHonoursDeadline(tb testing.TB, subject appender.Contract, v appender.Value) {
 	tb.Helper()
 	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
 	defer cancel()
-	err := subject.Run(ctx, key)
+	_, err := subject.Run(ctx, v)
 	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
 		"Run must report an expired deadline as context.DeadlineExceeded")
 }
@@ -210,7 +212,7 @@ func AssertContractRunHonoursDeadline(tb testing.TB, subject appender.Contract, 
 // succeeding is correct — a nil context reaches production through a caller
 // that forgot one, and a panic turns that into an outage rather than a failed
 // request.
-func AssertContractRunToleratesNilContext(tb testing.TB, subject appender.Contract, key string) {
+func AssertContractRunToleratesNilContext(tb testing.TB, subject appender.Contract, v appender.Value) {
 	tb.Helper()
 	defer func() {
 		if r := recover(); r != nil {
@@ -219,7 +221,27 @@ func AssertContractRunToleratesNilContext(tb testing.TB, subject appender.Contra
 	}()
 	//nolint:staticcheck // passing nil is the check.
 	var ctx context.Context
-	_ = subject.Run(ctx, key)
+	_, _ = subject.Run(ctx, v)
+}
+
+// AssertContractRunZeroOnError asserts an error is accompanied by the zero value.
+//
+// Fails when: Run returns a non-zero result alongside a non-nil
+// error. A caller who checks the error and a caller who checks the value must
+// not disagree about whether the call succeeded.
+func AssertContractRunZeroOnError(tb testing.TB, subject appender.Contract, v appender.Value) {
+	tb.Helper()
+	ctx := tb.Context()
+	r0, r1 := subject.Run(ctx, v)
+	if r1 == nil {
+		tb.Fatalf("Run succeeded; supply inputs it misses through " +
+			"ContractWithFixture")
+	}
+	{
+		var zero int64
+		testkit.Equal(tb, r0, zero,
+			"Run must return the zero value alongside an error")
+	}
 }
 
 // ContractOption configures a contract run.
@@ -272,7 +294,6 @@ func ContractWithFixture(f ContractFixture) ContractOption {
 func ContractSeed(fn func(ctx context.Context, subject appender.Contract) error) ContractOption {
 	return func(c *contractConfig) {
 		c.seed = fn
-		c.seedIsDerived = false
 	}
 }
 
@@ -340,10 +361,6 @@ type contractConfig struct {
 	withoutDouble bool
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject appender.Contract) error
-	// seedIsDerived is what lets a failed seed name the right culprit. The
-	// derived seed and a consumer's are the same field, and the advice for one
-	// is useless for the other.
-	seedIsDerived bool
 	without       map[string]struct{}
 	extensions    []contractContractExtension
 	onRun         []namedContractRunCheck
@@ -355,12 +372,6 @@ func newContractConfig(opts ...ContractOption) *contractConfig {
 		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
-	// Derived: Run is classified writer, so the interface
-	// populates itself and a reader has something to read.
-	c.seed = func(ctx context.Context, subject appender.Contract) error {
-		return subject.Run(ctx, c.Fixture.Key)
-	}
-	c.seedIsDerived = true
 	for _, o := range opts {
 		o(c)
 	}
@@ -386,13 +397,7 @@ func (c *contractConfig) subject(
 		// names them. A seed the caller supplied is theirs, and telling them to
 		// supply one is advice they already took.
 		if err := c.seed(tb.Context(), s); err != nil {
-			if c.seedIsDerived {
-				tb.Fatalf("seeding through Run failed: %v; "+
-					"supply a value it accepts through ContractWithFixture, or a "+
-					"whole seed through ContractSeed", err)
-			} else {
-				tb.Fatalf("the seed supplied through ContractSeed failed: %v", err)
-			}
+			tb.Fatalf("the seed supplied through ContractSeed failed: %v", err)
 		}
 	}
 	if wrap != nil {
@@ -428,4 +433,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6b40b0f413caadf2152aba8e21797108b1d929b15a585b5b3eb3c2912133a890
+// testkit:provenance 928cdea68bdb7f5e22df6b4b3a266031466c5cf7c7ce62b8bbbfe70588f69797

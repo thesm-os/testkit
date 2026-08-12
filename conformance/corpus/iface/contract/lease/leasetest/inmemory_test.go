@@ -30,7 +30,7 @@ func TestContractContract(t *testing.T) {
 			tb testing.TB, subject lease.Contract, key string,
 		) {
 			tb.Helper()
-			testkit.ErrorIs(tb, subject.Acquire(tb.Context(), key), leasetest.ErrHeld,
+			testkit.ErrorIs(tb, subject.Acquire(tb.Context(), key), lease.ErrHeld,
 				"a held lease is refused rather than granted twice")
 			testkit.NoError(tb, subject.Acquire(tb.Context(), key+"-free"),
 				"and a key nobody holds is still available")

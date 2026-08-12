@@ -28,9 +28,14 @@ import (
 type Mixed interface {
 	// Stream must reflect writes that preceded it. The law needs both a
 	// mutation and a stream, which a read-only interface cannot provide.
-	//testkit:mixin streamreflectsmutations
+	//testkit:mixin streamreflectsmutations mutate=Add delete=Remove
 	Stream(ctx context.Context) iter.Seq2[string, error]
 
 	// Add is the mutation the stream must reflect.
 	Add(ctx context.Context, item string) error
+
+	// Remove is the mutation's inverse, which the stream must also reflect —
+	// and the half that lets AUTO-STREAM-REFLECTS-MUTATIONS clean up after
+	// its own put.
+	Remove(ctx context.Context, item string) error
 }

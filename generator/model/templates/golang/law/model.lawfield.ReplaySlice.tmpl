@@ -1,0 +1,22 @@
+{{- /*
+The replay, adapted from the slice the method returns to the iterator the law
+drains. The partition key is ignored: this subject replays one chain, and the
+partition set below says so.
+*/ -}}
+{{- define "model.lawfield.ReplaySlice" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, _ string) {{ renderExpr (external "iter" "Seq2") }}[{{ renderType .Out }}, error] {
+			return func(yield func({{ renderType .Out }}, error) bool) {
+				entries, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+				if err != nil {
+					var zero {{ renderType .Out }}
+					yield(zero, err)
+					return
+				}
+				for _, e := range entries {
+					if !yield(e, nil) {
+						return
+					}
+				}
+			}
+		}
+{{- end -}}

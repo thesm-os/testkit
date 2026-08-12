@@ -26,12 +26,15 @@ type leaseState struct {
 //     does not change state.
 //   - Release on a held key succeeds (no error) and transitions to
 //     unheld.
-//   - Release on an unheld key fails with the configured free error
-//     and does not change state.
+//   - Release on an unheld key answers the configured free error and
+//     does not change state — or succeeds silently where freeErr is
+//     nil, the lenient dialect the LeaseTracker oracle speaks: giving
+//     up what was never taken is ordinary Go to a deferred caller.
 //
-// The partition key comes from model.OpInput.PartitionKey. heldErr
-// and freeErr are matched via errors.Is; either may be nil to mean
-// "any non-nil error counts."
+// The partition key comes from model.OpInput.PartitionKey. heldErr is
+// matched via errors.Is; nil means "any non-nil error counts". freeErr
+// nil selects the lenient release rather than an unnamed strict one,
+// because a dialect that refuses must be able to say how.
 func LeaseTable(heldErr, freeErr error) porcupine.Model {
 	return porcupine.Model{
 		Partition: partitionByKey,
@@ -57,6 +60,9 @@ func LeaseTable(heldErr, freeErr error) porcupine.Model {
 
 			case "Release":
 				if !s.held {
+					if freeErr == nil {
+						return r.Err == nil, s
+					}
 					return matchErr(r.Err, freeErr), s
 				}
 				if r.Err != nil {

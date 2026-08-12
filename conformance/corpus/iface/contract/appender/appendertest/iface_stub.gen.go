@@ -22,9 +22,10 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type ContractRunCall struct {
-	Ctx context.Context
-	Key string
-	Err error
+	Ctx    context.Context
+	V      appender.Value
+	Result int64
+	Err    error
 }
 
 // --- Per-method configuration ---
@@ -38,25 +39,26 @@ type ContractRunCall struct {
 type ContractRunStub struct {
 	*stub.MethodStub[ContractRunCall]
 
-	fn       func(context.Context, string) error
+	fn       func(context.Context, appender.Value) (int64, error)
 	fallback *ContractRunReturn
 }
 
 // ContractRunReturn holds the fixed answer configured through Returns.
 type ContractRunReturn struct {
-	Err error
+	Result int64
+	Err    error
 }
 
 // Returns pins a fixed result for every call to Run. A Func
 // override and an injected fault both take precedence over it.
-func (s *ContractRunStub) Returns(err error) *ContractRunStub {
-	s.fallback = &ContractRunReturn{Err: err}
+func (s *ContractRunStub) Returns(result int64, err error) *ContractRunStub {
+	s.fallback = &ContractRunReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Run, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractRunStub) Func(fn func(context.Context, string) error) *ContractRunStub {
+func (s *ContractRunStub) Func(fn func(context.Context, appender.Value) (int64, error)) *ContractRunStub {
 	s.fn = fn
 	return s
 }
@@ -119,7 +121,7 @@ func ContractStubBenchMode() ContractStubOption {
 // WithContractRun sets Run's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractRun(fn func(context.Context, string) error) ContractStubOption {
+func WithContractRun(fn func(context.Context, appender.Value) (int64, error)) ContractStubOption {
 	return func(s *ContractStub) { s.OnRun.Func(fn) }
 }
 
@@ -195,13 +197,13 @@ func (s *ContractStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractRunStub) invoke(ctx context.Context, key string) func() ContractRunReturn {
+func (s *ContractRunStub) invoke(ctx context.Context, v appender.Value) func() ContractRunReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() ContractRunReturn {
-		r0 := s.fn(ctx, key)
-		return ContractRunReturn{Err: r0}
+		r0, r1 := s.fn(ctx, v)
+		return ContractRunReturn{Result: r0, Err: r1}
 	}
 }
 
@@ -211,18 +213,19 @@ func (s *ContractRunStub) invoke(ctx context.Context, key string) func() Contrac
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Run(ctx context.Context, key string) error {
-	call := ContractRunCall{Ctx: ctx, Key: key}
+func (s *ContractStub) Run(ctx context.Context, v appender.Value) (int64, error) {
+	call := ContractRunCall{Ctx: ctx, V: v}
 	r := stub.Answer(s.OnRun.MethodStub, &call, stub.Arms[ContractRunCall, ContractRunReturn]{
-		Invoke:   s.OnRun.invoke(ctx, key),
+		Invoke:   s.OnRun.invoke(ctx, v),
 		Fallback: s.OnRun.fallback,
 		Fault:    func(err error) ContractRunReturn { return ContractRunReturn{Err: err} },
 		Stamp: func(c *ContractRunCall, r ContractRunReturn) {
+			c.Result = r.Result
 			c.Err = r.Err
 		},
 	})
-	return r.Err
+	return r.Result, r.Err
 }
 
 // testkit: end of generated content.
-// testkit:provenance 574debd4cc74a74063424f3b2da6ee9b0d6cb961728ad70561abcfc017875996
+// testkit:provenance ae7c91a1f718be0c2c9c3b7c07f946beb488b201106f8addb82cb34c28660c15

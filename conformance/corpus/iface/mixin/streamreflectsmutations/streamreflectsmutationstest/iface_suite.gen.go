@@ -30,6 +30,13 @@ type MixedStreamCheck func(tb testing.TB, subject streamreflectsmutations.Mixed)
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
 type MixedAddCheck func(tb testing.TB, subject streamreflectsmutations.Mixed, item string)
 
+// MixedRemoveCheck is one assertion about Remove.
+//
+// Every generated check for Remove is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type MixedRemoveCheck func(tb testing.TB, subject streamreflectsmutations.Mixed, item string)
+
 // MixedFixture holds every input the generated checks run against.
 //
 // Derived from each method's parameter names and types. Every field has a
@@ -58,12 +65,12 @@ func DefaultMixedFixture() MixedFixture {
 
 // AssertMixedContract runs every generated check against every declared subject.
 //
-//	Checks:   6 across 2 methods, per subject
+//	Checks:   10 across 3 methods, per subject
 //	Subjects: declare each with MixedSubject
 //	Double:   every subject runs a second time wrapped in MixedStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. MixedWithoutDouble declines it.
-//	Extend:   MixedOnStream, MixedOnAdd
+//	Extend:   MixedOnStream, MixedOnAdd, MixedOnRemove
 //	Drop:     MixedWithout, by the path each check reports under
 //
 // # What is checked somewhere else
@@ -73,7 +80,7 @@ func DefaultMixedFixture() MixedFixture {
 //
 //   - streamreader, on Stream
 //   - streamreflectsmutations, on Stream
-//   - writer, on Add
+//   - writer, on Add, Remove
 //
 // //testkit:model on the interface derives that reference, and the
 // MixedModel option it generates runs them here under "model".
@@ -141,6 +148,27 @@ func runMixedChecks(
 			})
 			for _, c := range cfg.onAdd {
 				cfg.run(t, "Add"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+				})
+			}
+		})
+
+		t.Run("Remove", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Remove/smoke", "smoke", func(tb testing.TB) {
+				AssertMixedRemoveSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Remove/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertMixedRemoveCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Remove/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertMixedRemoveHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			cfg.run(t, "Remove/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertMixedRemoveToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
+			})
+			for _, c := range cfg.onRemove {
+				cfg.run(t, "Remove"+"/"+c.name, c.name, func(tb testing.TB) {
 					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Item)
 				})
 			}
@@ -280,6 +308,81 @@ func AssertMixedAddToleratesNilContext(tb testing.TB, subject streamreflectsmuta
 	_ = subject.Add(ctx, item)
 }
 
+// AssertMixedRemoveSmoke asserts Remove survives a call with derived inputs.
+//
+// Fails when: Remove panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertMixedRemoveSmoke(tb testing.TB, subject streamreflectsmutations.Mixed, item string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Remove panicked on a derived value (%v); supply one it "+
+				"accepts through MixedWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_ = subject.Remove(ctx, item)
+}
+
+// AssertMixedRemoveCancels asserts Remove reports a cancelled context as cancelled.
+//
+// Fails when: Remove returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertMixedRemoveCancels(tb testing.TB, subject streamreflectsmutations.Mixed, item string) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	err := subject.Remove(ctx, item)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Remove must report a cancelled context as context.Canceled")
+}
+
+// AssertMixedRemoveHonoursDeadline asserts Remove reports an expired deadline as exceeded.
+//
+// Fails when: Remove returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertMixedRemoveHonoursDeadline(tb testing.TB, subject streamreflectsmutations.Mixed, item string) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	err := subject.Remove(ctx, item)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Remove must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertMixedRemoveToleratesNilContext asserts Remove does not panic on a nil context.
+//
+// Fails when: Remove panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertMixedRemoveToleratesNilContext(tb testing.TB, subject streamreflectsmutations.Mixed, item string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Remove panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_ = subject.Remove(ctx, item)
+}
+
 // MixedOption configures a contract run.
 type MixedOption func(*mixedConfig)
 
@@ -348,6 +451,13 @@ func MixedOnAdd(name string, fn MixedAddCheck) MixedOption {
 	}
 }
 
+// MixedOnRemove adds a named check to Remove.
+func MixedOnRemove(name string, fn MixedRemoveCheck) MixedOption {
+	return func(c *mixedConfig) {
+		c.onRemove = append(c.onRemove, namedMixedRemoveCheck{name, fn})
+	}
+}
+
 // MixedWithout drops generated checks by the path each reports under.
 //
 // For a subject that legitimately violates one. Without this the only recourse
@@ -369,6 +479,11 @@ type namedMixedStreamCheck struct {
 type namedMixedAddCheck struct {
 	name string
 	fn   MixedAddCheck
+}
+
+type namedMixedRemoveCheck struct {
+	name string
+	fn   MixedRemoveCheck
 }
 
 type namedMixedSubject struct {
@@ -418,6 +533,7 @@ type mixedConfig struct {
 	extensions    []mixedContractExtension
 	onStream      []namedMixedStreamCheck
 	onAdd         []namedMixedAddCheck
+	onRemove      []namedMixedRemoveCheck
 }
 
 func newMixedConfig(opts ...MixedOption) *mixedConfig {
@@ -499,4 +615,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 08120a02831b268474f7efc3560df533564faf254ffff6968e088ffb50049a5c
+// testkit:provenance a42a72773ab6c6ac078c215a5d588ebae046e4b8ee8750f8ba836d0c15e9593b

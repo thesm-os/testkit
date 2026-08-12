@@ -18,7 +18,7 @@ import (
 // Every generated check for Contract, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   4 checks
+//	Proved:   8 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -117,5 +117,95 @@ func TestAssertContractPutToleratesNilContextCanFail(t *testing.T) {
 		"and rejects it for the reason the check is about")
 }
 
+// TestAssertContractGetSmokeCanFail holds AssertContractGetSmoke to being able to fail.
+//
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func TestAssertContractGetSmokeCanFail(t *testing.T) {
+	t.Parallel()
+
+	subject := castest.NewContractStub(t,
+		castest.WithContractGet(func(context.Context) (cas.Value, error) {
+			panic("Contract.Get: violating the smoke check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a derived value",
+		func(tb testing.TB) {
+			tb.Helper()
+			castest.AssertContractGetSmoke(tb, subject)
+		})
+	testkit.Assert(t, got).Contains("panicked on a derived value",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractGetCancelsCanFail holds AssertContractGetCancels to being able to fail.
+//
+// The stand-in answers a cancelled context as though nothing were wrong. A
+// check that let that pass would report success for a subject doing work its
+// caller had already abandoned.
+func TestAssertContractGetCancelsCanFail(t *testing.T) {
+	t.Parallel()
+
+	subject := castest.NewContractStub(t,
+		castest.WithContractGet(func(context.Context) (cas.Value, error) {
+			var r0 cas.Value
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
+		func(tb testing.TB) {
+			tb.Helper()
+			castest.AssertContractGetCancels(tb, subject)
+		})
+	testkit.Assert(t, got).Contains("must report a cancelled context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractGetHonoursDeadlineCanFail holds AssertContractGetHonoursDeadline to being able to fail.
+//
+// The stand-in answers an expired deadline as though nothing were wrong. A
+// check that let that pass would report success for a subject that keeps
+// working past the point its caller stopped waiting.
+func TestAssertContractGetHonoursDeadlineCanFail(t *testing.T) {
+	t.Parallel()
+
+	subject := castest.NewContractStub(t,
+		castest.WithContractGet(func(context.Context) (cas.Value, error) {
+			var r0 cas.Value
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
+		func(tb testing.TB) {
+			tb.Helper()
+			castest.AssertContractGetHonoursDeadline(tb, subject)
+		})
+	testkit.Assert(t, got).Contains("must report an expired deadline",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractGetToleratesNilContextCanFail holds AssertContractGetToleratesNilContext to being able to fail.
+//
+// The stand-in panics rather than reporting. A check that let that pass would
+// leave a caller who forgot a context taking the process down instead of
+// getting an error back.
+func TestAssertContractGetToleratesNilContextCanFail(t *testing.T) {
+	t.Parallel()
+
+	subject := castest.NewContractStub(t,
+		castest.WithContractGet(func(context.Context) (cas.Value, error) {
+			panic("Contract.Get: violating the nil-context check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a nil context",
+		func(tb testing.TB) {
+			tb.Helper()
+			castest.AssertContractGetToleratesNilContext(tb, subject)
+		})
+	testkit.Assert(t, got).Contains("panicked on a nil context",
+		"and rejects it for the reason the check is about")
+}
+
 // testkit: end of generated content.
-// testkit:provenance 400f88b2878fc3409352a1173a94daa704e6f88a070dd5c09381028349fc27d6
+// testkit:provenance c5b38268294a427aaf70cda6f52554606db5a004cdc7fe9bd009e3521e68e298

@@ -73,6 +73,22 @@ func (s *InMemory) Run(ctx context.Context, key string) error {
 	return nil
 }
 
+// State reports the key's observed position: the start state for a key
+// nothing has run yet, because the observation collapses "not started" into
+// Draft — the first Run then reads as a self-transition, and the declared
+// table stays the whole observable relation.
+func (s *InMemory) State(ctx context.Context, key string) (string, error) {
+	if err := contextErr(ctx); err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if current := s.state[key]; current != Absent {
+		return current, nil
+	}
+	return Draft, nil
+}
+
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 //
 // Nil is not a legal context and reaches production anyway, through a caller

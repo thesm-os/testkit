@@ -21,7 +21,14 @@ import (
 // Every generated check for Store is a value of it, and so is one you
 // write — so they compose, reorder, and each runs standalone. testing.TB rather
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
-type MixedStoreCheck func(tb testing.TB, subject injectionsafe.Mixed, in string)
+type MixedStoreCheck func(tb testing.TB, subject injectionsafe.Mixed, key string, value string)
+
+// MixedLoadCheck is one assertion about Load.
+//
+// Every generated check for Load is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type MixedLoadCheck func(tb testing.TB, subject injectionsafe.Mixed, key string)
 
 // MixedFixture holds every input the generated checks run against.
 //
@@ -36,27 +43,31 @@ type MixedStoreCheck func(tb testing.TB, subject injectionsafe.Mixed, in string)
 // a value nobody could write. Supply one through MixedWithFixture
 // and the check a consumer writes has something to use.
 type MixedFixture struct {
-	In      string
-	InOther string
+	Key        string
+	KeyOther   string
+	Value      string
+	ValueOther string
 }
 
 // DefaultMixedFixture is what this run derived. Replace any field through
 // MixedWithFixture; the rest keep these values.
 func DefaultMixedFixture() MixedFixture {
 	return MixedFixture{
-		In:      "test-in",
-		InOther: "other-in",
+		Key:        "test-key",
+		KeyOther:   "other-key",
+		Value:      "test-value",
+		ValueOther: "other-value",
 	}
 }
 
 // AssertMixedContract runs every generated check against every declared subject.
 //
-//	Checks:   5 across 1 method, per subject
+//	Checks:   9 across 2 methods, per subject
 //	Subjects: declare each with MixedSubject
 //	Double:   every subject runs a second time wrapped in MixedStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. MixedWithoutDouble declines it.
-//	Extend:   MixedOnStore
+//	Extend:   MixedOnStore, MixedOnLoad
 //	Drop:     MixedWithout, by the path each check reports under
 //
 // # What is checked somewhere else
@@ -64,6 +75,7 @@ func DefaultMixedFixture() MixedFixture {
 // These need a reference implementation to compare against, which a suite run
 // has no way to build. Nothing here asserts them and nothing here should:
 //
+//   - compositewriter, on Store
 //   - injectionsafe, on Store
 //
 // //testkit:model on the interface derives that reference, and the
@@ -104,23 +116,44 @@ func runMixedChecks(
 		t.Run("Store", func(t *testing.T) {
 			t.Parallel()
 			cfg.run(t, "Store/smoke", "smoke", func(tb testing.TB) {
-				AssertMixedStoreSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.In)
+				AssertMixedStoreSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key, cfg.Fixture.Value)
 			})
 			cfg.run(t, "Store/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
-				AssertMixedStoreCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.In)
+				AssertMixedStoreCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key, cfg.Fixture.Value)
 			})
 			cfg.run(t, "Store/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
-				AssertMixedStoreHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.In)
+				AssertMixedStoreHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key, cfg.Fixture.Value)
 			})
 			cfg.run(t, "Store/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
-				AssertMixedStoreToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.In)
-			})
-			cfg.run(t, "Store/an error carries the zero value", "an error carries the zero value", func(tb testing.TB) {
-				AssertMixedStoreZeroOnError(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.InOther)
+				AssertMixedStoreToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key, cfg.Fixture.Value)
 			})
 			for _, c := range cfg.onStore {
 				cfg.run(t, "Store"+"/"+c.name, c.name, func(tb testing.TB) {
-					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.In)
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key, cfg.Fixture.Value)
+				})
+			}
+		})
+
+		t.Run("Load", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Load/smoke", "smoke", func(tb testing.TB) {
+				AssertMixedLoadSmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "Load/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertMixedLoadCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "Load/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertMixedLoadHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "Load/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertMixedLoadToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
+			})
+			cfg.run(t, "Load/an error carries the zero value", "an error carries the zero value", func(tb testing.TB) {
+				AssertMixedLoadZeroOnError(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.KeyOther)
+			})
+			for _, c := range cfg.onLoad {
+				cfg.run(t, "Load"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.Key)
 				})
 			}
 		})
@@ -154,7 +187,7 @@ func runMixedChecks(
 // Fails when: Store panics. The weakest check in this file and the one
 // that catches the most — a method that panics on a derived value is one no
 // other check here reaches.
-func AssertMixedStoreSmoke(tb testing.TB, subject injectionsafe.Mixed, in string) {
+func AssertMixedStoreSmoke(tb testing.TB, subject injectionsafe.Mixed, key string, value string) {
 	tb.Helper()
 	defer func() {
 		if r := recover(); r != nil {
@@ -163,7 +196,7 @@ func AssertMixedStoreSmoke(tb testing.TB, subject injectionsafe.Mixed, in string
 		}
 	}()
 	ctx := tb.Context()
-	_, _ = subject.Store(ctx, in)
+	_ = subject.Store(ctx, key, value)
 }
 
 // AssertMixedStoreCancels asserts Store reports a cancelled context as cancelled.
@@ -177,11 +210,11 @@ func AssertMixedStoreSmoke(tb testing.TB, subject injectionsafe.Mixed, in string
 // The error rather than merely its presence is what separates this from the
 // deadline check. Asserting only that something came back makes the two one
 // check written twice.
-func AssertMixedStoreCancels(tb testing.TB, subject injectionsafe.Mixed, in string) {
+func AssertMixedStoreCancels(tb testing.TB, subject injectionsafe.Mixed, key string, value string) {
 	tb.Helper()
 	ctx, cancel := context.WithCancel(tb.Context())
 	cancel()
-	_, err := subject.Store(ctx, in)
+	err := subject.Store(ctx, key, value)
 	testkit.ErrorIs(tb, err, context.Canceled,
 		"Store must report a cancelled context as context.Canceled")
 }
@@ -197,11 +230,11 @@ func AssertMixedStoreCancels(tb testing.TB, subject injectionsafe.Mixed, in stri
 // The deadline is the zero time, which is unconditionally in the past. No clock
 // is read: a generated check that consults the wall clock is one whose subject
 // is partly the machine it runs on.
-func AssertMixedStoreHonoursDeadline(tb testing.TB, subject injectionsafe.Mixed, in string) {
+func AssertMixedStoreHonoursDeadline(tb testing.TB, subject injectionsafe.Mixed, key string, value string) {
 	tb.Helper()
 	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
 	defer cancel()
-	_, err := subject.Store(ctx, in)
+	err := subject.Store(ctx, key, value)
 	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
 		"Store must report an expired deadline as context.DeadlineExceeded")
 }
@@ -212,7 +245,7 @@ func AssertMixedStoreHonoursDeadline(tb testing.TB, subject injectionsafe.Mixed,
 // succeeding is correct — a nil context reaches production through a caller
 // that forgot one, and a panic turns that into an outage rather than a failed
 // request.
-func AssertMixedStoreToleratesNilContext(tb testing.TB, subject injectionsafe.Mixed, in string) {
+func AssertMixedStoreToleratesNilContext(tb testing.TB, subject injectionsafe.Mixed, key string, value string) {
 	tb.Helper()
 	defer func() {
 		if r := recover(); r != nil {
@@ -221,26 +254,101 @@ func AssertMixedStoreToleratesNilContext(tb testing.TB, subject injectionsafe.Mi
 	}()
 	//nolint:staticcheck // passing nil is the check.
 	var ctx context.Context
-	_, _ = subject.Store(ctx, in)
+	_ = subject.Store(ctx, key, value)
 }
 
-// AssertMixedStoreZeroOnError asserts an error is accompanied by the zero value.
+// AssertMixedLoadSmoke asserts Load survives a call with derived inputs.
 //
-// Fails when: Store returns a non-zero result alongside a non-nil
+// Fails when: Load panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertMixedLoadSmoke(tb testing.TB, subject injectionsafe.Mixed, key string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Load panicked on a derived value (%v); supply one it "+
+				"accepts through MixedWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_, _ = subject.Load(ctx, key)
+}
+
+// AssertMixedLoadCancels asserts Load reports a cancelled context as cancelled.
+//
+// Fails when: Load returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertMixedLoadCancels(tb testing.TB, subject injectionsafe.Mixed, key string) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	_, err := subject.Load(ctx, key)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Load must report a cancelled context as context.Canceled")
+}
+
+// AssertMixedLoadHonoursDeadline asserts Load reports an expired deadline as exceeded.
+//
+// Fails when: Load returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertMixedLoadHonoursDeadline(tb testing.TB, subject injectionsafe.Mixed, key string) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	_, err := subject.Load(ctx, key)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Load must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertMixedLoadToleratesNilContext asserts Load does not panic on a nil context.
+//
+// Fails when: Load panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertMixedLoadToleratesNilContext(tb testing.TB, subject injectionsafe.Mixed, key string) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Load panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_, _ = subject.Load(ctx, key)
+}
+
+// AssertMixedLoadZeroOnError asserts an error is accompanied by the zero value.
+//
+// Fails when: Load returns a non-zero result alongside a non-nil
 // error. A caller who checks the error and a caller who checks the value must
 // not disagree about whether the call succeeded.
-func AssertMixedStoreZeroOnError(tb testing.TB, subject injectionsafe.Mixed, in string) {
+func AssertMixedLoadZeroOnError(tb testing.TB, subject injectionsafe.Mixed, key string) {
 	tb.Helper()
 	ctx := tb.Context()
-	r0, r1 := subject.Store(ctx, in)
+	r0, r1 := subject.Load(ctx, key)
 	if r1 == nil {
-		tb.Fatalf("Store succeeded; supply inputs it misses through " +
+		tb.Fatalf("Load succeeded; supply inputs it misses through " +
 			"MixedWithFixture")
 	}
 	{
 		var zero string
 		testkit.Equal(tb, r0, zero,
-			"Store must return the zero value alongside an error")
+			"Load must return the zero value alongside an error")
 	}
 }
 
@@ -294,6 +402,7 @@ func MixedWithFixture(f MixedFixture) MixedOption {
 func MixedSeed(fn func(ctx context.Context, subject injectionsafe.Mixed) error) MixedOption {
 	return func(c *mixedConfig) {
 		c.seed = fn
+		c.seedIsDerived = false
 	}
 }
 
@@ -301,6 +410,13 @@ func MixedSeed(fn func(ctx context.Context, subject injectionsafe.Mixed) error) 
 func MixedOnStore(name string, fn MixedStoreCheck) MixedOption {
 	return func(c *mixedConfig) {
 		c.onStore = append(c.onStore, namedMixedStoreCheck{name, fn})
+	}
+}
+
+// MixedOnLoad adds a named check to Load.
+func MixedOnLoad(name string, fn MixedLoadCheck) MixedOption {
+	return func(c *mixedConfig) {
+		c.onLoad = append(c.onLoad, namedMixedLoadCheck{name, fn})
 	}
 }
 
@@ -320,6 +436,11 @@ func MixedWithout(paths ...string) MixedOption {
 type namedMixedStoreCheck struct {
 	name string
 	fn   MixedStoreCheck
+}
+
+type namedMixedLoadCheck struct {
+	name string
+	fn   MixedLoadCheck
 }
 
 type namedMixedSubject struct {
@@ -361,9 +482,14 @@ type mixedConfig struct {
 	withoutDouble bool
 	clock         clock.Clock
 	seed          func(ctx context.Context, subject injectionsafe.Mixed) error
+	// seedIsDerived is what lets a failed seed name the right culprit. The
+	// derived seed and a consumer's are the same field, and the advice for one
+	// is useless for the other.
+	seedIsDerived bool
 	without       map[string]struct{}
 	extensions    []mixedContractExtension
 	onStore       []namedMixedStoreCheck
+	onLoad        []namedMixedLoadCheck
 }
 
 func newMixedConfig(opts ...MixedOption) *mixedConfig {
@@ -372,6 +498,12 @@ func newMixedConfig(opts ...MixedOption) *mixedConfig {
 		clock:   clock.RealClock(),
 		without: map[string]struct{}{},
 	}
+	// Derived: Store is classified writer, so the interface
+	// populates itself and a reader has something to read.
+	c.seed = func(ctx context.Context, subject injectionsafe.Mixed) error {
+		return subject.Store(ctx, c.Fixture.Key, c.Fixture.Value)
+	}
+	c.seedIsDerived = true
 	for _, o := range opts {
 		o(c)
 	}
@@ -397,7 +529,13 @@ func (c *mixedConfig) subject(
 		// names them. A seed the caller supplied is theirs, and telling them to
 		// supply one is advice they already took.
 		if err := c.seed(tb.Context(), s); err != nil {
-			tb.Fatalf("the seed supplied through MixedSeed failed: %v", err)
+			if c.seedIsDerived {
+				tb.Fatalf("seeding through Store failed: %v; "+
+					"supply a value it accepts through MixedWithFixture, or a "+
+					"whole seed through MixedSeed", err)
+			} else {
+				tb.Fatalf("the seed supplied through MixedSeed failed: %v", err)
+			}
 		}
 	}
 	if wrap != nil {
@@ -433,4 +571,4 @@ func (c *mixedConfig) run(t *testing.T, path, name string, fn func(tb testing.TB
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4a85fb36b14c9729dc476f34a94e7fcba07e69e031c8ec75a238e9c8283d9da4
+// testkit:provenance 37f2fc144cde3f34b44eeec6e21ea7533f269121707916b0a9124d8aed57abe0

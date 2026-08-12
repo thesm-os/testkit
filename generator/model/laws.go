@@ -4,24 +4,30 @@
 package model
 
 import (
+	"slices"
+	"strconv"
 	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/suite"
 	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // LawFieldKindPrefix composes each law field's emit kind —
-// `model.lawfield.<Name>` — which is the template that renders it.
+// `model.lawfield.<Shape>` — which is the template that renders it.
 //
-// Dispatch is on the field's name because the catalogue already asserts the
-// name is the concept: Values is always the value pool, Read is always the
-// observation the claim compares against. A field unique to one law gets its
-// own template under the same rule.
+// Dispatch is on the closure's shape, not the field's name: the catalogue
+// spells Read on a keyed store and Read on a version cell with one word, and
+// the two closures could not be less alike. The shape table below is the
+// transcription of each law struct's field types, held to the shipped structs
+// the same way the binding rows are — a wrong shape renders a closure that
+// fails to compile in whichever corpus package arms it.
 const LawFieldKindPrefix = "model.lawfield."
 
 // LawBinding is one law, instantiated and filled, in the generated registry.
@@ -38,7 +44,7 @@ type LawBinding struct {
 	Args []sdk.Ref
 	Ptr  bool
 
-	// Fields fill the struct, each through its name's template.
+	// Fields fill the struct, each through its shape's template.
 	Fields []*LawField
 }
 
@@ -49,7 +55,7 @@ func (*LawBinding) Kind() sdk.Kind { return "model.law" }
 type LawField struct {
 	sdk.BaseEmit
 
-	// KindName selects the field's template by its name.
+	// KindName selects the field's template by its closure shape.
 	KindName sdk.Kind
 
 	// Name is the struct field, for the composite literal.
@@ -60,8 +66,14 @@ type LawField struct {
 	Method   string
 	TakesCtx bool
 
-	// Iface, Key and Value spell the closure's parameter and result types.
+	// Iface, Key and Value spell the closure's parameter and result types at
+	// the pools' own types.
 	Iface, Key, Value sdk.Ref
+
+	// In and Out spell a closure's own types where they are not the pools':
+	// the domain a roundtrip draws, the offset an append answers, the state
+	// an observation returns.
+	In, Out sdk.Ref
 
 	// Pool names the shared local a generator field reuses, and KeyOfName the
 	// shared key projection a handle field reuses — the same values the
@@ -71,7 +83,18 @@ type LawField struct {
 
 	// Const is a constant field's qualified value — a sentinel the
 	// declaration stamped, rendered where a manifest names its stamp key.
+	// Lit is the literal form, for a numeric stamp like a bound.
 	Const *sdk.Expr
+	Lit   string
+
+	// KeyField names the fixture key a fixture-anchored closure reads or
+	// writes — the fixed key an idempotent composite write repeats, the key
+	// a keyed observation revisits.
+	KeyField string
+
+	// Pairs are the permitted transitions a workflow stamp declares, parsed
+	// from its `from>to` list.
+	Pairs [][2]string
 }
 
 // Kind returns the field's template key.
@@ -80,6 +103,124 @@ func (f *LawField) Kind() sdk.Kind { return f.KindName }
 // ModelPkg surfaces the runner's import path to the field templates, whose
 // closures take the runner's *T.
 func (*LawField) ModelPkg() string { return ModelPkg }
+
+// LawPool is one pool a law draws that the sequences do not: a wide input
+// domain for a stateless claim, the adversarial strings a safety claim needs.
+type LawPool struct {
+	// Name is the local the property declares; Q is the element's stamp
+	// spelling, so two laws asking for one name at two types are caught.
+	Name, Q string
+
+	// Elem is the drawn element type; Adversarial selects the hostile-string
+	// generator instead of the reflective one.
+	Elem        sdk.Ref
+	Adversarial bool
+}
+
+// The law-declared pool names.
+const (
+	poolInputs   = "inputs"
+	poolPayloads = "payloads"
+)
+
+// builtinString is the one builtin two pool declarations spell.
+const builtinString = "string"
+
+// lawShape names the closure a law field renders — the template dispatch.
+type lawShape string
+
+// The closure vocabulary, one per distinct field type across the law structs.
+const (
+	shapeKeyedRead  lawShape = "Read"        // func(rt, T, K) (V, error)
+	shapeValueOp    lawShape = "Write"       // func(rt, T, V) error
+	shapeDrainSlice lawShape = "Drain"       // func(rt, T) ([]V, error), slice role
+	shapeDrainSeq   lawShape = "DrainSeq"    // same field over an iterator role
+	shapeScalar     lawShape = "Scalar"      // func(rt, T) (R, error)
+	shapeScalarLen  lawShape = "ScalarLen"   // same, R = len of a returned slice
+	shapeBoolCall   lawShape = "BoolCall"    // func(rt, T) bool
+	shapeResultCall lawShape = "ResultCall"  // func(rt, T) R
+	shapeInputCall  lawShape = "InputCall"   // func(rt, T, X) (R, error)
+	shapeCtxOp      lawShape = "CtxOp"       // func(ctx, T) error
+	shapeErrOp      lawShape = "ErrOp"       // func(rt, T) error
+	shapeKeyedOp    lawShape = "KeyedOp"     // func(rt, T, K) error
+	shapeKVOp       lawShape = "KVOp"        // func(rt, T, k, v string) error
+	shapeSum        lawShape = "Sum"         // func(rt, T) int64
+	shapeMerge      lawShape = "Merge"       // func(rt, dst, src T) error
+	shapeSave       lawShape = "Save"        // func(rt, T, V) (K, error), K synthesized
+	shapeAppendOff  lawShape = "Append"      // func(rt, T, V) (Off, error)
+	shapeReplay     lawShape = "ReplaySlice" // func(rt, T, K) iter.Seq2[E, error]
+)
+
+// lawRoleShapes transcribes each rowed law's role-field closure types from
+// the engine structs — the second half of what the binding row transcribes.
+// A rowed law's role field missing here is a build refusal by name, never a
+// wrong guess.
+//
+// The field and role spellings this file repeats — each names one concept.
+const (
+	fRead    = "Read"
+	fWrite   = "Write"
+	fDrain   = "Drain"
+	fCall    = "Call"
+	fromSelf = "self"
+)
+
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var lawRoleShapes = map[string]map[string]lawShape{
+	lawid.Cacheable:             {fRead: shapeKeyedRead},
+	lawid.DefaultOnError:        {fRead: shapeKeyedRead},
+	lawid.DeleteReturnsNotFound: {fRead: shapeKeyedRead},
+	lawid.PointInTime:           {fRead: shapeKeyedRead},
+	lawid.ReadAfterWrite:        {fRead: shapeKeyedRead},
+	lawid.Sticky:                {fRead: shapeKeyedRead},
+	lawid.WriteObservable:       {fWrite: shapeValueOp, fRead: shapeKeyedRead},
+
+	lawid.StreamCompletion:   {fDrain: shapeDrainSlice},
+	lawid.StreamNoDuplicates: {fDrain: shapeDrainSlice},
+	lawid.StreamOverMatch:    {fDrain: shapeDrainSlice},
+	lawid.StreamPermutation:  {fDrain: shapeDrainSlice},
+	lawid.StreamReentrant:    {"Collect": shapeDrainSlice},
+	lawid.StreamStableOrder:  {fDrain: shapeDrainSlice},
+	lawid.StreamReflectsMutations: {
+		"Put":    shapeValueOp,
+		"Delete": shapeValueOp,
+		fDrain:   shapeDrainSlice,
+	},
+
+	lawid.AggregatorBounded:        {fRead: shapeScalar},
+	lawid.CountEqualsReference:     {"Count": shapeScalar},
+	lawid.LifecycleRespectsContext: {"Op": shapeCtxOp},
+	lawid.MonotonicNonDecreasing:   {fRead: shapeScalar},
+	lawid.PoisonIdempotentRead:     {"Probe": shapeErrOp},
+	lawid.PoisonNilOnFresh:         {"Probe": shapeErrOp},
+	lawid.PredicateConsistent:      {fCall: shapeBoolCall},
+	lawid.PureDeterministic:        {fCall: shapeResultCall},
+	lawid.TotalOver:                {fCall: shapeInputCall},
+
+	lawid.Associative:      {"Apply": shapeValueOp},
+	lawid.AtomicWrite:      {fWrite: shapeValueOp},
+	lawid.CommutativeWrite: {fWrite: shapeValueOp},
+	lawid.Conservative:     {fWrite: shapeValueOp, "Sum": shapeSum},
+	lawid.CRDTMerge:        {fWrite: shapeValueOp, "Merge": shapeMerge},
+	lawid.IdempotentWrite:  {fWrite: shapeValueOp},
+	lawid.InjectionSafe:    {"Store": shapeKVOp, "Load": shapeKeyedRead},
+	lawid.XSSSafe:          {"Render": shapeInputCall},
+
+	lawid.AppenderMonotonicOffsets: {"Append": shapeAppendOff},
+	lawid.CASAtomicOneWinner:       {"CAS": shapeValueOp, fRead: shapeScalar},
+	lawid.LeakFree:                 {"Open": shapeErrOp, "Close": shapeErrOp},
+	lawid.LeaseDoubleAcquireBlocks: {"Acquire": shapeKeyedOp, "Release": shapeKeyedOp},
+	lawid.PersisterRetrievable:     {"Save": shapeSave, fRead: shapeKeyedRead},
+	lawid.Roundtrip:                {"Forward": shapeInputCall, "Inverse": shapeInputCall},
+	lawid.LossyRoundtrip:           {"Forward": shapeInputCall, "Inverse": shapeInputCall},
+	lawid.UpdaterReplaces:          {"Update": shapeValueOp, fRead: shapeKeyedRead},
+	lawid.UpserterIdempotent:       {"Upsert": shapeValueOp, fRead: shapeKeyedRead},
+	lawid.ValidTransition:          {fWrite: shapeValueOp},
+
+	lawid.AppendOnlyGrows:          {"Replay": shapeReplay},
+	lawid.HashChainIntegrityVerify: {"Verify": shapeErrOp},
+	lawid.ReplayDeterministic:      {"Replay": shapeReplay},
+}
 
 // lawsOf selects and fills every law the interface's classifications earn.
 //
@@ -98,16 +239,35 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			claims[name] = true
 		}
 	}
+	// The derived adapter's inert arms: a law reaching one compares against
+	// a body answering zeros — and the companion drives the adapter as a
+	// full subject, where the lie becomes a red run on the reference itself.
+	inert := map[string]string{}
+	if b.Reference.Derived() {
+		for _, am := range b.Adapter {
+			if am.Op == "" {
+				inert[am.Sig.Name] = am.Reason
+			}
+		}
+	}
 	// One outcome per (law, selecting method): a contract classification
 	// rides every role method, and re-selecting the same rule from each
 	// would register one law twice and print one refusal per carrier.
 	seen := map[string]bool{}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
-		if _, partner := partners[m.Name]; partner {
+		if _, partner := partners[m.Name]; partner && len(m.Mixins) == 0 {
+			// A role-overridden partner — a validator, a tamper — carries no
+			// claim of its own and selects nothing. A partner that hosts its
+			// own mixin still voices it: the leakfree open half names itself,
+			// and excluding it from the sequences must not silence its law.
 			continue
 		}
-		for _, r := range tiers.Select(classificationsOf(m), paramsOf(m)) {
+		selectable := classificationsOf(m)
+		if _, partner := partners[m.Name]; partner {
+			selectable = m.Mixins
+		}
+		for _, r := range tiers.Select(selectable, paramsOf(harness, m)) {
 			if reason, negated := negatedBy(claims, r.Law); negated {
 				if !seen[r.Law+"\x00"+reason] {
 					seen[r.Law+"\x00"+reason] = true
@@ -116,7 +276,7 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 				continue
 			}
 			before := len(b.Unbound)
-			binding, ok := lawOf(b, harness, r, m, keyed)
+			binding, ok := lawOf(b, harness, r, m, keyed, inert)
 			if !ok {
 				// lawOf appended the refusal; keep it only if new.
 				added := b.Unbound[before:]
@@ -162,7 +322,13 @@ func negatedBy(claims map[string]bool, law string) (string, bool) {
 }
 
 // lawOf fills one rule, false where [Bindings.Unbound] records why not.
-func lawOf(b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.Method) (*LawBinding, bool) {
+func lawOf(
+	b *Bindings,
+	harness *suite.Contract,
+	r tiers.Rule,
+	m, keyed *suite.Method,
+	inert map[string]string,
+) (*LawBinding, bool) {
 	spec, specified := tiers.BindingFor(r.Law)
 	if !specified {
 		b.Unbound = append(b.Unbound, Skip{
@@ -182,30 +348,16 @@ func lawOf(b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.M
 		Args: []sdk.Ref{b.IfaceRef},
 	}
 	for _, a := range spec.Args {
-		switch a {
-		case tiers.BindKey:
-			if b.Keys.Type == nil {
-				b.Unbound = append(b.Unbound, Skip{
-					Method: r.Law,
-					Reason: "instantiates at a key type no method here draws",
-				})
-				return nil, false
-			}
-			lb.Args = append(lb.Args, b.Keys.Type)
-		case tiers.BindValue:
-			if b.Values.Type == nil {
-				b.Unbound = append(b.Unbound, Skip{
-					Method: r.Law,
-					Reason: "instantiates at a value type no method here draws",
-				})
-				return nil, false
-			}
-			lb.Args = append(lb.Args, b.Values.Type)
+		ref, reason := resolveArg(b, harness, r, a, m, keyed)
+		if reason != "" {
+			b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
+			return nil, false
 		}
+		lb.Args = append(lb.Args, ref)
 	}
 
 	for _, f := range r.Fields {
-		field, reason := lawFieldOf(b, harness, f, m, keyed)
+		field, reason := lawFieldOf(b, harness, r, f, m, keyed)
 		if reason != "" {
 			b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
 			return nil, false
@@ -214,15 +366,211 @@ func lawOf(b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.M
 			lb.Fields = append(lb.Fields, field)
 		}
 	}
+	for _, field := range lb.Fields {
+		if reason, held := inert[field.Method]; field.Method != "" && held {
+			b.Unbound = append(b.Unbound, Skip{
+				Method: r.Law,
+				Reason: field.Name + " reaches " + field.Method +
+					", which the derived reference answers inertly — " + reason,
+			})
+			return nil, false
+		}
+	}
 	return lb, true
+}
+
+// resolveArg lifts one binding-row argument into a renderable type.
+func resolveArg(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, a tiers.BindArg, m, keyed *suite.Method,
+) (sdk.Ref, string) {
+	switch a {
+	case tiers.BindKey:
+		if b.Keys.Type == nil {
+			return nil, "instantiates at a key type no method here draws"
+		}
+		return b.Keys.Type, ""
+	case tiers.BindValue:
+		if b.Values.Type == nil {
+			return nil, "instantiates at a value type no method here draws"
+		}
+		return b.Values.Type, ""
+	case tiers.BindObservation:
+		obs, reason := observationOf(b, harness, keyed)
+		if reason != "" {
+			return nil, reason
+		}
+		return obs.Out, ""
+	case tiers.BindPartition:
+		// The single anonymous partition, until a partition projection is
+		// declared and stamped.
+		return sdk.Builtin(builtinString), ""
+	}
+
+	form, fieldName, qualified := a.Qualifier()
+	if !qualified {
+		return nil, "instantiates through " + string(a) + ", which nothing resolves"
+	}
+	role, reason := ruleFieldRole(b, harness, r, fieldName, m, keyed)
+	if reason != "" {
+		return nil, reason
+	}
+	switch form {
+	case "result":
+		ref, _, why := resultType(role)
+		return ref, why
+	case "input":
+		if len(role.CallArgs()) == 0 {
+			return nil, "instantiates at " + role.Name + "'s input, and it takes none"
+		}
+		return role.CallArgs()[0].Type, ""
+	case "elem":
+		return drainedElem(b, role)
+	case "scalar":
+		ref, _, why := scalarType(role)
+		return ref, why
+	}
+	return nil, "instantiates through " + string(a) + ", which nothing resolves"
+}
+
+// ruleFieldRole resolves a binding argument's field reference to the method
+// that fills it — the same resolution the field itself gets.
+func ruleFieldRole(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, fieldName string, m, keyed *suite.Method,
+) (*suite.Method, string) {
+	for _, f := range r.Fields {
+		if f.Name != fieldName {
+			continue
+		}
+		if f.Kind != tiers.KindRole {
+			return nil, "instantiates through " + fieldName + ", which is not a role field"
+		}
+		role, reason := roleMethod(b, harness, f.From, m, keyed)
+		if reason != "" {
+			return nil, fieldName + " " + reason
+		}
+		return role, ""
+	}
+	return nil, "instantiates through " + fieldName + ", which the manifest does not name"
+}
+
+// resultType is a method's single non-error result.
+func resultType(m *suite.Method) (sdk.Ref, *golang.Return, string) {
+	results := make([]*golang.Return, 0, len(m.Returns))
+	for i := range m.Returns {
+		ret := &m.Returns[i]
+		if ret.Source != nil && golang.IsError(ret.Source) {
+			continue
+		}
+		results = append(results, ret)
+	}
+	if len(results) == 0 {
+		return nil, nil, "observes through " + m.Name + ", which answers nothing to observe"
+	}
+	if len(results) > 1 {
+		return nil, nil, "observes through " + m.Name +
+			", which answers several results no single-valued closure returns"
+	}
+	return results[0].Type, results[0], ""
+}
+
+// scalarType is a method's scalar observation: its single non-error result,
+// or the length of the slice it returns.
+func scalarType(m *suite.Method) (ref sdk.Ref, viaLen bool, reason string) {
+	if returnsSlice(m) {
+		return sdk.Builtin("int"), true, ""
+	}
+	r, _, why := resultType(m)
+	return r, false, why
+}
+
+// drainedElem is the element type of the stream a method drains — a slice's
+// element, or the stamped yield of an iterator.
+func drainedElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
+	if returnsSlice(m) {
+		return collectorElem(b, m)
+	}
+	q, stamped := shape.MetaValueType.Get(m.Source.Meta())
+	if !stamped || q == "" {
+		return nil, "drains " + m.Name + ", which streams elements no stamp names"
+	}
+	ref, err := golang.RefForQualified(q, b.IfaceName)
+	if err != nil {
+		return nil, "drains " + q + ", which no closure can spell: " + err.Error()
+	}
+	return ref, ""
+}
+
+// observation is the composed whole-state read the before/after laws share.
+type observation struct {
+	Method   *suite.Method
+	Out      sdk.Ref
+	Keyed    bool
+	TakesCtx bool
+}
+
+// observationOf derives the strongest whole-state observation the interface
+// offers: the drained collection, the aggregate, or a read of the fixture
+// key — in that order, because each earlier one sees strictly more.
+func observationOf(
+	b *Bindings,
+	harness *suite.Contract,
+	keyed *suite.Method,
+) (*observation, string) {
+	var agg, keyedReader *suite.Method
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		switch pseudoShape(m) {
+		case tiers.ShapeCollector:
+			elem, why := collectorElem(b, m)
+			if why != "" {
+				continue
+			}
+			return &observation{Method: m, Out: sdk.SliceOf(elem), TakesCtx: m.TakesContext()}, ""
+		case shapeAggregator:
+			if agg == nil && len(m.CallArgs()) == 0 {
+				if _, _, why := resultType(m); why == "" {
+					agg = m
+				}
+			}
+		case shapeReader:
+			if keyedReader == nil {
+				keyedReader = m
+			}
+		}
+	}
+	if agg != nil {
+		out, _, _ := resultType(agg)
+		return &observation{Method: agg, Out: out, TakesCtx: agg.TakesContext()}, ""
+	}
+	if keyedReader != nil && b.UsesKeys() && b.Keys.Field != "" {
+		out, _, why := resultType(keyedReader)
+		if why == "" {
+			return &observation{
+				Method: keyedReader, Out: out, Keyed: true, TakesCtx: keyedReader.TakesContext(),
+			}, ""
+		}
+	}
+	if keyed != nil && b.UsesKeys() && b.Keys.Field != "" {
+		out, _, why := resultType(keyed)
+		if why == "" {
+			return &observation{
+				Method:   keyed,
+				Out:      out,
+				Keyed:    true,
+				TakesCtx: keyed.TakesContext(),
+			}, ""
+		}
+	}
+	return nil, "observes state through no method here — no drain, no aggregate, no keyed read"
 }
 
 // lawFieldOf fills one manifest entry: a field, nil for one the law defaults,
 // or the reason nothing can fill it.
-func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *suite.Method) (*LawField, string) {
+func lawFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field, m, keyed *suite.Method,
+) (*LawField, string) {
 	field := &LawField{
 		BaseEmit: b.BaseEmit,
-		KindName: sdk.Kind(LawFieldKindPrefix + f.Name),
 		Name:     f.Name,
 		Iface:    b.IfaceRef,
 		Key:      b.Keys.Type,
@@ -247,125 +595,663 @@ func lawFieldOf(b *Bindings, harness *suite.Contract, f tiers.Field, m, keyed *s
 		}
 		return nil, f.Name + " waits on the " + f.From + " option, which no generated value can stand in for"
 	case tiers.KindRole:
-		role, reason := roleMethod(b, harness, f.From, m, keyed)
-		if reason != "" {
-			return nil, f.Name + " " + reason
-		}
-		if len(role.CallArgs()) > 1 {
-			// The role templates compose a single-input closure; a composite
-			// call would render with the wrong arity and fail in whichever
-			// package armed it.
-			return nil, f.Name + " closes over " + role.Name +
-				", which takes several inputs no single-value closure composes"
-		}
-		if (f.Name == "Drain" || f.Name == "Collect") && !returnsSlice(role) {
-			// The drain spelling returns the slice the method returns; an
-			// iterator-shaped method needs a collect loop this build does not
-			// compose.
-			return nil, f.Name + " drains " + role.Name +
-				", which streams through an iterator rather than returning a slice"
-		}
-		// The Read and Write closures are typed by the pools, so the role
-		// must be the shape the field's template spells at the pools' own
-		// types — a cacheable claim riding a zero-arg drain selects a law
-		// whose Read no closure over that drain can fill.
-		if reason := roleShapeMismatch(b, f.Name, role); reason != "" {
-			return nil, reason
-		}
-		field.Method = role.Name
-		field.TakesCtx = role.TakesContext()
-		if f.Name == "Drain" || f.Name == "Collect" {
-			// The drained element type, not the pool's: a collector's slice
-			// element is what the law compares, and the two agree by the
-			// reference derivation's own check.
-			if elem, err := collectorElem(b, role); err == "" {
-				field.Value = elem
-			}
-		}
-		return field, ""
+		return roleFieldOf(b, harness, r, f, field, m, keyed)
 	case tiers.KindConstant:
-		value, ok := stampValue(m, f.From)
-		if !ok {
-			return nil, f.Name + " reads the " + f.From + " stamp, which this declaration does not carry"
-		}
-		pkg, name, qualified := splitQualified(value)
-		if !qualified {
-			return nil, f.Name + "'s stamp names " + value + ", which carries no package to import it from"
-		}
-		field.Const = sdk.NewExternal(pkg, name)
-		return field, ""
+		return constFieldOf(harness, r, f, field, m)
 	case tiers.KindGenerator:
-		// The pool locals exist exactly where an action draws from them; a
-		// law reaching for one nothing declared is a compile error waiting.
-		if (f.From == poolKeys && !b.UsesKeys()) || (f.From == poolValues && !b.UsesValues()) {
-			return nil, f.Name + " draws from the " + f.From + " pool, which no action here declares"
-		}
-		field.Pool = f.From
-		return field, ""
+		return generatorFieldOf(b, harness, r, f, field, m, keyed)
 	case tiers.KindHandle:
-		if b.Reference.KeyField == "" {
-			return nil, f.Name + " needs the key projection, which was not derivable here"
-		}
-		field.KeyOfName = b.KeyOfName()
-		return field, ""
+		return handleFieldOf(b, harness, r, f, field, m, keyed)
 	}
 	return nil, f.Name + " has the unknown kind " + string(f.Kind)
 }
 
-// roleShapeMismatch holds a Read or Write role to the shape its template
-// spells: Read composes `(ctx, K) (V, error)` and Write `(ctx, V) error`,
-// each at the pools' types, so a role of another shape — or of the right
-// shape over other types — renders a closure that fails to compile in
-// whichever package arms it. Empty where the field carries no such contract.
-func roleShapeMismatch(b *Bindings, field string, role *suite.Method) string {
-	keyQ, _ := shape.MetaKeyType.Get(role.Source.Meta())
-	valueQ, _ := shape.MetaValueType.Get(role.Source.Meta())
-	switch field {
-	case "Read":
-		if pseudoShape(role) != shapeReader {
-			return field + " closes over " + role.Name + ", whose shape is " +
-				pseudoShape(role) + " rather than a keyed reader"
+// roleFieldOf fills a closure field per its law's transcribed shape.
+func roleFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	role, reason := roleMethod(b, harness, f.From, m, keyed)
+	if reason != "" {
+		return nil, f.Name + " " + reason
+	}
+	shapes, known := lawRoleShapes[r.Law]
+	sh, mapped := shapes[f.Name]
+	if !known || !mapped {
+		return nil, f.Name + " closes over " + role.Name +
+			", and the generator transcribes no closure shape for it"
+	}
+	field.Method = role.Name
+	field.TakesCtx = role.TakesContext()
+	field.KindName = sdk.Kind(LawFieldKindPrefix + string(sh))
+
+	switch sh {
+	case shapeDrainSeq, shapeScalarLen:
+		// Override spellings, never table entries: the slice arms below pick
+		// them when the role streams or the observation is a length.
+		return nil, f.Name + " names an override shape no table row spells"
+	case shapeKeyedRead:
+		if why := keyedReadMismatch(b, f.Name, role); why != "" {
+			return nil, why
 		}
-		if (b.Keys.Q != "" && keyQ != b.Keys.Q) || (b.Values.Q != "" && valueQ != b.Values.Q) {
-			return field + " closes over " + role.Name + ", which reads (" + keyQ +
-				" → " + valueQ + ") beside pools of (" + b.Keys.Q + ", " + b.Values.Q + ")"
+		// The closure is typed by the role itself — the pools agree where the
+		// mismatch check above demands it, and a reader whose value no pool
+		// draws (a cache, a persister's load) still compiles.
+		field.Key = role.CallArgs()[0].Type
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
 		}
-	case "Write":
-		if pseudoShape(role) != shapeWriter {
-			return field + " closes over " + role.Name + ", whose shape is " +
-				pseudoShape(role) + " rather than a value writer"
+		field.Value = out
+		return field, ""
+
+	case shapeValueOp:
+		return valueOpField(b, f, field, role)
+
+	case shapeDrainSlice:
+		elem, why := drainedElem(b, role)
+		if why != "" {
+			return nil, f.Name + " " + why
 		}
-		if b.Values.Q != "" && valueQ != b.Values.Q {
-			return field + " closes over " + role.Name + ", which takes " + valueQ +
-				" where the values pool draws " + b.Values.Q
+		field.Value = elem
+		if !returnsSlice(role) {
+			field.KindName = sdk.Kind(LawFieldKindPrefix + string(shapeDrainSeq))
+		}
+		return field, ""
+
+	case shapeScalar:
+		ref, viaLen, why := scalarType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs no nullary observation supplies"
+		}
+		field.Out = ref
+		switch {
+		case viaLen:
+			field.KindName = sdk.Kind(LawFieldKindPrefix + string(shapeScalarLen))
+		case !role.ReturnsError():
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "ScalarNoErr")
+		}
+		if r.Law == lawid.AggregatorBounded && !viaLen && !orderedScalar(role) {
+			return nil, f.Name + " observes " + role.Name +
+				"'s result, which no bound orders"
+		}
+		if r.Law == lawid.CountEqualsReference && identityCompared(role) {
+			return nil, f.Name + " observes " + role.Name +
+				"'s result, a live handle only identity could compare"
+		}
+		return field, ""
+
+	case shapeBoolCall:
+		if len(role.CallArgs()) > 0 || len(role.Returns) != 1 ||
+			role.Returns[0].Source == nil || !golang.IsBuiltinNamed(role.Returns[0].Source, "bool") {
+
+			return nil, f.Name + " closes over " + role.Name + ", which is not a bare predicate"
+		}
+		return field, ""
+
+	case shapeResultCall:
+		if len(role.CallArgs()) > 0 || role.ReturnsError() {
+			return nil, f.Name + " closes over " + role.Name + ", which is not a bare pure call"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Out = out
+		return field, ""
+
+	case shapeInputCall:
+		if len(role.CallArgs()) != 1 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes several inputs no single-value closure composes"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.In = role.CallArgs()[0].Type
+		field.Out = out
+		return field, ""
+
+	case shapeCtxOp:
+		if !role.TakesContext() || len(role.CallArgs()) > 0 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a context-respecting error operation"
+		}
+		return field, ""
+
+	case shapeErrOp:
+		if len(role.CallArgs()) > 0 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a nullary error operation"
+		}
+		return field, ""
+
+	case shapeKeyedOp:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which is not a keyed error operation"
+		}
+		if b.Keys.Q != "" {
+			if q, _ := shape.MetaKeyType.Get(role.Source.Meta()); q != "" && q != b.Keys.Q {
+				return nil, f.Name + " closes over " + role.Name +
+					", which keys on " + q + " beside a pool of " + b.Keys.Q
+			}
+		}
+		return field, ""
+
+	case shapeKVOp:
+		args := role.CallArgs()
+		if len(args) != 2 || !errOnly(role) || !stringParam(args[0]) || !stringParam(args[1]) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a string-keyed string write"
+		}
+		return field, ""
+
+	case shapeSum:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs no nullary observation supplies"
+		}
+		_, ret, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if ret.Source == nil || !integerResult(ret) {
+			return nil, f.Name + " observes " + role.Name + "'s result, which no sum totals"
+		}
+		return field, ""
+
+	case shapeMerge:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not merge one peer"
+		}
+		return field, ""
+
+	case shapeSave:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not save one value"
+		}
+		if b.Reference.KeyField == "" {
+			return nil, f.Name + " synthesizes the saved identity from the key projection, " +
+				"which was not derivable here"
+		}
+		field.KeyOfName = b.KeyOfName()
+		field.In = role.CallArgs()[0].Type
+		field.Out = b.Keys.Type
+		return field, ""
+
+	case shapeAppendOff:
+		if len(role.CallArgs()) != 1 {
+			return nil, f.Name + " closes over " + role.Name + ", which does not append one value"
+		}
+		out, ret, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if !integerResult(ret) {
+			return nil, f.Name + " expects an offset, and " + role.Name + " answers none"
+		}
+		field.In = role.CallArgs()[0].Type
+		field.Out = out
+		return field, ""
+
+	case shapeReplay:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs the single-partition replay does not thread"
+		}
+		elem, why := drainedElem(b, role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if !returnsSlice(role) {
+			return nil, f.Name + " drains " + role.Name +
+				", which streams through an iterator this adapter does not compose"
+		}
+		field.Out = elem
+		return field, ""
+	}
+	return nil, f.Name + " has the unrendered shape " + string(sh)
+}
+
+// valueOpField fills a single-value mutation closure: the role's one value
+// input, or a composite write anchored on the fixture key.
+func valueOpField(
+	b *Bindings,
+	f tiers.Field,
+	field *LawField,
+	role *suite.Method,
+) (*LawField, string) {
+	args := role.CallArgs()
+	switch {
+	case len(args) == 1:
+		field.In = args[0].Type
+		if !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which answers more than an error"
+		}
+		return field, ""
+	case len(args) == 2 && b.UsesKeys() && b.Keys.Field != "":
+		// A composite write anchored on the fixture key: the law repeats one
+		// (key, value) pair, which is its claim restricted to a key every
+		// other draw revisits.
+		q, _ := shape.MetaKeyType.Get(role.Source.Meta())
+		if q != "" && b.Keys.Q != "" && q != b.Keys.Q {
+			return nil, f.Name + " closes over " + role.Name +
+				", which keys on " + q + " beside a pool of " + b.Keys.Q
+		}
+		if !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which answers more than an error"
+		}
+		field.In = args[1].Type
+		field.KeyField = b.Keys.Field
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "WriteFixedKey")
+		b.LawsUseFixture = true
+		return field, ""
+	default:
+		return nil, f.Name + " closes over " + role.Name +
+			", which takes several inputs no single-value closure composes"
+	}
+}
+
+// constFieldOf fills a stamped constant: a qualified sentinel, a numeric
+// literal, or the workflow's transition list.
+func constFieldOf(
+	harness *suite.Contract, r tiers.Rule, f tiers.Field, field *LawField, m *suite.Method,
+) (*LawField, string) {
+	value, ok := stampValue(harness, m, f.From)
+	if !ok {
+		if f.Optional {
+			return nil, ""
+		}
+		return nil, f.Name + " reads the " + f.From + " stamp, which this declaration does not carry"
+	}
+
+	if r.Law == lawid.ValidTransition && f.Name == "Allowed" {
+		pairs, why := transitionPairs(value)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Pairs = pairs
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Transitions")
+		return field, ""
+	}
+
+	if pkg, name, qualified := splitQualified(value); qualified {
+		field.Const = sdk.NewExternal(pkg, name)
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Sentinel")
+		return field, ""
+	}
+	if _, err := strconv.ParseFloat(value, 64); err == nil {
+		field.Lit = value
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "ConstLit")
+		return field, ""
+	}
+	return nil, f.Name + "'s stamp names " + value +
+		", which is neither a qualified symbol nor a number"
+}
+
+// generatorFieldOf fills a pool field: the run's shared pools, or a
+// law-declared one for a domain the sequences never draw.
+func generatorFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	switch f.From {
+	case poolKeys:
+		if !b.UsesKeys() {
+			return nil, f.Name + " draws from the " + f.From + " pool, which no action here declares"
+		}
+		field.Pool = f.From
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Keys")
+		return field, ""
+	case poolValues:
+		if !b.UsesValues() {
+			return nil, f.Name + " draws from the " + f.From + " pool, which no action here declares"
+		}
+		field.Pool = f.From
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Values")
+		return field, ""
+	case poolInputs:
+		elem, q, why := lawInputElem(b, harness, r, m, keyed)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if reason := b.addLawPool(LawPool{Name: poolInputs, Q: q, Elem: elem}); reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.Pool = poolInputs
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
+		return field, ""
+	case poolPayloads:
+		if reason := b.addLawPool(LawPool{
+			Name: poolPayloads, Q: builtinString, Elem: sdk.Builtin(builtinString), Adversarial: true,
+		}); reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.Pool = poolPayloads
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
+		return field, ""
+	}
+	return nil, f.Name + " draws from the " + f.From + " pool, which this build does not compose"
+}
+
+// lawInputElem is the element type of a law's wide input pool: the first
+// role field's own input, which is the domain the stateless claim ranges
+// over.
+func lawInputElem(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.Method,
+) (sdk.Ref, string, string) {
+	for _, f := range r.Fields {
+		if f.Kind != tiers.KindRole {
+			continue
+		}
+		role, reason := roleMethod(b, harness, f.From, m, keyed)
+		if reason != "" || len(role.CallArgs()) == 0 {
+			continue
+		}
+		arg := role.CallArgs()[0]
+		return arg.Type, shape.QName(arg.Source), ""
+	}
+	return nil, "", "draws a domain no role here states"
+}
+
+// addLawPool registers a law-declared pool, refusing a second element type
+// under one name.
+func (b *Bindings) addLawPool(p LawPool) string {
+	for _, held := range b.LawPools {
+		if held.Name == p.Name {
+			if held.Q == p.Q {
+				return ""
+			}
+			return "draws " + p.Q + " from the " + p.Name + " pool, which already draws " + held.Q
 		}
 	}
+	b.LawPools = append(b.LawPools, p)
 	return ""
+}
+
+// handleFieldOf fills a handle the generated file constructs and shares.
+func handleFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	switch f.From {
+	case "key-projection":
+		if b.Reference.KeyField == "" {
+			return nil, f.Name + " needs the key projection, which was not derivable here"
+		}
+		field.KeyOfName = b.KeyOfName()
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "KeyOf")
+		return field, ""
+
+	case "identity-hash":
+		// Identity over the drained element: the hash argument is the value
+		// itself, so the closure needs only the element's type.
+		if elem, why := hashElem(b, harness, r, m, keyed); why == "" {
+			field.Value = elem
+		}
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Hash")
+		return field, ""
+
+	case "subject-factory":
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Factory")
+		return field, ""
+
+	case "natural-order":
+		role, reason := roleMethod(b, harness, fromSelf, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		if !orderedScalar(role) {
+			return nil, f.Name + " orders " + role.Name + "'s result, which the language does not"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Out = out
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Less")
+		return field, ""
+
+	case "observation":
+		obs, reason := observationOf(b, harness, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.Method = obs.Method.Name
+		field.TakesCtx = obs.TakesCtx
+		field.Out = obs.Out
+		if obs.Keyed {
+			field.KeyField = b.Keys.Field
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "ObserveKeyed")
+			b.LawsUseFixture = true
+		} else {
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "ObserveCall")
+		}
+		return field, ""
+
+	case "partitions":
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Partitions")
+		return field, ""
+
+	case "trace-classifier":
+		return nil, f.Name + " waits on the per-client trace classifier, " +
+			"which needs the version stamp eidos#25 brings and a multi-client runner"
+	case "clock":
+		return nil, f.Name + " waits on the aging-reference clock the isolation design brings"
+	case "history":
+		return nil, f.Name + " waits on an append-recording history hook the runner does not offer"
+	}
+	return nil, f.Name + " needs the " + f.From + " handle, which this build does not construct"
+}
+
+// hashElem resolves the identity hash's element: the drained element of the
+// same rule's Drain field where one exists, the values pool otherwise.
+func hashElem(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.Method,
+) (sdk.Ref, string) {
+	for _, f := range r.Fields {
+		if f.Kind != tiers.KindRole || (f.Name != "Drain" && f.Name != "Collect") {
+			continue
+		}
+		role, reason := roleMethod(b, harness, f.From, m, keyed)
+		if reason != "" {
+			return nil, reason
+		}
+		return drainedElem(b, role)
+	}
+	if b.Values.Type != nil {
+		return b.Values.Type, ""
+	}
+	return nil, "hashes a value type no method here draws"
+}
+
+// keyedReadMismatch holds a keyed-read role to the shape its template spells:
+// `(ctx, K) (V, error)` at the pools' own types, so a role of another shape —
+// or of the right shape over other types — renders a closure that fails to
+// compile in whichever package arms it.
+func keyedReadMismatch(b *Bindings, fieldName string, role *suite.Method) string {
+	keyQ, _ := shape.MetaKeyType.Get(role.Source.Meta())
+	valueQ, _ := shape.MetaValueType.Get(role.Source.Meta())
+	if pseudoShape(role) != shapeReader {
+		return fieldName + " closes over " + role.Name + ", whose shape is " +
+			pseudoShape(role) + " rather than a keyed reader"
+	}
+	if (b.Keys.Q != "" && keyQ != b.Keys.Q) || (b.Values.Q != "" && valueQ != b.Values.Q) {
+		return fieldName + " closes over " + role.Name + ", which reads (" + keyQ +
+			" → " + valueQ + ") beside pools of (" + b.Keys.Q + ", " + b.Values.Q + ")"
+	}
+	return ""
+}
+
+// errOnly reports whether the method returns exactly one error and nothing
+// else.
+func errOnly(m *suite.Method) bool {
+	return len(m.Returns) == 1 && m.Returns[0].Source != nil &&
+		golang.IsError(m.Returns[0].Source)
+}
+
+// stringParam reports whether the parameter is a bare string.
+func stringParam(p golang.Param) bool {
+	return p.Source != nil && golang.IsBuiltinNamed(p.Source, builtinString)
+}
+
+// integerResult reports whether the return slot is a builtin integer — the
+// shape an offset or a conserved sum totals.
+func integerResult(ret *golang.Return) bool {
+	if ret.Source == nil {
+		return false
+	}
+	for _, name := range builtinInts {
+		if golang.IsBuiltinNamed(ret.Source, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// builtinInts are the signed integer builtins a sum or an offset totals;
+// builtinOrdered is everything `<` orders.
+//
+//nolint:gochecknoglobals // vocabulary tables, read-only after init.
+var (
+	builtinInts    = []string{"int", "int8", "int16", "int32", "int64"}
+	builtinOrdered = append(append([]string{}, builtinInts...),
+		"uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", builtinString)
+)
+
+// identityCompared reports whether the method's first result is a live
+// handle — a channel, a function, a pointer — that `!=` compares by identity,
+// which two independently built sides never share.
+func identityCompared(m *suite.Method) bool {
+	if len(m.Returns) == 0 || m.Returns[0].Source == nil {
+		return false
+	}
+	src := m.Returns[0].Source
+	return golang.IsChannel(src) || src.IsFunc() || shape.GoPointerElem(src) != nil
+}
+
+// orderedScalar reports whether the method's single result is a type `<`
+// orders — the builtin integers, floats and string.
+func orderedScalar(m *suite.Method) bool {
+	_, ret, why := resultType(m)
+	if why != "" || ret.Source == nil {
+		return false
+	}
+	for _, name := range builtinOrdered {
+		if golang.IsBuiltinNamed(ret.Source, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// transitionPairs parses a workflow's `from>to[,from>to…]` stamp.
+func transitionPairs(value string) ([][2]string, string) {
+	var out [][2]string
+	for part := range strings.SplitSeq(value, ",") {
+		from, to, ok := strings.Cut(strings.TrimSpace(part), ">")
+		if !ok || from == "" || to == "" {
+			return nil, "reads " + value + ", which is not a from>to transition list"
+		}
+		out = append(out, [2]string{from, to})
+	}
+	return out, ""
 }
 
 // roleMethod resolves a manifest role to the method whose call fills it:
 // the selecting method itself, a shape family, or a partner the selecting
 // method's own stamp names.
-func roleMethod(b *Bindings, harness *suite.Contract, from string, m, keyed *suite.Method) (*suite.Method, string) {
+func roleMethod(
+	b *Bindings,
+	harness *suite.Contract,
+	from string,
+	m, keyed *suite.Method,
+) (*suite.Method, string) {
 	switch from {
-	case "self":
+	case fromSelf:
 		return m, ""
 	case "family.reader":
 		if keyed == nil {
 			return nil, "names the reader family, and the interface has no keyed reader"
 		}
 		return keyed, ""
+	case "family.writer":
+		if harness != nil {
+			var fallback *suite.Method
+			for i := range harness.Methods {
+				candidate := &harness.Methods[i]
+				if pseudoShape(candidate) != shapeWriter {
+					continue
+				}
+				// The family's writer is the values pool's own feeder: a
+				// peer-merging method is writer-shaped too, and a law fed by
+				// one writes values no pool ever draws.
+				if q, _ := shape.MetaValueType.Get(candidate.Source.Meta()); q == b.Values.Q {
+					return candidate, ""
+				}
+				if fallback == nil {
+					fallback = candidate
+				}
+			}
+			if b.Values.Q == "" && fallback != nil {
+				return fallback, ""
+			}
+		}
+		return nil, "names the writer family, and the interface has no value writer feeding the pool"
+	case "family.aggregator":
+		if harness != nil {
+			for i := range harness.Methods {
+				candidate := &harness.Methods[i]
+				if pseudoShape(candidate) == shapeAggregator && len(candidate.CallArgs()) == 0 {
+					return candidate, ""
+				}
+			}
+		}
+		return nil, "names the aggregator family, and the interface has no aggregate"
+	case "family.cell":
+		if harness != nil {
+			for i := range harness.Methods {
+				candidate := &harness.Methods[i]
+				if candidate.Name == m.Name || len(candidate.CallArgs()) > 0 {
+					continue
+				}
+				if _, _, why := resultType(candidate); why == "" {
+					return candidate, ""
+				}
+			}
+		}
+		return nil, "names the cell family, and the interface has no nullary read"
 	}
-	if mixin, param, ok := strings.Cut(from, "."); ok && !strings.HasPrefix(from, "family.") {
-		v, stamped := shape.MixinParamKey(mixin, param).Get(m.Source.Meta())
-		if !stamped || v == "" {
-			return nil, "names " + from + ", which the selecting method does not stamp"
+	if owner, param, ok := strings.Cut(from, "."); ok && !strings.HasPrefix(from, "family.") {
+		// A mixin's sibling parameter first — `deleteremoves.read` names the
+		// method its stamp points at.
+		v, stamped := shape.MixinParamKey(owner, param).Get(m.Source.Meta())
+		if stamped && v != "" {
+			role := methodOf(harness, golang.LocalName(v))
+			if role == nil {
+				return nil, "names " + from + " = " + v + ", which is not a method of " + b.IfaceName
+			}
+			return role, ""
 		}
-		role := methodOf(harness, golang.LocalName(v))
-		if role == nil {
-			return nil, "names " + from + " = " + v + ", which is not a method of " + b.IfaceName
+		// Then a contract role: the selecting method fills it itself, or its
+		// directive's partner key names the sibling that does.
+		if held, ownRole := shape.ContractRoleKey(owner).Get(m.Source.Meta()); ownRole && held == param {
+			return m, ""
 		}
-		return role, ""
+		partner, named := shape.ContractPartnerKey(owner, param).Get(m.Source.Meta())
+		if named && partner != "" {
+			role := methodOf(harness, golang.LocalName(partner))
+			if role == nil {
+				return nil, "names " + from + " = " + partner + ", which is not a method of " + b.IfaceName
+			}
+			return role, ""
+		}
+		return nil, "names " + from + ", which the selecting method does not stamp"
 	}
 	return nil, "names " + from + ", which nothing resolves"
 }
@@ -376,12 +1262,39 @@ func returnsSlice(m *suite.Method) bool {
 		shape.GoSliceElem(m.Returns[0].Source) != nil
 }
 
-// stampValue reads one classification parameter off the selecting method, by
-// the raw key the manifest spells — the annotator's own composition, reached
-// through the registry rather than respelled.
-func stampValue(m *suite.Method, key string) (string, bool) {
-	v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(m.Source.Meta())
-	return v, ok && v != ""
+// stampValue reads one classification parameter, by the raw key the manifest
+// spells — off the selecting method first, and for a contract parameter off
+// every carrier of the same contract, because the stamp lives on the
+// directive host and any role method may be the one selecting the rule.
+func stampValue(harness *suite.Contract, m *suite.Method, key string) (string, bool) {
+	if v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(m.Source.Meta()); ok && v != "" {
+		return v, true
+	}
+	contract, isContract := contractOfParamKey(key)
+	if !isContract || harness == nil {
+		return "", false
+	}
+	for i := range harness.Methods {
+		carrier := &harness.Methods[i]
+		if !slices.Contains(carrier.Contracts, contract) {
+			continue
+		}
+		if v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(carrier.Source.Meta()); ok && v != "" {
+			return v, true
+		}
+	}
+	return "", false
+}
+
+// contractOfParamKey extracts the contract a param stamp key belongs to,
+// false for a mixin's.
+func contractOfParamKey(key string) (string, bool) {
+	rest, found := strings.CutPrefix(key, "shape.contract.")
+	if !found {
+		return "", false
+	}
+	name, _, ok := strings.Cut(rest, ".param.")
+	return name, ok && name != ""
 }
 
 // splitQualified splits a resolver-qualified name into its package path and
@@ -406,13 +1319,31 @@ func classificationsOf(m *suite.Method) []string {
 }
 
 // paramsOf collects the classification parameters the When clauses condition
-// on, keyed the way [tiers.Condition.Param] spells them.
-func paramsOf(m *suite.Method) map[string]string {
+// on, keyed the way [tiers.Condition.Param] spells them — the mixin params off
+// the method, the contract params off every carrier of the same contract,
+// because a contract's parameter speaks for the protocol and lives on the
+// directive host: the codec's fidelity is stamped on the forward role, and a
+// rule selected from the inverse conditions on it all the same.
+func paramsOf(harness *suite.Contract, m *suite.Method) map[string]string {
 	out := map[string]string{}
 	for _, name := range m.Mixins {
 		for _, p := range mixinParamNames(name) {
 			if v, ok := shape.MixinParamKey(name, p).Get(m.Source.Meta()); ok {
 				out[shape.MixinParamKey(name, p).Name()] = v
+			}
+		}
+	}
+	for _, name := range m.Contracts {
+		for _, p := range contractParamNames(name) {
+			for i := range harness.Methods {
+				carrier := &harness.Methods[i]
+				if !slices.Contains(carrier.Contracts, name) {
+					continue
+				}
+				v, held := shape.ContractParamKey(name, p).Get(carrier.Source.Meta())
+				if held && v != "" {
+					out[shape.ContractParamKey(name, p).Name()] = v
+				}
 			}
 		}
 	}
@@ -425,6 +1356,16 @@ func mixinParamNames(name string) []string {
 	for _, mx := range mixins.All() {
 		if mx.Name == name {
 			return mx.Params
+		}
+	}
+	return nil
+}
+
+// contractParamNames returns the named contract's declared parameters.
+func contractParamNames(name string) []string {
+	for _, c := range contracts.All() {
+		if c.Name == name {
+			return c.Params
 		}
 	}
 	return nil

@@ -1,0 +1,8 @@
+{{- /*
+A bare pure call: one result, no error to thread.
+*/ -}}
+{{- define "model.lawfield.ResultCall" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) {{ renderType .Out }} {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

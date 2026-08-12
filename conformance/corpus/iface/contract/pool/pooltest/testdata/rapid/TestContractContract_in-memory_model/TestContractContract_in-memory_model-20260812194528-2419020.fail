@@ -1,0 +1,7 @@
+# 2026/08/12 19:45:28.222198 [TestContractContract/in-memory/model] [invariant] AUTO-COUNT-EQUALS-REFERENCE at step 0: CountEqualsReference: SUT err=pooltest: nothing left in the pool, ref err=pooltest: nothing left in the pool
+#   invariant: AUTO-COUNT-EQUALS-REFERENCE
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} free:[] inUse:0}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} free:[] inUse:0}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
+# 
+v0.4.8#6490191468189102146

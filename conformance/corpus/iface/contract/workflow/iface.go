@@ -27,4 +27,8 @@ type Contract interface {
 	// that names its partners.
 	//testkit:contract workflow role=fn transitions=Draft>Live
 	Run(ctx context.Context, key string) error
+
+	// State reports the key's position in the machine — the observation
+	// AUTO-VALID-TRANSITION compares before and after each Run.
+	State(ctx context.Context, key string) (string, error)
 }

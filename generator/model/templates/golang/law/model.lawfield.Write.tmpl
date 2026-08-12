@@ -2,7 +2,7 @@
 Write is the claim's own act: the role method called with a drawn value.
 */ -}}
 {{- define "model.lawfield.Write" -}}
-Write: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .Value }}) error {
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .In }}) error {
 			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
 		}
 {{- end -}}

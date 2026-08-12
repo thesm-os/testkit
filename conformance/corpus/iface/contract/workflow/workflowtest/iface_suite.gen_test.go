@@ -17,7 +17,7 @@ import (
 // Every generated check for Contract, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   4 checks
+//	Proved:   9 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -116,5 +116,123 @@ func TestAssertContractRunToleratesNilContextCanFail(t *testing.T) {
 		"and rejects it for the reason the check is about")
 }
 
+// TestAssertContractStateSmokeCanFail holds AssertContractStateSmoke to being able to fail.
+//
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func TestAssertContractStateSmokeCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := workflowtest.DefaultContractFixture()
+	subject := workflowtest.NewContractStub(t,
+		workflowtest.WithContractState(func(context.Context, string) (string, error) {
+			panic("Contract.State: violating the smoke check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a derived value",
+		func(tb testing.TB) {
+			tb.Helper()
+			workflowtest.AssertContractStateSmoke(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("panicked on a derived value",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractStateCancelsCanFail holds AssertContractStateCancels to being able to fail.
+//
+// The stand-in answers a cancelled context as though nothing were wrong. A
+// check that let that pass would report success for a subject doing work its
+// caller had already abandoned.
+func TestAssertContractStateCancelsCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := workflowtest.DefaultContractFixture()
+	subject := workflowtest.NewContractStub(t,
+		workflowtest.WithContractState(func(context.Context, string) (string, error) {
+			var r0 string
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
+		func(tb testing.TB) {
+			tb.Helper()
+			workflowtest.AssertContractStateCancels(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("must report a cancelled context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractStateHonoursDeadlineCanFail holds AssertContractStateHonoursDeadline to being able to fail.
+//
+// The stand-in answers an expired deadline as though nothing were wrong. A
+// check that let that pass would report success for a subject that keeps
+// working past the point its caller stopped waiting.
+func TestAssertContractStateHonoursDeadlineCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := workflowtest.DefaultContractFixture()
+	subject := workflowtest.NewContractStub(t,
+		workflowtest.WithContractState(func(context.Context, string) (string, error) {
+			var r0 string
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
+		func(tb testing.TB) {
+			tb.Helper()
+			workflowtest.AssertContractStateHonoursDeadline(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("must report an expired deadline",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractStateToleratesNilContextCanFail holds AssertContractStateToleratesNilContext to being able to fail.
+//
+// The stand-in panics rather than reporting. A check that let that pass would
+// leave a caller who forgot a context taking the process down instead of
+// getting an error back.
+func TestAssertContractStateToleratesNilContextCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := workflowtest.DefaultContractFixture()
+	subject := workflowtest.NewContractStub(t,
+		workflowtest.WithContractState(func(context.Context, string) (string, error) {
+			panic("Contract.State: violating the nil-context check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a nil context",
+		func(tb testing.TB) {
+			tb.Helper()
+			workflowtest.AssertContractStateToleratesNilContext(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("panicked on a nil context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractStateZeroOnErrorCanFail holds AssertContractStateZeroOnError to being able to fail.
+//
+// The stand-in succeeds for the input the check chose so it would miss. A check
+// that let that pass would never reach the comparison it exists to make, and
+// would report success without having compared anything.
+func TestAssertContractStateZeroOnErrorCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := workflowtest.DefaultContractFixture()
+	subject := workflowtest.NewContractStub(t,
+		workflowtest.WithContractState(func(context.Context, string) (string, error) {
+			var r0 string
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that succeeds for an input it should miss",
+		func(tb testing.TB) {
+			tb.Helper()
+			workflowtest.AssertContractStateZeroOnError(tb, subject, fixture.KeyOther)
+		})
+	testkit.Assert(t, got).Contains("supply inputs it misses",
+		"and rejects it for the reason the check is about")
+}
+
 // testkit: end of generated content.
-// testkit:provenance c75ad9e7d78bfeb40058d66e37a2a42aa79e9ddfd0ff87c47577e230e37ad0bd
+// testkit:provenance a38bb968a692670bebd28a38fe90600fb8893bfb95ed32f93658c1ea00e6c969

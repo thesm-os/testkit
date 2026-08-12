@@ -1,0 +1,13 @@
+{{- /*
+The conserved quantity, totalled. An observation that cannot be made is a
+loud failure, not a zero the comparison would read as real.
+*/ -}}
+{{- define "model.lawfield.Sum" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) int64 {
+			v, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			if err != nil {
+				rt.Fatalf("{{ .Name }} observation failed: %v", err)
+			}
+			return int64(v)
+		}
+{{- end -}}

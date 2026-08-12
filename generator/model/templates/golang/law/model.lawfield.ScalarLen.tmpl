@@ -1,0 +1,10 @@
+{{- /*
+The scalar observation of a slice-returning method is its length — which is
+exactly what a bound over a listing states.
+*/ -}}
+{{- define "model.lawfield.ScalarLen" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) (int, error) {
+			items, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			return len(items), err
+		}
+{{- end -}}

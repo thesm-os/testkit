@@ -23,6 +23,19 @@ import (
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
 type ContractPutCheck func(tb testing.TB, subject cas.Contract, v cas.Value)
 
+// ContractGetCheck is one assertion about Get.
+//
+// Every generated check for Get is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+//
+// Get returns a value beside its error and takes nothing to vary, so no
+// "an error carries the zero value" check is generated for it. That check reaches
+// the failure it is about by choosing an input that misses, and this signature
+// offers none — a generated one could only demand failure from a correct
+// implementation. Write it here against a subject this package can break.
+type ContractGetCheck func(tb testing.TB, subject cas.Contract)
+
 // ContractFixture holds every input the generated checks run against.
 //
 // Derived from each method's parameter names and types. Every field has a
@@ -44,19 +57,19 @@ type ContractFixture struct {
 // ContractWithFixture; the rest keep these values.
 func DefaultContractFixture() ContractFixture {
 	return ContractFixture{
-		V:      cas.Value{Key: "test-key", Body: "test-body"},
-		VOther: cas.Value{Key: "other-key", Body: "other-body"},
+		V:      cas.Value{Body: "test-body", Version: 42},
+		VOther: cas.Value{Body: "other-body", Version: 7},
 	}
 }
 
 // AssertContractContract runs every generated check against every declared subject.
 //
-//	Checks:   4 across 1 method, per subject
+//	Checks:   8 across 2 methods, per subject
 //	Subjects: declare each with ContractSubject
 //	Double:   every subject runs a second time wrapped in ContractStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. ContractWithoutDouble declines it.
-//	Extend:   ContractOnPut
+//	Extend:   ContractOnPut, ContractOnGet
 //	Drop:     ContractWithout, by the path each check reports under
 //
 // # What is checked somewhere else
@@ -66,6 +79,7 @@ func DefaultContractFixture() ContractFixture {
 //
 //   - writer, on Put
 //   - cas, on Put
+//   - aggregator, on Get
 //
 // //testkit:model on the interface derives that reference, and the
 // ContractModel option it generates runs them here under "model".
@@ -119,6 +133,27 @@ func runContractChecks(
 			for _, c := range cfg.onPut {
 				cfg.run(t, "Put"+"/"+c.name, c.name, func(tb testing.TB) {
 					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+				})
+			}
+		})
+
+		t.Run("Get", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Get/smoke", "smoke", func(tb testing.TB) {
+				AssertContractGetSmoke(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Get/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertContractGetCancels(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Get/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertContractGetHonoursDeadline(tb, cfg.subject(tb, factory, wrap))
+			})
+			cfg.run(t, "Get/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertContractGetToleratesNilContext(tb, cfg.subject(tb, factory, wrap))
+			})
+			for _, c := range cfg.onGet {
+				cfg.run(t, "Get"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap))
 				})
 			}
 		})
@@ -222,6 +257,81 @@ func AssertContractPutToleratesNilContext(tb testing.TB, subject cas.Contract, v
 	_ = subject.Put(ctx, v)
 }
 
+// AssertContractGetSmoke asserts Get survives a call with derived inputs.
+//
+// Fails when: Get panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertContractGetSmoke(tb testing.TB, subject cas.Contract) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Get panicked on a derived value (%v); supply one it "+
+				"accepts through ContractWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_, _ = subject.Get(ctx)
+}
+
+// AssertContractGetCancels asserts Get reports a cancelled context as cancelled.
+//
+// Fails when: Get returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertContractGetCancels(tb testing.TB, subject cas.Contract) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	_, err := subject.Get(ctx)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Get must report a cancelled context as context.Canceled")
+}
+
+// AssertContractGetHonoursDeadline asserts Get reports an expired deadline as exceeded.
+//
+// Fails when: Get returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertContractGetHonoursDeadline(tb testing.TB, subject cas.Contract) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	_, err := subject.Get(ctx)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Get must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertContractGetToleratesNilContext asserts Get does not panic on a nil context.
+//
+// Fails when: Get panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertContractGetToleratesNilContext(tb testing.TB, subject cas.Contract) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Get panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_, _ = subject.Get(ctx)
+}
+
 // ContractOption configures a contract run.
 type ContractOption func(*contractConfig)
 
@@ -283,6 +393,13 @@ func ContractOnPut(name string, fn ContractPutCheck) ContractOption {
 	}
 }
 
+// ContractOnGet adds a named check to Get.
+func ContractOnGet(name string, fn ContractGetCheck) ContractOption {
+	return func(c *contractConfig) {
+		c.onGet = append(c.onGet, namedContractGetCheck{name, fn})
+	}
+}
+
 // ContractWithout drops generated checks by the path each reports under.
 //
 // For a subject that legitimately violates one. Without this the only recourse
@@ -299,6 +416,11 @@ func ContractWithout(paths ...string) ContractOption {
 type namedContractPutCheck struct {
 	name string
 	fn   ContractPutCheck
+}
+
+type namedContractGetCheck struct {
+	name string
+	fn   ContractGetCheck
 }
 
 type namedContractSubject struct {
@@ -347,6 +469,7 @@ type contractConfig struct {
 	without       map[string]struct{}
 	extensions    []contractContractExtension
 	onPut         []namedContractPutCheck
+	onGet         []namedContractGetCheck
 }
 
 func newContractConfig(opts ...ContractOption) *contractConfig {
@@ -428,4 +551,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance 62ba403ce7078be220e449ac96d5e5ce4f69c7b505837b528e1b0c6bac33e5de
+// testkit:provenance f6290e3da9710e1ea86fbd68bfdd4c88e33d07aeb3944535782e8102881c2f5e

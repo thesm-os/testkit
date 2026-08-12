@@ -11,6 +11,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/model"
 )
 
 // TestLawSelection walks the one law the corpus fixture's classifications
@@ -39,10 +40,10 @@ func TestLawSelection(t *testing.T) {
 		"KeyOf reuses the projection the reference is keyed on")
 }
 
-// TestUnboundLawIsReported holds the miss to visibility: a selected law the
-// catalogue cannot instantiate is named in the header with what it waits on,
-// never silently absent from the registry.
-func TestUnboundLawIsReported(t *testing.T) {
+// TestIteratorStreamLawsBind pins the iterator adaptation: a streamreader
+// drains through a collect loop rather than refusing, so its two laws bind at
+// the stamped element type — the wall the audit's register carried, closed.
+func TestIteratorStreamLawsBind(t *testing.T) {
 	t.Parallel()
 
 	s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
@@ -55,19 +56,18 @@ func TestUnboundLawIsReported(t *testing.T) {
 	stampShape(s, "List", "streamreader", "", "example.com/validates.Payload")
 	b := bindingsOf(t, s)
 
-	testkit.Equal(t, len(b.Laws), 1, "the writer's law still binds")
-
-	// The streamreader's laws select and refuse: List streams through an
-	// iterator, and the drain spelling returns a slice. Selected-and-refused
-	// is a header line; selected-and-miscompiled would be a consumer's build.
-	unbound := map[string]string{}
-	for _, u := range b.Unbound {
-		unbound[u.Method] = u.Reason
+	bound := map[string]*model.LawBinding{}
+	for _, l := range b.Laws {
+		bound[l.ID] = l
 	}
-	testkit.Assert(t, unbound[lawid.StreamCompletion]).Contains("iterator",
-		"the drain names what it cannot yet consume")
-	testkit.Assert(t, unbound[lawid.StreamReentrant]).Contains("iterator",
-		"and so does the reentrancy claim")
+	testkit.True(t, bound[lawid.WriteObservable] != nil, "the writer's law still binds")
+	completion := bound[lawid.StreamCompletion]
+	testkit.True(t, completion != nil, "the drain law binds over the iterator")
+	if completion != nil {
+		testkit.Equal(t, string(completion.Fields[0].Kind()), "model.lawfield.DrainSeq",
+			"through the collect-loop template, not the slice spelling")
+	}
+	testkit.True(t, bound[lawid.StreamReentrant] != nil, "and so does the reentrancy claim")
 }
 
 // TestNoReaderWriterPairAtAll covers the other half of the twin floor: a

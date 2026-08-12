@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.10.1"
+const Version = "0.12.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -122,6 +122,12 @@ func directives() []sdk.DirectiveSchema {
 	}
 }
 
+// keyFieldConventions are the field names read as a value's identity, in
+// preference order — the upsert inference's one convention.
+//
+//nolint:gochecknoglobals // a vocabulary table, read-only after init.
+var keyFieldConventions = []string{"ID", "Key"}
+
 // Bindings is the value queued once per interface carrying the directive.
 type Bindings struct {
 	sdk.BaseEmit
@@ -172,6 +178,13 @@ type Bindings struct {
 	Laws    []*LawBinding
 	Unbound []Skip
 
+	// LawPools are the pools the laws declare beyond the shared pair: a wide
+	// input domain for a stateless claim, the adversarial strings a safety
+	// claim needs. LawsUseFixture marks a law closure anchored on a fixture
+	// key, which obliges the property to construct the fixture.
+	LawPools       []LawPool
+	LawsUseFixture bool
+
 	// ConcReader and ConcWriter are the actions the concurrent leg drives
 	// against the Porcupine keyed-store model, both nil where the leg does
 	// not derive. They point into Actions, so the closures the two legs
@@ -180,6 +193,13 @@ type Bindings struct {
 
 	// PkgName is where Layout routed the file — see [Bindings.SetOutputPackages].
 	PkgName string
+
+	// contractKeySrc is the contract-oracle role method whose argument is the
+	// store's key domain, and contractKeyedRoles the role methods that draw
+	// it — a lease's acquire and release take the key, and a reader-less
+	// keyed contract would otherwise never declare the pool its laws draw.
+	contractKeySrc     *suite.Method
+	contractKeyedRoles map[string]bool
 }
 
 // Kind returns [KindBindings].
@@ -233,10 +253,10 @@ func (*Bindings) RefPkg() string { return RefPkg }
 func (*Bindings) TierName() string { return TierName }
 
 // NeedsFixture reports whether anything in the property reads the fixture —
-// a pool, or a multi-argument writer's per-position pairs. An unused local
-// is a compile error in a generated file.
+// a pool, a fixture-anchored law closure, or a multi-argument writer's
+// per-position pairs. An unused local is a compile error in a generated file.
 func (b *Bindings) NeedsFixture() bool {
-	if b.UsesKeys() || b.UsesValues() {
+	if b.UsesKeys() || b.UsesValues() || b.LawsUseFixture {
 		return true
 	}
 	for _, a := range b.Actions {
@@ -332,6 +352,14 @@ type Reference struct {
 	ContractArg   sdk.Ref
 	CtorErrs      []CtorErr
 
+	// CtorFns are ref-package functions instantiated at ContractArg and
+	// called with nothing, rendered before the error slots — the oracle's
+	// own semantics choices, like the chain's default hash. VersionField is
+	// the value field the version= stamp names; when set, the constructor's
+	// first argument is the generated projection of it.
+	CtorFns      []string
+	VersionField string
+
 	// KeyField is the field of the value type the map oracle keys on, empty
 	// for the keyed oracle, whose key is an argument.
 	KeyField string
@@ -358,7 +386,14 @@ const (
 
 // CtorErr is one error argument of a contract oracle's constructor. Name is
 // the generated sentinel's identifier, empty where the slot renders nil.
-type CtorErr struct{ Name, Msg string }
+type CtorErr struct {
+	// Name is the minted sentinel's identifier, empty where the slot is nil
+	// or the declaration stamped one. Sym is the stamped sentinel — the
+	// declaration's own error, which gives the oracle and the bound law one
+	// identity to agree on.
+	Name, Msg string
+	Sym       *sdk.Expr
+}
 
 // Supplied reports that the directive named the reference.
 func (r Reference) Supplied() bool { return r.SuppliedCtor != nil }
@@ -475,7 +510,10 @@ type AdapterMethod struct {
 	Sig *golang.Sig
 
 	// Op is the oracle method the body forwards to, empty for an inert body.
-	Op string
+	// Collect marks an op that streams through an iterator while the method
+	// answers a slice, so the body drains rather than returning the call.
+	Op      string
+	Collect bool
 
 	// Reason says why an inert body is inert, for the comment above it.
 	Reason string
@@ -758,12 +796,23 @@ func bindingsOf(
 		}
 		b.Actions = kept
 	}
+	// A keyed contract's roles draw keys — an acquire's argument is the
+	// lease's key — and the actions were composed before the derivation
+	// could say so.
+	for _, a := range b.Actions {
+		if b.contractKeyedRoles[a.Method] && a.Shape == shapeWriter {
+			a.Pool = poolKeys
+		}
+	}
 	// The oracle derivation sees only the canonical reader and writer; the
 	// pools serve every drawing action, so their sources widen to the
 	// fallbacks where the canonical shapes are absent.
 	keySrc, valueSrc := keyed, valued
 	if keySrc == nil {
 		keySrc = keyFallback
+	}
+	if keySrc == nil {
+		keySrc = b.contractKeySrc
 	}
 	if valueSrc == nil && composite == nil {
 		valueSrc = valueFallback
@@ -1159,16 +1208,45 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 				continue
 			}
 
+			if spec.VersionParam != "" {
+				field, stamped := stampValue(harness, carrier,
+					shape.ContractParamKey(contract, spec.VersionParam).Name())
+				if !stamped {
+					// The cell cannot guard what nothing names; the twins
+					// stand in and the header's floor says so.
+					continue
+				}
+				names.VersionField = field
+			}
+			names.CtorFns = spec.CtorFns
 			names.Oracle = OracleContract
 			names.ContractStore = spec.Store
 			names.ContractName = contract
 			names.ContractArg = arg
+			if !spec.TypeArgResult {
+				// The store's type argument is a role argument, so the roles
+				// draw keys: record the source for the pool derivation and
+				// the methods whose actions draw from it.
+				b.contractKeySrc = src
+				b.contractKeyedRoles = map[string]bool{}
+				for _, rm := range roles {
+					b.contractKeyedRoles[rm.Name] = true
+				}
+			}
 			lower := strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:]
 			minted := false
 			for _, e := range spec.Errs {
 				ce := CtorErr{Msg: e.Msg}
 				if e.Suffix != "" && !roleClaims(roles[e.Role], e.NilUnder) {
-					ce.Name = lower + "Model" + e.Suffix
+					// The declaration's own sentinel where one is stamped —
+					// the bound law compares identities, and an oracle
+					// disagreeing under a different spelling of the same
+					// state would fail every correct subject.
+					if sym, stamped := stampedSentinel(harness, carrier, contract, e.Param); stamped {
+						ce.Sym = sym
+					} else {
+						ce.Name = lower + "Model" + e.Suffix
+					}
 					minted = true
 				}
 				names.CtorErrs = append(names.CtorErrs, ce)
@@ -1189,18 +1267,43 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 	return false, ""
 }
 
+// stampedSentinel resolves a contract error's declared sentinel, false where
+// the parameter is unnamed or unstamped.
+func stampedSentinel(
+	harness *suite.Contract, carrier *suite.Method, contract, param string,
+) (*sdk.Expr, bool) {
+	if param == "" {
+		return nil, false
+	}
+	v, ok := stampValue(harness, carrier, shape.ContractParamKey(contract, param).Name())
+	if !ok {
+		return nil, false
+	}
+	pkg, name, qualified := splitQualified(v)
+	if !qualified {
+		return nil, false
+	}
+	return sdk.NewExternal(pkg, name), true
+}
+
 // roleClaims reports whether the role's method carries the named mixin — the
 // stamp that flips a constructor sentinel to the oracle's lenient nil.
 func roleClaims(m *suite.Method, mixin string) bool {
 	return m != nil && mixin != "" && slices.Contains(m.Mixins, mixin)
 }
 
-// contractRoleMethods resolves the named contract's roles to methods: the
-// carrier fills its stamped role, and each partner key names a sibling.
+// contractRoleMethods resolves the named contract's roles to methods: every
+// method filling a role by its own stamp, plus each partner key the carrier
+// names. Both walks, because a protocol splits its directives — the chain
+// stamps append on one method and verify on another, and reading only the
+// carrier's would leave a role the interface plainly fills unresolved.
 func contractRoleMethods(harness *suite.Contract, carrier *suite.Method, contract string) map[string]*suite.Method {
 	out := map[string]*suite.Method{}
-	if role, ok := shape.ContractRoleKey(contract).Get(carrier.Source.Meta()); ok && role != "" {
-		out[role] = carrier
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		if role, ok := shape.ContractRoleKey(contract).Get(m.Source.Meta()); ok && role != "" {
+			out[role] = m
+		}
 	}
 	for _, role := range tiers.ContractRoles(contract) {
 		v, ok := shape.ContractPartnerKey(contract, role).Get(carrier.Source.Meta())
@@ -1215,33 +1318,42 @@ func contractRoleMethods(harness *suite.Contract, carrier *suite.Method, contrac
 }
 
 // contractAdapterOf builds the role-stamped delegation table: a method
-// filling a role forwards to the role's op, and everything else is inert —
-// the contract oracle models its own vocabulary and nothing beside it.
+// filling a role forwards to the role's op, a non-role method whose shape
+// the spec's ShapeOps claim forwards likewise — the cell's read is no role
+// the cas contract declares — and everything else is inert.
 func contractAdapterOf(
 	harness *suite.Contract,
 	partners map[string]string,
 	contract string,
 	roles map[string]*suite.Method,
 ) []AdapterMethod {
+	spec, _ := tiers.ContractStore(contract)
 	opOf := map[string]string{}
+	drains := map[string]bool{}
 	for role, m := range roles {
 		if op, ok := tiers.ContractRoleOp(contract, role); ok {
 			opOf[m.Name] = op
+			drains[m.Name] = tiers.ContractRoleDrains(contract, role)
 		}
 	}
 	out := make([]AdapterMethod, 0, len(harness.Methods))
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		am := AdapterMethod{Sig: m.Sig}
+		op := opOf[m.Name]
+		if op == "" {
+			op = spec.ShapeOps[pseudoShape(m)]
+		}
 		switch role, partner := partners[m.Name]; {
 		case partner:
 			am.Reason = role
 		case !m.TakesContext():
 			am.Reason = "it takes no context to forward to the oracle"
-		case opOf[m.Name] == "":
+		case op == "":
 			am.Reason = "the " + contract + " oracle models only its roles"
 		default:
-			am.Op = opOf[m.Name]
+			am.Op = op
+			am.Collect = drains[m.Name]
 		}
 		out = append(out, am)
 	}
@@ -1259,7 +1371,7 @@ func upsertKeyField(ctx *sdk.GeneratorContext, b *Bindings, valueQ string) (stri
 		if cand.Package+"."+cand.Name != valueQ {
 			continue
 		}
-		for _, preferred := range []string{"ID", "Key"} {
+		for _, preferred := range keyFieldConventions {
 			for _, f := range cand.Fields {
 				if f.Name != preferred {
 					continue
@@ -1306,7 +1418,7 @@ func keyFieldOf(ctx *sdk.GeneratorContext, valueQ, keyQ string) (string, string)
 	case 1:
 		return candidates[0], ""
 	}
-	for _, preferred := range []string{"ID", "Key"} {
+	for _, preferred := range keyFieldConventions {
 		for _, cand := range candidates {
 			if cand == preferred {
 				return cand, ""
@@ -1567,7 +1679,7 @@ func unmakeable(ctx *sdk.GeneratorContext, typeQ string, seen map[string]bool) s
 //
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var scalarKinds = map[string]bool{
-	"bool": true, "string": true, "byte": true, "rune": true,
+	"bool": true, builtinString: true, "byte": true, "rune": true,
 	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"uintptr": true, "float32": true, "float64": true,

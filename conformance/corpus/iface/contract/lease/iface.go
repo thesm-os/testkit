@@ -11,10 +11,15 @@ package lease
 
 import (
 	"context"
+	"errors"
 )
 
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
+
+// ErrHeld is what Acquire reports when the lease is standing — the contract's
+// own sentinel, declared beside the shape so the directive can name it.
+var ErrHeld = errors.New("lease: the lease is already held")
 
 // Contract is the fixture interface.
 //
@@ -25,7 +30,7 @@ type Value struct{ Key, Body string }
 type Contract interface {
 	// Acquire is the lease contract's acquire role, and hosts the directive
 	// that names its partners.
-	//testkit:contract lease role=acquire release=Release
+	//testkit:contract lease role=acquire release=Release held=ErrHeld
 	Acquire(ctx context.Context, key string) error
 
 	// Release is the lease contract's release role.

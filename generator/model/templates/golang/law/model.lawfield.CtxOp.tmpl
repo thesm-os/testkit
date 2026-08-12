@@ -1,0 +1,9 @@
+{{- /*
+The context-respecting operation: the law drives the context itself, so the
+closure forwards the one it is given rather than the run's.
+*/ -}}
+{{- define "model.lawfield.CtxOp" -}}
+{{ .Name }}: func(ctx {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) error {
+			return s.{{ .Method }}(ctx)
+		}
+{{- end -}}

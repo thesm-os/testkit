@@ -248,36 +248,46 @@ func (StreamReflectsMutations[T, V, H]) ID() string { return lawid.StreamReflect
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (StreamReflectsMutations[T, V, H]) REQID() string { return "" }
 
-// contains reports whether a drain of the stream includes the hash
-// of v.
-func (l StreamReflectsMutations[T, V, H]) contains(rt *rapid.T, sut T, v V) (bool, error) {
+// count reports how many drained elements hash equal to v.
+//
+// A count rather than a membership test, because the stream may lawfully
+// hold copies the run put there earlier: presence after a delete proves
+// nothing when a stranger's copy remains, and absence would be a claim about
+// their copy rather than this Check's own.
+func (l StreamReflectsMutations[T, V, H]) count(rt *rapid.T, sut T, v V) (int, error) {
 	items, err := l.Drain(rt, sut)
 	if err != nil {
-		return false, err
+		return 0, err
 	}
 	h := l.Hash(v)
+	n := 0
 	for _, it := range items {
 		if l.Hash(it) == h {
-			return true, nil
+			n++
 		}
 	}
-	return false, nil
+	return n, nil
 }
 
-// Check puts a value and verifies the stream contains it; when
-// Delete is supplied, deletes it and verifies the stream no longer
-// does.
+// Check puts a value and verifies the stream gained a copy; when Delete is
+// supplied, deletes it and verifies the stream returned to the count it held
+// before the put.
 func (l StreamReflectsMutations[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	v := l.Values.Draw(rt, "StreamReflectsMutations_value")
-	if err := l.Put(rt, sut, v); err != nil {
+	before, err := l.count(rt, sut, v)
+	if err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
-	found, err := l.contains(rt, sut, v)
+	if putErr := l.Put(rt, sut, v); putErr != nil {
+		return nil //nolint:nilerr // precondition failed; law vacuously holds
+	}
+	after, err := l.count(rt, sut, v)
 	if err != nil {
 		return fmt.Errorf("StreamReflectsMutations: drain after put errored: %w", err)
 	}
-	if !found {
-		return fmt.Errorf("StreamReflectsMutations: value %v not in stream after put", v)
+	if after <= before {
+		return fmt.Errorf("StreamReflectsMutations: value %v not in stream after put (%d → %d copies)",
+			v, before, after)
 	}
 	if l.Delete == nil {
 		return nil
@@ -285,12 +295,13 @@ func (l StreamReflectsMutations[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	if delErr := l.Delete(rt, sut, v); delErr != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
-	found, err = l.contains(rt, sut, v)
+	restored, err := l.count(rt, sut, v)
 	if err != nil {
 		return fmt.Errorf("StreamReflectsMutations: drain after delete errored: %w", err)
 	}
-	if found {
-		return fmt.Errorf("StreamReflectsMutations: value %v still in stream after delete", v)
+	if restored != before {
+		return fmt.Errorf("StreamReflectsMutations: value %v: delete did not restore the count (%d → %d)",
+			v, before, restored)
 	}
 	return nil
 }

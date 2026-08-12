@@ -1,0 +1,8 @@
+{{- /*
+A nullary scalar observation: the count, the version, the cell.
+*/ -}}
+{{- define "model.lawfield.Scalar" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

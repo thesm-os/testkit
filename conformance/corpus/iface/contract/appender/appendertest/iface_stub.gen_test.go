@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender/appendertest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
@@ -32,27 +33,28 @@ func contractStubRunSubject(tb testing.TB) stub.Subject[appendertest.ContractRun
 		Stub: s.OnRun.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			var a1 string
-			_ = s.Run(a0, a1)
+			var a1 appender.Value
+			_, _ = s.Run(a0, a1)
 		},
 		Result: func() appendertest.ContractRunReturn {
 			var a0 context.Context
-			var a1 string
-			got0 := s.Run(a0, a1)
-			return appendertest.ContractRunReturn{Err: got0}
+			var a1 appender.Value
+			got0, got1 := s.Run(a0, a1)
+			return appendertest.ContractRunReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnRun.Func(func(_ context.Context, _ string) error {
+			s.OnRun.Func(func(_ context.Context, _ appender.Value) (int64, error) {
 				mark()
-				var z0 error
-				return z0
+				var z0 int64
+				var z1 error
+				return z0, z1
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
-			var a1 string
-			r0 := s.Run(a0, a1)
-			return r0
+			var a1 appender.Value
+			_, r1 := s.Run(a0, a1)
+			return r1
 		},
 	}
 }
@@ -71,12 +73,14 @@ func TestContractStubRun(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := appendertest.NewContractStub(t)
-		var want0 error
-		s.OnRun.Returns(want0)
+		var want0 int64
+		var want1 error
+		s.OnRun.Returns(want0, want1)
 		var a0 context.Context
-		var a1 string
-		got0 := s.Run(a0, a1)
+		var a1 appender.Value
+		got0, got1 := s.Run(a0, a1)
 		testkit.Equal(t, got0, want0, "Run must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Run must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -85,11 +89,11 @@ func TestContractStubRun(t *testing.T) {
 		// most needs the log to surface.
 		s := appendertest.NewContractStub(t)
 		var a0 context.Context
-		var a1 string
-		_ = s.Run(a0, a1)
+		var a1 appender.Value
+		_, _ = s.Run(a0, a1)
 		got := s.OnRun.AssertCalledOnce(t, "Run must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.V, a1, "the recorded call carries V")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -101,23 +105,24 @@ func TestContractStubRun(t *testing.T) {
 		var seen []appendertest.ContractRunCall
 		s.OnRun.OnRecord(func(c appendertest.ContractRunCall) { seen = append(seen, c) })
 		var a0 context.Context
-		var a1 string
-		_ = s.Run(a0, a1)
-		_ = s.Run(a0, a1)
+		var a1 appender.Value
+		_, _ = s.Run(a0, a1)
+		_, _ = s.Run(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Run call")
 	})
 
 	t.Run("wires WithContractRun at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := appendertest.NewContractStub(t, appendertest.WithContractRun(func(_ context.Context, _ string) error {
+		s := appendertest.NewContractStub(t, appendertest.WithContractRun(func(_ context.Context, _ appender.Value) (int64, error) {
 			called = true
-			var z0 error
-			return z0
+			var z0 int64
+			var z1 error
+			return z0, z1
 		}))
 		var a0 context.Context
-		var a1 string
-		_ = s.Run(a0, a1)
+		var a1 appender.Value
+		_, _ = s.Run(a0, a1)
 		testkit.True(t, called, "WithContractRun must install the override")
 	})
 
@@ -127,14 +132,16 @@ func TestContractStubRun(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := appendertest.NewContractStub(t)
-		var want0 error
-		s.OnRun.Returns(want0)
+		var want0 int64
+		var want1 error
+		s.OnRun.Returns(want0, want1)
 		var a0 context.Context
-		var a1 string
-		_ = s.Run(a0, a1)
+		var a1 appender.Value
+		_, _ = s.Run(a0, a1)
 		s.ResetCalls()
-		got0 := s.Run(a0, a1)
+		got0, got1 := s.Run(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
 }
 
@@ -150,8 +157,8 @@ func contractStubDouble() stub.Double[appendertest.ContractRunCall] {
 			Stub: s.OnRun.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				var a1 string
-				_ = s.Run(a0, a1)
+				var a1 appender.Value
+				_, _ = s.Run(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -197,8 +204,8 @@ func TestContractStubDelegateTo(t *testing.T) {
 
 	t.Run("forwards Run to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		var a1 string
-		_ = s.Run(a0, a1)
+		var a1 appender.Value
+		_, _ = s.Run(a0, a1)
 		inner.OnRun.AssertCalledOnce(t, "Run must reach the wrapped implementation")
 	})
 
@@ -209,11 +216,11 @@ func TestContractStubDelegateTo(t *testing.T) {
 		want := testkit.TestError("Run-delegate")
 		inner.OnRun.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		var a1 string
-		r0 := s.Run(a0, a1)
-		testkit.ErrorIs(t, r0, want, "Run must surface the wrapped answer")
+		var a1 appender.Value
+		_, r1 := s.Run(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Run must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance d1dd1d604c578a3e47ba1e9f73e2936ab32ab2213aa7c25e988d3c20e76f4261
+// testkit:provenance b6432da5dd9ffed781001d111d3ec8e4f1d23d4b8b50378768048a185bf00cca

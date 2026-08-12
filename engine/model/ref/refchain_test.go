@@ -4,8 +4,10 @@
 package ref_test
 
 import (
+	"context"
 	"testing"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/engine/model/ref"
 )
 
@@ -132,5 +134,37 @@ func TestPartitionedAppendOnly(t *testing.T) {
 		if err := p.Err(); err != nil {
 			t.Fatalf("a reference chain never poisons, got: %v", err)
 		}
+	})
+}
+
+// The oracle stands opposite subjects held to context respect, so its own
+// context-taking operations refuse a cancelled caller the same way.
+func TestAppendOnlyRespectsContext(t *testing.T) {
+	t.Parallel()
+
+	c := ref.NewAppendOnly[chainEntry](nil)
+	testkit.NoError(t, c.Append(t.Context(), chainEntry{ID: "a"}), "a live context appends")
+
+	cancelled, cancel := context.WithCancel(t.Context())
+	cancel()
+
+	t.Run("a cancelled append is refused", func(t *testing.T) {
+		t.Parallel()
+		testkit.ErrorIs(t, c.Append(cancelled, chainEntry{ID: "b"}), context.Canceled,
+			"the write never lands")
+	})
+
+	t.Run("a cancelled replay yields the context's error", func(t *testing.T) {
+		t.Parallel()
+		for _, err := range c.Replay(cancelled) {
+			testkit.ErrorIs(t, err, context.Canceled, "the drain reports, never streams")
+			break
+		}
+	})
+
+	t.Run("a cancelled verify reports the context's error", func(t *testing.T) {
+		t.Parallel()
+		testkit.ErrorIs(t, c.Verify(cancelled), context.Canceled,
+			"the recomputation never runs")
 	})
 }

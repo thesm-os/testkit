@@ -20,18 +20,16 @@ func TestMixedContract(t *testing.T) {
 		injectionsafetest.MixedSubject("in-memory", func() injectionsafe.Mixed {
 			return injectionsafetest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: storing is defined for every string, so there is no input Store
-		// refuses — the zero-on-error check has no miss to find.
-		injectionsafetest.MixedWithout("Store/an error carries the zero value"),
-		injectionsafetest.MixedOnStore("returns a control sequence unchanged", func(
-			tb testing.TB, subject injectionsafe.Mixed, in string,
+		injectionsafetest.MixedOnStore("round-trips a control sequence as data", func(
+			tb testing.TB, subject injectionsafe.Mixed, key, value string,
 		) {
 			tb.Helper()
 			const hostile = `'; DROP TABLE users; --`
-			got, err := subject.Store(tb.Context(), hostile)
-			testkit.NoError(tb, err, "storing succeeds")
+			testkit.NoError(tb, subject.Store(tb.Context(), key, hostile), "storing succeeds")
+			got, err := subject.Load(tb.Context(), key)
+			testkit.NoError(tb, err, "loading succeeds")
 			testkit.Equal(tb, got, hostile, "the value is data, not syntax")
-			_ = in
+			_ = value
 		}),
 	)
 }

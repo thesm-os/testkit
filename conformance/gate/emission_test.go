@@ -19,6 +19,7 @@ import (
 type assertionState struct {
 	owed  map[string]bool
 	bound map[string]bool
+	twins int
 	err   error
 }
 
@@ -49,6 +50,9 @@ var assertionOnce = sync.OnceValue(func() assertionState {
 	for _, e := range emitted {
 		for _, law := range e.Laws {
 			s.bound[law] = true
+		}
+		if e.Twin {
+			s.twins++
 		}
 	}
 	return s
@@ -115,6 +119,31 @@ func TestEmissionSeesTheTwinFloor(t *testing.T) {
 		"validates derives the map oracle")
 	testkit.True(t, kinds["go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded.Mixed"],
 		"bounded rides the twin floor — the audit's break experiment, kept measurable")
+}
+
+// twinCeiling is the corpus's twin count, ratcheted: 78 of 105 references
+// ride the twin floor today, and the number only sinks — an oracle upgrade
+// lowers it, and a derived fixture regressing to the twin raises it past the
+// ceiling and reddens this build by name. Lower the constant with every
+// floor raised; never raise it.
+const twinCeiling = 78
+
+// TestTwinFloorOnlySinks is the twin-count ratchet the audit's second item
+// commissioned: the twin is the honest floor, not the resting state, and a
+// regression from a derived oracle back to it must be visible somewhere
+// before it is visible nowhere.
+func TestTwinFloorOnlySinks(t *testing.T) {
+	t.Parallel()
+
+	s := assertionOnce()
+	if s.err != nil {
+		t.Fatalf("measure the corpus: %v", s.err)
+	}
+	testkit.True(t, s.twins <= twinCeiling,
+		"the twin floor only sinks — a derived fixture regressed, or a new fixture "+
+			"needs its oracle argued for before it rides the floor")
+	testkit.True(t, s.twins == twinCeiling,
+		"the floor sank — lower twinCeiling to the new count and bank the progress")
 }
 
 // TestEmissionSurfacesARunFailure pins the error arm: a pattern matching

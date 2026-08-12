@@ -32,6 +32,19 @@ type ContractStoreSpec struct {
 	TypeArgRole   string
 	TypeArgResult bool
 
+	// CtorFns are constructor arguments before the error slots, each the
+	// name of a ref-package function instantiated at the store's type
+	// argument and called with nothing — the chain's default hash, a
+	// semantics choice the oracle owns rather than a fact the declaration
+	// states.
+	CtorFns []string
+
+	// VersionParam names the contract parameter whose stamp names the
+	// version field on the store's value type. When set, the constructor's
+	// first argument is the generated projection of that field — the same
+	// one-derivation rule the key projection follows.
+	VersionParam string
+
 	// Errs are the constructor's error arguments in declaration order. A
 	// named entry mints a sentinel; an empty one renders nil — the oracle's
 	// lenient arm, chosen where two legitimate dialects exist and the
@@ -39,6 +52,12 @@ type ContractStoreSpec struct {
 	// releasing what was never held is ordinary Go to its subject, and a
 	// strict oracle read the no-op as divergence.
 	Errs []ContractErr
+
+	// ShapeOps delegate the interface's non-role methods by pseudo-shape —
+	// the cell's read is no role the cas contract declares, and an
+	// aggregator-shaped method on a cell can only be asking the cell what it
+	// holds. A shape absent here stays inert, with the header saying so.
+	ShapeOps map[string]string
 }
 
 // ContractErr is one constructor error argument. NilUnder names a mixin
@@ -49,6 +68,11 @@ type ContractStoreSpec struct {
 type ContractErr struct {
 	Suffix, Msg    string
 	Role, NilUnder string
+
+	// Param names the contract parameter whose stamp supplies the sentinel.
+	// A declaration that stamps it gives the oracle and the law one error
+	// identity; absent the stamp, the constructor mints its own.
+	Param string
 }
 
 // ContractRoleOp returns the oracle method the named contract role delegates
@@ -56,6 +80,13 @@ type ContractErr struct {
 func ContractRoleOp(contract, role string) (string, bool) {
 	op, ok := contractRoleOps[contract+"."+role]
 	return op, ok
+}
+
+// ContractRoleDrains reports that the role's oracle op streams through an
+// iterator while the role method answers a slice, so the adapter collects
+// rather than delegating the return directly.
+func ContractRoleDrains(contract, role string) bool {
+	return contractRoleDrains[contract+"."+role]
 }
 
 // ContractRoles returns the named contract's role vocabulary, sorted — the
@@ -91,12 +122,20 @@ func trimPrefix(s, prefix string) (string, bool) {
 	return "", false
 }
 
-// The lease vocabulary, spelled once: the role names are the directive's
-// and the op names the tracker's.
+// The contract-role vocabulary, spelled once: the role names are the
+// directives' and the op names the oracles'.
 const (
 	roleAcquire = "acquire"
 	opAcquire   = "Acquire"
 	opRelease   = "Release"
+
+	roleAppend = "append"
+	roleReplay = "replay"
+	roleVerify = "verify"
+	roleWriter = "writer"
+
+	opGet    = "Get"
+	opVerify = "Verify"
 )
 
 // The contract oracle tables.
@@ -110,7 +149,7 @@ var (
 			Errs: []ContractErr{
 				{
 					Suffix: "Held", Msg: "the model reference already holds the key",
-					Role: roleAcquire, NilUnder: mixinIdempotent,
+					Role: roleAcquire, NilUnder: mixinIdempotent, Param: "held",
 				},
 				// Lenient release: giving up what was never taken is
 				// ordinary Go to the corpus subject, and nil is the
@@ -118,9 +157,43 @@ var (
 				{},
 			},
 		},
+		contractChain: {
+			Store:       "AppendOnly",
+			TypeArgRole: roleAppend,
+			// The oracle's own bookkeeping hash: any deterministic chain
+			// serves its Verify, and the default is the semantics choice.
+			CtorFns: []string{"DefaultChainHash"},
+		},
+		contractCAS: {
+			Store:        "VersionedCell",
+			TypeArgRole:  roleWriter,
+			VersionParam: "version",
+			Errs: []ContractErr{
+				{
+					Suffix: "Mismatch", Msg: "the write's version is stale",
+					Role: roleWriter, Param: "mismatch",
+				},
+				{Suffix: "Empty", Msg: "the cell holds nothing yet"},
+			},
+			// The cell's read is no role the contract declares; an
+			// aggregator-shaped method on a cell can only be asking what it
+			// holds.
+			ShapeOps: map[string]string{shapeAggregator: opGet},
+		},
 	}
 	contractRoleOps = map[string]string{
 		contractLease + ".acquire": opAcquire,
 		contractLease + ".release": opRelease,
+
+		contractChain + "." + roleAppend: "Append",
+		contractChain + "." + roleReplay: "Replay",
+		contractChain + "." + roleVerify: opVerify,
+
+		contractCAS + "." + roleWriter: fieldPut,
+	}
+	contractRoleDrains = map[string]bool{
+		// The AppendOnly oracle replays through an iterator; the corpus's
+		// chain answers a slice, and the adapter drains the difference.
+		contractChain + "." + roleReplay: true,
 	}
 )

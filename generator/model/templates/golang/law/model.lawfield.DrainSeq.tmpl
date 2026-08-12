@@ -1,0 +1,16 @@
+{{- /*
+The drain over an iterator-shaped stream: the closure collects the yields so
+the law compares a slice, and a mid-stream error surfaces as the drain's own.
+*/ -}}
+{{- define "model.lawfield.DrainSeq" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ([]{{ renderType .Value }}, error) {
+			out := []{{ renderType .Value }}{}
+			for v, err := range s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }}) {
+				if err != nil {
+					return out, err
+				}
+				out = append(out, v)
+			}
+			return out, nil
+		}
+{{- end -}}

@@ -29,6 +29,10 @@ func TestContractContract(t *testing.T) {
 		workflowtest.ContractSubject("in-memory", func() workflow.Contract {
 			return workflowtest.NewInMemory()
 		}),
+		// Dropped rather than satisfied: every key has a state to report,
+		// so there is no input State refuses — the zero-on-error check has
+		// no miss to find.
+		workflowtest.ContractWithout("State/an error carries the zero value"),
 		workflowtest.ContractOnRun("refuses a transition out of the last state", func(
 			tb testing.TB, subject workflow.Contract, key string,
 		) {
@@ -63,6 +67,10 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		workflowtest.ContractSubject("in-memory", func() workflow.Contract {
 			return workflowtest.NewInMemory()
 		}),
+		// Dropped rather than satisfied: every key has a state to report,
+		// so there is no input State refuses — the zero-on-error check has
+		// no miss to find.
+		workflowtest.ContractWithout("State/an error carries the zero value"),
 		workflowtest.ContractWithout("Run/smoke"),
 		workflowtest.ContractWithoutDouble(),
 	)

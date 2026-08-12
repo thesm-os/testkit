@@ -24,7 +24,9 @@ type Value struct{ Key, Body string }
 //testkit:model
 type Contract interface {
 	// Run is the appender contract's fn role, and hosts the directive
-	// that names its partners.
+	// that names its partners. The offset it answers is the contract's
+	// observable: AUTO-APPENDER-MONOTONIC-OFFSETS holds successive answers
+	// strictly increasing.
 	//testkit:contract appender role=fn
-	Run(ctx context.Context, key string) error
+	Run(ctx context.Context, v Value) (int64, error)
 }

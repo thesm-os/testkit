@@ -20,11 +20,20 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
+	// The derived fixture cannot know the cell's dialect: a fresh cell
+	// accepts version zero and nothing else, so the seeded values say so —
+	// the second value stays at zero too, because every check gets a fresh
+	// subject whose cell is back at the start.
+	fixture := castest.DefaultContractFixture()
+	fixture.V.Version = 0
+	fixture.VOther.Version = 0
+
 	castest.AssertContractContract(t,
 		castest.ContractModel(),
 		castest.ContractSubject("in-memory", func() cas.Contract {
 			return castest.NewInMemory()
 		}),
+		castest.ContractWithFixture(fixture),
 	)
 }
 
@@ -32,10 +41,15 @@ func TestContractContract(t *testing.T) {
 func TestContractContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()
 
+	fixture := castest.DefaultContractFixture()
+	fixture.V.Version = 0
+	fixture.VOther.Version = 0
+
 	castest.AssertContractContract(t,
 		castest.ContractSubject("in-memory", func() cas.Contract {
 			return castest.NewInMemory()
 		}),
+		castest.ContractWithFixture(fixture),
 		castest.ContractWithout("Put/smoke"),
 		castest.ContractWithoutDouble(),
 	)

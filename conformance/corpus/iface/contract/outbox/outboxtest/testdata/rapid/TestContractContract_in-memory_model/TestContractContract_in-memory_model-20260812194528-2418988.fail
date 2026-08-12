@@ -1,0 +1,7 @@
+# 2026/08/12 19:45:28.217551 [TestContractContract/in-memory/model] [invariant] AUTO-COUNT-EQUALS-REFERENCE at step 0: CountEqualsReference: SUT=0x2e1a3c7aa770, ref=0x2e1a3c7aa7e0
+#   invariant: AUTO-COUNT-EQUALS-REFERENCE
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} records:[] subscribers:[0x2e1a3c7aa770]}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} records:[] subscribers:[0x2e1a3c7aa7e0]}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
+# 
+v0.4.8#15950303090584612655

@@ -18,7 +18,7 @@ import (
 // Every generated check for Mixed, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   6 checks
+//	Proved:   10 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -161,5 +161,97 @@ func TestAssertMixedAddToleratesNilContextCanFail(t *testing.T) {
 		"and rejects it for the reason the check is about")
 }
 
+// TestAssertMixedRemoveSmokeCanFail holds AssertMixedRemoveSmoke to being able to fail.
+//
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func TestAssertMixedRemoveSmokeCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := streamreflectsmutationstest.DefaultMixedFixture()
+	subject := streamreflectsmutationstest.NewMixedStub(t,
+		streamreflectsmutationstest.WithMixedRemove(func(context.Context, string) error {
+			panic("Mixed.Remove: violating the smoke check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a derived value",
+		func(tb testing.TB) {
+			tb.Helper()
+			streamreflectsmutationstest.AssertMixedRemoveSmoke(tb, subject, fixture.Item)
+		})
+	testkit.Assert(t, got).Contains("panicked on a derived value",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedRemoveCancelsCanFail holds AssertMixedRemoveCancels to being able to fail.
+//
+// The stand-in answers a cancelled context as though nothing were wrong. A
+// check that let that pass would report success for a subject doing work its
+// caller had already abandoned.
+func TestAssertMixedRemoveCancelsCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := streamreflectsmutationstest.DefaultMixedFixture()
+	subject := streamreflectsmutationstest.NewMixedStub(t,
+		streamreflectsmutationstest.WithMixedRemove(func(context.Context, string) error {
+			return nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
+		func(tb testing.TB) {
+			tb.Helper()
+			streamreflectsmutationstest.AssertMixedRemoveCancels(tb, subject, fixture.Item)
+		})
+	testkit.Assert(t, got).Contains("must report a cancelled context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedRemoveHonoursDeadlineCanFail holds AssertMixedRemoveHonoursDeadline to being able to fail.
+//
+// The stand-in answers an expired deadline as though nothing were wrong. A
+// check that let that pass would report success for a subject that keeps
+// working past the point its caller stopped waiting.
+func TestAssertMixedRemoveHonoursDeadlineCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := streamreflectsmutationstest.DefaultMixedFixture()
+	subject := streamreflectsmutationstest.NewMixedStub(t,
+		streamreflectsmutationstest.WithMixedRemove(func(context.Context, string) error {
+			return nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
+		func(tb testing.TB) {
+			tb.Helper()
+			streamreflectsmutationstest.AssertMixedRemoveHonoursDeadline(tb, subject, fixture.Item)
+		})
+	testkit.Assert(t, got).Contains("must report an expired deadline",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedRemoveToleratesNilContextCanFail holds AssertMixedRemoveToleratesNilContext to being able to fail.
+//
+// The stand-in panics rather than reporting. A check that let that pass would
+// leave a caller who forgot a context taking the process down instead of
+// getting an error back.
+func TestAssertMixedRemoveToleratesNilContextCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := streamreflectsmutationstest.DefaultMixedFixture()
+	subject := streamreflectsmutationstest.NewMixedStub(t,
+		streamreflectsmutationstest.WithMixedRemove(func(context.Context, string) error {
+			panic("Mixed.Remove: violating the nil-context check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a nil context",
+		func(tb testing.TB) {
+			tb.Helper()
+			streamreflectsmutationstest.AssertMixedRemoveToleratesNilContext(tb, subject, fixture.Item)
+		})
+	testkit.Assert(t, got).Contains("panicked on a nil context",
+		"and rejects it for the reason the check is about")
+}
+
 // testkit: end of generated content.
-// testkit:provenance 93fcaac2531b22a49f73069f5bd009c0743db1ec4e315e8306056636a62e666c
+// testkit:provenance 046d4ad68142b893401921b548dd89a1dac8b5bae9c77f145fe788a61b77ee2f

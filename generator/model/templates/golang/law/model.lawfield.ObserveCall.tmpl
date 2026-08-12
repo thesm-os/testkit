@@ -1,0 +1,14 @@
+{{- /*
+The whole-state observation: the drain or the aggregate, made loud on error —
+a zero the comparison reads as real state would mask exactly the divergence
+the law exists to see.
+*/ -}}
+{{- define "model.lawfield.ObserveCall" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) {{ renderType .Out }} {
+			v, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			if err != nil {
+				rt.Fatalf("{{ .Name }} observation failed: %v", err)
+			}
+			return v
+		}
+{{- end -}}

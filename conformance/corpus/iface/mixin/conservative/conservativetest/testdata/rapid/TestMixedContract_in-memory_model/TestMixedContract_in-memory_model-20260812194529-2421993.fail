@@ -1,0 +1,12 @@
+# 2026/08/12 19:45:29.113510 [TestMixedContract/in-memory/model] [rapid] draw Conservative_value: conservative.Delta{Key:"test-key", Amount:42}
+# 2026/08/12 19:45:29.113584 [TestMixedContract/in-memory/model] [invariant] AUTO-CONSERVATIVE at step 0: conservative law: value {test-key 42}: sum changed 0 → 42
+#   invariant: AUTO-CONSERVATIVE
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} total:42}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} total:42}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
+# 
+v0.4.8#18223227370567074173
+0x0
+0x0
+0x0
+0x0

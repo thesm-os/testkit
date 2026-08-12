@@ -78,3 +78,69 @@ func (c *AtomicCell[V, Version]) CompareAndSwap(_ context.Context, v V) error {
 	c.version = c.nextVer(c.version)
 	return nil
 }
+
+// VersionedCell is the fixture-faced form of the compare-and-swap cell: one
+// slot, guarded by an int64 version the stored value carries in a field.
+// Construct with [NewVersionedCell]. Thread-safe.
+//
+// The [AtomicCell] above is the general oracle — any version type, the
+// version tracked beside the value. This face exists for the generated
+// adapter, whose subject speaks `Put(ctx, v) error` and `Get(ctx) (V,
+// error)` with the version riding inside v: a write is accepted exactly when
+// its embedded version matches the cell's, the cell then advances by one,
+// and the stored value is answered verbatim — the version field a reader
+// sees is the one the writer sent, not the cell's private counter.
+type VersionedCell[V any] struct {
+	mu        sync.Mutex
+	value     V
+	current   int64
+	present   bool
+	versionOf func(V) int64
+	mismatch  error
+	empty     error
+}
+
+// NewVersionedCell constructs a [VersionedCell]. versionOf projects the
+// version out of a value; mismatch reports a stale write and empty an
+// unwritten read — only their presence is compared, so a subject spelling
+// its own errors agrees with the oracle under the same states.
+func NewVersionedCell[V any](
+	versionOf func(V) int64,
+	mismatch, empty error,
+) *VersionedCell[V] {
+	return &VersionedCell[V]{versionOf: versionOf, mismatch: mismatch, empty: empty}
+}
+
+// Put accepts v exactly when its embedded version matches the cell's —
+// zero against a fresh cell — and advances the cell by one. A cancelled
+// context refuses the write, the shape the lifecycle law holds every
+// context-taking operation to.
+func (c *VersionedCell[V]) Put(ctx context.Context, v V) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.versionOf(v) != c.current {
+		return c.mismatch
+	}
+	c.value = v
+	c.current++
+	c.present = true
+	return nil
+}
+
+// Get answers the stored value verbatim, or the empty sentinel for a cell
+// nothing has written.
+func (c *VersionedCell[V]) Get(ctx context.Context) (V, error) {
+	var zero V
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.present {
+		return zero, c.empty
+	}
+	return c.value, nil
+}

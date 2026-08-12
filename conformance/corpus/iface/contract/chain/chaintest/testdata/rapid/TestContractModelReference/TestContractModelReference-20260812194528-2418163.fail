@@ -1,0 +1,7 @@
+# 2026/08/12 19:45:28.001848 [TestContractModelReference] [invariant] AUTO-LIFECYCLE-RESPECTS-CONTEXT at step 0: LifecycleRespectsContext: op with cancelled context returned <nil> (want context.Canceled)
+#   invariant: AUTO-LIFECYCLE-RESPECTS-CONTEXT
+#     sut: &{store:0x390e212a8c00}
+#     ref: &{store:0x390e212a8c20}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractModelReference.json
+# 
+v0.4.8#12939476828504902287

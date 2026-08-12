@@ -24,6 +24,10 @@ func TestContractContract(t *testing.T) {
 		appendertest.ContractSubject("in-memory", func() appender.Contract {
 			return appendertest.NewInMemory()
 		}),
+		// Dropped rather than satisfied: the log appends every value, so
+		// there is no input Run refuses — the zero-on-error check has no
+		// miss to find.
+		appendertest.ContractWithout("Run/an error carries the zero value"),
 	)
 }
 
@@ -35,6 +39,10 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		appendertest.ContractSubject("in-memory", func() appender.Contract {
 			return appendertest.NewInMemory()
 		}),
+		// Dropped rather than satisfied: the log appends every value, so
+		// there is no input Run refuses — the zero-on-error check has no
+		// miss to find.
+		appendertest.ContractWithout("Run/an error carries the zero value"),
 		appendertest.ContractWithout("Run/smoke"),
 		appendertest.ContractWithoutDouble(),
 	)

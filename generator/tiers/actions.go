@@ -174,10 +174,7 @@ var collectionOps = map[string]string{
 //
 // noduplicates is the direct claim: a subject collapsing repeats is its whole
 // point, and a plain log diverges from it — by design — at the second
-// identical add. crdtmerge earns the same row from the corpus: idempotence is
-// the I in a convergent merge, and a grow-only set re-adding an element held
-// is a no-op the log oracle miscounts. The stamp refines the oracle the way
-// it refines delegation.
+// identical add. The stamp refines the oracle the way it refines delegation.
 func CollectionDedupes(mixin string) bool {
 	return dedupingMixins[mixin]
 }
@@ -185,7 +182,6 @@ func CollectionDedupes(mixin string) bool {
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var dedupingMixins = map[string]bool{
 	mixinNoDuplicates: true,
-	mixinCRDTMerge:    true,
 }
 
 // DrainsHistory reports whether the named classification — mixin or contract
@@ -214,11 +210,13 @@ var historyDrains = map[string]bool{
 // beyond any immediate store model, with the reason the generated header
 // prints.
 //
-// The one row is eventually: a read may lag a write until something forces
-// convergence, and every derived oracle answers immediately — the first
-// publish an eventual subject had not yet surfaced read as a divergence. The
-// twin floor is the honest model: two instances driven identically lag
-// identically, so the claim's own slack cancels out of the comparison.
+// eventually: a read may lag a write until something forces convergence, and
+// every derived oracle answers immediately — the first publish an eventual
+// subject had not yet surfaced read as a divergence. crdtmerge: the merge
+// relation is the semantics, and every store oracle holds it inert — the
+// corpus proved it when the convergence law red-lined the derived adapter,
+// whose inert merge can never converge. The twin floor is the honest model
+// both times: two instances driven identically diverge identically.
 func DefeatsOracles(mixin string) (string, bool) {
 	reason, defeated := oracleDefeats[mixin]
 	return reason, defeated
@@ -227,6 +225,7 @@ func DefeatsOracles(mixin string) (string, bool) {
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var oracleDefeats = map[string]string{
 	mixinEventually: "the eventually claim lets reads lag writes, which no immediate store models",
+	mixinCRDTMerge:  "the merge relation is the claim, and every store oracle holds it inert",
 }
 
 // MapStorePins reports whether the named mixin turns the map oracle into its

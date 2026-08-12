@@ -1,0 +1,9 @@
+{{- /*
+The persisting write, its identity synthesized: the saved value's own key,
+through the shared projection, is the ID the paired read retrieves it by.
+*/ -}}
+{{- define "model.lawfield.Save" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .In }}) ({{ renderType .Out }}, error) {
+			return {{ .KeyOfName }}(v), s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
+		}
+{{- end -}}

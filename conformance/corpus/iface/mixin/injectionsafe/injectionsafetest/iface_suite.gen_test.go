@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/injectionsafe/iface.go
 // Plugins:   golang 1.0.0, suite 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package injectionsafetest_test
 
@@ -17,7 +17,7 @@ import (
 // Every generated check for Mixed, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   5 checks
+//	Proved:   9 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -34,14 +34,14 @@ func TestAssertMixedStoreSmokeCanFail(t *testing.T) {
 
 	fixture := injectionsafetest.DefaultMixedFixture()
 	subject := injectionsafetest.NewMixedStub(t,
-		injectionsafetest.WithMixedStore(func(context.Context, string) (string, error) {
+		injectionsafetest.WithMixedStore(func(context.Context, string, string) error {
 			panic("Mixed.Store: violating the smoke check")
 		}))
 
 	got := testkit.Rejects(t, "a method that panics on a derived value",
 		func(tb testing.TB) {
 			tb.Helper()
-			injectionsafetest.AssertMixedStoreSmoke(tb, subject, fixture.In)
+			injectionsafetest.AssertMixedStoreSmoke(tb, subject, fixture.Key, fixture.Value)
 		})
 	testkit.Assert(t, got).Contains("panicked on a derived value",
 		"and rejects it for the reason the check is about")
@@ -57,15 +57,14 @@ func TestAssertMixedStoreCancelsCanFail(t *testing.T) {
 
 	fixture := injectionsafetest.DefaultMixedFixture()
 	subject := injectionsafetest.NewMixedStub(t,
-		injectionsafetest.WithMixedStore(func(context.Context, string) (string, error) {
-			var r0 string
-			return r0, nil
+		injectionsafetest.WithMixedStore(func(context.Context, string, string) error {
+			return nil
 		}))
 
 	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
 		func(tb testing.TB) {
 			tb.Helper()
-			injectionsafetest.AssertMixedStoreCancels(tb, subject, fixture.In)
+			injectionsafetest.AssertMixedStoreCancels(tb, subject, fixture.Key, fixture.Value)
 		})
 	testkit.Assert(t, got).Contains("must report a cancelled context",
 		"and rejects it for the reason the check is about")
@@ -81,15 +80,14 @@ func TestAssertMixedStoreHonoursDeadlineCanFail(t *testing.T) {
 
 	fixture := injectionsafetest.DefaultMixedFixture()
 	subject := injectionsafetest.NewMixedStub(t,
-		injectionsafetest.WithMixedStore(func(context.Context, string) (string, error) {
-			var r0 string
-			return r0, nil
+		injectionsafetest.WithMixedStore(func(context.Context, string, string) error {
+			return nil
 		}))
 
 	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
 		func(tb testing.TB) {
 			tb.Helper()
-			injectionsafetest.AssertMixedStoreHonoursDeadline(tb, subject, fixture.In)
+			injectionsafetest.AssertMixedStoreHonoursDeadline(tb, subject, fixture.Key, fixture.Value)
 		})
 	testkit.Assert(t, got).Contains("must report an expired deadline",
 		"and rejects it for the reason the check is about")
@@ -105,30 +103,124 @@ func TestAssertMixedStoreToleratesNilContextCanFail(t *testing.T) {
 
 	fixture := injectionsafetest.DefaultMixedFixture()
 	subject := injectionsafetest.NewMixedStub(t,
-		injectionsafetest.WithMixedStore(func(context.Context, string) (string, error) {
+		injectionsafetest.WithMixedStore(func(context.Context, string, string) error {
 			panic("Mixed.Store: violating the nil-context check")
 		}))
 
 	got := testkit.Rejects(t, "a method that panics on a nil context",
 		func(tb testing.TB) {
 			tb.Helper()
-			injectionsafetest.AssertMixedStoreToleratesNilContext(tb, subject, fixture.In)
+			injectionsafetest.AssertMixedStoreToleratesNilContext(tb, subject, fixture.Key, fixture.Value)
 		})
 	testkit.Assert(t, got).Contains("panicked on a nil context",
 		"and rejects it for the reason the check is about")
 }
 
-// TestAssertMixedStoreZeroOnErrorCanFail holds AssertMixedStoreZeroOnError to being able to fail.
+// TestAssertMixedLoadSmokeCanFail holds AssertMixedLoadSmoke to being able to fail.
 //
-// The stand-in succeeds for the input the check chose so it would miss. A check
-// that let that pass would never reach the comparison it exists to make, and
-// would report success without having compared anything.
-func TestAssertMixedStoreZeroOnErrorCanFail(t *testing.T) {
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func TestAssertMixedLoadSmokeCanFail(t *testing.T) {
 	t.Parallel()
 
 	fixture := injectionsafetest.DefaultMixedFixture()
 	subject := injectionsafetest.NewMixedStub(t,
-		injectionsafetest.WithMixedStore(func(context.Context, string) (string, error) {
+		injectionsafetest.WithMixedLoad(func(context.Context, string) (string, error) {
+			panic("Mixed.Load: violating the smoke check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a derived value",
+		func(tb testing.TB) {
+			tb.Helper()
+			injectionsafetest.AssertMixedLoadSmoke(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("panicked on a derived value",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedLoadCancelsCanFail holds AssertMixedLoadCancels to being able to fail.
+//
+// The stand-in answers a cancelled context as though nothing were wrong. A
+// check that let that pass would report success for a subject doing work its
+// caller had already abandoned.
+func TestAssertMixedLoadCancelsCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := injectionsafetest.DefaultMixedFixture()
+	subject := injectionsafetest.NewMixedStub(t,
+		injectionsafetest.WithMixedLoad(func(context.Context, string) (string, error) {
+			var r0 string
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
+		func(tb testing.TB) {
+			tb.Helper()
+			injectionsafetest.AssertMixedLoadCancels(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("must report a cancelled context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedLoadHonoursDeadlineCanFail holds AssertMixedLoadHonoursDeadline to being able to fail.
+//
+// The stand-in answers an expired deadline as though nothing were wrong. A
+// check that let that pass would report success for a subject that keeps
+// working past the point its caller stopped waiting.
+func TestAssertMixedLoadHonoursDeadlineCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := injectionsafetest.DefaultMixedFixture()
+	subject := injectionsafetest.NewMixedStub(t,
+		injectionsafetest.WithMixedLoad(func(context.Context, string) (string, error) {
+			var r0 string
+			return r0, nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
+		func(tb testing.TB) {
+			tb.Helper()
+			injectionsafetest.AssertMixedLoadHonoursDeadline(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("must report an expired deadline",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedLoadToleratesNilContextCanFail holds AssertMixedLoadToleratesNilContext to being able to fail.
+//
+// The stand-in panics rather than reporting. A check that let that pass would
+// leave a caller who forgot a context taking the process down instead of
+// getting an error back.
+func TestAssertMixedLoadToleratesNilContextCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := injectionsafetest.DefaultMixedFixture()
+	subject := injectionsafetest.NewMixedStub(t,
+		injectionsafetest.WithMixedLoad(func(context.Context, string) (string, error) {
+			panic("Mixed.Load: violating the nil-context check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a nil context",
+		func(tb testing.TB) {
+			tb.Helper()
+			injectionsafetest.AssertMixedLoadToleratesNilContext(tb, subject, fixture.Key)
+		})
+	testkit.Assert(t, got).Contains("panicked on a nil context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertMixedLoadZeroOnErrorCanFail holds AssertMixedLoadZeroOnError to being able to fail.
+//
+// The stand-in succeeds for the input the check chose so it would miss. A check
+// that let that pass would never reach the comparison it exists to make, and
+// would report success without having compared anything.
+func TestAssertMixedLoadZeroOnErrorCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := injectionsafetest.DefaultMixedFixture()
+	subject := injectionsafetest.NewMixedStub(t,
+		injectionsafetest.WithMixedLoad(func(context.Context, string) (string, error) {
 			var r0 string
 			return r0, nil
 		}))
@@ -136,11 +228,11 @@ func TestAssertMixedStoreZeroOnErrorCanFail(t *testing.T) {
 	got := testkit.Rejects(t, "a method that succeeds for an input it should miss",
 		func(tb testing.TB) {
 			tb.Helper()
-			injectionsafetest.AssertMixedStoreZeroOnError(tb, subject, fixture.InOther)
+			injectionsafetest.AssertMixedLoadZeroOnError(tb, subject, fixture.KeyOther)
 		})
 	testkit.Assert(t, got).Contains("supply inputs it misses",
 		"and rejects it for the reason the check is about")
 }
 
 // testkit: end of generated content.
-// testkit:provenance 69ecf630abb05e3f73b9b385268c192fc1a5a5deb428d7812311c116f3c5773a
+// testkit:provenance d4c9da975de6b006c22ae6e048f0c69cb8636d272dce203b46de8811c5831dbd

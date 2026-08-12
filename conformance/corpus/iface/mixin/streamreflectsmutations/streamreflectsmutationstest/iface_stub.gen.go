@@ -38,6 +38,17 @@ type MixedAddCall struct {
 	Err  error
 }
 
+// MixedRemoveCall records one invocation of Mixed.Remove.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedRemoveCall struct {
+	Ctx  context.Context
+	Item string
+	Err  error
+}
+
 // --- Per-method configuration ---
 
 // MixedStreamStub controls how the double answers Stream and records
@@ -142,6 +153,38 @@ func (s *MixedAddStub) Func(fn func(context.Context, string) error) *MixedAddStu
 	return s
 }
 
+// MixedRemoveStub controls how the double answers Remove and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedRemoveStub struct {
+	*stub.MethodStub[MixedRemoveCall]
+
+	fn       func(context.Context, string) error
+	fallback *MixedRemoveReturn
+}
+
+// MixedRemoveReturn holds the fixed answer configured through Returns.
+type MixedRemoveReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Remove. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedRemoveStub) Returns(err error) *MixedRemoveStub {
+	s.fallback = &MixedRemoveReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Remove, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedRemoveStub) Func(fn func(context.Context, string) error) *MixedRemoveStub {
+	s.fn = fn
+	return s
+}
+
 // --- MixedStub ---
 
 // MixedStubOption configures a [MixedStub] at construction time.
@@ -163,6 +206,7 @@ func MixedStubDelegateTo(impl streamreflectsmutations.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnStream.Func(impl.Stream)
 		s.OnAdd.Func(impl.Add)
+		s.OnRemove.Func(impl.Remove)
 	}
 }
 
@@ -212,6 +256,13 @@ func WithMixedAdd(fn func(context.Context, string) error) MixedStubOption {
 	return func(s *MixedStub) { s.OnAdd.Func(fn) }
 }
 
+// WithMixedRemove sets Remove's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedRemove(fn func(context.Context, string) error) MixedStubOption {
+	return func(s *MixedStub) { s.OnRemove.Func(fn) }
+}
+
 // MixedStub is a recording test double for Mixed.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
@@ -219,6 +270,7 @@ func WithMixedAdd(fn func(context.Context, string) error) MixedStubOption {
 type MixedStub struct {
 	OnStream *MixedStreamStub
 	OnAdd    *MixedAddStub
+	OnRemove *MixedRemoveStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -245,10 +297,12 @@ func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
 		OnStream: &MixedStreamStub{MethodStub: stub.NewMethodStub[MixedStreamCall](tb, "Mixed.Stream")},
 		OnAdd:    &MixedAddStub{MethodStub: stub.NewMethodStub[MixedAddCall](tb, "Mixed.Add")},
+		OnRemove: &MixedRemoveStub{MethodStub: stub.NewMethodStub[MixedRemoveCall](tb, "Mixed.Remove")},
 	}
 	s.all = []stub.Configurable{
 		s.OnStream.MethodStub,
 		s.OnAdd.MethodStub,
+		s.OnRemove.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -347,5 +401,37 @@ func (s *MixedStub) Add(ctx context.Context, item string) error {
 	return r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *MixedRemoveStub) invoke(ctx context.Context, item string) func() MixedRemoveReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedRemoveReturn {
+		r0 := s.fn(ctx, item)
+		return MixedRemoveReturn{Err: r0}
+	}
+}
+
+// Remove records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Remove(ctx context.Context, item string) error {
+	call := MixedRemoveCall{Ctx: ctx, Item: item}
+	r := stub.Answer(s.OnRemove.MethodStub, &call, stub.Arms[MixedRemoveCall, MixedRemoveReturn]{
+		Invoke:   s.OnRemove.invoke(ctx, item),
+		Fallback: s.OnRemove.fallback,
+		Fault:    func(err error) MixedRemoveReturn { return MixedRemoveReturn{Err: err} },
+		Stamp: func(c *MixedRemoveCall, r MixedRemoveReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
 // testkit: end of generated content.
-// testkit:provenance e76e515221ffdf84e6ea36b797630b539cbed9a10cc9c280199ffdd0be4c60ee
+// testkit:provenance 67e2d8caabd1455212268c5f1e077287661e15610e21f99576fd5e6fc15ff16e

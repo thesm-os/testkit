@@ -89,6 +89,7 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	fx := {{ .FixtureCtor }}()
 {{- end }}
 {{- template "model.pools" . }}
+{{- template "model.lawpools" . }}
 	reference := cfg.reference
 	if reference == nil {
 {{- if .Reference.Supplied }}
@@ -185,6 +186,15 @@ func {{ .KeyOfName }}(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type 
 
 {{ end -}}
 {{ if .Reference.IsContract -}}
+{{ if .Reference.VersionField -}}
+// {{ lower .IfaceName }}ModelVersionOf projects a value's version — the one
+// derivation the cell guards writes by, shared so the oracle and any law
+// cannot disagree about which field is the guard.
+func {{ lower .IfaceName }}ModelVersionOf(v {{ renderType .Reference.ContractArg }}) int64 {
+	return v.{{ .Reference.VersionField }}
+}
+
+{{ end -}}
 {{ range .Reference.CtorErrs }}{{ if .Name -}}
 // {{ .Name }} is the oracle's spelling; only its presence is compared, so a
 // subject reporting its own error under the same state agrees with it.
@@ -200,8 +210,14 @@ type {{ .Reference.TypeName }} struct {
 
 func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
 	return &{{ .Reference.TypeName }}{store: {{ renderExpr (external .RefPkg (printf "New%s" .Reference.StoreType)) }}[{{ renderType .Reference.ContractArg }}](
+{{- if .Reference.VersionField }}
+		{{ lower .IfaceName }}ModelVersionOf,
+{{- end }}
+{{- range .Reference.CtorFns }}
+		{{ renderExpr (external $b.RefPkg .) }}[{{ renderType $b.Reference.ContractArg }}](),
+{{- end }}
 {{- range .Reference.CtorErrs }}
-		{{ if .Name }}{{ .Name }}{{ else }}nil{{ end }},
+		{{ if .Sym }}{{ renderExpr .Sym }}{{ else if .Name }}{{ .Name }}{{ else }}nil{{ end }},
 {{- end }}
 	)}
 }
@@ -224,7 +240,20 @@ func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
 }
 {{ end -}}
 {{ range .Adapter }}
-{{- if .Op }}
+{{- if and .Op .Collect }}
+// {{ .Sig.Name }} drains the oracle's iterator into the slice the contract
+// answers — the one seam between the two spellings of a replay.
+func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params" .Sig }}) {{ template "model.results" .Sig }} {
+	out := {{ renderType (index .Sig.Returns 0).Type }}{}
+	for e, err := range r.store.{{ .Op }}({{ range $i, $p := .Sig.Params }}{{ if $i }}, {{ end }}{{ $p.Name }}{{ end }}) {
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, nil
+}
+{{ else if .Op }}
 func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params" .Sig }}) {{ template "model.results" .Sig }} {
 	return r.store.{{ .Op }}({{ range $i, $p := .Sig.Params }}{{ if $i }}, {{ end }}{{ $p.Name }}{{ end }})
 }
@@ -317,6 +346,25 @@ colliding without anyone noticing.
 	if cfg.values != nil {
 		values = cfg.values
 	}
+{{- end }}
+{{- end -}}
+
+{{- /*
+model.lawpools declares the pools the laws bring beyond the shared pair —
+sequential leg only, because the laws run there and an unused local is a
+compile error in a generated file.
+*/ -}}
+{{- define "model.lawpools" -}}
+{{- range .LawPools }}
+{{- if .Adversarial }}
+	// The {{ .Name }} pool is the laws' own: hostile strings beside arbitrary
+	// ones, because a safety claim never probed with an attack is vacuous.
+	{{ .Name }} := {{ renderExpr (external $.ModelPkg "AdversarialStrings") }}()
+{{- else }}
+	// The {{ .Name }} pool is the laws' own: a wide domain for a stateless
+	// claim, which the colliding pair deliberately does not serve.
+	{{ .Name }} := {{ renderExpr (external $.ModelPkg "Make") }}[{{ renderType .Elem }}]()
+{{- end }}
 {{- end }}
 {{- end -}}
 

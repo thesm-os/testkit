@@ -1,0 +1,8 @@
+{{- /*
+A bare predicate call.
+*/ -}}
+{{- define "model.lawfield.BoolCall" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) bool {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}
