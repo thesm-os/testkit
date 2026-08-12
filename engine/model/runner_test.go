@@ -450,6 +450,27 @@ func TestOptionWithHistoryReset(t *testing.T) {
 	}
 }
 
+// TestStatefulLawsResetPerIteration pins the iteration boundary the wide
+// pools surfaced: a stateful law's memory of the previous pair must not
+// outlive the pair. The subject here answers a different value every
+// iteration — exactly the shape that false-failed the sticky law before the
+// runner reset, and exactly the shape the fixture-pair pools never drew.
+func TestStatefulLawsResetPerIteration(t *testing.T) {
+	t.Parallel()
+
+	iteration := 0
+	model.Assert(
+		t,
+		func() int { iteration++; return iteration },
+		model.WithReference(func() int { return 0 }),
+		model.WithActions(action.Pure("Ping", func(int) int { return 0 })),
+		model.WithLaw[int](&law.Sticky[int, string, int]{
+			Keys: rapid.Just("k"),
+			Read: func(_ *rapid.T, s int, _ string) (int, error) { return s, nil },
+		}),
+	)
+}
+
 func TestOptionSkipLaw(t *testing.T) {
 	t.Parallel()
 	// SkipLaw removes a law by ID. Verify the option applies without

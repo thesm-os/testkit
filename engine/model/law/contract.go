@@ -225,8 +225,16 @@ func (*AppenderMonotonicOffsets[T, V, Off]) ID() string { return lawid.AppenderM
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*AppenderMonotonicOffsets[T, V, Off]) REQID() string { return "" }
 
-// Check appends a value and verifies the returned offset exceeds
-// the previously-observed offset.
+// Reset clears the prior offset — [Resettable], because the previous
+// iteration's log is gone and its offsets order nothing in this one.
+func (l *AppenderMonotonicOffsets[T, V, Off]) Reset() {
+	var zero Off
+	l.prev = zero
+	l.hasPrev = false
+}
+
+// Check appends a value and verifies the returned offset exceeds the
+// previously-observed offset.
 func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "AppenderMonotonicOffsets_value")
 	off, err := l.Append(rt, sut, v)

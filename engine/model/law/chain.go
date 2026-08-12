@@ -48,6 +48,11 @@ func (l *AppendOnlyHistoryGrows[T, K, Entry]) Check(rt *rapid.T, sut, ref T) err
 	return l.CheckWithStep(rt, sut, ref, -1)
 }
 
+// Reset clears the prior snapshots — [Resettable]. The step-zero guard in
+// CheckWithStep covers the common path; this covers a run whose first check
+// lands past step zero, and keeps the stateful contract uniform.
+func (l *AppendOnlyHistoryGrows[T, K, Entry]) Reset() { l.prior = nil }
+
 // CheckWithStep verifies the chain growth invariant per partition.
 func (l *AppendOnlyHistoryGrows[T, K, Entry]) CheckWithStep(rt *rapid.T, sut, _ T, step int) error {
 	if step == 0 || l.prior == nil {

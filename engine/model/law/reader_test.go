@@ -112,6 +112,44 @@ func TestSticky(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("the observation mirrors, because a sticky read pins", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			refReads := 0
+			l := &law.Sticky[string, string, int]{
+				Read: func(_ *rapid.T, side, _ string) (int, error) {
+					if side == "ref" {
+						refReads++
+					}
+					return 1, nil
+				},
+				Keys: rapid.Just("k"),
+			}
+			if err := l.Check(rt, "sut", "ref"); err != nil {
+				rt.Fatal(err)
+			}
+			if refReads != 1 {
+				rt.Fatalf("the pin must land on both sides, got %d ref reads", refReads)
+			}
+		})
+	})
+
+	t.Run("Reset forgets the pins, so a fresh pair re-resolves", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			reads := 0
+			l := &law.Sticky[int, string, int]{
+				Read: func(*rapid.T, int, string) (int, error) { reads++; return reads, nil },
+				Keys: rapid.Just("k"),
+			}
+			_ = l.Check(rt, 0, 0) // pins the first reading
+			l.Reset()
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("a pin taken against a gone store must not outlive Reset: %v", err)
+			}
+		})
+	})
 }
 
 // PointInTime asks whether two consecutive reads of the same key agree, with
@@ -262,6 +300,10 @@ func TestMonotonicNonDecreasingBranches(t *testing.T) {
 			_ = l.Check(rt, 0, 0) // primes the watermark at 9
 			if err := l.Check(rt, 0, 0); err == nil {
 				rt.Fatal("a reading below the previous one is a violation")
+			}
+			l.Reset()
+			if err := l.Check(rt, 0, 0); err != nil {
+				rt.Fatalf("Reset clears the watermark for the next pair: %v", err)
 			}
 		})
 	})

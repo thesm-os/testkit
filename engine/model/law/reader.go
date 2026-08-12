@@ -159,10 +159,22 @@ func (*Sticky[T, K, V]) ID() string { return lawid.Sticky }
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*Sticky[T, K, V]) REQID() string { return "" }
 
+// Reset clears the pinned resolutions — [Resettable], because a pin taken
+// against the previous iteration's store is a memory of nothing.
+func (l *Sticky[T, K, V]) Reset() { l.first = nil }
+
 // Check verifies the first-resolved value for k persists.
-func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
+//
+// The observation lands on both sides — mirrored conduct, not observational,
+// because this law runs against resolution-pinning subjects where a read IS
+// a write: it pins. A pair whose resolution state advances one side at a
+// time diverges at the next overwrite, and the divergence would be blamed on
+// whichever action read next. The reference's answer is not this law's
+// claim; the reader action compares the pair.
+func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "Sticky_key")
 	v, err := l.Read(rt, sut, k)
+	_, _ = l.Read(rt, ref, k)
 	if err != nil {
 		return nil //nolint:nilerr // precondition failed; law vacuously holds
 	}
@@ -198,6 +210,14 @@ func (*MonotonicNonDecreasing[T, R]) ID() string { return lawid.MonotonicNonDecr
 
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*MonotonicNonDecreasing[T, R]) REQID() string { return "" }
+
+// Reset clears the prior observation — [Resettable], because an observation
+// of the previous iteration's store orders nothing in this one.
+func (l *MonotonicNonDecreasing[T, R]) Reset() {
+	var zero R
+	l.prev = zero
+	l.seen = false
+}
 
 // Check verifies the result has not decreased.
 func (l *MonotonicNonDecreasing[T, R]) Check(rt *rapid.T, sut, _ T) error {

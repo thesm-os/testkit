@@ -65,6 +65,30 @@ func TestAppendOnlyHistoryGrows(t *testing.T) {
 		})
 	})
 
+	t.Run("Reset clears the snapshots for a fresh pair", func(t *testing.T) {
+		t.Parallel()
+		grown := ref.NewAppendOnly[entry](nil)
+		hist := history.New[struct{}, entry]()
+		_ = grown.Append(t.Context(), entry{ID: "1", Data: "a"})
+		hist.Record(struct{}{}, entry{ID: "1", Data: "a"})
+
+		l := &law.AppendOnlyHistoryGrows[chainImpl, struct{}, entry]{
+			Replay: replayFn(t), Partitions: hist.Partitions,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			// Past step zero, so only Reset stands between the snapshot and
+			// the next pair's shorter chain.
+			if err := l.CheckWithStep(rt, grown, grown, 1); err != nil {
+				rt.Fatal(err)
+			}
+			l.Reset()
+			fresh := ref.NewAppendOnly[entry](nil)
+			if err := l.CheckWithStep(rt, fresh, fresh, 1); err != nil {
+				rt.Fatalf("the previous pair's chain constrains nothing here: %v", err)
+			}
+		})
+	})
+
 	t.Run("equal size is not shrinkage", func(t *testing.T) {
 		t.Parallel()
 		chain := ref.NewAppendOnly[entry](nil)

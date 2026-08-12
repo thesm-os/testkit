@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/gate"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/generator/tiers"
 )
 
@@ -209,6 +210,32 @@ func TestEveryBindingRowMatchesItsLaw(t *testing.T) {
 		_, valueHasCheck := typ.MethodByName("Check")
 		testkit.Equal(t, b.Ptr, !valueHasCheck,
 			id+"'s row addresses the literal exactly when the law is stateful")
+	}
+}
+
+// TestEveryStatefulLawResets holds the memory-carrying laws to
+// [law.Resettable]: cross-action state lives in unexported fields, the pair
+// is rebuilt fresh every property iteration, and a law the runner cannot
+// reset false-fails the first iteration whose draws differ from the last —
+// the leak the wide pools surfaced. Trace-bound laws are exempt: their one
+// unexported field is rebound per iteration through [law.TraceBinder].
+func TestEveryStatefulLawResets(t *testing.T) {
+	t.Parallel()
+
+	resettable := reflect.TypeFor[law.Resettable]()
+	binder := reflect.TypeFor[law.TraceBinder]()
+	for id, typ := range gate.LawTypes {
+		stateful := false
+		for f := range typ.Fields() {
+			if !f.IsExported() {
+				stateful = true
+			}
+		}
+		if !stateful || reflect.PointerTo(typ).Implements(binder) {
+			continue
+		}
+		testkit.True(t, reflect.PointerTo(typ).Implements(resettable),
+			id+" carries cross-action state the runner must reset per iteration")
 	}
 }
 

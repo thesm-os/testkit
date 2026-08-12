@@ -240,10 +240,16 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 		var iterTrace trace.Trace
 		iterTrace.Reset()
 
-		// Bind trace to laws that implement TraceBinder (trace combinators).
+		// Bind trace to laws that implement TraceBinder (trace combinators),
+		// and clear cross-action law state: the pair is about to be rebuilt,
+		// and state observed against the previous iteration's stores would
+		// false-fail the first draw that differs from that iteration's.
 		for _, l := range cfg.Laws.laws {
 			if binder, ok := l.(law.TraceBinder); ok {
 				binder.BindTrace(&iterTrace)
+			}
+			if r, ok := l.(law.Resettable); ok {
+				r.Reset()
 			}
 		}
 

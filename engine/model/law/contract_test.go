@@ -36,6 +36,31 @@ func TestAppenderMonotonicOffsets(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Reset clears the watermark for a fresh pair", func(t *testing.T) {
+		t.Parallel()
+		l := &law.AppenderMonotonicOffsets[*ref.MonotonicLog[string], string, int64]{
+			Append: func(rt *rapid.T, s *ref.MonotonicLog[string], v string) (int64, error) {
+				return s.Append(rt.Context(), v)
+			},
+			Values: rapid.Just("v"),
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			grown := ref.NewMonotonicLog[string]()
+			_, _ = grown.Append(rt.Context(), "seed")
+			_, _ = grown.Append(rt.Context(), "seed")
+			if err := l.Check(rt, grown, grown); err != nil {
+				rt.Fatal(err)
+			}
+			l.Reset()
+			// A fresh log answers offsets below the old watermark; only the
+			// reset keeps that from reading as a violation.
+			fresh := ref.NewMonotonicLog[string]()
+			if err := l.Check(rt, fresh, fresh); err != nil {
+				rt.Fatalf("the previous pair's offsets order nothing here: %v", err)
+			}
+		})
+	})
 }
 
 func TestCASAtomicOneWinner(t *testing.T) {

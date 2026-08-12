@@ -87,6 +87,20 @@ type StatefulLaw[T any] interface {
 	CheckWithStep(rt *rapid.T, sut, ref T, step int) error
 }
 
+// Resettable is implemented by every law carrying cross-action state. The
+// runner resets each one at the start of every property iteration: the pair
+// is rebuilt fresh through the factories, and state observed against the
+// previous iteration's stores is a memory of nothing that still exists.
+//
+// The rule is not optional for a stateful law. One that keeps its state
+// across iterations false-fails the moment two iterations draw different
+// values for the same key — which the fixture-pair pools never did, and the
+// first wide pool did on its first run.
+type Resettable interface {
+	// Reset clears the cross-action state.
+	Reset()
+}
+
 // ReadAfterWrite checks that every key in a sample pool is consistent
 // between SUT and reference. Observational — never writes.
 //
