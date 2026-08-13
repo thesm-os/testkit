@@ -797,10 +797,13 @@ func TestRunnerConfigValidation(t *testing.T) {
 			)
 		})
 		if !ft.Failed() {
-			t.Fatal("laws plus concurrent must be rejected, not silently dropped")
+			t.Fatal("a step-boundary law plus concurrent must be rejected, not silently dropped")
 		}
-		if !strings.Contains(ft.Msg(), "Laws are unsupported with Concurrent") {
+		if !strings.Contains(ft.Msg(), "unsupported with Concurrent") {
 			t.Fatalf("the diagnostic must explain the incompatibility, got: %s", ft.Msg())
+		}
+		if !strings.Contains(ft.Msg(), "AUTO-PURE-DETERMINISTIC") {
+			t.Fatalf("and name the law that needs the step boundary, got: %s", ft.Msg())
 		}
 	})
 }

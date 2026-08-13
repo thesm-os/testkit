@@ -12,9 +12,9 @@ const (
 	twoPhase    = "waits on a begin that returns the transaction handle commit and rollback thread"
 	pageDebt    = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
 	comparator  = "waits on the supplied comparator its manifest names, which no generated value can stand in for"
-	sessionDebt = "waits on the multi-client trace that makes a session guarantee " +
-		"falsifiable — the version stamp is declarable since eidos#25, and the " +
-		"runner still records one client"
+	sessionDebt = "waits on a write that answers its stored state — the trace records " +
+		"what was sent, never the version the store assigned, and an upserter " +
+		"shape (ctx, V) (V, error) is the detector vocabulary upstream adds"
 )
 
 // UnboundLaws is the debt register the assertion gate carries: model-owned
@@ -86,9 +86,11 @@ var UnboundLaws = map[string]string{
 	// Waiting on the append-recording hook.
 	"AUTO-APPEND-ONLY-NO-DROPS": "waits on an append-recording history hook the runner does not offer",
 
-	// Waiting on eidos#25's version stamp and the multi-client runner behind
-	// it: a single-client trace satisfies every session guarantee vacuously.
-	"AUTO-MONOTONIC-READS":     sessionDebt,
+	// The read-ordering half of the session family binds — monotonicreads
+	// runs per client over the concurrent leg's trace. The write-ordering
+	// three still cannot see the version a write was assigned: a writer
+	// answering only an error hides it from the trace, and the shape that
+	// surfaces it is a detector eidos does not yet draw.
 	"AUTO-MONOTONIC-WRITES":    sessionDebt,
 	"AUTO-READ-YOUR-WRITES":    sessionDebt,
 	"AUTO-WRITES-FOLLOW-READS": sessionDebt,

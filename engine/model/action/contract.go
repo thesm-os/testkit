@@ -117,7 +117,7 @@ func Appender[T, V any, Offset comparable](
 					Output: sutOff,
 				}
 			}
-			return model.ActionResult{Input: v, Output: sutOff}
+			return model.ActionResult{Input: v, Output: sutOff, CallErr: sutErr}
 		},
 	}
 }
@@ -254,7 +254,7 @@ func GetOrCompute[T any, K comparable, V any](
 					}
 				}
 			}
-			return model.ActionResult{Input: k, Output: sutGot}
+			return model.ActionResult{Input: k, Output: sutGot, CallErr: sutErr}
 		},
 	}
 }

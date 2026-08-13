@@ -17,8 +17,13 @@ import (
 	"context"
 )
 
-// Value is the payload the store holds.
-type Value struct{ Key, Body string }
+// Value is the payload the store holds. Rev is the ordering stamp the
+// subject assigns on write — the version the per-client guarantee is
+// defined against, which is why the mixin names it.
+type Value struct {
+	Key, Body string
+	Rev       int64
+}
 
 // Mixed is the fixture interface.
 //
@@ -30,7 +35,8 @@ type Mixed interface {
 	// Store is the write the read is judged against.
 	Store(ctx context.Context, v Value) error
 
-	// Get reads a key. Once a client has seen a version, it never sees an older one.
-	//testkit:mixin monotonicreads
+	// Get reads a key. Once a client has seen a version, it never sees an
+	// older one — ordered by the Rev the store stamped.
+	//testkit:mixin monotonicreads version=Rev
 	Get(ctx context.Context, key string) (Value, error)
 }

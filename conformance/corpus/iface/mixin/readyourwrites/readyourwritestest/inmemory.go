@@ -22,6 +22,7 @@ var ErrNotFound = errors.New("readyourwritestest: not found")
 // against.
 type InMemory struct {
 	mu     sync.Mutex
+	rev    int64
 	values map[string]readyourwrites.Value
 }
 
@@ -39,6 +40,8 @@ func (s *InMemory) Store(ctx context.Context, v readyourwrites.Value) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.rev++
+	v.Rev = s.rev
 	s.values[v.Key] = v
 	return nil
 }

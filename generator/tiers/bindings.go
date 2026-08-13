@@ -217,6 +217,11 @@ var bindings = map[string]Binding{
 	// factory builds the subject on the run's own test clock — a law that
 	// advances a clock the subject does not read fails every correct
 	// implementation.
+	lawid.MonotonicReads:    {Type: "MonotonicReads", Ptr: true, Args: []BindArg{BindKey}},
+	lawid.MonotonicWrites:   {Type: "MonotonicWrites", Ptr: true, Args: []BindArg{BindKey}},
+	lawid.ReadYourWrites:    {Type: "ReadYourWrites", Ptr: true, Args: []BindArg{BindKey}},
+	lawid.WritesFollowReads: {Type: "WritesFollowReads", Ptr: true, Args: []BindArg{BindKey}},
+
 	lawid.TTLExpiry: {
 		Type: "TTLExpiryAfterAdvance", Timeaware: true,
 		Args: []BindArg{BindKey, BindValue},

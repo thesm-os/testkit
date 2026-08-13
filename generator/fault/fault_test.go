@@ -656,7 +656,7 @@ func badPartition(t *testing.T) *sdk.Package {
 // the projected package declares are typed and uninitialised, so running the
 // suite would assert against nil errors. Giving them values means `errors.New`,
 // and an import referenced only by an initialiser is dropped from the
-// projection — eidos#11.
+// projection, which the frontend now marks.
 func TestToolchainAcceptsTheContribution(t *testing.T) {
 	t.Parallel()
 

@@ -847,7 +847,7 @@ func TestHandleFieldArms(t *testing.T) {
 	t.Run("the handles nothing constructs refuse by name", func(t *testing.T) {
 		t.Parallel()
 		for from, needle := range map[string]string{
-			"trace-classifier": "eidos#25",
+			"trace-classifier": "no keyed reader",
 			"history":          "history hook",
 			"coalesce-probe":   "does not construct",
 		} {
@@ -1165,4 +1165,189 @@ func TestClockedLawBinding(t *testing.T) {
 		testkit.True(t, len(b.LawPools) == 1 && b.LawPools[0].Offsets,
 			"and the declared pool carries the bounded-duration form")
 	})
+}
+
+// TestSessionClassifierDerivation pins the per-client classifier's arms:
+// every refusal names what is missing, the write-ordering laws hold out for
+// a write the trace can see, and the derivation is one file-level function
+// however many laws read it.
+func TestSessionClassifierDerivation(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	sessionRule := func(law string) tiers.Rule {
+		return tiers.Rule{Law: law, Needs: []string{mixinMonotonicReads}, Fields: []tiers.Field{
+			{Name: "Classify", Kind: tiers.KindHandle, From: handleClassifier},
+		}}
+	}
+	classify := func(b *Bindings, lawID string, m, keyed *suite.Method) (*LawField, string) {
+		r := sessionRule(lawID)
+		return lawFieldOf(b, nil, r, r.Fields[0], m, keyed)
+	}
+	stampedReader := func() *suite.Method {
+		reader := projected("Get",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+		shape.MixinParamKey(mixinMonotonicReads, "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
+		return reader
+	}
+
+	t.Run("no keyed reader, no ordering to read", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := classify(b, lawid.MonotonicReads, unstamped(), nil)
+		testkit.Assert(t, reason).Contains("no keyed reader", "the guarantee is about reads")
+	})
+
+	t.Run("no version= member, no ordering stamp", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		reader := projected("Get",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+		_, reason := classify(b, lawid.MonotonicReads, unstamped(), reader)
+		testkit.Assert(t, reason).Contains("version=", "the mixin names the member or nothing orders")
+	})
+
+	t.Run("a write-ordering law holds out for a visible write", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		r := tiers.Rule{Law: lawid.MonotonicWrites, Needs: []string{"monotonicwrites"}, Fields: []tiers.Field{
+			{Name: "Classify", Kind: tiers.KindHandle, From: handleClassifier},
+		}}
+		reader := stampedReader()
+		shape.MixinParamKey("monotonicwrites", "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
+		_, reason := lawFieldOf(b, &suite.Contract{}, r, r.Fields[0], reader, reader)
+		testkit.Assert(t, reason).Contains("upserter", "the shape that would surface the stamp is named")
+	})
+
+	t.Run("the read-ordering law binds and the derivation memoizes", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject:         suite.Subject{IfaceName: "Mixed"},
+			Keys:            Pool{Type: sdk.Builtin(qStr)},
+			sessionKeyField: fieldKey,
+		}
+		reader := stampedReader()
+		field, reason := classify(b, lawid.MonotonicReads, reader, reader)
+		testkit.True(t, reason == "" && field != nil, "a stamped keyed reader classifies: "+reason)
+		testkit.Equal(t, field.KeyOfName, "mixedSessionClassify", "through the one file-level function")
+		testkit.True(t, b.Session != nil && b.Session.VersionField == "Rev",
+			"and the derivation lands on the bindings")
+
+		again, reason := classify(b, lawid.MonotonicReads, reader, reader)
+		testkit.True(t, reason == "" && again.KeyOfName == field.KeyOfName,
+			"a second law reads the same derivation: "+reason)
+	})
+
+	t.Run("a key pool nothing draws refuses", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject:         suite.Subject{IfaceName: "Mixed"},
+			sessionKeyField: fieldKey,
+		}
+		_, reason := classify(b, lawid.MonotonicReads, stampedReader(), stampedReader())
+		testkit.Assert(t, reason).Contains("key type", "the laws instantiate at the pool's key")
+	})
+
+	t.Run("a value with no conventional key member refuses", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject: suite.Subject{IfaceName: "Mixed"},
+			Keys:    Pool{Type: sdk.Builtin(qStr)},
+		}
+		_, reason := classify(b, lawid.MonotonicReads, stampedReader(), stampedReader())
+		testkit.Assert(t, reason).Contains("no convention names", "per-client state needs the value's identity")
+	})
+}
+
+// TestUpserterDetection pins the shape the write-ordering laws hold out
+// for: one value in, the same type out beside the error.
+func TestUpserterDetection(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	valueRef := pkgRef("example.com/s", "Value")
+
+	up := projected("Persist",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", valueRef)},
+		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+	plain := projected("Put",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", valueRef)},
+		[]golang.Return{errRet})
+	crossed := projected("Save",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", valueRef)},
+		[]golang.Return{res(namedRef("int64")), errRet})
+
+	h := &suite.Contract{Methods: []suite.Method{*plain, *up, *crossed}}
+	found := upserterOf(h)
+	testkit.True(t, found != nil && found.Name == "Persist",
+		"the answered-state write is the upserter")
+
+	none := &suite.Contract{Methods: []suite.Method{*plain, *crossed}}
+	testkit.True(t, upserterOf(none) == nil,
+		"an error-only write and a scalar-answering write both hide the stored state")
+}
+
+// TestSessionVersionScan pins the stamp scan the twin decision reads: the
+// first session mixin carrying version= answers, anything else scans past.
+func TestSessionVersionScan(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	reader := projected("Get",
+		[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+	reader.Mixins = []string{"monotonicreads"}
+	shape.MixinParamKey(mixinMonotonicReads, "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
+
+	member, stamped := sessionVersionOf(&suite.Contract{Methods: []suite.Method{*reader}})
+	testkit.True(t, stamped && member == "Rev", "a stamped session mixin names its member")
+
+	bare := projected("Get",
+		[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+	bare.Mixins = []string{"monotonicreads"}
+	_, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*bare}})
+	testkit.False(t, stamped, "a session mixin without version= stamps no ordering")
+
+	other := projected("Put",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
+		[]golang.Return{errRet})
+	other.Mixins = []string{"idempotent"}
+	_, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*other}})
+	testkit.False(t, stamped, "a non-session mixin is not in the scan")
+}
+
+// TestSessionConcurrentDerivation pins the session leg: it derives whole —
+// reader and writer both driven — or not at all, and lands the stepless
+// family the trace laws carry.
+func TestSessionConcurrentDerivation(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	keyed := projected("Get",
+		[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+	valued := projected("Persist",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/s", "Value"))},
+		[]golang.Return{errRet})
+
+	b := &Bindings{
+		Subject: suite.Subject{IfaceName: "Mixed"},
+		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
+		Actions: []*Action{{Method: "Get"}, {Method: "Persist"}},
+	}
+	concurrentOf(b, keyed, valued)
+	testkit.Equal(t, b.ConcFamily, "session", "both halves in hand derive the stepless leg")
+
+	half := &Bindings{
+		Subject: suite.Subject{IfaceName: "Mixed"},
+		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
+		Actions: []*Action{{Method: "Get"}},
+	}
+	concurrentOf(half, keyed, valued)
+	testkit.Equal(t, half.ConcFamily, "", "half a pair interleaves nothing worth checking")
+	testkit.True(t, half.ConcReader == nil && half.ConcWriter == nil,
+		"and the halves are reset rather than left dangling")
 }

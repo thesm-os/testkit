@@ -102,7 +102,7 @@ func run(ctx context.Context, root string, patterns ...string) (*pipeline.Pipeli
 // DetectorStamps returns each package's detector stamps — the per-fixture
 // view [Annotate]'s corpus-wide census deliberately flattens, for the
 // identity gate that holds a detector fixture to the shape its directory
-// names. eidos#26 proved the need the hard way: two fixtures drifted from
+// names. Two drifted fixtures proved the need the hard way: both moved from
 // their named shapes with years of green builds, because coverage asked
 // only whether the stamps existed somewhere.
 func DetectorStamps(ctx context.Context, root string, patterns ...string) (map[string][]string, error) {

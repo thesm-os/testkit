@@ -792,8 +792,8 @@ func TestToolchainAcceptsTheChecks(t *testing.T) {
 //
 // The sentinels carry real initialisers, so the umbrella checks are compiled
 // alongside the per-type ones rather than left to the golden. That needs an
-// import referenced only by an `InitExpr`, which the projection now marks —
-// eidos#11. Their messages carry the package prefix because the generated suite
+// import referenced only by an `InitExpr`, which the projection now marks.
+// Their messages carry the package prefix because the generated suite
 // checks for it: a sentinel initialised to `errors.New("empty")` would render a
 // check that compiles and then fails, reporting this fixture's wording as a
 // generator defect.

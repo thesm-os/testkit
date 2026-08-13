@@ -1,0 +1,7 @@
+{{- /*
+The per-client classifier handle: one file-level derivation, referenced by
+every session law that reads through it.
+*/ -}}
+{{- define "model.lawfield.Classify" -}}
+{{ .Name }}: {{ .KeyOfName }}
+{{- end -}}

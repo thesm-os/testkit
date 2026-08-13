@@ -120,6 +120,18 @@ parameter with no hint is a diagnostic at the parameter.
   satisfy reports vacuously, counted apart from a pass — a law vacuous on
   every check past the census floor is named in the run's log, because
   sixty vacuous returns are sixty times a binding asserted nothing.
+- **Per-client session laws, where a version is named** — the four session
+  mixins accept `version=<member>`, naming the field of the value that
+  carries the store-assigned ordering stamp. The generator emits one
+  classifier per interface — trace event in, per-client read or write out —
+  and binds the read-ordering law over it; the laws run over the sequential
+  trace and, with real client IDs, over the concurrent leg's multi-client
+  interleaving, where Porcupine stays out (a store-assigned stamp defeats
+  value equality — the model is stepless and the trace laws are the check).
+  A version-stamped fixture forces the twin reference for the same reason.
+  The write-ordering laws hold out for a write the trace can see — an
+  upserter shape answering the stored state — and refuse by name until the
+  upstream detector for it lands.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history

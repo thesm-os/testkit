@@ -14,7 +14,9 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/core/trace"
 	"go.thesmos.sh/testkit/engine/model"
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/engine/model/linearize"
 )
 
@@ -310,4 +312,192 @@ func TestConcurrentRequiresAtLeastOneAction(t *testing.T) {
 	if !strings.Contains(ft.Msg(), "Action") {
 		t.Fatalf("the diagnostic must say what is missing, got: %s", ft.Msg())
 	}
+}
+
+// --- The multi-client trace and the per-client laws ---
+
+// vitem is a value the store stamps: Rev is store-assigned on write.
+type vitem struct {
+	ID   string
+	Name string
+	Rev  int64
+}
+
+// vstore stamps every write from one counter and answers the stored value.
+type vstore struct {
+	mu    sync.Mutex
+	rev   int64
+	items map[string]vitem
+}
+
+func newVStore() *vstore { return &vstore{items: map[string]vitem{}} }
+
+func (s *vstore) Get(_ context.Context, key string) (vitem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.items[key]
+	if !ok {
+		return vitem{}, errNotFound
+	}
+	return v, nil
+}
+
+func (s *vstore) Put(_ context.Context, v vitem) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rev++
+	v.Rev = s.rev
+	s.items[v.ID] = v
+	return nil
+}
+
+// staleVStore keeps every version and alternates between the newest and the
+// oldest — a client that reads twice sees time run backwards, which is the
+// regression a session guarantee exists to catch.
+type staleVStore struct {
+	vstore
+	flip    atomic.Int64
+	history map[string][]vitem
+}
+
+func newStaleVStore() *staleVStore {
+	return &staleVStore{vstore: *newVStore(), history: map[string][]vitem{}}
+}
+
+func (s *staleVStore) Put(ctx context.Context, v vitem) error {
+	if err := s.vstore.Put(ctx, v); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.history[v.ID] = append(s.history[v.ID], s.items[v.ID])
+	return nil
+}
+
+func (s *staleVStore) Get(_ context.Context, key string) (vitem, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hist := s.history[key]
+	if len(hist) == 0 {
+		return vitem{}, errNotFound
+	}
+	if s.flip.Add(1)%2 == 0 {
+		return hist[0], nil // the oldest — backwards for any client that saw newer
+	}
+	return hist[len(hist)-1], nil
+}
+
+type vstoreIface interface {
+	Get(context.Context, string) (vitem, error)
+	Put(context.Context, vitem) error
+}
+
+// classifyV maps trace events to per-client ops, the way the generator will:
+// reads take their version off the output value, errored calls classify
+// nothing.
+func classifyV(ev trace.Event) (law.ClientOp[string], bool) {
+	if ev.Err != nil {
+		return law.ClientOp[string]{}, false
+	}
+	if ev.Method != "Get" { //nolint:usestdlibvars // a store method name, not an HTTP verb
+		return law.ClientOp[string]{}, false
+	}
+	v, ok := ev.Output.(vitem)
+	if !ok {
+		return law.ClientOp[string]{}, false
+	}
+	return law.ClientOp[string]{Key: v.ID, Version: v.Rev}, true
+}
+
+var vitemGen = rapid.Custom(func(rt *rapid.T) vitem {
+	id := rapid.SampledFrom([]string{"a", "b"}).Draw(rt, "id")
+	return vitem{ID: id, Name: rapid.StringMatching(`[a-z]{3}`).Draw(rt, "name")}
+})
+
+func vConcurrent() model.ConcurrentConfig[vstoreIface] {
+	return model.ConcurrentConfig[vstoreIface]{
+		// Stepless on purpose: a store-assigned Rev defeats value equality,
+		// so the run carries the trace-scanning laws instead of Porcupine.
+		Actions: []model.ConcurrentAction[vstoreIface]{
+			linearize.ConcurrentReader("Get", rapid.SampledFrom([]string{"a", "b"}),
+				func(ctx context.Context, s vstoreIface, k string) (vitem, error) { return s.Get(ctx, k) }),
+			linearize.ConcurrentWriter("Put", vitemGen,
+				func(ctx context.Context, s vstoreIface, v vitem) error { return s.Put(ctx, v) },
+				func(v vitem) string { return v.ID }),
+		},
+	}
+}
+
+func TestConcurrentTraceLawsPass(t *testing.T) {
+	t.Parallel()
+
+	model.Assert(t,
+		func() vstoreIface { return newVStore() },
+		model.WithConcurrent(vConcurrent()),
+		model.WithLaw(&law.MonotonicReads[vstoreIface, string]{Classify: classifyV}),
+	)
+}
+
+func TestConcurrentTraceLawsCatchStaleReads(t *testing.T) {
+	t.Parallel()
+
+	ft := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		model.Assert(ft,
+			func() vstoreIface { return newStaleVStore() },
+			model.WithConcurrent(vConcurrent()),
+			model.WithLaw(&law.MonotonicReads[vstoreIface, string]{Classify: classifyV}),
+		)
+	}()
+	<-done
+	if !ft.Failed() {
+		t.Fatal("a client re-reading an older version must trip the per-client law")
+	}
+	if !strings.Contains(ft.Msg(), "AUTO-MONOTONIC-READS") {
+		t.Fatalf("and the failure names the law, got: %s", ft.Msg())
+	}
+}
+
+func TestConcurrentSteplessModelNeedsTraceLaws(t *testing.T) {
+	t.Parallel()
+
+	ft := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		model.Assert(ft,
+			func() vstoreIface { return newVStore() },
+			model.WithConcurrent(vConcurrent()),
+		)
+	}()
+	<-done
+	if !ft.Failed() {
+		t.Fatal("no model and no trace law is a run that asserts nothing — it must say so")
+	}
+	if !strings.Contains(ft.Msg(), "assert nothing") {
+		t.Fatalf("the diagnostic must explain the vacuity, got: %s", ft.Msg())
+	}
+}
+
+// vacuousTraceLaw declines every trace — the counted-apart verdict on the
+// concurrent walk.
+type vacuousTraceLaw struct{ tr *trace.Trace }
+
+func (l *vacuousTraceLaw) BindTrace(t *trace.Trace) { l.tr = t }
+func (*vacuousTraceLaw) ID() string                 { return "TEST-TRACE-VACUOUS" }
+func (*vacuousTraceLaw) REQID() string              { return "" }
+func (*vacuousTraceLaw) Check(_ *rapid.T, _, _ vstoreIface) error {
+	return law.Vacuous
+}
+
+func TestConcurrentTraceLawVacuousIsCountedApart(t *testing.T) {
+	t.Parallel()
+
+	model.Assert(t,
+		func() vstoreIface { return newVStore() },
+		model.WithConcurrent(vConcurrent()),
+		model.WithLaw(&vacuousTraceLaw{}),
+	)
 }

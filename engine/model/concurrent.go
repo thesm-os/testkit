@@ -4,6 +4,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/core/trace"
+	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // runConcurrent executes concurrent linearizability testing.
@@ -38,6 +40,11 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 	}
 	if len(cc.Actions) == 0 && len(cc.StressActions) == 0 {
 		t.Fatal("model.runConcurrent: at least one Action or StressAction required")
+	}
+	if cc.Model.Step == nil && !hasTraceLaws(cfg.Laws) {
+		// No model and no trace-scanning law is a run that records a history
+		// nothing reads — loud, because the caller believes it checks.
+		t.Fatal("model.runConcurrent: no Model and no trace-scanning law; the run would assert nothing")
 	}
 
 	rapid.Check(t, func(rt *rapid.T) {
@@ -125,8 +132,21 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 
 		wg.Wait()
 
-		// Phase 3: Check linearizability (skip if no linearizable ops).
 		if len(history) == 0 {
+			return
+		}
+
+		// The history as a trace, every iteration — the multi-client view
+		// the per-client laws are defined against. Typed results speak
+		// through [TraceResult]; anything else lands whole.
+		iterTrace := historyTrace(history)
+
+		// Phase 3: Check linearizability where a model speaks the values'
+		// language. A version-stamping subject defeats value equality, and
+		// its run carries trace-scanning laws instead — a stepless model
+		// skips Porcupine, never the laws.
+		if cc.Model.Step == nil {
+			checkTraceLaws(rt, cfg, iterTrace, sut, ref)
 			return
 		}
 		result, info := porcupine.CheckOperationsVerbose(
@@ -181,7 +201,88 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 				"ConcurrentConfig.Timeout or reduce the concurrent load; an "+
 				"undecided run asserts nothing", cc.Timeout)
 		}
+
+		checkTraceLaws(rt, cfg, iterTrace, sut, ref)
 	})
+}
+
+// historyTrace converts a Porcupine history into the trace the per-client
+// laws scan: method names, real client IDs, and each call's own output and
+// error, unwrapped through [TraceResult].
+func historyTrace(history []porcupine.Operation) *trace.Trace {
+	var tr trace.Trace
+	for _, op := range history {
+		input := op.Input.(OpInput)
+		output := op.Output.(OpOutput).Result
+		var callErr error
+		if res, typed := output.(TraceResult); typed {
+			output, callErr = res.TraceOutput()
+		}
+		tr.Record(trace.Event{
+			StartNs:  op.Call,
+			EndNs:    op.Return,
+			Method:   input.Name,
+			ClientID: op.ClientId,
+			Inputs:   []any{input.Args},
+			Output:   output,
+			Err:      callErr,
+		})
+	}
+	return &tr
+}
+
+// hasTraceLaws reports whether the registry holds any trace-scanning law.
+func hasTraceLaws[T any](laws *Registry[T]) bool {
+	if laws == nil {
+		return false
+	}
+	for _, l := range laws.laws {
+		if _, scans := l.(law.TraceBinder); scans {
+			return true
+		}
+	}
+	return false
+}
+
+// checkTraceLaws binds the iteration's multi-client trace to every
+// trace-scanning law and runs each once. A violation carries the whole
+// interleaving: the failure is about an ordering, and the trace is the
+// only place the ordering exists.
+func checkTraceLaws[T any](rt *rapid.T, cfg Config[T], tr *trace.Trace, sut, ref T) {
+	if cfg.Laws == nil {
+		return
+	}
+	for _, l := range cfg.Laws.laws {
+		binder, scans := l.(law.TraceBinder)
+		if !scans {
+			continue
+		}
+		binder.BindTrace(tr)
+		cfg.Laws.ran[l.ID()]++
+		err := l.Check(rt, sut, ref)
+		if errors.Is(err, law.Vacuous) {
+			cfg.Laws.vacuous[l.ID()]++
+			continue
+		}
+		if err != nil {
+			f := &Failure{
+				Kind:         FailureInvariant,
+				LawID:        l.ID(),
+				REQID:        l.REQID(),
+				StepRan:      StepID{WorkerID: -1, Index: 0},
+				StepReported: StepID{WorkerID: -1, Index: 0},
+				Err:          err,
+				Trace:        tr.Snapshot(),
+			}
+			if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
+				f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
+			}
+			for _, p := range emitPerClientJSON(rt, cfg.ArtifactDir, f) {
+				f.ArtifactPaths = append(f.ArtifactPaths, "json: "+p)
+			}
+			rt.Fatalf("%s", formatFailure(f))
+		}
+	}
 }
 
 // writeVisualization writes a Porcupine visualization HTML file to

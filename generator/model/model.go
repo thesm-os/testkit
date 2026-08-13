@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.14.1"
+const Version = "0.15.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -67,6 +67,47 @@ const KindBindings sdk.Kind = "model.bindings"
 // ActionKindPrefix composes each action's emit kind — `model.action.<shape>` —
 // which is the template that renders its constructor call.
 const ActionKindPrefix = "model.action."
+
+// TracePkg is the trace vocabulary's import path — the event type the
+// generated session classifier reads.
+const TracePkg = "go.thesmos.sh/testkit/core/trace"
+
+// sessionMixins are the four per-client guarantees, each carrying the
+// version= param that names the ordering stamp on the value.
+//
+// mixinMonotonicReads is the read-ordering session mixin's spelling — the
+// one the tests and the vocabulary list both name.
+const mixinMonotonicReads = "monotonicreads"
+
+//nolint:gochecknoglobals // a vocabulary list, read-only after init.
+var sessionMixins = []string{
+	mixinMonotonicReads, "monotonicwrites", "readyourwrites", "writesfollowreads",
+}
+
+// SessionSpec is the derived per-client classification: the one closure the
+// session laws share, spelled once at file level so the sequential property
+// and the concurrent leg reference the same derivation.
+type SessionSpec struct {
+	// ClassifyName is the generated file-level function's identifier.
+	ClassifyName string
+
+	// Reader is the keyed read the classifier interprets, with TakesCtx
+	// mirrored for the header.
+	Reader string
+
+	// Value is the read's result type; KeyField and VersionField are its
+	// identity and ordering members.
+	Value                  sdk.Ref
+	KeyField, VersionField string
+
+	// Writer is the upserter-shaped write whose answered state carries the
+	// stamp — empty where no write surfaces one, which classifies writes
+	// out and binds the read-ordering law alone.
+	Writer string
+
+	// Key is the pool key type the laws instantiate at.
+	Key sdk.Ref
+}
 
 // The two shared pool locals the generated property declares. Every draw in
 // the file goes through one of them, which is what keeps a law's values
@@ -156,6 +197,14 @@ type Bindings struct {
 	// bare name, so every stamp read routes through [Bindings.substQ].
 	witnessQ map[string]string
 
+	// Session is the derived per-client classification, nil where no session
+	// mixin stamps a version. One derivation, referenced by the sequential
+	// registry and the concurrent leg alike. sessionKeyField is the value's
+	// identity member, derived beside the twin decision where the reader is
+	// in hand.
+	Session         *SessionSpec
+	sessionKeyField string
+
 	// OptionName is `<Iface>Model` — the option a consumer passes to the
 	// contract entry to run this tier. PropertyName is `<Iface>ModelProperty`,
 	// the composition point it and any bespoke harness share. OptionTypeName
@@ -244,8 +293,9 @@ const (
 	roleLeaseAcquire = "acquire"
 	roleLeaseRelease = "release"
 
-	concFamilyKV    = "kv"
-	concFamilyLease = "lease"
+	concFamilyKV      = "kv"
+	concFamilyLease   = "lease"
+	concFamilySession = "session"
 )
 
 // Kind returns [KindBindings].
@@ -308,6 +358,12 @@ func (*Bindings) RefPkg() string { return RefPkg }
 
 // ClockPkg surfaces the test clock's import path to the templates.
 func (*Bindings) ClockPkg() string { return ClockPkg }
+
+// TracePath surfaces the trace vocabulary's import path to the templates.
+func (*Bindings) TracePath() string { return TracePkg }
+
+// LawPath surfaces the law package's import path to the templates.
+func (*Bindings) LawPath() string { return LawPkg }
 
 // TierName returns the tier's base path.
 func (*Bindings) TierName() string { return TierName }
@@ -1033,6 +1089,25 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 		}
 		b.ConcAcquire, b.ConcRelease = nil, nil
 	}
+	// The session leg: the same reader/writer interleaving, checked by the
+	// per-client laws over the multi-client trace rather than by Porcupine —
+	// a store-assigned version defeats the KV model's value equality, so the
+	// model stays stepless and the laws carry the run.
+	if b.Session != nil && keyed != nil && valued != nil {
+		for _, a := range b.Actions {
+			switch a.Method {
+			case keyed.Name:
+				b.ConcReader = a
+			case valued.Name:
+				b.ConcWriter = a
+			}
+		}
+		if b.ConcReader != nil && b.ConcWriter != nil {
+			b.ConcFamily = concFamilySession
+			return
+		}
+		b.ConcReader, b.ConcWriter = nil, nil
+	}
 	if b.Reference.Oracle != OracleMap || !b.Reference.Derived() || b.Reference.Pins || keyed == nil || valued == nil {
 		return
 	}
@@ -1051,6 +1126,24 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 		return
 	}
 	b.ConcFamily = concFamilyKV
+}
+
+// sessionVersionOf reports the first session mixin carrying a version=
+// param anywhere in the method set: the mixin, the member it names, and
+// whether one was found.
+func sessionVersionOf(harness *suite.Contract) (member string, stamped bool) {
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		for _, mx := range m.Mixins {
+			if !slices.Contains(sessionMixins, mx) {
+				continue
+			}
+			if v, given := shape.MixinParamKey(mx, "version").Get(m.Source.Meta()); given && v != "" {
+				return v, true
+			}
+		}
+	}
+	return "", false
 }
 
 // actionOf builds one method's action, or says why there is none.
@@ -1267,6 +1360,21 @@ func referenceOf(
 				return twin(reason)
 			}
 		}
+	}
+
+	// A version-stamped fixture is one more claim no store oracle survives:
+	// the subject assigns the ordering member on write, a value-storing
+	// oracle holds the input's zero, and the first read-back diverges on a
+	// correct store. Twins stamp together. The key member is derived here,
+	// where the reader is in hand — the classifier needs the same identity
+	// the upsert inference reads, and the twin carries no adapter to ask.
+	if _, stamped := sessionVersionOf(harness); stamped {
+		if keyed != nil {
+			if q, _ := b.valueQOf(keyed); q != "" {
+				b.sessionKeyField, _ = upsertKeyField(ctx, b, q)
+			}
+		}
+		return twin("the subject assigns the version member on write, which no value-storing oracle stamps")
 	}
 
 	// A contract claim outranks the shapes: its roles say what each method

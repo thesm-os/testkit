@@ -35,6 +35,11 @@ the tier — and the engine dependency with it.
 //	Witnesses: the property runs at {{ renderType .IfaceRef }} — the types
 //	           the source's witness= names, one per type parameter
 {{- end }}
+{{- if .Session }}
+//	Sessions:  per-client laws read {{ .Session.VersionField }} off {{ .Session.Reader }}'s value; the
+//	           concurrent leg interleaves real clients over a stepless model —
+//	           a store-assigned stamp defeats value equality, so the laws carry it
+{{- end }}
 {{- if .UsesValues }}
 {{- if .Values.GenFunc }}
 //	Values:    the fixture pair blended with {{ .Values.GenFunc }}'s draws — the gen= supply
@@ -49,6 +54,10 @@ the tier — and the engine dependency with it.
 {{- if eq .ConcFamily "kv" }}
 //	Concurrent: {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} interleave across four workers,
 //	           Porcupine-checked against the keyed-store model per key
+{{- else if eq .ConcFamily "session" }}
+//	Concurrent: {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} interleave across four workers;
+//	           the per-client laws read the multi-client trace — stepless,
+//	           because a store-assigned {{ .Session.VersionField }} defeats value equality
 {{- else if eq .ConcFamily "lease" }}
 //	Concurrent: {{ .ConcAcquire.Method }} and {{ .ConcRelease.Method }} interleave across four workers,
 //	           Porcupine-checked against the lease-table model per key
@@ -184,6 +193,11 @@ func {{ .IfaceName }}ModelFuzz(f *{{ renderExpr (external "testing" "F") }}, fac
 // interleave {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} over the shared pools, and
 // Porcupine checks the recorded history against the keyed-store model, one
 // key at a time. No reference runs here — linearizability is the oracle —
+{{- else if eq .ConcFamily "session" }}
+// interleave {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} over the shared pools, and hold
+// the recorded interleaving to the per-client session laws. No Porcupine
+// model runs here — the subject assigns {{ .Session.VersionField }} on write, which no
+// value-equality model predicts — so the trace-scanning laws are the check.
 {{- else if eq .ConcFamily "lease" }}
 // interleave {{ .ConcAcquire.Method }} and {{ .ConcRelease.Method }} over the shared keys, and
 // Porcupine checks the recorded history against the lease-table model, one
@@ -216,6 +230,25 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 					}),
 			},
 		}),
+{{- else if eq .ConcFamily "session" }}
+		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
+			// Stepless on purpose: the subject assigns {{ .Session.VersionField }} on write, and
+			// no value-equality model survives a stamp it cannot predict. The
+			// per-client laws over the recorded interleaving are the check.
+			Actions: []{{ renderExpr (external .ModelPkg "ConcurrentAction") }}[{{ renderType .IfaceRef }}]{
+				{{ renderExpr (external .LinearizePkg "ConcurrentWriter") }}("{{ .ConcWriter.Method }}", values,
+					func({{ if .ConcWriter.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, v {{ renderType .Values.Type }}) error {
+						return s.{{ .ConcWriter.Method }}({{ if .ConcWriter.TakesCtx }}ctx, {{ end }}v)
+					}, func(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type }} { return v.{{ .Session.KeyField }} }),
+				{{ renderExpr (external .LinearizePkg "ConcurrentReader") }}("{{ .ConcReader.Method }}", keys,
+					func({{ if .ConcReader.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, k {{ renderType .Keys.Type }}) ({{ renderType .Values.Type }}, error) {
+						return s.{{ .ConcReader.Method }}({{ if .ConcReader.TakesCtx }}ctx, {{ end }}k)
+					}),
+			},
+		}),
+{{- range .Laws }}{{ if .Session }}
+		{{ renderExpr (external $b.ModelPkg "WithLaw") }}({{ render . }}),
+{{- end }}{{ end }}
 {{- else if eq .ConcFamily "lease" }}
 		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
 			// The lease-table model speaks the acquire/release vocabulary at
@@ -336,6 +369,37 @@ func (r *{{ $b.Reference.TypeName }}) {{ .Sig.Name }}({{ template "model.params"
 {{ end }}
 {{- end }}
 {{- end }}
+{{ if .Session }}
+// {{ .Session.ClassifyName }} interprets one trace event as a per-client
+// operation: the ordering stamp rides the value's {{ .Session.VersionField }} member, and an
+// errored call classifies nothing — a miss's zero value is not a version.
+{{- if not .Session.Writer }}
+// Writes classify nothing here: the writer answers only an error, so the
+// version the store assigned never reaches the trace.
+{{- end }}
+func {{ .Session.ClassifyName }}(ev {{ renderExpr (external .TracePath "Event") }}) ({{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}], bool) {
+	if ev.Err != nil {
+		return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{}, false
+	}
+	switch ev.Method {
+	case "{{ .Session.Reader }}":
+		v, ok := ev.Output.({{ renderType .Session.Value }})
+		if !ok {
+			return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{}, false
+		}
+		return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{Key: v.{{ .Session.KeyField }}, Version: int64(v.{{ .Session.VersionField }})}, true
+{{- if .Session.Writer }}
+	case "{{ .Session.Writer }}":
+		v, ok := ev.Output.({{ renderType .Session.Value }})
+		if !ok {
+			return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{}, false
+		}
+		return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{Write: true, Key: v.{{ .Session.KeyField }}, Version: int64(v.{{ .Session.VersionField }})}, true
+{{- end }}
+	}
+	return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{}, false
+}
+{{ end }}
 // {{ .OptionTypeName }} configures the model run.
 type {{ .OptionTypeName }} func(*{{ .ConfigName }})
 

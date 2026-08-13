@@ -454,8 +454,8 @@ func TestMixinChecks(t *testing.T) {
 //
 // Until eidos declared the sibling param there was no second callable to reach
 // — the stamp held a bare name with no package and no owner, so a generator
-// could confirm a relationship existed and do nothing about it
-// (thesm-os/eidos#16).
+// could confirm a relationship existed and do nothing about it — the mixin
+// schema declares no parameter naming the partner.
 func TestRelationalMixin(t *testing.T) {
 	t.Parallel()
 

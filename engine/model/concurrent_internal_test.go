@@ -13,8 +13,11 @@ import (
 	"testing"
 
 	"github.com/anishathalye/porcupine"
+	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/core/trace"
+	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // trivialModel stands in for a real linearizability model. The visualizer
@@ -95,4 +98,28 @@ func TestWriteVisualization(t *testing.T) {
 			t.Fatal("the failure must be logged, not swallowed")
 		}
 	})
+}
+
+// TestTraceLawWalkSkipsStepBoundaryLaws pins the walk's defensive arms: a
+// registry holding only step-boundary laws scans no trace, and the walk
+// steps over one rather than binding what has no BindTrace. The dispatch
+// guard rejects that mix before any real run reaches here — these arms are
+// what keeps a future dispatch change from corrupting the walk silently.
+func TestTraceLawWalkSkipsStepBoundaryLaws(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry[int]()
+	r.Add(law.CountEqualsReference[int, int]{
+		Count: func(_ *rapid.T, n int) (int, error) { return n, nil },
+	})
+	if hasTraceLaws(r) {
+		t.Fatal("a step-boundary law scans no trace")
+	}
+
+	rapid.Check(t, func(rt *rapid.T) {
+		checkTraceLaws(rt, Config[int]{Laws: r}, &trace.Trace{}, 1, 1)
+	})
+	if r.ran[law.CountEqualsReference[int, int]{}.ID()] != 0 {
+		t.Fatal("the walk must step over a law it cannot bind a trace to")
+	}
 }

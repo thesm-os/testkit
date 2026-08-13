@@ -87,7 +87,7 @@ func TestAnnotateReportsUnresolvablePattern(t *testing.T) {
 // a detector-axis fixture exists to pin one detector's dispatch, and its
 // method set must carry the stamp its directory names — corpus-wide coverage
 // stayed green through two drifted fixtures because the stamps existed
-// somewhere else (eidos#26 confirmed the boundaries; the fixtures were the
+// somewhere else (the boundaries were confirmed upstream; the fixtures were the
 // ones adrift).
 func TestDetectorFixturesCarryTheirNamedStamp(t *testing.T) {
 	t.Parallel()

@@ -52,7 +52,7 @@ func Reader[T any, K comparable, V any](
 					}
 				}
 			}
-			return model.ActionResult{Input: k, Output: sutGot}
+			return model.ActionResult{Input: k, Output: sutGot, CallErr: sutErr}
 		},
 	}
 }
@@ -206,7 +206,7 @@ func Writer[T, V any](
 					Input: v,
 				}
 			}
-			return model.ActionResult{Input: v}
+			return model.ActionResult{Input: v, CallErr: sutErr}
 		},
 	}
 }
@@ -231,7 +231,7 @@ func Deleter[T any, K comparable](
 					Input: k,
 				}
 			}
-			return model.ActionResult{Input: k}
+			return model.ActionResult{Input: k, CallErr: sutErr}
 		},
 	}
 }

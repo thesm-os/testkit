@@ -17,8 +17,12 @@ import (
 	"context"
 )
 
-// Value is the payload the store holds.
-type Value struct{ Key, Body string }
+// Value is the payload the store holds. Rev is the ordering stamp the
+// subject assigns on write — named by the mixin, read by the law.
+type Value struct {
+	Key, Body string
+	Rev       int64
+}
 
 // Mixed is the fixture interface.
 //
@@ -31,6 +35,6 @@ type Mixed interface {
 	Store(ctx context.Context, v Value) error
 
 	// Get reads a key, never returning a version older than this client wrote.
-	//testkit:mixin readyourwrites
+	//testkit:mixin readyourwrites version=Rev
 	Get(ctx context.Context, key string) (Value, error)
 }

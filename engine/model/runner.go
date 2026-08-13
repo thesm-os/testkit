@@ -53,10 +53,22 @@ type Action[T any] struct {
 type ActionResult struct {
 	// Err is non-nil when the action detected a divergence.
 	Err error
+	// CallErr is the SUT's own error for this call — a miss, a refusal —
+	// recorded into the trace so a trace-scanning law can tell an errored
+	// read's zero value from a read that answered zero. Divergence lives in
+	// Err; agreement-in-error lives here.
+	CallErr error
 	// Input is the drawn value(s) for this action.
 	Input any
 	// Output is the SUT's result.
 	Output any
+}
+
+// TraceResult lets a concurrent action's typed result speak the trace's
+// vocabulary: the raw output a trace-scanning law reads, and the call's own
+// error. A result that does not implement it lands in the trace whole.
+type TraceResult interface {
+	TraceOutput() (output any, err error)
 }
 
 // ConcurrentAction is an action that records structured I/O for
@@ -177,13 +189,19 @@ func dispatch[T any](t rapid.TB, cfg Config[T]) {
 		// expect sequential SUT/ref comparison, but the concurrent
 		// runner has no reference under linearizability and no
 		// well-defined "after every action" boundary across workers.
-		// Reject loud rather than silently drop the laws.
-		if cfg.Laws != nil && len(cfg.Laws.laws) > 0 {
-			t.Fatal("model: Laws are unsupported with Concurrent — laws " +
-				"require sequential SUT/ref comparison. Use the sequential " +
-				"runner with stress workers if both invariants and " +
-				"concurrency matter, or drop Laws for pure linearizability " +
-				"checking.")
+		// Trace-scanning laws ride the concurrent history; everything else
+		// needs the sequential step boundary and is rejected loud rather
+		// than silently dropped.
+		if cfg.Laws != nil {
+			for _, l := range cfg.Laws.laws {
+				if _, scans := l.(law.TraceBinder); !scans {
+					t.Fatal("model: law " + l.ID() + " is unsupported with " +
+						"Concurrent — it compares SUT and ref at a step " +
+						"boundary the interleaving does not have. Only " +
+						"trace-scanning laws (law.TraceBinder) run here; use " +
+						"the sequential runner for the rest.")
+				}
+			}
 		}
 		runConcurrent(t, cfg)
 		return
@@ -318,6 +336,10 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					if result.Input != nil {
 						inputs = []any{result.Input}
 					}
+					evErr := result.CallErr
+					if result.Err != nil {
+						evErr = result.Err
+					}
 					iterTrace.Record(trace.Event{
 						StartNs:  startNs,
 						EndNs:    endNs,
@@ -325,7 +347,7 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 						ClientID: -1, // sequential
 						Inputs:   inputs,
 						Output:   result.Output,
-						Err:      result.Err,
+						Err:      evErr,
 					})
 				}
 

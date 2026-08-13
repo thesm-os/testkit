@@ -3,7 +3,7 @@
 
 // Package compositewriter is the detector-axis fixture for the compositewriter shape:
 // a key beside a value, an error and nothing else — exactly two non-context
-// parameters, the boundary eidos#26 confirmed the detector draws.
+// parameters, the boundary the detector documents and draws.
 //
 // No directive appears here: the classification comes from the signature
 // alone, so a detector that misfires shows up as wrong generated output
@@ -31,6 +31,6 @@ type Value struct {
 type CompositeWriter interface {
 	// Set is the documented shape whole: a key beside a value, an error and
 	// nothing else — exactly two non-context parameters, which is the
-	// boundary eidos#26 confirmed the detector draws.
+	// boundary the detector draws.
 	Set(ctx context.Context, key string, v Value) error
 }

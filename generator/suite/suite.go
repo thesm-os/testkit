@@ -946,8 +946,8 @@ func batchSizeCheck(
 // docs/adr/0018 — no [engine/model/law] property covers it — and each is
 // derivable from the stamp plus the signature, which is what excludes the rest:
 // `validates` and `scope` need a value no run can invent, and `sideeffect`,
-// `partition`, `hooks` and `sample` name a partner eidos declares no parameter
-// for (thesm-os/eidos#16).
+// `partition`, `hooks` and `sample` name a partner the mixin schema declares
+// no parameter for.
 const (
 	MixinNilSafe         = nilsafe.Name
 	MixinDeprecated      = deprecated.Name
@@ -1040,8 +1040,8 @@ func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method
 // to it.
 //
 // Three, where the RFC's tier table lists sixteen. What is missing is not
-// unwritten: `validates` and `scope` need a value no run can invent, four name a
-// partner eidos declares no parameter for (thesm-os/eidos#16), `concurrent` and
+// unwritten: `validates` and `scope` need a value no run can invent, four name
+// a partner the mixin schema declares no parameter for, `concurrent` and
 // `concurrentreaders` assert nothing without `-race`, `retrysucceeds` has no
 // attempt count to read, `integrationonly` is a build tag rather than an
 // assertion, and `deprecated` is a fact about a method rather than a claim about

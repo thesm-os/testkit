@@ -17,7 +17,7 @@ import (
 // shape resolver and cut back to its local form for the call site — which is why
 // this check exists and `sideeffect`, `partition`, `hooks` and `sample` do not:
 // those describe a relationship between two methods and declare no parameter
-// naming the second (thesm-os/eidos#16).
+// naming the second.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 

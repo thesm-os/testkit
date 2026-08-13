@@ -481,7 +481,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldRead, Kind: KindRole, From: "deleteremoves.read"},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			// eidos#19: no classification names the not-found sentinel, and a
+			// No classification names the not-found sentinel, and a
 			// nil one fails every correct subject — so this does not bind.
 			{Name: fieldSentinel, Kind: KindConstant, From: paramDeleteSentinel},
 		},
@@ -495,7 +495,7 @@ var rules = []Rule{
 			{Name: "Replicas", Kind: KindDefault},
 			{Name: fieldWrite, Kind: KindRole, From: familyWriter},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
-			// eidos#20: `eventually` names neither the quiet window nor the
+			// `eventually` names neither the quiet window nor the
 			// anti-entropy round. Settle is skippable; Sync is the law.
 			{Name: "Settle", Kind: KindRole, From: "eventually.settle", Optional: true},
 			{Name: "Sync", Kind: KindRole, From: "eventually.sync"},
@@ -556,7 +556,7 @@ var rules = []Rule{
 		Law:   lawid.LeakFree,
 		Needs: []string{mixinLeakFree},
 		Fields: []Field{
-			// eidos#20: `leakfree` names neither half of the cycle whose
+			// `leakfree` names neither half of the cycle whose
 			// balance is the whole claim.
 			{Name: "Open", Kind: KindRole, From: "leakfree.open"},
 			{Name: fieldClose, Kind: KindRole, From: "leakfree.close"},
@@ -633,7 +633,7 @@ var rules = []Rule{
 		Needs: []string{mixinStreamReflects},
 		Fields: []Field{
 			{Name: fieldPut, Kind: KindRole, From: "streamreflectsmutations.mutate"},
-			// eidos#20: the mixin names the write half only.
+			// The mixin names the write half only.
 			{Name: "Delete", Kind: KindRole, From: "streamreflectsmutations.delete"},
 			{Name: fieldDrain, Kind: KindRole, From: roleSelf},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
@@ -646,7 +646,7 @@ var rules = []Rule{
 		Needs: []string{mixinTamperEvident},
 		Fields: []Field{
 			{Name: fieldWrite, Kind: KindRole, From: familyWriter},
-			// eidos#20: neither the tamper nor the verify is named.
+			// Neither the tamper nor the verify is named by the mixin.
 			{Name: "Tamper", Kind: KindRole, From: "tamperevident.tamper"},
 			{Name: "Verify", Kind: KindRole, From: "tamperevident.verify"},
 			{Name: fieldValues, Kind: KindGenerator, From: genValues},
@@ -743,7 +743,7 @@ var rules = []Rule{
 		Law:   lawid.Windowed,
 		Needs: []string{mixinWindowed},
 		Fields: []Field{
-			// eidos#20: neither the increment nor the count is named.
+			// Neither the increment nor the count is named by the mixin.
 			{Name: "Incr", Kind: KindRole, From: "windowed.incr"},
 			{Name: fieldCount, Kind: KindRole, From: "windowed.count"},
 			{Name: fieldAdvance, Kind: KindHandle, From: handleClock},
@@ -1076,7 +1076,7 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: "Watch", Kind: KindRole, From: "watcher.watch"},
 			{Name: "Mutate", Kind: KindRole, From: "watcher.trigger"},
-			// eidos#20: both are methods on the handle Watch returns, which
+			// Both are methods on the handle Watch returns, which
 			// the contract's roles do not reach.
 			{Name: "Next", Kind: KindSupplied, From: "next"},
 			{Name: "Stop", Kind: KindSupplied, From: "stop"},
@@ -1129,6 +1129,6 @@ func twoPhase() []Field {
 //
 // AUTO-SCHEDULED-FIRES-AFTER-ADVANCE is the one clock law with no rule: it
 // needs a schedule-at method and a fired-count method, and `timeaware` names
-// neither (eidos#20). The pool is spelled here so the name exists once when
+// neither. The pool is spelled here so the name exists once when
 // that rule lands rather than being invented at the call site.
 var _ = genOffsets

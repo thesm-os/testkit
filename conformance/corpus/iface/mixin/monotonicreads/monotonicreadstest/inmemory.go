@@ -22,6 +22,7 @@ var ErrNotFound = errors.New("monotonicreadstest: not found")
 // against.
 type InMemory struct {
 	mu     sync.Mutex
+	rev    int64
 	values map[string]monotonicreads.Value
 }
 
@@ -32,13 +33,16 @@ func NewInMemory() *InMemory {
 	return &InMemory{values: map[string]monotonicreads.Value{}}
 }
 
-// Store records the value under its own key.
+// Store records the value under its own key, stamping Rev from the one
+// counter every write moves — the ordering the session guarantee reads.
 func (s *InMemory) Store(ctx context.Context, v monotonicreads.Value) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.rev++
+	v.Rev = s.rev
 	s.values[v.Key] = v
 	return nil
 }

@@ -9,6 +9,11 @@ type ReaderResult[V any] struct {
 	Err   error
 }
 
+// TraceOutput surfaces the read's value and its own error to the trace, so
+// a trace-scanning law tells an errored read's zero from a read that
+// answered zero.
+func (r ReaderResult[V]) TraceOutput() (any, error) { return r.Value, r.Err }
+
 // ReaderBoolResult is the output for ReaderWithBool-shaped operations.
 type ReaderBoolResult[V any] struct {
 	Value V
@@ -26,6 +31,9 @@ type LookupResult[R1, R2 any] struct {
 type WriterResult struct {
 	Err error
 }
+
+// TraceOutput surfaces the write's own error to the trace.
+func (r WriterResult) TraceOutput() (any, error) { return nil, r.Err }
 
 // OpSpec defines a single operation for a linearizability model.
 type OpSpec struct {
