@@ -1,0 +1,36 @@
+# 2026/08/13 13:02:08.516522 [TestMixedContract/in-memory/model] [rapid] draw WriteObservable_value: atomic.Entry{Key:"test-key", Left:"test-left", Right:"test-right"}
+# 2026/08/13 13:02:08.516528 [TestMixedContract/in-memory/model] [rapid] draw AtomicWrite_value: atomic.Entry{Key:"test-key", Left:"test-left", Right:"test-right"}
+# 2026/08/13 13:02:08.516529 [TestMixedContract/in-memory/model] [rapid] draw action: "Write"
+# 2026/08/13 13:02:08.516530 [TestMixedContract/in-memory/model] [rapid] draw Write_value: atomic.Entry{Key:"test-key", Left:"", Right:"A"}
+# 2026/08/13 13:02:08.516625 [TestMixedContract/in-memory/model] [semantic] at step 0: Write({test-key  A}): SUT err=atomictest: refuses an entry missing one half, ref err=<nil>
+#   semantic: SUT vs reference disagreement (action)
+#   [step 0] Write({Key:test-key Left: Right:A}) -> err: Write({test-key  A}): SUT err=atomictest: refuses an entry missing one half, ref err=<nil>   <-- FAILED
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
+# 
+v0.4.8#1495378607186378365
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x1
+0x0
+0x1
+0x0
+0x0
+0x5555555555555
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0

@@ -9,22 +9,26 @@ package paginationtest
 import (
 	"context"
 	"errors"
+	"maps"
+	"slices"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/pagination"
 )
 
-// ErrNotFound reports a key the store does not hold.
-var ErrNotFound = errors.New("paginationtest: no value under that key")
+// PageSize is how many entries one page carries.
+//
+// Small on purpose: the walk laws are about page boundaries, and a page size
+// the seeded store never fills is a paginator that is never seen paginating.
+const PageSize = 2
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
 //
-// A plain keyed store, because that is what the fixture declares. The
-// contract's `cursor=Cursor` names a page token the interface has no parameter
-// for, so nothing here can page — which is a fact about the fixture rather than
-// about the subject, and it is why the paging claims are stated against
-// composite/paginated-reader instead.
+// Entries are served in key order, and the cursor is the last key a page
+// emitted: resuming means "strictly after this key", which stays correct when
+// entries are inserted between walks — a numeric offset would shift and
+// re-emit or skip.
 type InMemory struct {
 	mu     sync.Mutex
 	values map[string]pagination.Value
@@ -35,27 +39,42 @@ var _ pagination.Contract = (*InMemory)(nil)
 // NewInMemory returns an empty store.
 func NewInMemory() *InMemory { return &InMemory{values: map[string]pagination.Value{}} }
 
-// Store puts a value in, so a test can seed an interface declaring no writer.
-func (s *InMemory) Store(v pagination.Value) {
+// Put stores an entry under its own key, replacing what was there.
+func (s *InMemory) Put(ctx context.Context, v pagination.Value) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.values[v.Key] = v
+	return nil
 }
 
-// Get returns the zero value alongside every error it reports, so a caller who
-// checks the error and one who checks the value do not disagree about whether
-// the call succeeded.
-func (s *InMemory) Get(ctx context.Context, key string) (pagination.Value, error) {
+// Page answers the entries strictly after the cursor, in key order, up to
+// PageSize of them.
+func (s *InMemory) Page(
+	ctx context.Context, cur pagination.Cursor,
+) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
 	if err := contextErr(ctx); err != nil {
-		return pagination.Value{}, err
+		return nil, "", false, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	v, present := s.values[key]
-	if !present {
-		return pagination.Value{}, ErrNotFound
+
+	keys := slices.Sorted(maps.Keys(s.values))
+	from, _ := slices.BinarySearch(keys, string(cur))
+	if from < len(keys) && keys[from] == string(cur) {
+		from++
 	}
-	return v, nil
+
+	for _, k := range keys[from:] {
+		if len(items) == PageSize {
+			return items, next, true, nil
+		}
+		items = append(items, s.values[k])
+		next = pagination.Cursor(k)
+	}
+	return items, next, false, nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

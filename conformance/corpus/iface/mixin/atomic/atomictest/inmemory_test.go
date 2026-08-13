@@ -4,7 +4,6 @@
 package atomictest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -12,32 +11,40 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/atomic/atomictest"
 )
 
-// atomic is the model tier's under ADR-0018 — AUTO-ATOMIC-WRITE states it — so
-// the suite generates the signature family and nothing about atomicity.
+// atomic is the model tier's under ADR-0018 — AUTO-ATOMIC-WRITE states it,
+// comparing observable state around the write the subject refuses.
 //
-// That is the assignment working rather than a gap: a property about two
-// concurrent callers is not something one fixed call can observe.
+// The checks below are the deterministic complement: one accepted entry read
+// back whole, and one refused entry that landed nowhere.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
-
-	fixture := atomictest.DefaultMixedFixture()
 
 	atomictest.AssertMixedContract(t,
 		atomictest.MixedModel(),
 		atomictest.MixedSubject("in-memory", func() atomic.Mixed {
 			return atomictest.NewInMemory()
 		}),
-		atomictest.MixedSeed(func(ctx context.Context, subject atomic.Mixed) error {
-			return subject.Write(ctx, fixture.Key, fixture.Left, fixture.Right)
-		}),
-		atomictest.MixedOnRead("returns both halves as they were written", func(
+		atomictest.MixedOnRead("returns the whole entry as it was written", func(
 			tb testing.TB, subject atomic.Mixed, key string,
 		) {
 			tb.Helper()
-			left, right, err := subject.Read(tb.Context(), key)
+			e := atomic.Entry{Key: key, Left: "left", Right: "right"}
+			testkit.NoError(tb, subject.Write(tb.Context(), e), "a whole entry lands")
+
+			got, err := subject.Read(tb.Context(), key)
 			testkit.NoError(tb, err, "a written key is found")
-			testkit.Equal(tb, left, fixture.Left, "the left half is what was written")
-			testkit.Equal(tb, right, fixture.Right, "and so is the right")
+			testkit.Equal(tb, got, e, "and carries both halves")
+		}),
+		atomictest.MixedOnRead("refuses half an entry whole", func(
+			tb testing.TB, subject atomic.Mixed, _ string,
+		) {
+			tb.Helper()
+			half := atomic.Entry{Key: "b6-half", Left: "only"}
+			testkit.ErrorIs(tb, subject.Write(tb.Context(), half), atomictest.ErrHalfEntry,
+				"an entry missing one half is refused")
+
+			_, err := subject.Read(tb.Context(), "b6-half")
+			testkit.ErrorIs(tb, err, atomictest.ErrNotFound, "and nothing landed")
 		}),
 	)
 }

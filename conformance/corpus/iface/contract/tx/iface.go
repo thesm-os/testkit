@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 // Package tx is the contract-axis fixture for the tx contract:
-// a begin/commit/rollback triple.
+// a begin/commit/rollback triple threading one handle.
 //
 // Every role the contract declares is present, because a contract is a
 // multi-callable protocol and a fixture missing a partner exercises the
@@ -11,10 +11,18 @@ package tx
 
 import (
 	"context"
+	"errors"
 )
 
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
+
+// Tx is the handle Begin answers and both terminal operations consume.
+type Tx struct{ ID int64 }
+
+// ErrTxClosed is what a terminal operation reports on a transaction the
+// other terminal operation already closed.
+var ErrTxClosed = errors.New("tx: closed")
 
 // Contract is the fixture interface.
 //
@@ -23,14 +31,15 @@ type Value struct{ Key, Body string }
 //testkit:suite
 //testkit:model
 type Contract interface {
-	// Begin is the tx contract's begin role, and hosts the directive
-	// that names its partners.
-	//testkit:contract tx role=begin commit=Commit rollback=Rollback
-	Begin(ctx context.Context) error
+	// Begin opens a transaction and answers the handle its terminal pair
+	// threads — the shape a commit-XOR-rollback claim needs, because a
+	// mutex over an unnamed transaction is unobservable.
+	//testkit:contract tx role=begin commit=Commit rollback=Rollback closed=ErrTxClosed
+	Begin(ctx context.Context) (Tx, error)
 
-	// Commit is the tx contract's commit role.
-	Commit(ctx context.Context) error
+	// Commit terminally applies the handle's transaction.
+	Commit(ctx context.Context, tx Tx) error
 
-	// Rollback is the tx contract's rollback role.
-	Rollback(ctx context.Context) error
+	// Rollback terminally discards the handle's transaction.
+	Rollback(ctx context.Context, tx Tx) error
 }

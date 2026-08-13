@@ -1,0 +1,13 @@
+{{- /*
+One page of the walk, made loud on error: a walk that read a failure as an
+empty final page would terminate early and call it clean.
+*/ -}}
+{{- define "model.lawfield.PageRead" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, cur {{ renderType .In }}) ([]{{ renderType .Out }}, {{ renderType .In }}, bool) {
+			items, next, more, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}cur)
+			if err != nil {
+				rt.Fatalf("{{ .Name }} walk failed: %v", err)
+			}
+			return items, next, more
+		}
+{{- end -}}

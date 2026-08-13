@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx/txtest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
@@ -32,24 +33,25 @@ func contractStubBeginSubject(tb testing.TB) stub.Subject[txtest.ContractBeginCa
 		Stub: s.OnBegin.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			_ = s.Begin(a0)
+			_, _ = s.Begin(a0)
 		},
 		Result: func() txtest.ContractBeginReturn {
 			var a0 context.Context
-			got0 := s.Begin(a0)
-			return txtest.ContractBeginReturn{Err: got0}
+			got0, got1 := s.Begin(a0)
+			return txtest.ContractBeginReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnBegin.Func(func(_ context.Context) error {
+			s.OnBegin.Func(func(_ context.Context) (tx.Tx, error) {
 				mark()
-				var z0 error
-				return z0
+				var z0 tx.Tx
+				var z1 error
+				return z0, z1
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
-			r0 := s.Begin(a0)
-			return r0
+			_, r1 := s.Begin(a0)
+			return r1
 		},
 	}
 }
@@ -68,11 +70,13 @@ func TestContractStubBegin(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := txtest.NewContractStub(t)
-		var want0 error
-		s.OnBegin.Returns(want0)
+		var want0 tx.Tx
+		var want1 error
+		s.OnBegin.Returns(want0, want1)
 		var a0 context.Context
-		got0 := s.Begin(a0)
+		got0, got1 := s.Begin(a0)
 		testkit.Equal(t, got0, want0, "Begin must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Begin must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -81,7 +85,7 @@ func TestContractStubBegin(t *testing.T) {
 		// most needs the log to surface.
 		s := txtest.NewContractStub(t)
 		var a0 context.Context
-		_ = s.Begin(a0)
+		_, _ = s.Begin(a0)
 		got := s.OnBegin.AssertCalledOnce(t, "Begin must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 	})
@@ -95,21 +99,22 @@ func TestContractStubBegin(t *testing.T) {
 		var seen []txtest.ContractBeginCall
 		s.OnBegin.OnRecord(func(c txtest.ContractBeginCall) { seen = append(seen, c) })
 		var a0 context.Context
-		_ = s.Begin(a0)
-		_ = s.Begin(a0)
+		_, _ = s.Begin(a0)
+		_, _ = s.Begin(a0)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Begin call")
 	})
 
 	t.Run("wires WithContractBegin at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := txtest.NewContractStub(t, txtest.WithContractBegin(func(_ context.Context) error {
+		s := txtest.NewContractStub(t, txtest.WithContractBegin(func(_ context.Context) (tx.Tx, error) {
 			called = true
-			var z0 error
-			return z0
+			var z0 tx.Tx
+			var z1 error
+			return z0, z1
 		}))
 		var a0 context.Context
-		_ = s.Begin(a0)
+		_, _ = s.Begin(a0)
 		testkit.True(t, called, "WithContractBegin must install the override")
 	})
 
@@ -119,13 +124,15 @@ func TestContractStubBegin(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := txtest.NewContractStub(t)
-		var want0 error
-		s.OnBegin.Returns(want0)
+		var want0 tx.Tx
+		var want1 error
+		s.OnBegin.Returns(want0, want1)
 		var a0 context.Context
-		_ = s.Begin(a0)
+		_, _ = s.Begin(a0)
 		s.ResetCalls()
-		got0 := s.Begin(a0)
+		got0, got1 := s.Begin(a0)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
 }
 
@@ -143,15 +150,17 @@ func contractStubCommitSubject(tb testing.TB) stub.Subject[txtest.ContractCommit
 		Stub: s.OnCommit.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			_ = s.Commit(a0)
+			var a1 tx.Tx
+			_ = s.Commit(a0, a1)
 		},
 		Result: func() txtest.ContractCommitReturn {
 			var a0 context.Context
-			got0 := s.Commit(a0)
+			var a1 tx.Tx
+			got0 := s.Commit(a0, a1)
 			return txtest.ContractCommitReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnCommit.Func(func(_ context.Context) error {
+			s.OnCommit.Func(func(_ context.Context, _ tx.Tx) error {
 				mark()
 				var z0 error
 				return z0
@@ -159,7 +168,8 @@ func contractStubCommitSubject(tb testing.TB) stub.Subject[txtest.ContractCommit
 		},
 		Fails: func() error {
 			var a0 context.Context
-			r0 := s.Commit(a0)
+			var a1 tx.Tx
+			r0 := s.Commit(a0, a1)
 			return r0
 		},
 	}
@@ -182,7 +192,8 @@ func TestContractStubCommit(t *testing.T) {
 		var want0 error
 		s.OnCommit.Returns(want0)
 		var a0 context.Context
-		got0 := s.Commit(a0)
+		var a1 tx.Tx
+		got0 := s.Commit(a0, a1)
 		testkit.Equal(t, got0, want0, "Commit must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
@@ -192,9 +203,11 @@ func TestContractStubCommit(t *testing.T) {
 		// most needs the log to surface.
 		s := txtest.NewContractStub(t)
 		var a0 context.Context
-		_ = s.Commit(a0)
+		var a1 tx.Tx
+		_ = s.Commit(a0, a1)
 		got := s.OnCommit.AssertCalledOnce(t, "Commit must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Tx, a1, "the recorded call carries Tx")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -206,21 +219,23 @@ func TestContractStubCommit(t *testing.T) {
 		var seen []txtest.ContractCommitCall
 		s.OnCommit.OnRecord(func(c txtest.ContractCommitCall) { seen = append(seen, c) })
 		var a0 context.Context
-		_ = s.Commit(a0)
-		_ = s.Commit(a0)
+		var a1 tx.Tx
+		_ = s.Commit(a0, a1)
+		_ = s.Commit(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Commit call")
 	})
 
 	t.Run("wires WithContractCommit at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := txtest.NewContractStub(t, txtest.WithContractCommit(func(_ context.Context) error {
+		s := txtest.NewContractStub(t, txtest.WithContractCommit(func(_ context.Context, _ tx.Tx) error {
 			called = true
 			var z0 error
 			return z0
 		}))
 		var a0 context.Context
-		_ = s.Commit(a0)
+		var a1 tx.Tx
+		_ = s.Commit(a0, a1)
 		testkit.True(t, called, "WithContractCommit must install the override")
 	})
 
@@ -233,9 +248,10 @@ func TestContractStubCommit(t *testing.T) {
 		var want0 error
 		s.OnCommit.Returns(want0)
 		var a0 context.Context
-		_ = s.Commit(a0)
+		var a1 tx.Tx
+		_ = s.Commit(a0, a1)
 		s.ResetCalls()
-		got0 := s.Commit(a0)
+		got0 := s.Commit(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
@@ -254,15 +270,17 @@ func contractStubRollbackSubject(tb testing.TB) stub.Subject[txtest.ContractRoll
 		Stub: s.OnRollback.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			_ = s.Rollback(a0)
+			var a1 tx.Tx
+			_ = s.Rollback(a0, a1)
 		},
 		Result: func() txtest.ContractRollbackReturn {
 			var a0 context.Context
-			got0 := s.Rollback(a0)
+			var a1 tx.Tx
+			got0 := s.Rollback(a0, a1)
 			return txtest.ContractRollbackReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnRollback.Func(func(_ context.Context) error {
+			s.OnRollback.Func(func(_ context.Context, _ tx.Tx) error {
 				mark()
 				var z0 error
 				return z0
@@ -270,7 +288,8 @@ func contractStubRollbackSubject(tb testing.TB) stub.Subject[txtest.ContractRoll
 		},
 		Fails: func() error {
 			var a0 context.Context
-			r0 := s.Rollback(a0)
+			var a1 tx.Tx
+			r0 := s.Rollback(a0, a1)
 			return r0
 		},
 	}
@@ -293,7 +312,8 @@ func TestContractStubRollback(t *testing.T) {
 		var want0 error
 		s.OnRollback.Returns(want0)
 		var a0 context.Context
-		got0 := s.Rollback(a0)
+		var a1 tx.Tx
+		got0 := s.Rollback(a0, a1)
 		testkit.Equal(t, got0, want0, "Rollback must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
@@ -303,9 +323,11 @@ func TestContractStubRollback(t *testing.T) {
 		// most needs the log to surface.
 		s := txtest.NewContractStub(t)
 		var a0 context.Context
-		_ = s.Rollback(a0)
+		var a1 tx.Tx
+		_ = s.Rollback(a0, a1)
 		got := s.OnRollback.AssertCalledOnce(t, "Rollback must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Tx, a1, "the recorded call carries Tx")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -317,21 +339,23 @@ func TestContractStubRollback(t *testing.T) {
 		var seen []txtest.ContractRollbackCall
 		s.OnRollback.OnRecord(func(c txtest.ContractRollbackCall) { seen = append(seen, c) })
 		var a0 context.Context
-		_ = s.Rollback(a0)
-		_ = s.Rollback(a0)
+		var a1 tx.Tx
+		_ = s.Rollback(a0, a1)
+		_ = s.Rollback(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Rollback call")
 	})
 
 	t.Run("wires WithContractRollback at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := txtest.NewContractStub(t, txtest.WithContractRollback(func(_ context.Context) error {
+		s := txtest.NewContractStub(t, txtest.WithContractRollback(func(_ context.Context, _ tx.Tx) error {
 			called = true
 			var z0 error
 			return z0
 		}))
 		var a0 context.Context
-		_ = s.Rollback(a0)
+		var a1 tx.Tx
+		_ = s.Rollback(a0, a1)
 		testkit.True(t, called, "WithContractRollback must install the override")
 	})
 
@@ -344,9 +368,10 @@ func TestContractStubRollback(t *testing.T) {
 		var want0 error
 		s.OnRollback.Returns(want0)
 		var a0 context.Context
-		_ = s.Rollback(a0)
+		var a1 tx.Tx
+		_ = s.Rollback(a0, a1)
 		s.ResetCalls()
-		got0 := s.Rollback(a0)
+		got0 := s.Rollback(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
@@ -363,7 +388,7 @@ func contractStubDouble() stub.Double[txtest.ContractBeginCall] {
 			Stub: s.OnBegin.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				_ = s.Begin(a0)
+				_, _ = s.Begin(a0)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -409,7 +434,7 @@ func TestContractStubDelegateTo(t *testing.T) {
 
 	t.Run("forwards Begin to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		_ = s.Begin(a0)
+		_, _ = s.Begin(a0)
 		inner.OnBegin.AssertCalledOnce(t, "Begin must reach the wrapped implementation")
 	})
 
@@ -420,13 +445,14 @@ func TestContractStubDelegateTo(t *testing.T) {
 		want := testkit.TestError("Begin-delegate")
 		inner.OnBegin.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		r0 := s.Begin(a0)
-		testkit.ErrorIs(t, r0, want, "Begin must surface the wrapped answer")
+		_, r1 := s.Begin(a0)
+		testkit.ErrorIs(t, r1, want, "Begin must surface the wrapped answer")
 	})
 
 	t.Run("forwards Commit to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		_ = s.Commit(a0)
+		var a1 tx.Tx
+		_ = s.Commit(a0, a1)
 		inner.OnCommit.AssertCalledOnce(t, "Commit must reach the wrapped implementation")
 	})
 
@@ -437,13 +463,15 @@ func TestContractStubDelegateTo(t *testing.T) {
 		want := testkit.TestError("Commit-delegate")
 		inner.OnCommit.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		r0 := s.Commit(a0)
+		var a1 tx.Tx
+		r0 := s.Commit(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Commit must surface the wrapped answer")
 	})
 
 	t.Run("forwards Rollback to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		_ = s.Rollback(a0)
+		var a1 tx.Tx
+		_ = s.Rollback(a0, a1)
 		inner.OnRollback.AssertCalledOnce(t, "Rollback must reach the wrapped implementation")
 	})
 
@@ -454,10 +482,11 @@ func TestContractStubDelegateTo(t *testing.T) {
 		want := testkit.TestError("Rollback-delegate")
 		inner.OnRollback.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		r0 := s.Rollback(a0)
+		var a1 tx.Tx
+		r0 := s.Rollback(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Rollback must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance a9fedce5669a013df45e1135a93cab70b732532db5f4bdda9f00645438708223
+// testkit:provenance 537661d75bdc34dcb18783672e02938027c6e9436648795964166554c7e6b28e

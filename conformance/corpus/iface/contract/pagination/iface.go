@@ -16,6 +16,9 @@ import (
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
 
+// Cursor is where a walk resumes; its zero value is the first page.
+type Cursor string
+
 // Contract is the fixture interface.
 //
 //testkit:out paginationtest/ pkg=paginationtest
@@ -23,8 +26,14 @@ type Value struct{ Key, Body string }
 //testkit:suite
 //testkit:model
 type Contract interface {
-	// Get is the pagination contract's reader role, and hosts the directive
-	// that names its partners.
+	// Page is the pagination contract's reader role, and hosts the
+	// directive that names its partners. It answers one page, where the
+	// walk resumes, and whether anything remains — the shape both walk
+	// claims need, because a keyed read has no cursor to resume from.
 	//testkit:contract pagination role=reader cursor=Cursor
-	Get(ctx context.Context, key string) (Value, error)
+	Page(ctx context.Context, cur Cursor) (items []Value, next Cursor, more bool, err error)
+
+	// Put stores an entry the walk will visit. Without a writer the
+	// sequences seed nothing and every walk holds over empty pages.
+	Put(ctx context.Context, v Value) error
 }

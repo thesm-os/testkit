@@ -1,0 +1,7 @@
+{{- /*
+The counter the probe increments — the property local, shared by address so
+the law reads what the probe wrote.
+*/ -}}
+{{- define "model.lawfield.Counter" -}}
+{{ .Name }}: &coalesceCalls
+{{- end -}}

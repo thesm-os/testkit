@@ -1,0 +1,9 @@
+{{- /*
+One terminal operation on the threaded handle: the law decides which of the
+pair runs first, so the closure only forwards.
+*/ -}}
+{{- define "model.lawfield.HandleOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, h {{ renderType .In }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}h)
+		}
+{{- end -}}

@@ -1011,7 +1011,10 @@ var rules = []Rule{
 			// the closure and the counter it increments.
 			{Name: "Compute", Kind: KindHandle, From: "coalesce-probe"},
 			{Name: "Counter", Kind: KindHandle, From: "coalesce-counter"},
-			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
+			// The law's own pool rather than the shared keys: the run role
+			// takes a callable no pool draws, so no action feeds a keys pool
+			// here — the inputs pool ranges over the role's key parameter.
+			{Name: fieldKeys, Kind: KindGenerator, From: genInputs},
 			{Name: "Parallel", Kind: KindDefault},
 		},
 	},

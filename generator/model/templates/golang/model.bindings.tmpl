@@ -158,6 +158,13 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 		drainSub = {{ .Publisher.DrainName }}
 	}
 {{- end }}
+{{- if .Coalesced }}
+	// The coalescing law's own instrumentation: its compute increments this
+	// under the lock, because a subject that fails to coalesce invokes it
+	// concurrently.
+	coalesceCalls := 0
+	var coalesceMu {{ renderExpr (external "sync" "Mutex") }}
+{{- end }}
 	laws := {{ renderExpr (external .ModelPkg "NewRegistry") }}[{{ renderType .IfaceRef }}]()
 {{- range .Laws }}
 {{- if not .Clocked }}

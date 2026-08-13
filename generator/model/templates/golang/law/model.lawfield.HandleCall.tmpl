@@ -1,0 +1,9 @@
+{{- /*
+The handle-answering call: what Begin opens, kept only to be threaded into
+the terminal pair — never compared, because two runs' handles need not agree.
+*/ -}}
+{{- define "model.lawfield.HandleCall" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

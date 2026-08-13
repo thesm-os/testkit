@@ -1,0 +1,7 @@
+{{- /*
+Identity as the fingerprint: the element is comparable and no projection
+derives, so the strongest duplicate is the element itself, twice.
+*/ -}}
+{{- define "model.lawfield.KeyOfIdentity" -}}
+{{ .Name }}: func(v {{ renderType .Value }}) {{ renderType .Value }} { return v }
+{{- end -}}

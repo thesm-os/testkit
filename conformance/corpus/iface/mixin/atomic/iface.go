@@ -18,6 +18,11 @@ import (
 	"context"
 )
 
+// Entry is the two-field write the mixin holds together: a failed write
+// applies neither field, and Read answers both so a half-applied one is
+// observable.
+type Entry struct{ Key, Left, Right string }
+
 // Mixed is the fixture interface.
 //
 //testkit:out atomictest/ pkg=atomictest
@@ -25,11 +30,12 @@ import (
 //testkit:suite
 //testkit:model
 type Mixed interface {
-	// Write applies both fields or neither. Observing one without the other
-	// is the violation, which is why Read has to return them together.
+	// Write applies both of the entry's fields or neither. One input
+	// rather than several, because the law's claim is about one write's
+	// halves — the fields travel together so the observation can too.
 	//testkit:mixin atomic
-	Write(ctx context.Context, key, left, right string) error
+	Write(ctx context.Context, e Entry) error
 
-	// Read returns both fields, so a partial write is observable.
-	Read(ctx context.Context, key string) (left, right string, err error)
+	// Read returns the whole entry, so a partial write is observable.
+	Read(ctx context.Context, key string) (Entry, error)
 }

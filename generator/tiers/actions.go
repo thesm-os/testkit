@@ -227,6 +227,10 @@ func DefeatsOracles(mixin string) (string, bool) {
 var oracleDefeats = map[string]string{
 	mixinEventually: "the eventually claim lets reads lag writes, which no immediate store models",
 	mixinCRDTMerge:  "the merge relation is the claim, and every store oracle holds it inert",
+	// The atomic claim is about refused writes: the subject rejects by policy
+	// and a derived map accepts everything, so the first refusal reads as a
+	// semantic disagreement on a correct subject. Twins share the policy.
+	mixinAtomic: "the atomic claim is about refused writes, and a derived store refuses nothing",
 }
 
 // MapStorePins reports whether the named mixin turns the map oracle into its

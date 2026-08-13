@@ -22,8 +22,9 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type ContractBeginCall struct {
-	Ctx context.Context
-	Err error
+	Ctx    context.Context
+	Result tx.Tx
+	Err    error
 }
 
 // ContractCommitCall records one invocation of Contract.Commit.
@@ -33,6 +34,7 @@ type ContractBeginCall struct {
 // the source left unnamed or blank falls back to a positional name.
 type ContractCommitCall struct {
 	Ctx context.Context
+	Tx  tx.Tx
 	Err error
 }
 
@@ -43,6 +45,7 @@ type ContractCommitCall struct {
 // the source left unnamed or blank falls back to a positional name.
 type ContractRollbackCall struct {
 	Ctx context.Context
+	Tx  tx.Tx
 	Err error
 }
 
@@ -57,25 +60,26 @@ type ContractRollbackCall struct {
 type ContractBeginStub struct {
 	*stub.MethodStub[ContractBeginCall]
 
-	fn       func(context.Context) error
+	fn       func(context.Context) (tx.Tx, error)
 	fallback *ContractBeginReturn
 }
 
 // ContractBeginReturn holds the fixed answer configured through Returns.
 type ContractBeginReturn struct {
-	Err error
+	Result tx.Tx
+	Err    error
 }
 
 // Returns pins a fixed result for every call to Begin. A Func
 // override and an injected fault both take precedence over it.
-func (s *ContractBeginStub) Returns(err error) *ContractBeginStub {
-	s.fallback = &ContractBeginReturn{Err: err}
+func (s *ContractBeginStub) Returns(result tx.Tx, err error) *ContractBeginStub {
+	s.fallback = &ContractBeginReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Begin, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractBeginStub) Func(fn func(context.Context) error) *ContractBeginStub {
+func (s *ContractBeginStub) Func(fn func(context.Context) (tx.Tx, error)) *ContractBeginStub {
 	s.fn = fn
 	return s
 }
@@ -89,7 +93,7 @@ func (s *ContractBeginStub) Func(fn func(context.Context) error) *ContractBeginS
 type ContractCommitStub struct {
 	*stub.MethodStub[ContractCommitCall]
 
-	fn       func(context.Context) error
+	fn       func(context.Context, tx.Tx) error
 	fallback *ContractCommitReturn
 }
 
@@ -107,7 +111,7 @@ func (s *ContractCommitStub) Returns(err error) *ContractCommitStub {
 
 // Func supplies a body for Commit, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractCommitStub) Func(fn func(context.Context) error) *ContractCommitStub {
+func (s *ContractCommitStub) Func(fn func(context.Context, tx.Tx) error) *ContractCommitStub {
 	s.fn = fn
 	return s
 }
@@ -121,7 +125,7 @@ func (s *ContractCommitStub) Func(fn func(context.Context) error) *ContractCommi
 type ContractRollbackStub struct {
 	*stub.MethodStub[ContractRollbackCall]
 
-	fn       func(context.Context) error
+	fn       func(context.Context, tx.Tx) error
 	fallback *ContractRollbackReturn
 }
 
@@ -139,7 +143,7 @@ func (s *ContractRollbackStub) Returns(err error) *ContractRollbackStub {
 
 // Func supplies a body for Rollback, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractRollbackStub) Func(fn func(context.Context) error) *ContractRollbackStub {
+func (s *ContractRollbackStub) Func(fn func(context.Context, tx.Tx) error) *ContractRollbackStub {
 	s.fn = fn
 	return s
 }
@@ -204,21 +208,21 @@ func ContractStubBenchMode() ContractStubOption {
 // WithContractBegin sets Begin's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractBegin(fn func(context.Context) error) ContractStubOption {
+func WithContractBegin(fn func(context.Context) (tx.Tx, error)) ContractStubOption {
 	return func(s *ContractStub) { s.OnBegin.Func(fn) }
 }
 
 // WithContractCommit sets Commit's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractCommit(fn func(context.Context) error) ContractStubOption {
+func WithContractCommit(fn func(context.Context, tx.Tx) error) ContractStubOption {
 	return func(s *ContractStub) { s.OnCommit.Func(fn) }
 }
 
 // WithContractRollback sets Rollback's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractRollback(fn func(context.Context) error) ContractStubOption {
+func WithContractRollback(fn func(context.Context, tx.Tx) error) ContractStubOption {
 	return func(s *ContractStub) { s.OnRollback.Func(fn) }
 }
 
@@ -305,8 +309,8 @@ func (s *ContractBeginStub) invoke(ctx context.Context) func() ContractBeginRetu
 		return nil
 	}
 	return func() ContractBeginReturn {
-		r0 := s.fn(ctx)
-		return ContractBeginReturn{Err: r0}
+		r0, r1 := s.fn(ctx)
+		return ContractBeginReturn{Result: r0, Err: r1}
 	}
 }
 
@@ -316,28 +320,29 @@ func (s *ContractBeginStub) invoke(ctx context.Context) func() ContractBeginRetu
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Begin(ctx context.Context) error {
+func (s *ContractStub) Begin(ctx context.Context) (tx.Tx, error) {
 	call := ContractBeginCall{Ctx: ctx}
 	r := stub.Answer(s.OnBegin.MethodStub, &call, stub.Arms[ContractBeginCall, ContractBeginReturn]{
 		Invoke:   s.OnBegin.invoke(ctx),
 		Fallback: s.OnBegin.fallback,
 		Fault:    func(err error) ContractBeginReturn { return ContractBeginReturn{Err: err} },
 		Stamp: func(c *ContractBeginCall, r ContractBeginReturn) {
+			c.Result = r.Result
 			c.Err = r.Err
 		},
 	})
-	return r.Err
+	return r.Result, r.Err
 }
 
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractCommitStub) invoke(ctx context.Context) func() ContractCommitReturn {
+func (s *ContractCommitStub) invoke(ctx context.Context, tx tx.Tx) func() ContractCommitReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() ContractCommitReturn {
-		r0 := s.fn(ctx)
+		r0 := s.fn(ctx, tx)
 		return ContractCommitReturn{Err: r0}
 	}
 }
@@ -348,10 +353,10 @@ func (s *ContractCommitStub) invoke(ctx context.Context) func() ContractCommitRe
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Commit(ctx context.Context) error {
-	call := ContractCommitCall{Ctx: ctx}
+func (s *ContractStub) Commit(ctx context.Context, tx tx.Tx) error {
+	call := ContractCommitCall{Ctx: ctx, Tx: tx}
 	r := stub.Answer(s.OnCommit.MethodStub, &call, stub.Arms[ContractCommitCall, ContractCommitReturn]{
-		Invoke:   s.OnCommit.invoke(ctx),
+		Invoke:   s.OnCommit.invoke(ctx, tx),
 		Fallback: s.OnCommit.fallback,
 		Fault:    func(err error) ContractCommitReturn { return ContractCommitReturn{Err: err} },
 		Stamp: func(c *ContractCommitCall, r ContractCommitReturn) {
@@ -364,12 +369,12 @@ func (s *ContractStub) Commit(ctx context.Context) error {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractRollbackStub) invoke(ctx context.Context) func() ContractRollbackReturn {
+func (s *ContractRollbackStub) invoke(ctx context.Context, tx tx.Tx) func() ContractRollbackReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() ContractRollbackReturn {
-		r0 := s.fn(ctx)
+		r0 := s.fn(ctx, tx)
 		return ContractRollbackReturn{Err: r0}
 	}
 }
@@ -380,10 +385,10 @@ func (s *ContractRollbackStub) invoke(ctx context.Context) func() ContractRollba
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Rollback(ctx context.Context) error {
-	call := ContractRollbackCall{Ctx: ctx}
+func (s *ContractStub) Rollback(ctx context.Context, tx tx.Tx) error {
+	call := ContractRollbackCall{Ctx: ctx, Tx: tx}
 	r := stub.Answer(s.OnRollback.MethodStub, &call, stub.Arms[ContractRollbackCall, ContractRollbackReturn]{
-		Invoke:   s.OnRollback.invoke(ctx),
+		Invoke:   s.OnRollback.invoke(ctx, tx),
 		Fallback: s.OnRollback.fallback,
 		Fault:    func(err error) ContractRollbackReturn { return ContractRollbackReturn{Err: err} },
 		Stamp: func(c *ContractRollbackCall, r ContractRollbackReturn) {
@@ -394,4 +399,4 @@ func (s *ContractStub) Rollback(ctx context.Context) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5175a8acfa48705146503675fbcf97e26058309de6fa742bc12c9795ee3ba7ce
+// testkit:provenance dccab94a3579f445aa35f806e090242c34b452f3557afe55c2d3c734319899ea

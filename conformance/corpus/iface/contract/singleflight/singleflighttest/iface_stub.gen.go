@@ -22,9 +22,22 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type ContractRunCall struct {
-	Ctx context.Context
-	Key string
-	Err error
+	Ctx     context.Context
+	Key     string
+	Compute func() string
+	Result  string
+	Err     error
+}
+
+// ContractFlightsCall records one invocation of Contract.Flights.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractFlightsCall struct {
+	Ctx    context.Context
+	Result int
+	Err    error
 }
 
 // --- Per-method configuration ---
@@ -38,25 +51,59 @@ type ContractRunCall struct {
 type ContractRunStub struct {
 	*stub.MethodStub[ContractRunCall]
 
-	fn       func(context.Context, string) error
+	fn       func(context.Context, string, func() string) (string, error)
 	fallback *ContractRunReturn
 }
 
 // ContractRunReturn holds the fixed answer configured through Returns.
 type ContractRunReturn struct {
-	Err error
+	Result string
+	Err    error
 }
 
 // Returns pins a fixed result for every call to Run. A Func
 // override and an injected fault both take precedence over it.
-func (s *ContractRunStub) Returns(err error) *ContractRunStub {
-	s.fallback = &ContractRunReturn{Err: err}
+func (s *ContractRunStub) Returns(result string, err error) *ContractRunStub {
+	s.fallback = &ContractRunReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Run, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractRunStub) Func(fn func(context.Context, string) error) *ContractRunStub {
+func (s *ContractRunStub) Func(fn func(context.Context, string, func() string) (string, error)) *ContractRunStub {
+	s.fn = fn
+	return s
+}
+
+// ContractFlightsStub controls how the double answers Flights and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractFlightsStub struct {
+	*stub.MethodStub[ContractFlightsCall]
+
+	fn       func(context.Context) (int, error)
+	fallback *ContractFlightsReturn
+}
+
+// ContractFlightsReturn holds the fixed answer configured through Returns.
+type ContractFlightsReturn struct {
+	Result int
+	Err    error
+}
+
+// Returns pins a fixed result for every call to Flights. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractFlightsStub) Returns(result int, err error) *ContractFlightsStub {
+	s.fallback = &ContractFlightsReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for Flights, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractFlightsStub) Func(fn func(context.Context) (int, error)) *ContractFlightsStub {
 	s.fn = fn
 	return s
 }
@@ -81,6 +128,7 @@ func ContractStubStrict() ContractStubOption {
 func ContractStubDelegateTo(impl singleflight.Contract) ContractStubOption {
 	return func(s *ContractStub) {
 		s.OnRun.Func(impl.Run)
+		s.OnFlights.Func(impl.Flights)
 	}
 }
 
@@ -119,8 +167,15 @@ func ContractStubBenchMode() ContractStubOption {
 // WithContractRun sets Run's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractRun(fn func(context.Context, string) error) ContractStubOption {
+func WithContractRun(fn func(context.Context, string, func() string) (string, error)) ContractStubOption {
 	return func(s *ContractStub) { s.OnRun.Func(fn) }
+}
+
+// WithContractFlights sets Flights's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractFlights(fn func(context.Context) (int, error)) ContractStubOption {
+	return func(s *ContractStub) { s.OnFlights.Func(fn) }
 }
 
 // ContractStub is a recording test double for Contract.
@@ -128,7 +183,8 @@ func WithContractRun(fn func(context.Context, string) error) ContractStubOption 
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type ContractStub struct {
-	OnRun *ContractRunStub
+	OnRun     *ContractRunStub
+	OnFlights *ContractFlightsStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -153,10 +209,12 @@ var _ singleflight.Contract = (*ContractStub)(nil)
 // and non-test callers want.
 func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
-		OnRun: &ContractRunStub{MethodStub: stub.NewMethodStub[ContractRunCall](tb, "Contract.Run")},
+		OnRun:     &ContractRunStub{MethodStub: stub.NewMethodStub[ContractRunCall](tb, "Contract.Run")},
+		OnFlights: &ContractFlightsStub{MethodStub: stub.NewMethodStub[ContractFlightsCall](tb, "Contract.Flights")},
 	}
 	s.all = []stub.Configurable{
 		s.OnRun.MethodStub,
+		s.OnFlights.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -195,13 +253,13 @@ func (s *ContractStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractRunStub) invoke(ctx context.Context, key string) func() ContractRunReturn {
+func (s *ContractRunStub) invoke(ctx context.Context, key string, compute func() string) func() ContractRunReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() ContractRunReturn {
-		r0 := s.fn(ctx, key)
-		return ContractRunReturn{Err: r0}
+		r0, r1 := s.fn(ctx, key, compute)
+		return ContractRunReturn{Result: r0, Err: r1}
 	}
 }
 
@@ -211,18 +269,52 @@ func (s *ContractRunStub) invoke(ctx context.Context, key string) func() Contrac
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Run(ctx context.Context, key string) error {
-	call := ContractRunCall{Ctx: ctx, Key: key}
+func (s *ContractStub) Run(ctx context.Context, key string, compute func() string) (string, error) {
+	call := ContractRunCall{Ctx: ctx, Key: key, Compute: compute}
 	r := stub.Answer(s.OnRun.MethodStub, &call, stub.Arms[ContractRunCall, ContractRunReturn]{
-		Invoke:   s.OnRun.invoke(ctx, key),
+		Invoke:   s.OnRun.invoke(ctx, key, compute),
 		Fallback: s.OnRun.fallback,
 		Fault:    func(err error) ContractRunReturn { return ContractRunReturn{Err: err} },
 		Stamp: func(c *ContractRunCall, r ContractRunReturn) {
+			c.Result = r.Result
 			c.Err = r.Err
 		},
 	})
-	return r.Err
+	return r.Result, r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *ContractFlightsStub) invoke(ctx context.Context) func() ContractFlightsReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractFlightsReturn {
+		r0, r1 := s.fn(ctx)
+		return ContractFlightsReturn{Result: r0, Err: r1}
+	}
+}
+
+// Flights records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) Flights(ctx context.Context) (int, error) {
+	call := ContractFlightsCall{Ctx: ctx}
+	r := stub.Answer(s.OnFlights.MethodStub, &call, stub.Arms[ContractFlightsCall, ContractFlightsReturn]{
+		Invoke:   s.OnFlights.invoke(ctx),
+		Fallback: s.OnFlights.fallback,
+		Fault:    func(err error) ContractFlightsReturn { return ContractFlightsReturn{Err: err} },
+		Stamp: func(c *ContractFlightsCall, r ContractFlightsReturn) {
+			c.Result = r.Result
+			c.Err = r.Err
+		},
+	})
+	return r.Result, r.Err
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4cba9e52af0e23a238b8309a532816dadb8e62c19bc592c6ddb74421fa42225a
+// testkit:provenance 12eae82993ee903123be864244af2eb52abdfc7da81809df811cfe8cbe2b9220

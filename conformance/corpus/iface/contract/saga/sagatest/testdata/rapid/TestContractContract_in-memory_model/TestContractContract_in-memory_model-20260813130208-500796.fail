@@ -1,0 +1,50 @@
+# 2026/08/13 13:02:08.498639 [TestContractContract/in-memory/model] [rapid] draw Run_steps: []saga.Value{saga.Value{Key:"test-key", Body:"test-body"}}
+# 2026/08/13 13:02:08.498645 [TestContractContract/in-memory/model] [rapid] draw Run_steps: []saga.Value{saga.Value{Key:"test-key", Body:"test-body"}}
+# 2026/08/13 13:02:08.498647 [TestContractContract/in-memory/model] [rapid] draw action: "Compensate"
+# 2026/08/13 13:02:08.498647 [TestContractContract/in-memory/model] [rapid] draw Compensate_value: saga.Value{Key:"test-key", Body:"test-body"}
+# 2026/08/13 13:02:08.498648 [TestContractContract/in-memory/model] [rapid] draw Run_steps: []saga.Value{saga.Value{Key:"test-key", Body:"test-body"}}
+# 2026/08/13 13:02:08.498651 [TestContractContract/in-memory/model] [rapid] draw Run_steps: []saga.Value{saga.Value{Key:"", Body:""}, saga.Value{Key:"", Body:""}}
+# 2026/08/13 13:02:08.498766 [TestContractContract/in-memory/model] [invariant] AUTO-SAGA-FULL-COMPENSATION at step 1: SagaFullCompensation: the reference refused what the subject accepted: sagatest: a step for that key is already applied
+#   invariant: AUTO-SAGA-FULL-COMPENSATION
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} applied:[]}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} applied:[]}
+#   [step 0] Compensate({Key:test-key Body:test-body}) -> err: sagatest: no applied step to compensate
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
+# 
+v0.4.8#211373249948381337
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1084210842108
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x0
+0x1
+0x0
+0x0
+0xccccccccccccd
+0x0
+0x1
+0x0
+0x0
+0x0

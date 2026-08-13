@@ -1,0 +1,9 @@
+{{- /*
+The transactional scope: the law supplies the body — including the one that
+always fails — and the closure only forwards it.
+*/ -}}
+{{- define "model.lawfield.BodyRun" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, body func({{ renderExpr (external "context" "Context") }}) error) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}body)
+		}
+{{- end -}}

@@ -16,49 +16,96 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// ContractGetCall records one invocation of Contract.Get.
+// ContractPageCall records one invocation of Contract.Page.
 //
 // Fields take their names from the source signature — parameters and named
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
-type ContractGetCall struct {
-	Ctx    context.Context
-	Key    string
-	Result pagination.Value
-	Err    error
+type ContractPageCall struct {
+	Ctx   context.Context
+	Cur   pagination.Cursor
+	Items []pagination.Value
+	Next  pagination.Cursor
+	More  bool
+	Err   error
+}
+
+// ContractPutCall records one invocation of Contract.Put.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractPutCall struct {
+	Ctx context.Context
+	V   pagination.Value
+	Err error
 }
 
 // --- Per-method configuration ---
 
-// ContractGetStub controls how the double answers Get and records
+// ContractPageStub controls how the double answers Page and records
 // what it was asked.
 //
 // The embedded MethodStub supplies the machinery every method shares: call
 // recording, fault injection, latency against a virtual clock, gates,
 // call-count expectations, and strict mode.
-type ContractGetStub struct {
-	*stub.MethodStub[ContractGetCall]
+type ContractPageStub struct {
+	*stub.MethodStub[ContractPageCall]
 
-	fn       func(context.Context, string) (pagination.Value, error)
-	fallback *ContractGetReturn
+	fn       func(context.Context, pagination.Cursor) ([]pagination.Value, pagination.Cursor, bool, error)
+	fallback *ContractPageReturn
 }
 
-// ContractGetReturn holds the fixed answer configured through Returns.
-type ContractGetReturn struct {
-	Result pagination.Value
-	Err    error
+// ContractPageReturn holds the fixed answer configured through Returns.
+type ContractPageReturn struct {
+	Items []pagination.Value
+	Next  pagination.Cursor
+	More  bool
+	Err   error
 }
 
-// Returns pins a fixed result for every call to Get. A Func
+// Returns pins a fixed result for every call to Page. A Func
 // override and an injected fault both take precedence over it.
-func (s *ContractGetStub) Returns(result pagination.Value, err error) *ContractGetStub {
-	s.fallback = &ContractGetReturn{Result: result, Err: err}
+func (s *ContractPageStub) Returns(items []pagination.Value, next pagination.Cursor, more bool, err error) *ContractPageStub {
+	s.fallback = &ContractPageReturn{Items: items, Next: next, More: more, Err: err}
 	return s
 }
 
-// Func supplies a body for Get, for when the answer depends on the
+// Func supplies a body for Page, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractGetStub) Func(fn func(context.Context, string) (pagination.Value, error)) *ContractGetStub {
+func (s *ContractPageStub) Func(fn func(context.Context, pagination.Cursor) ([]pagination.Value, pagination.Cursor, bool, error)) *ContractPageStub {
+	s.fn = fn
+	return s
+}
+
+// ContractPutStub controls how the double answers Put and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractPutStub struct {
+	*stub.MethodStub[ContractPutCall]
+
+	fn       func(context.Context, pagination.Value) error
+	fallback *ContractPutReturn
+}
+
+// ContractPutReturn holds the fixed answer configured through Returns.
+type ContractPutReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Put. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractPutStub) Returns(err error) *ContractPutStub {
+	s.fallback = &ContractPutReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Put, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractPutStub) Func(fn func(context.Context, pagination.Value) error) *ContractPutStub {
 	s.fn = fn
 	return s
 }
@@ -82,7 +129,8 @@ func ContractStubStrict() ContractStubOption {
 // production type, which is the point of conformance testing.
 func ContractStubDelegateTo(impl pagination.Contract) ContractStubOption {
 	return func(s *ContractStub) {
-		s.OnGet.Func(impl.Get)
+		s.OnPage.Func(impl.Page)
+		s.OnPut.Func(impl.Put)
 	}
 }
 
@@ -118,11 +166,18 @@ func ContractStubBenchMode() ContractStubOption {
 	}
 }
 
-// WithContractGet sets Get's body at construction
+// WithContractPage sets Page's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractGet(fn func(context.Context, string) (pagination.Value, error)) ContractStubOption {
-	return func(s *ContractStub) { s.OnGet.Func(fn) }
+func WithContractPage(fn func(context.Context, pagination.Cursor) ([]pagination.Value, pagination.Cursor, bool, error)) ContractStubOption {
+	return func(s *ContractStub) { s.OnPage.Func(fn) }
+}
+
+// WithContractPut sets Put's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractPut(fn func(context.Context, pagination.Value) error) ContractStubOption {
+	return func(s *ContractStub) { s.OnPut.Func(fn) }
 }
 
 // ContractStub is a recording test double for Contract.
@@ -130,7 +185,8 @@ func WithContractGet(fn func(context.Context, string) (pagination.Value, error))
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type ContractStub struct {
-	OnGet *ContractGetStub
+	OnPage *ContractPageStub
+	OnPut  *ContractPutStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -155,10 +211,12 @@ var _ pagination.Contract = (*ContractStub)(nil)
 // and non-test callers want.
 func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
-		OnGet: &ContractGetStub{MethodStub: stub.NewMethodStub[ContractGetCall](tb, "Contract.Get")},
+		OnPage: &ContractPageStub{MethodStub: stub.NewMethodStub[ContractPageCall](tb, "Contract.Page")},
+		OnPut:  &ContractPutStub{MethodStub: stub.NewMethodStub[ContractPutCall](tb, "Contract.Put")},
 	}
 	s.all = []stub.Configurable{
-		s.OnGet.MethodStub,
+		s.OnPage.MethodStub,
+		s.OnPut.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -197,35 +255,69 @@ func (s *ContractStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractGetStub) invoke(ctx context.Context, key string) func() ContractGetReturn {
+func (s *ContractPageStub) invoke(ctx context.Context, cur pagination.Cursor) func() ContractPageReturn {
 	if s.fn == nil {
 		return nil
 	}
-	return func() ContractGetReturn {
-		r0, r1 := s.fn(ctx, key)
-		return ContractGetReturn{Result: r0, Err: r1}
+	return func() ContractPageReturn {
+		items, next, more, err := s.fn(ctx, cur)
+		return ContractPageReturn{Items: items, Next: next, More: more, Err: err}
 	}
 }
 
-// Get records the call and answers it.
+// Page records the call and answers it.
 //
 // Which arm answers — injected fault, Func override, Returns fallback, or the
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Get(ctx context.Context, key string) (pagination.Value, error) {
-	call := ContractGetCall{Ctx: ctx, Key: key}
-	r := stub.Answer(s.OnGet.MethodStub, &call, stub.Arms[ContractGetCall, ContractGetReturn]{
-		Invoke:   s.OnGet.invoke(ctx, key),
-		Fallback: s.OnGet.fallback,
-		Fault:    func(err error) ContractGetReturn { return ContractGetReturn{Err: err} },
-		Stamp: func(c *ContractGetCall, r ContractGetReturn) {
-			c.Result = r.Result
+func (s *ContractStub) Page(ctx context.Context, cur pagination.Cursor) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
+	call := ContractPageCall{Ctx: ctx, Cur: cur}
+	r := stub.Answer(s.OnPage.MethodStub, &call, stub.Arms[ContractPageCall, ContractPageReturn]{
+		Invoke:   s.OnPage.invoke(ctx, cur),
+		Fallback: s.OnPage.fallback,
+		Fault:    func(err error) ContractPageReturn { return ContractPageReturn{Err: err} },
+		Stamp: func(c *ContractPageCall, r ContractPageReturn) {
+			c.Items = r.Items
+			c.Next = r.Next
+			c.More = r.More
 			c.Err = r.Err
 		},
 	})
-	return r.Result, r.Err
+	return r.Items, r.Next, r.More, r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *ContractPutStub) invoke(ctx context.Context, v pagination.Value) func() ContractPutReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractPutReturn {
+		r0 := s.fn(ctx, v)
+		return ContractPutReturn{Err: r0}
+	}
+}
+
+// Put records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) Put(ctx context.Context, v pagination.Value) error {
+	call := ContractPutCall{Ctx: ctx, V: v}
+	r := stub.Answer(s.OnPut.MethodStub, &call, stub.Arms[ContractPutCall, ContractPutReturn]{
+		Invoke:   s.OnPut.invoke(ctx, v),
+		Fallback: s.OnPut.fallback,
+		Fault:    func(err error) ContractPutReturn { return ContractPutReturn{Err: err} },
+		Stamp: func(c *ContractPutCall, r ContractPutReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
 }
 
 // testkit: end of generated content.
-// testkit:provenance a9a49868bb1d5effc7512adb24ce2f5e7f3112278945147b1dac6c7bd51ee4d2
+// testkit:provenance 836cf1532d10409c1248dc31a030c703817dffe360415514711a877b1da59f79

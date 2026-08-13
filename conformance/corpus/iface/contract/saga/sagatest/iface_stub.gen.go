@@ -38,6 +38,17 @@ type ContractCompensateCall struct {
 	Err error
 }
 
+// ContractStateCall records one invocation of Contract.State.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractStateCall struct {
+	Ctx    context.Context
+	Result string
+	Err    error
+}
+
 // --- Per-method configuration ---
 
 // ContractStepStub controls how the double answers Step and records
@@ -104,6 +115,39 @@ func (s *ContractCompensateStub) Func(fn func(context.Context, saga.Value) error
 	return s
 }
 
+// ContractStateStub controls how the double answers State and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractStateStub struct {
+	*stub.MethodStub[ContractStateCall]
+
+	fn       func(context.Context) (string, error)
+	fallback *ContractStateReturn
+}
+
+// ContractStateReturn holds the fixed answer configured through Returns.
+type ContractStateReturn struct {
+	Result string
+	Err    error
+}
+
+// Returns pins a fixed result for every call to State. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractStateStub) Returns(result string, err error) *ContractStateStub {
+	s.fallback = &ContractStateReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for State, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractStateStub) Func(fn func(context.Context) (string, error)) *ContractStateStub {
+	s.fn = fn
+	return s
+}
+
 // --- ContractStub ---
 
 // ContractStubOption configures a [ContractStub] at construction time.
@@ -125,6 +169,7 @@ func ContractStubDelegateTo(impl saga.Contract) ContractStubOption {
 	return func(s *ContractStub) {
 		s.OnStep.Func(impl.Step)
 		s.OnCompensate.Func(impl.Compensate)
+		s.OnState.Func(impl.State)
 	}
 }
 
@@ -174,6 +219,13 @@ func WithContractCompensate(fn func(context.Context, saga.Value) error) Contract
 	return func(s *ContractStub) { s.OnCompensate.Func(fn) }
 }
 
+// WithContractState sets State's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractState(fn func(context.Context) (string, error)) ContractStubOption {
+	return func(s *ContractStub) { s.OnState.Func(fn) }
+}
+
 // ContractStub is a recording test double for Contract.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
@@ -181,6 +233,7 @@ func WithContractCompensate(fn func(context.Context, saga.Value) error) Contract
 type ContractStub struct {
 	OnStep       *ContractStepStub
 	OnCompensate *ContractCompensateStub
+	OnState      *ContractStateStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -207,10 +260,12 @@ func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
 		OnStep:       &ContractStepStub{MethodStub: stub.NewMethodStub[ContractStepCall](tb, "Contract.Step")},
 		OnCompensate: &ContractCompensateStub{MethodStub: stub.NewMethodStub[ContractCompensateCall](tb, "Contract.Compensate")},
+		OnState:      &ContractStateStub{MethodStub: stub.NewMethodStub[ContractStateCall](tb, "Contract.State")},
 	}
 	s.all = []stub.Configurable{
 		s.OnStep.MethodStub,
 		s.OnCompensate.MethodStub,
+		s.OnState.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -310,5 +365,38 @@ func (s *ContractStub) Compensate(ctx context.Context, v saga.Value) error {
 	return r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *ContractStateStub) invoke(ctx context.Context) func() ContractStateReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractStateReturn {
+		r0, r1 := s.fn(ctx)
+		return ContractStateReturn{Result: r0, Err: r1}
+	}
+}
+
+// State records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) State(ctx context.Context) (string, error) {
+	call := ContractStateCall{Ctx: ctx}
+	r := stub.Answer(s.OnState.MethodStub, &call, stub.Arms[ContractStateCall, ContractStateReturn]{
+		Invoke:   s.OnState.invoke(ctx),
+		Fallback: s.OnState.fallback,
+		Fault:    func(err error) ContractStateReturn { return ContractStateReturn{Err: err} },
+		Stamp: func(c *ContractStateCall, r ContractStateReturn) {
+			c.Result = r.Result
+			c.Err = r.Err
+		},
+	})
+	return r.Result, r.Err
+}
+
 // testkit: end of generated content.
-// testkit:provenance f3642a29a7c44b8bbf0c0df570eee0c11d1604f0ecc872f7941b83ef3e527fb5
+// testkit:provenance fce6c3d9af9b794fd2a63b93f28cbd5d3bfed22b821d2f068f1a386aa6907c5d

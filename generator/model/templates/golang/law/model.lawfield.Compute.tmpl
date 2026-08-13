@@ -1,0 +1,14 @@
+{{- /*
+The law's own probe: every increment is one real computation. Locked, because
+a subject that fails to coalesce runs this concurrently, and the failure must
+arrive as a count — not as a race report.
+*/ -}}
+{{- define "model.lawfield.Compute" -}}
+{{ .Name }}: func() {{ renderType .Out }} {
+			coalesceMu.Lock()
+			coalesceCalls++
+			coalesceMu.Unlock()
+			var v {{ renderType .Out }}
+			return v
+		}
+{{- end -}}

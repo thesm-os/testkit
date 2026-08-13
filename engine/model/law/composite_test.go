@@ -425,8 +425,12 @@ func TestSagaFullCompensationPair(t *testing.T) {
 		})
 	})
 
-	t.Run("a refusing reference is reported", func(t *testing.T) {
+	t.Run("a refusing reference is tolerated", func(t *testing.T) {
 		t.Parallel()
+		// Run draws its own work, so the two sides' draws differ by design:
+		// the reference refusing its own run is a compensated no-op, not a
+		// disagreement — reporting it failed correct pairs on the first
+		// colliding draw.
 		rapid.Check(t, func(rt *rapid.T) {
 			refS := &sagaState{}
 			l := law.SagaFullCompensation[*sagaState, int]{
@@ -439,8 +443,8 @@ func TestSagaFullCompensationPair(t *testing.T) {
 				},
 				Observe: func(_ *rapid.T, s *sagaState) int { return s.count },
 			}
-			if err := l.Check(rt, &sagaState{}, refS); err == nil {
-				rt.Fatal("expected the refusal to be reported")
+			if err := l.Check(rt, &sagaState{}, refS); err != nil {
+				rt.Fatalf("a reference refusing its own drawn run is not a disagreement: %v", err)
 			}
 		})
 	})

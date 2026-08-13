@@ -22,11 +22,9 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type MixedWriteCall struct {
-	Ctx   context.Context
-	Key   string
-	Left  string
-	Right string
-	Err   error
+	Ctx context.Context
+	E   atomic.Entry
+	Err error
 }
 
 // MixedReadCall records one invocation of Mixed.Read.
@@ -35,11 +33,10 @@ type MixedWriteCall struct {
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type MixedReadCall struct {
-	Ctx   context.Context
-	Key   string
-	Left  string
-	Right string
-	Err   error
+	Ctx    context.Context
+	Key    string
+	Result atomic.Entry
+	Err    error
 }
 
 // --- Per-method configuration ---
@@ -53,7 +50,7 @@ type MixedReadCall struct {
 type MixedWriteStub struct {
 	*stub.MethodStub[MixedWriteCall]
 
-	fn       func(context.Context, string, string, string) error
+	fn       func(context.Context, atomic.Entry) error
 	fallback *MixedWriteReturn
 }
 
@@ -71,7 +68,7 @@ func (s *MixedWriteStub) Returns(err error) *MixedWriteStub {
 
 // Func supplies a body for Write, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *MixedWriteStub) Func(fn func(context.Context, string, string, string) error) *MixedWriteStub {
+func (s *MixedWriteStub) Func(fn func(context.Context, atomic.Entry) error) *MixedWriteStub {
 	s.fn = fn
 	return s
 }
@@ -85,27 +82,26 @@ func (s *MixedWriteStub) Func(fn func(context.Context, string, string, string) e
 type MixedReadStub struct {
 	*stub.MethodStub[MixedReadCall]
 
-	fn       func(context.Context, string) (string, string, error)
+	fn       func(context.Context, string) (atomic.Entry, error)
 	fallback *MixedReadReturn
 }
 
 // MixedReadReturn holds the fixed answer configured through Returns.
 type MixedReadReturn struct {
-	Left  string
-	Right string
-	Err   error
+	Result atomic.Entry
+	Err    error
 }
 
 // Returns pins a fixed result for every call to Read. A Func
 // override and an injected fault both take precedence over it.
-func (s *MixedReadStub) Returns(left string, right string, err error) *MixedReadStub {
-	s.fallback = &MixedReadReturn{Left: left, Right: right, Err: err}
+func (s *MixedReadStub) Returns(result atomic.Entry, err error) *MixedReadStub {
+	s.fallback = &MixedReadReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Read, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *MixedReadStub) Func(fn func(context.Context, string) (string, string, error)) *MixedReadStub {
+func (s *MixedReadStub) Func(fn func(context.Context, string) (atomic.Entry, error)) *MixedReadStub {
 	s.fn = fn
 	return s
 }
@@ -169,14 +165,14 @@ func MixedStubBenchMode() MixedStubOption {
 // WithMixedWrite sets Write's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithMixedWrite(fn func(context.Context, string, string, string) error) MixedStubOption {
+func WithMixedWrite(fn func(context.Context, atomic.Entry) error) MixedStubOption {
 	return func(s *MixedStub) { s.OnWrite.Func(fn) }
 }
 
 // WithMixedRead sets Read's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithMixedRead(fn func(context.Context, string) (string, string, error)) MixedStubOption {
+func WithMixedRead(fn func(context.Context, string) (atomic.Entry, error)) MixedStubOption {
 	return func(s *MixedStub) { s.OnRead.Func(fn) }
 }
 
@@ -255,12 +251,12 @@ func (s *MixedStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *MixedWriteStub) invoke(ctx context.Context, key string, left string, right string) func() MixedWriteReturn {
+func (s *MixedWriteStub) invoke(ctx context.Context, e atomic.Entry) func() MixedWriteReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() MixedWriteReturn {
-		r0 := s.fn(ctx, key, left, right)
+		r0 := s.fn(ctx, e)
 		return MixedWriteReturn{Err: r0}
 	}
 }
@@ -271,10 +267,10 @@ func (s *MixedWriteStub) invoke(ctx context.Context, key string, left string, ri
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *MixedStub) Write(ctx context.Context, key string, left string, right string) error {
-	call := MixedWriteCall{Ctx: ctx, Key: key, Left: left, Right: right}
+func (s *MixedStub) Write(ctx context.Context, e atomic.Entry) error {
+	call := MixedWriteCall{Ctx: ctx, E: e}
 	r := stub.Answer(s.OnWrite.MethodStub, &call, stub.Arms[MixedWriteCall, MixedWriteReturn]{
-		Invoke:   s.OnWrite.invoke(ctx, key, left, right),
+		Invoke:   s.OnWrite.invoke(ctx, e),
 		Fallback: s.OnWrite.fallback,
 		Fault:    func(err error) MixedWriteReturn { return MixedWriteReturn{Err: err} },
 		Stamp: func(c *MixedWriteCall, r MixedWriteReturn) {
@@ -292,8 +288,8 @@ func (s *MixedReadStub) invoke(ctx context.Context, key string) func() MixedRead
 		return nil
 	}
 	return func() MixedReadReturn {
-		left, right, err := s.fn(ctx, key)
-		return MixedReadReturn{Left: left, Right: right, Err: err}
+		r0, r1 := s.fn(ctx, key)
+		return MixedReadReturn{Result: r0, Err: r1}
 	}
 }
 
@@ -303,20 +299,19 @@ func (s *MixedReadStub) invoke(ctx context.Context, key string) func() MixedRead
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *MixedStub) Read(ctx context.Context, key string) (left string, right string, err error) {
+func (s *MixedStub) Read(ctx context.Context, key string) (atomic.Entry, error) {
 	call := MixedReadCall{Ctx: ctx, Key: key}
 	r := stub.Answer(s.OnRead.MethodStub, &call, stub.Arms[MixedReadCall, MixedReadReturn]{
 		Invoke:   s.OnRead.invoke(ctx, key),
 		Fallback: s.OnRead.fallback,
 		Fault:    func(err error) MixedReadReturn { return MixedReadReturn{Err: err} },
 		Stamp: func(c *MixedReadCall, r MixedReadReturn) {
-			c.Left = r.Left
-			c.Right = r.Right
+			c.Result = r.Result
 			c.Err = r.Err
 		},
 	})
-	return r.Left, r.Right, r.Err
+	return r.Result, r.Err
 }
 
 // testkit: end of generated content.
-// testkit:provenance db637591f5c02ed0c4527eb82b4fd593a244c372926e1ee5d26318a2d460a4c6
+// testkit:provenance 9501022b8223fd0289c116ae1567f30310c46ab59e59d76410b5d814cdbb9b62

@@ -107,6 +107,12 @@ type LawField struct {
 	// Pairs are the permitted transitions a workflow stamp declares, parsed
 	// from its `from>to` list.
 	Pairs [][2]string
+
+	// Partner names the sibling method a coordinating closure also calls —
+	// the compensation a saga run unwinds through — with PartnerCtx saying
+	// whether that call forwards the run's context.
+	Partner    string
+	PartnerCtx bool
 }
 
 // Kind returns the field's template key.
@@ -177,6 +183,13 @@ const (
 	shapeCountObs    lawShape = "CountObs"    // func(rt, T) int — loud on error
 	shapeSubscribe   lawShape = "Subscribe"   // func(rt, T) (Sub, error) — the handle kept, never compared
 	shapeCtxKeyedOp  lawShape = "CtxKeyedOp"  // func(ctx, T, K) error — the law draws the key
+
+	shapeHandleCall  lawShape = "HandleCall"  // func(rt, T) (H, error) — the handle a terminal pair threads
+	shapeHandleOp    lawShape = "HandleOp"    // func(rt, T, H) error — one terminal operation on the handle
+	shapeSagaRun     lawShape = "SagaRun"     // func(rt, T) error — step drawn values, unwind what committed
+	shapeComputeCall lawShape = "ComputeCall" // func(ctx, T, K, compute) (V, error) — the deduplicated call
+	shapeBodyRun     lawShape = "BodyRun"     // func(rt, T, body) error — the transactional scope
+	shapePageRead    lawShape = "PageRead"    // func(rt, T, C) ([]V, C, bool) — one page, loud on error
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -209,6 +222,15 @@ const (
 	fMerge     = "Merge"
 	fHistory   = "History"
 	fEntryID   = "EntryID"
+
+	// The contract-shape family's field and handle spellings.
+	fBegin              = "Begin"
+	fCommit             = "Commit"
+	fRollback           = "Rollback"
+	fRun                = "Run"
+	fPage               = "Page"
+	handleKeyProjection = "key-projection"
+	handleCoalesce      = "coalesce-probe"
 )
 
 //nolint:gochecknoglobals // a lookup table, read-only after init.
@@ -277,9 +299,21 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.PublisherAtLeastOnce: {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
 	lawid.PublisherAtMostOnce:  {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
 	lawid.PublisherExactlyOnce: {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
-	lawid.IdempotentLifecycle:  {fCall: shapeErrOp},
-	lawid.LifecycleAfterClose:  {fClose: shapeErrOp, "Op": shapeErrOp},
-	lawid.PoisonConsistent:     {"Poison": shapeDoOp, fProbe: shapeErrOp},
+
+	lawid.TwoPhaseMutex: {
+		fBegin: shapeHandleCall, fCommit: shapeHandleOp, fRollback: shapeHandleOp,
+	},
+	lawid.TwoPhaseRollbackAfterCommit: {
+		fBegin: shapeHandleCall, fCommit: shapeHandleOp, fRollback: shapeHandleOp,
+	},
+	lawid.SagaFullCompensation:  {fRun: shapeSagaRun},
+	lawid.SingleflightCoalesces: {fCall: shapeComputeCall},
+	lawid.TransactionRollback:   {fRun: shapeBodyRun, fRead: shapeKeyedRead},
+	lawid.PaginatorNoDuplicates: {fPage: shapePageRead},
+	lawid.PaginatorResumable:    {fPage: shapePageRead},
+	lawid.IdempotentLifecycle:   {fCall: shapeErrOp},
+	lawid.LifecycleAfterClose:   {fClose: shapeErrOp, "Op": shapeErrOp},
+	lawid.PoisonConsistent:      {"Poison": shapeDoOp, fProbe: shapeErrOp},
 
 	lawid.TTLExpiry:                  {"Put": shapePinnedWrite, fRead: shapeKeyedRead},
 	lawid.DeadlineRespecting:         {"Op": shapeCtxOpFixed},
@@ -360,8 +394,31 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			}
 			seen[key] = true
 			b.Laws = append(b.Laws, binding)
+			for _, field := range binding.Fields {
+				// The flag rides the appended binding, never the attempt: a
+				// probe filled for a law that later refused would render
+				// locals nothing uses.
+				if field.Kind() == sdk.Kind(LawFieldKindPrefix+"Compute") {
+					b.Coalesced = true
+				}
+			}
 		}
 	}
+	// A contract's classification rides every role method, and only the
+	// directive host carries the stamps its roles resolve through — so a law
+	// bound from the host still records a refusal per partner carrier. One
+	// binding is the interface's outcome; the carrier refusals are noise.
+	bound := map[string]bool{}
+	for _, lb := range b.Laws {
+		bound[lb.ID] = true
+	}
+	kept := b.Unbound[:0]
+	for _, u := range b.Unbound {
+		if !bound[u.Method] {
+			kept = append(kept, u)
+		}
+	}
+	b.Unbound = kept
 }
 
 // bindingFingerprint spells what makes two bindings the same law twice: the
@@ -1009,6 +1066,100 @@ func roleFieldOf(
 		}
 		field.Out = elem
 		return field, ""
+
+	case shapeHandleCall:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs no handle draw supplies"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " closes over " + role.Name +
+				", which answers no handle the terminal pair can thread"
+		}
+		field.Out = out
+		return field, ""
+
+	case shapeHandleOp:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not settle one handle"
+		}
+		begin, reason := ruleFieldRole(b, harness, r, fBegin, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		_, ret, why := resultType(begin)
+		if why != "" {
+			return nil, f.Name + " threads " + begin.Name + "'s handle, and it answers none"
+		}
+		if hq := shape.QName(role.CallArgs()[0].Source); hq != shape.QName(ret.Source) {
+			return nil, f.Name + " settles a " + hq +
+				" where " + begin.Name + " answers " + shape.QName(ret.Source)
+		}
+		field.In = role.CallArgs()[0].Type
+		return field, ""
+
+	case shapeSagaRun:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not step one value"
+		}
+		if !b.UsesValues() {
+			return nil, f.Name + " draws steps from the values pool, which no action here declares"
+		}
+		if q, _ := b.valueQOf(role); q != "" && b.Values.Q != "" && q != b.Values.Q {
+			return nil, f.Name + " closes over " + role.Name +
+				", which steps " + q + " beside a pool of " + b.Values.Q
+		}
+		partner, reason := roleMethod(b, harness, "saga.compensate", m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.In = role.CallArgs()[0].Type
+		field.Pool = poolValues
+		field.Partner = partner.Name
+		field.PartnerCtx = partner.TakesContext()
+		return field, ""
+
+	case shapeComputeCall:
+		args := role.CallArgs()
+		if len(args) != 2 || args[1].Source == nil || !args[1].Source.IsFunc() {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes no compute to deduplicate"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Key = args[0].Type
+		field.Out = out
+		return field, ""
+
+	case shapeBodyRun:
+		args := role.CallArgs()
+		if len(args) != 1 || !errOnly(role) || args[0].Source == nil || !args[0].Source.IsFunc() {
+			return nil, f.Name + " closes over " + role.Name + ", which accepts no failing body"
+		}
+		return field, ""
+
+	case shapePageRead:
+		if len(role.CallArgs()) != 1 || len(role.Returns) != 4 || !role.ReturnsError() {
+			return nil, f.Name + " closes over " + role.Name +
+				", which answers no page — no cursor to resume from"
+		}
+		if cq := shape.QName(role.CallArgs()[0].Source); cq != shape.QName(role.Returns[1].Source) {
+			return nil, f.Name + " resumes " + role.Name +
+				" at a " + shape.QName(role.Returns[1].Source) + ", which is not its " + cq + " cursor"
+		}
+		if role.Returns[2].Source == nil || !golang.IsBuiltinNamed(role.Returns[2].Source, "bool") {
+			return nil, f.Name + " closes over " + role.Name + ", which never says whether more remains"
+		}
+		elem, why := drainedElem(b, role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.In = role.CallArgs()[0].Type
+		field.Out = elem
+		return field, ""
 	}
 	return nil, f.Name + " has the unrendered shape " + string(sh)
 }
@@ -1232,13 +1383,30 @@ func handleFieldOf(
 	field *LawField, m, keyed *suite.Method,
 ) (*LawField, string) {
 	switch f.From {
-	case "key-projection":
-		if b.Reference.KeyField == "" {
-			return nil, f.Name + " needs the key projection, which was not derivable here"
+	case handleKeyProjection:
+		if b.Reference.KeyField != "" {
+			field.KeyOfName = b.KeyOfName()
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "KeyOf")
+			return field, ""
 		}
-		field.KeyOfName = b.KeyOfName()
-		field.KindName = sdk.Kind(LawFieldKindPrefix + "KeyOf")
-		return field, ""
+		if r.Law == lawid.PaginatorNoDuplicates {
+			// Identity over the page element: no projection derives where the
+			// only reader is the walk itself, and the element is comparable —
+			// the binding row instantiates K at the element for the same
+			// reason.
+			role, reason := ruleFieldRole(b, harness, r, fPage, m, keyed)
+			if reason != "" {
+				return nil, f.Name + " " + reason
+			}
+			elem, why := drainedElem(b, role)
+			if why != "" {
+				return nil, f.Name + " " + why
+			}
+			field.Value = elem
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "KeyOfIdentity")
+			return field, ""
+		}
+		return nil, f.Name + " needs the key projection, which was not derivable here"
 
 	case "identity-hash":
 		// Identity over the drained element: the hash argument is the value
@@ -1302,6 +1470,26 @@ func handleFieldOf(
 	case "clock":
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Advance")
 		return field, ""
+
+	case handleCoalesce:
+		// The law's own instrumentation: the compute it hands every caller,
+		// counting how often the subject actually ran it.
+		call, reason := ruleFieldRole(b, harness, r, fCall, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		out, _, why := resultType(call)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Out = out
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Compute")
+		return field, ""
+
+	case "coalesce-counter":
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Counter")
+		return field, ""
+
 	case "history":
 		return nil, f.Name + " waits on an append-recording history hook the runner does not offer"
 	}

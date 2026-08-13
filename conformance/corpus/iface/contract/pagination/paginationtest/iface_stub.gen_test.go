@@ -19,68 +19,74 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// contractStubGetSubject binds Get into the shape
+// contractStubPageSubject binds Page into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
 //
 // Each call builds a fresh double, because several of the checks assert on
 // failure and need one bound to a failable TB rather than to the running
 // test.
-func contractStubGetSubject(tb testing.TB) stub.Subject[paginationtest.ContractGetCall, paginationtest.ContractGetReturn] {
+func contractStubPageSubject(tb testing.TB) stub.Subject[paginationtest.ContractPageCall, paginationtest.ContractPageReturn] {
 	tb.Helper()
 	s := paginationtest.NewContractStub(tb)
-	return stub.Subject[paginationtest.ContractGetCall, paginationtest.ContractGetReturn]{
-		Stub: s.OnGet.MethodStub,
+	return stub.Subject[paginationtest.ContractPageCall, paginationtest.ContractPageReturn]{
+		Stub: s.OnPage.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			var a1 string
-			_, _ = s.Get(a0, a1)
+			var a1 pagination.Cursor
+			_, _, _, _ = s.Page(a0, a1)
 		},
-		Result: func() paginationtest.ContractGetReturn {
+		Result: func() paginationtest.ContractPageReturn {
 			var a0 context.Context
-			var a1 string
-			got0, got1 := s.Get(a0, a1)
-			return paginationtest.ContractGetReturn{Result: got0, Err: got1}
+			var a1 pagination.Cursor
+			got0, got1, got2, got3 := s.Page(a0, a1)
+			return paginationtest.ContractPageReturn{Items: got0, Next: got1, More: got2, Err: got3}
 		},
 		Override: func(mark func()) {
-			s.OnGet.Func(func(_ context.Context, _ string) (pagination.Value, error) {
+			s.OnPage.Func(func(_ context.Context, _ pagination.Cursor) ([]pagination.Value, pagination.Cursor, bool, error) {
 				mark()
-				var z0 pagination.Value
-				var z1 error
-				return z0, z1
+				var z0 []pagination.Value
+				var z1 pagination.Cursor
+				var z2 bool
+				var z3 error
+				return z0, z1, z2, z3
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
-			var a1 string
-			_, r1 := s.Get(a0, a1)
-			return r1
+			var a1 pagination.Cursor
+			_, _, _, err := s.Page(a0, a1)
+			return err
 		},
 	}
 }
 
-// TestContractStubGet pins how Get answers.
+// TestContractStubPage pins how Page answers.
 //
 // Recording, resetting, call-count expectations, strict mode, fault injection
 // and zero-value dispatch are the same contract for every method, so they are
 // asserted once in [stub.Behaviour] rather than restated here. What remains
 // below needs a value this method's signature can tell apart from a zero one.
-func TestContractStubGet(t *testing.T) {
+func TestContractStubPage(t *testing.T) {
 	t.Parallel()
 
-	stub.Behaviour(t, "Get", contractStubGetSubject)
+	stub.Behaviour(t, "Page", contractStubPageSubject)
 
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := paginationtest.NewContractStub(t)
-		var want0 pagination.Value
-		var want1 error
-		s.OnGet.Returns(want0, want1)
+		var want0 []pagination.Value
+		var want1 pagination.Cursor
+		var want2 bool
+		var want3 error
+		s.OnPage.Returns(want0, want1, want2, want3)
 		var a0 context.Context
-		var a1 string
-		got0, got1 := s.Get(a0, a1)
-		testkit.Equal(t, got0, want0, "Get must answer with what Returns pinned")
-		testkit.Equal(t, got1, want1, "Get must answer with what Returns pinned")
+		var a1 pagination.Cursor
+		got0, got1, got2, got3 := s.Page(a0, a1)
+		testkit.Equal(t, got0, want0, "Page must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Page must answer with what Returns pinned")
+		testkit.Equal(t, got2, want2, "Page must answer with what Returns pinned")
+		testkit.Equal(t, got3, want3, "Page must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -89,11 +95,11 @@ func TestContractStubGet(t *testing.T) {
 		// most needs the log to surface.
 		s := paginationtest.NewContractStub(t)
 		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		got := s.OnGet.AssertCalledOnce(t, "Get must record the call")
+		var a1 pagination.Cursor
+		_, _, _, _ = s.Page(a0, a1)
+		got := s.OnPage.AssertCalledOnce(t, "Page must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.Cur, a1, "the recorded call carries Cur")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -102,28 +108,30 @@ func TestContractStubGet(t *testing.T) {
 		// concurrency test observes progress with — polling the log instead
 		// races the thing under test.
 		s := paginationtest.NewContractStub(t)
-		var seen []paginationtest.ContractGetCall
-		s.OnGet.OnRecord(func(c paginationtest.ContractGetCall) { seen = append(seen, c) })
+		var seen []paginationtest.ContractPageCall
+		s.OnPage.OnRecord(func(c paginationtest.ContractPageCall) { seen = append(seen, c) })
 		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		_, _ = s.Get(a0, a1)
-		testkit.Len(t, seen, 2, "OnRecord must fire once per Get call")
+		var a1 pagination.Cursor
+		_, _, _, _ = s.Page(a0, a1)
+		_, _, _, _ = s.Page(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Page call")
 	})
 
-	t.Run("wires WithContractGet at construction", func(t *testing.T) {
+	t.Run("wires WithContractPage at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := paginationtest.NewContractStub(t, paginationtest.WithContractGet(func(_ context.Context, _ string) (pagination.Value, error) {
+		s := paginationtest.NewContractStub(t, paginationtest.WithContractPage(func(_ context.Context, _ pagination.Cursor) ([]pagination.Value, pagination.Cursor, bool, error) {
 			called = true
-			var z0 pagination.Value
-			var z1 error
-			return z0, z1
+			var z0 []pagination.Value
+			var z1 pagination.Cursor
+			var z2 bool
+			var z3 error
+			return z0, z1, z2, z3
 		}))
 		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		testkit.True(t, called, "WithContractGet must install the override")
+		var a1 pagination.Cursor
+		_, _, _, _ = s.Page(a0, a1)
+		testkit.True(t, called, "WithContractPage must install the override")
 	})
 
 	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
@@ -132,51 +140,175 @@ func TestContractStubGet(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := paginationtest.NewContractStub(t)
-		var want0 pagination.Value
-		var want1 error
-		s.OnGet.Returns(want0, want1)
+		var want0 []pagination.Value
+		var want1 pagination.Cursor
+		var want2 bool
+		var want3 error
+		s.OnPage.Returns(want0, want1, want2, want3)
 		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
+		var a1 pagination.Cursor
+		_, _, _, _ = s.Page(a0, a1)
 		s.ResetCalls()
-		got0, got1 := s.Get(a0, a1)
+		got0, got1, got2, got3 := s.Page(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got2, want2, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got3, want3, "a reset must keep what Returns pinned")
+	})
+}
+
+// contractStubPutSubject binds Put into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubPutSubject(tb testing.TB) stub.Subject[paginationtest.ContractPutCall, paginationtest.ContractPutReturn] {
+	tb.Helper()
+	s := paginationtest.NewContractStub(tb)
+	return stub.Subject[paginationtest.ContractPutCall, paginationtest.ContractPutReturn]{
+		Stub: s.OnPut.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 pagination.Value
+			_ = s.Put(a0, a1)
+		},
+		Result: func() paginationtest.ContractPutReturn {
+			var a0 context.Context
+			var a1 pagination.Value
+			got0 := s.Put(a0, a1)
+			return paginationtest.ContractPutReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnPut.Func(func(_ context.Context, _ pagination.Value) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 pagination.Value
+			r0 := s.Put(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestContractStubPut pins how Put answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubPut(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Put", contractStubPutSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := paginationtest.NewContractStub(t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 pagination.Value
+		got0 := s.Put(a0, a1)
+		testkit.Equal(t, got0, want0, "Put must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := paginationtest.NewContractStub(t)
+		var a0 context.Context
+		var a1 pagination.Value
+		_ = s.Put(a0, a1)
+		got := s.OnPut.AssertCalledOnce(t, "Put must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.V, a1, "the recorded call carries V")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := paginationtest.NewContractStub(t)
+		var seen []paginationtest.ContractPutCall
+		s.OnPut.OnRecord(func(c paginationtest.ContractPutCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 pagination.Value
+		_ = s.Put(a0, a1)
+		_ = s.Put(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Put call")
+	})
+
+	t.Run("wires WithContractPut at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := paginationtest.NewContractStub(t, paginationtest.WithContractPut(func(_ context.Context, _ pagination.Value) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 pagination.Value
+		_ = s.Put(a0, a1)
+		testkit.True(t, called, "WithContractPut must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := paginationtest.NewContractStub(t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 pagination.Value
+		_ = s.Put(a0, a1)
+		s.ResetCalls()
+		got0 := s.Put(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
 
 // contractStubDouble describes how to build a ContractStub under each
 // option whose effect is the same whatever a method's signature.
 //
-// Get stands in for the double as a whole: what these checks assert
+// Page stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func contractStubDouble() stub.Double[paginationtest.ContractGetCall] {
-	instance := func(s *paginationtest.ContractStub) stub.Instance[paginationtest.ContractGetCall] {
-		return stub.Instance[paginationtest.ContractGetCall]{
-			Stub: s.OnGet.MethodStub,
+func contractStubDouble() stub.Double[paginationtest.ContractPageCall] {
+	instance := func(s *paginationtest.ContractStub) stub.Instance[paginationtest.ContractPageCall] {
+		return stub.Instance[paginationtest.ContractPageCall]{
+			Stub: s.OnPage.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				var a1 string
-				_, _ = s.Get(a0, a1)
+				var a1 pagination.Cursor
+				_, _, _, _ = s.Page(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
 	}
-	return stub.Double[paginationtest.ContractGetCall]{
-		New: func(tb testing.TB) stub.Instance[paginationtest.ContractGetCall] {
+	return stub.Double[paginationtest.ContractPageCall]{
+		New: func(tb testing.TB) stub.Instance[paginationtest.ContractPageCall] {
 			return instance(paginationtest.NewContractStub(tb))
 		},
-		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[paginationtest.ContractGetCall] {
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[paginationtest.ContractPageCall] {
 			return instance(paginationtest.NewContractStub(tb, paginationtest.ContractStubWithClock(clk)))
 		},
-		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[paginationtest.ContractGetCall] {
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[paginationtest.ContractPageCall] {
 			return instance(paginationtest.NewContractStub(tb, paginationtest.ContractStubWithRandSource(src)))
 		},
-		BenchMode: func(tb testing.TB) stub.Instance[paginationtest.ContractGetCall] {
+		BenchMode: func(tb testing.TB) stub.Instance[paginationtest.ContractPageCall] {
 			return instance(paginationtest.NewContractStub(tb, paginationtest.ContractStubBenchMode()))
 		},
-		Strict: func(tb testing.TB) stub.Instance[paginationtest.ContractGetCall] {
+		Strict: func(tb testing.TB) stub.Instance[paginationtest.ContractPageCall] {
 			return instance(paginationtest.NewContractStub(tb, paginationtest.ContractStubStrict()))
 		},
 	}
@@ -202,25 +334,44 @@ func TestContractStubDelegateTo(t *testing.T) {
 	inner := paginationtest.NewContractStub(t)
 	s := paginationtest.NewContractStub(t, paginationtest.ContractStubDelegateTo(inner))
 
-	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
+	t.Run("forwards Page to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		var a1 string
-		_, _ = s.Get(a0, a1)
-		inner.OnGet.AssertCalledOnce(t, "Get must reach the wrapped implementation")
+		var a1 pagination.Cursor
+		_, _, _, _ = s.Page(a0, a1)
+		inner.OnPage.AssertCalledOnce(t, "Page must reach the wrapped implementation")
 	})
 
-	t.Run("surfaces what Get answered", func(t *testing.T) {
+	t.Run("surfaces what Page answered", func(t *testing.T) {
 		// Reaching the wrapped implementation is not enough: a double that
 		// called through and then discarded the answer would pass the check
 		// above while telling its caller nothing true.
-		want := testkit.TestError("Get-delegate")
-		inner.OnGet.FaultsFor(time.Hour, want)
+		want := testkit.TestError("Page-delegate")
+		inner.OnPage.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		var a1 string
-		_, r1 := s.Get(a0, a1)
-		testkit.ErrorIs(t, r1, want, "Get must surface the wrapped answer")
+		var a1 pagination.Cursor
+		_, _, _, err := s.Page(a0, a1)
+		testkit.ErrorIs(t, err, want, "Page must surface the wrapped answer")
+	})
+
+	t.Run("forwards Put to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 pagination.Value
+		_ = s.Put(a0, a1)
+		inner.OnPut.AssertCalledOnce(t, "Put must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Put answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Put-delegate")
+		inner.OnPut.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 pagination.Value
+		r0 := s.Put(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Put must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8a9231256b0262e854c95712bfaa07f5e84c577876f3d6cfc7e20fdc0c9c2f5a
+// testkit:provenance f50bc0b98ecadc1beed44b386c7a728a59108b6309b9273fd014b86075b69c74

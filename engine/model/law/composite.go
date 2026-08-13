@@ -143,7 +143,17 @@ func (TwoPhaseNoRollbackAfterCommit[T, Tx]) REQID() string { return "" }
 
 // Check begins, commits, then asserts a follow-up rollback returns
 // the closed sentinel.
-func (l TwoPhaseNoRollbackAfterCommit[T, Tx]) Check(rt *rapid.T, sut, _ T) error {
+func (l TwoPhaseNoRollbackAfterCommit[T, Tx]) Check(rt *rapid.T, sut, ref T) error {
+	// Levelness first, agreement never: the same begin/settle triple lands
+	// on the reference, errors swallowed — a begin that advances a counter
+	// on one side only reads as divergence at the next compared call.
+	defer func() {
+		if tx, err := l.Begin(rt, ref); err == nil {
+			if l.Commit(rt, ref, tx) == nil {
+				_ = l.Rollback(rt, ref, tx)
+			}
+		}
+	}()
 	tx, beginErr := l.Begin(rt, sut)
 	if beginErr != nil {
 		return Vacuous // a precondition this run supplies was refused
@@ -185,14 +195,26 @@ func (TwoPhaseCommitOrRollback[T, Tx]) REQID() string { return "" }
 // Check begins a transaction, runs one terminal operation (drawn by
 // rapid), and asserts the other terminal operation is then rejected
 // with the closed sentinel.
-func (l TwoPhaseCommitOrRollback[T, Tx]) Check(rt *rapid.T, sut, _ T) error {
-	tx, beginErr := l.Begin(rt, sut)
-	if beginErr != nil {
-		return Vacuous // a precondition this run supplies was refused
-	}
+func (l TwoPhaseCommitOrRollback[T, Tx]) Check(rt *rapid.T, sut, ref T) error {
 	first, second, firstName, secondName := l.Commit, l.Rollback, "commit", "rollback"
 	if rapid.Bool().Draw(rt, "TwoPhaseCommitOrRollback_rollbackFirst") {
 		first, second, firstName, secondName = l.Rollback, l.Commit, "rollback", "commit"
+	}
+	// Levelness first, agreement never: the same drawn sequence lands on
+	// the reference, errors swallowed — a begin that advances a counter on
+	// one side only reads as divergence at the next compared call. Level
+	// twins refuse the same steps, so the guarded replay traces the same
+	// shape on both sides.
+	defer func() {
+		if tx, err := l.Begin(rt, ref); err == nil {
+			if first(rt, ref, tx) == nil {
+				_ = second(rt, ref, tx)
+			}
+		}
+	}()
+	tx, beginErr := l.Begin(rt, sut)
+	if beginErr != nil {
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := first(rt, sut, tx); err != nil {
 		return nil //nolint:nilerr // first terminal op failed; law vacuously holds
@@ -225,10 +247,14 @@ func (SagaFullCompensation[T, Obs]) REQID() string { return "" }
 func (l SagaFullCompensation[T, Obs]) Check(rt *rapid.T, sut, ref T) error {
 	before := l.Observe(rt, sut)
 	if err := l.Run(rt, sut); err == nil {
-		// A completed saga mutated the subject; the same run lands on the
-		// reference — the mirrored half of the [Law] conduct contract. A
-		// failed run compensated itself, and mirrors nothing.
-		return mirror("SagaFullCompensation", func() error { return l.Run(rt, ref) })
+		// A completed saga mutated the subject; a run lands on the reference
+		// too — the mirrored half of the [Law] conduct contract. Levelness,
+		// not agreement: Run draws its own work, so the two sides' draws
+		// differ by design and the reference refusing its own is no
+		// disagreement — a refusing run compensated itself, which is the
+		// same net-nothing a completed one may leave.
+		_ = l.Run(rt, ref)
+		return nil
 	}
 	after := l.Observe(rt, sut)
 	if before != after {

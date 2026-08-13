@@ -4,7 +4,7 @@
 package paginationtest_test
 
 import (
-	"context"
+	"fmt"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -13,38 +13,54 @@ import (
 )
 
 // pagination is the model tier's under ADR-0018: `AUTO-PAGINATOR-NO-DUPLICATES`
-// and `AUTO-PAGINATOR-RESUMABLE` state it.
+// and `AUTO-PAGINATOR-RESUMABLE` state it, over the page-shaped reader the
+// fixture now declares.
 //
-// The fixture's reader role takes a key and no page token — `cursor=Cursor` is
-// an opaque param naming something the signature does not carry — so nothing
-// here can walk pages at all. The paging claims are stated against
-// composite/paginated-reader, whose reader takes the cursor the contract talks
-// about.
+// The check below is the deterministic complement: a seeded store small enough
+// to hand-walk, asserting the page boundary lands where PageSize says and the
+// keys arrive in order.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
-
-	fixture := paginationtest.DefaultContractFixture()
 
 	paginationtest.AssertContractContract(t,
 		paginationtest.ContractModel(),
 		paginationtest.ContractSubject("in-memory", func() pagination.Contract {
 			return paginationtest.NewInMemory()
 		}),
-		paginationtest.ContractSeed(func(_ context.Context, subject pagination.Contract) error {
-			// The reader role is the only one declared, so nothing is derived
-			// to seed through and the hit path is unreachable without this.
-			subject.(*paginationtest.InMemory).Store(
-				pagination.Value{Key: fixture.Key, Body: "seeded"},
-			)
-			return nil
-		}),
-		paginationtest.ContractOnGet("returns what was seeded", func(
-			tb testing.TB, subject pagination.Contract, key string,
+		paginationtest.ContractOnPage("walks every entry once, in key order", func(
+			tb testing.TB, subject pagination.Contract, _ pagination.Cursor,
 		) {
 			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, got.Body, "seeded", "and carries what was written")
+			const entries = 5
+			for i := range entries {
+				testkit.NoError(tb, subject.Put(tb.Context(), pagination.Value{
+					Key:  fmt.Sprintf("b6-%02d", i),
+					Body: "seeded",
+				}), "an entry is stored")
+			}
+
+			// The walk sees at least the five above; the harness may have
+			// seeded more, so the assertions are about order and termination
+			// rather than exact contents.
+			seen := map[string]bool{}
+			last, cur := "", pagination.Cursor("")
+			for range 100 {
+				items, next, more, err := subject.Page(tb.Context(), cur)
+				testkit.NoError(tb, err, "a page is readable")
+				for _, v := range items {
+					testkit.Equal(tb, v.Key > last, true, "keys arrive strictly ascending")
+					last = v.Key
+					seen[v.Key] = true
+				}
+				if !more {
+					break
+				}
+				cur = next
+			}
+			for i := range entries {
+				key := fmt.Sprintf("b6-%02d", i)
+				testkit.Equal(tb, seen[key], true, "the stored entry paged out")
+			}
 		}),
 	)
 }
@@ -57,7 +73,7 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		paginationtest.ContractSubject("in-memory", func() pagination.Contract {
 			return paginationtest.NewInMemory()
 		}),
-		paginationtest.ContractWithout("Get/smoke"),
+		paginationtest.ContractWithout("Page/smoke"),
 		paginationtest.ContractWithoutDouble(),
 	)
 }

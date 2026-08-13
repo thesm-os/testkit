@@ -30,4 +30,10 @@ type Contract interface {
 
 	// Compensate is the saga contract's compensate role.
 	Compensate(ctx context.Context, v Value) error
+
+	// State reports the applied-step fingerprint, in order — the
+	// observation a compensation claim compares before and after a failed
+	// run. A string rather than a listing because the comparison is
+	// equality, and one composed value cannot half-match.
+	State(ctx context.Context) (string, error)
 }

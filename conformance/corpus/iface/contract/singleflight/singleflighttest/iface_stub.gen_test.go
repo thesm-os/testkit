@@ -33,26 +33,30 @@ func contractStubRunSubject(tb testing.TB) stub.Subject[singleflighttest.Contrac
 		Call: func() {
 			var a0 context.Context
 			var a1 string
-			_ = s.Run(a0, a1)
+			var a2 func() string
+			_, _ = s.Run(a0, a1, a2)
 		},
 		Result: func() singleflighttest.ContractRunReturn {
 			var a0 context.Context
 			var a1 string
-			got0 := s.Run(a0, a1)
-			return singleflighttest.ContractRunReturn{Err: got0}
+			var a2 func() string
+			got0, got1 := s.Run(a0, a1, a2)
+			return singleflighttest.ContractRunReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnRun.Func(func(_ context.Context, _ string) error {
+			s.OnRun.Func(func(_ context.Context, _ string, _ func() string) (string, error) {
 				mark()
-				var z0 error
-				return z0
+				var z0 string
+				var z1 error
+				return z0, z1
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
 			var a1 string
-			r0 := s.Run(a0, a1)
-			return r0
+			var a2 func() string
+			_, r1 := s.Run(a0, a1, a2)
+			return r1
 		},
 	}
 }
@@ -71,12 +75,15 @@ func TestContractStubRun(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := singleflighttest.NewContractStub(t)
-		var want0 error
-		s.OnRun.Returns(want0)
+		var want0 string
+		var want1 error
+		s.OnRun.Returns(want0, want1)
 		var a0 context.Context
 		var a1 string
-		got0 := s.Run(a0, a1)
+		var a2 func() string
+		got0, got1 := s.Run(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "Run must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Run must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -86,10 +93,12 @@ func TestContractStubRun(t *testing.T) {
 		s := singleflighttest.NewContractStub(t)
 		var a0 context.Context
 		var a1 string
-		_ = s.Run(a0, a1)
+		var a2 func() string
+		_, _ = s.Run(a0, a1, a2)
 		got := s.OnRun.AssertCalledOnce(t, "Run must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.Compute, a2, "the recorded call carries Compute")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -102,22 +111,25 @@ func TestContractStubRun(t *testing.T) {
 		s.OnRun.OnRecord(func(c singleflighttest.ContractRunCall) { seen = append(seen, c) })
 		var a0 context.Context
 		var a1 string
-		_ = s.Run(a0, a1)
-		_ = s.Run(a0, a1)
+		var a2 func() string
+		_, _ = s.Run(a0, a1, a2)
+		_, _ = s.Run(a0, a1, a2)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Run call")
 	})
 
 	t.Run("wires WithContractRun at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := singleflighttest.NewContractStub(t, singleflighttest.WithContractRun(func(_ context.Context, _ string) error {
+		s := singleflighttest.NewContractStub(t, singleflighttest.WithContractRun(func(_ context.Context, _ string, _ func() string) (string, error) {
 			called = true
-			var z0 error
-			return z0
+			var z0 string
+			var z1 error
+			return z0, z1
 		}))
 		var a0 context.Context
 		var a1 string
-		_ = s.Run(a0, a1)
+		var a2 func() string
+		_, _ = s.Run(a0, a1, a2)
 		testkit.True(t, called, "WithContractRun must install the override")
 	})
 
@@ -127,14 +139,134 @@ func TestContractStubRun(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := singleflighttest.NewContractStub(t)
-		var want0 error
-		s.OnRun.Returns(want0)
+		var want0 string
+		var want1 error
+		s.OnRun.Returns(want0, want1)
 		var a0 context.Context
 		var a1 string
-		_ = s.Run(a0, a1)
+		var a2 func() string
+		_, _ = s.Run(a0, a1, a2)
 		s.ResetCalls()
-		got0 := s.Run(a0, a1)
+		got0, got1 := s.Run(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
+// contractStubFlightsSubject binds Flights into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubFlightsSubject(tb testing.TB) stub.Subject[singleflighttest.ContractFlightsCall, singleflighttest.ContractFlightsReturn] {
+	tb.Helper()
+	s := singleflighttest.NewContractStub(tb)
+	return stub.Subject[singleflighttest.ContractFlightsCall, singleflighttest.ContractFlightsReturn]{
+		Stub: s.OnFlights.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			_, _ = s.Flights(a0)
+		},
+		Result: func() singleflighttest.ContractFlightsReturn {
+			var a0 context.Context
+			got0, got1 := s.Flights(a0)
+			return singleflighttest.ContractFlightsReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnFlights.Func(func(_ context.Context) (int, error) {
+				mark()
+				var z0 int
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			_, r1 := s.Flights(a0)
+			return r1
+		},
+	}
+}
+
+// TestContractStubFlights pins how Flights answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubFlights(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Flights", contractStubFlightsSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := singleflighttest.NewContractStub(t)
+		var want0 int
+		var want1 error
+		s.OnFlights.Returns(want0, want1)
+		var a0 context.Context
+		got0, got1 := s.Flights(a0)
+		testkit.Equal(t, got0, want0, "Flights must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Flights must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := singleflighttest.NewContractStub(t)
+		var a0 context.Context
+		_, _ = s.Flights(a0)
+		got := s.OnFlights.AssertCalledOnce(t, "Flights must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := singleflighttest.NewContractStub(t)
+		var seen []singleflighttest.ContractFlightsCall
+		s.OnFlights.OnRecord(func(c singleflighttest.ContractFlightsCall) { seen = append(seen, c) })
+		var a0 context.Context
+		_, _ = s.Flights(a0)
+		_, _ = s.Flights(a0)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Flights call")
+	})
+
+	t.Run("wires WithContractFlights at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := singleflighttest.NewContractStub(t, singleflighttest.WithContractFlights(func(_ context.Context) (int, error) {
+			called = true
+			var z0 int
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		_, _ = s.Flights(a0)
+		testkit.True(t, called, "WithContractFlights must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := singleflighttest.NewContractStub(t)
+		var want0 int
+		var want1 error
+		s.OnFlights.Returns(want0, want1)
+		var a0 context.Context
+		_, _ = s.Flights(a0)
+		s.ResetCalls()
+		got0, got1 := s.Flights(a0)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
 }
 
@@ -151,7 +283,8 @@ func contractStubDouble() stub.Double[singleflighttest.ContractRunCall] {
 			Call: func() {
 				var a0 context.Context
 				var a1 string
-				_ = s.Run(a0, a1)
+				var a2 func() string
+				_, _ = s.Run(a0, a1, a2)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -198,7 +331,8 @@ func TestContractStubDelegateTo(t *testing.T) {
 	t.Run("forwards Run to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 string
-		_ = s.Run(a0, a1)
+		var a2 func() string
+		_, _ = s.Run(a0, a1, a2)
 		inner.OnRun.AssertCalledOnce(t, "Run must reach the wrapped implementation")
 	})
 
@@ -210,10 +344,28 @@ func TestContractStubDelegateTo(t *testing.T) {
 		inner.OnRun.FaultsFor(time.Hour, want)
 		var a0 context.Context
 		var a1 string
-		r0 := s.Run(a0, a1)
-		testkit.ErrorIs(t, r0, want, "Run must surface the wrapped answer")
+		var a2 func() string
+		_, r1 := s.Run(a0, a1, a2)
+		testkit.ErrorIs(t, r1, want, "Run must surface the wrapped answer")
+	})
+
+	t.Run("forwards Flights to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		_, _ = s.Flights(a0)
+		inner.OnFlights.AssertCalledOnce(t, "Flights must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Flights answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Flights-delegate")
+		inner.OnFlights.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		_, r1 := s.Flights(a0)
+		testkit.ErrorIs(t, r1, want, "Flights must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 59a68f710109f01b36d4d18c62d45b3097bfeb93f5b94b08a9fe763f97802586
+// testkit:provenance 82439abc0427cc9b4d5afe4cdcc28088def7d5758ca29e4f2c2685651c4d660d

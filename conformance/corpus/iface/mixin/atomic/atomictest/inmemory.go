@@ -17,47 +17,56 @@ import (
 // ErrNotFound is what Read reports for a key nothing holds.
 var ErrNotFound = errors.New("atomictest: not found")
 
-// pair is the two halves that move together, stored as one value so a reader
-// can never observe one updated and the other not.
-type pair struct{ left, right string }
+// ErrHalfEntry is what Write reports for an entry carrying one half.
+//
+// A refusal rather than a partial apply, and it is what makes the atomicity
+// law reachable: drawn entries carry one-sided empties often, so the failing
+// write the law compares around arrives through the interface. An entry with
+// *both* halves empty is accepted — that is an honest empty write, not half of
+// one.
+var ErrHalfEntry = errors.New("atomictest: refuses an entry missing one half")
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
 type InMemory struct {
 	mu    sync.Mutex
-	items map[string]pair
+	items map[string]atomic.Entry
 }
 
 var _ atomic.Mixed = (*InMemory)(nil)
 
 // NewInMemory returns an empty store.
-func NewInMemory() *InMemory { return &InMemory{items: map[string]pair{}} }
+func NewInMemory() *InMemory { return &InMemory{items: map[string]atomic.Entry{}} }
 
-// Write replaces both halves under one lock, which is the mixin's whole claim:
-// two fields written separately are two chances for a reader to see a state
-// neither writer intended.
-func (s *InMemory) Write(ctx context.Context, key, left, right string) error {
+// Write replaces the whole entry under one lock, or refuses it whole: an
+// entry with exactly one empty half never lands, and nothing else changes
+// when it is refused — which is the mixin's entire claim.
+func (s *InMemory) Write(ctx context.Context, e atomic.Entry) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
+	if (e.Left == "") != (e.Right == "") {
+		return ErrHalfEntry
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.items[key] = pair{left: left, right: right}
+	s.items[e.Key] = e
 	return nil
 }
 
-// Read returns both halves as they were written, or the zero for each.
-func (s *InMemory) Read(ctx context.Context, key string) (left, right string, err error) {
+// Read returns the whole entry as it was written, or the zero entry beside
+// every error it reports.
+func (s *InMemory) Read(ctx context.Context, key string) (atomic.Entry, error) {
 	if err := contextErr(ctx); err != nil {
-		return "", "", err
+		return atomic.Entry{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	p, ok := s.items[key]
+	e, ok := s.items[key]
 	if !ok {
-		return "", "", ErrNotFound
+		return atomic.Entry{}, ErrNotFound
 	}
-	return p.left, p.right, nil
+	return e, nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

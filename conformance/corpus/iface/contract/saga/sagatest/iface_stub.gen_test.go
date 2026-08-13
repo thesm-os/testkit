@@ -259,6 +259,123 @@ func TestContractStubCompensate(t *testing.T) {
 	})
 }
 
+// contractStubStateSubject binds State into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubStateSubject(tb testing.TB) stub.Subject[sagatest.ContractStateCall, sagatest.ContractStateReturn] {
+	tb.Helper()
+	s := sagatest.NewContractStub(tb)
+	return stub.Subject[sagatest.ContractStateCall, sagatest.ContractStateReturn]{
+		Stub: s.OnState.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			_, _ = s.State(a0)
+		},
+		Result: func() sagatest.ContractStateReturn {
+			var a0 context.Context
+			got0, got1 := s.State(a0)
+			return sagatest.ContractStateReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnState.Func(func(_ context.Context) (string, error) {
+				mark()
+				var z0 string
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			_, r1 := s.State(a0)
+			return r1
+		},
+	}
+}
+
+// TestContractStubState pins how State answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubState(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "State", contractStubStateSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := sagatest.NewContractStub(t)
+		var want0 string
+		var want1 error
+		s.OnState.Returns(want0, want1)
+		var a0 context.Context
+		got0, got1 := s.State(a0)
+		testkit.Equal(t, got0, want0, "State must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "State must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := sagatest.NewContractStub(t)
+		var a0 context.Context
+		_, _ = s.State(a0)
+		got := s.OnState.AssertCalledOnce(t, "State must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := sagatest.NewContractStub(t)
+		var seen []sagatest.ContractStateCall
+		s.OnState.OnRecord(func(c sagatest.ContractStateCall) { seen = append(seen, c) })
+		var a0 context.Context
+		_, _ = s.State(a0)
+		_, _ = s.State(a0)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per State call")
+	})
+
+	t.Run("wires WithContractState at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := sagatest.NewContractStub(t, sagatest.WithContractState(func(_ context.Context) (string, error) {
+			called = true
+			var z0 string
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		_, _ = s.State(a0)
+		testkit.True(t, called, "WithContractState must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := sagatest.NewContractStub(t)
+		var want0 string
+		var want1 error
+		s.OnState.Returns(want0, want1)
+		var a0 context.Context
+		_, _ = s.State(a0)
+		s.ResetCalls()
+		got0, got1 := s.State(a0)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
 // contractStubDouble describes how to build a ContractStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -353,7 +470,24 @@ func TestContractStubDelegateTo(t *testing.T) {
 		r0 := s.Compensate(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Compensate must surface the wrapped answer")
 	})
+
+	t.Run("forwards State to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		_, _ = s.State(a0)
+		inner.OnState.AssertCalledOnce(t, "State must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what State answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("State-delegate")
+		inner.OnState.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		_, r1 := s.State(a0)
+		testkit.ErrorIs(t, r1, want, "State must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance bc00bd62227bea71101c2c36167700b0442ae58a72391db2c97629cf9329b4f5
+// testkit:provenance 167396becaf54d1348872b098547ce4f3cc1513366b9b9f727a362c43a165800

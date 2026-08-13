@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/saga"
@@ -21,6 +22,14 @@ import (
 // applied is a coordinator that lost track of where it was — and the
 // compensation it runs next will be for a step somebody else owns.
 var ErrNotApplied = errors.New("sagatest: no applied step to compensate")
+
+// ErrAlreadyApplied reports a step for a key the saga already stepped.
+//
+// A refusal rather than a repeat, and it is what makes the compensation law
+// reachable: the generated run steps drawn values until one fails, and drawn
+// keys collide with the pinned pool by design — so the failing step the law
+// needs arrives through the interface instead of through a rigged subject.
+var ErrAlreadyApplied = errors.New("sagatest: a step for that key is already applied")
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
@@ -38,13 +47,17 @@ var _ saga.Contract = (*InMemory)(nil)
 // NewInMemory returns a saga with nothing applied.
 func NewInMemory() *InMemory { return &InMemory{} }
 
-// Step applies a value and records that it was applied.
+// Step applies a value and records that it was applied, refusing a key it
+// already stepped.
 func (s *InMemory) Step(ctx context.Context, v saga.Value) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if slices.ContainsFunc(s.applied, func(a saga.Value) bool { return a.Key == v.Key }) {
+		return ErrAlreadyApplied
+	}
 	s.applied = append(s.applied, v)
 	return nil
 }
@@ -67,6 +80,25 @@ func (s *InMemory) Compensate(ctx context.Context, v saga.Value) error {
 	}
 	s.applied = slices.Delete(s.applied, at, at+1)
 	return nil
+}
+
+// State reports the applied-step fingerprint, in order.
+//
+// Joined with separators no drawn payload is likely to carry, because the
+// fingerprint's whole job is that two different applied sequences never spell
+// the same string — a collision here is a compensation defect the law would
+// wave through.
+func (s *InMemory) State(ctx context.Context) (string, error) {
+	if err := contextErr(ctx); err != nil {
+		return "", err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	parts := make([]string, len(s.applied))
+	for i, v := range s.applied {
+		parts[i] = v.Key + "\x00" + v.Body
+	}
+	return strings.Join(parts, "\x1f"), nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

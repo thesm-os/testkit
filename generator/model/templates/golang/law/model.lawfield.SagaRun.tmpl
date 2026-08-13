@@ -1,0 +1,26 @@
+{{- /*
+The saga run is the coordinator: step drawn values until one fails, then
+unwind through the compensation the validator pins one-to-one. Every path
+compensates all it committed — failure the prefix, success the whole run —
+because the law's mirrored re-run draws fresh values, and a run that left
+state behind would desynchronize the twin pair. A compensation that fails to
+restore is exactly what the law's before/after comparison reports.
+*/ -}}
+{{- define "model.lawfield.SagaRun" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) error {
+			steps := {{ renderExpr (external "pgregory.net/rapid" "SliceOfN") }}({{ .Pool }}, 1, 4).Draw(rt, "{{ .Name }}_steps")
+			committed := make([]{{ renderType .In }}, 0, len(steps))
+			var failed error
+			for _, v := range steps {
+				if err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v); err != nil {
+					failed = err
+					break
+				}
+				committed = append(committed, v)
+			}
+			for _, v := range {{ renderExpr (external "slices" "Backward") }}(committed) {
+				_ = s.{{ .Partner }}({{ if .PartnerCtx }}rt.Context(), {{ end }}v)
+			}
+			return failed
+		}
+{{- end -}}

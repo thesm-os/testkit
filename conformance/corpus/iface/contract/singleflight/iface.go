@@ -24,7 +24,15 @@ type Value struct{ Key, Body string }
 //testkit:model
 type Contract interface {
 	// Run is the singleflight contract's fn role, and hosts the directive
-	// that names its partners.
+	// that names its partners. It takes the computation it deduplicates —
+	// the shape a coalescing claim needs, because a run that computes
+	// nothing observable cannot show how often it computed.
 	//testkit:contract singleflight role=fn
-	Run(ctx context.Context, key string) error
+	Run(ctx context.Context, key string, compute func() string) (string, error)
+
+	// Flights reports how many computations have ever run — the observable
+	// a coalescing claim counts. It is also what keeps the sequences
+	// driving: the run role takes a callable no pool can draw, so this is
+	// the method the twin comparison exercises between law rounds.
+	Flights(ctx context.Context) (int, error)
 }

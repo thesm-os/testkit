@@ -1,0 +1,9 @@
+{{- /*
+The deduplicated call: the law owns the context and the compute — coalescing
+is only observable through work the law itself can count.
+*/ -}}
+{{- define "model.lawfield.ComputeCall" -}}
+{{ .Name }}: func(ctx {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}, compute func() {{ renderType .Out }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k, compute)
+		}
+{{- end -}}

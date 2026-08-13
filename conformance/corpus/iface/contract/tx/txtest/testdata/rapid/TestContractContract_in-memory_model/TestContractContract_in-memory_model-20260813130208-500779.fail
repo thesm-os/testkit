@@ -1,0 +1,19 @@
+# 2026/08/13 13:02:08.502471 [TestContractContract/in-memory/model] [rapid] draw TwoPhaseCommitOrRollback_rollbackFirst: false
+# 2026/08/13 13:02:08.502476 [TestContractContract/in-memory/model] [rapid] draw action: "Commit"
+# 2026/08/13 13:02:08.502478 [TestContractContract/in-memory/model] [rapid] draw Commit_value: tx.Tx{ID:42}
+# 2026/08/13 13:02:08.502573 [TestContractContract/in-memory/model] [invariant] AUTO-COUNT-EQUALS-REFERENCE at step 1: CountEqualsReference: SUT={4}, ref={2}
+#   invariant: AUTO-COUNT-EQUALS-REFERENCE
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} nextID:4 open:map[1:true 4:true]}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} nextID:2 open:map[1:true 2:true]}
+#   [step 0] Commit({ID:42}) -> err: txtest: transaction 42: tx: closed
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
+# 
+v0.4.8#3511970634242740818
+0x0
+0x1084210842108
+0x0
+0x1
+0x0
+0x0
+0x0
+0x0

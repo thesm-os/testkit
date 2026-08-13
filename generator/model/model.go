@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.18.2"
+const Version = "0.19.3"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -317,6 +317,10 @@ type Bindings struct {
 	// UsesClock marks a clock-bound law in the set, which obliges the
 	// property to offer the ModelClocked option and guard those laws on it.
 	UsesClock bool
+
+	// Coalesced marks a bound coalescing law, which obliges the property to
+	// declare the locked call counter its compute probe increments.
+	Coalesced bool
 
 	// ConcFamily picks the concurrent leg's model: empty for none, "kv" for
 	// the keyed-store pair, "lease" for the acquire/release table.
@@ -1271,6 +1275,11 @@ func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action,
 		a.Key = m.CallArgs()[0].Type
 		a.Value = m.Returns[0].Type
 	case "multireader", "lookup":
+		if len(m.Returns) != 3 {
+			// The action drives a (value, value, error) triple and nothing
+			// wider — a page-shaped read answers more, and its law walks it.
+			return nil, "answers more than the (value, value, error) triple its action drives"
+		}
 		a.Pool = poolKeys
 		a.Key = m.CallArgs()[0].Type
 		a.Value = m.Returns[0].Type

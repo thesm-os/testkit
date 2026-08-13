@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/atomic"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/atomic/atomictest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
@@ -32,21 +33,17 @@ func mixedStubWriteSubject(tb testing.TB) stub.Subject[atomictest.MixedWriteCall
 		Stub: s.OnWrite.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			var a1 string
-			var a2 string
-			var a3 string
-			_ = s.Write(a0, a1, a2, a3)
+			var a1 atomic.Entry
+			_ = s.Write(a0, a1)
 		},
 		Result: func() atomictest.MixedWriteReturn {
 			var a0 context.Context
-			var a1 string
-			var a2 string
-			var a3 string
-			got0 := s.Write(a0, a1, a2, a3)
+			var a1 atomic.Entry
+			got0 := s.Write(a0, a1)
 			return atomictest.MixedWriteReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnWrite.Func(func(_ context.Context, _ string, _ string, _ string) error {
+			s.OnWrite.Func(func(_ context.Context, _ atomic.Entry) error {
 				mark()
 				var z0 error
 				return z0
@@ -54,10 +51,8 @@ func mixedStubWriteSubject(tb testing.TB) stub.Subject[atomictest.MixedWriteCall
 		},
 		Fails: func() error {
 			var a0 context.Context
-			var a1 string
-			var a2 string
-			var a3 string
-			r0 := s.Write(a0, a1, a2, a3)
+			var a1 atomic.Entry
+			r0 := s.Write(a0, a1)
 			return r0
 		},
 	}
@@ -80,10 +75,8 @@ func TestMixedStubWrite(t *testing.T) {
 		var want0 error
 		s.OnWrite.Returns(want0)
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		got0 := s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		got0 := s.Write(a0, a1)
 		testkit.Equal(t, got0, want0, "Write must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
@@ -93,15 +86,11 @@ func TestMixedStubWrite(t *testing.T) {
 		// most needs the log to surface.
 		s := atomictest.NewMixedStub(t)
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		_ = s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		_ = s.Write(a0, a1)
 		got := s.OnWrite.AssertCalledOnce(t, "Write must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
-		testkit.Equal(t, got.Left, a2, "the recorded call carries Left")
-		testkit.Equal(t, got.Right, a3, "the recorded call carries Right")
+		testkit.Equal(t, got.E, a1, "the recorded call carries E")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -113,27 +102,23 @@ func TestMixedStubWrite(t *testing.T) {
 		var seen []atomictest.MixedWriteCall
 		s.OnWrite.OnRecord(func(c atomictest.MixedWriteCall) { seen = append(seen, c) })
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		_ = s.Write(a0, a1, a2, a3)
-		_ = s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		_ = s.Write(a0, a1)
+		_ = s.Write(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Write call")
 	})
 
 	t.Run("wires WithMixedWrite at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := atomictest.NewMixedStub(t, atomictest.WithMixedWrite(func(_ context.Context, _ string, _ string, _ string) error {
+		s := atomictest.NewMixedStub(t, atomictest.WithMixedWrite(func(_ context.Context, _ atomic.Entry) error {
 			called = true
 			var z0 error
 			return z0
 		}))
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		_ = s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		_ = s.Write(a0, a1)
 		testkit.True(t, called, "WithMixedWrite must install the override")
 	})
 
@@ -146,12 +131,10 @@ func TestMixedStubWrite(t *testing.T) {
 		var want0 error
 		s.OnWrite.Returns(want0)
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		_ = s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		_ = s.Write(a0, a1)
 		s.ResetCalls()
-		got0 := s.Write(a0, a1, a2, a3)
+		got0 := s.Write(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
@@ -171,28 +154,27 @@ func mixedStubReadSubject(tb testing.TB) stub.Subject[atomictest.MixedReadCall, 
 		Call: func() {
 			var a0 context.Context
 			var a1 string
-			_, _, _ = s.Read(a0, a1)
+			_, _ = s.Read(a0, a1)
 		},
 		Result: func() atomictest.MixedReadReturn {
 			var a0 context.Context
 			var a1 string
-			got0, got1, got2 := s.Read(a0, a1)
-			return atomictest.MixedReadReturn{Left: got0, Right: got1, Err: got2}
+			got0, got1 := s.Read(a0, a1)
+			return atomictest.MixedReadReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnRead.Func(func(_ context.Context, _ string) (string, string, error) {
+			s.OnRead.Func(func(_ context.Context, _ string) (atomic.Entry, error) {
 				mark()
-				var z0 string
-				var z1 string
-				var z2 error
-				return z0, z1, z2
+				var z0 atomic.Entry
+				var z1 error
+				return z0, z1
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
 			var a1 string
-			_, _, err := s.Read(a0, a1)
-			return err
+			_, r1 := s.Read(a0, a1)
+			return r1
 		},
 	}
 }
@@ -211,16 +193,14 @@ func TestMixedStubRead(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := atomictest.NewMixedStub(t)
-		var want0 string
-		var want1 string
-		var want2 error
-		s.OnRead.Returns(want0, want1, want2)
+		var want0 atomic.Entry
+		var want1 error
+		s.OnRead.Returns(want0, want1)
 		var a0 context.Context
 		var a1 string
-		got0, got1, got2 := s.Read(a0, a1)
+		got0, got1 := s.Read(a0, a1)
 		testkit.Equal(t, got0, want0, "Read must answer with what Returns pinned")
 		testkit.Equal(t, got1, want1, "Read must answer with what Returns pinned")
-		testkit.Equal(t, got2, want2, "Read must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -230,7 +210,7 @@ func TestMixedStubRead(t *testing.T) {
 		s := atomictest.NewMixedStub(t)
 		var a0 context.Context
 		var a1 string
-		_, _, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
 		got := s.OnRead.AssertCalledOnce(t, "Read must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
@@ -246,24 +226,23 @@ func TestMixedStubRead(t *testing.T) {
 		s.OnRead.OnRecord(func(c atomictest.MixedReadCall) { seen = append(seen, c) })
 		var a0 context.Context
 		var a1 string
-		_, _, _ = s.Read(a0, a1)
-		_, _, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Read call")
 	})
 
 	t.Run("wires WithMixedRead at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := atomictest.NewMixedStub(t, atomictest.WithMixedRead(func(_ context.Context, _ string) (string, string, error) {
+		s := atomictest.NewMixedStub(t, atomictest.WithMixedRead(func(_ context.Context, _ string) (atomic.Entry, error) {
 			called = true
-			var z0 string
-			var z1 string
-			var z2 error
-			return z0, z1, z2
+			var z0 atomic.Entry
+			var z1 error
+			return z0, z1
 		}))
 		var a0 context.Context
 		var a1 string
-		_, _, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
 		testkit.True(t, called, "WithMixedRead must install the override")
 	})
 
@@ -273,18 +252,16 @@ func TestMixedStubRead(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := atomictest.NewMixedStub(t)
-		var want0 string
-		var want1 string
-		var want2 error
-		s.OnRead.Returns(want0, want1, want2)
+		var want0 atomic.Entry
+		var want1 error
+		s.OnRead.Returns(want0, want1)
 		var a0 context.Context
 		var a1 string
-		_, _, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
 		s.ResetCalls()
-		got0, got1, got2 := s.Read(a0, a1)
+		got0, got1 := s.Read(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
-		testkit.Equal(t, got2, want2, "a reset must keep what Returns pinned")
 	})
 }
 
@@ -300,10 +277,8 @@ func mixedStubDouble() stub.Double[atomictest.MixedWriteCall] {
 			Stub: s.OnWrite.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				var a1 string
-				var a2 string
-				var a3 string
-				_ = s.Write(a0, a1, a2, a3)
+				var a1 atomic.Entry
+				_ = s.Write(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -349,10 +324,8 @@ func TestMixedStubDelegateTo(t *testing.T) {
 
 	t.Run("forwards Write to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		_ = s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		_ = s.Write(a0, a1)
 		inner.OnWrite.AssertCalledOnce(t, "Write must reach the wrapped implementation")
 	})
 
@@ -363,17 +336,15 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		want := testkit.TestError("Write-delegate")
 		inner.OnWrite.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		var a1 string
-		var a2 string
-		var a3 string
-		r0 := s.Write(a0, a1, a2, a3)
+		var a1 atomic.Entry
+		r0 := s.Write(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Write must surface the wrapped answer")
 	})
 
 	t.Run("forwards Read to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 string
-		_, _, _ = s.Read(a0, a1)
+		_, _ = s.Read(a0, a1)
 		inner.OnRead.AssertCalledOnce(t, "Read must reach the wrapped implementation")
 	})
 
@@ -385,10 +356,10 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		inner.OnRead.FaultsFor(time.Hour, want)
 		var a0 context.Context
 		var a1 string
-		_, _, err := s.Read(a0, a1)
-		testkit.ErrorIs(t, err, want, "Read must surface the wrapped answer")
+		_, r1 := s.Read(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Read must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7369eebea3e22f654c0ae6a83ea1aa481c84abcd7831ee7cc48d2418d4465445
+// testkit:provenance 526b82552d7ba45ad393cf9c7c4bf73a350a8b664aabae610482cc448b93e0a8

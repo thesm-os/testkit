@@ -151,6 +151,23 @@ parameter with no hint is a diagnostic at the parameter.
   reads its in-flight deliveries as loss; the header states which drain is
   in play. The redelivery arm stays unexercised until a fixture declares
   the redeliver role, and the header says so.
+- **The contract-shape closures** — laws over roles whose signatures carry
+  a handle, a callable or a cursor bind through closures the shared pools
+  cannot spell. A `Begin(ctx) (Tx, error)` threads its handle into the
+  commit/rollback pair for both two-phase laws; a saga's step role earns a
+  coordinating run that steps drawn values, unwinds the committed prefix in
+  reverse through the pinned compensation, and restores everything it
+  committed on every path (the mirrored re-run draws fresh values, so a run
+  that left state behind would desynchronize the twin pair); a singleflight
+  `Run(ctx, key, compute)` is counted through the generator's own locked
+  probe; a transaction's body-taking run receives the law's induced
+  failure; and a `Page(ctx, cursor) (items, next, more, error)` walk pays
+  both paginator laws, keyed by identity where no projection derives.
+  Each shape refuses by name where the fixture's role does not carry it — a
+  flat begin, a computeless run, a keyed read with no cursor to resume
+  from. The atomic mixin joins the oracle-defeating claims: its law is
+  about refused writes, a derived map refuses nothing, and the twin shares
+  the policy.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history

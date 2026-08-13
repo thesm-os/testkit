@@ -9,85 +9,70 @@ package txtest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx"
 )
 
-// The states a transaction passes through, and the two it ends in.
-const (
-	Idle       = "idle"
-	Open       = "open"
-	Committed  = "committed"
-	RolledBack = "rolled back"
-)
-
-// ErrNotOpen reports a terminal operation on a transaction that is not running.
-//
-// One error for both cases — never begun, and already settled — because from
-// the caller's side they are the same mistake: the handle they hold does not
-// name a transaction they may act on.
-var ErrNotOpen = errors.New("txtest: no open transaction")
-
-// ErrOpen reports a second Begin on a transaction already running.
-var ErrOpen = errors.New("txtest: a transaction is already open")
-
 // InMemory is the implementation the generated conformance harness is run
 // against.
 //
-// A state field and nothing else. What the transaction would guard is left out
-// deliberately: the contract's roles are Begin, Commit and Rollback, and the
-// claim they carry is that exactly one of the two terminal operations runs.
+// A set of open transactions and nothing else. What a transaction would guard
+// is left out deliberately: the contract's roles are Begin, Commit and
+// Rollback, and the claim they carry is that exactly one of the two terminal
+// operations settles each handle.
 type InMemory struct {
-	mu    sync.Mutex
-	state string
+	mu     sync.Mutex
+	nextID int64
+	open   map[int64]bool
 }
 
 var _ tx.Contract = (*InMemory)(nil)
 
-// NewInMemory returns a transaction that has not begun.
-func NewInMemory() *InMemory { return &InMemory{state: Idle} }
+// NewInMemory returns a store with no transaction open.
+func NewInMemory() *InMemory { return &InMemory{open: map[int64]bool{}} }
 
-// Begin opens the transaction, and refuses to open a second one.
+// Begin opens a transaction and answers its handle.
 //
-// Refusing rather than nesting. A nested Begin would need a stack and a rule
-// for which Commit settles which level, and the fixture declares neither — a
-// subject inventing one would be testing this package's idea of nesting.
-func (s *InMemory) Begin(ctx context.Context) error {
+// Every Begin opens a fresh one rather than refusing a second: the handle is
+// what names a transaction now, so two open transactions are two handles, not
+// a conflict over an implicit current one.
+func (s *InMemory) Begin(ctx context.Context) (tx.Tx, error) {
 	if err := contextErr(ctx); err != nil {
-		return err
+		return tx.Tx{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.state == Open {
-		return ErrOpen
-	}
-	s.state = Open
-	return nil
+	s.nextID++
+	s.open[s.nextID] = true
+	return tx.Tx{ID: s.nextID}, nil
 }
 
-// Commit settles the transaction, and refuses one that is not open.
-func (s *InMemory) Commit(ctx context.Context) error { return s.settle(ctx, Committed) }
+// Commit settles the handle's transaction, and refuses one already settled.
+func (s *InMemory) Commit(ctx context.Context, h tx.Tx) error { return s.settle(ctx, h) }
 
-// Rollback settles the transaction the other way, and refuses one that is not
-// open.
-func (s *InMemory) Rollback(ctx context.Context) error { return s.settle(ctx, RolledBack) }
+// Rollback settles the handle's transaction the other way, and refuses one
+// already settled.
+func (s *InMemory) Rollback(ctx context.Context, h tx.Tx) error { return s.settle(ctx, h) }
 
-// settle is both terminal operations, because they differ only in the state
-// they leave behind.
+// settle is both terminal operations, because they differ only in what they
+// leave behind — which this subject deliberately has none of.
 //
 // One statement rather than two, so the rule that a settled transaction cannot
 // be settled again cannot be written correctly in one and wrongly in the other.
-func (s *InMemory) settle(ctx context.Context, to string) error {
+// A handle that was never begun settles nothing either, and from the caller's
+// side that is the same mistake: the handle does not name an open transaction.
+func (s *InMemory) settle(ctx context.Context, h tx.Tx) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.state != Open {
-		return ErrNotOpen
+	if !s.open[h.ID] {
+		return fmt.Errorf("txtest: transaction %d: %w", h.ID, tx.ErrTxClosed)
 	}
-	s.state = to
+	delete(s.open, h.ID)
 	return nil
 }
 

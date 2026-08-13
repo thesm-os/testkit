@@ -248,6 +248,40 @@ var bindings = map[string]Binding{
 	lawid.ReadYourWrites:    {Type: "ReadYourWrites", Ptr: true, Args: []BindArg{BindKey}},
 	lawid.WritesFollowReads: {Type: "WritesFollowReads", Ptr: true, Args: []BindArg{BindKey}},
 
+	// The contract-shape family: laws over roles whose signatures carry a
+	// handle, a callable or a cursor. Each instantiates off the role's own
+	// types, because no shared pool draws a transaction handle or a page
+	// token.
+	lawid.TwoPhaseMutex: {
+		Type: "TwoPhaseCommitOrRollback",
+		Args: []BindArg{ResultOf("Begin")},
+	},
+	lawid.TwoPhaseRollbackAfterCommit: {
+		Type: "TwoPhaseNoRollbackAfterCommit",
+		Args: []BindArg{ResultOf("Begin")},
+	},
+	lawid.SagaFullCompensation: {Type: "SagaFullCompensation", Args: []BindArg{BindObservation}},
+	lawid.SingleflightCoalesces: {
+		Type: "SingleflightCoalesces",
+		Args: []BindArg{InputOf(fieldCall), ResultOf(fieldCall)},
+	},
+	lawid.TransactionRollback: {
+		Type: "TransactionRollbackOnError",
+		Args: []BindArg{BindKey, ResultOf(fieldRead)},
+	},
+	// K is the page element itself: no key projection derives where the
+	// fixture's only reader is the page walk, and identity is the strongest
+	// fingerprint the drained element carries — the KeyOf handle renders the
+	// matching identity closure.
+	lawid.PaginatorNoDuplicates: {
+		Type: "PaginatorNoDuplicates",
+		Args: []BindArg{ElemOf("Page"), ElemOf("Page"), InputOf("Page")},
+	},
+	lawid.PaginatorResumable: {
+		Type: "PaginatorResumable",
+		Args: []BindArg{ElemOf("Page"), InputOf("Page")},
+	},
+
 	lawid.TTLExpiry: {
 		Type: "TTLExpiryAfterAdvance", Timeaware: true,
 		Args: []BindArg{BindKey, BindValue},
