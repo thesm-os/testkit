@@ -3,10 +3,10 @@ github.com/russross/blackfriday/v2 v2.1.0 h1:JIOH55/0cWyOuilr9/qlrm0BSXldqnqwMsf
 github.com/yuin/goldmark v1.4.13 h1:fVcFKWvrslecOb/tg+Cc05dkeYx540o0FuFt3nUVDoE=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
 go.thesmos.sh/eidos v1.8.0/go.mod h1:hafUOhbpdIaExBAuwnvHfA92BYgjLWcgEa4PwVs6PO8=
+go.thesmos.sh/eidos v1.14.1/go.mod h1:hafUOhbpdIaExBAuwnvHfA92BYgjLWcgEa4PwVs6PO8=
 go.thesmos.sh/eidos/backend/golang v1.7.0/go.mod h1:Uc72o6ZjTQt5eGYZCoyEY2tfRDPlS7xe3OT5nvAWxCc=
 go.thesmos.sh/eidos/eidostest v1.3.0/go.mod h1:DMTWJl/FhEdu+aKIZXQDYYbx0/Yyfrn7Vm37/ZVlxQA=
 go.thesmos.sh/eidos/eidostest v1.6.2/go.mod h1:JlcDGbtPTdsuuT2LhBUBTxCkr564xLG3Wan6Uw+lXIU=
-go.thesmos.sh/eidos/eidostest v1.14.0/go.mod h1:pXnnM3qQMTY6z6zN/uPdPVbIs1WRJGfqz0fe3nEjDmQ=
 go.thesmos.sh/eidos/frontend/golang v1.6.3/go.mod h1:ePcMH+Mkg1jW8qd1Ag4cBq9bOmdekSziYH6C6Vt+r/Y=
 go.thesmos.sh/eidos/plugins v1.7.2/go.mod h1:5j+F9QC/Hl2HXuS3lRemq2xkaIXBr/P+fXGe46LDR0A=
 go.thesmos.sh/testkit v0.10.0/go.mod h1:dkDWLbVV1I6La+iXpc3b7HzbrxZ77EX4c6vr6AdeJfw=
