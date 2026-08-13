@@ -16,49 +16,48 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// CompositeWriterStoreCall records one invocation of CompositeWriter.Store.
+// CompositeWriterSetCall records one invocation of CompositeWriter.Set.
 //
 // Fields take their names from the source signature — parameters and named
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
-type CompositeWriterStoreCall struct {
-	Ctx    context.Context
-	V      compositewriter.Value
-	Result compositewriter.Value
-	Err    error
+type CompositeWriterSetCall struct {
+	Ctx context.Context
+	Key string
+	V   compositewriter.Value
+	Err error
 }
 
 // --- Per-method configuration ---
 
-// CompositeWriterStoreStub controls how the double answers Store and records
+// CompositeWriterSetStub controls how the double answers Set and records
 // what it was asked.
 //
 // The embedded MethodStub supplies the machinery every method shares: call
 // recording, fault injection, latency against a virtual clock, gates,
 // call-count expectations, and strict mode.
-type CompositeWriterStoreStub struct {
-	*stub.MethodStub[CompositeWriterStoreCall]
+type CompositeWriterSetStub struct {
+	*stub.MethodStub[CompositeWriterSetCall]
 
-	fn       func(context.Context, compositewriter.Value) (compositewriter.Value, error)
-	fallback *CompositeWriterStoreReturn
+	fn       func(context.Context, string, compositewriter.Value) error
+	fallback *CompositeWriterSetReturn
 }
 
-// CompositeWriterStoreReturn holds the fixed answer configured through Returns.
-type CompositeWriterStoreReturn struct {
-	Result compositewriter.Value
-	Err    error
+// CompositeWriterSetReturn holds the fixed answer configured through Returns.
+type CompositeWriterSetReturn struct {
+	Err error
 }
 
-// Returns pins a fixed result for every call to Store. A Func
+// Returns pins a fixed result for every call to Set. A Func
 // override and an injected fault both take precedence over it.
-func (s *CompositeWriterStoreStub) Returns(result compositewriter.Value, err error) *CompositeWriterStoreStub {
-	s.fallback = &CompositeWriterStoreReturn{Result: result, Err: err}
+func (s *CompositeWriterSetStub) Returns(err error) *CompositeWriterSetStub {
+	s.fallback = &CompositeWriterSetReturn{Err: err}
 	return s
 }
 
-// Func supplies a body for Store, for when the answer depends on the
+// Func supplies a body for Set, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *CompositeWriterStoreStub) Func(fn func(context.Context, compositewriter.Value) (compositewriter.Value, error)) *CompositeWriterStoreStub {
+func (s *CompositeWriterSetStub) Func(fn func(context.Context, string, compositewriter.Value) error) *CompositeWriterSetStub {
 	s.fn = fn
 	return s
 }
@@ -82,7 +81,7 @@ func CompositeWriterStubStrict() CompositeWriterStubOption {
 // production type, which is the point of conformance testing.
 func CompositeWriterStubDelegateTo(impl compositewriter.CompositeWriter) CompositeWriterStubOption {
 	return func(s *CompositeWriterStub) {
-		s.OnStore.Func(impl.Store)
+		s.OnSet.Func(impl.Set)
 	}
 }
 
@@ -118,11 +117,11 @@ func CompositeWriterStubBenchMode() CompositeWriterStubOption {
 	}
 }
 
-// WithCompositeWriterStore sets Store's body at construction
+// WithCompositeWriterSet sets Set's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithCompositeWriterStore(fn func(context.Context, compositewriter.Value) (compositewriter.Value, error)) CompositeWriterStubOption {
-	return func(s *CompositeWriterStub) { s.OnStore.Func(fn) }
+func WithCompositeWriterSet(fn func(context.Context, string, compositewriter.Value) error) CompositeWriterStubOption {
+	return func(s *CompositeWriterStub) { s.OnSet.Func(fn) }
 }
 
 // CompositeWriterStub is a recording test double for CompositeWriter.
@@ -130,7 +129,7 @@ func WithCompositeWriterStore(fn func(context.Context, compositewriter.Value) (c
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type CompositeWriterStub struct {
-	OnStore *CompositeWriterStoreStub
+	OnSet *CompositeWriterSetStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -155,10 +154,10 @@ var _ compositewriter.CompositeWriter = (*CompositeWriterStub)(nil)
 // and non-test callers want.
 func NewCompositeWriterStub(tb testing.TB, opts ...CompositeWriterStubOption) *CompositeWriterStub {
 	s := &CompositeWriterStub{
-		OnStore: &CompositeWriterStoreStub{MethodStub: stub.NewMethodStub[CompositeWriterStoreCall](tb, "CompositeWriter.Store")},
+		OnSet: &CompositeWriterSetStub{MethodStub: stub.NewMethodStub[CompositeWriterSetCall](tb, "CompositeWriter.Set")},
 	}
 	s.all = []stub.Configurable{
-		s.OnStore.MethodStub,
+		s.OnSet.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -197,35 +196,34 @@ func (s *CompositeWriterStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *CompositeWriterStoreStub) invoke(ctx context.Context, v compositewriter.Value) func() CompositeWriterStoreReturn {
+func (s *CompositeWriterSetStub) invoke(ctx context.Context, key string, v compositewriter.Value) func() CompositeWriterSetReturn {
 	if s.fn == nil {
 		return nil
 	}
-	return func() CompositeWriterStoreReturn {
-		r0, r1 := s.fn(ctx, v)
-		return CompositeWriterStoreReturn{Result: r0, Err: r1}
+	return func() CompositeWriterSetReturn {
+		r0 := s.fn(ctx, key, v)
+		return CompositeWriterSetReturn{Err: r0}
 	}
 }
 
-// Store records the call and answers it.
+// Set records the call and answers it.
 //
 // Which arm answers — injected fault, Func override, Returns fallback, or the
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *CompositeWriterStub) Store(ctx context.Context, v compositewriter.Value) (compositewriter.Value, error) {
-	call := CompositeWriterStoreCall{Ctx: ctx, V: v}
-	r := stub.Answer(s.OnStore.MethodStub, &call, stub.Arms[CompositeWriterStoreCall, CompositeWriterStoreReturn]{
-		Invoke:   s.OnStore.invoke(ctx, v),
-		Fallback: s.OnStore.fallback,
-		Fault:    func(err error) CompositeWriterStoreReturn { return CompositeWriterStoreReturn{Err: err} },
-		Stamp: func(c *CompositeWriterStoreCall, r CompositeWriterStoreReturn) {
-			c.Result = r.Result
+func (s *CompositeWriterStub) Set(ctx context.Context, key string, v compositewriter.Value) error {
+	call := CompositeWriterSetCall{Ctx: ctx, Key: key, V: v}
+	r := stub.Answer(s.OnSet.MethodStub, &call, stub.Arms[CompositeWriterSetCall, CompositeWriterSetReturn]{
+		Invoke:   s.OnSet.invoke(ctx, key, v),
+		Fallback: s.OnSet.fallback,
+		Fault:    func(err error) CompositeWriterSetReturn { return CompositeWriterSetReturn{Err: err} },
+		Stamp: func(c *CompositeWriterSetCall, r CompositeWriterSetReturn) {
 			c.Err = r.Err
 		},
 	})
-	return r.Result, r.Err
+	return r.Err
 }
 
 // testkit: end of generated content.
-// testkit:provenance 94e538230328127b9cb909a8d61716e8e784c55f336b04ce98c64ea03a65a65d
+// testkit:provenance 9e812d36f1ce3a2b00ee58236bc6eab8fabca3cc10ca1af0231cf389360064ae

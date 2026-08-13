@@ -20,9 +20,6 @@ func TestMixedContract(t *testing.T) {
 		totaltest.MixedSubject("in-memory", func() total.Mixed {
 			return totaltest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: the directive's whole claim is that no input is refused, so a check
-		// asking for one that is would contradict the declaration.
-		totaltest.MixedWithout("Classify/an error carries the zero value"),
 		totaltest.MixedOnClassify("answers for the empty string as readily as for any other", func(
 			tb testing.TB, subject total.Mixed, in string,
 		) {
@@ -45,9 +42,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		totaltest.MixedSubject("in-memory", func() total.Mixed {
 			return totaltest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: the directive's whole claim is that no input is refused, so a check
-		// asking for one that is would contradict the declaration.
-		totaltest.MixedWithout("Classify/an error carries the zero value"),
 		totaltest.MixedWithoutDouble(),
 	)
 }

@@ -4,12 +4,14 @@
 package gate_test
 
 import (
+	"reflect"
 	"slices"
 	"testing"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/gate"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/generator/tiers"
 )
 
@@ -28,8 +30,11 @@ func TestEveryLawHasAConduct(t *testing.T) {
 		c, classified := gate.LawConduct[id]
 		testkit.True(t, classified, id+" carries a conduct verdict")
 		if classified {
-			testkit.True(t, c.Sound() || c == gate.ConductNeedsMirror || c == gate.ConductNeedsIsolation,
-				id+"'s verdict is from the vocabulary")
+			testkit.True(
+				t,
+				c.Sound() || c == gate.ConductNeedsMirror || c == gate.ConductNeedsIsolation,
+				id+"'s verdict is from the vocabulary",
+			)
 		}
 	}
 	for id := range gate.LawConduct {
@@ -70,4 +75,40 @@ func TestConductVocabularyIsClosed(t *testing.T) {
 	testkit.False(t, gate.ConductNeedsMirror.Sound(), "needs-mirror does not")
 	testkit.False(t, gate.ConductNeedsIsolation.Sound(), "needs-isolation does not")
 	testkit.False(t, gate.Conduct("nonesuch").Sound(), "and an unknown spelling is unsound")
+}
+
+// TestIsolatedMarkerMatchesCensus holds the runner's dispatch to the census's
+// verdict. The isolated conduct has two flavors: a law that corrupts whatever
+// subjects it is handed carries the [law.Isolated] marker, and the runner
+// routes it to a throwaway pair; a law that builds its own subjects through a
+// Factory field self-isolates inside Check and needs no routing at all. So a
+// marked law must be censused isolated, and an isolated verdict must be earned
+// one way or the other — a marker the census missed corrupts the shared pair
+// the runner still walks it on, and a verdict neither flavor backs quarantines
+// a law the runner would have walked safely.
+func TestIsolatedMarkerMatchesCensus(t *testing.T) {
+	t.Parallel()
+
+	marker := reflect.TypeFor[law.Isolated]()
+	for id, typ := range gate.LawTypes {
+		marked := typ.Implements(marker) || reflect.PointerTo(typ).Implements(marker)
+		factory, selfIsolating := typ.FieldByName("Factory")
+		selfIsolating = selfIsolating && factory.Type.Kind() == reflect.Func
+		isolated := gate.LawConduct[id] == gate.ConductIsolated
+
+		if marked {
+			testkit.True(
+				t,
+				isolated,
+				id+" carries the IsolatedLaw marker, so its verdict must be isolated",
+			)
+		}
+		if isolated {
+			testkit.True(
+				t,
+				marked || selfIsolating,
+				id+" is censused isolated, so it must carry the marker or build its own subjects through a Factory field",
+			)
+		}
+	}
 }

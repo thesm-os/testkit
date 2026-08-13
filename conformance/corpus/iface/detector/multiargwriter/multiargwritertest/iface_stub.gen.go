@@ -25,6 +25,7 @@ type MultiArgWriterSetCall struct {
 	Ctx  context.Context
 	Key  string
 	Body string
+	Mime string
 	Err  error
 }
 
@@ -39,7 +40,7 @@ type MultiArgWriterSetCall struct {
 type MultiArgWriterSetStub struct {
 	*stub.MethodStub[MultiArgWriterSetCall]
 
-	fn       func(context.Context, string, string) error
+	fn       func(context.Context, string, string, string) error
 	fallback *MultiArgWriterSetReturn
 }
 
@@ -57,7 +58,7 @@ func (s *MultiArgWriterSetStub) Returns(err error) *MultiArgWriterSetStub {
 
 // Func supplies a body for Set, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *MultiArgWriterSetStub) Func(fn func(context.Context, string, string) error) *MultiArgWriterSetStub {
+func (s *MultiArgWriterSetStub) Func(fn func(context.Context, string, string, string) error) *MultiArgWriterSetStub {
 	s.fn = fn
 	return s
 }
@@ -120,7 +121,7 @@ func MultiArgWriterStubBenchMode() MultiArgWriterStubOption {
 // WithMultiArgWriterSet sets Set's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithMultiArgWriterSet(fn func(context.Context, string, string) error) MultiArgWriterStubOption {
+func WithMultiArgWriterSet(fn func(context.Context, string, string, string) error) MultiArgWriterStubOption {
 	return func(s *MultiArgWriterStub) { s.OnSet.Func(fn) }
 }
 
@@ -196,12 +197,12 @@ func (s *MultiArgWriterStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *MultiArgWriterSetStub) invoke(ctx context.Context, key string, body string) func() MultiArgWriterSetReturn {
+func (s *MultiArgWriterSetStub) invoke(ctx context.Context, key string, body string, mime string) func() MultiArgWriterSetReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() MultiArgWriterSetReturn {
-		r0 := s.fn(ctx, key, body)
+		r0 := s.fn(ctx, key, body, mime)
 		return MultiArgWriterSetReturn{Err: r0}
 	}
 }
@@ -212,10 +213,10 @@ func (s *MultiArgWriterSetStub) invoke(ctx context.Context, key string, body str
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *MultiArgWriterStub) Set(ctx context.Context, key string, body string) error {
-	call := MultiArgWriterSetCall{Ctx: ctx, Key: key, Body: body}
+func (s *MultiArgWriterStub) Set(ctx context.Context, key string, body string, mime string) error {
+	call := MultiArgWriterSetCall{Ctx: ctx, Key: key, Body: body, Mime: mime}
 	r := stub.Answer(s.OnSet.MethodStub, &call, stub.Arms[MultiArgWriterSetCall, MultiArgWriterSetReturn]{
-		Invoke:   s.OnSet.invoke(ctx, key, body),
+		Invoke:   s.OnSet.invoke(ctx, key, body, mime),
 		Fallback: s.OnSet.fallback,
 		Fault:    func(err error) MultiArgWriterSetReturn { return MultiArgWriterSetReturn{Err: err} },
 		Stamp: func(c *MultiArgWriterSetCall, r MultiArgWriterSetReturn) {
@@ -226,4 +227,4 @@ func (s *MultiArgWriterStub) Set(ctx context.Context, key string, body string) e
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0c7618a0f3ab3b0bef25bbb2efe47f33d273be71e380d62fcac22365a6667fd9
+// testkit:provenance 79f840aeb55ffeb5597746b7ac6aac8a73371be4a93b889263eb3a0f34c1b09c

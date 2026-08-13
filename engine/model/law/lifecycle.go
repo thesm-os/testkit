@@ -23,6 +23,10 @@ type IdempotentLifecycle[T any, Obs any] struct {
 	Observe func(*rapid.T, T) Obs
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (IdempotentLifecycle[T, Obs]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (IdempotentLifecycle[T, Obs]) ID() string { return lawid.IdempotentLifecycle }
 
@@ -33,7 +37,7 @@ func (IdempotentLifecycle[T, Obs]) REQID() string { return "" }
 // not error.
 func (l IdempotentLifecycle[T, Obs]) Check(rt *rapid.T, sut, _ T) error {
 	if err := l.Call(rt, sut); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	before := l.Observe(rt, sut)
 	if err := l.Call(rt, sut); err != nil {
@@ -86,10 +90,10 @@ func (l LeakFree[T]) Check(rt *rapid.T, sut, _ T) error {
 	before := runtime.NumGoroutine()
 	for range cycles {
 		if err := l.Open(rt, sut); err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 		if err := l.Close(rt, sut); err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 	}
 	after := runtime.NumGoroutine()
@@ -198,6 +202,10 @@ type PoisonConsistent[T any] struct {
 	Reads int
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (PoisonConsistent[T]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (PoisonConsistent[T]) ID() string { return lawid.PoisonConsistent }
 
@@ -235,6 +243,10 @@ type LifecycleAfterCloseSentinel[T any] struct {
 	Sentinel error
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (LifecycleAfterCloseSentinel[T]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (LifecycleAfterCloseSentinel[T]) ID() string { return lawid.LifecycleAfterClose }
 
@@ -245,7 +257,7 @@ func (LifecycleAfterCloseSentinel[T]) REQID() string { return "" }
 // sentinel afterwards.
 func (l LifecycleAfterCloseSentinel[T]) Check(rt *rapid.T, sut, _ T) error {
 	if err := l.Close(rt, sut); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	err := l.Op(rt, sut)
 	if !errors.Is(err, l.Sentinel) {

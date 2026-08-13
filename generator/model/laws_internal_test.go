@@ -848,13 +848,18 @@ func TestHandleFieldArms(t *testing.T) {
 		t.Parallel()
 		for from, needle := range map[string]string{
 			"trace-classifier": "eidos#25",
-			"clock":            "aging-reference clock",
 			"history":          "history hook",
 			"coalesce-probe":   "does not construct",
 		} {
 			_, reason := handle(b, lawid.SingleflightCoalesces, "X", from, nil)
 			testkit.Assert(t, reason).Contains(needle, from+" names its debt")
 		}
+
+		field, reason := handle(b, lawid.TTLExpiry, "Advance", "clock", nil)
+		testkit.True(t, reason == "" && field != nil,
+			"the clock handle binds — the template guards it on ModelClocked: "+reason)
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.Advance",
+			"through the advance spelling")
 	})
 }
 
@@ -948,4 +953,216 @@ func TestContractParamNames(t *testing.T) {
 		"a registered contract lists its parameters")
 	testkit.True(t, contractParamNames("nonesuch") == nil,
 		"an unregistered one lists nothing")
+}
+
+// TestClockShapedRoleFields pins the B1 shape vocabulary: the closures the
+// isolation-and-clock laws render, each held to its transcription and each
+// refusal to a reason a header prints.
+func TestClockShapedRoleFields(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+
+	t.Run("the corruption operations hold their shapes", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := bindField(b, lawid.TamperEvident, "Tamper",
+			projected("Tamper", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet}))
+		testkit.True(t, reason == "", "a nullary tamper binds: "+reason)
+
+		_, reason = bindField(b, lawid.TamperEvident, "Tamper",
+			projected("Tamper", []golang.Param{arg("k", namedRef(qStr))}, []golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("nullary error operation", "a tamper takes nothing")
+
+		_, reason = bindField(b, lawid.PoisonConsistent, "Poison",
+			projected("Poison", nil, nil))
+		testkit.True(t, reason == "", "a fire-and-forget corruption binds: "+reason)
+
+		_, reason = bindField(b, lawid.PoisonConsistent, "Poison",
+			projected("Poison", []golang.Param{arg("dose", namedRef("int"))}, nil))
+		testkit.Assert(t, reason).Contains("no nullary corruption", "a poison takes nothing")
+	})
+
+	t.Run("the cursor's next answers the triple", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		field, reason := bindField(b, lawid.CursorNextAfterClose, "Next",
+			projected("Next", []golang.Param{arg("ctx", ctxRef())},
+				[]golang.Return{res(namedRef(qStr)), res(namedRef("bool")), errRet}))
+		testkit.True(t, reason == "" && field.Out != nil, "a (value, more, error) next binds: "+reason)
+
+		_, reason = bindField(b, lawid.CursorNextAfterClose, "Next",
+			projected("Next", []golang.Param{arg("ctx", ctxRef())},
+				[]golang.Return{res(namedRef(qStr)), errRet}))
+		testkit.Assert(t, reason).Contains("triple", "a two-return next is not the shape")
+	})
+
+	t.Run("the pinned write pins through the pool", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Values: Pool{Pin: fieldKey}}
+		field, reason := bindField(b, lawid.TTLExpiry, "Put",
+			projected("Put", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
+				[]golang.Return{errRet}))
+		testkit.True(t, reason == "" && field.KeyField == fieldKey, "a one-value put binds on the pin: "+reason)
+
+		_, reason = bindField(b, lawid.TTLExpiry, "Put",
+			projected("Put", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr)), arg("v", namedRef(qStr))},
+				[]golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("one value", "a composite put is not the shape")
+
+		unpinned := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason = bindField(unpinned, lawid.TTLExpiry, "Put",
+			projected("Put", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
+				[]golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("pins nothing", "an unpinned pool cannot age a known key")
+	})
+
+	t.Run("the deadline op anchors on the projection's fixture field", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		anchored := projected("Op", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{errRet})
+		anchored.ArgFields = []string{"Target"}
+		field, reason := bindField(b, lawid.DeadlineRespecting, "Op", anchored)
+		testkit.True(t, reason == "" && field.KeyField == "Target", "an anchored context op binds: "+reason)
+		testkit.True(t, b.LawsUseFixture, "and the binding records the fixture use")
+
+		_, reason = bindField(b, lawid.DeadlineRespecting, "Op",
+			projected("Op", []golang.Param{arg("k", namedRef(qStr))}, []golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("context operation", "the deadline needs a context to expire")
+
+		_, reason = bindField(b, lawid.DeadlineRespecting, "Op",
+			projected("Op", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+				[]golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("fixture field", "an unanchored input has no fixed argument")
+	})
+
+	t.Run("the scheduler's pair hold their shapes", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := bindField(b, lawid.ScheduledFiresAfterAdvance, "Schedule",
+			projected("At", []golang.Param{arg("ctx", ctxRef()), arg("after", pkgRef("time", "Duration"))},
+				[]golang.Return{errRet}))
+		testkit.True(t, reason == "", "a one-offset schedule binds: "+reason)
+
+		_, reason = bindField(b, lawid.ScheduledFiresAfterAdvance, "Schedule",
+			projected("At", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("one offset", "a schedule takes its instant")
+
+		_, reason = bindField(b, lawid.ScheduledFiresAfterAdvance, "FiredCount",
+			projected("Fired", []golang.Param{arg("ctx", ctxRef())},
+				[]golang.Return{res(namedRef("int")), errRet}))
+		testkit.True(t, reason == "", "a counting observation binds: "+reason)
+
+		_, reason = bindField(b, lawid.ScheduledFiresAfterAdvance, "FiredCount",
+			projected("Fired", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+				[]golang.Return{res(namedRef("int")), errRet}))
+		testkit.Assert(t, reason).Contains("no nullary observation", "a count takes nothing")
+
+		_, reason = bindField(b, lawid.ScheduledFiresAfterAdvance, "FiredCount",
+			projected("Fired", []golang.Param{arg("ctx", ctxRef())},
+				[]golang.Return{res(namedRef(qStr)), errRet}))
+		testkit.Assert(t, reason).Contains("not a count", "a string is no firing tally")
+	})
+}
+
+// TestClockConstAndTypeArms pins the remaining B1 arms: the duration stamp
+// rendered as nanoseconds, the triple-returning result instantiation, and
+// the strict value check a value-instantiating row turns on.
+func TestClockConstAndTypeArms(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+
+	t.Run("a duration stamp renders as untyped nanoseconds", func(t *testing.T) {
+		t.Parallel()
+		m := unstamped()
+		sdk.EnsureKey("shape.mixin.ttl.ttl", sdk.StringParser).Set(m.Source.EnsureMeta(), "5s", "test")
+		r := tiers.Rule{Law: lawid.TTLExpiry, Fields: []tiers.Field{
+			{Name: "TTL", Kind: tiers.KindConstant, From: "shape.mixin.ttl.ttl"},
+		}}
+		field, reason := lawFieldOf(&Bindings{Subject: suite.Subject{IfaceName: "Mixed"}},
+			nil, r, r.Fields[0], m, nil)
+		testkit.True(t, reason == "", "a duration stamp binds: "+reason)
+		testkit.Equal(t, field.Lit, "5000000000", "as nanoseconds, assignable without an import")
+	})
+
+	t.Run("a triple-returning role instantiates at its first result", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		r := roleRule(lawid.CursorNextAfterClose, "Next")
+		next := projected("Next", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef(qStr)), res(namedRef("bool")), errRet})
+		ref, reason := resolveArg(b, nil, r, tiers.ResultOf("Next"), next, nil)
+		testkit.True(t, reason == "" && ref != nil,
+			"NextOp carries the triple whole, so the type is the first result: "+reason)
+
+		void := projected("Next", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
+		_, reason = resolveArg(b, nil, r, tiers.ResultOf("Next"), void, nil)
+		testkit.Assert(t, reason).Contains("nothing to observe",
+			"a next answering only an error observes nothing")
+	})
+
+	t.Run("a value-instantiating row holds the reader to the pool's value", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject: suite.Subject{IfaceName: "Mixed"},
+			Keys:    Pool{Q: qStr},
+			Values:  Pool{Q: qStr, Pin: fieldKey},
+		}
+		mismatched := stamp(projected("Get",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(namedRef("int")), res(namedRef("error"))}), "reader", qStr, "int")
+		_, reason := bindField(b, lawid.TTLExpiry, "Read", mismatched)
+		testkit.Assert(t, reason).Contains("beside pools of",
+			"TTLExpiry draws the value pool, so the reader must answer it")
+
+		// Windowed's count reads (string → int) beside string pools and binds:
+		// its row draws no value, so only the key is held to the pool.
+		counted, reason := bindField(b, lawid.Windowed, "Count", mismatched)
+		testkit.True(t, reason == "" && counted != nil,
+			"a keyless row leaves the reader's value its own: "+reason)
+	})
+
+	t.Run("the template accessors answer their imports", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{}
+		testkit.True(t, b.ClockPkg() != "", "the clock package is spelled for the clocked property")
+		held := b.LeaseHeld()
+		testkit.True(t, held.Sym == nil && held.Name == "", "no ctor error means no held sentinel")
+		b.Reference.CtorErrs = []CtorErr{{Name: "ErrHeld"}}
+		testkit.Equal(t, b.LeaseHeld().Name, "ErrHeld", "the first named ctor error is the held sentinel")
+	})
+}
+
+// TestClockedLawBinding pins the timeaware instantiation: the ctor spelled
+// from the timeaware package, the offsets pool composed bounded, and the
+// Advance handle marking the binding clocked.
+func TestClockedLawBinding(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an Advance handle marks the binding clocked in the timeaware package", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		r := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
+			{Name: "Advance", Kind: tiers.KindHandle, From: "clock"},
+		}}
+		lb, ok := lawOf(b, nil, r, nil, nil, nil)
+		testkit.True(t, ok, "the handle binds")
+		testkit.True(t, lb.Clocked, "and marks the law clocked")
+		testkit.True(t, b.UsesClock, "so the property declares the clock")
+	})
+
+	t.Run("the offsets pool composes bounded durations", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		r := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
+			{Name: "Offsets", Kind: tiers.KindGenerator, From: "offsets"},
+		}}
+		field, reason := lawFieldOf(b, nil, r, r.Fields[0], nil, nil)
+		testkit.True(t, reason == "", "the pool composes: "+reason)
+		testkit.Equal(t, field.Pool, "offsets", "under its own name")
+		testkit.True(t, len(b.LawPools) == 1 && b.LawPools[0].Offsets,
+			"and the declared pool carries the bounded-duration form")
+	})
 }

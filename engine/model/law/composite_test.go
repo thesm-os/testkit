@@ -94,6 +94,11 @@ func TestPoolLeakFree(t *testing.T) {
 func TestCursorCloseIdempotentLaw(t *testing.T) {
 	t.Parallel()
 
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.CursorCloseIdempotent[*lifecycleSUT]{}
+	iso.IsolatedLaw()
+
 	t.Run("two no-op closes pass", func(t *testing.T) {
 		t.Parallel()
 		l := law.CursorCloseIdempotent[*lifecycleSUT]{
@@ -128,6 +133,11 @@ func TestCursorCloseIdempotentLaw(t *testing.T) {
 
 func TestCursorNextAfterCloseSentinel(t *testing.T) {
 	t.Parallel()
+
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.CursorNextAfterCloseSentinel[*lifecycleSUT, int]{}
+	iso.IsolatedLaw()
 
 	sentinel := errors.New("closed")
 
@@ -275,7 +285,7 @@ func TestCompositeLawPreconditionsAndSentinels(t *testing.T) {
 			Sentinel: closed,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a cursor that cannot be closed is a precondition: %v", err)
 			}
 		})
@@ -304,14 +314,14 @@ func TestCompositeLawPreconditionsAndSentinels(t *testing.T) {
 				Rollback: func(*rapid.T, int, int) error { return closed },
 				Closed:   closed,
 			}
-			if err := noBegin.Check(rt, 0, 0); err != nil {
+			if err := noBegin.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Begin is a precondition: %v", err)
 			}
 
 			noCommit := noBegin
 			noCommit.Begin = func(*rapid.T, int) (int, error) { return 0, nil }
 			noCommit.Commit = func(*rapid.T, int, int) error { return errors.New("conflict") }
-			if err := noCommit.Check(rt, 0, 0); err != nil {
+			if err := noCommit.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Commit is a precondition: %v", err)
 			}
 		})
@@ -385,7 +395,7 @@ func TestCompositeLawPreconditionsAndSentinels(t *testing.T) {
 			Closed:   closed,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a subject that cannot begin a transaction is a precondition: %v", err)
 			}
 		})

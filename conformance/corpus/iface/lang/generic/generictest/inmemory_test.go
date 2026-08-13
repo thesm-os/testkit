@@ -22,6 +22,11 @@ func TestStoreContract(t *testing.T) {
 	t.Parallel()
 
 	generictest.AssertStoreContract[string, int](t,
+		// The model tier rides the witnesses: witness=string,int on the
+		// directive is what makes StoreModel a [string, int] option, and an
+		// instantiation at any other types cannot accept it — the property,
+		// its pools and its derived oracle are all spelled at the witnesses.
+		generictest.StoreModel(),
 		generictest.StoreSubject[string, int]("in-memory", func() generic.Store[string, int] {
 			return generictest.NewInMemory[string, int]()
 		}),

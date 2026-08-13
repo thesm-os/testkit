@@ -171,8 +171,15 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 			}
 			rt.Fatalf("%s", formatFailure(f))
 		case porcupine.Unknown:
-			rt.Logf("linearizability check timed out (%v) — treating as warning",
-				cc.Timeout)
+			// Undecided is not evidence: a run whose verdict never arrived
+			// used to log a warning and pass, which is a linearizability
+			// claim nothing checked. The timeout is the config's own knob —
+			// a history this check cannot decide in its budget needs a
+			// bigger budget or a smaller history, and either is the
+			// caller's choice to make, not this run's to make silently.
+			rt.Fatalf("linearizability undecided after %v — raise "+
+				"ConcurrentConfig.Timeout or reduce the concurrent load; an "+
+				"undecided run asserts nothing", cc.Timeout)
 		}
 	})
 }

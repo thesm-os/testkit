@@ -1,0 +1,13 @@
+{{- /*
+The firing count, made loud on error — a zero the law reads as "nothing
+fired" would mask exactly the silence it exists to see.
+*/ -}}
+{{- define "model.lawfield.CountObs" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) int {
+			n, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			if err != nil {
+				rt.Fatalf("{{ .Name }} observation failed: %v", err)
+			}
+			return n
+		}
+{{- end -}}

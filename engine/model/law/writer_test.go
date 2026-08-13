@@ -414,6 +414,11 @@ func (s *tamperStore) tamper() bool {
 func TestTamperEvident(t *testing.T) {
 	t.Parallel()
 
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.TamperEvident[*tamperStore, string]{}
+	iso.IsolatedLaw()
+
 	t.Run("checksum store detects post-write tampering", func(t *testing.T) {
 		t.Parallel()
 		l := law.TamperEvident[*tamperStore, string]{
@@ -599,7 +604,7 @@ func TestWriteObservablePreconditionsAndViolations(t *testing.T) {
 		s.writeErr = errors.New("read-only")
 		l := mk(s, okRead)
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 			}
 		})
@@ -644,7 +649,7 @@ func TestTamperEvidentPreconditionsAndViolations(t *testing.T) {
 			Values: rapid.Just("v"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 			}
 		})
@@ -751,7 +756,7 @@ func TestInjectionSafePreconditionsAndViolations(t *testing.T) {
 		s.writeErr = errors.New("read-only")
 		l := mk(okStore, okLoad)
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 			}
 		})
@@ -965,7 +970,7 @@ func TestCommutativeWriteBranches(t *testing.T) {
 					Values:  rapid.Just("a"),
 					Observe: observe,
 				}
-				if err := l.Check(rt, nil, nil); err != nil {
+				if err := l.Check(rt, nil, nil); !law.Holds(err) {
 					rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 				}
 			})
@@ -984,7 +989,7 @@ func TestXSSSafeBranches(t *testing.T) {
 			Payloads: xssVectors,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused render is a precondition, not a violation: %v", err)
 			}
 		})
@@ -1026,7 +1031,7 @@ func TestWriterLawPreconditionsAndViolations(t *testing.T) {
 			Observe: func(rt *rapid.T, w *wkv) string { return w.observe(rt) },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+			if err := l.Check(rt, &wkv{}, &wkv{}); !law.Holds(err) {
 				rt.Fatalf("a refused first write is a precondition: %v", err)
 			}
 		})
@@ -1072,7 +1077,7 @@ func TestWriterLawPreconditionsAndViolations(t *testing.T) {
 				CanaryKey:   "canary",
 				CanaryValue: "intact",
 			}
-			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+			if err := l.Check(rt, &wkv{}, &wkv{}); !law.Holds(err) {
 				rt.Fatalf("a store that refuses the payload is a precondition: %v", err)
 			}
 		})
@@ -1087,7 +1092,7 @@ func TestWriterLawPreconditionsAndViolations(t *testing.T) {
 			Allowed: func(string, string) bool { return false },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, &wkv{}, &wkv{}); err != nil {
+			if err := l.Check(rt, &wkv{}, &wkv{}); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition: %v", err)
 			}
 		})

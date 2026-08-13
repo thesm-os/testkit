@@ -20,11 +20,6 @@ func TestContractContract(t *testing.T) {
 		codectest.ContractSubject("in-memory", func() codec.Contract {
 			return codectest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: base64 encodes every string, so
-		// there is no input Encode refuses. Decode keeps its check — a
-		// string the forward transform could not have produced is a real
-		// miss, and that is the asymmetry the pair has.
-		codectest.ContractWithout("Encode/an error carries the zero value"),
 		codectest.ContractOnDecode("undoes exactly what Encode did", func(
 			tb testing.TB, subject codec.Contract, in string,
 		) {
@@ -50,11 +45,6 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		codectest.ContractSubject("in-memory", func() codec.Contract {
 			return codectest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: base64 encodes every string, so
-		// there is no input Encode refuses. Decode keeps its check — a
-		// string the forward transform could not have produced is a real
-		// miss, and that is the asymmetry the pair has.
-		codectest.ContractWithout("Encode/an error carries the zero value"),
 		codectest.ContractWithoutDouble(),
 	)
 }

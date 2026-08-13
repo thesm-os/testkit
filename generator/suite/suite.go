@@ -6,6 +6,7 @@ package suite
 import (
 	"fmt"
 	"slices"
+	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
@@ -14,9 +15,12 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/concurrent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/hooks"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/idempotent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/integrationonly"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/lifecycleafterclose"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/nilsafe"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/partition"
@@ -40,7 +44,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.0.0"
+const Version = "1.2.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -66,6 +70,14 @@ const (
 	KindDeadline    sdk.Kind = "suite.check.deadline"
 	KindNilContext  sdk.Kind = "suite.check.nilcontext"
 	KindZeroOnError sdk.Kind = "suite.check.zeroonerror"
+
+	// KindCloseIdempotent asserts a declared-idempotent teardown answers the
+	// same on the second call; KindUseAfterClose that operations report the
+	// declared sentinel once teardown ran; KindConcurrentSmoke that a
+	// declared-concurrent method survives parallel callers under -race.
+	KindCloseIdempotent sdk.Kind = "suite.check.closeidempotent"
+	KindUseAfterClose   sdk.Kind = "suite.check.useafterclose"
+	KindConcurrentSmoke sdk.Kind = "suite.check.concurrentsmoke"
 )
 
 // The emit kinds for the detector-derived checks.
@@ -326,6 +338,10 @@ type Check struct {
 	// never calls the partner at all.
 	Partner     *Method
 	PartnerArgs []string
+
+	// Sentinel is the resolver-qualified error a directive names — what a
+	// use-after-close operation must report once teardown ran.
+	Sentinel *sdk.Expr
 }
 
 // Kind returns [Check.KindName].
@@ -549,6 +565,13 @@ type Double struct {
 	// CtorName constructs one, and DelegateToName is the option that makes it
 	// forward to a real implementation.
 	CtorName, DelegateToName string
+
+	// Witnesses are the concrete types the double's own companion instantiates
+	// at — pinned by the stub directive's witness key or derived from an open
+	// constraint — and empty for a non-generic interface. The falsification
+	// guards run at the same types: a Test function cannot carry type
+	// parameters, so these are what make a generic harness provable.
+	Witnesses []sdk.Ref
 }
 
 // Contract is the emit value rendered into the primary output.
@@ -682,7 +705,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Seed:          seedOf(fixture, methods),
 			Double:        doubleOf(doubles, iface),
 			Methods:       methods,
-			Coverage:      coverageOf(methods),
+			Coverage:      coverageOf(methods, modelWillRun(iface)),
 			Unfalsifiable: unfalsifiableReason(iface, doubles),
 		}
 		queued := []sdk.EmitNode{contract}
@@ -797,6 +820,8 @@ func mixinParamsOf(bag *sdk.Bag) map[string]string {
 		{MixinPartition, MixinPartitionAxis},
 		{MixinHooks, MixinHooksParam},
 		{MixinSample, MixinSampleParam},
+		{MixinAfterClose, MixinAfterCloseClose},
+		{MixinAfterClose, MixinAfterCloseSentinel},
 		{MixinValidates, MixinValidatesParam},
 		{MixinWrappedVia, MixinWrappedViaParam},
 	}
@@ -852,14 +877,17 @@ func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Metho
 	if m.TakesContext() {
 		out = append(out, base(KindNilContext, "tolerates a nil context", "ToleratesNilContext", args, false))
 	}
-	if m.ReturnsError() && len(m.ValueReturns()) > 0 && m.HasInput() {
+	if m.ReturnsError() && len(m.ValueReturns()) > 0 && m.HasInput() &&
+		!slices.Contains(m.Mixins, "total") {
 		// The only one whose meaning is in the value: a miss check called with
 		// the value the subject was seeded with succeeds, and asserts nothing.
 		//
 		// HasInput because the check reaches the failure it is about through the
 		// alternate value, and a method taking nothing after its context leaves
-		// nowhere to put one. Emitted anyway it fatals against every correct
-		// implementation, and names a fixture field that does not exist.
+		// nowhere to put one; the check skips visibly where even the alternate
+		// succeeds. The total mixin is the declared form of that totality — a
+		// claim that no input fails — so nothing is emitted against it rather
+		// than a check that skips by construction.
 		out = append(out, base(KindZeroOnError, "an error carries the zero value", "ZeroOnError", other, true))
 	}
 	return out
@@ -941,6 +969,12 @@ const (
 	MixinValidatesParam  = validates.ParamFn
 	MixinWrappedVia      = wrappedvia.Name
 	MixinWrappedViaParam = wrappedvia.ParamFn
+
+	MixinIdempotent         = idempotent.Name
+	MixinConcurrent         = concurrent.Name
+	MixinAfterClose         = lifecycleafterclose.Name
+	MixinAfterCloseClose    = lifecycleafterclose.ParamClose
+	MixinAfterCloseSentinel = lifecycleafterclose.ParamSentinel
 )
 
 // missShapes are the classifications whose absence signal is a value rather
@@ -1229,6 +1263,35 @@ func OtherIdent(name string) string { return name + OtherSuffix }
 // Where the partner needs a field the method does not take, the check is not
 // generated: widening its parameter list would give it a signature no other
 // check has, for a shape the corpus does not contain.
+// teardownShaped reports the one signature "a second call answers the same"
+// can be stated against without a value: context in, error out, nothing else.
+func teardownShaped(m Method) bool {
+	return m.TakesContext() && m.ReturnsError() &&
+		len(m.ValueReturns()) == 0 && !m.HasInput()
+}
+
+// qualifiedExpr lifts a resolver-qualified symbol into an expression, false
+// for a bare name with no package to import it from.
+func qualifiedExpr(v string) (*sdk.Expr, bool) {
+	i := strings.LastIndexByte(v, '.')
+	if i <= 0 || i == len(v)-1 {
+		return nil, false
+	}
+	return sdk.NewExternal(v[:i], v[i+1:]), true
+}
+
+// spellableBuilder reports whether every argument the builder takes has a
+// fixture field to draw from.
+func spellableBuilder(f Fixture, p Method) bool {
+	for _, arg := range p.CallArgs() {
+		field, held := f.Field(f.FieldFor(arg))
+		if !held || !field.OK() {
+			return false
+		}
+	}
+	return true
+}
+
 func partnerArgs(f Fixture, m, partner Method) ([]string, bool) {
 	byField := map[string]string{}
 	for _, p := range m.CallArgs() {
@@ -1303,15 +1366,54 @@ func mixinChecks(
 		out = append(out, ck)
 	}
 	if p := partnerOf(methods, m, MixinSample, MixinSampleParam); p != nil && builds(m, *p) {
-		ck := base(KindSample, MixinSample, "AcceptsASampledInput", nil)
-		ck.Partner = p
-		out = append(out, ck)
+		// The sampled value stays the builder's answer — handing the method a
+		// fixture value instead would test the derivation rather than the
+		// pair. The builder's own arguments are the fixture's to supply,
+		// though: a builder taking anything after its context used to render
+		// a call with those arguments missing, latent until a source declared
+		// one. A builder whose arguments nothing can spell drops the check,
+		// with the header saying so.
+		if spellableBuilder(f, *p) {
+			ck := base(KindSample, MixinSample, "AcceptsASampledInput", fixtureArgs(f, *p, false))
+			ck.Partner = p
+			for _, arg := range p.CallArgs() {
+				ck.PartnerArgs = append(ck.PartnerArgs, arg.Name)
+			}
+			out = append(out, ck)
+		}
 	}
 	if p := partnerOf(methods, m, MixinHooks, MixinHooksParam); p != nil {
 		if cb, ok := callbackParam(*p); ok {
 			ck := base(KindHooks, MixinHooks, "FiresRegisteredHooks", fixtureArgs(f, m, false))
 			ck.Partner, ck.Callback = p, cb
 			out = append(out, ck)
+		}
+	}
+	if slices.Contains(m.Mixins, MixinIdempotent) && teardownShaped(m) {
+		// The declared claim, on the one shape where "again" needs no value:
+		// a second teardown answers what the first did. Gated on the mixin —
+		// a bare lifecycle shape makes no such promise, and os.File-style
+		// subjects legitimately refuse the second call.
+		out = append(out, base(KindCloseIdempotent, MixinIdempotent, "CloseTwice", nil))
+	}
+	if slices.Contains(m.Mixins, MixinConcurrent) {
+		// Four callers under the race detector: the mixin's whole claim is
+		// that parallel use is safe, and no other generated file so much as
+		// starts a goroutine.
+		out = append(out, base(KindConcurrentSmoke, MixinConcurrent, "SurvivesConcurrentCallers",
+			fixtureArgs(f, m, false)))
+	}
+	if p := partnerOf(methods, m, MixinAfterClose, MixinAfterCloseClose); p != nil {
+		// The op is the carrier and the close its partner; the sentinel is
+		// the declaration's own, because "refused" without an identity lets
+		// any unrelated failure pass as closure discipline.
+		if sym, stamped := m.MixinParam(MixinAfterClose, MixinAfterCloseSentinel); stamped {
+			if ref, qualified := qualifiedExpr(sym); qualified {
+				ck := base(KindUseAfterClose, MixinAfterClose, "RefusesAfterClose",
+					fixtureArgs(f, m, false))
+				ck.Partner, ck.Sentinel = p, ref
+				out = append(out, ck)
+			}
 		}
 	}
 	if p := partnerOf(methods, m, MixinPartition, MixinPartitionRead); p != nil {
@@ -1364,7 +1466,39 @@ func doubleOf(queued map[sdk.Node]*stub.Stub, iface *sdk.Interface) *Double {
 		TypeName:       d.TypeName,
 		CtorName:       d.CtorName,
 		DelegateToName: d.DelegateToName,
+		Witnesses:      d.Witnesses,
 	}
+}
+
+// ModelDirective is the model generator's directive name, respelled here
+// because that generator imports this one and Go permits no import back.
+// Exported so the conformance gate can hold the two spellings equal.
+const ModelDirective = "model"
+
+// ModelWitnessKey is the model directive's witness key, respelled here for
+// the same reason [ModelDirective] is: the suite cannot import the generator
+// that imports it, and the header's "will the model tier run" predicate has
+// to ask the same question the model generator answers.
+const ModelWitnessKey = "witness"
+
+// modelWillRun reports whether the model tier will actually emit for this
+// interface: armed by its directive, and — where the interface is generic —
+// carrying the witness list that names the types the property runs at. The
+// model generator refuses a generic interface without one, and a header
+// pointing at output that will not exist is the lie this predicate stops.
+func modelWillRun(iface *sdk.Interface) bool {
+	if !iface.HasPositiveDirective(ModelDirective) {
+		return false
+	}
+	if len(iface.TypeParams) == 0 {
+		return true
+	}
+	dir := iface.Directive(ModelDirective)
+	if dir == nil {
+		return false
+	}
+	_, witnessed := dir.KV[ModelWitnessKey]
+	return witnessed
 }
 
 // subjectOf names the interface every emit value for it is about.

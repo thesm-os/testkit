@@ -36,6 +36,11 @@ type Binding struct {
 	// The gate holds it to the struct's method set by reflection: a value
 	// type with no Check method is a law that must be bound by pointer.
 	Ptr bool
+
+	// Timeaware marks a law living in engine/model/timeaware rather than
+	// engine/model/law — the clock-shaped family, boxed apart because its
+	// checks read time.
+	Timeaware bool
 }
 
 // BindArg names one type argument, resolved by the generator against the
@@ -197,7 +202,29 @@ var bindings = map[string]Binding{
 		Args: []BindArg{BindPartition, ElemOf(fieldReplay)},
 		Ptr:  true,
 	},
-	lawid.HashChainIntegrityVerify: {Type: "HashChainIntegrityViaVerify", Args: []BindArg{}},
+
+	// The isolated family: each Check corrupts its own throwaway pair, which
+	// the runner hands it once per iteration — the conduct census flipped
+	// these sound when the [law.Isolated] marker landed.
+	lawid.TamperEvident:         {Type: "TamperEvident", Args: []BindArg{InputOf(fieldWrite)}},
+	lawid.CursorCloseIdempotent: {Type: "CursorCloseIdempotent", Args: []BindArg{}},
+	lawid.CursorNextAfterClose:  {Type: "CursorNextAfterCloseSentinel", Args: []BindArg{ResultOf("Next")}},
+	lawid.IdempotentLifecycle:   {Type: "IdempotentLifecycle", Args: []BindArg{BindObservation}},
+	lawid.LifecycleAfterClose:   {Type: "LifecycleAfterCloseSentinel", Args: []BindArg{}},
+	lawid.PoisonConsistent:      {Type: "PoisonConsistent", Args: []BindArg{}},
+
+	// The clock family: bound conditionally on the ModelClocked option, whose
+	// factory builds the subject on the run's own test clock — a law that
+	// advances a clock the subject does not read fails every correct
+	// implementation.
+	lawid.TTLExpiry: {
+		Type: "TTLExpiryAfterAdvance", Timeaware: true,
+		Args: []BindArg{BindKey, BindValue},
+	},
+	lawid.DeadlineRespecting:         {Type: "DeadlineRespecting", Timeaware: true, Args: []BindArg{}},
+	lawid.ScheduledFiresAfterAdvance: {Type: "ScheduledFiresAfterAdvance", Timeaware: true, Args: []BindArg{}},
+	lawid.Windowed:                   {Type: "Windowed", Args: []BindArg{BindKey}},
+	lawid.HashChainIntegrityVerify:   {Type: "HashChainIntegrityViaVerify", Args: []BindArg{}},
 	lawid.ReplayDeterministic: {
 		Type: "ReplayDeterminism",
 		Args: []BindArg{BindPartition, ElemOf(fieldReplay)},

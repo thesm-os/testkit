@@ -53,7 +53,7 @@ func (IdempotentWrite[T, V, Obs]) REQID() string { return "" }
 func (l IdempotentWrite[T, V, Obs]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "IdempotentWrite_value")
 	if err := l.Write(rt, sut, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := mirror("IdempotentWrite", func() error { return l.Write(rt, ref, v) }); err != nil {
 		return err
@@ -106,7 +106,7 @@ func (WriteObservable[T, V, K]) REQID() string { return "" }
 func (l WriteObservable[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "WriteObservable_value")
 	if err := l.Write(rt, sut, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := mirror("WriteObservable", func() error { return l.Write(rt, ref, v) }); err != nil {
 		return err
@@ -139,6 +139,10 @@ type TamperEvident[T any, V any] struct {
 	Values *rapid.Generator[V]
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (TamperEvident[T, V]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (TamperEvident[T, V]) ID() string { return lawid.TamperEvident }
 
@@ -150,7 +154,7 @@ func (TamperEvident[T, V]) REQID() string { return "" }
 func (l TamperEvident[T, V]) Check(rt *rapid.T, sut, _ T) error {
 	v := l.Values.Draw(rt, "TamperEvident_value")
 	if err := l.Write(rt, sut, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := l.Verify(rt, sut); err != nil {
 		return fmt.Errorf("law: TamperEvident Verify failed on intact data: %v", err)
@@ -191,7 +195,7 @@ func (l XSSSafe[T]) Check(rt *rapid.T, sut, _ T) error {
 	raw := l.Payloads.Draw(rt, "XSSSafe_payload")
 	out, err := l.Render(rt, sut, raw)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	danger := l.Dangerous
 	if len(danger) == 0 {
@@ -237,7 +241,7 @@ func (InjectionSafe[T]) REQID() string { return "" }
 func (l InjectionSafe[T]) Check(rt *rapid.T, sut, ref T) error {
 	const target = "injectionsafe_target"
 	if err := l.Store(rt, sut, l.CanaryKey, l.CanaryValue); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// Each accepted store lands on both sides — the mirrored half of the
 	// [Law] conduct contract.
@@ -248,7 +252,7 @@ func (l InjectionSafe[T]) Check(rt *rapid.T, sut, ref T) error {
 	}
 	payload := l.Payloads.Draw(rt, "InjectionSafe_payload")
 	if err := l.Store(rt, sut, target, payload); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := mirror("InjectionSafe", func() error { return l.Store(rt, ref, target, payload) }); err != nil {
 		return err
@@ -302,18 +306,18 @@ func (l CommutativeWrite[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 
 	ab := l.Factory()
 	if err := l.Write(rt, ab, a); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := l.Write(rt, ab, b); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 
 	ba := l.Factory()
 	if err := l.Write(rt, ba, b); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := l.Write(rt, ba, a); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 
 	obsAB := l.Observe(rt, ab)
@@ -390,7 +394,7 @@ func (l ValidTransition[T, V, S]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "ValidTransition_value")
 	before := l.Observe(rt, sut)
 	if err := l.Write(rt, sut, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The accepted write lands on both sides — the mirrored half of the
 	// [Law] conduct contract.

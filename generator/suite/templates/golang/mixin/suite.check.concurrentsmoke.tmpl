@@ -1,0 +1,36 @@
+{{- /*
+The declared-concurrent claim, exercised: parallel callers, a recover per
+goroutine, and the race detector doing what only it can.
+*/ -}}
+{{- define "suite.check.concurrentsmoke" -}}
+{{ $m := .Method }}
+// {{ .Func }} asserts {{ $m.Name }} survives concurrent callers.
+//
+// Fails when: any of four parallel callers panics. What it cannot assert —
+// a data race with no panic — the race detector reports through the same
+// run, and this check is the only generated code that gives it goroutines
+// to watch.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if $m.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	var wg {{ renderExpr (external "sync" "WaitGroup") }}
+	for range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					tb.Errorf("{{ $m.Name }} panicked under concurrent callers: %v", r)
+				}
+			}()
+			for range 8 {
+				{{ if $m.HasResults }}{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}_{{ end }} = {{ end }}subject.{{ $m.Name }}({{ template "suite.args" . }})
+			}
+		}()
+	}
+	wg.Wait()
+}
+{{- end -}}

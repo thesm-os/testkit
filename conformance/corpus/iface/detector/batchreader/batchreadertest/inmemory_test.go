@@ -134,7 +134,6 @@ func TestBatchReaderAnswersPerKeyWhenItHoldsThemAll(t *testing.T) {
 			return s
 		}),
 		batchreadertest.BatchReaderWithout(
-			"GetAll/an error carries the zero value",
 			"GetAll/reports a miss",
 			"GetAll/returns nothing rather than a partial answer",
 		),

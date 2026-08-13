@@ -118,15 +118,24 @@ func (f FixtureField) Choose(alternate bool) FixtureValue {
 // OtherName is the identifier of the companion field.
 func (f FixtureField) OtherName() string { return f.Name + OtherSuffix }
 
-// OK reports whether a value for this field could be produced at all — a
-// companion, or both halves of a derived pair.
+// OK reports whether both of this field's values could be produced: the
+// sample — a companion or a derived literal — and, separately, the alternate.
+//
+// Separately, because the companion answers only the sample half: "a value
+// that should not be found" is a different claim from "a value this type
+// accepts", and a companion accepted as proof of both let the alternate
+// render as a silent zero — which real data collides with, and which turns a
+// miss check into a comparison against nothing in particular.
 //
 // A parameter whose type admits no literal and declares no companion — a
 // channel, a func, a type from a package the run never read — yields neither,
 // and the one check whose meaning is the value is dropped rather than emitted
 // against something nobody could write.
 func (f FixtureField) OK() bool {
-	return f.Companion != nil || f.Composed() || (f.Sample.OK() && f.Other.OK())
+	if f.Composed() {
+		return true
+	}
+	return (f.Companion != nil || f.Sample.OK()) && f.Other.OK()
 }
 
 // Reason phrases why nothing could be derived for this field.

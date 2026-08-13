@@ -14,9 +14,6 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/lifecycleafterclose"
 )
 
-// ErrClosed is what Work reports once the subject has been torn down.
-var ErrClosed = errors.New("lifecycleafterclosetest: closed")
-
 // InMemory is the implementation the generated conformance harness is run
 // against.
 type InMemory struct {
@@ -52,7 +49,7 @@ func (s *InMemory) Work(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return ErrClosed
+		return lifecycleafterclose.ErrClosed
 	}
 	s.works++
 	return nil

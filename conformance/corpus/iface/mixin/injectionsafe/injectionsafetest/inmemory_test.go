@@ -42,9 +42,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		injectionsafetest.MixedSubject("in-memory", func() injectionsafe.Mixed {
 			return injectionsafetest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: storing is defined for every string, so there is no input Store
-		// refuses — the zero-on-error check has no miss to find.
-		injectionsafetest.MixedWithout("Store/an error carries the zero value"),
 		injectionsafetest.MixedWithoutDouble(),
 	)
 }

@@ -1,0 +1,55 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+package suite
+
+import (
+	"testing"
+
+	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit"
+)
+
+// modelFixture builds one interface carrying the supplied directives and
+// answers its node, for the predicate the header trusts.
+func modelFixture(t *testing.T, generic bool, directives ...*sdk.Directive) *sdk.Interface {
+	t.Helper()
+	s := storefixture.New().
+		Package("p", "example.com/p").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("p/iface.go", 1, 1))
+			for _, d := range directives {
+				i.Directive(d)
+			}
+			if generic {
+				i.TypeParam("V", nil)
+			}
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	items := s.Nodes().Interfaces().Items()
+	testkit.Equal(t, len(items), 1, "one interface")
+	return items[0]
+}
+
+// TestModelWillRun holds the header's "checked somewhere else" predicate to
+// the model generator's own answer: armed, and — where generic — witnessed.
+// A drifted copy is a header pointing at output that does not exist.
+func TestModelWillRun(t *testing.T) {
+	t.Parallel()
+
+	testkit.False(t, modelWillRun(modelFixture(t, false)),
+		"an unarmed interface runs no model tier")
+	testkit.True(t, modelWillRun(modelFixture(t, false, storefixture.Directive(ModelDirective))),
+		"an armed concrete interface runs it")
+	testkit.False(t, modelWillRun(modelFixture(t, true, storefixture.Directive(ModelDirective))),
+		"an armed generic interface without witnesses is refused by the model generator")
+	testkit.True(t, modelWillRun(modelFixture(t, true,
+		storefixture.Directive(ModelDirective, storefixture.KV(ModelWitnessKey, "int")))),
+		"and the witness list is what makes it run")
+}

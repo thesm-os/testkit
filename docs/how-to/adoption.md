@@ -4,7 +4,9 @@ How to integrate testkit into an existing Go project.
 
 ## Status
 
-Pre-1.0. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`bench`**. The remaining generators (`model`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
+Pre-1.0. Six generators ship today: **`stub`**, **`builder`**, **`sentinel`**, **`enum`**, **`suite`**, **`model`** — plus the `fault` and `defaults` contributors that weave into the double. The remaining generators (`bench`, `sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are designed but not yet implemented; this guide reflects what's available now.
+
+Generators are driven by source directives, not per-generator commands: a `//testkit:<name>` comment on a declaration opts it in, and one `testkit run` regenerates everything the directives claim.
 
 ## Prerequisites
 
@@ -29,10 +31,9 @@ func TestSomething(t *testing.T) {
 
 ## Step 2: Install the CLI
 
-> **Not available yet.** The generator is being rebuilt on
-> [eidos](https://go.thesmos.sh/eidos) and there is no `testkit` binary in the
-> tree. See [ADR-0003](../adr/0003-adopt-eidos-as-the-codegen-substrate.md).
-> Steps 1 and 3 onward describe the target workflow.
+The CLI lives in the `cmd` module, built on
+[eidos](https://go.thesmos.sh/eidos)
+([ADR-0003](../adr/0003-adopt-eidos-as-the-codegen-substrate.md)):
 
 ```bash
 go install go.thesmos.sh/testkit/cmd/testkit@latest
@@ -44,6 +45,9 @@ Verify:
 testkit version
 ```
 
+`version` prints the plugin list with each generator's own version — the
+same fingerprints the output headers carry.
+
 ## Step 3: Create `.testkit.yaml` (optional)
 
 Only needed when defaults don't match your project conventions or when configuring validators. Defaults:
@@ -54,36 +58,38 @@ output:
   generated_suffix: .gen.go
   test_package_style: external
 
-stub:
-  file-pattern: "{type}_stub"
-  type-suffix: Stub
+artifacts:
+  dir: .testkit/artifacts
 ```
 
 See [Configuration](../reference/configuration.md) for the full reference. An absent `.testkit.yaml` is valid — defaults apply.
 
-## Step 4: Add `//go:generate` directives
+## Step 4: Add `//testkit:` directives
 
-Place directives in the package that owns the types. A common pattern is a `generate.go` per package:
+A directive is a comment on the declaration it opts in. Stack what a type
+earns; routing rides the `out=` key:
 
 ```go
-// store/generate.go
+// store/store.go
 package store
 
-//go:generate testkit stub      -o storetest/store_stub.gen.go   Store
-//go:generate testkit stub      -o storetest/cache_stub.gen.go   Cache
-//go:generate testkit builder   -o storetest/builders.gen.go     User Item
-//go:generate testkit sentinel  -o errors.gen_test.go
-//go:generate testkit enum      -o status_enum.gen_test.go       Status
+// Store is the port your services depend on.
+//
+//testkit:out storetest/ pkg=storetest
+//testkit:stub
+//testkit:suite
+//testkit:model
+type Store interface {
+    Get(ctx context.Context, key string) (Item, error)
+    Put(ctx context.Context, key string, v Item) error
+}
 ```
-
-Or place directives alongside the types they reference:
 
 ```go
 // store/status.go
 package store
 
-//go:generate testkit enum -o status_enum.gen_test.go Status
-
+//testkit:enum
 type Status uint8
 
 const (
@@ -93,66 +99,73 @@ const (
 )
 ```
 
+`//testkit:sentinel` on an error variable's package, `//testkit:builder` on
+a struct, `//testkit:fault` and `//testkit:default` where the double and
+its zero values need shaping. Each generator's reference page documents its
+keys; a wrong key or a misplaced directive is a diagnostic at the line, not
+a silent no-op.
+
 ## Step 5: Generate
 
 ```bash
-go generate ./...
+testkit run ./...
 ```
+
+One command, every directive. The pipeline parses the packages, classifies
+the shapes, runs every generator, and writes only what changed. Run it
+twice after upgrading testkit itself: the first pass compile-validates
+against the outputs already on disk and may report them stale; the second
+converges.
 
 Review the generated files. Commit them to version control.
 
 ## Step 6: Wire freshness checks into CI
 
+The CLI carries the drift gate itself — no git-diff scripting:
+
 ```makefile
 check-generated:
- go generate ./...
- @if ! git diff --quiet -- '*.gen.go' '*.gen_test.go'; then \
-     echo "generated files are stale — run: go generate ./..."; \
-     git diff --stat -- '*.gen.go' '*.gen_test.go'; \
-     exit 1; \
- fi
+ testkit check ./...
 ```
 
-When validators ship, add them similarly:
-
-```makefile
-check-testkit:
- testkit validate proto-sync migration depguard wire
-
-check: lint test check-generated check-testkit
-```
+`check` runs the full pipeline against an in-memory sink and compares every
+output byte-for-byte with the file on disk, exiting non-zero on drift.
+`testkit prune` deletes generated files a run no longer claims — the
+cleanup after deleting a directive or renaming a type.
 
 ## Incremental adoption order
 
 testkit does not require all-or-nothing adoption. Recommended order, given today's state:
 
 1. **Primitives.** Import `testkit` for assertions, `MethodStub`, fault injection, recorders, shape-typed contexts. No config file, no CLI. Immediate value.
-2. **`sentinel`.** Add `//go:generate testkit sentinel` to packages with `Err*` variables and custom error types. Catches prefix violations and accidental aliasing. Quick win.
-3. **`enum`.** Add `//go:generate testkit enum` to packages with iota constants. Catches new constants without test coverage, broken stringers, broken Marshal pairs. Quick win.
-4. **`builder`.** Add `//go:generate testkit builder` for fixtures used across many tests. Eliminates brittle inline `Item{...}` construction.
-5. **`stub`.** Add `//go:generate testkit stub` for interfaces with multiple implementations. The largest time saver for any codebase with non-trivial interfaces.
-6. **`suite`.** Add `//go:generate testkit suite` for any interface with a documented contract. Provides Tier 1 conformance — auto-detected ctx coverage and shape-typed plug-in points where the consumer composes assertions from `testkit/<shape>_assert.go`.
-7. **`model`.** Add `//go:generate testkit model` for stateful interfaces where property-based testing adds value. Provides Tier 2-3 — rapid-driven state-machine with differential SUT/ref testing, auto-derived laws, concurrent stress, trace combinators, fuzz targets.
-8. **`bench`.** Add `//go:generate testkit bench` for any interface where allocation or latency budgets matter. Provides Tier 4 — auto-detected hot-path benchmarks per method plus typed bench plug-ins from `testkit/bench_<shape>.go`.
+2. **`sentinel`.** `//testkit:sentinel` in packages with `Err*` variables and custom error types. Catches prefix violations and accidental aliasing. Quick win.
+3. **`enum`.** `//testkit:enum` on iota-constant types. Catches new constants without test coverage, broken stringers, broken Marshal pairs. Quick win.
+4. **`builder`.** `//testkit:builder` on fixture structs used across many tests. Eliminates brittle inline `Item{...}` construction.
+5. **`stub`.** `//testkit:stub` on interfaces with multiple implementations. The largest time saver for any codebase with non-trivial interfaces; `//testkit:fault` and `//testkit:default` refine the double.
+6. **`suite`.** `//testkit:suite` on any interface with a documented contract. Tier 1 conformance — the generated `Assert<Iface>Contract` entry, derived checks per method shape, typed extension points, and a companion that proves every check can fail.
+7. **`model`.** `//testkit:model` on stateful interfaces where property-based testing adds value. Tiers 2–3 — rapid-driven state-machine runs against a derived reference, auto-bound laws, the clocked family for time-reading claims, a concurrent Porcupine leg, fuzz targets, and a mutation kill matrix proving the derivation has teeth. Generic interfaces name their types with `witness=`.
 
-When the remaining generators ship, the natural extension order is `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
+When the remaining generators ship, the natural extension order is `bench` → `codec` → `smoke` → `sim` → `chaos`/`replay`/`differential-rollout` → `pkgdoc`.
 
 ## Updating generated code
 
-When a source type or proto changes:
+When a source type changes:
 
 ```bash
-go generate ./...
+testkit run ./...
 ```
 
 When testkit itself is updated:
 
 ```bash
 go get go.thesmos.sh/testkit@latest
-go generate ./...
+go install go.thesmos.sh/testkit/cmd/testkit@latest
+testkit run ./... && testkit run ./...
 ```
 
-Review the diff. Generated files include a header noting the testkit subcommand and source location; regeneration after a testkit upgrade may show formatting or template changes — accept and commit.
+Review the diff. Generated files carry a header naming the source file and
+every plugin version that produced them, so an upgrade's template changes
+surface as a header bump beside the content diff — accept and commit.
 
 ## Excluding generated files from review
 

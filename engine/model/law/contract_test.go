@@ -930,7 +930,7 @@ func TestWatcherReturnsOnChange(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			s := newWatchable(false)
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a subject that cannot watch is a precondition: %v", err)
 			}
 		})
@@ -949,7 +949,7 @@ func TestWatcherReturnsOnChange(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			s := newWatchable(false)
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a subject that refuses the change is a precondition: %v", err)
 			}
 		})
@@ -1111,7 +1111,7 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 		}
 		s := &persisterSUT{}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused Save is a precondition, not a violation: %v", err)
 			}
 		})
@@ -1154,7 +1154,7 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 					Values: rapid.Just("aa"),
 					KeyOf:  func(v string) string { return v[:1] },
 				}
-				if err := l.Check(rt, s, &updaterSUT{}); err != nil {
+				if err := l.Check(rt, s, &updaterSUT{}); !law.Holds(err) {
 					rt.Fatalf("a refused write is a precondition, not a violation: %v", err)
 				}
 			})
@@ -1198,7 +1198,7 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			fail := failOnNth(1)
 			l := mk(func(*rapid.T, *updaterSUT, string) error { return fail() }, okRead)
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused first upsert must hold vacuously: %v", err)
 			}
 		})
@@ -1206,7 +1206,7 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 			l := mk(okUpsert, func(*rapid.T, *updaterSUT, string) (string, error) {
 				return "", errors.New("not yet")
 			})
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused first read must hold vacuously: %v", err)
 			}
 		})
@@ -1253,7 +1253,7 @@ func TestContractLawPreconditionsAndViolations(t *testing.T) {
 			Values: rapid.Just("v"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, log, log); err != nil {
+			if err := l.Check(rt, log, log); !law.Holds(err) {
 				rt.Fatalf("a refused Append is a precondition, not a violation: %v", err)
 			}
 		})
@@ -1422,7 +1422,7 @@ func TestLeaseDoubleAcquireBlocksOutcomes(t *testing.T) {
 			Held:    held,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a lease that cannot be taken is a precondition: %v", err)
 			}
 		})
@@ -1597,11 +1597,11 @@ func TestPublisherDeliversBranches(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			noSub := &pubsubBox{subErr: errors.New("closed"), deliveries: 1}
-			if err := mk(noSub, 2).Check(rt, noSub, noSub); err != nil {
+			if err := mk(noSub, 2).Check(rt, noSub, noSub); !law.Holds(err) {
 				rt.Fatalf("a refused subscribe is a precondition: %v", err)
 			}
 			noPub := &pubsubBox{pubErr: errors.New("closed"), deliveries: 1}
-			if err := mk(noPub, 2).Check(rt, noPub, noPub); err != nil {
+			if err := mk(noPub, 2).Check(rt, noPub, noPub); !law.Holds(err) {
 				rt.Fatalf("a refused publish is a precondition: %v", err)
 			}
 		})
@@ -1749,7 +1749,7 @@ func TestPublisherDeliveryBoundModes(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &pubsubBox{subErr: errors.New("no capacity")}
-			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); err != nil {
+			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); !law.Holds(err) {
 				rt.Fatalf("a broker that refuses subscribers is a precondition: %v", err)
 			}
 		})
@@ -1759,7 +1759,7 @@ func TestPublisherDeliveryBoundModes(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &pubsubBox{pubErr: errors.New("topic closed")}
-			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); err != nil {
+			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); !law.Holds(err) {
 				rt.Fatalf("a broker that refuses the publish is a precondition: %v", err)
 			}
 		})
@@ -1873,14 +1873,14 @@ func TestTransactionNoMidTxVisibilityBranches(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			s := fresh(true)
 			s.beginErr = errors.New("no tx")
-			if err := withLeakAtPut(mk(), s).Check(rt, s, s); err != nil {
+			if err := withLeakAtPut(mk(), s).Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused Begin is a precondition: %v", err)
 			}
 
 			s2 := fresh(true)
 			l := mk()
 			l.TxPut = func(*rapid.T, int, string, string) error { return errors.New("rejected") }
-			if err := l.Check(rt, s2, s2); err != nil {
+			if err := l.Check(rt, s2, s2); !law.Holds(err) {
 				rt.Fatalf("a refused TxPut is a precondition: %v", err)
 			}
 		})
@@ -1933,7 +1933,7 @@ func TestLeaseReleasedOnCancelBranches(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &leaseBox{acquireErr: errors.New("held elsewhere")}
-			if err := mk(b, time.Second).Check(rt, b, b); err != nil {
+			if err := mk(b, time.Second).Check(rt, b, b); !law.Holds(err) {
 				rt.Fatalf("a lease that cannot be taken is a precondition: %v", err)
 			}
 		})

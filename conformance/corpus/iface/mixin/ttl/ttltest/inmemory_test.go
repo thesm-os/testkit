@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/ttl"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/ttl/ttltest"
 )
@@ -21,7 +22,9 @@ func TestMixedContract(t *testing.T) {
 		}),
 		// The model tier: random sequences against the derived reference,
 		// reporting under "model" beside the per-method checks.
-		ttltest.MixedModel(),
+		ttltest.MixedModel(ttltest.MixedModelClocked(
+			func(clk *clock.TestClock) ttl.Mixed { return ttltest.NewInMemoryOn(clk) },
+		)),
 		ttltest.MixedOnRead("reports the declared sentinel for an absent key", func(
 			tb testing.TB, subject ttl.Mixed, key string,
 		) {

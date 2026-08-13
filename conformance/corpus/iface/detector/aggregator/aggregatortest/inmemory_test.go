@@ -16,9 +16,9 @@ import (
 //
 // Count returns a value beside an error, which is ordinarily enough to earn the
 // "an error carries the zero value" check — but that check reaches the failure
-// it is about by choosing an input that misses, and there is no input. Generated
-// anyway it would demand failure from a correct implementation, so the claim is
-// written here instead, against a subject this package can break.
+// it is about by choosing an input that misses, and there is no input to vary.
+// So the claim is written here instead, against a subject this package can
+// break.
 func TestAggregatorContract(t *testing.T) {
 	t.Parallel()
 

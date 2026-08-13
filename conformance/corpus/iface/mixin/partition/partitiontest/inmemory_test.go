@@ -31,12 +31,6 @@ func TestMixedContract(t *testing.T) {
 		partitiontest.MixedSubject("in-memory", func() partition.Mixed {
 			return partitiontest.NewInMemory()
 		}),
-		// Read is a miss for an unwritten partition, which the derived
-		// alternate is — but the zero-value check calls it on a subject the
-		// seed never touched, where every partition is unwritten and the miss
-		// is the only outcome. That is the check working; it is dropped only
-		// because Read has no partition to hit until this suite writes one.
-		partitiontest.MixedWithout("Read/an error carries the zero value"),
 		partitiontest.MixedOnRead("reports a key its partition does not hold", func(
 			tb testing.TB, subject partition.Mixed, part, key string,
 		) {
@@ -60,7 +54,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		}),
 		partitiontest.MixedWithout(
 			"Put/smoke",
-			"Read/an error carries the zero value",
 		),
 		partitiontest.MixedWithoutDouble(),
 	)

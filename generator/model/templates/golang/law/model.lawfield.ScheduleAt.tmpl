@@ -1,0 +1,8 @@
+{{- /*
+The scheduling call at the law's own offset.
+*/ -}}
+{{- define "model.lawfield.ScheduleAt" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, at {{ renderExpr (external "time" "Duration") }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}at)
+		}
+{{- end -}}

@@ -8,7 +8,7 @@
 # - 	{""},
 # + 	nil,
 #   )
-# 
+#
 #   semantic: SUT vs reference disagreement (action)
 #   [step 0] Add("") -> <nil>
 #   [step 1] Stream([]) -> err: Stream: SUT/ref disagree:
@@ -18,7 +18,7 @@
 #   )
 #    <-- FAILED
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
-# 
+#
 v0.4.8#7187690998770464654
 0x0
 0x0

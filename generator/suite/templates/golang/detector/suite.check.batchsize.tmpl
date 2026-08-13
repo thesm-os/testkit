@@ -28,8 +28,10 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	if err != nil {
 		// The second key is the fixture's "should not be found", so a reader
 		// that fails a batch on any miss is refusing this one — which is a
-		// design the shape permits. There is no count to make about a call that
-		// did not answer.
+		// design the shape permits. There is no count to make about a call
+		// that did not answer, and the skip says so.
+		tb.Skipf("{{ $m.Name }} refused the batch holding a miss; the per-key " +
+			"count goes unexercised under this design")
 		return
 	}
 	{{ renderExpr (external $.Runtime "Len") }}(tb, got, 2,

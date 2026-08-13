@@ -33,6 +33,13 @@ type InMemory struct {
 
 var _ timeout.Mixed = (*InMemory)(nil)
 
+// NewInMemoryOn returns a subject reading the supplied clock — the door the
+// generated ModelClocked option opens, so the deadline law's advance is the
+// time this subject waits under.
+func NewInMemoryOn(clk clock.Clock) *InMemory {
+	return &InMemory{clk: clk}
+}
+
 // NewInMemory returns a subject that answers immediately on the real clock.
 func NewInMemory() *InMemory { return &InMemory{clk: clock.RealClock()} }
 

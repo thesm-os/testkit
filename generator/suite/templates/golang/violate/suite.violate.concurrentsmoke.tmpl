@@ -1,0 +1,21 @@
+{{- /*
+A method that panics the moment it is called — the recover arm's proof. The
+race the detector alone can see cannot be staged deterministically, and a
+guard that flaked would teach everyone to ignore it.
+*/ -}}
+{{- define "suite.violate.concurrentsmoke" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in panics under any caller, so every one of the check's
+// goroutines meets the recover arm this proves.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			panic("violate: unsynchronized state")
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

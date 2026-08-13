@@ -76,7 +76,7 @@ func (StreamCompletion[T, V]) REQID() string { return "" }
 func (l StreamCompletion[T, V]) Check(rt *rapid.T, sut, _ T) error {
 	items, err := l.Drain(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	limit := l.Limit
 	if limit <= 0 {
@@ -107,7 +107,7 @@ func (StreamNoDuplicates[T, V, H]) REQID() string { return "" }
 func (l StreamNoDuplicates[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	items, err := l.Drain(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	seen := make(map[H]struct{}, len(items))
 	for i, v := range items {
@@ -139,7 +139,7 @@ func (StreamStableOrder[T, V]) REQID() string { return "" }
 func (l StreamStableOrder[T, V]) Check(rt *rapid.T, sut, _ T) error {
 	items, err := l.Drain(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	for i := 1; i < len(items); i++ {
 		if l.Less(items[i], items[i-1]) {
@@ -168,7 +168,7 @@ func (StreamPermutation[T, V, H]) REQID() string { return "" }
 func (l StreamPermutation[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	got, err := l.Drain(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	expected := l.Expected(rt, sut)
 	if len(got) != len(expected) {
@@ -211,7 +211,7 @@ func (StreamOverMatch[T, V, H]) REQID() string { return "" }
 func (l StreamOverMatch[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	got, err := l.Drain(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	seen := make(map[H]struct{}, len(got))
 	for _, v := range got {
@@ -276,10 +276,10 @@ func (l StreamReflectsMutations[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 	v := l.Values.Draw(rt, "StreamReflectsMutations_value")
 	before, err := l.count(rt, sut, v)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if putErr := l.Put(rt, sut, v); putErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	after, err := l.count(rt, sut, v)
 	if err != nil {
@@ -293,7 +293,7 @@ func (l StreamReflectsMutations[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 		return nil
 	}
 	if delErr := l.Delete(rt, sut, v); delErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	restored, err := l.count(rt, sut, v)
 	if err != nil {

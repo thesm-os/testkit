@@ -73,6 +73,10 @@ type CursorCloseIdempotent[T any] struct {
 	Close func(*rapid.T, T) error
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (CursorCloseIdempotent[T]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (CursorCloseIdempotent[T]) ID() string { return lawid.CursorCloseIdempotent }
 
@@ -96,6 +100,10 @@ type CursorNextAfterCloseSentinel[T any, V any] struct {
 	Sentinel error
 }
 
+// IsolatedLaw marks the conduct: this Check corrupts its subjects to make
+// its observation, and the runner hands it a throwaway pair of its own.
+func (CursorNextAfterCloseSentinel[T, V]) IsolatedLaw() {}
+
 // ID returns the stable identifier for this law.
 func (CursorNextAfterCloseSentinel[T, V]) ID() string { return lawid.CursorNextAfterClose }
 
@@ -105,7 +113,7 @@ func (CursorNextAfterCloseSentinel[T, V]) REQID() string { return "" }
 // Check closes and then asserts Next returns the sentinel.
 func (l CursorNextAfterCloseSentinel[T, V]) Check(rt *rapid.T, sut, _ T) error {
 	if err := l.Close(rt, sut); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	_, _, err := l.Next(rt, sut)
 	if !errors.Is(err, l.Sentinel) {
@@ -138,10 +146,10 @@ func (TwoPhaseNoRollbackAfterCommit[T, Tx]) REQID() string { return "" }
 func (l TwoPhaseNoRollbackAfterCommit[T, Tx]) Check(rt *rapid.T, sut, _ T) error {
 	tx, beginErr := l.Begin(rt, sut)
 	if beginErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if commitErr := l.Commit(rt, sut, tx); commitErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	err := l.Rollback(rt, sut, tx)
 	if !errors.Is(err, l.Closed) {
@@ -180,7 +188,7 @@ func (TwoPhaseCommitOrRollback[T, Tx]) REQID() string { return "" }
 func (l TwoPhaseCommitOrRollback[T, Tx]) Check(rt *rapid.T, sut, _ T) error {
 	tx, beginErr := l.Begin(rt, sut)
 	if beginErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	first, second, firstName, secondName := l.Commit, l.Rollback, "commit", "rollback"
 	if rapid.Bool().Draw(rt, "TwoPhaseCommitOrRollback_rollbackFirst") {

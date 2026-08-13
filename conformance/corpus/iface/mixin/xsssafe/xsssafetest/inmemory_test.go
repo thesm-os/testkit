@@ -20,9 +20,6 @@ func TestMixedContract(t *testing.T) {
 		xsssafetest.MixedSubject("in-memory", func() xsssafe.Mixed {
 			return xsssafetest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: escaping is defined for every string, so there is no input Render
-		// refuses — the zero-on-error check has no miss to find.
-		xsssafetest.MixedWithout("Render/an error carries the zero value"),
 		xsssafetest.MixedOnRender("leaves no angle bracket in the output", func(
 			tb testing.TB, subject xsssafe.Mixed, in string,
 		) {
@@ -46,9 +43,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		xsssafetest.MixedSubject("in-memory", func() xsssafe.Mixed {
 			return xsssafetest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: escaping is defined for every string, so there is no input Render
-		// refuses — the zero-on-error check has no miss to find.
-		xsssafetest.MixedWithout("Render/an error carries the zero value"),
 		xsssafetest.MixedWithoutDouble(),
 	)
 }

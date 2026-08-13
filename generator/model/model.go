@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.12.4"
+const Version = "0.14.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -43,6 +43,15 @@ const RefKey = "ref"
 // wide pools cannot draw by reflection, or one whose domain the consumer
 // knows better than any reflection walk.
 const GenKey = "gen"
+
+// WitnessKey names the concrete types a generic interface's property runs at,
+// comma-separated in declaration order — `witness=string,int`. The same key
+// the stub directive reads, because both answer the same question: a Go test
+// cannot carry type parameters, so the source names the types or the tier
+// declines. Required here where the stub derives: the pools, the reference
+// and every law land at these types, and a silently guessed palette would
+// change what the property asserts.
+const WitnessKey = "witness"
 
 // TierName is the path the model run reports under inside the contract entry,
 // and the one `<Iface>Without` drops it by.
@@ -113,9 +122,12 @@ func directives() []sdk.DirectiveSchema {
 					"the source package returning the interface, for a shape no "+
 					"shipped reference models. "+GenKey+" names a generator "+
 					"constructor in the routed output package, for a value type "+
-					"the wide pools cannot draw by reflection.",
+					"the wide pools cannot draw by reflection. "+WitnessKey+
+					" names the concrete types a generic interface's property "+
+					"runs at, comma-separated in declaration order; required "+
+					"exactly where the interface is generic.",
 			).
-			AllowedKeys(RefKey, GenKey).
+			AllowedKeys(RefKey, GenKey, WitnessKey).
 			On(sdk.NodeKindInterface).
 			DenyNegation().
 			Build(),
@@ -132,6 +144,17 @@ var keyFieldConventions = []string{"ID", "Key"}
 type Bindings struct {
 	sdk.BaseEmit
 	suite.Subject
+
+	// Witnesses are the concrete types a generic interface's property runs
+	// at, in declaration order — empty in the ordinary non-generic case. The
+	// template renders them wherever the file names one of the harness's own
+	// generic types, and [Bindings.IfaceRef] arrives already instantiated.
+	Witnesses []sdk.Ref
+
+	// witnessQ maps each type parameter's name to its witness's stamp
+	// spelling. The annotator spells a parameter's key or value type by its
+	// bare name, so every stamp read routes through [Bindings.substQ].
+	witnessQ map[string]string
 
 	// OptionName is `<Iface>Model` — the option a consumer passes to the
 	// contract entry to run this tier. PropertyName is `<Iface>ModelProperty`,
@@ -184,6 +207,10 @@ type Bindings struct {
 	// key, which obliges the property to construct the fixture.
 	LawPools       []LawPool
 	LawsUseFixture bool
+
+	// UsesClock marks a clock-bound law in the set, which obliges the
+	// property to offer the ModelClocked option and guard those laws on it.
+	UsesClock bool
 
 	// ConcFamily picks the concurrent leg's model: empty for none, "kv" for
 	// the keyed-store pair, "lease" for the acquire/release table.
@@ -279,8 +306,23 @@ func (*Bindings) ModelPkg() string { return ModelPkg }
 // RefPkg returns the reference package's import path.
 func (*Bindings) RefPkg() string { return RefPkg }
 
-// TierName returns the path the tier reports under.
+// ClockPkg surfaces the test clock's import path to the templates.
+func (*Bindings) ClockPkg() string { return ClockPkg }
+
+// TierName returns the tier's base path.
 func (*Bindings) TierName() string { return TierName }
+
+// TierPath is the path this interface's run reports under: "model" where an
+// independent oracle stands opposite the subject, "model/twin" where the
+// subject's own factory is the floor — in the test output, because a weaker
+// claim a reader has to open a generated file to learn about is a claim
+// most readers hold wrong.
+func (b *Bindings) TierPath() string {
+	if b.Reference.Twin() {
+		return TierName + "/twin"
+	}
+	return TierName
+}
 
 // NeedsFixture reports whether anything in the property reads the fixture —
 // a pool, a fixture-anchored law closure, or a multi-argument writer's
@@ -571,17 +613,12 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Name, iface.Name, DirectiveName, suite.DirectiveName)
 			continue
 		}
-		if len(iface.TypeParams) > 0 {
-			// The property, the reference and the pools all land at concrete
-			// types, and nothing in the source names any.
-			ctx.Diag.Errorf(iface.Pos(),
-				"%s: interface %q is generic, and the model tier has no types to "+
-					"instantiate at; remove //testkit:%s",
-				Name, iface.Name, DirectiveName)
+		witnesses, usable := modelWitnesses(ctx, iface)
+		if !usable {
 			continue
 		}
 
-		b, ok := bindingsOf(ctx, c, iface, harness)
+		b, ok := bindingsOf(ctx, c, iface, harness, witnesses)
 		if !ok {
 			continue
 		}
@@ -711,12 +748,119 @@ func methodOf(harness *suite.Contract, name string) *suite.Method {
 
 // bindingsOf derives one interface's bindings, false where it reported why it
 // could not.
+// witnessedHarness rewrites a generic interface's projection at its
+// witnesses: every parameter and return naming a type parameter lands at the
+// concrete type, and the subject reference arrives instantiated. The
+// projection is the suite's emit value, shared with every plugin that reads
+// it, so the rewrite clones — methods, signatures and the subject alike —
+// and the non-generic path returns the harness untouched.
+func witnessedHarness(
+	harness *suite.Contract, iface *sdk.Interface, witnesses []sdk.Ref,
+) (*suite.Contract, map[string]string) {
+	by := golang.WitnessBindings(iface.TypeParams, witnesses)
+	if by == nil {
+		return harness, nil
+	}
+	clone := *harness
+	clone.IfaceRef = sdk.External(iface.Package, iface.Name, witnesses...)
+	methods := make([]suite.Method, len(harness.Methods))
+	for i := range harness.Methods {
+		m := harness.Methods[i]
+		sig := *m.Sig
+		params := make([]golang.Param, len(sig.Params))
+		for j, p := range sig.Params {
+			p.Type = golang.SubstituteTypeParams(p.Type, by)
+			params[j] = p
+		}
+		returns := make([]golang.Return, len(sig.Returns))
+		for j, r := range sig.Returns {
+			r.Type = golang.SubstituteTypeParams(r.Type, by)
+			returns[j] = r
+		}
+		sig.Params, sig.Returns = params, returns
+		m.Sig = &sig
+		methods[i] = m
+	}
+	clone.Methods = methods
+
+	q := make(map[string]string, len(by))
+	for name, ref := range by {
+		q[name] = witnessSpelling(ref)
+	}
+	return &clone, q
+}
+
+// witnessSpelling is a witness in the annotator's stamp vocabulary: bare for
+// a builtin, package-qualified for anything else — the same form
+// [golang.RefForQualified] lifts back into a reference.
+func witnessSpelling(r sdk.Ref) string {
+	if ext, qualified := r.(*sdk.ExternalRef); qualified {
+		return ext.Package + "." + ext.Name
+	}
+	if b, builtin := r.(*sdk.BuiltinRef); builtin {
+		return b.Name
+	}
+	return ""
+}
+
+// substQ rewrites a classification stamp's spelling at the witnesses: a
+// stamp naming a type parameter answers the concrete type the property runs
+// at, and every other spelling passes through untouched.
+func (b *Bindings) substQ(q string) string {
+	if w, bound := b.witnessQ[q]; bound {
+		return w
+	}
+	return q
+}
+
+// modelWitnesses resolves the concrete types a generic interface's property
+// runs at, or reports the interface unusable after diagnosing why.
+//
+// Required rather than derived: the stub's companion only has to compile, so
+// a derived palette serves it, but the property's pools, reference and laws
+// all assert THROUGH these types — a silent guess would change the claim.
+// Nothing here checks a witness satisfies its constraint; a wrong one is a
+// compile error naming the type in the generated file, which is the best
+// available outcome for a fact the generator cannot know.
+func modelWitnesses(ctx *sdk.GeneratorContext, iface *sdk.Interface) ([]sdk.Ref, bool) {
+	if len(iface.TypeParams) == 0 {
+		return nil, true
+	}
+	dir := iface.Directive(DirectiveName)
+	raw, given := "", false
+	if dir != nil {
+		raw, given = dir.KV[WitnessKey]
+	}
+	if !given {
+		ctx.Diag.Errorf(iface.Pos(),
+			"%s: interface %q is generic, and the property, the reference and "+
+				"the pools all land at concrete types; name them with %s= — one "+
+				"per type parameter, in declaration order",
+			Name, iface.Name, WitnessKey)
+		return nil, false
+	}
+	names := strings.Split(raw, ",")
+	if len(names) != len(iface.TypeParams) {
+		ctx.Diag.Errorf(iface.Pos(),
+			"%s: %s=%q on %s names %d types for %d type parameters; supply one per parameter",
+			Name, WitnessKey, raw, iface.Name, len(names), len(iface.TypeParams))
+		return nil, false
+	}
+	out := make([]sdk.Ref, 0, len(names))
+	for _, n := range names {
+		out = append(out, golang.RefFor(strings.TrimSpace(n), iface.Package))
+	}
+	return out, true
+}
+
 func bindingsOf(
 	ctx *sdk.GeneratorContext,
 	c *sdk.Provenance,
 	iface *sdk.Interface,
 	harness *suite.Contract,
+	witnesses []sdk.Ref,
 ) (*Bindings, bool) {
+	harness, witnessQ := witnessedHarness(harness, iface, witnesses)
 	b := &Bindings{
 		BaseEmit:       sdk.EmitBase(c, iface),
 		Subject:        harness.Subject,
@@ -726,6 +870,8 @@ func bindingsOf(
 		ConfigName:     strings.ToLower(harness.IfaceName[:1]) + harness.IfaceName[1:] + "ModelConfig",
 		EntryName:      harness.EntryName,
 		FixtureCtor:    harness.Fixture.CtorName,
+		Witnesses:      witnesses,
+		witnessQ:       witnessQ,
 	}
 
 	// Classification first, actions second: the values pool is one local, and
@@ -762,11 +908,11 @@ func bindingsOf(
 			}
 		}
 	}
-	valued := feederOf(keyed, collector, writers)
+	valued := feederOf(b, keyed, collector, writers)
 
 	valueQ := ""
 	if valued != nil {
-		valueQ, _ = shape.MetaValueType.Get(valued.Source.Meta())
+		valueQ, _ = b.valueQOf(valued)
 	}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
@@ -780,7 +926,7 @@ func bindingsOf(
 			continue
 		}
 		if a.Shape == shapeWriter && a.Pool == poolValues && m != valued {
-			if q, _ := shape.MetaValueType.Get(m.Source.Meta()); q != valueQ {
+			if q, _ := b.valueQOf(m); q != valueQ {
 				b.Skipped = append(b.Skipped, Skip{
 					Method: m.Name,
 					Reason: "takes " + q + " where the values pool draws " + valueQ,
@@ -1027,7 +1173,7 @@ func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action,
 	case "streamreader":
 		// The stream drains inside the closure, so the element type is the
 		// stamp's — nothing else states what the iterator yields.
-		q, stamped := shape.MetaValueType.Get(m.Source.Meta())
+		q, stamped := b.valueQOf(m)
 		if !stamped || q == "" {
 			return nil, "streams elements no stamp names"
 		}
@@ -1138,7 +1284,7 @@ func referenceOf(
 		// A value writer beside a collector, nothing keyed to read. The one
 		// agreement to check is that the writer adds what the collector
 		// returns.
-		wroteV, _ := shape.MetaValueType.Get(valued.Source.Meta())
+		wroteV, _ := b.valueQOf(valued)
 		elem := shape.QName(shape.GoSliceElem(collector.Returns[0].Source))
 		if wroteV == "" || wroteV != elem {
 			return twin("the drain returns " + elem + " where the writer adds " + wroteV)
@@ -1166,29 +1312,29 @@ func referenceOf(
 				names.KeyField = field
 				b.Keys.Type = keyRef
 				b.Reference = names
-				b.Adapter = adapterOf(harness, partners, OracleMap, wroteV)
+				b.Adapter = adapterOf(b, harness, partners, OracleMap, wroteV)
 				return true
 			}
 		}
 		names.Oracle = OracleCollection
 		names.Dedupe = dedupe
 		b.Reference = names
-		b.Adapter = adapterOf(harness, partners, OracleCollection, wroteV)
+		b.Adapter = adapterOf(b, harness, partners, OracleCollection, wroteV)
 		return true
 	}
 
 	if keyed != nil && composite != nil {
-		keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
-		readV, _ := shape.MetaValueType.Get(keyed.Source.Meta())
-		putK, _ := shape.MetaKeyType.Get(composite.Source.Meta())
-		putV, _ := shape.MetaValueType.Get(composite.Source.Meta())
+		keyQ, _ := b.keyQOf(keyed)
+		readV, _ := b.valueQOf(keyed)
+		putK, _ := b.keyQOf(composite)
+		putV, _ := b.valueQOf(composite)
 		if keyQ != putK || readV == "" || readV != putV {
 			return twin("the reader speaks (" + keyQ + " → " + readV +
 				") where the keyed writer takes (" + putK + ", " + putV + ")")
 		}
 		names.Oracle = OracleKeyed
 		b.Reference = names
-		b.Adapter = adapterOf(harness, partners, OracleKeyed, putV)
+		b.Adapter = adapterOf(b, harness, partners, OracleKeyed, putV)
 		return true
 	}
 
@@ -1196,9 +1342,9 @@ func referenceOf(
 		return twin("no reader/writer pair derives a store")
 	}
 
-	keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
-	readV, _ := shape.MetaValueType.Get(keyed.Source.Meta())
-	wroteV, _ := shape.MetaValueType.Get(valued.Source.Meta())
+	keyQ, _ := b.keyQOf(keyed)
+	readV, _ := b.valueQOf(keyed)
+	wroteV, _ := b.valueQOf(valued)
 	if readV == "" || readV != wroteV {
 		return twin("the reader answers " + readV + " where the writer takes " + wroteV)
 	}
@@ -1219,7 +1365,7 @@ func referenceOf(
 		}
 	}
 	b.Reference = names
-	b.Adapter = adapterOf(harness, partners, OracleMap, readV)
+	b.Adapter = adapterOf(b, harness, partners, OracleMap, readV)
 	return true
 }
 
@@ -1492,13 +1638,15 @@ func keyFieldOf(ctx *sdk.GeneratorContext, valueQ, keyQ string) (string, string)
 // matching operation or holds an inert body. valueQ is the value spelling the
 // oracle models — a writer of any other type stays inert, because forwarding
 // it would hand the store a value its element clause refuses to compile.
-func adapterOf(harness *suite.Contract, partners map[string]string, oracle Oracle, valueQ string) []AdapterMethod {
+func adapterOf(
+	b *Bindings, harness *suite.Contract, partners map[string]string, oracle Oracle, valueQ string,
+) []AdapterMethod {
 	out := make([]AdapterMethod, 0, len(harness.Methods))
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		am := AdapterMethod{Sig: m.Sig}
 		op, fromMixin := oracleOp(oracle, m)
-		wroteQ, _ := shape.MetaValueType.Get(m.Source.Meta())
+		wroteQ, _ := b.valueQOf(m)
 		switch role, partner := partners[m.Name]; {
 		case partner:
 			am.Reason = role
@@ -1566,7 +1714,7 @@ func poolsOf(
 	switch {
 	case keyed != nil:
 		arg := keyed.CallArgs()[0]
-		keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
+		keyQ, _ := b.keyQOf(keyed)
 		b.Keys = Pool{
 			Field:      keyed.ArgFields[0],
 			OtherField: keyed.ArgFields[0] + suite.OtherSuffix,
@@ -1577,7 +1725,7 @@ func poolsOf(
 		// A keyed writer with no reader still draws keys; its own first
 		// argument's fixture pair is the pool.
 		arg := composite.CallArgs()[0]
-		keyQ, _ := shape.MetaKeyType.Get(composite.Source.Meta())
+		keyQ, _ := b.keyQOf(composite)
 		b.Keys = Pool{
 			Field:      composite.ArgFields[0],
 			OtherField: composite.ArgFields[0] + suite.OtherSuffix,
@@ -1588,7 +1736,7 @@ func poolsOf(
 	switch {
 	case composite != nil:
 		arg := composite.CallArgs()[1]
-		valueQ, _ := shape.MetaValueType.Get(composite.Source.Meta())
+		valueQ, _ := b.valueQOf(composite)
 		b.Values = Pool{
 			Field:      composite.ArgFields[1],
 			OtherField: composite.ArgFields[1] + suite.OtherSuffix,
@@ -1597,7 +1745,7 @@ func poolsOf(
 		}
 	case valued != nil:
 		arg := valued.CallArgs()[0]
-		valueQ, _ := shape.MetaValueType.Get(valued.Source.Meta())
+		valueQ, _ := b.valueQOf(valued)
 		b.Values = Pool{
 			Field:      valued.ArgFields[0],
 			OtherField: valued.ArgFields[0] + suite.OtherSuffix,
@@ -1629,9 +1777,9 @@ func poolsOf(
 func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite *suite.Method) {
 	pin := b.Reference.KeyField
 	if pin == "" && !b.Reference.Derived() && keyed != nil && valued != nil && composite == nil {
-		keyQ, _ := shape.MetaKeyType.Get(keyed.Source.Meta())
-		readV, _ := shape.MetaValueType.Get(keyed.Source.Meta())
-		wroteV, _ := shape.MetaValueType.Get(valued.Source.Meta())
+		keyQ, _ := b.keyQOf(keyed)
+		readV, _ := b.valueQOf(keyed)
+		wroteV, _ := b.valueQOf(valued)
 		if readV != "" && readV == wroteV {
 			pin, _ = keyFieldOf(ctx, readV, keyQ)
 		}
@@ -1686,7 +1834,7 @@ func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *suite.Contract
 				return true
 			}
 		}
-		if q, ok := shape.MetaValueType.Get(m.Source.Meta()); ok && q != "" {
+		if q, ok := b.valueQOf(m); ok && q != "" {
 			valueQ = q
 		}
 	}
@@ -1740,7 +1888,7 @@ func unmakeable(ctx *sdk.GeneratorContext, typeQ string, seen map[string]bool) s
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var scalarKinds = map[string]bool{
 	"bool": true, builtinString: true, "byte": true, "rune": true,
-	"int": true, "int8": true, "int16": true, "int32": true, "int64": true,
+	builtinInt: true, "int8": true, "int16": true, "int32": true, "int64": true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"uintptr": true, "float32": true, "float64": true,
 }
@@ -1749,20 +1897,20 @@ var scalarKinds = map[string]bool{
 // with the reader — or, with no reader, with the collector's element — else
 // the first in declaration order, so the choice never depends on where a
 // method sits in the source.
-func feederOf(keyed, collector *suite.Method, writers []*suite.Method) *suite.Method {
+func feederOf(b *Bindings, keyed, collector *suite.Method, writers []*suite.Method) *suite.Method {
 	if len(writers) == 0 {
 		return nil
 	}
 	want := ""
 	switch {
 	case keyed != nil:
-		want, _ = shape.MetaValueType.Get(keyed.Source.Meta())
+		want, _ = b.valueQOf(keyed)
 	case collector != nil:
 		want = shape.QName(shape.GoSliceElem(collector.Returns[0].Source))
 	}
 	if want != "" {
 		for _, w := range writers {
-			if q, _ := shape.MetaValueType.Get(w.Source.Meta()); q == want {
+			if q, _ := b.valueQOf(w); q == want {
 				return w
 			}
 		}
@@ -1820,4 +1968,21 @@ func directiveValue(iface *sdk.Interface, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// keyQOf reads a method's key-type stamp through the witness substitution:
+// the annotator spells a type parameter by its bare name, and the property
+// runs at the concrete type the source pinned. The stamped flag mirrors the
+// meta read for the sites that distinguish absent from empty.
+//
+//nolint:unparam // mirrors valueQOf; callers today read only the spelling
+func (b *Bindings) keyQOf(m *suite.Method) (string, bool) {
+	q, stamped := shape.MetaKeyType.Get(m.Source.Meta())
+	return b.substQ(q), stamped
+}
+
+// valueQOf is [Bindings.keyQOf] for the value-type stamp.
+func (b *Bindings) valueQOf(m *suite.Method) (string, bool) {
+	q, stamped := shape.MetaValueType.Get(m.Source.Meta())
+	return b.substQ(q), stamped
 }

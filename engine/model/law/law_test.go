@@ -394,7 +394,7 @@ func TestCRDTMergeBranches(t *testing.T) {
 		l := mk(unionMerge)
 		l.Write = func(*rapid.T, *replica, string) error { return errors.New("read-only") }
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition: %v", err)
 			}
 		})
@@ -413,7 +413,7 @@ func TestCRDTMergeBranches(t *testing.T) {
 			return unionMerge(rt, dst, src)
 		})
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused reverse merge is a precondition: %v", err)
 			}
 		})
@@ -443,7 +443,7 @@ func TestCRDTMergeBranches(t *testing.T) {
 		t.Parallel()
 		l := mk(func(*rapid.T, *replica, *replica) error { return errors.New("no merge") })
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused merge is a precondition: %v", err)
 			}
 		})

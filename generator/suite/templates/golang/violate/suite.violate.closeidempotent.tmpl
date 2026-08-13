@@ -1,0 +1,25 @@
+{{- /*
+A teardown that counts its calls and refuses the second — the exact defect a
+deferred double-close meets in the wild.
+*/ -}}
+{{- define "suite.violate.closeidempotent" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in closes cleanly once and refuses every call after, which is the
+// subject the second-call claim exists to reject.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	closes := 0
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			closes++
+			if closes > 1 {
+				return {{ renderExpr (external "errors" "New") }}("violate: already closed")
+			}
+			return nil
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

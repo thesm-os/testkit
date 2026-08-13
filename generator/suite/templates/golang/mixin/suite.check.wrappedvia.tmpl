@@ -1,8 +1,8 @@
 {{- /*
 Conditional on there being a cause. A subject with nothing wrong has no wrapped
 error to show, and demanding one would fail an implementation that is simply
-healthy — so the cause is asked first and the claim made only when there is
-something to wrap.
+healthy — so the cause is asked first, and a healthy subject is a visible skip
+rather than a green line claiming a comparison that never happened.
 */ -}}
 {{- define "suite.check.wrappedvia" -}}
 {{ $m := .Method }}
@@ -22,7 +22,9 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	cause := subject.{{ $p.Name }}({{ template "suite.partnerargs" $ }})
 	if cause == nil {
 		// Nothing to wrap, so nothing to claim. A subject in good health is not
-		// a subject in breach.
+		// a subject in breach — and the skip says the claim went unexercised.
+		tb.Skipf("{{ $p.Name }} reports no cause; nothing this run does makes " +
+			"{{ $m.Name }} fail, so the wrapping claim goes unexercised")
 		return
 	}
 

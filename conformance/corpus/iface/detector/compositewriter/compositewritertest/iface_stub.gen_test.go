@@ -19,68 +19,69 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
-// compositeWriterStubStoreSubject binds Store into the shape
+// compositeWriterStubSetSubject binds Set into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
 //
 // Each call builds a fresh double, because several of the checks assert on
 // failure and need one bound to a failable TB rather than to the running
 // test.
-func compositeWriterStubStoreSubject(tb testing.TB) stub.Subject[compositewritertest.CompositeWriterStoreCall, compositewritertest.CompositeWriterStoreReturn] {
+func compositeWriterStubSetSubject(tb testing.TB) stub.Subject[compositewritertest.CompositeWriterSetCall, compositewritertest.CompositeWriterSetReturn] {
 	tb.Helper()
 	s := compositewritertest.NewCompositeWriterStub(tb)
-	return stub.Subject[compositewritertest.CompositeWriterStoreCall, compositewritertest.CompositeWriterStoreReturn]{
-		Stub: s.OnStore.MethodStub,
+	return stub.Subject[compositewritertest.CompositeWriterSetCall, compositewritertest.CompositeWriterSetReturn]{
+		Stub: s.OnSet.MethodStub,
 		Call: func() {
 			var a0 context.Context
-			var a1 compositewriter.Value
-			_, _ = s.Store(a0, a1)
+			var a1 string
+			var a2 compositewriter.Value
+			_ = s.Set(a0, a1, a2)
 		},
-		Result: func() compositewritertest.CompositeWriterStoreReturn {
+		Result: func() compositewritertest.CompositeWriterSetReturn {
 			var a0 context.Context
-			var a1 compositewriter.Value
-			got0, got1 := s.Store(a0, a1)
-			return compositewritertest.CompositeWriterStoreReturn{Result: got0, Err: got1}
+			var a1 string
+			var a2 compositewriter.Value
+			got0 := s.Set(a0, a1, a2)
+			return compositewritertest.CompositeWriterSetReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnStore.Func(func(_ context.Context, _ compositewriter.Value) (compositewriter.Value, error) {
+			s.OnSet.Func(func(_ context.Context, _ string, _ compositewriter.Value) error {
 				mark()
-				var z0 compositewriter.Value
-				var z1 error
-				return z0, z1
+				var z0 error
+				return z0
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
-			var a1 compositewriter.Value
-			_, r1 := s.Store(a0, a1)
-			return r1
+			var a1 string
+			var a2 compositewriter.Value
+			r0 := s.Set(a0, a1, a2)
+			return r0
 		},
 	}
 }
 
-// TestCompositeWriterStubStore pins how Store answers.
+// TestCompositeWriterStubSet pins how Set answers.
 //
 // Recording, resetting, call-count expectations, strict mode, fault injection
 // and zero-value dispatch are the same contract for every method, so they are
 // asserted once in [stub.Behaviour] rather than restated here. What remains
 // below needs a value this method's signature can tell apart from a zero one.
-func TestCompositeWriterStubStore(t *testing.T) {
+func TestCompositeWriterStubSet(t *testing.T) {
 	t.Parallel()
 
-	stub.Behaviour(t, "Store", compositeWriterStubStoreSubject)
+	stub.Behaviour(t, "Set", compositeWriterStubSetSubject)
 
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := compositewritertest.NewCompositeWriterStub(t)
-		var want0 compositewriter.Value
-		var want1 error
-		s.OnStore.Returns(want0, want1)
+		var want0 error
+		s.OnSet.Returns(want0)
 		var a0 context.Context
-		var a1 compositewriter.Value
-		got0, got1 := s.Store(a0, a1)
-		testkit.Equal(t, got0, want0, "Store must answer with what Returns pinned")
-		testkit.Equal(t, got1, want1, "Store must answer with what Returns pinned")
+		var a1 string
+		var a2 compositewriter.Value
+		got0 := s.Set(a0, a1, a2)
+		testkit.Equal(t, got0, want0, "Set must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -89,11 +90,13 @@ func TestCompositeWriterStubStore(t *testing.T) {
 		// most needs the log to surface.
 		s := compositewritertest.NewCompositeWriterStub(t)
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, _ = s.Store(a0, a1)
-		got := s.OnStore.AssertCalledOnce(t, "Store must record the call")
+		var a1 string
+		var a2 compositewriter.Value
+		_ = s.Set(a0, a1, a2)
+		got := s.OnSet.AssertCalledOnce(t, "Set must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
-		testkit.Equal(t, got.V, a1, "the recorded call carries V")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.V, a2, "the recorded call carries V")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -102,28 +105,29 @@ func TestCompositeWriterStubStore(t *testing.T) {
 		// concurrency test observes progress with — polling the log instead
 		// races the thing under test.
 		s := compositewritertest.NewCompositeWriterStub(t)
-		var seen []compositewritertest.CompositeWriterStoreCall
-		s.OnStore.OnRecord(func(c compositewritertest.CompositeWriterStoreCall) { seen = append(seen, c) })
+		var seen []compositewritertest.CompositeWriterSetCall
+		s.OnSet.OnRecord(func(c compositewritertest.CompositeWriterSetCall) { seen = append(seen, c) })
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, _ = s.Store(a0, a1)
-		_, _ = s.Store(a0, a1)
-		testkit.Len(t, seen, 2, "OnRecord must fire once per Store call")
+		var a1 string
+		var a2 compositewriter.Value
+		_ = s.Set(a0, a1, a2)
+		_ = s.Set(a0, a1, a2)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Set call")
 	})
 
-	t.Run("wires WithCompositeWriterStore at construction", func(t *testing.T) {
+	t.Run("wires WithCompositeWriterSet at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := compositewritertest.NewCompositeWriterStub(t, compositewritertest.WithCompositeWriterStore(func(_ context.Context, _ compositewriter.Value) (compositewriter.Value, error) {
+		s := compositewritertest.NewCompositeWriterStub(t, compositewritertest.WithCompositeWriterSet(func(_ context.Context, _ string, _ compositewriter.Value) error {
 			called = true
-			var z0 compositewriter.Value
-			var z1 error
-			return z0, z1
+			var z0 error
+			return z0
 		}))
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, _ = s.Store(a0, a1)
-		testkit.True(t, called, "WithCompositeWriterStore must install the override")
+		var a1 string
+		var a2 compositewriter.Value
+		_ = s.Set(a0, a1, a2)
+		testkit.True(t, called, "WithCompositeWriterSet must install the override")
 	})
 
 	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
@@ -132,51 +136,51 @@ func TestCompositeWriterStubStore(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := compositewritertest.NewCompositeWriterStub(t)
-		var want0 compositewriter.Value
-		var want1 error
-		s.OnStore.Returns(want0, want1)
+		var want0 error
+		s.OnSet.Returns(want0)
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, _ = s.Store(a0, a1)
+		var a1 string
+		var a2 compositewriter.Value
+		_ = s.Set(a0, a1, a2)
 		s.ResetCalls()
-		got0, got1 := s.Store(a0, a1)
+		got0 := s.Set(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
-		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
 }
 
 // compositeWriterStubDouble describes how to build a CompositeWriterStub under each
 // option whose effect is the same whatever a method's signature.
 //
-// Store stands in for the double as a whole: what these checks assert
+// Set stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func compositeWriterStubDouble() stub.Double[compositewritertest.CompositeWriterStoreCall] {
-	instance := func(s *compositewritertest.CompositeWriterStub) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
-		return stub.Instance[compositewritertest.CompositeWriterStoreCall]{
-			Stub: s.OnStore.MethodStub,
+func compositeWriterStubDouble() stub.Double[compositewritertest.CompositeWriterSetCall] {
+	instance := func(s *compositewritertest.CompositeWriterStub) stub.Instance[compositewritertest.CompositeWriterSetCall] {
+		return stub.Instance[compositewritertest.CompositeWriterSetCall]{
+			Stub: s.OnSet.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				var a1 compositewriter.Value
-				_, _ = s.Store(a0, a1)
+				var a1 string
+				var a2 compositewriter.Value
+				_ = s.Set(a0, a1, a2)
 			},
 			Reset: s.ResetCalls,
 		}
 	}
-	return stub.Double[compositewritertest.CompositeWriterStoreCall]{
-		New: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
+	return stub.Double[compositewritertest.CompositeWriterSetCall]{
+		New: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterSetCall] {
 			return instance(compositewritertest.NewCompositeWriterStub(tb))
 		},
-		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[compositewritertest.CompositeWriterSetCall] {
 			return instance(compositewritertest.NewCompositeWriterStub(tb, compositewritertest.CompositeWriterStubWithClock(clk)))
 		},
-		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[compositewritertest.CompositeWriterSetCall] {
 			return instance(compositewritertest.NewCompositeWriterStub(tb, compositewritertest.CompositeWriterStubWithRandSource(src)))
 		},
-		BenchMode: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
+		BenchMode: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterSetCall] {
 			return instance(compositewritertest.NewCompositeWriterStub(tb, compositewritertest.CompositeWriterStubBenchMode()))
 		},
-		Strict: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterStoreCall] {
+		Strict: func(tb testing.TB) stub.Instance[compositewritertest.CompositeWriterSetCall] {
 			return instance(compositewritertest.NewCompositeWriterStub(tb, compositewritertest.CompositeWriterStubStrict()))
 		},
 	}
@@ -202,25 +206,27 @@ func TestCompositeWriterStubDelegateTo(t *testing.T) {
 	inner := compositewritertest.NewCompositeWriterStub(t)
 	s := compositewritertest.NewCompositeWriterStub(t, compositewritertest.CompositeWriterStubDelegateTo(inner))
 
-	t.Run("forwards Store to the wrapped implementation", func(t *testing.T) {
+	t.Run("forwards Set to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, _ = s.Store(a0, a1)
-		inner.OnStore.AssertCalledOnce(t, "Store must reach the wrapped implementation")
+		var a1 string
+		var a2 compositewriter.Value
+		_ = s.Set(a0, a1, a2)
+		inner.OnSet.AssertCalledOnce(t, "Set must reach the wrapped implementation")
 	})
 
-	t.Run("surfaces what Store answered", func(t *testing.T) {
+	t.Run("surfaces what Set answered", func(t *testing.T) {
 		// Reaching the wrapped implementation is not enough: a double that
 		// called through and then discarded the answer would pass the check
 		// above while telling its caller nothing true.
-		want := testkit.TestError("Store-delegate")
-		inner.OnStore.FaultsFor(time.Hour, want)
+		want := testkit.TestError("Set-delegate")
+		inner.OnSet.FaultsFor(time.Hour, want)
 		var a0 context.Context
-		var a1 compositewriter.Value
-		_, r1 := s.Store(a0, a1)
-		testkit.ErrorIs(t, r1, want, "Store must surface the wrapped answer")
+		var a1 string
+		var a2 compositewriter.Value
+		r0 := s.Set(a0, a1, a2)
+		testkit.ErrorIs(t, r0, want, "Set must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance da3277bac41596a014a1bda1cb89f810f69a4c85c4d4e67094bba19359720dca
+// testkit:provenance 6520e56b798f7cb8c42bf4075b08851dc1a9dd2270652fa0d95209526f941719

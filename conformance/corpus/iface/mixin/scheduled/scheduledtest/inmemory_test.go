@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/scheduled"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/scheduled/scheduledtest"
 )
@@ -17,6 +18,9 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	scheduledtest.AssertMixedContract(t,
+		scheduledtest.MixedModel(scheduledtest.MixedModelClocked(
+			func(clk *clock.TestClock) scheduled.Mixed { return scheduledtest.NewInMemoryOn(clk) },
+		)),
 		scheduledtest.MixedSubject("in-memory", func() scheduled.Mixed {
 			return scheduledtest.NewInMemory()
 		}),

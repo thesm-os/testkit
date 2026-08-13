@@ -19,14 +19,14 @@ func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 	cause := {{ renderExpr (external "errors" "New") }}("the cause the subject reports")
 	unrelated := {{ renderExpr (external "errors" "New") }}("something else entirely")
 
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 {{- range $m.ValueReturns }}
 			var {{ .Local }} {{ renderType .Type }}
 {{- end }}
 			return {{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}unrelated{{ else }}{{ $r.Local }}{{ end }}{{ end }}
 		}),
-		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
 			return cause
 		}))
 

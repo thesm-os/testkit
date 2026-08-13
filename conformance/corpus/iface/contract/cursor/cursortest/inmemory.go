@@ -14,13 +14,12 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/cursor"
 )
 
-// ErrClosed reports a read from a cursor that has been closed.
+// The subject reports the contract's own sentinel; see [cursor.ErrClosed].
 //
 // An error rather than a quiet exhaustion, because the two mean different
 // things to the caller: exhausted is "you have everything", closed is "you gave
 // up the right to ask". A cursor reporting the first for the second hides a
 // bug in the caller's own control flow.
-var ErrClosed = errors.New("cursortest: cursor is closed")
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
@@ -52,7 +51,7 @@ func (s *InMemory) Next(ctx context.Context) (cursor.Value, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
-		return cursor.Value{}, false, ErrClosed
+		return cursor.Value{}, false, cursor.ErrClosed
 	}
 	if s.at >= len(s.values) {
 		return cursor.Value{}, false, nil

@@ -1,0 +1,11 @@
+{{- /*
+The keyed write over a value that carries its key: the drawn key pins into
+the drawn value's own field — the same pinning the pools do — and the put
+takes the value whole.
+*/ -}}
+{{- define "model.lawfield.PinnedWrite" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}, v {{ renderType .In }}) error {
+			v.{{ .KeyField }} = k
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
+		}
+{{- end -}}

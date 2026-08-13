@@ -12,6 +12,7 @@ import (
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/engine/model/timeaware"
 )
 
@@ -179,7 +180,7 @@ func TestTTLExpiryAfterAdvanceBranches(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			s := fresh()
 			s.putErr = errors.New("read-only")
-			if err := mk(s, time.Second).Check(rt, s, s); err != nil {
+			if err := mk(s, time.Second).Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition: %v", err)
 			}
 		})

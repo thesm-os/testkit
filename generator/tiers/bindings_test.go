@@ -39,3 +39,26 @@ func TestBoundNamesDeclaredLaws(t *testing.T) {
 	}
 	testkit.True(t, slices.IsSorted(tiers.Bound()), "and the listing is sorted")
 }
+
+// TestBindArgQualifier pins the argument vocabulary's two halves: the four
+// field-qualified forms split into form and field, and the bare pool
+// spellings stay whole.
+func TestBindArgQualifier(t *testing.T) {
+	t.Parallel()
+
+	for arg, want := range map[tiers.BindArg][2]string{
+		tiers.ResultOf("Next"):  {"result", "Next"},
+		tiers.InputOf("Write"):  {"input", "Write"},
+		tiers.ElemOf("Drain"):   {"elem", "Drain"},
+		tiers.ScalarOf("Count"): {"scalar", "Count"},
+	} {
+		form, field, ok := arg.Qualifier()
+		testkit.True(t, ok, string(arg)+" is field-qualified")
+		testkit.Equal(t, form, want[0], string(arg)+"'s form")
+		testkit.Equal(t, field, want[1], string(arg)+"'s field")
+	}
+	for _, bare := range []tiers.BindArg{tiers.BindKey, tiers.BindValue, tiers.BindObservation, tiers.BindPartition} {
+		_, _, ok := bare.Qualifier()
+		testkit.False(t, ok, string(bare)+" is a bare pool spelling")
+	}
+}

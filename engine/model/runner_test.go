@@ -825,3 +825,99 @@ func TestWithSaturationThreshold(t *testing.T) {
 		t.Fatal("a configured state hash must produce state-space coverage")
 	}
 }
+
+// --- Isolated-law walk ---
+
+// isoProbe is a marker-carrying law: the runner must route it to a throwaway
+// pair once per iteration and keep it off the shared per-step walk.
+type isoProbe struct {
+	id    string
+	calls *int
+	err   error
+}
+
+func (isoProbe) IsolatedLaw()  {}
+func (l isoProbe) ID() string  { return l.id }
+func (isoProbe) REQID() string { return "" }
+func (l isoProbe) Check(_ *rapid.T, _, _ storeIface) error {
+	*l.calls++
+	return l.err
+}
+
+func TestIsolatedLawRunsOnItsOwnPair(t *testing.T) {
+	t.Parallel()
+
+	var checks, vacuous, steps int
+	model.Assert(
+		t,
+		func() storeIface { return newStore() },
+		model.WithReference(func() storeIface { return newStore() }),
+		model.WithActions(
+			action.Writer("Put", itemGen, func(ctx context.Context, s storeIface, v item) error {
+				steps++
+				return s.Put(ctx, v)
+			}),
+		),
+		model.WithLaw(isoProbe{id: "TEST-ISOLATED", calls: &checks}),
+		model.WithLaw(isoProbe{id: "TEST-ISOLATED-VACUOUS", calls: &vacuous, err: law.Vacuous}),
+	)
+	if checks == 0 {
+		t.Fatal("the isolated walk must run the marked law")
+	}
+	if vacuous == 0 {
+		t.Fatal("a vacuous isolated law still runs; only its verdict is counted apart")
+	}
+	// Once per iteration, never per step: a per-step isolated walk would
+	// check at least as often as the actions ran.
+	if steps > 0 && checks >= steps+checks/2 {
+		t.Fatalf("the isolated walk ran %d times against %d steps — it must be once per iteration", checks, steps)
+	}
+}
+
+func TestIsolatedLawViolationFails(t *testing.T) {
+	t.Parallel()
+
+	var checks int
+	ft := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		model.Assert(
+			ft,
+			func() storeIface { return newStore() },
+			model.WithReference(func() storeIface { return newStore() }),
+			model.WithActions(
+				action.Writer("Put", itemGen, storePut),
+			),
+			model.WithLaw(isoProbe{id: "TEST-ISOLATED-BROKEN", calls: &checks, err: errors.New("the ritual failed")}),
+		)
+	}()
+	<-done
+	if !ft.Failed() {
+		t.Fatal("an isolated law's violation must fail the run")
+	}
+}
+
+// vacuousLaw always declines — the shared walk's counterpart of the isolated
+// vacuous case, driving the registry's census through the runner.
+type vacuousLaw struct{}
+
+func (vacuousLaw) ID() string    { return "TEST-VACUOUS" }
+func (vacuousLaw) REQID() string { return "" }
+func (vacuousLaw) Check(_ *rapid.T, _, _ storeIface) error {
+	return law.Vacuous
+}
+
+func TestVacuousLawIsCountedApartFromAPass(t *testing.T) {
+	t.Parallel()
+
+	model.Assert(
+		t,
+		func() storeIface { return newStore() },
+		model.WithReference(func() storeIface { return newStore() }),
+		model.WithActions(
+			action.Writer("Put", itemGen, storePut),
+		),
+		model.WithLaw(vacuousLaw{}),
+	)
+}

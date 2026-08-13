@@ -332,7 +332,7 @@ func TestEventualConvergencePreconditions(t *testing.T) {
 			Merge:    mergeSorted,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition: %v", err)
 			}
 		})
@@ -352,7 +352,7 @@ func TestEventualConvergencePreconditions(t *testing.T) {
 			Merge:    mergeSorted,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused Sync is a precondition: %v", err)
 			}
 		})

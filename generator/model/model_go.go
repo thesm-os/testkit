@@ -53,6 +53,12 @@ const (
 	RefPkg = ModelPkg + "/ref"
 	LawPkg = ModelPkg + "/law"
 
+	// TimeawarePkg is where the clock-shaped laws live, boxed apart because
+	// their checks read time; ClockPkg is the deterministic clock the
+	// ModelClocked option threads through the factory and every Advance.
+	TimeawarePkg = ModelPkg + "/timeaware"
+	ClockPkg     = "go.thesmos.sh/testkit/clock"
+
 	// LinearizePkg holds the Porcupine models and the concurrent action
 	// helpers the derived concurrent leg wires.
 	LinearizePkg = ModelPkg + "/linearize"

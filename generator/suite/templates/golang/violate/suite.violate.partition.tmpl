@@ -21,12 +21,12 @@ func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 	// One slot for every partition, which is the whole of the violation.
 	var flat {{ renderType (index $p.ValueReturns 0).Type }}
 
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.namedparams" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.namedparams" $m }}){{ template "suite.violate.results" $m }} {
 			flat = {{ .Check.CompareAgainst }}
 			return nil
 		}),
-		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
 			return flat, nil
 		}))
 

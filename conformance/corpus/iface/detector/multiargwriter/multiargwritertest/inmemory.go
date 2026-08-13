@@ -27,16 +27,17 @@ var _ multiargwriter.MultiArgWriter = (*InMemory)(nil)
 // NewInMemory returns an empty store.
 func NewInMemory() *InMemory { return &InMemory{values: map[string]string{}} }
 
-// Set spreads the value across parameters rather than taking a struct, which is
-// the only thing separating this shape from [writer] — and the harness seeds
-// through it either way, because arity is not something a seed has to know.
-func (s *InMemory) Set(ctx context.Context, key, body string) error {
+// Set spreads the value across three parameters rather than taking a struct —
+// past the composite pair, into the boundary the fixture's directory names.
+// The harness seeds through it either way, because arity is not something a
+// seed has to know.
+func (s *InMemory) Set(ctx context.Context, key, body, mime string) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.values[key] = body
+	s.values[key] = mime + ":" + body
 	return nil
 }
 

@@ -279,8 +279,28 @@ func TestDiagnostics(t *testing.T) {
 		plugintest.Generate(t, suite.New(), s)
 		got := plugintest.Generate(t, model.New(), s).Diagnostics()
 		testkit.Equal(t, len(got), 1, "one diagnostic")
-		testkit.Assert(t, got[0].Message).Contains("generic",
-			"the property and the reference land at concrete types")
+		testkit.Assert(t, got[0].Message).Contains("witness=",
+			"the property and the reference land at concrete types, and the key names them")
+	})
+
+	t.Run("a witness list disagreeing with the parameter list", func(t *testing.T) {
+		t.Parallel()
+		s := genericFixture(t, storefixture.KV(model.WitnessKey, "string,int"))
+		plugintest.Generate(t, suite.New(), s)
+		got := plugintest.Generate(t, model.New(), s).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("one per parameter",
+			"a partial list would leave the generator guessing which position it means")
+	})
+
+	t.Run("a witnessed generic interface emits at the witnesses", func(t *testing.T) {
+		t.Parallel()
+		s := genericFixture(t, storefixture.KV(model.WitnessKey, "int"))
+		plugintest.Generate(t, suite.New(), s)
+		res := plugintest.Generate(t, model.New(), s)
+		testkit.Equal(t, len(res.Diagnostics()), 0, "the witness answers the refusal")
+		b := bindingsOf(t, s)
+		testkit.Equal(t, len(b.Witnesses), 1, "and the emission carries it")
 	})
 
 	t.Run("a qualified ref constructor", func(t *testing.T) {
@@ -826,6 +846,40 @@ func generateBoth(t *testing.T, s *sdk.Store) *diag.Sink {
 // mixed is the corpus fixture in store form, stamped the way the annotator
 // stamps it: a writer carrying the validates mixin, the validator it names,
 // and a reader.
+// genericFixture is a one-parameter generic store, its model directive
+// carrying whatever the case supplies — the witness key or nothing.
+func genericFixture(t *testing.T, opts ...storefixture.DirectiveOption) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("gen", "example.com/gen").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("gen/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model", opts...))
+			i.TypeParam("V", nil)
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.TypeParamRef("V"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Param("v", storefixture.TypeParamRef("V"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+
+	// Stamped the way the annotator stamps a generic pair: the parameter's
+	// bare name is the value spelling, which is exactly what the witness
+	// substitution rewrites.
+	stampShape(s, "Get", "reader", "string", "V")
+	stampShape(s, "Put", "compositewriter", "string", "V")
+	return s
+}
+
 func mixed(t *testing.T, opts ...storefixture.DirectiveOption) *sdk.Store {
 	t.Helper()
 	return mixedWith(t, nil, opts...)

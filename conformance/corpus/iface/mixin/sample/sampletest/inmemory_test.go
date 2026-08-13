@@ -37,7 +37,6 @@ func TestMixedContract(t *testing.T) {
 		// builder. Both checks below reach Process through NewInput instead.
 		sampletest.MixedWithout(
 			"Process/smoke",
-			"Process/an error carries the zero value",
 		),
 		sampletest.MixedOnProcess("refuses an input the builder did not produce", func(
 			tb testing.TB, subject sample.Mixed, input string,
@@ -62,7 +61,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		}),
 		sampletest.MixedWithout(
 			"Process/smoke",
-			"Process/an error carries the zero value",
 		),
 		sampletest.MixedWithoutDouble(),
 	)

@@ -133,7 +133,6 @@ func TestComposedContractWithoutTheDouble(t *testing.T) {
 			testkit.NoError(tb, err, "a seeded identifier is found")
 			testkit.Equal(tb, got, "seeded", "and carries what was written")
 		}),
-		embeddedtest.ComposedWithout("Get/an error carries the zero value"),
 		embeddedtest.ComposedWithoutDouble(),
 	)
 }

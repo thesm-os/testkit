@@ -109,7 +109,7 @@ func (l EventualConvergence[T, V, S]) Check(rt *rapid.T, _, _ T) error {
 		v := l.Values.Draw(rt, fmt.Sprintf("EventualConvergence_v%d", i))
 		dst := rapid.IntRange(0, n-1).Draw(rt, fmt.Sprintf("EventualConvergence_dst%d", i))
 		if err := l.Write(rt, replicas[dst], v); err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 	}
 	if l.Settle != nil {
@@ -120,7 +120,7 @@ func (l EventualConvergence[T, V, S]) Check(rt *rapid.T, _, _ T) error {
 		pre[i] = l.Snapshot(rt, r)
 	}
 	if err := l.Sync(rt, replicas); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	post := make([]S, n)
 	for i, r := range replicas {

@@ -10,5 +10,4 @@ it describes how the current tree relates to the previous one.
 | Note | Answers |
 |---|---|
 | [classification-map.md](classification-map.md) | Does every classification testkit had exist in eidos, and on which axis? |
-| [generated-suite-audit.md](generated-suite-audit.md) | Do the generated suites assert what the classifications claim, and where do the tiers fail to deliver? |
 | [helper-surface.md](helper-surface.md) | Which testkit helpers does generated output reach, and what should change? |

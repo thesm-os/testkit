@@ -20,11 +20,6 @@ func TestContractContract(t *testing.T) {
 		codeclossytest.ContractSubject("in-memory", func() codeclossy.Contract {
 			return codeclossytest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: the fold encodes every string and
-		// the identity decodes every one, so neither role has an input it
-		// refuses — the zero-on-error checks have no miss to find.
-		codeclossytest.ContractWithout("Encode/an error carries the zero value"),
-		codeclossytest.ContractWithout("Decode/an error carries the zero value"),
 		codeclossytest.ContractOnDecode("agrees with itself on the second pass", func(
 			tb testing.TB, subject codeclossy.Contract, in string,
 		) {
@@ -53,8 +48,6 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		codeclossytest.ContractSubject("in-memory", func() codeclossy.Contract {
 			return codeclossytest.NewInMemory()
 		}),
-		codeclossytest.ContractWithout("Encode/an error carries the zero value"),
-		codeclossytest.ContractWithout("Decode/an error carries the zero value"),
 		codeclossytest.ContractWithoutDouble(),
 	)
 }

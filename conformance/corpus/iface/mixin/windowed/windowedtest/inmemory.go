@@ -31,6 +31,14 @@ type InMemory struct {
 
 var _ windowed.Mixed = (*InMemory)(nil)
 
+// NewInMemoryOn returns a counter reading the supplied clock — the door the
+// generated ModelClocked option opens.
+func NewInMemoryOn(clk clock.Clock) *InMemory {
+	s := NewInMemory()
+	s.clk = clk
+	return s
+}
+
 // NewInMemory returns a counter on a clock that only moves when told to.
 func NewInMemory() *InMemory {
 	return &InMemory{

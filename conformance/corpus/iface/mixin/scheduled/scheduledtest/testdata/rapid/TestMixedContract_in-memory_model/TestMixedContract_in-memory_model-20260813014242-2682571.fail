@@ -1,0 +1,26 @@
+# 2026/08/13 01:42:42.650121 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1
+# 2026/08/13 01:42:42.650130 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1
+# 2026/08/13 01:42:42.650130 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1
+# 2026/08/13 01:42:42.650131 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1
+# 2026/08/13 01:42:42.650133 [TestMixedContract/in-memory/model] [rapid] draw action: "Fired"
+# 2026/08/13 01:42:42.650228 [TestMixedContract/in-memory/model] [semantic] at step 0: Fired: SUT=4, ref=0
+#   semantic: SUT vs reference disagreement (action)
+#   [step 0] Fired([]) -> err: Fired: SUT=4, ref=0   <-- FAILED
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
+#
+v0.4.8#16259761580184099106
+0x0
+0x0
+0x1
+0x0
+0x0
+0x1
+0x0
+0x0
+0x1
+0x0
+0x0
+0x1
+0x1084210842108
+0x0
+0x1

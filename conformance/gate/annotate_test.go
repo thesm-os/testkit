@@ -4,9 +4,12 @@
 package gate_test
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/gate"
 )
 
@@ -78,4 +81,45 @@ func TestAnnotateReportsUnresolvablePattern(t *testing.T) {
 	if !strings.Contains(err.Error(), "gate:") {
 		t.Errorf("the error must name its origin, got: %v", err)
 	}
+}
+
+// TestDetectorFixturesCarryTheirNamedStamp is the per-fixture identity gate:
+// a detector-axis fixture exists to pin one detector's dispatch, and its
+// method set must carry the stamp its directory names — corpus-wide coverage
+// stayed green through two drifted fixtures because the stamps existed
+// somewhere else (eidos#26 confirmed the boundaries; the fixtures were the
+// ones adrift).
+func TestDetectorFixturesCarryTheirNamedStamp(t *testing.T) {
+	t.Parallel()
+
+	stamps, err := gate.DetectorStamps(t.Context(), corpusRoot, "./corpus/iface/detector/...")
+	if err != nil {
+		t.Fatalf("measure the detector axis: %v", err)
+	}
+
+	dirs, err := os.ReadDir(filepath.Join(corpusRoot, "corpus", "iface", "detector"))
+	if err != nil {
+		t.Fatalf("list the detector fixtures: %v", err)
+	}
+	const prefix = "go.thesmos.sh/testkit/conformance/corpus/iface/detector/"
+	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+		name := d.Name()
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			testkit.Assert(t, strings.Join(stamps[prefix+name], ", ")).Contains(name,
+				"the fixture's method set carries the stamp its directory names")
+		})
+	}
+}
+
+// TestDetectorStampsSurfacesARunFailure pins the error arm: a pattern
+// matching nothing is a run that failed, not an empty identity census.
+func TestDetectorStampsSurfacesARunFailure(t *testing.T) {
+	t.Parallel()
+
+	_, err := gate.DetectorStamps(t.Context(), corpusRoot, "./corpus/definitely-not-here/...")
+	testkit.True(t, err != nil, "a failed run reports, never measures empty")
 }

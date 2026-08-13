@@ -5,12 +5,14 @@ package timeaware_test
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"pgregory.net/rapid"
 
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/engine/model/timeaware"
 )
 
@@ -59,7 +61,11 @@ func TestScheduledFiresAfterAdvance(t *testing.T) {
 
 	t.Run("compliant scheduler fires every scheduled task", func(t *testing.T) {
 		t.Parallel()
-		s := newSched(time.Unix(0, 0))
+		// Two fixtures under one advance — the deployed shape: every
+		// accepted schedule mirrors onto the reference, and the shared
+		// clock fires both together.
+		sut := newSched(time.Unix(0, 0))
+		ref := newSched(time.Unix(0, 0))
 		l := timeaware.ScheduledFiresAfterAdvance[*schedFixture]{
 			Schedule: func(_ *rapid.T, s *schedFixture, at time.Duration) error {
 				s.schedule(at)
@@ -68,10 +74,13 @@ func TestScheduledFiresAfterAdvance(t *testing.T) {
 			FiredCount: func(_ *rapid.T, s *schedFixture) int { return s.firedCount() },
 			Offsets:    rapid.SampledFrom([]time.Duration{time.Second, 2 * time.Second, 3 * time.Second}),
 			N:          3,
-			Advance:    s.advance,
+			Advance: func(d time.Duration) {
+				sut.advance(d)
+				ref.advance(d)
+			},
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, sut, ref); err != nil {
 				rt.Fatal(err)
 			}
 		})
@@ -94,8 +103,9 @@ func TestScheduledFiresAfterAdvance(t *testing.T) {
 			N:          2,
 			Advance:    stuck,
 		}
+		ref := newSched(time.Unix(0, 0))
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err == nil {
+			if err := l.Check(rt, s, ref); err == nil {
 				rt.Fatal("expected missing-fires flagged")
 			}
 		})
@@ -137,8 +147,10 @@ func TestScheduledFiresAfterAdvanceBranches(t *testing.T) {
 	t.Run("every accepted task fires after the advance", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
+			// Distinct pair: every accepted schedule mirrors onto the
+			// reference, and a shared instance would double-count itself.
 			s := &sched{}
-			if err := mk(s, 3).Check(rt, s, s); err != nil {
+			if err := mk(s, 3).Check(rt, s, &sched{}); err != nil {
 				rt.Fatalf("all scheduled work fired: %v", err)
 			}
 		})
@@ -148,7 +160,7 @@ func TestScheduledFiresAfterAdvanceBranches(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			s := &sched{refuse: true}
-			if err := mk(s, 3).Check(rt, s, s); err != nil {
+			if err := mk(s, 3).Check(rt, s, &sched{}); !law.Holds(err) {
 				rt.Fatalf("nothing scheduled means nothing to verify: %v", err)
 			}
 		})
@@ -158,8 +170,19 @@ func TestScheduledFiresAfterAdvanceBranches(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			s := &sched{neverFire: true}
-			if err := mk(s, 3).Check(rt, s, s); err == nil {
+			if err := mk(s, 3).Check(rt, s, &sched{}); err == nil {
 				rt.Fatal("work that never fires after the advance is a violation")
+			}
+		})
+	})
+
+	t.Run("a reference that refuses a mirrored schedule is the divergence", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &sched{}
+			err := mk(s, 3).Check(rt, s, &sched{refuse: true})
+			if err == nil || !strings.Contains(err.Error(), "the reference refused") {
+				rt.Fatalf("a refusing reference is the law's own finding, got: %v", err)
 			}
 		})
 	})
@@ -170,7 +193,7 @@ func TestScheduledFiresAfterAdvanceBranches(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
 			s := &sched{}
-			if err := mk(s, 0).Check(rt, s, s); err != nil {
+			if err := mk(s, 0).Check(rt, s, &sched{}); err != nil {
 				rt.Fatalf("the default batch must still verify: %v", err)
 			}
 			if s.accepted < 2 {

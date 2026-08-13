@@ -87,8 +87,12 @@ primitive for a check you write yourself.
 
 Two shapes get no companion, and the harness header says which: an interface
 declaring no `//testkit:stub` has no stand-in to configure, and a generic one
-has no concrete instantiation to prove against — a `Test` function cannot carry
-type arguments.
+whose constraints derive no witnesses and whose stub pins none has no
+concrete instantiation to prove against — a `Test` function cannot carry
+type arguments. A witnessed generic interface *is* proved: the guards
+instantiate every entry point at the double's own witnesses — pinned by
+`//testkit:stub witness=` or derived from an open constraint — so the two
+companions run at one instantiation.
 
 ## What it generates
 

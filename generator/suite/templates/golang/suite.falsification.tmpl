@@ -46,7 +46,7 @@ each violator template supplies.
 {{- define "suite.violate.open" -}}
 	t.Parallel()
 {{ if .NeedsFixture }}
-	fixture := {{ renderExpr (external .HarnessPkg .FixtureCtor) }}{{ .TypeArgs }}()
+	fixture := {{ renderExpr (external .HarnessPkg .FixtureCtor) }}{{ template "suite.witnessargs" . }}()
 {{- end }}
 {{- end -}}
 
@@ -108,11 +108,11 @@ they were asserting, which is what each caller's own doc comment says.
 */ -}}
 {{- define "suite.violate.permissive" -}}
 {{ template "suite.violate.open" . }}
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" .Method }}){{ template "suite.violate.results" .Method }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" .Method }}){{ template "suite.violate.results" .Method }} {
 {{- template "suite.violate.zeros" .Method }}
 		}){{ if .PartnerOption }},
-		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" .Partner }}){{ template "suite.violate.results" .Partner }} {
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" .Partner }}){{ template "suite.violate.results" .Partner }} {
 {{- template "suite.violate.zeros" .Partner }}
 		}){{ end }})
 
@@ -129,14 +129,14 @@ reader to look for where it is handled.
 */ -}}
 {{- define "suite.violate.refuses" -}}
 {{ template "suite.violate.open" . }}
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" .Method }}){{ template "suite.violate.results" .Method }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" .Method }}){{ template "suite.violate.results" .Method }} {
 {{- range .Method.ValueReturns }}
 			var {{ .Local }} {{ renderType .Type }}
 {{- end }}
 			return {{ range $i, $r := .Method.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}{{ renderExpr (external "errors" "New") }}("violating {{ $.Check.Subtest }}"){{ else }}{{ $r.Local }}{{ end }}{{ end }}
 		}){{ if .PartnerOption }},
-		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" .Partner }}){{ template "suite.violate.results" .Partner }} {
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" .Partner }}){{ template "suite.violate.results" .Partner }} {
 {{- template "suite.violate.zeros" .Partner }}
 		}){{ end }})
 
@@ -166,12 +166,37 @@ the check is about.
 suite.violate.drive runs the check under proof through Rejects and holds the
 rejection to the phrase the check itself reports.
 */ -}}
+{{- /*
+suite.violate.plausibleerr answers a believable value in every slot the check
+holds to its zero, beside a non-nil error — the zero-on-error violation.
+*/ -}}
+{{- define "suite.violate.plausibleerr" -}}
+{{- $v := .Plausible -}}
+{{- $miss := len (.Method.MissReturns) -}}
+{{- range $i, $r := .Method.Returns }}
+{{- if and (not $r.Error) (ge $i $miss) }}
+			var {{ $r.Local }} {{ renderType $r.Type }}
+{{- end }}
+{{- end }}
+			return {{ range $i, $r := .Method.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}{{ renderExpr (external "errors" "New") }}("violate: refused with a believable value"){{ else if lt $i $miss }}{{ template "suite.value" (index $v $i) }}{{ else }}{{ $r.Local }}{{ end }}{{ end }}
+{{- end -}}
+
 {{- define "suite.violate.drive" -}}
 	got := {{ renderExpr (external .Runtime "Rejects") }}(t, {{ printf "%q" .Reason }},
 		func(tb {{ renderExpr (external "testing" "TB") }}) {
 			tb.Helper()
-			{{ renderExpr (external .HarnessPkg .Check.Func) }}{{ .TypeArgs }}(tb, {{ if .Check.NeedsClock }}{{ renderExpr (external (printf "%s/clock" .Runtime) "RealClock") }}(), {{ end }}subject{{ range .Check.Args }}, fixture.{{ . }}{{ end }}{{ range .Check.Extra }}, fixture.{{ .Field }}{{ end }})
+			{{ renderExpr (external .HarnessPkg .Check.Func) }}{{ template "suite.witnessargs" . }}(tb, {{ if .Check.NeedsClock }}{{ renderExpr (external (printf "%s/clock" .Runtime) "RealClock") }}(), {{ end }}subject{{ range .Check.Args }}, fixture.{{ . }}{{ end }}{{ range .Check.Extra }}, fixture.{{ .Field }}{{ end }})
 		})
 	{{ renderExpr (external .Runtime "Assert") }}(t, got).Contains({{ printf "%q" .Because }},
 		"and rejects it for the reason the check is about")
+{{- end -}}
+
+{{- /*
+suite.witnessargs instantiates a generic harness symbol at the witnesses —
+`[int, genericbound.Score]` — and renders nothing for a non-generic
+interface, so every call site is unconditional. A generic interface without
+witnesses never reaches these templates: unfalsifiableReason declines it.
+*/ -}}
+{{- define "suite.witnessargs" -}}
+{{- if .Witnesses }}[{{ range $i, $w := .Witnesses }}{{ if $i }}, {{ end }}{{ renderType $w }}{{ end }}]{{ end -}}
 {{- end -}}

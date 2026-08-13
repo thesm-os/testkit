@@ -24,6 +24,11 @@ type lifecycleSUT struct {
 func TestIdempotentLifecycle(t *testing.T) {
 	t.Parallel()
 
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.IdempotentLifecycle[*lifecycleSUT, bool]{}
+	iso.IsolatedLaw()
+
 	t.Run("second call leaves Observe unchanged", func(t *testing.T) {
 		t.Parallel()
 		s := &lifecycleSUT{}
@@ -106,7 +111,7 @@ func TestLeakFree(t *testing.T) {
 			Cycles: 2,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, &lifecycleSUT{}, &lifecycleSUT{}); err != nil {
+			if err := l.Check(rt, &lifecycleSUT{}, &lifecycleSUT{}); !law.Holds(err) {
 				rt.Fatal(err)
 			}
 		})
@@ -237,6 +242,11 @@ func (b *poisonBox) probe() error {
 func TestPoisonConsistent(t *testing.T) {
 	t.Parallel()
 
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.PoisonConsistent[*poisonBox]{}
+	iso.IsolatedLaw()
+
 	t.Run("sticky poison stays reported across reads", func(t *testing.T) {
 		t.Parallel()
 		l := law.PoisonConsistent[*poisonBox]{
@@ -287,6 +297,11 @@ func (s *closableStore) get() error {
 func TestLifecycleAfterCloseSentinel(t *testing.T) {
 	t.Parallel()
 
+	// The marker is the runner's dispatch, on the value receiver: a registry
+	// holding the law by value must still route it to a throwaway pair.
+	var iso law.Isolated = law.LifecycleAfterCloseSentinel[*closableStore]{}
+	iso.IsolatedLaw()
+
 	t.Run("closed store returns the sentinel from reads", func(t *testing.T) {
 		t.Parallel()
 		l := law.LifecycleAfterCloseSentinel[*closableStore]{
@@ -331,7 +346,7 @@ func TestLifecycleLawBranches(t *testing.T) {
 			Observe: func(*rapid.T, int) int { return 0 },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused first call is a precondition: %v", err)
 			}
 		})
@@ -407,10 +422,10 @@ func TestLifecycleLawBranches(t *testing.T) {
 			Cycles: 2, Tolerance: 1,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := refuseOpen.Check(rt, 0, 0); err != nil {
+			if err := refuseOpen.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Open is a precondition: %v", err)
 			}
-			if err := refuseClose.Check(rt, 0, 0); err != nil {
+			if err := refuseClose.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Close is a precondition: %v", err)
 			}
 		})
@@ -425,7 +440,7 @@ func TestLifecycleLawBranches(t *testing.T) {
 			Sentinel: sentinel,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Close is a precondition: %v", err)
 			}
 		})

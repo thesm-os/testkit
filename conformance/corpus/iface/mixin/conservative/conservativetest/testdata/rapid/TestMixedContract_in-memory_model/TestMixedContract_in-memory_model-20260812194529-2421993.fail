@@ -4,7 +4,7 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} total:42}
 #     ref: &{mu:{_:{} mu:{state:0 sema:0}} total:42}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
-# 
+#
 v0.4.8#18223227370567074173
 0x0
 0x0

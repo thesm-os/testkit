@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
@@ -44,8 +45,11 @@ type LawBinding struct {
 	Args []sdk.Ref
 	Ptr  bool
 
-	// Fields fill the struct, each through its shape's template.
-	Fields []*LawField
+	// Fields fill the struct, each through its shape's template. Clocked
+	// marks a binding whose Advance reads the run's test clock, armed only
+	// where the ModelClocked option supplies a subject on it.
+	Fields  []*LawField
+	Clocked bool
 }
 
 // Kind returns the one template every binding renders through.
@@ -112,19 +116,25 @@ type LawPool struct {
 	Name, Q string
 
 	// Elem is the drawn element type; Adversarial selects the hostile-string
-	// generator instead of the reflective one.
+	// generator, Offsets the bounded-duration one, instead of the
+	// reflective default.
 	Elem        sdk.Ref
 	Adversarial bool
+	Offsets     bool
 }
 
 // The law-declared pool names.
 const (
 	poolInputs   = "inputs"
 	poolPayloads = "payloads"
+	poolOffsets  = "offsets"
 )
 
-// builtinString is the one builtin two pool declarations spell.
-const builtinString = "string"
+// builtinString and builtinInt are the builtins several derivations spell.
+const (
+	builtinString = "string"
+	builtinInt    = "int"
+)
 
 // lawShape names the closure a law field renders — the template dispatch.
 type lawShape string
@@ -149,6 +159,14 @@ const (
 	shapeSave       lawShape = "Save"        // func(rt, T, V) (K, error), K synthesized
 	shapeAppendOff  lawShape = "Append"      // func(rt, T, V) (Off, error)
 	shapeReplay     lawShape = "ReplaySlice" // func(rt, T, K) iter.Seq2[E, error]
+
+	shapeOkOp        lawShape = "OkOp"        // func(rt, T) bool — err-op success
+	shapeNextOp      lawShape = "NextOp"      // func(rt, T) (V, bool, error)
+	shapeDoOp        lawShape = "DoOp"        // func(rt, T) — fire and forget
+	shapePinnedWrite lawShape = "PinnedWrite" // func(rt, T, K, V) error — pin then put
+	shapeCtxOpFixed  lawShape = "CtxOpFixed"  // func(ctx, T) error — fixed fixture arg
+	shapeScheduleAt  lawShape = "ScheduleAt"  // func(rt, T, at time.Duration) error
+	shapeCountObs    lawShape = "CountObs"    // func(rt, T) int — loud on error
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -162,6 +180,9 @@ const (
 	fWrite   = "Write"
 	fDrain   = "Drain"
 	fCall    = "Call"
+	fCount   = "Count"
+	fProbe   = "Probe"
+	fClose   = "Close"
 	fromSelf = "self"
 )
 
@@ -191,8 +212,8 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.CountEqualsReference:     {"Count": shapeScalar},
 	lawid.LifecycleRespectsContext: {"Op": shapeCtxOp},
 	lawid.MonotonicNonDecreasing:   {fRead: shapeScalar},
-	lawid.PoisonIdempotentRead:     {"Probe": shapeErrOp},
-	lawid.PoisonNilOnFresh:         {"Probe": shapeErrOp},
+	lawid.PoisonIdempotentRead:     {fProbe: shapeErrOp},
+	lawid.PoisonNilOnFresh:         {fProbe: shapeErrOp},
 	lawid.PredicateConsistent:      {fCall: shapeBoolCall},
 	lawid.PureDeterministic:        {fCall: shapeResultCall},
 	lawid.TotalOver:                {fCall: shapeInputCall},
@@ -220,6 +241,18 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.AppendOnlyGrows:          {"Replay": shapeReplay},
 	lawid.HashChainIntegrityVerify: {"Verify": shapeErrOp},
 	lawid.ReplayDeterministic:      {"Replay": shapeReplay},
+
+	lawid.TamperEvident:         {fWrite: shapeValueOp, "Tamper": shapeOkOp, "Verify": shapeErrOp},
+	lawid.CursorCloseIdempotent: {fClose: shapeErrOp},
+	lawid.CursorNextAfterClose:  {fClose: shapeErrOp, "Next": shapeNextOp},
+	lawid.IdempotentLifecycle:   {fCall: shapeErrOp},
+	lawid.LifecycleAfterClose:   {fClose: shapeErrOp, "Op": shapeErrOp},
+	lawid.PoisonConsistent:      {"Poison": shapeDoOp, fProbe: shapeErrOp},
+
+	lawid.TTLExpiry:                  {"Put": shapePinnedWrite, fRead: shapeKeyedRead},
+	lawid.DeadlineRespecting:         {"Op": shapeCtxOpFixed},
+	lawid.ScheduledFiresAfterAdvance: {"Schedule": shapeScheduleAt, "FiredCount": shapeCountObs},
+	lawid.Windowed:                   {"Incr": shapeKeyedOp, fCount: shapeKeyedRead},
 }
 
 // lawsOf selects and fills every law the interface's classifications earn.
@@ -338,10 +371,14 @@ func lawOf(
 		return nil, false
 	}
 
+	pkg := LawPkg
+	if spec.Timeaware {
+		pkg = TimeawarePkg
+	}
 	lb := &LawBinding{
 		BaseEmit: b.BaseEmit,
 		ID:       r.Law,
-		Ctor:     sdk.NewExternal(LawPkg, spec.Type),
+		Ctor:     sdk.NewExternal(pkg, spec.Type),
 		Ptr:      spec.Ptr,
 		// The subject leads every law's argument list; the spec spells only
 		// what follows it.
@@ -367,6 +404,12 @@ func lawOf(
 		}
 	}
 	for _, field := range lb.Fields {
+		if field.Kind() == sdk.Kind(LawFieldKindPrefix+"Advance") {
+			// A clock-bound law arms only where the ModelClocked option
+			// supplies a subject on the run's clock; the template guards it.
+			lb.Clocked = true
+			b.UsesClock = true
+		}
 		if reason, held := inert[field.Method]; field.Method != "" && held {
 			b.Unbound = append(b.Unbound, Skip{
 				Method: r.Law,
@@ -416,6 +459,12 @@ func resolveArg(
 	}
 	switch form {
 	case "result":
+		if lawRoleShapes[r.Law][fieldName] == shapeNextOp {
+			// NextOp's closure carries the multi-valued return whole, so
+			// the law instantiates at the first non-error result — the
+			// element a cursor's Next yields beside its ok flag.
+			return firstResultType(role)
+		}
 		ref, _, why := resultType(role)
 		return ref, why
 	case "input":
@@ -453,6 +502,20 @@ func ruleFieldRole(
 	return nil, "instantiates through " + fieldName + ", which the manifest does not name"
 }
 
+// firstResultType is a method's first non-error result — the instantiation
+// point for a law whose closure shape returns the method's results whole,
+// where [resultType]'s single-valued strictness would refuse the method.
+func firstResultType(m *suite.Method) (sdk.Ref, string) {
+	for i := range m.Returns {
+		ret := &m.Returns[i]
+		if ret.Source != nil && golang.IsError(ret.Source) {
+			continue
+		}
+		return ret.Type, ""
+	}
+	return nil, "observes through " + m.Name + ", which answers nothing to observe"
+}
+
 // resultType is a method's single non-error result.
 func resultType(m *suite.Method) (sdk.Ref, *golang.Return, string) {
 	results := make([]*golang.Return, 0, len(m.Returns))
@@ -477,7 +540,7 @@ func resultType(m *suite.Method) (sdk.Ref, *golang.Return, string) {
 // or the length of the slice it returns.
 func scalarType(m *suite.Method) (ref sdk.Ref, viaLen bool, reason string) {
 	if returnsSlice(m) {
-		return sdk.Builtin("int"), true, ""
+		return sdk.Builtin(builtinInt), true, ""
 	}
 	r, _, why := resultType(m)
 	return r, false, why
@@ -489,7 +552,7 @@ func drainedElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
 	if returnsSlice(m) {
 		return collectorElem(b, m)
 	}
-	q, stamped := shape.MetaValueType.Get(m.Source.Meta())
+	q, stamped := b.valueQOf(m)
 	if !stamped || q == "" {
 		return nil, "drains " + m.Name + ", which streams elements no stamp names"
 	}
@@ -631,7 +694,8 @@ func roleFieldOf(
 		// them when the role streams or the observation is a length.
 		return nil, f.Name + " names an override shape no table row spells"
 	case shapeKeyedRead:
-		if why := keyedReadMismatch(b, f.Name, role); why != "" {
+		spec, _ := tiers.BindingFor(r.Law)
+		if why := keyedReadMismatch(b, f.Name, role, slices.Contains(spec.Args, tiers.BindValue)); why != "" {
 			return nil, why
 		}
 		// The closure is typed by the role itself — the pools agree where the
@@ -736,7 +800,7 @@ func roleFieldOf(
 			return nil, f.Name + " closes over " + role.Name + ", which is not a keyed error operation"
 		}
 		if b.Keys.Q != "" {
-			if q, _ := shape.MetaKeyType.Get(role.Source.Meta()); q != "" && q != b.Keys.Q {
+			if q, _ := b.keyQOf(role); q != "" && q != b.Keys.Q {
 				return nil, f.Name + " closes over " + role.Name +
 					", which keys on " + q + " beside a pool of " + b.Keys.Q
 			}
@@ -799,6 +863,70 @@ func roleFieldOf(
 		field.Out = out
 		return field, ""
 
+	case shapeOkOp:
+		if len(role.CallArgs()) > 0 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which is not a nullary error operation"
+		}
+		return field, ""
+
+	case shapeNextOp:
+		if len(role.CallArgs()) > 0 || len(role.Returns) != 3 || !role.ReturnsError() {
+			return nil, f.Name + " closes over " + role.Name +
+				", which does not answer the (value, more, error) triple"
+		}
+		field.Out = role.Returns[0].Type
+		return field, ""
+
+	case shapeDoOp:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs no nullary corruption supplies"
+		}
+		return field, ""
+
+	case shapePinnedWrite:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not put one value"
+		}
+		if b.Values.Pin == "" {
+			return nil, f.Name + " pins the drawn key into the value, and this pool pins nothing"
+		}
+		field.In = role.CallArgs()[0].Type
+		field.KeyField = b.Values.Pin
+		return field, ""
+
+	case shapeCtxOpFixed:
+		if !role.TakesContext() || !errOnly(role) || len(role.CallArgs()) != 1 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a one-input context operation"
+		}
+		if len(role.ArgFields) == 0 {
+			return nil, f.Name + " anchors on a fixture field the projection does not carry"
+		}
+		field.KeyField = role.ArgFields[0]
+		b.LawsUseFixture = true
+		return field, ""
+
+	case shapeScheduleAt:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name + ", which does not take one offset"
+		}
+		return field, ""
+
+	case shapeCountObs:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which takes inputs no nullary observation supplies"
+		}
+		_, ret, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if !integerResult(ret) {
+			return nil, f.Name + " counts " + role.Name + "'s result, which is not a count"
+		}
+		return field, ""
+
 	case shapeReplay:
 		if len(role.CallArgs()) > 0 {
 			return nil, f.Name + " closes over " + role.Name +
@@ -838,7 +966,7 @@ func valueOpField(
 		// A composite write anchored on the fixture key: the law repeats one
 		// (key, value) pair, which is its claim restricted to a key every
 		// other draw revisits.
-		q, _ := shape.MetaKeyType.Get(role.Source.Meta())
+		q, _ := b.keyQOf(role)
 		if q != "" && b.Keys.Q != "" && q != b.Keys.Q {
 			return nil, f.Name + " closes over " + role.Name +
 				", which keys on " + q + " beside a pool of " + b.Keys.Q
@@ -890,6 +1018,13 @@ func constFieldOf(
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "ConstLit")
 		return field, ""
 	}
+	if d, err := time.ParseDuration(value); err == nil {
+		// The duration as untyped nanoseconds: assignable to time.Duration,
+		// and free of any import the literal spelling would drag in.
+		field.Lit = strconv.FormatInt(d.Nanoseconds(), 10)
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "ConstLit")
+		return field, ""
+	}
 	return nil, f.Name + "'s stamp names " + value +
 		", which is neither a qualified symbol nor a number"
 }
@@ -933,6 +1068,22 @@ func generatorFieldOf(
 			return nil, f.Name + " " + reason
 		}
 		field.Pool = poolPayloads
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
+		return field, ""
+	case poolOffsets:
+		// Bounded durations rather than arbitrary ones: an offset past the
+		// advance horizon never fires inside the law's own window, and a
+		// negative one is a schedule for the past nothing promises.
+		elem, err := golang.RefForQualified("time.Duration", b.IfaceName)
+		if err != nil {
+			return nil, f.Name + " spells time.Duration, which no ref composes: " + err.Error()
+		}
+		if reason := b.addLawPool(LawPool{
+			Name: poolOffsets, Q: "time.Duration", Elem: elem, Offsets: true,
+		}); reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.Pool = poolOffsets
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
 		return field, ""
 	}
@@ -1042,7 +1193,8 @@ func handleFieldOf(
 		return nil, f.Name + " waits on the per-client trace classifier, " +
 			"which needs the version stamp eidos#25 brings and a multi-client runner"
 	case "clock":
-		return nil, f.Name + " waits on the aging-reference clock the isolation design brings"
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Advance")
+		return field, ""
 	case "history":
 		return nil, f.Name + " waits on an append-recording history hook the runner does not offer"
 	}
@@ -1074,14 +1226,19 @@ func hashElem(
 // `(ctx, K) (V, error)` at the pools' own types, so a role of another shape —
 // or of the right shape over other types — renders a closure that fails to
 // compile in whichever package arms it.
-func keyedReadMismatch(b *Bindings, fieldName string, role *suite.Method) string {
-	keyQ, _ := shape.MetaKeyType.Get(role.Source.Meta())
-	valueQ, _ := shape.MetaValueType.Get(role.Source.Meta())
+func keyedReadMismatch(b *Bindings, fieldName string, role *suite.Method, strictValue bool) string {
+	keyQ, _ := b.keyQOf(role)
+	valueQ, _ := b.valueQOf(role)
 	if pseudoShape(role) != shapeReader {
 		return fieldName + " closes over " + role.Name + ", whose shape is " +
 			pseudoShape(role) + " rather than a keyed reader"
 	}
-	if (b.Keys.Q != "" && keyQ != b.Keys.Q) || (b.Values.Q != "" && valueQ != b.Values.Q) {
+	// The value half is held to the pool only where the law's own row draws
+	// it: a windowed count reads int beside string pools, lawfully, because
+	// nothing compares its answer to a drawn value.
+	if (b.Keys.Q != "" && keyQ != b.Keys.Q) ||
+		(strictValue && b.Values.Q != "" && valueQ != b.Values.Q) {
+
 		return fieldName + " closes over " + role.Name + ", which reads (" + keyQ +
 			" → " + valueQ + ") beside pools of (" + b.Keys.Q + ", " + b.Values.Q + ")"
 	}
@@ -1119,7 +1276,7 @@ func integerResult(ret *golang.Return) bool {
 //
 //nolint:gochecknoglobals // vocabulary tables, read-only after init.
 var (
-	builtinInts    = []string{"int", "int8", "int16", "int32", "int64"}
+	builtinInts    = []string{builtinInt, "int8", "int16", "int32", "int64"}
 	builtinOrdered = append(append([]string{}, builtinInts...),
 		"uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", builtinString)
 )
@@ -1191,7 +1348,7 @@ func roleMethod(
 				// The family's writer is the values pool's own feeder: a
 				// peer-merging method is writer-shaped too, and a law fed by
 				// one writes values no pool ever draws.
-				if q, _ := shape.MetaValueType.Get(candidate.Source.Meta()); q == b.Values.Q {
+				if q, _ := b.valueQOf(candidate); q == b.Values.Q {
 					return candidate, ""
 				}
 				if fallback == nil {

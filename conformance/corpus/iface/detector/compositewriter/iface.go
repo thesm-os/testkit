@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // Package compositewriter is the detector-axis fixture for the compositewriter shape:
-// a value in, the stored value out. The caller cannot construct the return
-// because the implementation assigns part of it.
+// a key beside a value, an error and nothing else — exactly two non-context
+// parameters, the boundary eidos#26 confirmed the detector draws.
 //
 // No directive appears here: the classification comes from the signature
 // alone, so a detector that misfires shows up as wrong generated output
@@ -29,5 +29,8 @@ type Value struct {
 //testkit:suite
 //testkit:model
 type CompositeWriter interface {
-	Store(ctx context.Context, v Value) (Value, error)
+	// Set is the documented shape whole: a key beside a value, an error and
+	// nothing else — exactly two non-context parameters, which is the
+	// boundary eidos#26 confirmed the detector draws.
+	Set(ctx context.Context, key string, v Value) error
 }

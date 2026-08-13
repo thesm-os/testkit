@@ -3,5 +3,5 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} poisoned:true callCount:0}
 #     ref: &{mu:{_:{} mu:{state:0 sema:0}} poisoned:true callCount:0}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestPoisonAccessorContract_in-memory__already_failed_model.json
-# 
+#
 v0.4.8#11049736973066759242

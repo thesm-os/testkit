@@ -12,6 +12,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // TTLExpiryAfterAdvance verifies a TTL-bound store removes its
@@ -57,7 +58,7 @@ func (l TTLExpiryAfterAdvance[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 	v := l.Values.Draw(rt, "ttl_value")
 
 	if err := l.Put(rt, sut, k, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return law.Vacuous // a precondition this run supplies was refused
 	}
 	if _, err := l.Read(rt, sut, k); err != nil {
 		return fmt.Errorf("ttl-expiry law: Read pre-advance errored: %v", err)

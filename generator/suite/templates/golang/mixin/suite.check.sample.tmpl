@@ -13,9 +13,11 @@ would test the derivation rather than the pair.
 // method accepts turns every sampled run into a wall of failures about the
 // fixture rather than the subject — which is how a suite gets switched off.
 //
-// It takes no derived input, because the input is the point: a value the fixture
-// invented would say nothing about the pair.
-func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) {
+// The sampled value is the builder's answer, never the fixture's — a value the
+// fixture invented would say nothing about the pair. The builder's own
+// arguments are the fixture's to supply.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $p.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
 {{- if or $m.TakesContext $p.TakesContext }}
 	ctx := tb.Context()

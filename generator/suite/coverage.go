@@ -48,12 +48,20 @@ type Coverage struct {
 	// no rule selects one.
 	Laws []string
 
-	// Checked reports whether this generator emitted a check for it here.
-	//
-	// Not the same as being assertable: `deprecated` generates nothing,
-	// because it is a fact about a method rather than a claim about its
-	// behaviour.
-	Checked bool
+	// Checked reports whether this generator emitted a check for it on every
+	// method that carries it — per method, because a classification checked
+	// on one carrier and silent on another used to OR into "checked", and a
+	// reader asking "what does this file not check" was told nothing.
+	// Unchecked names the carriers without one, for the header.
+	Checked   bool
+	Unchecked []string
+
+	// Modeled reports whether the model tier will actually run for this
+	// interface — the source is armed and the shape is one the model
+	// generator accepts. What [Coverage.Elsewhere] turns on: a law that
+	// exists in the catalogue for a fixture the model tier never touches is
+	// evidence nowhere.
+	Modeled bool
 }
 
 // Elsewhere reports whether the evidence for this classification comes from
@@ -65,7 +73,12 @@ type Coverage struct {
 // the extension point is exactly where it belongs. Conflating the two produced
 // a header that told consumers to write `deleteremoves` themselves, which
 // nobody can state against a single subject.
-func (c Coverage) Elsewhere() bool { return len(c.Laws) > 0 }
+//
+// Gated on the model tier actually running, not on the catalogue holding a
+// law: seven corpus headers used to point readers at model output that did
+// not exist — an unarmed fixture, a generic interface the model generator
+// refuses — and "checked somewhere else" was a lie both times.
+func (c Coverage) Elsewhere() bool { return len(c.Laws) > 0 && c.Modeled }
 
 // checkedBy names the emit kinds that assert each classification.
 //
@@ -141,7 +154,7 @@ func checksFor(m Method, name string) bool {
 // header says what covers a declaration, and a binding says what one method
 // earns. Asking the stronger question would make the header depend on which
 // method happened to be first.
-func coverageOf(methods []Method) []Coverage {
+func coverageOf(methods []Method, modeled bool) []Coverage {
 	byName := map[string]*Coverage{}
 	order := []string{}
 
@@ -151,14 +164,20 @@ func coverageOf(methods []Method) []Coverage {
 		}
 		c, seen := byName[name]
 		if !seen {
-			c = &Coverage{Axis: axis, Name: name, Laws: tiers.LawsFor(name)}
+			c = &Coverage{Axis: axis, Name: name, Laws: tiers.LawsFor(name), Checked: true, Modeled: modeled}
 			byName[name] = c
 			order = append(order, name)
 		}
 		if !slices.Contains(c.Methods, method) {
 			c.Methods = append(c.Methods, method)
 		}
-		c.Checked = c.Checked || checked
+		// Per carrier, not OR-ed across them: every method carrying the
+		// classification owes its check, and a partial answer names the
+		// methods still owing.
+		if !checked {
+			c.Checked = false
+			c.Unchecked = append(c.Unchecked, method)
+		}
 	}
 
 	for _, m := range methods {
@@ -189,3 +208,7 @@ func (m Method) Shape() string {
 
 // MethodList spells the methods carrying a classification, for the header.
 func (c Coverage) MethodList() string { return strings.Join(c.Methods, ", ") }
+
+// UncheckedList spells the carriers still owing a check — the header's
+// sharper answer where coverage is partial rather than absent.
+func (c Coverage) UncheckedList() string { return strings.Join(c.Unchecked, ", ") }

@@ -43,7 +43,7 @@ func (l Cacheable[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 		return fmt.Errorf("cacheable law: key %v: first err=%v, second err=%v", k, err1, err2)
 	}
 	if err1 != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if diff := cmp.Diff(v1, v2); diff != "" {
 		return fmt.Errorf("cacheable law: key %v: repeated call disagrees (-first +second):\n%s", k, diff)
@@ -125,7 +125,7 @@ func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 		return fmt.Errorf("PointInTime: key %v: first err=%v, second err=%v", k, err1, err2)
 	}
 	if err1 != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if diff := cmp.Diff(v1, v2); diff != "" {
 		return fmt.Errorf("PointInTime: key %v: snapshot drifted (-first +second):\n%s", k, diff)
@@ -176,7 +176,7 @@ func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	v, err := l.Read(rt, sut, k)
 	_, _ = l.Read(rt, ref, k)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if l.first == nil {
 		l.first = make(map[K]V)
@@ -223,7 +223,7 @@ func (l *MonotonicNonDecreasing[T, R]) Reset() {
 func (l *MonotonicNonDecreasing[T, R]) Check(rt *rapid.T, sut, _ T) error {
 	cur, err := l.Read(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if l.seen && l.Less(cur, l.prev) {
 		return fmt.Errorf("MonotonicNonDecreasing: previous=%v, now=%v", l.prev, cur)

@@ -1,0 +1,25 @@
+{{- /*
+The one teardown claim a declared-idempotent close makes: doing it again
+changes nothing the first call's answer did not already say.
+*/ -}}
+{{- define "suite.check.closeidempotent" -}}
+{{ $m := .Method }}
+// {{ .Func }} asserts a second {{ $m.Name }} answers what the first did.
+//
+// Fails when: the first call succeeds and the second reports an error. The
+// idempotent claim is exactly that a deferred double-close is safe, and a
+// subject refusing the second call makes every `defer Close()` beside an
+// explicit one a latent failure.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) {
+	tb.Helper()
+	ctx := tb.Context()
+	if first := subject.{{ $m.Name }}(ctx); first != nil {
+		// A teardown that refuses outright is another check's finding; the
+		// claim here is only about the second call.
+		tb.Skipf("{{ $m.Name }} refused its first call; the second-call claim goes unexercised")
+		return
+	}
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, subject.{{ $m.Name }}(ctx),
+		"a second {{ $m.Name }} after a clean one must be a no-op")
+}
+{{- end -}}

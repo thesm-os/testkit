@@ -46,3 +46,17 @@ func TestContractRoleOpDeclinesTheUnknown(t *testing.T) {
 	testkit.False(t, shipped,
 		"a saga needs its steps, which no derivation can mint — the twin floor holds it")
 }
+
+// TestContractRoleDrains pins the one adapter row: chain's replay streams
+// through an iterator while the role method answers a slice, and every other
+// role delegates its return directly.
+func TestContractRoleDrains(t *testing.T) {
+	t.Parallel()
+
+	testkit.True(t, tiers.ContractRoleDrains("chain", "replay"),
+		"chain.replay collects the iterator into the slice the role answers")
+	testkit.False(t, tiers.ContractRoleDrains("chain", "append"),
+		"chain.append delegates directly")
+	testkit.False(t, tiers.ContractRoleDrains("cursor", "next"),
+		"an unknown pair drains nothing")
+}

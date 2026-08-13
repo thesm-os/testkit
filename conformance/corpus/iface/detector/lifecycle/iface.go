@@ -25,5 +25,9 @@ var ErrClosed = errors.New("lifecycle: closed")
 //testkit:suite
 //testkit:model
 type Lifecycle interface {
+	// Close tears down, and declares the teardown safe to repeat — the
+	// idempotence a deferred double-close relies on, which the mixin states
+	// because no signature can.
+	//testkit:mixin idempotent
 	Close(ctx context.Context) error
 }

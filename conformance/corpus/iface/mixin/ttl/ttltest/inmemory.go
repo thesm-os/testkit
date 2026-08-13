@@ -46,6 +46,15 @@ type entry struct {
 
 var _ ttl.Mixed = (*InMemory)(nil)
 
+// NewInMemoryOn returns a store reading the supplied clock — the door the
+// generated ModelClocked option opens, so the aging laws advance exactly the
+// time this subject reads.
+func NewInMemoryOn(clk clock.Clock) *InMemory {
+	s := NewInMemory()
+	s.clk = clk
+	return s
+}
+
 // NewInMemory returns a store on a clock that only moves when told to.
 func NewInMemory() *InMemory {
 	return &InMemory{

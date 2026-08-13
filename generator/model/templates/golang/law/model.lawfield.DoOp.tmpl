@@ -1,0 +1,8 @@
+{{- /*
+Fire and forget: the corruption is the point, and its error is nobody's.
+*/ -}}
+{{- define "model.lawfield.DoOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) {
+			_ = s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

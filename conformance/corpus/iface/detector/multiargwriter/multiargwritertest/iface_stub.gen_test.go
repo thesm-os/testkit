@@ -34,17 +34,19 @@ func multiArgWriterStubSetSubject(tb testing.TB) stub.Subject[multiargwritertest
 			var a0 context.Context
 			var a1 string
 			var a2 string
-			_ = s.Set(a0, a1, a2)
+			var a3 string
+			_ = s.Set(a0, a1, a2, a3)
 		},
 		Result: func() multiargwritertest.MultiArgWriterSetReturn {
 			var a0 context.Context
 			var a1 string
 			var a2 string
-			got0 := s.Set(a0, a1, a2)
+			var a3 string
+			got0 := s.Set(a0, a1, a2, a3)
 			return multiargwritertest.MultiArgWriterSetReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnSet.Func(func(_ context.Context, _ string, _ string) error {
+			s.OnSet.Func(func(_ context.Context, _ string, _ string, _ string) error {
 				mark()
 				var z0 error
 				return z0
@@ -54,7 +56,8 @@ func multiArgWriterStubSetSubject(tb testing.TB) stub.Subject[multiargwritertest
 			var a0 context.Context
 			var a1 string
 			var a2 string
-			r0 := s.Set(a0, a1, a2)
+			var a3 string
+			r0 := s.Set(a0, a1, a2, a3)
 			return r0
 		},
 	}
@@ -79,7 +82,8 @@ func TestMultiArgWriterStubSet(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		got0 := s.Set(a0, a1, a2)
+		var a3 string
+		got0 := s.Set(a0, a1, a2, a3)
 		testkit.Equal(t, got0, want0, "Set must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
@@ -91,11 +95,13 @@ func TestMultiArgWriterStubSet(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		_ = s.Set(a0, a1, a2)
+		var a3 string
+		_ = s.Set(a0, a1, a2, a3)
 		got := s.OnSet.AssertCalledOnce(t, "Set must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
 		testkit.Equal(t, got.Body, a2, "the recorded call carries Body")
+		testkit.Equal(t, got.Mime, a3, "the recorded call carries Mime")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -109,15 +115,16 @@ func TestMultiArgWriterStubSet(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		_ = s.Set(a0, a1, a2)
-		_ = s.Set(a0, a1, a2)
+		var a3 string
+		_ = s.Set(a0, a1, a2, a3)
+		_ = s.Set(a0, a1, a2, a3)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Set call")
 	})
 
 	t.Run("wires WithMultiArgWriterSet at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := multiargwritertest.NewMultiArgWriterStub(t, multiargwritertest.WithMultiArgWriterSet(func(_ context.Context, _ string, _ string) error {
+		s := multiargwritertest.NewMultiArgWriterStub(t, multiargwritertest.WithMultiArgWriterSet(func(_ context.Context, _ string, _ string, _ string) error {
 			called = true
 			var z0 error
 			return z0
@@ -125,7 +132,8 @@ func TestMultiArgWriterStubSet(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		_ = s.Set(a0, a1, a2)
+		var a3 string
+		_ = s.Set(a0, a1, a2, a3)
 		testkit.True(t, called, "WithMultiArgWriterSet must install the override")
 	})
 
@@ -140,9 +148,10 @@ func TestMultiArgWriterStubSet(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		_ = s.Set(a0, a1, a2)
+		var a3 string
+		_ = s.Set(a0, a1, a2, a3)
 		s.ResetCalls()
-		got0 := s.Set(a0, a1, a2)
+		got0 := s.Set(a0, a1, a2, a3)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
@@ -161,7 +170,8 @@ func multiArgWriterStubDouble() stub.Double[multiargwritertest.MultiArgWriterSet
 				var a0 context.Context
 				var a1 string
 				var a2 string
-				_ = s.Set(a0, a1, a2)
+				var a3 string
+				_ = s.Set(a0, a1, a2, a3)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -209,7 +219,8 @@ func TestMultiArgWriterStubDelegateTo(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		_ = s.Set(a0, a1, a2)
+		var a3 string
+		_ = s.Set(a0, a1, a2, a3)
 		inner.OnSet.AssertCalledOnce(t, "Set must reach the wrapped implementation")
 	})
 
@@ -222,10 +233,11 @@ func TestMultiArgWriterStubDelegateTo(t *testing.T) {
 		var a0 context.Context
 		var a1 string
 		var a2 string
-		r0 := s.Set(a0, a1, a2)
+		var a3 string
+		r0 := s.Set(a0, a1, a2, a3)
 		testkit.ErrorIs(t, r0, want, "Set must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 784bd59b59afdbb3412670d03ff1b696b95e363c1f700aadc25c275c0962eadb
+// testkit:provenance c5f5399df6a1f36cd3abf504f18d4e8a670d2f926aa4047b470712950e61343c

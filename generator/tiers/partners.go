@@ -57,6 +57,8 @@ var drivenPartners = map[string]bool{
 	mixinTTL + ".read":              true,
 	mixinWindowed + ".incr":         true,
 	mixinWindowed + ".count":        true,
+	mixinScheduled + ".schedule":    true,
+	mixinScheduled + ".fired":       true,
 }
 
 // excludedPartners marks the references whose role overrides their shape,

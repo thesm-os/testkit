@@ -29,14 +29,6 @@ func TestMixedContract(t *testing.T) {
 		sideeffecttest.MixedSubject("in-memory", func() sideeffect.Mixed {
 			return sideeffecttest.NewInMemory()
 		}),
-		// Observed is total: an unobserved key has been touched zero times,
-		// which is an answer rather than a failure. The zero-value check reads
-		// "if it errors, the result is the zero" and is generated as "it must
-		// error" — because a version that tolerated success would pass without
-		// asserting anything. Both readings are defensible and neither fits a
-		// method that cannot fail, so the subject drops the one check it
-		// legitimately violates rather than abandoning the other nine.
-		sideeffecttest.MixedWithout("Observed/an error carries the zero value"),
 	)
 }
 
@@ -50,7 +42,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		}),
 		sideeffecttest.MixedWithout(
 			"Touch/smoke",
-			"Observed/an error carries the zero value",
 		),
 		sideeffecttest.MixedWithoutDouble(),
 	)

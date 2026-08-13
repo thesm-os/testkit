@@ -3,5 +3,5 @@
 #     sut: &{store:0x390e212a8c00}
 #     ref: &{store:0x390e212a8c20}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractModelReference.json
-# 
+#
 v0.4.8#12939476828504902287

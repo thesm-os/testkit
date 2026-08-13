@@ -248,34 +248,42 @@ checks:
     - label: empty-body-interface-satisfier
       func_glob: "Reset"
       file_glob: "fault/fault_strategy.go"
-    # A generated conformance check asserts a property of a subject, and its
-    # failure arm — the recover(), the "you supplied an input that hits"
-    # Fatalf — fires only against a subject deliberately broken to reach it.
-    # Reaching them for real means writing a violating implementation per check
-    # per fixture, which is the hand-written proof docs/rfc/0002 exists to
-    # replace: the generated companion output drives every check against a
-    # complying subject and a violating one, and removes this entry when it
-    # ships. The happy path of each check is covered by the corpus contract
-    # runs; what is skipped is the arm no correct subject takes.
-    - label: assertion-failure-arms
-      func_glob: "*"
-      file_glob: "**/*_suite.gen.go"
-    # A generated model option is a consumer surface: <Iface>ModelValues and
-    # its siblings exist for the subject whose accepted values a raw draw
-    # cannot spell, and no corpus fixture is such a subject — arming one would
-    # mean shipping a fixture the derived pools deliberately cannot serve.
-    # The property, the actions, the laws and the derived reference in the
-    # same file are all driven by the corpus contract runs and the generated
-    # companion; what is skipped is the escape hatch nothing here needs.
-    - label: generated-consumer-options
-      func_glob: "*"
-      file_glob: "**/*_model.gen.go"
+    # IsolatedLaw is the runner's dispatch marker on the corruption laws: an
+    # empty body by design, called through the law.Isolated interface by the
+    # runner's assertion and each law's own test. The profile records `0 1` —
+    # executed, nothing to measure — and the conformance conduct census holds
+    # the marker to the isolated verdict, which is the real gate on it.
+    - label: empty-body-interface-satisfier
+      func_glob: "IsolatedLaw"
+      file_glob: "engine/model/law/*.go"
     - label: assertion-failure-arms
       func_glob: "*ehaviour*"
       file_glob: "stub/behaviour.go"
     - label: assertion-failure-arms
       func_glob: "assertFailed"
       file_glob: "stub/behaviour.go"
+    # A generated check's failure arms — the recover(), the Fatalf, the
+    # skip — fire only against a subject that violates the claim, and the
+    # falsification companion proves exactly one violation per check kind
+    # per fixture. What no run can reach is the remainder: every arm of
+    # every check against every fixture, because a fixture violating all
+    # of its own claims at once is not a fixture. The companion is the
+    # proof each check can fail; this skip is the statement that per-arm
+    # per-fixture line coverage is not the measure of it. Standing, not a
+    # debt: the falsification output is the gate that replaces it.
+    - label: assertion-failure-arms
+      func_glob: "*"
+      file_glob: "**/*_suite.gen.go"
+    # A generated model file's consumer options — ModelValues, ModelReference,
+    # the config plumbing — are exercised where a fixture needs them (the
+    # validates fixture supplies its accepted domain through ModelValues) and
+    # deliberately unused everywhere the derivation already serves. The
+    # property, actions, laws and derived reference are driven by the corpus
+    # contract runs and the companions; the skip covers the option surface a
+    # given fixture has no reason to touch.
+    - label: generated-consumer-options
+      func_glob: "*"
+      file_glob: "**/*_model.gen.go"
     # run builds its pipeline from a plugin set fixed at compile time — one
     # frontend, the annotators generator.Annotators returns, one backend.
     # eidos's Build only fails on structural faults in that set (duplicate

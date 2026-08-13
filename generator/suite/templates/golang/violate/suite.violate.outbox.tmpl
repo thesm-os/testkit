@@ -18,11 +18,11 @@ func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 	// the check would read as a delivered zero rather than as nothing arriving.
 	stream := make(chan {{ renderType .StreamElem }})
 
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 {{- template "suite.violate.zeros" $m }}
 		}),
-		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
 			return stream, nil
 		}))
 

@@ -44,7 +44,7 @@ func TestConcurrentLinearizable(t *testing.T) {
 // report Illegal before the budget expires, which is a different verdict.
 // Slowing the *model* rather than shrinking the budget is what makes the
 // timeout certain — a nanosecond budget alone races the checker.
-func TestConcurrentCheckTimeoutIsAWarning(t *testing.T) {
+func TestConcurrentCheckTimeoutFails(t *testing.T) {
 	t.Parallel()
 
 	slow := linearize.KV[string, item](errNotFound)
@@ -75,8 +75,11 @@ func TestConcurrentCheckTimeoutIsAWarning(t *testing.T) {
 	}()
 	<-done
 
-	if ft.Failed() {
-		t.Fatalf("an inconclusive check must not fail the test: %s", ft.Msg())
+	if !ft.Failed() {
+		t.Fatal("an undecided check asserts nothing, and must say so as a failure")
+	}
+	if msg := ft.Msg(); !strings.Contains(msg, "undecided") || !strings.Contains(msg, "Timeout") {
+		t.Fatalf("the failure names the verdict and the knob: %s", msg)
 	}
 }
 

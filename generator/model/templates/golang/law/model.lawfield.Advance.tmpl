@@ -1,0 +1,7 @@
+{{- /*
+The clock's own hand: every aging law advances the one clock the ModelClocked
+factory built the subject on.
+*/ -}}
+{{- define "model.lawfield.Advance" -}}
+{{ .Name }}: clk.Advance
+{{- end -}}

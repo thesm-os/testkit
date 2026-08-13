@@ -25,8 +25,8 @@ func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 	// clock the check does not read would overrun nothing.
 	clk := {{ renderExpr (external (printf "%s/clock" .Runtime) "NewTestClock") }}({{ renderExpr (external "time" "Time") }}{})
 
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 			clk.Advance(2 * budget)
 {{- template "suite.violate.zeros" $m }}
 		}))
@@ -34,7 +34,7 @@ func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 	got := {{ renderExpr (external .Runtime "Rejects") }}(t, {{ printf "%q" .Reason }},
 		func(tb {{ renderExpr (external "testing" "TB") }}) {
 			tb.Helper()
-			{{ renderExpr (external .HarnessPkg .Check.Func) }}{{ .TypeArgs }}(tb, clk, subject{{ range .Check.Args }}, fixture.{{ . }}{{ end }})
+			{{ renderExpr (external .HarnessPkg .Check.Func) }}{{ template "suite.witnessargs" . }}(tb, clk, subject{{ range .Check.Args }}, fixture.{{ . }}{{ end }})
 		})
 	{{ renderExpr (external .Runtime "Assert") }}(t, got).Contains({{ printf "%q" .Because }},
 		"and rejects it for the reason the check is about")

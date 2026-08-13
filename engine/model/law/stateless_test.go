@@ -52,7 +52,7 @@ func TestRoundtrip(t *testing.T) {
 			Values:  rapid.Just(1),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatal(err)
 			}
 		})
@@ -139,7 +139,7 @@ func TestRoundtripLawPreconditions(t *testing.T) {
 			Values:  rapid.Just("x"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Forward is a precondition: %v", err)
 			}
 		})
@@ -153,7 +153,7 @@ func TestRoundtripLawPreconditions(t *testing.T) {
 			Values:  rapid.Just("x"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Inverse is a precondition: %v", err)
 			}
 		})
@@ -210,13 +210,13 @@ func TestRoundtripLawPreconditions(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			noForward := base
 			noForward.Forward = func(*rapid.T, int, string) (string, error) { return "", boom }
-			if err := noForward.Check(rt, 0, 0); err != nil {
+			if err := noForward.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Forward is a precondition: %v", err)
 			}
 
 			noInverse := base
 			noInverse.Inverse = func(*rapid.T, int, string) (string, error) { return "", boom }
-			if err := noInverse.Check(rt, 0, 0); err != nil {
+			if err := noInverse.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused Inverse is a precondition: %v", err)
 			}
 
@@ -231,7 +231,7 @@ func TestRoundtripLawPreconditions(t *testing.T) {
 				}
 				return s, nil
 			}
-			if err := secondFails.Check(rt, 0, 0); err != nil {
+			if err := secondFails.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused re-Forward is a precondition: %v", err)
 			}
 		})

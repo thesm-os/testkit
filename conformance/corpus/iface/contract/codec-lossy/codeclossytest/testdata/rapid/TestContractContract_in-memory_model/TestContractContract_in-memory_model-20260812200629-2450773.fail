@@ -7,13 +7,13 @@
 # - 	"A",
 # + 	"a",
 #   )
-# 
+#
 #   invariant: AUTO-ROUNDTRIP
 #     sut: &{}
 #     ref: &{}
 #   [step 0] Decode("test-in") -> "test-in"
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
-# 
+#
 v0.4.8#18219487588371972513
 0x0
 0x1084210842108

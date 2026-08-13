@@ -60,6 +60,28 @@ type Law[T any] interface {
 	Check(rt *rapid.T, sut, ref T) error
 }
 
+// Vacuous is the sentinel a law returns where a precondition this run
+// supplies was refused — the subject declined the draw, so the claim was
+// never engaged. The runner counts it apart from a pass: sixty vacuous
+// returns are sixty times a law asserted nothing, and a rate of one hundred
+// percent is a binding that reads as coverage while checking nothing.
+//
+//nolint:revive,errname,staticcheck // an io.EOF-style sentinel: the vocabulary reads law.Vacuous, law.Holds
+var Vacuous = errors.New("law: vacuously holds — a precondition this run supplies was refused")
+
+// Holds reports a check that found no violation: a clean pass, or the
+// vacuous sentinel a refused precondition returns. The spelling tests reach
+// for — a law that "holds" includes one whose claim this draw never engaged,
+// and the runner's census is where the difference is counted.
+func Holds(err error) bool { return err == nil || errors.Is(err, Vacuous) }
+
+// Isolated marks a law whose Check corrupts its subjects — closing,
+// poisoning, tampering — and therefore runs against a throwaway pair of its
+// own, once per iteration. No mirror repairs a closed subject; the shared
+// pair must never meet one. The conformance conduct census holds the marker
+// and the verdict to each other.
+type Isolated interface{ IsolatedLaw() }
+
 // mirror applies to the reference a mutation the subject accepted.
 //
 // The mirrored-conduct half of the [Law] contract, spelled once: a
@@ -241,14 +263,14 @@ func (l CRDTMerge[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 			dst = b
 		}
 		if err := l.Write(rt, dst, v); err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 	}
 	if err := l.Merge(rt, a, b); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := l.Merge(rt, b, a); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	obsA := l.Observe(rt, a)
 	obsB := l.Observe(rt, b)

@@ -1115,6 +1115,11 @@ func mixinFixture(t *testing.T, mixinName, param string) *sdk.Store {
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Pos(sdk.At("miss/iface.go", 1, 1))
 			i.Directive(storefixture.Directive("suite"))
+			// Armed the way every corpus fixture is: the coverage header's
+			// "checked somewhere else" turns on the model tier actually
+			// running, and an unarmed interface would put every law-bearing
+			// classification in the consumer's own list.
+			i.Directive(storefixture.Directive("model"))
 			i.Method("Load", func(m *storefixture.MethodBuilder) {
 				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 				m.Param("key", storefixture.Named("string"))

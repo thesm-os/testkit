@@ -5,12 +5,12 @@
 # - 	"A",
 # + 	"a",
 #   )
-# 
+#
 #   invariant: AUTO-ROUNDTRIP
 #     sut: &{}
 #     ref: &{}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
-# 
+#
 v0.4.8#6044274591804872582
 0x0
 0x5555555555555

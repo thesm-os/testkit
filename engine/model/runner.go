@@ -5,6 +5,7 @@ package model
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -258,6 +259,44 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 		if cfg.RefFactory != nil {
 			ref = cfg.RefFactory()
 		}
+
+		// Isolated laws run once per iteration, each against a throwaway
+		// pair of its own: their Checks corrupt what they observe — closing,
+		// poisoning, tampering — and the shared pair must never meet one.
+		// Once, not per step, because their claims are self-contained
+		// rituals rather than observations of the accumulated history.
+		for _, l := range cfg.Laws.laws {
+			if _, isolated := l.(law.Isolated); !isolated {
+				continue
+			}
+			cfg.Laws.ran[l.ID()]++
+			isoSut := cfg.SUTFactory()
+			var isoRef T
+			if cfg.RefFactory != nil {
+				isoRef = cfg.RefFactory()
+			}
+			err := l.Check(rt, isoSut, isoRef)
+			if errors.Is(err, law.Vacuous) {
+				cfg.Laws.vacuous[l.ID()]++
+				continue
+			}
+			if err != nil {
+				f := &Failure{
+					Kind:         FailureInvariant,
+					LawID:        l.ID(),
+					REQID:        l.REQID(),
+					StepRan:      StepID{WorkerID: -1, Index: 0},
+					StepReported: StepID{WorkerID: -1, Index: 0},
+					Err:          err,
+					SUTState:     fmt.Sprintf("%+v", isoSut),
+					RefState:     fmt.Sprintf("%+v", isoRef),
+				}
+				if jsonPath := emitClassifiedJSON(rt, cfg.ArtifactDir, f); jsonPath != "" {
+					f.ArtifactPaths = append(f.ArtifactPaths, "json: "+jsonPath)
+				}
+				rt.Fatalf("%s", formatFailure(f))
+			}
+		}
 		step := 0
 
 		if cfg.Cleanup != nil {
@@ -313,12 +352,26 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 		// Empty-string key: rapid's check action, after every command.
 		actionMap[""] = func(rt *rapid.T) {
 			for _, l := range cfg.Laws.laws {
+				if _, isolated := l.(law.Isolated); isolated {
+					// An isolated law corrupts its subjects; it ran once at
+					// the top of the iteration against a pair of its own,
+					// and the shared pair must never meet it.
+					continue
+				}
 				cfg.Laws.ran[l.ID()]++
 				var err error
 				if sl, ok := l.(law.StatefulLaw[T]); ok {
 					err = sl.CheckWithStep(rt, sut, ref, step)
 				} else {
 					err = l.Check(rt, sut, ref)
+				}
+				if errors.Is(err, law.Vacuous) {
+					// The subject declined the draw, so the claim was never
+					// engaged. Counted apart from a pass: a law vacuous on
+					// every check reads as coverage while checking nothing,
+					// and the registry's census says so once per run.
+					cfg.Laws.noteVacuous(rt, l.ID())
+					continue
 				}
 				if err != nil {
 					f := &Failure{

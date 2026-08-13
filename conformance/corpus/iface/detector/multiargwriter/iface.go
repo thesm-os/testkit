@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MIT
 
 // Package multiargwriter is the detector-axis fixture for the multiargwriter shape:
-// several parameters rather than one composite value. The arity is the
-// distinguishing feature.
+// three or more non-context parameters — past the composite pair, the arity
+// boundary eidos#26 confirmed the detector draws.
 //
 // No directive appears here: the classification comes from the signature
 // alone, so a detector that misfires shows up as wrong generated output
@@ -24,5 +24,8 @@ type Value struct{ Key, Body string }
 //testkit:suite
 //testkit:model
 type MultiArgWriter interface {
-	Set(ctx context.Context, key, body string) error
+	// Set carries three non-context parameters — past the composite pair,
+	// into the boundary eidos#26 confirmed the detector draws at three or
+	// more.
+	Set(ctx context.Context, key, body, mime string) error
 }

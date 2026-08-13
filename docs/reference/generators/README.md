@@ -4,7 +4,7 @@ A generator reads Go declarations and writes the test infrastructure you would o
 
 testkit supplies generators and annotator configuration. Parsing Go, the intermediate representation, typed metadata, slot ordering, determinism, caching and the file sink all come from [eidos](https://go.thesmos.sh/eidos); see [ADR-0003](../../adr/0003-adopt-eidos-as-the-codegen-substrate.md) and [ADR-0004](../../adr/0004-consume-only-the-annotator-plugin.md). Generators do not inspect Go types directly. They read the three classification axes eidos's shape annotator stamps — detector for the signature, contract for the multi-callable protocol, mixin for the declared guarantees — and decide what to emit from those.
 
-**Status.** Five generators ship: `stub`, `builder`, `enum`, `sentinel`, `suite`. Three more — `bench`, `fuzz`, `model` — are designed in [RFC-0003](../../rfc/0003-the-projection-consumers.md) and not implemented; their pages track that design and say so at the top. The rest (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are planned; their pages describe an intended shape.
+**Status.** Six generators ship: `stub`, `builder`, `enum`, `sentinel`, `suite`, `model` — the last including its fuzz targets, clocked laws and generic witnesses. `bench` is designed in [RFC-0003](../../rfc/0003-the-projection-consumers.md) and not implemented; its page tracks that design and says so at the top. The rest (`sim`, `chaos`, `differential-rollout`, `replay`, `codec`, `smoke`, `pkgdoc`) are planned; their pages describe an intended shape.
 
 ## Opting in
 

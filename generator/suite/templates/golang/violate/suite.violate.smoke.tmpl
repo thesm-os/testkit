@@ -14,8 +14,8 @@ failure rather than a crashed test binary.
 // a failed assertion — with no line naming the method that did it.
 func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 {{ template "suite.violate.open" . }}
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 			panic("{{ .IfaceName }}.{{ $m.Name }}: violating the smoke check")
 		}))
 

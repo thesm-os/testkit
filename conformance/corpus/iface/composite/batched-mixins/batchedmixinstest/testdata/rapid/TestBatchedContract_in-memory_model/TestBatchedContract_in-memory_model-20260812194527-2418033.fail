@@ -5,7 +5,7 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} values:map[test-key:]}
 #     ref: &{store:0x726bc7881a0}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestBatchedContract_in-memory_model.json
-# 
+#
 v0.4.8#3846423433478985120
 0x1c4c297de4aa63
 0x1

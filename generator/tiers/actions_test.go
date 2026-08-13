@@ -65,3 +65,70 @@ func TestMapStoreOpsAreDetectorShapes(t *testing.T) {
 		testkit.True(t, live[s], s+" is a shape the annotator stamps or the generator derives")
 	}
 }
+
+// TestKeyedStoreDelegation pins the keyed oracle's rows: the three shapes it
+// models, the census over them, and the one mixin-assigned method whose
+// semantics no signature carries.
+func TestKeyedStoreDelegation(t *testing.T) {
+	t.Parallel()
+
+	for shape, op := range map[string]string{
+		"reader": "Get", "compositewriter": "Put", "aggregator": "Count",
+	} {
+		got, ok := tiers.KeyedStoreOp(shape)
+		testkit.True(t, ok, shape+" has a keyed-oracle row")
+		testkit.Equal(t, got, op, shape+" delegates to "+op)
+	}
+	_, ok := tiers.KeyedStoreOp("writer")
+	testkit.False(t, ok, "a plain writer has no row — a keyed store cannot place a keyless value")
+
+	testkit.Equal(t, len(tiers.KeyedStoreShapes()), 3, "the census names exactly the modeled shapes")
+
+	op, ok := tiers.KeyedStoreMixinOp("deleteremoves")
+	testkit.True(t, ok, "deleteremoves assigns its carrier a method")
+	testkit.Equal(t, op, "Delete", "the delete is the one row a shape alone cannot earn")
+	_, ok = tiers.KeyedStoreMixinOp("idempotent")
+	testkit.False(t, ok, "other mixins assign nothing")
+}
+
+// TestCollectionDelegation pins the append-and-drain oracle's rows and the
+// mixin refinements that pick its variants.
+func TestCollectionDelegation(t *testing.T) {
+	t.Parallel()
+
+	got, ok := tiers.CollectionOp("writer")
+	testkit.True(t, ok, "a value writer appends")
+	testkit.Equal(t, got, "Add", "through Add")
+	got, ok = tiers.CollectionOp(tiers.ShapeCollector)
+	testkit.True(t, ok, "the collector drains")
+	testkit.Equal(t, got, "Items", "through Items")
+	_, ok = tiers.CollectionOp("reader")
+	testkit.False(t, ok, "a keyed reader is the keyed oracle's territory")
+
+	testkit.True(t, tiers.CollectionDedupes("noduplicates"),
+		"noduplicates turns the collection into its deduplicating form")
+	testkit.False(t, tiers.CollectionDedupes("idempotent"),
+		"other mixins leave the log plain")
+}
+
+// TestOracleRefinements pins the classification-driven oracle switches: the
+// history vocabularies, the claims no immediate store models, and the
+// resolution pin.
+func TestOracleRefinements(t *testing.T) {
+	t.Parallel()
+
+	testkit.True(t, tiers.DrainsHistory("snapshotisolation"), "snapshotisolation records events")
+	testkit.True(t, tiers.DrainsHistory("chain"), "chain replays an append-only log")
+	testkit.False(t, tiers.DrainsHistory("noduplicates"), "a deduped collection is holdings, not history")
+
+	for _, mixin := range []string{"eventually", "crdtmerge"} {
+		reason, defeated := tiers.DefeatsOracles(mixin)
+		testkit.True(t, defeated, mixin+" puts the subject beyond any immediate store model")
+		testkit.True(t, reason != "", mixin+"'s header prints the reason")
+	}
+	_, defeated := tiers.DefeatsOracles("idempotent")
+	testkit.False(t, defeated, "idempotent claims nothing about immediacy")
+
+	testkit.True(t, tiers.MapStorePins("sticky"), "sticky pins the first resolution")
+	testkit.False(t, tiers.MapStorePins("idempotent"), "other mixins leave the map latest-write-wins")
+}

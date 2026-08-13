@@ -12,6 +12,7 @@
         test test-race test-bench test-fuzz test-coverage test-e2e \
         bench-baseline bench-regression bench-profile \
         check check-coverage check-uncovered check-mutation check-branch \
+        check-drift \
         release
 
 ERGON ?= ergon
@@ -91,6 +92,8 @@ check-mutation: ## Run gremlins mutation testing per layer (slow)
 	$(ERGON) check mutation --mutants
 check-branch: ## Run gobco branch-coverage gating per layer (slow)
 	$(ERGON) check branch
+check-drift: ## Fail when the generated corpus drifts from a fresh run
+	cd conformance && go run ../cmd/testkit check ./corpus/...
 
 release: ## Bump versions and tag (MESSAGE="..." FLAGS=--major)
 	$(ERGON) release $(if $(MESSAGE),-m "$(MESSAGE)",) $(FLAGS)

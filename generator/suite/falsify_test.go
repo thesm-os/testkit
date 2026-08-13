@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/sdk"
@@ -170,14 +171,27 @@ func TestUnfalsifiableInterface(t *testing.T) {
 		testkit.False(t, hasFalsification(t, undoubledStore(t)), "and no companion is queued")
 	})
 
-	t.Run("declines a generic interface", func(t *testing.T) {
+	t.Run("proves a generic interface at its witnesses", func(t *testing.T) {
 		t.Parallel()
-		// A guard is a Test function, which cannot carry type arguments, and
-		// nothing in the source names a concrete instantiation.
+		// A guard is a Test function, which cannot carry type arguments — but
+		// the double's companion already names the types it instantiates at,
+		// and the guards run at the same ones: two companions, one
+		// instantiation, one answer to "which types prove this".
 		c := contractIn(t, genericStore(t))
-		testkit.Assert(t, c.Unfalsifiable).Contains("the interface is generic",
-			"the harness names why nothing proves its checks")
-		testkit.False(t, hasFalsification(t, genericStore(t)), "and no companion is queued")
+		testkit.Equal(t, c.Unfalsifiable, "",
+			"witnesses are what make a generic harness provable")
+		f := falsificationIn(t, genericStore(t))
+		testkit.True(t, len(f.Witnesses) > 0, "and the guards carry them")
+	})
+
+	t.Run("declines a generic interface whose constraint derives no witness", func(t *testing.T) {
+		t.Parallel()
+		// An opaque constraint is a reference into a package the generator
+		// never loaded, so nothing derives, and the source has not pinned.
+		c := contractIn(t, opaqueGenericStore(t))
+		testkit.Assert(t, c.Unfalsifiable).Contains("witness=",
+			"the reason names the key that would prove it")
+		testkit.False(t, hasFalsification(t, opaqueGenericStore(t)), "and no companion is queued")
 	})
 }
 
@@ -337,6 +351,28 @@ func undoubledStore(t *testing.T) *sdk.Store {
 			})
 		}).
 		Build()
+}
+
+// opaqueGenericStore carries a type parameter bounded by a named constraint —
+// a reference into a package the generator never loaded, deriving nothing.
+func opaqueGenericStore(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("miss", "example.com/miss").
+		Interface("Store", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("miss/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("stub"))
+			i.TypeParam("V", &node.Constraint{Raw: "miss.Bound"})
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.TypeParamRef("V"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	plugintest.Generate(t, stub.New(), s)
+	return s
 }
 
 // genericStore carries type parameters, which a Test function cannot.

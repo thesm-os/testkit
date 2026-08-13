@@ -1,6 +1,0 @@
-# 2026/08/12 20:16:13.115077 [TestStreamReflectsMutationsBranches/a_drain_that_fails_after_the_delete_is_a_violation] [rapid] draw StreamReflectsMutations_value: 1
-# 2026/08/12 20:16:13.115082 [TestStreamReflectsMutationsBranches/a_drain_that_fails_after_the_delete_is_a_violation] a stream that stops draining must be reported, got: StreamReflectsMutations: drain after put errored: stream closed
-# 
-v0.4.8#1914706132609254140
-0x0
-0x0

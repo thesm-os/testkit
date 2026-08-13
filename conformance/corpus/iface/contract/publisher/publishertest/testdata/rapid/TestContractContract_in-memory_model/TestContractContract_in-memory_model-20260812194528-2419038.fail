@@ -3,5 +3,5 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} subscribers:[0x6d735c46bd0]}
 #     ref: &{mu:{_:{} mu:{state:0 sema:0}} subscribers:[0x6d735c46c40]}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
-# 
+#
 v0.4.8#8243102737269397418

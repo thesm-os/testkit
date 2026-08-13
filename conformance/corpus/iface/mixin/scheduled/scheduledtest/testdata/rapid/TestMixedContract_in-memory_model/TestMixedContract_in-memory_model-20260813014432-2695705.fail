@@ -1,0 +1,190 @@
+# 2026/08/13 01:44:32.745544 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 3816260276
+# 2026/08/13 01:44:32.745552 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 2
+# 2026/08/13 01:44:32.745553 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 42
+# 2026/08/13 01:44:32.745554 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 9920165167
+# 2026/08/13 01:44:32.745556 [TestMixedContract/in-memory/model] [rapid] draw action: "At"
+# 2026/08/13 01:44:32.745558 [TestMixedContract/in-memory/model] [rapid] draw At_value: 0
+# 2026/08/13 01:44:32.745563 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 130935289
+# 2026/08/13 01:44:32.745563 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 182
+# 2026/08/13 01:44:32.745564 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 274
+# 2026/08/13 01:44:32.745565 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6
+# 2026/08/13 01:44:32.745568 [TestMixedContract/in-memory/model] [rapid] draw action: "Fired"
+# 2026/08/13 01:44:32.745569 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 4689989
+# 2026/08/13 01:44:32.745572 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 141
+# 2026/08/13 01:44:32.745573 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 5923574922
+# 2026/08/13 01:44:32.745574 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 748
+# 2026/08/13 01:44:32.745575 [TestMixedContract/in-memory/model] [rapid] draw action: "At"
+# 2026/08/13 01:44:32.745576 [TestMixedContract/in-memory/model] [rapid] draw At_value: 0
+# 2026/08/13 01:44:32.745577 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6066
+# 2026/08/13 01:44:32.745578 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6
+# 2026/08/13 01:44:32.745585 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 346
+# 2026/08/13 01:44:32.745588 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 5
+# 2026/08/13 01:44:32.745589 [TestMixedContract/in-memory/model] [rapid] draw action: "Fired"
+# 2026/08/13 01:44:32.745590 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 19
+# 2026/08/13 01:44:32.745591 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 58
+# 2026/08/13 01:44:32.745591 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 82875503
+# 2026/08/13 01:44:32.745595 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 755
+# 2026/08/13 01:44:32.745596 [TestMixedContract/in-memory/model] [rapid] draw action: "At"
+# 2026/08/13 01:44:32.745596 [TestMixedContract/in-memory/model] [rapid] draw At_value: 0
+# 2026/08/13 01:44:32.745598 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 5
+# 2026/08/13 01:44:32.745598 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6451
+# 2026/08/13 01:44:32.745599 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 68
+# 2026/08/13 01:44:32.745600 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 147
+# 2026/08/13 01:44:32.745603 [TestMixedContract/in-memory/model] [rapid] draw action: "At"
+# 2026/08/13 01:44:32.745604 [TestMixedContract/in-memory/model] [rapid] draw At_value: 0
+# 2026/08/13 01:44:32.745605 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 186
+# 2026/08/13 01:44:32.745605 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 3236
+# 2026/08/13 01:44:32.745606 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6560876166
+# 2026/08/13 01:44:32.745607 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1703
+# 2026/08/13 01:44:32.745609 [TestMixedContract/in-memory/model] [rapid] draw action: "Fired"
+# 2026/08/13 01:44:32.745612 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 9
+# 2026/08/13 01:44:32.745613 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 1
+# 2026/08/13 01:44:32.745614 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 6
+# 2026/08/13 01:44:32.745614 [TestMixedContract/in-memory/model] [rapid] draw schedule_offset: 0
+# 2026/08/13 01:44:32.745981 [TestMixedContract/in-memory/model] [invariant] AUTO-SCHEDULED-FIRES-AFTER-ADVANCE at step 7: scheduled-fires law: scheduled 4, fired 3 after advance to 1.000009ms
+#   invariant: AUTO-SCHEDULED-FIRES-AFTER-ADVANCE
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x387720d24380 tasks:[{wall:70139423 ext:62135596849 loc:0xa81260} {wall:253879149 ext:62135596845 loc:0xa81260} {wall:253879189 ext:62135596845 loc:0xa81260} {wall:174044314 ext:62135596855 loc:0xa81260} {wall:175044314 ext:62135596855 loc:0xa81260} {wall:305979603 ext:62135596855 loc:0xa81260} {wall:175044496 ext:62135596855 loc:0xa81260} {wall:175044588 ext:62135596855 loc:0xa81260} {wall:175044320 ext:62135596855 loc:0xa81260} {wall:311669592 ext:62135596855 loc:0xa81260} {wall:306979744 ext:62135596855 loc:0xa81260} {wall:230554525 ext:62135596861 loc:0xa81260} {wall:306980351 ext:62135596855 loc:0xa81260} {wall:231554525 ext:62135596861 loc:0xa81260} {wall:231560591 ext:62135596861 loc:0xa81260} {wall:231554531 ext:62135596861 loc:0xa81260} {wall:231554871 ext:62135596861 loc:0xa81260} {wall:231554530 ext:62135596861 loc:0xa81260} {wall:232560610 ext:62135596861 loc:0xa81260} {wall:232560649 ext:62135596861 loc:0xa81260} {wall:315436094 ext:62135596861 loc:0xa81260} {wall:232561346 ext:62135596861 loc:0xa81260} {wall:316436094 ext:62135596861 loc:0xa81260} {wall:316436099 ext:62135596861 loc:0xa81260} {wall:316442545 ext:62135596861 loc:0xa81260} {wall:316436162 ext:62135596861 loc:0xa81260} {wall:316436241 ext:62135596861 loc:0xa81260} {wall:317442545 ext:62135596861 loc:0xa81260} {wall:317442731 ext:62135596861 loc:0xa81260} {wall:317445781 ext:62135596861 loc:0xa81260} {wall:878318711 ext:62135596867 loc:0xa81260} {wall:317444248 ext:62135596861 loc:0xa81260} {wall:879318720 ext:62135596867 loc:0xa81260} {wall:879318712 ext:62135596867 loc:0xa81260} {wall:879318717 ext:62135596867 loc:0xa81260} {wall:879318711 ext:62135596867 loc:0xa81260}]}
+#     ref: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x387720d24380 tasks:[{wall:70139423 ext:62135596849 loc:0xa81260} {wall:253879149 ext:62135596845 loc:0xa81260} {wall:253879189 ext:62135596845 loc:0xa81260} {wall:174044314 ext:62135596855 loc:0xa81260} {wall:175044314 ext:62135596855 loc:0xa81260} {wall:305979603 ext:62135596855 loc:0xa81260} {wall:175044496 ext:62135596855 loc:0xa81260} {wall:175044588 ext:62135596855 loc:0xa81260} {wall:175044320 ext:62135596855 loc:0xa81260} {wall:311669592 ext:62135596855 loc:0xa81260} {wall:306979744 ext:62135596855 loc:0xa81260} {wall:230554525 ext:62135596861 loc:0xa81260} {wall:306980351 ext:62135596855 loc:0xa81260} {wall:231554525 ext:62135596861 loc:0xa81260} {wall:231560591 ext:62135596861 loc:0xa81260} {wall:231554531 ext:62135596861 loc:0xa81260} {wall:231554871 ext:62135596861 loc:0xa81260} {wall:231554530 ext:62135596861 loc:0xa81260} {wall:232560610 ext:62135596861 loc:0xa81260} {wall:232560649 ext:62135596861 loc:0xa81260} {wall:315436094 ext:62135596861 loc:0xa81260} {wall:232561346 ext:62135596861 loc:0xa81260} {wall:316436094 ext:62135596861 loc:0xa81260} {wall:316436099 ext:62135596861 loc:0xa81260} {wall:316442545 ext:62135596861 loc:0xa81260} {wall:316436162 ext:62135596861 loc:0xa81260} {wall:316436241 ext:62135596861 loc:0xa81260} {wall:317442545 ext:62135596861 loc:0xa81260} {wall:317442731 ext:62135596861 loc:0xa81260} {wall:317445781 ext:62135596861 loc:0xa81260} {wall:878318711 ext:62135596867 loc:0xa81260} {wall:317444248 ext:62135596861 loc:0xa81260} {wall:879318720 ext:62135596867 loc:0xa81260} {wall:879318712 ext:62135596867 loc:0xa81260} {wall:879318717 ext:62135596867 loc:0xa81260} {wall:879318711 ext:62135596867 loc:0xa81260}]}
+#   [step 0] At(0s) -> <nil>
+#   [step 1] Fired([]) -> 9
+#   [step 2] At(0s) -> <nil>
+#   [step 3] Fired([]) -> 18
+#   [step 4] At(0s) -> <nil>
+#   [step 5] At(0s) -> <nil>
+#   [step 6] Fired([]) -> 32
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model.json
+#
+v0.4.8#7777265315778395302
+0x1e59015fe2eb10
+0x1ea91bf219dad1
+0x2fdc3650c
+0xe37782b4
+0x1e10b0e224145d
+0x73a4b942d856f
+0x2
+0x828aec2a7d525
+0xb07c9b17b2c15
+0x2a
+0x1dc795743ed9e3
+0x1e08553da6aeae
+0x24f49b52f
+0x10e0d7ca099918
+0x143d20cd12cab4
+0x0
+0x2c1b7829433de
+0x1
+0x6cbe4366e5ccd
+0x1c41d8f643a301
+0x7cde9f9
+0xb37a50415e10d
+0x103362cc03693e
+0xb6
+0xaa6a0f8eb919e
+0xfe398bca846a8
+0x112
+0x64770e88e25b3
+0x6e9c50924e862
+0x6
+0x1e540a5b4467dd
+0x1cb9daa9dd52ec
+0x1
+0x113478e27865af
+0x1b042599ad1011
+0x479045
+0x18f80bc2e1efcb
+0x1222fc4e16d453
+0x8d
+0x1365e8527e0ef1
+0x1ea0d45917a6d5
+0x2777d5a0d
+0x16112948a
+0x18f624673011e4
+0x11660061a4d05f
+0x2ec
+0x3dde60c885f68
+0x19e7d052f67578
+0x0
+0x1de159b20c9692
+0x0
+0x1170a96c960f9d
+0x146816440bab3d
+0x17b2
+0x1ddc76e5ca1042
+0x86c33f537ba1b
+0x6
+0xf6c92bcae529a
+0xfafc746c1975c
+0x15a
+0x1a7cb11a7e4467
+0x855240c827c01
+0x5
+0xb5381758860e9
+0x114d6b23013f2b
+0x1
+0x173febd50de7ea
+0xefb51843d93c9
+0x13
+0xf2a70946e041c
+0x11b533a8afe9ae
+0x3a
+0xf9f53e19eeecb
+0x1c32c74f7ae122
+0x4f0946f
+0x193b0b2d757f49
+0x129e8ff0b2e006
+0x2f3
+0x1bc27485e56413
+0x1048e354aa281e
+0x0
+0x1a0e7dd1cf7d8c
+0x0
+0x15885b30cf8bbb
+0x6da715d68979e
+0x5
+0x709f294a0f4b4
+0x14526b2f8db603
+0x1933
+0xe230f0800f87d
+0xd88e7e9d8b579
+0x44
+0x1fdb9dc21a97f1
+0xf2c08575be14c
+0x93
+0xc8149367445c6
+0x19e9e61912ca57
+0x0
+0x6cab15a37cef9
+0x0
+0x198c09be5701f0
+0xf85bd07ec07c5
+0xba
+0x914ad735a2186
+0x16f951e1b28e03
+0xca4
+0x1a480a083ae08f
+0x1f03a6c63dd079
+0x39e55ec6a
+0x35a3b96a3
+0x2ebb4846c
+0x38fff8b88
+0x2ee31a90d
+0x2cc1b8621
+0x1870f0686
+0x1b979078356ad9
+0x140e1e3f147a85
+0x6a7
+0x138e409c9701e2
+0x3c0a67e9a077f
+0x1
+0x1387d3c8f5e1cb
+0xc0e1c73b14984
+0x9
+0x159c2dc9ff2d0f
+0x2d904d9ff3551
+0x1
+0x5c15d8960469
+0x6c050ac9a9ee9
+0x6
+0x1f7a855f3d4c1b
+0x1aa2c7fb0edc5
+0x0

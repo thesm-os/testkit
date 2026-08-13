@@ -3,5 +3,5 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} free:[] inUse:0}
 #     ref: &{mu:{_:{} mu:{state:0 sema:0}} free:[] inUse:0}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
-# 
+#
 v0.4.8#6490191468189102146

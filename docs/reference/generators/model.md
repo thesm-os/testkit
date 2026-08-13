@@ -1,15 +1,17 @@
 # Model
 
-> **Status: the sequential tier is shipped; the deep runs are landing.**
+> **Status: shipped.**
 > [RFC-0003](../../rfc/0003-the-projection-consumers.md) fixes this
 > generator's design. What ships today: the directive, the differential
 > property (actions, pools, derived references with their mixin
-> refinements, law bindings with their negation table), the concurrent
-> Porcupine leg, the generated companion that proves the emission — the
-> reference's self-conformance, the inert-body probes, and the mutation
-> kill matrix — and the consumer options. The fuzz target and the
-> exhaustive search are queued. Where this page and the RFC differ, the
-> RFC is the authority.
+> refinements, law bindings), the isolated-law walk, the test clock and
+> the clocked law family, generic interfaces at their witnesses, the
+> concurrent Porcupine leg, the fuzz target, the generated companion that
+> proves the emission — the reference's self-conformance, the inert-body
+> probes, and the mutation kill matrix — and the consumer options. Where
+> this page and the RFC differ, this page reflects what shipped: the RFC
+> records the design, including the bounded exhaustive search that was
+> since deleted as dead capability.
 
 The `model` generator binds the classifications
 [ADR-0018](../../adr/0018-one-tier-owns-each-classification.md) assigns to
@@ -17,8 +19,8 @@ the model tier onto the shipped `engine/model` runtime: property-based
 state-machine testing on [`pgregory.net/rapid`](https://pgregory.net/rapid),
 linearizability checking on
 [`anishathalye/porcupine`](https://github.com/anishathalye/porcupine),
-bounded exhaustive search, and a mutation self-check that proves the bound
-laws can kill injected bugs. Consumers get law-backed conformance for one
+and a mutation self-check that proves the bound laws can kill injected
+bugs. Consumers get law-backed conformance for one
 directive; everything below is derived from the shape stamps and the
 [suite generator](suite.md)'s projection.
 
@@ -29,9 +31,19 @@ directive; everything below is derived from the shape stamps and the
 type Store interface { ... }
 ```
 
-Interface-scoped, no keys, negation denied — the tier exists where one is
-declared, and deleting the line is the suppression, the same shape as
-`//testkit:stub` and `//testkit:suite`. The generator emits where the
+Interface-scoped, negation denied — the tier exists where one is declared,
+and deleting the line is the suppression, the same shape as
+`//testkit:stub` and `//testkit:suite`. Three keys: `ref=` names a
+reference constructor where no shipped oracle models the shape, `gen=` a
+generator constructor for a value type reflection cannot draw, and
+`witness=` the concrete types a generic interface's property runs at —
+comma-separated, one per type parameter, in declaration order. The witness
+list is required exactly where the interface is generic: the pools, the
+reference and every law assert *through* those types, so the source names
+them or the generator refuses with the key that would fix it. Everything
+the file emits then lands at the witnesses — the instantiated subject
+type, the pools, the derived oracle — and the option plugs into the
+consumer's matching instantiation of the harness. The generator emits where the
 directive stands and `suite` queued a projection; a directive on an
 interface `suite` never touched, or one where no classification maps to a
 law, is a diagnostic at the directive.
@@ -88,37 +100,44 @@ parameter with no hint is a diagnostic at the parameter.
   subject wrong the same way twice — the header says why the floor was
   reached, and `ref=` raises it. The sequences drive only what the oracle
   models; a method the adapter holds inert is skipped by name.
+- **A clock, where a claim reads time** — the `ttl`, `windowed`,
+  `timeout` and `scheduled` families bind laws that age entries, roll
+  windows and fire schedules. They arm only under
+  `<Iface>ModelClocked(func(clk *clock.TestClock) T)`, which builds the
+  subject on the run's own `TestClock`; the clocked laws advance it and
+  nothing else does. A clocked run forces the twin reference even where a
+  map oracle derives — under the clock the derived oracle lies, because
+  mirrored writes age on the subject alone — so twins on one clock age
+  and fire together. The scheduled law mirrors every accepted schedule
+  onto the reference and asserts *at least* its batch fired after the
+  advance: the ambient action stream schedules beside it, so exact-count
+  is the quiescent claim the fixture's unit tests keep.
+- **An isolated walk, where a law corrupts** — the close/poison/tamper
+  family (`CursorCloseIdempotent`, `IdempotentLifecycle`,
+  `PoisonConsistent`, `TamperEvident` and kin) runs once per iteration
+  against a throwaway pair from the subject's factory; the shared pair
+  never meets them. A law whose precondition the run's draws cannot
+  satisfy reports vacuously, counted apart from a pass — a law vacuous on
+  every check past the census floor is named in the run's log, because
+  sixty vacuous returns are sixty times a binding asserted nothing.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history
   against `linearize.KV` per key. It registers beside the sequential leg
   as `model/concurrent`; the laws stay sequential, whose step boundary
   they need, and the companion holds the leg to the derived reference.
-- **Chain tracing** — `appender` shapes get the chain action family over a
-  partition-keyed `engine/model/history` trace.
-- **Derived leak checking** — `lifecycle` shapes wrap the run in
-  `model.CheckGoroutineLeaks`.
 - **A report header** — the generated docblock is a per-method table of
   what the run derived: actions, law IDs, the cluster map, what was skipped
   and the option that arms it.
 
-Three probes guard soundness, each skipping with a diagnosis rather than
-failing a correct implementation: a fresh-state probe (subject and
-reference must start observably equal), a determinism probe before the
-exhaustive search, and codegen feasibility for the action alphabet.
-
 ## The self-checks
 
-`_model.gen_test.go` carries three residents:
+`_model.gen_test.go` carries the emission's own proofs:
 
 - **`Fuzz<Iface>Model`** — the interface's *sequence space* as one fuzz
   target: `model.MakeFuzz` lets the coverage-guided engine drive rapid's
   choice stream, hunting for the action ordering that breaks a law. One
   target per interface.
-- **`Test<Iface>ModelExhaustive`** — bounded model checking over the
-  fixture-derived action alphabet with an observational state hash: proof
-  of law absence within bounds, and the shortest counterexample sequence
-  when there is none to prove.
 - **The mutation kill matrix** — `Test<Iface>ModelKillsInertMutants`:
   one mutant per driven method, each a reference whose one method answers
   zeros and forwards nothing, and the property must fail every one. An
@@ -137,11 +156,12 @@ because it is the assertion a declared classification owes.
 Nothing beyond the suite wiring: pass `<Iface>Model()` to the contract
 entry. The options are the escape hatches: `<Iface>ModelReference(factory)`
 replaces the derived oracle, `<Iface>ModelValues(gen)` replaces the values
-pool wholesale, the `gen=` directive key names a generator constructor in
-the routed package for a value type reflection cannot draw (a pointer
-payload, an invariant-carrying domain type), the `ref=` key names a
-reference constructor where no shipped oracle models the shape, and
-`<Iface>Without("model")` declines the tier. `<Iface>ModelFuzz(f, factory)`
+pool wholesale, `<Iface>ModelClocked(build)` hands the subject the run's
+test clock where a claim reads time, the `gen=` directive key names a
+generator constructor in the routed package for a value type reflection
+cannot draw (a pointer payload, an invariant-carrying domain type), the
+`ref=` key names a reference constructor where no shipped oracle models
+the shape, and `<Iface>Without("model")` declines the tier. `<Iface>ModelFuzz(f, factory)`
 is the one-line fuzz wiring: the fuzzer's bytes replay as rapid's choice
 stream over the subject's own branches.
 
@@ -150,7 +170,7 @@ stream over the subject's own branches.
 | Tag | Suffix | Contents |
 |---|---|---|
 | *(primary)* | `_model.gen.go` | Report header, generators, adapter, law registry, action set, concurrent config, options, extension registration. |
-| `test` | `_model.gen_test.go` | `Fuzz<Iface>Model`; the exhaustive and mutation tests where a reference is derivable. |
+| `test` | `_model.gen_test.go` | `Fuzz<Iface>Model`; the self-conformance and mutation tests where a reference is derivable. |
 
 ## See also
 

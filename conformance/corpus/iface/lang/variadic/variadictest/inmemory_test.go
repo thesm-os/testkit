@@ -57,10 +57,7 @@ func TestFinderContract(t *testing.T) {
 		// simply absent from the result — so the miss the check needs does not
 		// exist. Dropping it by name is what keeps the other nine running; the
 		// alternative is a consumer who abandons the suite over one check.
-		variadictest.FinderWithout(
-			"Find/an error carries the zero value",
-			"FindWithLimit/an error carries the zero value",
-		),
+		variadictest.FinderWithout(),
 		variadictest.FinderOnFindWithLimit("truncates to the limit", func(
 			tb testing.TB, subject variadic.Finder, limit int, keys string,
 		) {
@@ -98,8 +95,6 @@ func TestFinderContractWithoutTheDouble(t *testing.T) {
 			return variadictest.NewInMemory()
 		}),
 		variadictest.FinderWithout(
-			"Find/an error carries the zero value",
-			"FindWithLimit/an error carries the zero value",
 			// The same structural stamp and the same finder, so the same two
 			// drops: a run that declines the double still runs every check it
 			// did not drop.

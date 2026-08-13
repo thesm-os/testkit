@@ -21,14 +21,15 @@ import (
 
 // Mixed is the fixture interface.
 //
-// The model tier is deliberately unarmed: both methods are the scheduled
-// mixin's own partners — a schedule and a firing count against a clock the
-// sequences never advance — so no action would drive anything. Arming waits
-// on the clock-aware runner.
+// The model tier runs clocked: both methods are the scheduled mixin's own
+// partners, and the consumer supplies MixedModelClocked so the property owns
+// a TestClock the scheduled-fires law can advance. Unclocked, no sequence
+// would ever move time and every firing claim would hold vacuously.
 //
 //testkit:out scheduledtest/ pkg=scheduledtest
 //testkit:stub
 //testkit:suite
+//testkit:model
 type Mixed interface {
 	// At registers a task for the given offset from now.
 	//testkit:mixin scheduled schedule=At fired=Fired

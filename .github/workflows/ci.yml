@@ -24,6 +24,9 @@ jobs:
       - uses: ./.github/actions/setup-ergon
       - run: make lint-vet
       - run: make build
+      # The regen gate: the tree's generated corpus must match what a fresh
+      # run produces, or a template edit shipped without its regeneration.
+      - run: make check-drift
 
   tidy:
     name: Modules tidy
@@ -44,6 +47,12 @@ jobs:
       # Iteration count and per-package deadline come from .ergon.yaml's
       # `test` section (race_count: 3, timeout: 10m). ergon reads no
       # environment variables, so overriding here would be silently inert.
+      #
+      # rapid runs unseeded by design: a failure prints its own seed and
+      # failfile in the log ("To reproduce, specify -rapid.seed=..."), which
+      # is the reproduction path — pinning a seed here would trade the
+      # exploration property tests exist for against a determinism the log
+      # already provides on demand.
       - run: make test-race
 
   lint:
@@ -58,6 +67,46 @@ jobs:
       # The umbrella: vet, golangci-lint, markdownlint, license headers,
       # skip-expiry, error-prefix, govulncheck.
       - run: make lint
+
+  mutation:
+    # Gremlins is the kill matrix's sibling for hand-written code, and too
+    # slow to gate every PR — pushes to main pay for it, so a survivor is
+    # caught at merge rather than never (.ergon.yaml's score thresholds were
+    # otherwise enforced by nothing CI runs).
+    name: Mutation (gremlins)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+        with:
+          bootstrap: 'true'
+      - run: make check-mutation
+
+  fuzz:
+    # Every generated model companion ships a Fuzz target over the same
+    # derivation the property runs. The seed corpus rides the ordinary test
+    # job; this buys the exploration the seeds do not. Too slow to gate every
+    # PR at 28 targets × the configured fuzz_time — pushes to main pay for it,
+    # the same trade the mutation job makes.
+    name: Fuzz (generated targets)
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-ergon
+      - run: make test-fuzz
+      # A crasher is a minimized input written under testdata/fuzz, and the
+      # log's reproduction line dies with the runner — the artifact is what
+      # survives to become the regression seed.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-corpus
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
 
   coverage:
     name: Coverage + branch

@@ -144,16 +144,20 @@ var LawConduct = map[string]Conduct{
 	lawid.EventualConvergence: ConductIsolated,
 	lawid.PoisonNilOnFresh:    ConductIsolated,
 
-	// The two clock laws are not mirror-fixable: a put mirrored into a
-	// reference that does not age still diverges the pair the moment the
-	// clock advances past the lifetime. They need a reference that honours
-	// time, or a pair of their own.
-	lawid.CursorCloseIdempotent:      ConductNeedsIsolation,
-	lawid.ScheduledFiresAfterAdvance: ConductNeedsIsolation,
-	lawid.TTLExpiry:                  ConductNeedsIsolation,
-	lawid.CursorNextAfterClose:       ConductNeedsIsolation,
-	lawid.IdempotentLifecycle:        ConductNeedsIsolation,
-	lawid.LifecycleAfterClose:        ConductNeedsIsolation,
-	lawid.PoisonConsistent:           ConductNeedsIsolation,
-	lawid.TamperEvident:              ConductNeedsIsolation,
+	// The corruption laws carry the [law.Isolated] marker: the runner hands
+	// each a throwaway pair once per iteration, and the shared pair never
+	// meets one. The census test holds marker and verdict to each other.
+	lawid.CursorCloseIdempotent: ConductIsolated,
+	lawid.CursorNextAfterClose:  ConductIsolated,
+	lawid.IdempotentLifecycle:   ConductIsolated,
+	lawid.LifecycleAfterClose:   ConductIsolated,
+	lawid.PoisonConsistent:      ConductIsolated,
+	lawid.TamperEvident:         ConductIsolated,
+
+	// The clock laws: sound exactly where subject and reference age under
+	// one [clock.TestClock] — the twins the generated ModelClocked option
+	// builds share it, so the pair diverges and converges together. The
+	// TTL check even resynchronizes its own unmirrored put by expiring it.
+	lawid.TTLExpiry:                  ConductSelfCleaning,
+	lawid.ScheduledFiresAfterAdvance: ConductMirrored,
 }

@@ -27,6 +27,14 @@ type InMemory struct {
 
 var _ scheduled.Mixed = (*InMemory)(nil)
 
+// NewInMemoryOn returns a scheduler reading the supplied clock — the door
+// the generated ModelClocked option opens.
+func NewInMemoryOn(clk clock.Clock) *InMemory {
+	s := NewInMemory()
+	s.clk = clk
+	return s
+}
+
 // NewInMemory returns a scheduler on a clock that only moves when told to.
 func NewInMemory() *InMemory {
 	return &InMemory{clk: clock.NewTestClock(time.Unix(0, 0).UTC())}

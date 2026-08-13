@@ -9,12 +9,12 @@ const (
 		"its own transactions cannot be asked about isolation"
 	drainDebt = "waits on the drain option — the subscription hands back a live " +
 		"channel no generated closure drains honestly"
-	clockDebt   = "waits on the aging-reference clock the isolation design brings"
 	twoPhase    = "waits on a begin that returns the transaction handle commit and rollback thread"
 	pageDebt    = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
 	comparator  = "waits on the supplied comparator its manifest names, which no generated value can stand in for"
-	sessionDebt = "waits on the version stamp eidos#25 brings and the multi-client " +
-		"trace that makes a session guarantee falsifiable"
+	sessionDebt = "waits on the multi-client trace that makes a session guarantee " +
+		"falsifiable — the version stamp is declarable since eidos#25, and the " +
+		"runner still records one client"
 )
 
 // UnboundLaws is the debt register the assertion gate carries: model-owned
@@ -76,9 +76,12 @@ var UnboundLaws = map[string]string{
 	"AUTO-PUBLISHER-DELIVERS":      drainDebt,
 	"AUTO-PUBLISHER-EXACTLY-ONCE":  drainDebt,
 
-	// Waiting on runner capability the isolation-and-clock design brings.
-	"AUTO-DEADLINE-RESPECTING": clockDebt,
-	"AUTO-WINDOWED":            clockDebt,
+	// Waiting on an observable lifecycle carrier: the corpus's only
+	// idempotent teardown is a Close-only interface, and the law reads
+	// state before and after the second close — through a method the
+	// fixture does not have. The claim it could keep without one is
+	// close-idempotence alone, which is the cursor family's law.
+	"AUTO-IDEMPOTENT-LIFECYCLE": "waits on an observable lifecycle carrier — the only idempotent teardown here is Close-only, and the law observes state across the second close",
 
 	// Waiting on the append-recording hook.
 	"AUTO-APPEND-ONLY-NO-DROPS": "waits on an append-recording history hook the runner does not offer",

@@ -42,7 +42,7 @@ func TestContractContract(t *testing.T) {
 			testkit.NoError(tb, subject.Close(tb.Context()), "the cursor closes")
 
 			_, ok, err := subject.Next(tb.Context())
-			testkit.ErrorIs(tb, err, cursortest.ErrClosed, "and a read after it is refused")
+			testkit.ErrorIs(tb, err, cursor.ErrClosed, "and a read after it is refused")
 			testkit.False(tb, ok, "with no value beside the error")
 		}),
 	)

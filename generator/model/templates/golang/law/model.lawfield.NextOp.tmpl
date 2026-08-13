@@ -1,0 +1,8 @@
+{{- /*
+The cursor's step, verbatim: the (value, more, error) triple the law reads.
+*/ -}}
+{{- define "model.lawfield.NextOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ({{ renderType .Out }}, bool, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/windowed"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/windowed/windowedtest"
 )
@@ -16,14 +17,12 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	windowedtest.AssertMixedContract(t,
-		windowedtest.MixedModel(),
+		windowedtest.MixedModel(windowedtest.MixedModelClocked(
+			func(clk *clock.TestClock) windowed.Mixed { return windowedtest.NewInMemoryOn(clk) },
+		)),
 		windowedtest.MixedSubject("in-memory", func() windowed.Mixed {
 			return windowedtest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: an unrecorded key counts zero, which
-		// is an answer rather than a miss — this shape has no input CountIn
-		// refuses, so the zero-on-error check has nothing to find.
-		windowedtest.MixedWithout("CountIn/an error carries the zero value"),
 		windowedtest.MixedOnCountIn("counts inside the window and not outside it", func(
 			tb testing.TB, subject windowed.Mixed, key string,
 		) {
@@ -51,10 +50,6 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		windowedtest.MixedSubject("in-memory", func() windowed.Mixed {
 			return windowedtest.NewInMemory()
 		}),
-		// Dropped rather than satisfied: an unrecorded key counts zero, which
-		// is an answer rather than a miss — this shape has no input CountIn
-		// refuses, so the zero-on-error check has nothing to find.
-		windowedtest.MixedWithout("CountIn/an error carries the zero value"),
 		windowedtest.MixedWithoutDouble(),
 	)
 }

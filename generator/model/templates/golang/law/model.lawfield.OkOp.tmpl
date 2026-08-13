@@ -1,0 +1,9 @@
+{{- /*
+An error operation read as success: the corruption either landed or it did
+not, and the law only needs the verdict.
+*/ -}}
+{{- define "model.lawfield.OkOp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) bool {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }}) == nil
+		}
+{{- end -}}

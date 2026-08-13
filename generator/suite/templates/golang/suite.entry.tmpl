@@ -27,7 +27,7 @@ per implementation, which is where the statements drift.
 // against a subject you can build, so the check is yours to write:
 //
 {{- range . }}
-//   - {{ .Name }}, on {{ .MethodList }} — write it with {{ $.IfaceName }}On{{ index .Methods 0 }}
+//   - {{ .Name }}, on {{ .UncheckedList }} — write it with {{ $.IfaceName }}On{{ index .Unchecked 0 }}
 {{- end }}
 {{- end }}
 {{- with .Elsewhere }}
@@ -38,7 +38,7 @@ per implementation, which is where the statements drift.
 // has no way to build. Nothing here asserts them and nothing here should:
 //
 {{- range . }}
-//   - {{ .Name }}, on {{ .MethodList }}
+//   - {{ .Name }}, on {{ .UncheckedList }}
 {{- end }}
 //
 // //testkit:model on the interface derives that reference, and the

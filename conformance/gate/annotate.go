@@ -99,6 +99,28 @@ func run(ctx context.Context, root string, patterns ...string) (*pipeline.Pipeli
 	return pipe, nil
 }
 
+// DetectorStamps returns each package's detector stamps — the per-fixture
+// view [Annotate]'s corpus-wide census deliberately flattens, for the
+// identity gate that holds a detector fixture to the shape its directory
+// names. eidos#26 proved the need the hard way: two fixtures drifted from
+// their named shapes with years of green builds, because coverage asked
+// only whether the stamps existed somewhere.
+func DetectorStamps(ctx context.Context, root string, patterns ...string) (map[string][]string, error) {
+	pipe, err := run(ctx, root, patterns...)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]string{}
+	for _, iface := range pipe.Store().Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if s := shape.Get(m.Meta()); s != "" {
+				out[iface.Package] = append(out[iface.Package], s)
+			}
+		}
+	}
+	return out, nil
+}
+
 // collect reads the stamped classifications off every callable in the store.
 //
 // Structural shape is a single value per callable, while contracts and mixins

@@ -12,8 +12,8 @@ caller zipping keys to results reads every value against the wrong key from.
 // says so.
 func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 {{ template "suite.violate.open" . }}
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 			return {{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}nil{{ else }}make({{ renderType $r.Type }}, 1){{ end }}{{ end }}
 		}))
 

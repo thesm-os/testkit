@@ -11,7 +11,12 @@ package cursor
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrClosed is what Next reports once Close has run — the contract's own
+// sentinel, declared beside the shape so the directive can name it.
+var ErrClosed = errors.New("cursor: closed")
 
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
@@ -25,7 +30,7 @@ type Value struct{ Key, Body string }
 type Contract interface {
 	// Next is the cursor contract's next role, and hosts the directive
 	// that names its partners.
-	//testkit:contract cursor role=next close=Close
+	//testkit:contract cursor role=next close=Close sentinel=ErrClosed
 	Next(ctx context.Context) (Value, bool, error)
 
 	// Close is the cursor contract's close role.

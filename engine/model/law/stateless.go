@@ -33,11 +33,11 @@ func (l Roundtrip[T, X]) Check(rt *rapid.T, sut, _ T) error {
 	x := l.Values.Draw(rt, "Roundtrip_x")
 	y, err := l.Forward(rt, sut, x)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	back, err := l.Inverse(rt, sut, y)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if diff := cmp.Diff(x, back); diff != "" {
 		return fmt.Errorf("roundtrip law: Inverse(Forward(%v)) != %v:\n%s", x, x, diff)
@@ -65,15 +65,15 @@ func (l LossyRoundtrip[T, X]) Check(rt *rapid.T, sut, _ T) error {
 	x := l.Values.Draw(rt, "LossyRoundtrip_x")
 	y1, err := l.Forward(rt, sut, x)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	back, err := l.Inverse(rt, sut, y1)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	y2, err := l.Forward(rt, sut, back)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if diff := cmp.Diff(y1, y2); diff != "" {
 		return fmt.Errorf("LossyRoundtrip: F(Inverse(F(%v))) != F(%v):\n%s", x, x, diff)

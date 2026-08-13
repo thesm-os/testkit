@@ -73,7 +73,7 @@ func TestAggregatorBounded(t *testing.T) {
 			Min:  0, Max: 10,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, &aggSUT{}, &aggSUT{}); err != nil {
+			if err := l.Check(rt, &aggSUT{}, &aggSUT{}); !law.Holds(err) {
 				rt.Fatal(err)
 			}
 		})
@@ -210,7 +210,7 @@ func TestAggregatorLawBranches(t *testing.T) {
 			Values:  rapid.Just(1),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused Apply is a precondition: %v", err)
 			}
 		})
@@ -248,7 +248,7 @@ func TestAggregatorLawBranches(t *testing.T) {
 		}
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &intBag{}
-			if err := l.Check(rt, b, b); err != nil {
+			if err := l.Check(rt, b, b); !law.Holds(err) {
 				rt.Fatalf("a refused write is a precondition: %v", err)
 			}
 		})
@@ -341,7 +341,7 @@ func TestWindowedLawBranches(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			c := &counter{err: errors.New("unavailable")}
 			l := mk(c, true)
-			if err := l.Check(rt, c, c); err != nil {
+			if err := l.Check(rt, c, c); !law.Holds(err) {
 				rt.Fatalf("an unreadable counter is a precondition: %v", err)
 			}
 		})
@@ -353,7 +353,7 @@ func TestWindowedLawBranches(t *testing.T) {
 			c := &counter{}
 			l := mk(c, true)
 			l.Incr = func(*rapid.T, *counter, string) error { return errors.New("throttled") }
-			if err := l.Check(rt, c, c); err != nil {
+			if err := l.Check(rt, c, c); !law.Holds(err) {
 				rt.Fatalf("a refused increment is a precondition: %v", err)
 			}
 		})
@@ -406,7 +406,7 @@ func TestAggregatorLawPreconditionsAndViolations(t *testing.T) {
 				Values:  rapid.IntRange(0, 5),
 				Observe: func(_ *rapid.T, b *intBag) int { return b.sum },
 			}
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatalf("a refused second grouping is a precondition: %v", err)
 			}
 		})

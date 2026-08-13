@@ -32,7 +32,7 @@ func (AggregatorBounded[T, R]) REQID() string { return "" }
 func (l AggregatorBounded[T, R]) Check(rt *rapid.T, sut, _ T) error {
 	got, err := l.Read(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if got < l.Min || got > l.Max {
 		return fmt.Errorf("AggregatorBounded: got %v outside [%v, %v]", got, l.Min, l.Max)
@@ -65,12 +65,12 @@ func (l Associative[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 
 	left := l.Factory()
 	if l.Apply(rt, left, a) != nil || l.Apply(rt, left, b) != nil || l.Apply(rt, left, c) != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 
 	right := l.Factory()
 	if l.Apply(rt, right, a) != nil || l.Apply(rt, right, b) != nil || l.Apply(rt, right, c) != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 
 	leftObs := l.Observe(rt, left)
@@ -103,7 +103,7 @@ func (l Conservative[T, V]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "Conservative_value")
 	before := l.Sum(rt, sut)
 	if err := l.Write(rt, sut, v); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The accepted write lands on both sides — the mirrored half of the
 	// [Law] conduct contract.
@@ -147,10 +147,10 @@ func (l Windowed[T, K]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "Windowed_key")
 	before, err := l.Count(rt, sut, k)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if incErr := l.Incr(rt, sut, k); incErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The accepted increment lands on both sides — the mirrored half of the
 	// [Law] conduct contract. Advance stays unmirrored: the clock is the

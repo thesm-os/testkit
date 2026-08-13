@@ -11,8 +11,8 @@ subject the zero comparison exists to reject and the only one it can.
 // answer from an absence, which is the whole of what this shape signals with.
 func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
 {{ template "suite.violate.open" . }}
-	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ .TypeArgs }}(t,
-		{{ renderExpr (external .HarnessPkg .Option) }}{{ .TypeArgs }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
 {{- template "suite.violate.plausible" . }}
 		}))
 

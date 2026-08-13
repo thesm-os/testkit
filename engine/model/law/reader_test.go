@@ -220,7 +220,7 @@ func TestPointInTimeBranches(t *testing.T) {
 			Keys: rapid.Just("k"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a consistently absent key is a precondition: %v", err)
 			}
 		})
@@ -315,7 +315,7 @@ func TestMonotonicNonDecreasingBranches(t *testing.T) {
 				Read: func(*rapid.T, int) (int, error) { return 0, errors.New("unavailable") },
 				Less: func(a, b int) bool { return a < b },
 			}
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused read is a precondition: %v", err)
 			}
 		})
@@ -335,7 +335,7 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 			Keys: rapid.Just("k"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a consistently absent key is a precondition: %v", err)
 			}
 		})
@@ -435,7 +435,7 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 			Keys: rapid.Just("k"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); !law.Holds(err) {
 				rt.Fatalf("a refused read is a precondition: %v", err)
 			}
 		})

@@ -29,11 +29,12 @@ var ErrClosed = errors.New("lifecycleafterclose: closed")
 //testkit:suite
 //testkit:model
 type Mixed interface {
-	// Close is the teardown the law measures from.
-	//testkit:mixin lifecycleafterclose
+	// Close is the teardown the claim measures from.
 	Close(ctx context.Context) error
 
-	// Work must report [ErrClosed] once Close has run. Without an operation
-	// to reject, closure is unobservable.
+	// Work must report [ErrClosed] once Close has run — the mixin rides the
+	// operation, because the claim is about what the operation answers, and
+	// its parameters name the teardown and the sentinel the refusal carries.
+	//testkit:mixin lifecycleafterclose close=Close sentinel=ErrClosed
 	Work(ctx context.Context) error
 }

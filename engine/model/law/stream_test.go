@@ -265,7 +265,7 @@ func TestStreamOverMatch(t *testing.T) {
 			Hash:     func(v string) string { return v },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, nil, nil); err != nil {
+			if err := l.Check(rt, nil, nil); !law.Holds(err) {
 				rt.Fatal(err)
 			}
 		})
@@ -389,7 +389,7 @@ func TestStreamLawDrainFailures(t *testing.T) {
 		s := &streamSUT{drainErr: errors.New("closed")}
 		l := law.StreamCompletion[*streamSUT, int]{Drain: s.drain}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a failed drain is a precondition: %v", err)
 			}
 		})
@@ -402,7 +402,7 @@ func TestStreamLawDrainFailures(t *testing.T) {
 			Drain: s.drain, Hash: func(v int) int { return v },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a failed drain is a precondition: %v", err)
 			}
 		})
@@ -415,7 +415,7 @@ func TestStreamLawDrainFailures(t *testing.T) {
 			Drain: s.drain, Less: func(a, b int) bool { return a < b },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a failed drain is a precondition: %v", err)
 			}
 		})
@@ -430,7 +430,7 @@ func TestStreamLawDrainFailures(t *testing.T) {
 			Hash:     func(v int) int { return v },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a failed drain is a precondition: %v", err)
 			}
 		})
@@ -598,7 +598,7 @@ func TestStreamReflectsMutationsBranches(t *testing.T) {
 			Hash:   hash,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused put is a precondition: %v", err)
 			}
 		})
@@ -655,7 +655,7 @@ func TestStreamReflectsMutationsBranches(t *testing.T) {
 				Values: rapid.Just(1),
 				Hash:   hash,
 			}
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("no baseline count means no claim to compare: %v", err)
 			}
 		})
@@ -683,7 +683,7 @@ func TestStreamReflectsMutationsBranches(t *testing.T) {
 				Delete: func(*rapid.T, *setSUT, int) error { return errors.New("no") },
 				Drain:  drain, Values: rapid.Just(1), Hash: hash,
 			}
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); !law.Holds(err) {
 				rt.Fatalf("a refused delete is a precondition: %v", err)
 			}
 		})

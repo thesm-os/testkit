@@ -40,6 +40,10 @@ const (
 	KindViolateMissZero    sdk.Kind = "suite.violate.misszero"
 	KindViolateMissFlag    sdk.Kind = "suite.violate.missflag"
 	KindViolateTimeout     sdk.Kind = "suite.violate.timeout"
+
+	KindViolateCloseIdempotent sdk.Kind = "suite.violate.closeidempotent"
+	KindViolateUseAfterClose   sdk.Kind = "suite.violate.useafterclose"
+	KindViolateConcurrentSmoke sdk.Kind = "suite.violate.concurrentsmoke"
 )
 
 // Falsification is the emit value rendered into the tagged test output.
@@ -71,6 +75,11 @@ type Falsification struct {
 	// FixtureCtor names the derived-input constructor in the harness, so a
 	// guard hands the check the same values the run does.
 	FixtureCtor string
+
+	// Witnesses are the concrete types every guard instantiates the generic
+	// harness at — the double's own, so the two companions prove one
+	// instantiation. Empty for a non-generic interface.
+	Witnesses []sdk.Ref
 
 	// Cases are the checks with a derivable violator, in harness order.
 	Cases []*Violation
@@ -112,6 +121,39 @@ func (f *Falsification) SetOutputPackages(byTag map[string]string) {
 	}
 }
 
+// witnessedMethod rewrites a method's signature at the witnesses: every
+// parameter and return naming a type parameter lands at the concrete type a
+// guard can spell. The projection is shared with the harness's own rendering,
+// so the rewrite clones, and a nil binding map returns the method untouched.
+func witnessedMethod(m Method, by map[string]sdk.Ref) Method {
+	if by == nil {
+		return m
+	}
+	sig := *m.Sig
+	params := make([]golang.Param, len(sig.Params))
+	for i, p := range sig.Params {
+		p.Type = golang.SubstituteTypeParams(p.Type, by)
+		params[i] = p
+	}
+	returns := make([]golang.Return, len(sig.Returns))
+	for i, r := range sig.Returns {
+		r.Type = golang.SubstituteTypeParams(r.Type, by)
+		returns[i] = r
+	}
+	sig.Params, sig.Returns = params, returns
+	m.Sig = &sig
+	return m
+}
+
+// witnessedPartner is [witnessedMethod] over the nilable partner slot.
+func witnessedPartner(m *Method, by map[string]sdk.Ref) *Method {
+	if m == nil || by == nil {
+		return m
+	}
+	w := witnessedMethod(*m, by)
+	return &w
+}
+
 // unfalsifiableReason says why this interface gets no companion output, empty
 // where it gets one.
 //
@@ -121,11 +163,13 @@ func (f *Falsification) SetOutputPackages(byTag map[string]string) {
 // which cannot carry type arguments — so a generic interface would need a
 // concrete instantiation, and nothing in the source says which.
 func unfalsifiableReason(iface *sdk.Interface, doubles map[sdk.Node]*stub.Stub) string {
-	if _, hosted := doubles[sdk.Node(iface)]; !hosted {
+	double, hosted := doubles[sdk.Node(iface)]
+	if !hosted {
 		return "the interface declares no //testkit:stub, so there is nothing to break"
 	}
-	if len(iface.TypeParams) > 0 {
-		return "the interface is generic, so nothing names the types to prove it with"
+	if len(iface.TypeParams) > 0 && len(double.Witnesses) == 0 {
+		return "the interface is generic and its constraints derive no witnesses; " +
+			"name the types to prove it with through witness= on //testkit:stub"
 	}
 	return ""
 }
@@ -163,6 +207,11 @@ type Unproven struct {
 type Violation struct {
 	sdk.BaseEmit
 	Subject
+
+	// Witnesses are the concrete types this guard instantiates the harness's
+	// generic entry points at — the falsification's own, carried per case
+	// because each case renders through its own template.
+	Witnesses []sdk.Ref
 
 	// KindName is the emit kind, and therefore the template that renders this
 	// guard.
@@ -320,9 +369,10 @@ var violators = map[sdk.Kind]struct {
 		because:   "panicked on a nil context",
 	},
 	KindZeroOnError: {
-		violation: KindViolateZeroOnError,
-		reason:    "a method that succeeds for an input it should miss",
-		because:   "supply inputs it misses",
+		violation:      KindViolateZeroOnError,
+		reason:         "a method answering a believable value beside its error",
+		because:        becauseZeroValue,
+		needsPlausible: true,
 	},
 	KindIfAbsent: {
 		violation: KindViolateIfAbsent,
@@ -366,19 +416,34 @@ var violators = map[sdk.Kind]struct {
 	KindMissZero: {
 		violation:      KindViolateMissZero,
 		reason:         "a reader answering with a plausible value for a key it does not hold",
-		because:        "must return the zero value",
+		because:        becauseZeroValue,
 		needsPlausible: true,
 	},
 	KindMissFlag: {
 		violation:      KindViolateMissFlag,
 		reason:         "a reader answering with a plausible value beside a false flag",
-		because:        "must return the zero value",
+		because:        becauseZeroValue,
 		needsPlausible: true,
 	},
 	KindTimeout: {
 		violation: KindViolateTimeout,
 		reason:    "a method that spends twice its declared budget",
 		because:   "over its declared budget",
+	},
+	KindCloseIdempotent: {
+		violation: KindViolateCloseIdempotent,
+		reason:    "a teardown that refuses its second call",
+		because:   "must be a no-op",
+	},
+	KindUseAfterClose: {
+		violation: KindViolateUseAfterClose,
+		reason:    "an operation that answers as though nothing were closed",
+		because:   "must report the declared sentinel",
+	},
+	KindConcurrentSmoke: {
+		violation: KindViolateConcurrentSmoke,
+		reason:    "a method that panics the moment callers overlap",
+		because:   "panicked under concurrent callers",
 	},
 	KindNilSafe: {
 		violation: KindViolateNilSafe,
@@ -410,6 +475,11 @@ var violators = map[sdk.Kind]struct {
 	},
 }
 
+// becauseZeroValue is the failure phrase the three zero-comparison checks
+// share — the zero-on-error claim and both halves of the miss family report
+// the same comparison.
+const becauseZeroValue = "must return the zero value"
+
 // falsificationOf builds the companion output for one interface, or reports
 // that there is nothing to prove.
 //
@@ -429,6 +499,7 @@ func falsificationOf(
 		BaseEmit:    sdk.EmitBaseTagged(sdk.EmitBase(c, iface), GoTestOutputTag),
 		Subject:     subjectOf(iface),
 		Double:      contract.Double,
+		Witnesses:   contract.Double.Witnesses,
 		FixtureCtor: contract.Fixture.CtorName,
 		// Provisional, and deliberately wrong rather than empty: Layout has not
 		// resolved the harness's package yet, and a bare name would bind to
@@ -437,7 +508,13 @@ func falsificationOf(
 		HarnessPkg: iface.Package,
 	}
 
+	// The witness substitution, once per companion: a guard's stand-in spells
+	// its overriding closure at the method's own parameter and return types,
+	// and inside a Test function a type parameter is not a name.
+	by := golang.WitnessBindings(iface.TypeParams, contract.Double.Witnesses)
+
 	for _, m := range contract.Methods {
+		m = witnessedMethod(m, by)
 		for _, ck := range m.Checks {
 			// No guard on an unknown kind. Every check kind has a violator, and
 			// [TestEveryCheckKindHasAViolator] is what keeps that true — a
@@ -466,13 +543,14 @@ func falsificationOf(
 			f.Cases = append(f.Cases, &Violation{
 				BaseEmit:      sdk.EmitBaseTagged(sdk.EmitBase(c, iface), GoTestOutputTag),
 				Subject:       subjectOf(iface),
+				Witnesses:     contract.Double.Witnesses,
 				KindName:      v.violation,
 				TestName:      "Test" + ck.Func + "CanFail",
 				Check:         ck,
 				Method:        m,
 				Option:        "With" + iface.Name + m.Name,
 				PartnerOption: partnerOption,
-				Partner:       ck.Partner,
+				Partner:       witnessedPartner(ck.Partner, by),
 				CtorName:      contract.Double.CtorName,
 				FixtureCtor:   contract.Fixture.CtorName,
 				Plausible:     plausible,

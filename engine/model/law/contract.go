@@ -38,7 +38,7 @@ func (l PersisterRetrievable[T, V, ID]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "PersisterRetrievable_value")
 	id, err := l.Save(rt, sut, v)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The accepted save lands on both sides — the mirrored half of the [Law]
 	// conduct contract. The reference's own id is its own business: the claim
@@ -86,7 +86,7 @@ func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 		return nil // shrink will eventually find a same-key pair
 	}
 	if err := l.Update(rt, sut, v1); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// Each accepted update lands on both sides — the mirrored half of the
 	// [Law] conduct contract.
@@ -94,7 +94,7 @@ func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 		return err
 	}
 	if err := l.Update(rt, sut, v2); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := mirror("UpdaterReplaces", func() error { return l.Update(rt, ref, v2) }); err != nil {
 		return err
@@ -128,7 +128,7 @@ func (UpserterIdempotent[T, V, K]) REQID() string { return "" }
 func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v := l.Values.Draw(rt, "UpserterIdempotent_value")
 	if upsertErr := l.Upsert(rt, sut, v); upsertErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// Each accepted upsert lands on both sides — the mirrored half of the
 	// [Law] conduct contract.
@@ -137,7 +137,7 @@ func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	}
 	first, readErr := l.Read(rt, sut, l.KeyOf(v))
 	if readErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if err := l.Upsert(rt, sut, v); err != nil {
 		return fmt.Errorf("upserter law: second upsert errored: %v", err)
@@ -239,7 +239,7 @@ func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, ref T) err
 	v := l.Values.Draw(rt, "AppenderMonotonicOffsets_value")
 	off, err := l.Append(rt, sut, v)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The accepted append lands on both sides — the mirrored half of the
 	// [Law] conduct contract. The reference's offset is its own; the claim
@@ -372,7 +372,7 @@ func (LeaseDoubleAcquireBlocks[T, K]) REQID() string { return "" }
 func (l LeaseDoubleAcquireBlocks[T, K]) Check(rt *rapid.T, sut, _ T) error {
 	k := l.Keys.Draw(rt, "LeaseDoubleAcquireBlocks_key")
 	if err := l.Acquire(rt, sut, k); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	defer func() { _ = l.Release(rt, sut, k) }()
 	err := l.Acquire(rt, sut, k)
@@ -539,13 +539,13 @@ func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error {
 	for i := range n {
 		s, err := l.Subscribe(rt, sut)
 		if err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 		subs[i] = s
 	}
 	msg := l.Messages.Draw(rt, "PublisherDelivers_msg")
 	if err := l.Publish(rt, sut, msg); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The whole cycle lands on both sides — the mirrored half of the [Law]
 	// conduct contract. The reference's subscriber is subscribed, published
@@ -644,13 +644,13 @@ func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error 
 	for i := range n {
 		s, err := l.Subscribe(rt, sut)
 		if err != nil {
-			return nil //nolint:nilerr // precondition failed; law vacuously holds
+			return Vacuous // a precondition this run supplies was refused
 		}
 		subs[i] = s
 	}
 	msg := l.Messages.Draw(rt, "PublisherDeliveryBound_msg")
 	if err := l.Publish(rt, sut, msg); err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if l.Redeliver != nil {
 		l.Redeliver(rt, sut, msg)
@@ -748,11 +748,11 @@ func (l TransactionNoMidTxVisibility[T, Tx, K, V]) Check(rt *rapid.T, sut, _ T) 
 	before, beforeErr := l.Read(rt, sut, k)
 	tx, err := l.Begin(rt, sut)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if putErr := l.TxPut(rt, tx, k, v); putErr != nil {
 		_ = l.TxRollback(rt, tx)
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	mid, midErr := l.Read(rt, sut, k)
 	_ = l.TxRollback(rt, tx)
@@ -810,7 +810,7 @@ func (l LeaseReleasedOnCancel[T, K]) Check(rt *rapid.T, sut, _ T) error {
 	ctx, cancel := context.WithCancel(rt.Context())
 	if err := l.Acquire(ctx, sut, k); err != nil {
 		cancel()
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	if l.Free(rt, sut, k) {
 		cancel()
@@ -869,11 +869,11 @@ func (l WatcherReturnsOnChange[T, W, K, V]) Check(rt *rapid.T, sut, ref T) error
 	v := l.Values.Draw(rt, "WatcherReturnsOnChange_value")
 	w, err := l.Watch(rt, sut, k)
 	if err != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	defer l.Stop(w)
 	if mErr := l.Mutate(rt, sut, k, v); mErr != nil {
-		return nil //nolint:nilerr // precondition failed; law vacuously holds
+		return Vacuous // a precondition this run supplies was refused
 	}
 	// The mutation lands on both sides — the mirrored half of the [Law]
 	// conduct contract. The watch itself stays subject-side: it is the
