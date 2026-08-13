@@ -229,8 +229,17 @@ const (
 	fRollback           = "Rollback"
 	fRun                = "Run"
 	fPage               = "Page"
+	fReplay             = "Replay"
+	fCAS                = "CAS"
+	fromFamilyCell      = "family.cell"
 	handleKeyProjection = "key-projection"
 	handleCoalesce      = "coalesce-probe"
+	handleVersionStamp  = "version-stamp"
+	handleHistoryLog    = "history"
+
+	// paramCASVersion is the cas contract's version member stamp — the
+	// field of the attempt the compare-and-set guards by.
+	paramCASVersion = "shape.contract.cas.param.version"
 )
 
 //nolint:gochecknoglobals // a lookup table, read-only after init.
@@ -275,7 +284,7 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.XSSSafe:          {"Render": shapeInputCall},
 
 	lawid.AppenderMonotonicOffsets: {"Append": shapeAppendOff},
-	lawid.CASAtomicOneWinner:       {"CAS": shapeValueOp, fRead: shapeScalar},
+	lawid.CASAtomicOneWinner:       {fCAS: shapeValueOp, fRead: shapeScalar},
 	lawid.LeakFree:                 {"Open": shapeErrOp, "Close": shapeErrOp},
 	lawid.LeaseDoubleAcquireBlocks: {"Acquire": shapeKeyedOp, "Release": shapeKeyedOp},
 	lawid.PersisterRetrievable:     {"Save": shapeSave, fRead: shapeKeyedRead},
@@ -285,9 +294,10 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.UpserterIdempotent:       {"Upsert": shapeValueOp, fRead: shapeKeyedRead},
 	lawid.ValidTransition:          {fWrite: shapeValueOp},
 
-	lawid.AppendOnlyGrows:          {"Replay": shapeReplay},
+	lawid.AppendOnlyGrows:          {fReplay: shapeReplay},
+	lawid.AppendOnlyNoDrops:        {fReplay: shapeReplay},
 	lawid.HashChainIntegrityVerify: {"Verify": shapeErrOp},
-	lawid.ReplayDeterministic:      {"Replay": shapeReplay},
+	lawid.ReplayDeterministic:      {fReplay: shapeReplay},
 
 	lawid.TamperEvident:         {fWrite: shapeValueOp, "Tamper": shapeOkOp, "Verify": shapeErrOp},
 	lawid.CursorCloseIdempotent: {fClose: shapeErrOp},
@@ -395,11 +405,20 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			seen[key] = true
 			b.Laws = append(b.Laws, binding)
 			for _, field := range binding.Fields {
-				// The flag rides the appended binding, never the attempt: a
-				// probe filled for a law that later refused would render
+				// The flags ride the appended binding, never the attempt: a
+				// handle filled for a law that later refused would render
 				// locals nothing uses.
 				if field.Kind() == sdk.Kind(LawFieldKindPrefix+"Compute") {
 					b.Coalesced = true
+				}
+				if field.Kind() == sdk.Kind(LawFieldKindPrefix+"HistoryRef") {
+					b.RecordsHistory = true
+					b.HistoryElem = field.Value
+					for _, a := range b.Actions {
+						if a.Method == field.Method {
+							a.Records = true
+						}
+					}
 				}
 			}
 		}
@@ -1490,8 +1509,54 @@ func handleFieldOf(
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Counter")
 		return field, ""
 
-	case "history":
-		return nil, f.Name + " waits on an append-recording history hook the runner does not offer"
+	case handleVersionStamp:
+		// The version-coherent draw: read the cell, copy its version member
+		// into the drawn attempt. Both types carry the member — the stamp
+		// key names one field of one payload — and a fixture where they
+		// drift fails to compile in the package that armed it.
+		cell, reason := ruleFieldRole(b, harness, r, fRead, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		attempt, reason := ruleFieldRole(b, harness, r, fCAS, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		if len(attempt.CallArgs()) == 0 {
+			return nil, f.Name + " stamps " + attempt.Name + "'s attempt, and it takes none"
+		}
+		member, stamped := stampValue(harness, m, paramCASVersion)
+		if !stamped {
+			return nil, f.Name + " reads the version member, and the cas directive names none"
+		}
+		field.Method = cell.Name
+		field.TakesCtx = cell.TakesContext()
+		field.In = attempt.CallArgs()[0].Type
+		field.KeyField = golang.LocalName(member)
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "VersionStamp")
+		return field, ""
+
+	case handleHistoryLog:
+		// The append-recording history: a property-level log of every
+		// successful append the sequences drove, cleared by the runner each
+		// iteration. The field rides the append role so the inert check
+		// catches a derived reference answering it inertly.
+		appendRole, reason := roleMethod(b, harness, "chain.append", m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		replayRole, reason := ruleFieldRole(b, harness, r, fReplay, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		elem, why := drainedElem(b, replayRole)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Method = appendRole.Name
+		field.Value = elem
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "HistoryRef")
+		return field, ""
 	}
 	return nil, f.Name + " needs the " + f.From + " handle, which this build does not construct"
 }
@@ -1891,7 +1956,7 @@ func roleMethod(
 			}
 		}
 		return nil, "names the aggregator family, and the interface has no aggregate"
-	case "family.cell":
+	case fromFamilyCell:
 		if harness != nil {
 			for i := range harness.Methods {
 				candidate := &harness.Methods[i]
@@ -1906,6 +1971,9 @@ func roleMethod(
 		return nil, "names the cell family, and the interface has no nullary read"
 	}
 	if owner, param, ok := strings.Cut(from, "."); ok && !strings.HasPrefix(from, "family.") {
+		if m == nil {
+			return nil, "names " + from + ", which no selecting method stamps"
+		}
 		// A mixin's sibling parameter first — `deleteremoves.read` names the
 		// method its stamp points at.
 		v, stamped := shape.MixinParamKey(owner, param).Get(m.Source.Meta())

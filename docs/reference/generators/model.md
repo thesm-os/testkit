@@ -168,6 +168,15 @@ parameter with no hint is a diagnostic at the parameter.
   from. The atomic mixin joins the oracle-defeating claims: its law is
   about refused writes, a derived map refuses nothing, and the twin shares
   the policy.
+- **Version-coherent CAS draws, and an append log the runner clears** —
+  the cas contract's one-winner law stamps both drawn attempts at the
+  cell's current version before racing them (the VersionedCell dialect:
+  the seen version advanced by one, zero for an unreadable cell), because
+  two attempts at a stale version are two mismatches and no winner. The
+  chain contract's no-drops law reads a generated append history: the
+  append action logs every success into it, the law checks membership
+  against the replay, and the runner clears it each iteration through
+  `WithHistoryReset`.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history

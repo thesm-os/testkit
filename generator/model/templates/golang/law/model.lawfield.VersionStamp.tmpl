@@ -1,0 +1,17 @@
+{{- /*
+The version-coherent draw, in the VersionedCell dialect the engine oracle
+pins: the cell answers the written value verbatim, so the coherent next
+attempt carries the seen version advanced by one — and an unreadable cell
+is an unwritten one, whose coherent first attempt is the zero version.
+*/ -}}
+{{- define "model.lawfield.VersionStamp" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, v {{ renderType .In }}) {{ renderType .In }} {
+			cur, err := s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			if err != nil {
+				v.{{ .KeyField }} = 0
+				return v
+			}
+			v.{{ .KeyField }} = cur.{{ .KeyField }} + 1
+			return v
+		}
+{{- end -}}

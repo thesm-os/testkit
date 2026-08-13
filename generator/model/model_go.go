@@ -63,6 +63,10 @@ const (
 	// helpers the derived concurrent leg wires.
 	LinearizePkg = ModelPkg + "/linearize"
 
+	// HistoryPkg is the per-iteration append log the no-drops law reads
+	// and the recording action fills.
+	HistoryPkg = ModelPkg + "/history"
+
 	// RootPkg is the runtime module — the kill matrix's failure surrogate
 	// lives there.
 	RootPkg = "go.thesmos.sh/testkit"

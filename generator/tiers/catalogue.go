@@ -208,6 +208,12 @@ const (
 	handleOrder    = "natural-order"
 	handleClassify = "trace-classifier"
 
+	// handleVersionStamp is the version-coherent draw: an attempt stamped
+	// at the cell's current version, which is what makes "exactly one
+	// winner" a theorem — two attempts at a stale version are two
+	// mismatches and no winner.
+	handleVersionStamp = "version-stamp"
+
 	// handleObserve is the composed whole-state observation: the batch read
 	// where the interface streams its state, the aggregate where it counts
 	// it, the fixture-keyed read where it stores it. One derivation, because
@@ -804,7 +810,11 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: "CAS", Kind: KindRole, From: "cas.writer"},
 			{Name: fieldRead, Kind: KindRole, From: familyCell},
-			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			// The law's own pool over the writer's input: the VersionedCell
+			// election leaves no shared values pool, and the attempts are
+			// the law's to draw anyway — the stamp below makes them land.
+			{Name: fieldValues, Kind: KindGenerator, From: genInputs},
+			{Name: "Stamp", Kind: KindHandle, From: handleVersionStamp},
 			{Name: "Mismatch", Kind: KindConstant, From: paramCASMismatch},
 		},
 	},

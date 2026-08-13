@@ -108,6 +108,58 @@ func TestCASAtomicOneWinner(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("the stamp makes stale draws coherent", func(t *testing.T) {
+		t.Parallel()
+		type entry struct {
+			V       int
+			Version int
+		}
+		errMismatch := errors.New("mismatch")
+
+		l := law.CASAtomicOneWinner[*ref.AtomicCell[entry, int], entry]{
+			CAS: func(rt *rapid.T, c *ref.AtomicCell[entry, int], e entry) error {
+				return c.CompareAndSwap(rt.Context(), e)
+			},
+			Read: func(rt *rapid.T, c *ref.AtomicCell[entry, int]) (entry, error) {
+				v, ver, ok := c.Get(rt.Context())
+				if !ok {
+					var zero entry
+					return zero, errors.New("empty")
+				}
+				v.Version = ver
+				return v, nil
+			},
+			// Deliberately stale draws: without the stamp both attempts
+			// mismatch and the law reports no winner.
+			Values: rapid.SampledFrom([]entry{
+				{V: 1, Version: 99},
+				{V: 2, Version: 99},
+			}),
+			Stamp: func(rt *rapid.T, c *ref.AtomicCell[entry, int], e entry) entry {
+				_, ver, ok := c.Get(rt.Context())
+				if !ok {
+					e.Version = 0
+					return e
+				}
+				e.Version = ver
+				return e
+			},
+			Mismatch: errMismatch,
+		}
+
+		rapid.Check(t, func(rt *rapid.T) {
+			c := ref.NewAtomicCell(
+				func(e entry) int { return e.Version },
+				func(v int) int { return v + 1 },
+				errMismatch,
+			)
+			_ = c.CompareAndSwap(rt.Context(), entry{V: 0, Version: 0})
+			if err := l.Check(rt, c, c); err != nil {
+				rt.Fatal(err)
+			}
+		})
+	})
 }
 
 func TestLeaseDoubleAcquireBlocks(t *testing.T) {

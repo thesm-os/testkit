@@ -164,6 +164,13 @@ type CASAtomicOneWinner[T any, V any] struct {
 	Read     func(*rapid.T, T) (V, error)
 	Values   *rapid.Generator[V]
 	Mismatch error
+
+	// Stamp coerces a drawn attempt to the cell's current version — the
+	// version-coherent draw that makes "exactly one winner" a theorem
+	// rather than a coin toss, since two attempts at a stale version are
+	// two mismatches and no winner. Nil leaves the draws raw, for a caller
+	// whose generator is already coherent.
+	Stamp func(*rapid.T, T, V) V
 }
 
 // ID returns the stable identifier for this law.
@@ -176,6 +183,12 @@ func (CASAtomicOneWinner[T, V]) REQID() string { return "" }
 func (l CASAtomicOneWinner[T, V]) Check(rt *rapid.T, sut, ref T) error {
 	v1 := l.Values.Draw(rt, "CASAtomicOneWinner_v1")
 	v2 := l.Values.Draw(rt, "CASAtomicOneWinner_v2")
+	if l.Stamp != nil {
+		// Both attempts stamped before either runs: the point is two writes
+		// contending at one version, and stamping the second after the first
+		// won would hand it the bumped version and a free win.
+		v1, v2 = l.Stamp(rt, sut, v1), l.Stamp(rt, sut, v2)
+	}
 	err1 := l.CAS(rt, sut, v1)
 	err2 := l.CAS(rt, sut, v2)
 	// The same pair of attempts lands on both sides — the mirrored half of

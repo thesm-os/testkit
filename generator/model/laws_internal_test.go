@@ -861,9 +861,9 @@ func TestHandleFieldArms(t *testing.T) {
 		t.Parallel()
 		for from, needle := range map[string]string{
 			"trace-classifier": "no keyed reader",
-			"history":          "history hook",
-			// The probe constructs now; asked outside a rule that names its
-			// Call role, the refusal says which half is missing.
+			// Both construct now; asked with nothing to resolve through, the
+			// refusal says which half is missing.
+			"history":        "no selecting method stamps",
 			"coalesce-probe": "the manifest does not name",
 		} {
 			_, reason := handle(b, lawid.SingleflightCoalesces, "X", from, nil)
@@ -2049,4 +2049,149 @@ func TestContractShapeAnswerClauses(t *testing.T) {
 		projected("Run", []golang.Param{arg("ctx", ctxRef()), arg("body", funcRef())},
 			[]golang.Return{res(namedRef(qStr)), errRet}))
 	testkit.Assert(t, reason).Contains("accepts no failing body", "an answering run is another shape")
+}
+
+// TestVersionStampAndHistoryHandles pins the small pair's two handles: the
+// version-coherent draw over the cas cell, and the append-recording history
+// the no-drops law reads.
+func TestVersionStampAndHistoryHandles(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+
+	t.Run("the version stamp reads the cell and names its member", func(t *testing.T) {
+		t.Parallel()
+		put := projected("Put",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))}, []golang.Return{errRet})
+		shape.ContractRoleKey("cas").Set(put.Source.EnsureMeta(), "writer", "test")
+		sdk.EnsureKey(paramCASVersion, sdk.StringParser).Set(put.Source.EnsureMeta(), "Version", "test")
+		get := projected("Get", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		r := tiers.Rule{Law: lawid.CASAtomicOneWinner, Fields: []tiers.Field{
+			{Name: "CAS", Kind: tiers.KindRole, From: "cas.writer"},
+			{Name: fRead, Kind: tiers.KindRole, From: "family.cell"},
+			{Name: "Stamp", Kind: tiers.KindHandle, From: handleVersionStamp},
+		}}
+		field, reason := lawFieldOf(b, harnessOf(put, get), r, r.Fields[2], put, nil)
+		testkit.True(t, reason == "", "the stamp binds: "+reason)
+		testkit.Equal(t, field.Method, "Get", "reading through the cell")
+		testkit.Equal(t, field.KeyField, "Version", "at the named member")
+
+		unstamped := projected("Put",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))}, []golang.Return{errRet})
+		shape.ContractRoleKey("cas").Set(unstamped.Source.EnsureMeta(), "writer", "test")
+		_, reason = lawFieldOf(b, harnessOf(unstamped, get), r, r.Fields[2], unstamped, nil)
+		testkit.Assert(t, reason).Contains("names none", "no version member, no coherent draw")
+	})
+
+	t.Run("the history rides the append role beside the replay", func(t *testing.T) {
+		t.Parallel()
+		app := projected("Append",
+			[]golang.Param{arg("ctx", ctxRef()), arg("e", namedRef("Entry"))}, []golang.Return{errRet})
+		shape.ContractRoleKey("chain").Set(app.Source.EnsureMeta(), "append", "test")
+		shape.ContractPartnerKey("chain", "replay").Set(app.Source.EnsureMeta(), "Replay", "test")
+		replay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(sliceRef(namedRef("Entry"))), errRet})
+		r := tiers.Rule{Law: lawid.AppendOnlyNoDrops, Fields: []tiers.Field{
+			{Name: fReplay, Kind: tiers.KindRole, From: "chain.replay"},
+			{Name: "History", Kind: tiers.KindHandle, From: handleHistoryLog},
+		}}
+		field, reason := lawFieldOf(b, harnessOf(app, replay), r, r.Fields[1], app, nil)
+		testkit.True(t, reason == "" && field.Value != nil, "the history binds: "+reason)
+		testkit.Equal(t, field.Method, "Append", "riding the append the inert check watches")
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.HistoryRef", "as the shared local")
+
+		bare := tiers.Rule{Law: lawid.AppendOnlyNoDrops, Fields: []tiers.Field{
+			{Name: "History", Kind: tiers.KindHandle, From: handleHistoryLog},
+		}}
+		_, reason = lawFieldOf(b, harnessOf(app, replay), bare, bare.Fields[0], app, nil)
+		testkit.Assert(t, reason).Contains("does not name", "no replay field, no element to log")
+	})
+}
+
+// TestVersionStampAndHistoryRefusals walks the pair's remaining clauses:
+// each is a distinct wrong fixture whose refusal must name the missing half.
+func TestVersionStampAndHistoryRefusals(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+
+	get := projected("Get", []golang.Param{arg("ctx", ctxRef())},
+		[]golang.Return{res(namedRef("Value")), errRet})
+
+	t.Run("a stamp without its call or its attempt refuses", func(t *testing.T) {
+		t.Parallel()
+		put := projected("Put",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))}, []golang.Return{errRet})
+		shape.ContractRoleKey("cas").Set(put.Source.EnsureMeta(), "writer", "test")
+		sdk.EnsureKey(paramCASVersion, sdk.StringParser).Set(put.Source.EnsureMeta(), "Version", "test")
+
+		bare := tiers.Rule{Law: lawid.CASAtomicOneWinner, Fields: []tiers.Field{
+			{Name: fRead, Kind: tiers.KindRole, From: "family.cell"},
+			{Name: "Stamp", Kind: tiers.KindHandle, From: handleVersionStamp},
+		}}
+		_, reason := lawFieldOf(b, harnessOf(put, get), bare, bare.Fields[1], put, nil)
+		testkit.Assert(t, reason).Contains("does not name", "no CAS field, no attempt to stamp")
+
+		nullary := projected("Put", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
+		shape.ContractRoleKey("cas").Set(nullary.Source.EnsureMeta(), "writer", "test")
+		sdk.EnsureKey(paramCASVersion, sdk.StringParser).Set(nullary.Source.EnsureMeta(), "Version", "test")
+		r := tiers.Rule{Law: lawid.CASAtomicOneWinner, Fields: []tiers.Field{
+			{Name: "CAS", Kind: tiers.KindRole, From: "cas.writer"},
+			{Name: fRead, Kind: tiers.KindRole, From: "family.cell"},
+			{Name: "Stamp", Kind: tiers.KindHandle, From: handleVersionStamp},
+		}}
+		_, reason = lawFieldOf(b, harnessOf(nullary, get), r, r.Fields[2], nullary, nil)
+		testkit.Assert(t, reason).Contains("it takes none", "nothing to stamp a version into")
+	})
+
+	t.Run("a history over a streaming replay refuses", func(t *testing.T) {
+		t.Parallel()
+		app := projected("Append",
+			[]golang.Param{arg("ctx", ctxRef()), arg("e", namedRef("Entry"))}, []golang.Return{errRet})
+		shape.ContractRoleKey("chain").Set(app.Source.EnsureMeta(), "append", "test")
+		shape.ContractPartnerKey("chain", "replay").Set(app.Source.EnsureMeta(), "Replay", "test")
+		iterReplay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("Seq")), errRet})
+		r := tiers.Rule{Law: lawid.AppendOnlyNoDrops, Fields: []tiers.Field{
+			{Name: fReplay, Kind: tiers.KindRole, From: "chain.replay"},
+			{Name: "History", Kind: tiers.KindHandle, From: handleHistoryLog},
+		}}
+		_, reason := lawFieldOf(b, harnessOf(app, iterReplay), r, r.Fields[1], app, nil)
+		testkit.Assert(t, reason).Contains("no stamp names", "an unnamed stream logs nothing typed")
+	})
+}
+
+// TestVersionStampCellAndReplayResolution pins the pair's resolution
+// clauses: a stamp whose rule names no cell read, and a history whose
+// replay partner names a method the interface does not have.
+func TestVersionStampCellAndReplayResolution(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+
+	put := projected("Put",
+		[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))}, []golang.Return{errRet})
+	shape.ContractRoleKey("cas").Set(put.Source.EnsureMeta(), "writer", "test")
+	sdk.EnsureKey(paramCASVersion, sdk.StringParser).Set(put.Source.EnsureMeta(), "Version", "test")
+	cellless := tiers.Rule{Law: lawid.CASAtomicOneWinner, Fields: []tiers.Field{
+		{Name: fCAS, Kind: tiers.KindRole, From: "cas.writer"},
+		{Name: "Stamp", Kind: tiers.KindHandle, From: handleVersionStamp},
+	}}
+	_, reason := lawFieldOf(b, harnessOf(put), cellless, cellless.Fields[1], put, nil)
+	testkit.Assert(t, reason).Contains("does not name", "no cell read, nothing to stamp from")
+
+	app := projected("Append",
+		[]golang.Param{arg("ctx", ctxRef()), arg("e", namedRef("Entry"))}, []golang.Return{errRet})
+	shape.ContractRoleKey("chain").Set(app.Source.EnsureMeta(), "append", "test")
+	shape.ContractPartnerKey("chain", "replay").Set(app.Source.EnsureMeta(), "Nonesuch", "test")
+	r := tiers.Rule{Law: lawid.AppendOnlyNoDrops, Fields: []tiers.Field{
+		{Name: fReplay, Kind: tiers.KindRole, From: "chain.replay"},
+		{Name: "History", Kind: tiers.KindHandle, From: handleHistoryLog},
+	}}
+	_, reason = lawFieldOf(b, harnessOf(app), r, r.Fields[1], app, nil)
+	testkit.Assert(t, reason).Contains("is not a method", "the partner points at nothing here")
 }

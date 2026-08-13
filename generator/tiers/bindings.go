@@ -223,6 +223,10 @@ var bindings = map[string]Binding{
 		Args: []BindArg{BindPartition, ElemOf(fieldReplay)},
 		Ptr:  true,
 	},
+	lawid.AppendOnlyNoDrops: {
+		Type: "AppendOnlyNoDrops",
+		Args: []BindArg{BindPartition, ElemOf(fieldReplay)},
+	},
 
 	// The isolated family: each Check corrupts its own throwaway pair, which
 	// the runner hands it once per iteration — the conduct census flipped

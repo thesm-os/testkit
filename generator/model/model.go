@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.19.3"
+const Version = "0.20.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -322,6 +322,12 @@ type Bindings struct {
 	// declare the locked call counter its compute probe increments.
 	Coalesced bool
 
+	// RecordsHistory marks a bound no-drops law: the property declares the
+	// append log at HistoryElem, the append action records into it, and the
+	// runner clears it each iteration.
+	RecordsHistory bool
+	HistoryElem    sdk.Ref
+
 	// ConcFamily picks the concurrent leg's model: empty for none, "kv" for
 	// the keyed-store pair, "lease" for the acquire/release table.
 	ConcFamily string
@@ -409,6 +415,10 @@ func (b *Bindings) LeaseHeld() CtorErr {
 
 // LinearizePkg surfaces the Porcupine wiring's import path to the templates.
 func (*Bindings) LinearizePkg() string { return LinearizePkg }
+
+// HistoryPkg surfaces the append log's import path to the template that
+// declares the recording local.
+func (*Bindings) HistoryPkg() string { return HistoryPkg }
 
 // ModelPkg surfaces the runner's import path to the templates, which can
 // reach a method and not a const.
@@ -672,6 +682,10 @@ type Action struct {
 	// constructor's closure always receives one; a method that does not take
 	// it ignores it.
 	TakesCtx bool
+
+	// Records marks the append the no-drops law watches: the closure logs
+	// every successful call into the property's append history.
+	Records bool
 }
 
 // ActionArg is one drawn argument of a multi-argument writer or a

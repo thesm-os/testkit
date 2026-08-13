@@ -165,6 +165,12 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	coalesceCalls := 0
 	var coalesceMu {{ renderExpr (external "sync" "Mutex") }}
 {{- end }}
+{{- if .RecordsHistory }}
+	// Every successful append the sequences drive lands here too, so the
+	// no-drops law knows what was attempted; the runner clears it each
+	// iteration.
+	appendHist := {{ renderExpr (external .HistoryPkg "New") }}[string, {{ renderType .HistoryElem }}]()
+{{- end }}
 	laws := {{ renderExpr (external .ModelPkg "NewRegistry") }}[{{ renderType .IfaceRef }}]()
 {{- range .Laws }}
 {{- if not .Clocked }}
@@ -191,6 +197,9 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 		{{ renderExpr (external .ModelPkg "WithReference") }}(reference),
 {{- if .Laws }}
 		{{ renderExpr (external .ModelPkg "WithLaws") }}(laws),
+{{- end }}
+{{- if .RecordsHistory }}
+		{{ renderExpr (external .ModelPkg "WithHistoryReset") }}[{{ renderType .IfaceRef }}](appendHist.Reset),
 {{- end }}
 		{{ renderExpr (external .ModelPkg "WithActions") }}(
 {{- range .Actions }}
