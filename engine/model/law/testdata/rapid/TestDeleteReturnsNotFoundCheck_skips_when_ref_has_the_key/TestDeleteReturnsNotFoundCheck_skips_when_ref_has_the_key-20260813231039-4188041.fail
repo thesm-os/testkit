@@ -1,0 +1,6 @@
+# 2026/08/13 23:10:39.183343 [TestDeleteReturnsNotFoundCheck/skips_when_ref_has_the_key] [rapid] draw DeleteReturnsNotFound_key: "a"
+# 2026/08/13 23:10:39.183346 [TestDeleteReturnsNotFoundCheck/skips_when_ref_has_the_key] should skip when ref has key: law: vacuously holds — a precondition this run supplies was refused
+# 
+v0.4.8#1728261262031963535
+0x0
+0x0

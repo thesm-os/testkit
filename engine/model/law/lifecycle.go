@@ -255,7 +255,7 @@ func (PoisonConsistent[T]) REQID() string { return "" }
 func (l PoisonConsistent[T]) Check(rt *rapid.T, sut, _ T) error {
 	l.Poison(rt, sut)
 	if l.Probe(rt, sut) == nil {
-		return nil // poisoning was a no-op; nothing to hold consistent
+		return Vacuous // the poison did not take, so there is no latch to hold
 	}
 	n := l.Reads
 	if n <= 0 {

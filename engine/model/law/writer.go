@@ -160,7 +160,7 @@ func (l TamperEvident[T, V]) Check(rt *rapid.T, sut, _ T) error {
 		return fmt.Errorf("law: TamperEvident Verify failed on intact data: %v", err)
 	}
 	if !l.Tamper(rt, sut) {
-		return nil // tampering not applicable; nothing to detect
+		return Vacuous // the tamper refused, so there is nothing to detect
 	}
 	if err := l.Verify(rt, sut); err == nil {
 		return errors.New("law: TamperEvident Verify did not detect tampering")

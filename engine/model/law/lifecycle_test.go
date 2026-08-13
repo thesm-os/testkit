@@ -511,8 +511,8 @@ func TestLifecycleLawBranches(t *testing.T) {
 			Probe:  func(*rapid.T, int) error { return nil },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
-				rt.Fatalf("ineffective poisoning must skip, not fail: %v", err)
+			if err := l.Check(rt, 0, 0); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("a poison that did not take leaves no latch to hold: %v", err)
 			}
 		})
 	})

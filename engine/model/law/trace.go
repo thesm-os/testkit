@@ -120,12 +120,12 @@ func (l *EventuallyAfter[T]) Check(_ *rapid.T, _, _ T) error {
 		}
 	}
 	if lastTriggerIdx < 0 {
-		return nil // no trigger fired yet
+		return Vacuous // nothing triggered, so nothing owes a response
 	}
 	// Count steps since trigger.
 	stepsSinceTrigger := len(events) - 1 - lastTriggerIdx
 	if stepsSinceTrigger <= l.WithinSteps {
-		return nil // still within budget
+		return Vacuous // the budget has not run out, so the claim is unsettled
 	}
 	// No forward re-scan is needed: the backward walk above returned early on
 	// the first Response it met, so reaching here means nothing after

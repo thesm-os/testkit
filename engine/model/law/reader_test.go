@@ -107,7 +107,7 @@ func TestSticky(t *testing.T) {
 			},
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, &cacheableSUT{}, &cacheableSUT{}); err != nil {
+			if err := l.Check(rt, &cacheableSUT{}, &cacheableSUT{}); err != nil && !errors.Is(err, law.Vacuous) {
 				rt.Fatal(err)
 			}
 		})
@@ -126,7 +126,7 @@ func TestSticky(t *testing.T) {
 				},
 				Keys: rapid.Just("k"),
 			}
-			if err := l.Check(rt, "sut", "ref"); err != nil {
+			if err := l.Check(rt, "sut", "ref"); err != nil && !errors.Is(err, law.Vacuous) {
 				rt.Fatal(err)
 			}
 			if refReads != 1 {
@@ -145,7 +145,7 @@ func TestSticky(t *testing.T) {
 			}
 			_ = l.Check(rt, 0, 0) // pins the first reading
 			l.Reset()
-			if err := l.Check(rt, 0, 0); err != nil {
+			if err := l.Check(rt, 0, 0); err != nil && !errors.Is(err, law.Vacuous) {
 				rt.Fatalf("a pin taken against a gone store must not outlive Reset: %v", err)
 			}
 		})
@@ -399,8 +399,8 @@ func TestReaderLawSelfConsistency(t *testing.T) {
 				Default: 0,
 				Keys:    rapid.Just("k"),
 			}
-			if err := ok.Check(rt, 0, 0); err != nil {
-				rt.Fatalf("a successful read says nothing about the default: %v", err)
+			if err := ok.Check(rt, 0, 0); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("a successful read never engages the claim: %v", err)
 			}
 
 			proper := ok

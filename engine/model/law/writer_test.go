@@ -684,8 +684,8 @@ func TestTamperEvidentPreconditionsAndViolations(t *testing.T) {
 			Values: rapid.Just("v"),
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
-				rt.Fatalf("inapplicable tampering must skip, not fail: %v", err)
+			if err := l.Check(rt, s, s); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("a tamper that refused leaves nothing to detect: %v", err)
 			}
 		})
 	})

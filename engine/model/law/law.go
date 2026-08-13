@@ -177,7 +177,7 @@ func (l DeleteReturnsNotFound[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "DeleteReturnsNotFound_key")
 	_, refErr := l.Read(rt, ref, k)
 	if !errors.Is(refErr, l.Sentinel) {
-		return nil // ref says key exists; skip
+		return Vacuous // the key the draw picked exists, so nothing was deleted
 	}
 	_, sutErr := l.Read(rt, sut, k)
 	if !errors.Is(sutErr, l.Sentinel) {
@@ -216,7 +216,7 @@ func (l CountEqualsReference[T, R]) Check(rt *rapid.T, sut, ref T) error {
 			sutErr, refErr)
 	}
 	if sutErr != nil {
-		return nil //nolint:nilerr // both sides refused; the law vacuously holds
+		return Vacuous // both sides refused, so there are no counts to compare
 	}
 	if sutN != refN {
 		return fmt.Errorf("CountEqualsReference: SUT=%v, ref=%v", sutN, refN)

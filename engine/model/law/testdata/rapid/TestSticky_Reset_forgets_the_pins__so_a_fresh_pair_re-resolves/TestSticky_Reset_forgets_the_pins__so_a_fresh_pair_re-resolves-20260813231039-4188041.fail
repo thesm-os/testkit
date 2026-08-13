@@ -1,0 +1,9 @@
+# 2026/08/13 23:10:39.184999 [TestSticky/Reset_forgets_the_pins,_so_a_fresh_pair_re-resolves] [rapid] draw Sticky_key: "k"
+# 2026/08/13 23:10:39.185021 [TestSticky/Reset_forgets_the_pins,_so_a_fresh_pair_re-resolves] [rapid] draw Sticky_key: "k"
+# 2026/08/13 23:10:39.185021 [TestSticky/Reset_forgets_the_pins,_so_a_fresh_pair_re-resolves] a pin taken against a gone store must not outlive Reset: law: vacuously holds — a precondition this run supplies was refused
+# 
+v0.4.8#17992459050983605163
+0x0
+0x0
+0x0
+0x0

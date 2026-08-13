@@ -83,7 +83,7 @@ func (l UpdaterReplaces[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 	v1 := l.Values.Draw(rt, "UpdaterReplaces_v1")
 	v2 := l.Values.Draw(rt, "UpdaterReplaces_v2")
 	if l.KeyOf(v1) != l.KeyOf(v2) {
-		return nil // shrink will eventually find a same-key pair
+		return Vacuous // two keys, so neither write replaces the other
 	}
 	if err := l.Update(rt, sut, v1); err != nil {
 		return Vacuous // a precondition this run supplies was refused

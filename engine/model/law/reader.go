@@ -77,7 +77,10 @@ func (l DefaultOnError[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 	k := l.Keys.Draw(rt, "DefaultOnError_key")
 	v, err := l.Read(rt, sut, k)
 	if err == nil {
-		return nil
+		// The claim is about what an *errored* read answers. A read that
+		// succeeded never engaged it, and counting that as a pass is how a
+		// law that only ever meets healthy reads reports full coverage.
+		return Vacuous
 	}
 	if diff := l.Eq.Diff(l.Default, v); diff != "" {
 		return fmt.Errorf("DefaultOnError: key %v: err=%v but the value is not the default (-default +got):\n%s",
@@ -191,7 +194,9 @@ func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 		return nil
 	}
 	l.first[k] = v
-	return nil
+	// Nothing to be sticky against yet: the claim compares a read to an
+	// earlier one, and this is the earlier one.
+	return Vacuous
 }
 
 // MonotonicNonDecreasing verifies that an Aggregator-class method's

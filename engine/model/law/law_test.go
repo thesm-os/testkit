@@ -153,8 +153,8 @@ func TestDeleteReturnsNotFoundCheck(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			ref := newKV()
 			ref.data["a"] = "v"
-			if err := l.Check(rt, newKV(), ref); err != nil {
-				rt.Fatalf("should skip when ref has key: %v", err)
+			if err := l.Check(rt, newKV(), ref); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("a key the ref holds was never deleted, so the claim is unengaged: %v", err)
 			}
 		})
 	})
@@ -246,8 +246,8 @@ func TestCountEqualsReferenceCheck(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			// A pool both sides have drained refuses both counts identically;
 			// agreement in refusal is agreement.
-			if err := l.Check(rt, newKV(), newKV()); err != nil {
-				rt.Fatalf("matching refusals are agreement: %v", err)
+			if err := l.Check(rt, newKV(), newKV()); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("two refusals leave no counts to compare: %v", err)
 			}
 		})
 	})

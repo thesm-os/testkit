@@ -149,9 +149,10 @@ func TestEventuallyAfter(t *testing.T) {
 		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
 
 		rapid.Check(t, func(rt *rapid.T) {
-			err := l.Check(rt, 0, 0)
-			if err != nil {
-				rt.Fatalf("unexpected: %v", err)
+			// Nothing triggered, so nothing owes a response — the claim was
+			// never engaged rather than met.
+			if err := l.Check(rt, 0, 0); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("an untriggered trace settles nothing: %v", err)
 			}
 		})
 	})
@@ -172,7 +173,9 @@ func TestEventuallyAfter(t *testing.T) {
 		tr.Record(trace.Event{ClientID: -1, Method: "Get"})
 
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, 0, 0); err != nil {
+			// Inside the budget the verdict is still open: the response may
+			// yet arrive, so this is unsettled rather than satisfied.
+			if err := l.Check(rt, 0, 0); !errors.Is(err, law.Vacuous) {
 				rt.Fatalf("one step into a three-step budget: %v", err)
 			}
 		})

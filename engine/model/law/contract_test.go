@@ -323,7 +323,7 @@ func TestUpdaterReplaces(t *testing.T) {
 			KeyOf:  func(v string) string { return v[:1] },
 		}
 		rapid.Check(t, func(rt *rapid.T) {
-			if err := l.Check(rt, s, s); err != nil {
+			if err := l.Check(rt, s, s); err != nil && !errors.Is(err, law.Vacuous) {
 				rt.Fatal(err)
 			}
 		})
