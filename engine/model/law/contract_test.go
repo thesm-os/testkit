@@ -716,10 +716,12 @@ func TestTransactionNoMidTxVisibility(t *testing.T) {
 			Begin: func(rt *rapid.T, s *ref.SnapshotIsolation[string, int]) (*ref.SnapshotTx[string, int], error) {
 				return s.Begin(rt.Context())
 			},
-			TxPut: func(rt *rapid.T, tx *ref.SnapshotTx[string, int], k string, v int) error {
+			TxPut: func(rt *rapid.T, _ *ref.SnapshotIsolation[string, int], tx *ref.SnapshotTx[string, int], k string, v int) error {
 				return tx.Put(rt.Context(), k, v)
 			},
-			TxRollback: func(rt *rapid.T, tx *ref.SnapshotTx[string, int]) error { return tx.Rollback(rt.Context()) },
+			TxRollback: func(rt *rapid.T, _ *ref.SnapshotIsolation[string, int], tx *ref.SnapshotTx[string, int]) error {
+				return tx.Rollback(rt.Context())
+			},
 			Read: func(rt *rapid.T, s *ref.SnapshotIsolation[string, int], k string) (int, error) {
 				return s.Get(rt.Context(), k)
 			},
@@ -738,9 +740,12 @@ func TestTransactionNoMidTxVisibility(t *testing.T) {
 		t.Parallel()
 		errNF := errors.New("not found")
 		l := law.TransactionNoMidTxVisibility[*leakyTxStore, *leakyTx, string, int]{
-			Begin:      func(_ *rapid.T, s *leakyTxStore) (*leakyTx, error) { return &leakyTx{store: s}, nil },
-			TxPut:      func(_ *rapid.T, tx *leakyTx, k string, v int) error { tx.store.data[k] = v; return nil }, // BUG: writes through
-			TxRollback: func(_ *rapid.T, _ *leakyTx) error { return nil },
+			Begin: func(_ *rapid.T, s *leakyTxStore) (*leakyTx, error) { return &leakyTx{store: s}, nil },
+			TxPut: func(_ *rapid.T, _ *leakyTxStore, tx *leakyTx, k string, v int) error {
+				tx.store.data[k] = v
+				return nil
+			}, // BUG: writes through
+			TxRollback: func(_ *rapid.T, _ *leakyTxStore, _ *leakyTx) error { return nil },
 			Read: func(_ *rapid.T, s *leakyTxStore, k string) (int, error) {
 				v, ok := s.data[k]
 				if !ok {
@@ -1848,8 +1853,8 @@ func TestTransactionNoMidTxVisibilityBranches(t *testing.T) {
 	mk := func() law.TransactionNoMidTxVisibility[*txStore, int, string, string] {
 		return law.TransactionNoMidTxVisibility[*txStore, int, string, string]{
 			Begin:      func(_ *rapid.T, s *txStore) (int, error) { return 0, s.beginErr },
-			TxPut:      func(_ *rapid.T, _ int, k, v string) error { return nil },
-			TxRollback: func(*rapid.T, int) error { return nil },
+			TxPut:      func(_ *rapid.T, _ *txStore, _ int, k, v string) error { return nil },
+			TxRollback: func(*rapid.T, *txStore, int) error { return nil },
 			Read: func(_ *rapid.T, s *txStore, k string) (string, error) {
 				if s.leaking {
 					if v, ok := s.pending[k]; ok {
@@ -1877,7 +1882,7 @@ func TestTransactionNoMidTxVisibilityBranches(t *testing.T) {
 	// the before/mid reads straddle the uncommitted write.
 	withLeakAtPut := func(l law.TransactionNoMidTxVisibility[*txStore, int, string, string], s *txStore,
 	) law.TransactionNoMidTxVisibility[*txStore, int, string, string] {
-		l.TxPut = func(*rapid.T, int, string, string) error {
+		l.TxPut = func(*rapid.T, *txStore, int, string, string) error {
 			s.leaking = s.leakOnPut
 			return nil
 		}
@@ -1931,7 +1936,7 @@ func TestTransactionNoMidTxVisibilityBranches(t *testing.T) {
 
 			s2 := fresh(true)
 			l := mk()
-			l.TxPut = func(*rapid.T, int, string, string) error { return errors.New("rejected") }
+			l.TxPut = func(*rapid.T, *txStore, int, string, string) error { return errors.New("rejected") }
 			if err := l.Check(rt, s2, s2); !law.Holds(err) {
 				rt.Fatalf("a refused TxPut is a precondition: %v", err)
 			}

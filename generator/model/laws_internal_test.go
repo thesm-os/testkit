@@ -531,7 +531,6 @@ func TestValueOpField(t *testing.T) {
 const (
 	famWriter = "family.writer"
 	qStr      = "string"
-	fieldKey  = "Key"
 )
 
 // harnessOf wraps methods into the projection lawsOf walks.
@@ -2354,4 +2353,60 @@ func TestReplicaClosureShapes(t *testing.T) {
 		[]golang.Param{arg("ctx", ctxRef()), arg("n", namedRef("int"))}, []golang.Return{errRet})
 	_, reason = bindField(b, lawid.EventualConvergence, "Settle", wideSettle)
 	testkit.Assert(t, reason).Contains("not a nullary settle", "a parameterised settle draws nothing")
+}
+
+// TestMidTxDoorAndReadbackPool pins the mid-transaction wiring: the TxPut
+// door spelled at the handle, key and read-back types, the readback pool at
+// the observed reader's answer, and the refusals each earns without its
+// anchors.
+func TestMidTxDoorAndReadbackPool(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	begin := projected("Begin", []golang.Param{arg("ctx", ctxRef())},
+		[]golang.Return{res(namedRef("Tx")), errRet})
+	shape.ContractRoleKey("tx").Set(begin.Source.EnsureMeta(), "begin", "test")
+	get := stamp(projected("Get",
+		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+		[]golang.Return{res(namedRef("Value")), errRet}), "reader", qStr, "Value")
+	r := tiers.Rule{Law: lawid.TransactionNoMidTxVisibility, Fields: []tiers.Field{
+		{Name: fBegin, Kind: tiers.KindRole, From: "tx.begin"},
+		{Name: "TxPut", Kind: tiers.KindSupplied, From: "tx-put"},
+		{Name: fRead, Kind: tiers.KindRole, From: "family.reader"},
+		{Name: "Values", Kind: tiers.KindGenerator, From: "readback"},
+	}}
+
+	t.Run("the door and the pool bind at the fixture's types", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject: suite.Subject{IfaceName: "Contract"},
+			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
+		}
+		field, reason := lawFieldOf(b, harnessOf(begin, get), r, r.Fields[1], begin, get)
+		testkit.True(t, reason == "", "the mid-tx door binds: "+reason)
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.SuppliedField", "as a guarded door")
+
+		field, reason = lawFieldOf(b, harnessOf(begin, get), r, r.Fields[3], begin, get)
+		testkit.True(t, reason == "", "the readback pool binds: "+reason)
+		testkit.Equal(t, field.Pool, "readback", "at the observed reader's answer")
+	})
+
+	t.Run("each anchor's absence refuses by name", func(t *testing.T) {
+		t.Parallel()
+		keyless := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		_, reason := lawFieldOf(keyless, harnessOf(begin, get), r, r.Fields[1], begin, get)
+		testkit.Assert(t, reason).Contains("a key no method here draws", "no key pool, no probe")
+
+		pooled := &Bindings{
+			Subject: suite.Subject{IfaceName: "Contract"},
+			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
+		}
+		flat := projected("Begin", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
+		shape.ContractRoleKey("tx").Set(flat.Source.EnsureMeta(), "begin", "test")
+		_, reason = lawFieldOf(pooled, harnessOf(flat, get), r, r.Fields[1], flat, get)
+		testkit.Assert(t, reason).Contains("answers none", "no handle to stage through")
+
+		_, reason = lawFieldOf(pooled, harnessOf(begin), r, r.Fields[3], begin, nil)
+		testkit.Assert(t, reason).Contains("no keyed reader", "no read-back, no domain to draw")
+	})
 }

@@ -252,6 +252,7 @@ const (
 	// qualified stamps.
 	memberNext      = "next"
 	memberStop      = "stop"
+	poolReadback    = "readback"
 	paramWatcherKey = "shape.contract.watcher.param."
 	fNext           = "Next"
 	fWatch          = "Watch"
@@ -339,6 +340,10 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.PaginatorResumable:    {fPage: shapePageRead},
 
 	lawid.WatcherReturnsOnChange: {fWatch: shapeKeyedHandle, "Mutate": shapeKeyedWrite},
+
+	lawid.TransactionNoMidTxVisibility: {
+		fBegin: shapeHandleCall, "TxRollback": shapeHandleOp, fRead: shapeKeyedRead,
+	},
 
 	lawid.EventualConvergence: {
 		fWrite: shapeValueOp, "Sync": shapePeerSync, "Settle": shapeEachSettle,
@@ -1416,6 +1421,27 @@ func generatorFieldOf(
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Values")
 		return field, ""
 
+	case poolReadback:
+		// The observed reader's answer is the domain: the law's writes travel
+		// through a door, so no role input names what the store holds and
+		// only the read-back says.
+		role, reason := ruleFieldRole(b, harness, r, fRead, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		out, ret, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		if reason := b.addLawPool(LawPool{
+			Name: poolReadback, Q: shape.QName(ret.Source), Elem: out,
+		}); reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		field.Pool = poolReadback
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
+		return field, ""
+
 	case poolOffsets:
 		// Bounded durations rather than arbitrary ones: an offset past the
 		// advance horizon never fires inside the law's own window, and a
@@ -1830,6 +1856,8 @@ var suppliedShapes = map[string]map[string]string{
 	lawid.PoolBalanced:          {"Stats": supStats},
 	lawid.PoolLeakFree:          {"Balanced": supSubjPred},
 	lawid.ReplayCausalOrdering:  {fEntryID: supEntryID, "DependsOn": supDependsOn},
+
+	lawid.TransactionNoMidTxVisibility: {"TxPut": supTxPut},
 }
 
 // The supplied-shape vocabulary — each names one closure type arm in the
@@ -1845,6 +1873,7 @@ const (
 	supStats        = "Stats"        // func(*model.T, T) (int, int, int)
 	supEntryID      = "EntryID"      // func(E) string
 	supDependsOn    = "DependsOn"    // func(E) []string
+	supTxPut        = "TxPut"        // func(*model.T, T, Tx, K, V) error
 )
 
 // suppliedFieldOf builds a consumer-supplied door: the closure type spelled
@@ -1898,6 +1927,32 @@ func suppliedFieldOf(
 			return nil, f.Name + " " + why
 		}
 		opt.Elem = elem
+	case supTxPut:
+		// The mid-transaction write: the handle Begin answers, the key and
+		// the read-back's value — spelled at the fixture's own types so the
+		// consumer's closure reaches its subject's staging API directly.
+		begin, reason := ruleFieldRole(b, harness, r, fBegin, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		handle, why := firstResultType(begin)
+		if why != "" {
+			return nil, f.Name + " threads " + begin.Name + "'s handle, and it answers none"
+		}
+		if b.Keys.Type == nil {
+			return nil, f.Name + " is typed at a key no method here draws"
+		}
+		read, reason := ruleFieldRole(b, harness, r, fRead, m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		out, _, whyOut := resultType(read)
+		if whyOut != "" {
+			return nil, f.Name + " " + whyOut
+		}
+		opt.Out = handle
+		opt.Key = b.Keys.Type
+		opt.Elem = out
 	case supSubjPred, supStats:
 		// The subject alone; nothing more to resolve.
 	}

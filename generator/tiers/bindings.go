@@ -270,6 +270,10 @@ var bindings = map[string]Binding{
 		Args: []BindArg{ResultOf("Begin")},
 	},
 	lawid.SagaFullCompensation: {Type: "SagaFullCompensation", Args: []BindArg{BindObservation}},
+	lawid.TransactionNoMidTxVisibility: {
+		Type: "TransactionNoMidTxVisibility",
+		Args: []BindArg{ResultOf("Begin"), BindKey, ResultOf(fieldRead)},
+	},
 	lawid.SingleflightCoalesces: {
 		Type: "SingleflightCoalesces",
 		Args: []BindArg{InputOf(fieldCall), ResultOf(fieldCall)},

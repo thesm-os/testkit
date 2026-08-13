@@ -24,6 +24,9 @@ type Tx struct{ ID int64 }
 // other terminal operation already closed.
 var ErrTxClosed = errors.New("tx: closed")
 
+// ErrNotFound is what Get reports for a key no transaction committed.
+var ErrNotFound = errors.New("tx: not found")
+
 // Contract is the fixture interface.
 //
 //testkit:out txtest/ pkg=txtest
@@ -42,4 +45,9 @@ type Contract interface {
 
 	// Rollback terminally discards the handle's transaction.
 	Rollback(ctx context.Context, tx Tx) error
+
+	// Get observes the committed state — what an open transaction staged
+	// must not have touched, which is the mid-transaction claim's outside
+	// read.
+	Get(ctx context.Context, key string) (Value, error)
 }

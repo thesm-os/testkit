@@ -10,28 +10,32 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx"
 )
 
 // InMemory is the implementation the generated conformance harness is run
-// against.
-//
-// A set of open transactions and nothing else. What a transaction would guard
-// is left out deliberately: the contract's roles are Begin, Commit and
-// Rollback, and the claim they carry is that exactly one of the two terminal
-// operations settles each handle.
+// against: a keyed store whose writes travel through transactions. Staged
+// writes live with their handle until Commit applies them whole; an outside
+// Get sees only what committed.
 type InMemory struct {
-	mu     sync.Mutex
-	nextID int64
-	open   map[int64]bool
+	mu        sync.Mutex
+	nextID    int64
+	staged    map[int64]map[string]tx.Value
+	committed map[string]tx.Value
 }
 
 var _ tx.Contract = (*InMemory)(nil)
 
 // NewInMemory returns a store with no transaction open.
-func NewInMemory() *InMemory { return &InMemory{open: map[int64]bool{}} }
+func NewInMemory() *InMemory {
+	return &InMemory{
+		staged:    map[int64]map[string]tx.Value{},
+		committed: map[string]tx.Value{},
+	}
+}
 
 // Begin opens a transaction and answers its handle.
 //
@@ -45,35 +49,70 @@ func (s *InMemory) Begin(ctx context.Context) (tx.Tx, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.nextID++
-	s.open[s.nextID] = true
+	s.staged[s.nextID] = map[string]tx.Value{}
 	return tx.Tx{ID: s.nextID}, nil
 }
 
-// Commit settles the handle's transaction, and refuses one already settled.
-func (s *InMemory) Commit(ctx context.Context, h tx.Tx) error { return s.settle(ctx, h) }
+// PutInTx stages a write under the handle's transaction — the subject's own
+// staging API, deliberately off the interface: the contract states begin,
+// settle and observe, and how a store stages is its own business. The
+// generated TxPut door is armed with exactly this.
+func (s *InMemory) PutInTx(h tx.Tx, key string, v tx.Value) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	stage, open := s.staged[h.ID]
+	if !open {
+		return fmt.Errorf("txtest: transaction %d: %w", h.ID, tx.ErrTxClosed)
+	}
+	stage[key] = v
+	return nil
+}
 
-// Rollback settles the handle's transaction the other way, and refuses one
+// Commit applies the handle's staged writes whole, and refuses a transaction
 // already settled.
-func (s *InMemory) Rollback(ctx context.Context, h tx.Tx) error { return s.settle(ctx, h) }
-
-// settle is both terminal operations, because they differ only in what they
-// leave behind — which this subject deliberately has none of.
-//
-// One statement rather than two, so the rule that a settled transaction cannot
-// be settled again cannot be written correctly in one and wrongly in the other.
-// A handle that was never begun settles nothing either, and from the caller's
-// side that is the same mistake: the handle does not name an open transaction.
-func (s *InMemory) settle(ctx context.Context, h tx.Tx) error {
+func (s *InMemory) Commit(ctx context.Context, h tx.Tx) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.open[h.ID] {
+	stage, open := s.staged[h.ID]
+	if !open {
 		return fmt.Errorf("txtest: transaction %d: %w", h.ID, tx.ErrTxClosed)
 	}
-	delete(s.open, h.ID)
+	maps.Copy(s.committed, stage)
+	delete(s.staged, h.ID)
 	return nil
+}
+
+// Rollback discards the handle's staged writes, and refuses a transaction
+// already settled.
+func (s *InMemory) Rollback(ctx context.Context, h tx.Tx) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, open := s.staged[h.ID]; !open {
+		return fmt.Errorf("txtest: transaction %d: %w", h.ID, tx.ErrTxClosed)
+	}
+	delete(s.staged, h.ID)
+	return nil
+}
+
+// Get observes the committed state — never anything staged, which is the
+// mid-transaction claim.
+func (s *InMemory) Get(ctx context.Context, key string) (tx.Value, error) {
+	if err := contextErr(ctx); err != nil {
+		return tx.Value{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, present := s.committed[key]
+	if !present {
+		return tx.Value{}, fmt.Errorf("txtest: key %q: %w", key, tx.ErrNotFound)
+	}
+	return v, nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

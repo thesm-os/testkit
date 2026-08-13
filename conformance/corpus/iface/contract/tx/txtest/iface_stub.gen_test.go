@@ -376,6 +376,132 @@ func TestContractStubRollback(t *testing.T) {
 	})
 }
 
+// contractStubGetSubject binds Get into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubGetSubject(tb testing.TB) stub.Subject[txtest.ContractGetCall, txtest.ContractGetReturn] {
+	tb.Helper()
+	s := txtest.NewContractStub(tb)
+	return stub.Subject[txtest.ContractGetCall, txtest.ContractGetReturn]{
+		Stub: s.OnGet.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 string
+			_, _ = s.Get(a0, a1)
+		},
+		Result: func() txtest.ContractGetReturn {
+			var a0 context.Context
+			var a1 string
+			got0, got1 := s.Get(a0, a1)
+			return txtest.ContractGetReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnGet.Func(func(_ context.Context, _ string) (tx.Value, error) {
+				mark()
+				var z0 tx.Value
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 string
+			_, r1 := s.Get(a0, a1)
+			return r1
+		},
+	}
+}
+
+// TestContractStubGet pins how Get answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubGet(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Get", contractStubGetSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := txtest.NewContractStub(t)
+		var want0 tx.Value
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 string
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "Get must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Get must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := txtest.NewContractStub(t)
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		got := s.OnGet.AssertCalledOnce(t, "Get must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := txtest.NewContractStub(t)
+		var seen []txtest.ContractGetCall
+		s.OnGet.OnRecord(func(c txtest.ContractGetCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		_, _ = s.Get(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Get call")
+	})
+
+	t.Run("wires WithContractGet at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := txtest.NewContractStub(t, txtest.WithContractGet(func(_ context.Context, _ string) (tx.Value, error) {
+			called = true
+			var z0 tx.Value
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		testkit.True(t, called, "WithContractGet must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := txtest.NewContractStub(t)
+		var want0 tx.Value
+		var want1 error
+		s.OnGet.Returns(want0, want1)
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		s.ResetCalls()
+		got0, got1 := s.Get(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
+	})
+}
+
 // contractStubDouble describes how to build a ContractStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -486,7 +612,26 @@ func TestContractStubDelegateTo(t *testing.T) {
 		r0 := s.Rollback(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Rollback must surface the wrapped answer")
 	})
+
+	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 string
+		_, _ = s.Get(a0, a1)
+		inner.OnGet.AssertCalledOnce(t, "Get must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Get answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Get-delegate")
+		inner.OnGet.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 string
+		_, r1 := s.Get(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Get must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 537661d75bdc34dcb18783672e02938027c6e9436648795964166554c7e6b28e
+// testkit:provenance 5c6dd899a8398923091bda421dba35d88106d6b9267cc362c4b681882690a078

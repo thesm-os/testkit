@@ -666,5 +666,7 @@ func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ r
 func({{ renderType .Elem }}) string
 {{- else if eq .Shape "DependsOn" -}}
 func({{ renderType .Elem }}) []string
+{{- else if eq .Shape "TxPut" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}, {{ renderType .Out }}, {{ renderType .Key }}, {{ renderType .Elem }}) error
 {{- end -}}
 {{- end -}}

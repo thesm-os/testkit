@@ -118,6 +118,11 @@ const (
 	genMessages = "messages"
 	genOffsets  = "offsets"
 	genPayloads = "payloads"
+
+	// genReadback is a law-declared pool at the observed reader's answer —
+	// for a law whose writes travel through a door, so no role input names
+	// the domain and only the read-back says what the store holds.
+	genReadback = "readback"
 )
 
 // The parameter stamps a rule reads, in the annotator's own spelling.
@@ -1043,15 +1048,22 @@ var rules = []Rule{
 		},
 	},
 	{
+		// The claim is the tx trio's: what an open transaction staged stays
+		// invisible to an outside read until commit. Selection moved from
+		// the fn-shaped transaction contract to the trio the fields actually
+		// name — the fn contract's run has no handle to stage through.
 		Law:   lawid.TransactionNoMidTxVisibility,
-		Needs: []string{contractTransaction},
+		Needs: []string{contractTx},
 		Fields: []Field{
 			{Name: "Begin", Kind: KindRole, From: "tx.begin"},
 			{Name: "TxPut", Kind: KindSupplied, From: "tx-put"},
 			{Name: "TxRollback", Kind: KindRole, From: "tx.rollback"},
 			observed(fieldRead),
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
-			{Name: fieldValues, Kind: KindGenerator, From: genValues},
+			// The law's own pool at the read's answer: the trio's shared
+			// values pool draws handles, and the staged write's domain is
+			// whatever the outside read observes.
+			{Name: fieldValues, Kind: KindGenerator, From: genReadback},
 		},
 	},
 

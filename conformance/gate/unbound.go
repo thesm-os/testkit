@@ -16,10 +16,12 @@ package gate
 // recorded, never laundered. Quarantined laws are not listed: an unsound
 // conduct cannot bind by design, and the conduct census already carries it.
 //
+// The register is empty: every law the corpus's stamps select is bound in
+// at least one fixture, or consumer-payable through a generated door a
+// fixture arms. The declaration stays because the gate's contract does — a
+// law that stops binding must land here with its chokepoint or the build is
+// red, and the empty literal is the waterline regression is measured
+// against.
+//
 //nolint:gochecknoglobals // a census table, read-only, test-facing.
-var UnboundLaws = map[string]string{
-	// The member scope reaches the handle now; what remains is the carrier:
-	// the law's TxPut and TxRollback take the handle alone, so the handle
-	// must carry its own transaction, and no fixture declares one that does.
-	"AUTO-TRANSACTION-NO-MID-TX-VISIBILITY": "waits on a handle that carries its transaction — the law's mid-tx write and rollback take the handle alone, and no fixture declares members on the handle Begin answers",
-}
+var UnboundLaws = map[string]string{}

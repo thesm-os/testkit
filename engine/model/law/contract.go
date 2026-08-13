@@ -736,9 +736,12 @@ func checkDeliveryBound(mode DeliveryMode, count int) error {
 // transaction back. A store that leaks the uncommitted write changes
 // the key's observable presence or value mid-transaction and fails.
 type TransactionNoMidTxVisibility[T any, Tx any, K comparable, V any] struct {
-	Begin      func(rt *rapid.T, sut T) (Tx, error)
-	TxPut      func(rt *rapid.T, tx Tx, k K, v V) error
-	TxRollback func(rt *rapid.T, tx Tx) error
+	Begin func(rt *rapid.T, sut T) (Tx, error)
+	// TxPut and TxRollback take the subject beside the handle: a fixture's
+	// handle is a token, not a carrier, and the operation that stages
+	// through it still belongs to the store that issued it.
+	TxPut      func(rt *rapid.T, sut T, tx Tx, k K, v V) error
+	TxRollback func(rt *rapid.T, sut T, tx Tx) error
 	Read       func(rt *rapid.T, sut T, k K) (V, error)
 	Keys       *rapid.Generator[K]
 	Values     *rapid.Generator[V]
@@ -754,21 +757,35 @@ func (TransactionNoMidTxVisibility[T, Tx, K, V]) REQID() string { return "" }
 
 // Check verifies an outside read taken during an open transaction
 // matches the read taken before the transaction began.
-func (l TransactionNoMidTxVisibility[T, Tx, K, V]) Check(rt *rapid.T, sut, _ T) error {
+func (l TransactionNoMidTxVisibility[T, Tx, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "TransactionNoMidTxVisibility_key")
 	v := l.Values.Draw(rt, "TransactionNoMidTxVisibility_value")
+
+	// Levelness first, agreement never: the same begin/stage/rollback lands
+	// on the reference, errors swallowed — a begin that advances a counter
+	// on one side only reads as divergence at the next compared call. Level
+	// twins refuse the same steps, so the guarded replay traces the same
+	// shape on both sides.
+	defer func() {
+		refTx, err := l.Begin(rt, ref)
+		if err != nil {
+			return
+		}
+		_ = l.TxPut(rt, ref, refTx, k, v)
+		_ = l.TxRollback(rt, ref, refTx)
+	}()
 
 	before, beforeErr := l.Read(rt, sut, k)
 	tx, err := l.Begin(rt, sut)
 	if err != nil {
 		return Vacuous // a precondition this run supplies was refused
 	}
-	if putErr := l.TxPut(rt, tx, k, v); putErr != nil {
-		_ = l.TxRollback(rt, tx)
+	if putErr := l.TxPut(rt, sut, tx, k, v); putErr != nil {
+		_ = l.TxRollback(rt, sut, tx)
 		return Vacuous // a precondition this run supplies was refused
 	}
 	mid, midErr := l.Read(rt, sut, k)
-	_ = l.TxRollback(rt, tx)
+	_ = l.TxRollback(rt, sut, tx)
 
 	if (beforeErr == nil) != (midErr == nil) {
 		return fmt.Errorf(

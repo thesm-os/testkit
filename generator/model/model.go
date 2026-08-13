@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.22.2"
+const Version = "0.23.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -222,11 +222,14 @@ func directives() []sdk.DirectiveSchema {
 	}
 }
 
+// fieldKey is the identity convention's canonical member spelling.
+const fieldKey = "Key"
+
 // keyFieldConventions are the field names read as a value's identity, in
 // preference order — the upsert inference's one convention.
 //
 //nolint:gochecknoglobals // a vocabulary table, read-only after init.
-var keyFieldConventions = []string{"ID", "Key"}
+var keyFieldConventions = []string{"ID", fieldKey}
 
 // Bindings is the value queued once per interface carrying the directive.
 type Bindings struct {

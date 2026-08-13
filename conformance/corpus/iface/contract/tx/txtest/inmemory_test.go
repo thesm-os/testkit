@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/tx/txtest"
+	"go.thesmos.sh/testkit/engine/model"
 )
 
 // seed is the smallest true history this contract has: the suite seeds
@@ -35,7 +36,16 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	txtest.AssertContractContract(t,
-		txtest.ContractModel(),
+		txtest.ContractModel(
+			// The mid-transaction write door: how a store stages is its own
+			// business, so the closure reaches this subject's staging API —
+			// which is exactly why the field is supplied rather than derived.
+			txtest.ContractModelTxPut(func(
+				_ *model.T, s tx.Contract, h tx.Tx, key string, v tx.Value,
+			) error {
+				return s.(*txtest.InMemory).PutInTx(h, key, v)
+			}),
+		),
 		txtest.ContractSubject("in-memory", func() tx.Contract {
 			return txtest.NewInMemory()
 		}),
@@ -105,4 +115,33 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		txtest.ContractWithout("Begin/smoke"),
 		txtest.ContractWithoutDouble(),
 	)
+}
+
+// Staging is the subject's own API, so its refusals are this package's to
+// prove: a settled handle stages nothing, and what an open one staged never
+// reaches an outside read.
+func TestStagingRefusesASettledHandle(t *testing.T) {
+	t.Parallel()
+
+	s := txtest.NewInMemory()
+	h, err := s.Begin(t.Context())
+	testkit.NoError(t, err, "a transaction opens")
+	testkit.NoError(t, s.PutInTx(h, "k", tx.Value{Key: "k", Body: "staged"}),
+		"the open transaction stages")
+
+	_, err = s.Get(t.Context(), "k")
+	testkit.ErrorIs(t, err, tx.ErrNotFound, "and the outside read sees nothing of it")
+
+	testkit.NoError(t, s.Rollback(t.Context(), h), "the transaction rolls back")
+	testkit.ErrorIs(t, s.PutInTx(h, "k", tx.Value{Key: "k", Body: "late"}), tx.ErrTxClosed,
+		"a settled handle stages nothing")
+
+	h2, err := s.Begin(t.Context())
+	testkit.NoError(t, err, "a second transaction opens")
+	testkit.NoError(t, s.PutInTx(h2, "k", tx.Value{Key: "k", Body: "kept"}), "and stages")
+	testkit.NoError(t, s.Commit(t.Context(), h2), "and commits")
+
+	got, err := s.Get(t.Context(), "k")
+	testkit.NoError(t, err, "the committed write is readable")
+	testkit.Equal(t, got.Body, "kept", "whole, as staged")
 }

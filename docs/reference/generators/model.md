@@ -190,6 +190,14 @@ parameter with no hint is a diagnostic at the parameter.
   and the compile gate in the armed package holds the two together. A
   handle-answering read drops from the drawn sequences: an interface
   compares by identity, and two runs' handles never share one.
+- **The mid-transaction door, at the trio's own types** — the no-mid-tx
+  law binds on the begin/commit/rollback trio beside its keyed read: the
+  generated closures thread the handle, the outside read observes committed
+  state, and the staged write itself is the `TxPut` door — spelled at the
+  handle, key and read-back types, because how a store stages is its own
+  business and the consumer's closure reaches its subject's staging API
+  directly. The law's value pool draws the read's answer (`readback`),
+  since no role input names what the store holds.
 - **Version-coherent CAS draws, and an append log the runner clears** —
   the cas contract's one-winner law stamps both drawn attempts at the
   cell's current version before racing them (the VersionedCell dialect:
