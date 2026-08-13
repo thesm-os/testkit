@@ -18,6 +18,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/coverage"
 	"go.thesmos.sh/testkit/core/failure"
+	"go.thesmos.sh/testkit/core/trace"
 	"go.thesmos.sh/testkit/engine/model"
 	"go.thesmos.sh/testkit/engine/model/action"
 	"go.thesmos.sh/testkit/engine/model/law"
@@ -414,6 +415,89 @@ func TestOptionWithLawREQ(t *testing.T) {
 			Keys: keyGen,
 		}),
 	)
+}
+
+// probeLaw records what the runner asked of it, and carries every optional
+// interface a law may have — the four the REQ tag used to strip.
+type probeLaw struct {
+	bound   *trace.Trace
+	resets  int
+	steps   int
+	checked int
+}
+
+func (*probeLaw) ID() string    { return "AUTO-PROBE" }
+func (*probeLaw) REQID() string { return "" }
+func (p *probeLaw) Check(*rapid.T, storeIface, storeIface) error {
+	p.checked++
+	return nil
+}
+
+func (p *probeLaw) CheckWithStep(_ *rapid.T, _, _ storeIface, _ int) error {
+	p.steps++
+	return nil
+}
+func (p *probeLaw) BindTrace(t *trace.Trace) { p.bound = t }
+func (p *probeLaw) Reset()                   { p.resets++ }
+
+// isolatedProbe carries only the isolation marker: an isolated law runs once
+// per iteration against a throwaway pair, so it is never handed a step and
+// cannot stand in for the stateful case.
+type isolatedProbe struct{ probeLaw }
+
+func (*isolatedProbe) IsolatedLaw() {}
+
+// TestLawREQKeepsWhatTheLawIs pins the tag's transparency. The runner asks a
+// law what else it is by type assertion, and a wrapper that answered "only a
+// law" turned off every one of those behaviours — no trace to scan, no reset
+// between iterations, and an isolated law loosed on the shared pair.
+func TestLawREQKeepsWhatTheLawIs(t *testing.T) {
+	t.Parallel()
+
+	probe := &probeLaw{}
+	model.Assert(
+		t,
+		func() storeIface { return newStore() },
+		model.WithReference(func() storeIface { return newStore() }),
+		model.WithActions(action.Reader("Get", keyGen, storeGet)),
+		model.WithLawREQ("REQ-PROBE-001", probe),
+	)
+
+	testkit.True(t, probe.bound != nil, "a trace-scanning law is still bound one")
+	testkit.True(t, probe.resets > 0, "and still reset between iterations")
+	testkit.True(t, probe.steps > 0, "and still asked with the step it needs")
+	testkit.Equal(t, probe.checked, 0,
+		"the step-free arm never runs for a law that carries the stateful one")
+}
+
+// TestLawREQKeepsIsolationOff is the control: isolation is a marker, and a
+// law that does not carry it must not acquire one by being tagged — every
+// tagged law running against throwaway subjects would empty the sequences.
+func TestLawREQKeepsIsolationOff(t *testing.T) {
+	t.Parallel()
+
+	plain := law.ReadAfterWrite[storeIface, string, item]{
+		Read: func(rt *rapid.T, s storeIface, k string) (item, error) {
+			return s.Get(rt.Context(), k)
+		},
+		Keys: keyGen,
+	}
+	reg := model.NewRegistry[storeIface]()
+	model.WithLawREQ("REQ-PLAIN-001", plain)(&model.Config[storeIface]{Laws: reg})
+
+	tagged := reg.Laws()
+	testkit.Len(t, tagged, 1, "the tag registers the law")
+	_, isolated := tagged[0].(law.Isolated)
+	testkit.False(t, isolated, "a law that is not isolated does not become so")
+	testkit.Equal(t, tagged[0].REQID(), "REQ-PLAIN-001", "and still carries its tag")
+
+	// And the other direction: the marker survives the tag, or an isolated
+	// law would corrupt the shared pair every other law is checked against.
+	iso := model.NewRegistry[storeIface]()
+	model.WithLawREQ("REQ-ISO-001", &isolatedProbe{})(&model.Config[storeIface]{Laws: iso})
+	_, kept := iso.Laws()[0].(law.Isolated)
+	testkit.True(t, kept, "an isolated law stays isolated once tagged")
+	testkit.Equal(t, iso.Laws()[0].REQID(), "REQ-ISO-001", "and carries its tag too")
 }
 
 func TestOptionWithCleanup(t *testing.T) {

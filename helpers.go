@@ -198,3 +198,79 @@ func EmptySeq[V any](iter.Seq[V]) iter.Seq[V] {
 func EmptySeq2[K, V any](iter.Seq2[K, V]) iter.Seq2[K, V] {
 	return func(func(K, V) bool) {}
 }
+
+// FadedSeq answers the sequence reversed and one element short — the drain
+// that lies about what it already showed.
+//
+// Collected first: the order and the length are properties of the whole
+// sequence, so there is nothing to reverse until it has ended. A defect that
+// streamed lazily could not be one, which is why this shape is the collected
+// one.
+func FadedSeq[V any](seq iter.Seq[V]) iter.Seq[V] {
+	return func(yield func(V) bool) {
+		out := slices.Collect(seq)
+		slices.Reverse(out)
+		if len(out) > 0 {
+			out = out[:len(out)-1]
+		}
+		for _, v := range out {
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+
+// FadedSeq2 is [FadedSeq] for the two-value form.
+func FadedSeq2[K, V any](seq iter.Seq2[K, V]) iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		type pair struct {
+			k K
+			v V
+		}
+		var out []pair
+		for k, v := range seq {
+			out = append(out, pair{k, v})
+		}
+		slices.Reverse(out)
+		if len(out) > 0 {
+			out = out[:len(out)-1]
+		}
+		for _, p := range out {
+			if !yield(p.k, p.v) {
+				return
+			}
+		}
+	}
+}
+
+// DoubledSeq answers every element twice — the drain that repeats what a
+// no-duplicates claim says it never will.
+func DoubledSeq[V any](seq iter.Seq[V]) iter.Seq[V] {
+	return func(yield func(V) bool) {
+		for v := range seq {
+			// Twice, in two statements: the repeat is the defect, and one
+			// short-circuiting condition reads as a copied typo.
+			if !yield(v) {
+				return
+			}
+			if !yield(v) {
+				return
+			}
+		}
+	}
+}
+
+// DoubledSeq2 is [DoubledSeq] for the two-value form.
+func DoubledSeq2[K, V any](seq iter.Seq2[K, V]) iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		for k, v := range seq {
+			if !yield(k, v) {
+				return
+			}
+			if !yield(k, v) {
+				return
+			}
+		}
+	}
+}

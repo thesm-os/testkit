@@ -2540,6 +2540,51 @@ func TestSaturationDerivation(t *testing.T) {
 			[]golang.Return{res(namedRef("Value")), errRet})
 		testkit.Equal(t, satMutantsOf(b, plain)[0].SeqHelper(), "",
 			"a result that is not a stream names no helper")
+
+		// The near misses, because the check is a name match against the
+		// standard library and a wrong one would dress a stream defect on a
+		// method that cannot carry it.
+		notIter := projected("Chan", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("example.com/x", "Seq2"))})
+		testkit.Equal(t, seqArity(notIter), 0, "Seq2 from another package is not one")
+		wrongName := projected("Iter", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("iter", "Pull"))})
+		testkit.Equal(t, seqArity(wrongName), 0, "iter has more than the two sequence types")
+		twoResults := projected("Both", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("iter", "Seq")), errRet})
+		testkit.Equal(t, seqArity(twoResults), 0,
+			"a sequence beside an error is not the shape the drains take")
+	})
+
+	t.Run("the boundary wear needs a bound to cross", func(t *testing.T) {
+		t.Parallel()
+		// Built from the law's own stamped constant, so a law without one —
+		// or with one no integer can be read from — has no line to step over
+		// and earns no wear rather than a wear that steps nowhere.
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		count := projected("Count", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("int")), errRet})
+		h := harnessOf(count)
+
+		noBound := &LawBinding{
+			ID:     lawid.CountEqualsReference,
+			Fields: []*LawField{{Name: "Count", Method: "Count"}},
+		}
+		_, ok := overshootOf(b, h, noBound, "Count")
+		testkit.False(t, ok, "no stamped bound, no boundary to cross")
+
+		fractional := &LawBinding{ID: lawid.AggregatorBounded, Fields: []*LawField{
+			{Name: "Count", Method: "Count"}, {Name: fieldMax, Lit: "1.5"},
+		}}
+		_, ok = overshootOf(b, h, fractional, "Count")
+		testkit.False(t, ok, "no counting shape answers one past a fraction")
+
+		unread := &LawBinding{
+			ID:     lawid.AggregatorBounded,
+			Fields: []*LawField{{Name: fieldMax, Lit: "5"}},
+		}
+		_, ok = overshootOf(b, h, unread, "Count")
+		testkit.False(t, ok, "a bound on a method the law does not read is not this law's line")
 	})
 
 	t.Run("the surface knows its reach and its restatement", func(t *testing.T) {

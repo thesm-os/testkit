@@ -249,6 +249,8 @@ const (
 	kindFlap            = "flap"
 	kindOvershoot       = "overshoot"
 	kindFlicker         = "flicker"
+	kindFadeSeq         = "fadeseq"
+	kindDupSeq          = "dupseq"
 	fieldMax            = "Max"
 	fromFamilyCell      = "family.cell"
 	handleKeyProjection = "key-projection"
@@ -658,6 +660,18 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		sputter := base
 		sputter.Kind = kindSputter
 		out = append(out, sputter)
+	}
+	if base.Seq > 0 {
+		// The stream defects, which the slice form has had all along: a drain
+		// reversed and short one, and a drain that repeats. `fade` was dressed
+		// on the shape that returns a slice and never on the shape that
+		// streams, so a claim about order or duplicates had nothing worn on it
+		// that could be false.
+		faded := base
+		faded.Kind = kindFadeSeq
+		dup := base
+		dup.Kind = kindDupSeq
+		out = append(out, faded, dup)
 	}
 	if len(m.CallArgs()) == 1 && len(m.Returns) == 4 && m.ReturnsError() && returnsSlice(m) {
 		// The echoing defect: the first page answered forever, with more

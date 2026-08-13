@@ -100,6 +100,11 @@ var checkedBy = map[string][]sdk.Kind{
 	"readerwithbool": {KindMissZero, KindMissFlag},
 	"lookup":         {KindMissZero, KindMissFlag},
 	"batchreader":    {KindBatchSize},
+	// The multi-value read carries the same zero-on-error claim its
+	// single-value sibling does — one error, several results, and every one
+	// of them must be the zero. Its absence here made four headers say
+	// "nothing here asserts them" about a check the same file defines.
+	"multireader": {KindZeroOnError},
 	// Conditional the way reader's is: the round trip derives only beside a
 	// keyed reader of the same state, and a lone answering writer stays
 	// listed as unchecked — which is the truth of it.

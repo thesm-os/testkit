@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.39.0"
+const Version = "0.42.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -609,6 +609,19 @@ func (m SatMutant) SeqHelper() string {
 		return "EmptySeq2"
 	}
 	return ""
+}
+
+// SeqDefect names the runtime helper a stream-shaped defect wears — the
+// faded drain or the doubled one, at the wear's own arity.
+func (m SatMutant) SeqDefect() string {
+	base := "Faded"
+	if m.Kind == "dupseq" {
+		base = "Doubled"
+	}
+	if m.Seq == 2 {
+		return base + "Seq2"
+	}
+	return base + "Seq"
 }
 
 // Pool is one shared value source: a fixture field and its companion, and how

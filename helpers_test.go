@@ -291,3 +291,83 @@ func TestEmptySeq(t *testing.T) {
 		testkit.Equal(t, drained, 0, "the original is never started")
 	})
 }
+
+// The stream defects a drain claim can be false against: an order reversed
+// and an element dropped, and an element repeated. Both are collected shapes
+// — order and length are properties of the whole sequence — and both must
+// stop when the consumer does, or a bounded drain never returns.
+func TestSeqDefects(t *testing.T) {
+	t.Parallel()
+
+	t.Run("faded reverses and drops the last", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, slices.Collect(testkit.FadedSeq(slices.Values([]int{1, 2, 3}))),
+			[]int{3, 2}, "reversed, one short")
+		testkit.Equal(t, slices.Collect(testkit.FadedSeq(slices.Values([]int{}))),
+			[]int(nil), "an empty drain has nothing to drop")
+	})
+
+	t.Run("faded pairs keep their keys", func(t *testing.T) {
+		t.Parallel()
+		var keys []int
+		for k := range testkit.FadedSeq2(slices.All([]string{"a", "b", "c"})) {
+			keys = append(keys, k)
+		}
+		testkit.Equal(t, keys, []int{2, 1}, "the pair travels whole")
+	})
+
+	t.Run("doubled repeats every element", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, slices.Collect(testkit.DoubledSeq(slices.Values([]int{1, 2}))),
+			[]int{1, 1, 2, 2}, "each element twice, in place")
+		var got []string
+		for _, v := range testkit.DoubledSeq2(slices.All([]string{"a"})) {
+			got = append(got, v)
+		}
+		testkit.Equal(t, got, []string{"a", "a"}, "and the pair form with it")
+	})
+
+	t.Run("both stop when the consumer stops", func(t *testing.T) {
+		t.Parallel()
+		// The property that keeps a bounded drain bounded. A defect that
+		// ignored the consumer's answer would run until the process died,
+		// which is not a failing test — it is no test at all.
+		for v := range testkit.DoubledSeq(slices.Values([]int{1, 2, 3})) {
+			testkit.Equal(t, v, 1, "the first element, then the break")
+			break
+		}
+		for range testkit.FadedSeq(slices.Values([]int{1, 2, 3})) {
+			break
+		}
+		for range testkit.DoubledSeq2(slices.All([]int{1, 2, 3})) {
+			break
+		}
+		for range testkit.FadedSeq2(slices.All([]int{1, 2, 3})) {
+			break
+		}
+	})
+
+	t.Run("doubled stops on the repeat too", func(t *testing.T) {
+		t.Parallel()
+		// The other half of the brake: a consumer that takes the element and
+		// stops on its repeat. Both yields have to be answered, or a drain
+		// that wanted one more element than the source holds runs on.
+		seen := 0
+		for range testkit.DoubledSeq(slices.Values([]int{1, 2})) {
+			seen++
+			if seen == 2 {
+				break
+			}
+		}
+		testkit.Equal(t, seen, 2, "the element and its repeat, then the stop")
+
+		seen = 0
+		for range testkit.DoubledSeq2(slices.All([]int{1, 2})) {
+			seen++
+			if seen == 2 {
+				break
+			}
+		}
+		testkit.Equal(t, seen, 2, "and the same for the pair form")
+	})
+}

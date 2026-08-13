@@ -46,6 +46,10 @@ func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by d
 	dress({{ printf "%q" .Method }}, "sputter", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatSputter{{ .Method }}{ {{ $b.IfaceName }}: s }
 	})
+{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") }}
+	dress({{ printf "%q" .Method }}, {{ printf "%q" .Kind }}, func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }}{s}
+	})
 {{- else if eq .Kind "flicker" }}
 	dress({{ printf "%q" .Method }}, "flicker", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatFlicker{{ .Method }}{ {{ $b.IfaceName }}: s }
@@ -222,6 +226,20 @@ func (m *{{ lower $b.IfaceName }}SatSputter{{ .Method }}) {{ .Method }}({{ range
 		return
 	}
 	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") }}
+
+// {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }} answers a drain the
+// claims about {{ .Method }}'s stream say is impossible — reversed and short
+// one, or with every element repeated.
+//
+// The slice-returning shape has had these defects all along. A method that
+// streams had only the zero and the flicker, and a claim about order or
+// duplicates survives both: an empty drain is ordered and holds no repeats.
+type {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) {{ index .Returns 0 | renderType }} {
+	return {{ renderExpr (external $b.RootPkg .SeqDefect) }}(m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }}))
 }
 {{- else if eq .Kind "flicker" }}
 

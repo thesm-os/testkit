@@ -492,7 +492,7 @@ func WithLawREQ[T any](reqID string, l law.Law[T]) Option[T] {
 		if c.Laws == nil {
 			c.Laws = NewRegistry[T]()
 		}
-		c.Laws.Add(&taggedLaw[T]{Law: l, reqID: reqID})
+		c.Laws.Add(tagLaw(l, reqID))
 	}
 }
 
@@ -598,6 +598,29 @@ func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) {
 	dispatch(t, cfg)
 }
 
+// tagLaw wraps a law with a REQ ID override, keeping whatever the wrapped
+// law is besides a law.
+//
+// A law may also be [law.TraceBinder], [law.Resettable], [law.StatefulLaw]
+// or [law.Isolated], and the runner asks by type assertion. An embedding
+// wrapper satisfies none of them, so tagging a law with a REQ identifier
+// silently turned off everything the runner does for it: no trace bound
+// (which a trace-scanning law then dereferences as nil), no reset between
+// iterations (the cross-iteration leak an earlier fix already paid for
+// once), and an isolated law let loose on the shared pair it corrupts.
+//
+// Three of the four are behaviours and forward at run time. Isolation is a
+// marker, and a type either carries it or does not — so it takes a second
+// wrapper, chosen here, rather than a method that would make every tagged
+// law isolated.
+func tagLaw[T any](l law.Law[T], reqID string) law.Law[T] {
+	tagged := &taggedLaw[T]{Law: l, reqID: reqID}
+	if _, isolated := l.(law.Isolated); isolated {
+		return &taggedIsolatedLaw[T]{taggedLaw: tagged}
+	}
+	return tagged
+}
+
 // taggedLaw wraps a law with a REQ ID override.
 type taggedLaw[T any] struct {
 	law.Law[T]
@@ -605,3 +628,35 @@ type taggedLaw[T any] struct {
 }
 
 func (t *taggedLaw[T]) REQID() string { return t.reqID }
+
+// BindTrace forwards to the wrapped law where it scans a trace, and is a
+// no-op otherwise — the runner binds unconditionally and a law that does not
+// read one has nothing to bind.
+func (t *taggedLaw[T]) BindTrace(tr *trace.Trace) {
+	if binder, ok := t.Law.(law.TraceBinder); ok {
+		binder.BindTrace(tr)
+	}
+}
+
+// Reset forwards to the wrapped law where it carries cross-action state.
+func (t *taggedLaw[T]) Reset() {
+	if resettable, ok := t.Law.(law.Resettable); ok {
+		resettable.Reset()
+	}
+}
+
+// CheckWithStep forwards to the wrapped law where the step matters, and
+// falls back to the step-free check where it does not.
+func (t *taggedLaw[T]) CheckWithStep(rt *rapid.T, sut, ref T, step int) error {
+	if stateful, ok := t.Law.(law.StatefulLaw[T]); ok {
+		return stateful.CheckWithStep(rt, sut, ref, step)
+	}
+	return t.Check(rt, sut, ref)
+}
+
+// taggedIsolatedLaw is [taggedLaw] for a law that corrupts its subjects, so
+// the marker the runner reads survives the tagging.
+type taggedIsolatedLaw[T any] struct{ *taggedLaw[T] }
+
+// IsolatedLaw marks the wrapper as the wrapped law is marked.
+func (*taggedIsolatedLaw[T]) IsolatedLaw() {}
