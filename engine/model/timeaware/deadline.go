@@ -13,6 +13,7 @@ import (
 	"pgregory.net/rapid"
 
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // DeadlineRespecting verifies an operation invoked with a
@@ -49,14 +50,29 @@ func (DeadlineRespecting[T]) ID() string { return lawid.DeadlineRespecting }
 // REQID returns an empty string (auto-derived).
 func (DeadlineRespecting[T]) REQID() string { return "" }
 
-// Check verifies Op returns a deadline error once its deadline passes.
+// Check verifies that an Op still running when its deadline fires returns a
+// context error.
 //
 // # What the verdict rests on
 //
-// The returned error, not merely the return. Discarding it made the law
-// unfalsifiable: an Op that never looked at its context and answered nil
-// immediately returned promptly, which was the whole of what was checked, so
-// the one implementation the claim exists to catch passed it.
+// The returned error, not merely the return — but only once the deadline has
+// actually passed. Two ways to get this wrong, and the law has been both:
+//
+// Discarding the error made it unfalsifiable. An Op that never looked at its
+// context and answered nil immediately returned promptly, which was the whole
+// of what was checked, so the one implementation the claim exists to catch
+// passed it.
+//
+// Demanding the error unconditionally made it wrong about correct code, which
+// is worse. "Returns within a budget" is satisfied — most fully satisfied — by
+// an operation that finishes at once, and a subject with nothing to wait for
+// answers nil long before any deadline fires. Failing it says the tool is
+// broken to the one consumer whose implementation is perfect.
+//
+// So the deadline having passed is a precondition, not a conclusion. Op
+// returning inside its budget refuses it and the run is [law.Vacuous]: this
+// sequence engaged nothing, and counting it as a pass would let a subject that
+// is merely fast stand in for one that is correct under expiry.
 //
 // # The clock this law is actually on
 //
@@ -67,10 +83,16 @@ func (DeadlineRespecting[T]) REQID() string { return "" }
 // ignores it, and it is not a test of the fake clock's plumbing — a subject
 // that watches only the injected clock and never the context is outside what
 // it can judge.
+//
+// Concurrency: Op runs on its own goroutine and the channel is buffered, so a
+// subject that outlives the wait leaks no goroutine into the next iteration
+// beyond the one blocked on its own work — which the AwaitFor branch reports
+// rather than hangs on.
 func (l DeadlineRespecting[T]) Check(_ *rapid.T, sut, _ T) error {
 	ctx, cancel := context.WithTimeout(context.Background(), l.Deadline)
 	defer cancel()
 
+	start := time.Now()
 	done := make(chan error, 1)
 	go func() {
 		done <- l.Op(ctx, sut)
@@ -85,6 +107,11 @@ func (l DeadlineRespecting[T]) Check(_ *rapid.T, sut, _ T) error {
 	}
 	select {
 	case err := <-done:
+		if time.Since(start) < l.Deadline {
+			// Finished inside the budget: the deadline never fired, so there
+			// is no expiry behaviour to judge.
+			return law.Vacuous
+		}
 		if err == nil {
 			return errors.New(
 				"timeaware: deadline-respecting law: Op returned nil after its deadline passed, so it never saw one",

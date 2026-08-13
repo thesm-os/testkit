@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/engine/model/law"
 	"go.thesmos.sh/testkit/engine/model/timeaware"
 )
 
@@ -19,34 +20,62 @@ func TestDeadlineRespecting(t *testing.T) {
 
 	t.Run("an Op that ignores its deadline is caught", func(t *testing.T) {
 		t.Parallel()
-		// The implementation the claim exists to catch, and the one the law
-		// used to pass: it never reads the context, answers nil at once, and
-		// so returns well inside the wait window. Only the error tells it
-		// apart from an Op that honoured the deadline.
+		// The implementation the claim exists to catch: it never reads the
+		// context, outlives the deadline, and then answers nil as if nothing
+		// had happened. Only the error tells it apart from an Op that
+		// honoured the deadline — and only the elapsed time tells it apart
+		// from an Op that finished before there was a deadline to honour.
+		l := timeaware.DeadlineRespecting[struct{}]{
+			Op: func(context.Context, struct{}) error {
+				time.Sleep(20 * time.Millisecond)
+				return nil
+			},
+			Deadline: 5 * time.Millisecond,
+			Advance:  func(time.Duration) {},
+			AwaitFor: 500 * time.Millisecond,
+		}
+		err := l.Check(nil, struct{}{}, struct{}{})
+		testkit.False(t, errors.Is(err, law.Vacuous),
+			"outliving the deadline engages the claim; this is a verdict, not a refusal")
+		testkit.Assert(t, err.Error()).Contains("never saw one",
+			"and the verdict names what the subject failed to observe")
+	})
+
+	// The complement, and the reason the elapsed-time gate exists: finishing
+	// at once is the most complete way to satisfy "within a budget". Failing
+	// it told the consumer with the perfect implementation that the tool was
+	// broken, which is the one verdict a conformance tool cannot afford.
+	t.Run("an Op finishing inside its budget engages nothing", func(t *testing.T) {
+		t.Parallel()
 		l := timeaware.DeadlineRespecting[struct{}]{
 			Op:       func(context.Context, struct{}) error { return nil },
-			Deadline: 5 * time.Millisecond,
+			Deadline: time.Second,
 			Advance:  func(time.Duration) {},
 			AwaitFor: 50 * time.Millisecond,
 		}
-		if err := l.Check(nil, struct{}{}, struct{}{}); err == nil {
-			t.Fatal("an Op that answers nil never saw a deadline")
-		}
+		err := l.Check(nil, struct{}{}, struct{}{})
+		testkit.True(t, errors.Is(err, law.Vacuous),
+			"the deadline never fired, so there was no expiry behaviour to judge")
 	})
 
 	t.Run("an Op failing for its own reasons is not a deadline", func(t *testing.T) {
 		t.Parallel()
-		// Returning promptly with some unrelated error is not evidence the
-		// deadline was respected either — the claim names a context error.
+		// Outliving the deadline and then failing for some unrelated reason
+		// is not evidence the deadline was respected — the claim names a
+		// context error, and a disk fault is not one.
 		l := timeaware.DeadlineRespecting[struct{}]{
-			Op:       func(context.Context, struct{}) error { return errors.New("disk on fire") },
+			Op: func(context.Context, struct{}) error {
+				time.Sleep(20 * time.Millisecond)
+				return errors.New("disk on fire")
+			},
 			Deadline: 5 * time.Millisecond,
 			Advance:  func(time.Duration) {},
-			AwaitFor: 50 * time.Millisecond,
+			AwaitFor: 500 * time.Millisecond,
 		}
-		if err := l.Check(nil, struct{}{}, struct{}{}); err == nil {
-			t.Fatal("an unrelated failure is not a deadline being honoured")
-		}
+		err := l.Check(nil, struct{}{}, struct{}{})
+		testkit.False(t, errors.Is(err, law.Vacuous), "the claim was engaged")
+		testkit.Assert(t, err.Error()).Contains("not a context error",
+			"the verdict names why the error does not answer the claim")
 	})
 
 	t.Run("compliant Op returns when ctx is cancelled", func(t *testing.T) {
