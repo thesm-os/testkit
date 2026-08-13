@@ -85,13 +85,40 @@ func Test{{ .IfaceName }}ModelKillsInertMutants(t *{{ renderExpr (external "test
 			}))
 			{{ renderExpr (external .RootPkg "True") }}(t, f.Failed(),
 				"an inert "+m.method+" must diverge from the clean reference")
-			// Identity, not existence: a kill is the differential's own —
-			// an action divergence or a law violation — and a run reddened
-			// by anything else, a panic or a harness fault, is not a kill.
+			// The kill has to be this mutant's, and the reporter is the only
+			// thing that can say so. A divergence renders "<step>: <action>:
+			// <detail>", so the action's name arrives punctuated — which the
+			// surrogate TB cannot counterfeit: rapid echoes its name into the
+			// message and that name holds no colons. Matching the bare method
+			// would match the name and assert nothing, the same trap the
+			// saturation prover's criterion fell into.
+			//
+			// The suffix rather than the bracketed whole because a REQ-tagged
+			// kind renders "[REQ-1 semantic]".
 			msg := f.Msg()
+			// A law caught it, naming itself.
+			named := {{ renderExpr (external "strings" "Contains") }}(msg, "invariant] AUTO-")
+			// Or the differential caught it, naming the operation it diverged
+			// on. Not always this one: an inert release is observed on the
+			// next acquire, and a write that stopped writing on the read that
+			// stopped seeing it. What the matrix can hold is that the kill is
+			// attributable to an operation this interface declares — which is
+			// what separates a detected defect from a panic or a harness
+			// fault, and is the whole of what this predicate claims.
+			//
+			// The name arrives punctuated, "<action>(<input>):", and that is
+			// what makes it the reporter's word rather than the surrogate
+			// TB's: rapid echoes the TB name into the message, and the name
+			// is spelled without parentheses. Matching the bare method would
+			// match the name and assert nothing — the trap the saturation
+			// criterion fell into.
+			for _, op := range []string{ {{ range $i, $m := .Mutants }}{{ if $i }}, {{ end }}{{ printf "%q" .Method }}{{ end }} } {
+				named = named || {{ renderExpr (external "strings" "Contains") }}(msg, ": "+op+"(")
+			}
 			{{ renderExpr (external .RootPkg "True") }}(t,
-				{{ renderExpr (external "strings" "Contains") }}(msg, "[semantic]") || {{ renderExpr (external "strings" "Contains") }}(msg, "[invariant]"),
-				"the failure is the run's classified divergence, not a stray panic: "+msg)
+				named && ({{ renderExpr (external "strings" "Contains") }}(msg, "semantic] ") ||
+					{{ renderExpr (external "strings" "Contains") }}(msg, "invariant] ")),
+				"the kill is a classified verdict naming an operation or a law: "+msg)
 		})
 	}
 }

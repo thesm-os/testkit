@@ -1,6 +1,0 @@
-# 2026/08/13 23:10:39.186165 [TestReaderLawSelfConsistency/DefaultOnError_passes_on_success_and_on_a_proper_default] [rapid] draw DefaultOnError_key: "k"
-# 2026/08/13 23:10:39.186168 [TestReaderLawSelfConsistency/DefaultOnError_passes_on_success_and_on_a_proper_default] a successful read says nothing about the default: law: vacuously holds — a precondition this run supplies was refused
-# 
-v0.4.8#14830932689029101641
-0x0
-0x0

@@ -1,6 +1,0 @@
-# 2026/08/13 23:10:39.189337 [TestTamperEvidentPreconditionsAndViolations/inapplicable_tampering_holds_vacuously] [rapid] draw TamperEvident_value: "v"
-# 2026/08/13 23:10:39.189355 [TestTamperEvidentPreconditionsAndViolations/inapplicable_tampering_holds_vacuously] inapplicable tampering must skip, not fail: law: vacuously holds — a precondition this run supplies was refused
-# 
-v0.4.8#1007885524703524042
-0x0
-0x0
