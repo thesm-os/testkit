@@ -25,5 +25,11 @@ type Value struct{ Key, Body string }
 //testkit:suite
 //testkit:model
 type StreamReader interface {
+	// Add gives the stream something to yield. Without a writer the subject
+	// stays empty forever, and every claim about what a drain returns holds
+	// by vacancy — two drains of nothing agree, a drain of nothing
+	// terminates, and no defect worn on List can make either false.
+	Add(ctx context.Context, v Value) error
+
 	List(ctx context.Context) iter.Seq2[Value, error]
 }

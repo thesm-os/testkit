@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.38.0"
+const Version = "0.39.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -588,6 +588,27 @@ type SatMutant struct {
 	// read as unsaturatable.
 	Over   string
 	ViaLen bool
+
+	// Seq is the arity of a streamed result — 1 for an `iter.Seq`, 2 for an
+	// `iter.Seq2`, zero for anything else. A wear answering the zero value
+	// for one of those hands back a nil function, and ranging over it panics
+	// before the law it was worn for is ever consulted.
+	Seq int
+}
+
+// SeqHelper names the runtime helper that answers an empty sequence of the
+// wear's own shape, or the empty string where the result is not a stream.
+//
+// A method rather than arithmetic in the template: which helper applies is a
+// fact about the signature, and the template's job is to spell the call.
+func (m SatMutant) SeqHelper() string {
+	switch m.Seq {
+	case 1:
+		return "EmptySeq"
+	case 2:
+		return "EmptySeq2"
+	}
+	return ""
 }
 
 // Pool is one shared value source: a fixture field and its companion, and how

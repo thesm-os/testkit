@@ -6,6 +6,7 @@ package testkit_test
 import (
 	"errors"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
@@ -245,5 +246,48 @@ func TestTableTest(t *testing.T) {
 			t.Helper()
 			testkit.True(t, tc.value > 0, "value must be positive")
 		})
+	})
+}
+
+// A wear that answers "nothing" for a stream must answer an empty sequence
+// rather than the zero value, because ranging over a nil iterator panics —
+// which takes the run down instead of letting the law it was worn for speak.
+func TestEmptySeq(t *testing.T) {
+	t.Parallel()
+
+	t.Run("one-value sequences yield nothing", func(t *testing.T) {
+		t.Parallel()
+		full := slices.Values([]string{"a", "b"})
+		count := 0
+		for range testkit.EmptySeq(full) {
+			count++
+		}
+		testkit.Equal(t, count, 0, "the empty sequence yields no element")
+	})
+
+	t.Run("two-value sequences yield nothing", func(t *testing.T) {
+		t.Parallel()
+		full := slices.All([]string{"a", "b"})
+		count := 0
+		for range testkit.EmptySeq2(full) {
+			count++
+		}
+		testkit.Equal(t, count, 0, "the empty sequence yields no pair")
+	})
+
+	t.Run("the sequence handed in is not drained", func(t *testing.T) {
+		t.Parallel()
+		// Read for its type and nothing else: it is the real call the wear
+		// stands in for, and draining it would run the very work the defect
+		// exists to suppress.
+		drained := 0
+		full := func(yield func(int) bool) {
+			drained++
+			yield(1)
+		}
+		for range testkit.EmptySeq(full) {
+			t.Fatal("nothing is yielded")
+		}
+		testkit.Equal(t, drained, 0, "the original is never started")
 	})
 }

@@ -10,6 +10,7 @@ import (
 	"context"
 	"iter"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
@@ -18,6 +19,126 @@ import (
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
 )
+
+// streamReaderStubAddSubject binds Add into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func streamReaderStubAddSubject(tb testing.TB) stub.Subject[streamreadertest.StreamReaderAddCall, streamreadertest.StreamReaderAddReturn] {
+	tb.Helper()
+	s := streamreadertest.NewStreamReaderStub(tb)
+	return stub.Subject[streamreadertest.StreamReaderAddCall, streamreadertest.StreamReaderAddReturn]{
+		Stub: s.OnAdd.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 streamreader.Value
+			_ = s.Add(a0, a1)
+		},
+		Result: func() streamreadertest.StreamReaderAddReturn {
+			var a0 context.Context
+			var a1 streamreader.Value
+			got0 := s.Add(a0, a1)
+			return streamreadertest.StreamReaderAddReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnAdd.Func(func(_ context.Context, _ streamreader.Value) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 streamreader.Value
+			r0 := s.Add(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestStreamReaderStubAdd pins how Add answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestStreamReaderStubAdd(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Add", streamReaderStubAddSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := streamreadertest.NewStreamReaderStub(t)
+		var want0 error
+		s.OnAdd.Returns(want0)
+		var a0 context.Context
+		var a1 streamreader.Value
+		got0 := s.Add(a0, a1)
+		testkit.Equal(t, got0, want0, "Add must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := streamreadertest.NewStreamReaderStub(t)
+		var a0 context.Context
+		var a1 streamreader.Value
+		_ = s.Add(a0, a1)
+		got := s.OnAdd.AssertCalledOnce(t, "Add must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.V, a1, "the recorded call carries V")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := streamreadertest.NewStreamReaderStub(t)
+		var seen []streamreadertest.StreamReaderAddCall
+		s.OnAdd.OnRecord(func(c streamreadertest.StreamReaderAddCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 streamreader.Value
+		_ = s.Add(a0, a1)
+		_ = s.Add(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Add call")
+	})
+
+	t.Run("wires WithStreamReaderAdd at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := streamreadertest.NewStreamReaderStub(t, streamreadertest.WithStreamReaderAdd(func(_ context.Context, _ streamreader.Value) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 streamreader.Value
+		_ = s.Add(a0, a1)
+		testkit.True(t, called, "WithStreamReaderAdd must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := streamreadertest.NewStreamReaderStub(t)
+		var want0 error
+		s.OnAdd.Returns(want0)
+		var a0 context.Context
+		var a1 streamreader.Value
+		_ = s.Add(a0, a1)
+		s.ResetCalls()
+		got0 := s.Add(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
 
 // streamReaderStubListSubject binds List into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
@@ -202,34 +323,35 @@ func TestStreamReaderStubList(t *testing.T) {
 // streamReaderStubDouble describes how to build a StreamReaderStub under each
 // option whose effect is the same whatever a method's signature.
 //
-// List stands in for the double as a whole: what these checks assert
+// Add stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func streamReaderStubDouble() stub.Double[streamreadertest.StreamReaderListCall] {
-	instance := func(s *streamreadertest.StreamReaderStub) stub.Instance[streamreadertest.StreamReaderListCall] {
-		return stub.Instance[streamreadertest.StreamReaderListCall]{
-			Stub: s.OnList.MethodStub,
+func streamReaderStubDouble() stub.Double[streamreadertest.StreamReaderAddCall] {
+	instance := func(s *streamreadertest.StreamReaderStub) stub.Instance[streamreadertest.StreamReaderAddCall] {
+		return stub.Instance[streamreadertest.StreamReaderAddCall]{
+			Stub: s.OnAdd.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				_ = s.List(a0)
+				var a1 streamreader.Value
+				_ = s.Add(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
 	}
-	return stub.Double[streamreadertest.StreamReaderListCall]{
-		New: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderListCall] {
+	return stub.Double[streamreadertest.StreamReaderAddCall]{
+		New: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderAddCall] {
 			return instance(streamreadertest.NewStreamReaderStub(tb))
 		},
-		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[streamreadertest.StreamReaderListCall] {
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[streamreadertest.StreamReaderAddCall] {
 			return instance(streamreadertest.NewStreamReaderStub(tb, streamreadertest.StreamReaderStubWithClock(clk)))
 		},
-		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[streamreadertest.StreamReaderListCall] {
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[streamreadertest.StreamReaderAddCall] {
 			return instance(streamreadertest.NewStreamReaderStub(tb, streamreadertest.StreamReaderStubWithRandSource(src)))
 		},
-		BenchMode: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderListCall] {
+		BenchMode: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderAddCall] {
 			return instance(streamreadertest.NewStreamReaderStub(tb, streamreadertest.StreamReaderStubBenchMode()))
 		},
-		Strict: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderListCall] {
+		Strict: func(tb testing.TB) stub.Instance[streamreadertest.StreamReaderAddCall] {
 			return instance(streamreadertest.NewStreamReaderStub(tb, streamreadertest.StreamReaderStubStrict()))
 		},
 	}
@@ -255,6 +377,25 @@ func TestStreamReaderStubDelegateTo(t *testing.T) {
 	inner := streamreadertest.NewStreamReaderStub(t)
 	s := streamreadertest.NewStreamReaderStub(t, streamreadertest.StreamReaderStubDelegateTo(inner))
 
+	t.Run("forwards Add to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 streamreader.Value
+		_ = s.Add(a0, a1)
+		inner.OnAdd.AssertCalledOnce(t, "Add must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Add answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Add-delegate")
+		inner.OnAdd.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 streamreader.Value
+		r0 := s.Add(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Add must surface the wrapped answer")
+	})
+
 	t.Run("forwards List to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		_ = s.List(a0)
@@ -263,4 +404,4 @@ func TestStreamReaderStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0178eacf12536b9390e4098f0ae633bbb6b1b5863b264d9d0d24a332c5ef4aa9
+// testkit:provenance db955f38b48f9c96d5111f391a7a8a7aca86ec3d116a8421167fb5064da52fe6

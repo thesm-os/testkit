@@ -156,9 +156,17 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 // {{ lower $b.IfaceName }}SatInert{{ .Method }} answers zeros where {{ .Method }} should act.
 type {{ lower $b.IfaceName }}SatInert{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
 
+{{ if .Seq -}}
+// A stream's zero value is a nil iterator, and ranging over one panics before
+// the law is asked — so answering nothing means an empty sequence, not none.
+func (m {{ lower $b.IfaceName }}SatInert{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) {{ index .Returns 0 | renderType }} {
+	return {{ renderExpr (external $b.RootPkg .SeqHelper) }}(m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }}))
+}
+{{- else -}}
 func ({{ lower $b.IfaceName }}SatInert{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}){{ if .Returns }} ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }} {{ renderType $r }}{{ end }}){{ end }} {
 	return
 }
+{{- end }}
 {{- else if eq .Kind "flap" }}
 
 // {{ lower $b.IfaceName }}SatFlap{{ .Method }} alternates the fixture pair where
@@ -232,7 +240,12 @@ type {{ lower $b.IfaceName }}SatFlicker{{ .Method }} struct {
 
 func (m *{{ lower $b.IfaceName }}SatFlicker{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }} {{ renderType $r }}{{ end }}) {
 	if m.flip.Add(1)%2 == 0 {
+{{- if .Seq }}
+		// Empty rather than nil: a nil iterator panics when drained.
+		return {{ renderExpr (external $b.RootPkg .SeqHelper) }}(m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }}))
+{{- else }}
 		return
+{{- end }}
 	}
 	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
 }

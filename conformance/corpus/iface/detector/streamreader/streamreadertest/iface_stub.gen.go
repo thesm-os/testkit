@@ -17,6 +17,17 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
+// StreamReaderAddCall records one invocation of StreamReader.Add.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type StreamReaderAddCall struct {
+	Ctx context.Context
+	V   streamreader.Value
+	Err error
+}
+
 // StreamReaderListCall records one invocation of StreamReader.List.
 //
 // Fields take their names from the source signature — parameters and named
@@ -28,6 +39,38 @@ type StreamReaderListCall struct {
 }
 
 // --- Per-method configuration ---
+
+// StreamReaderAddStub controls how the double answers Add and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type StreamReaderAddStub struct {
+	*stub.MethodStub[StreamReaderAddCall]
+
+	fn       func(context.Context, streamreader.Value) error
+	fallback *StreamReaderAddReturn
+}
+
+// StreamReaderAddReturn holds the fixed answer configured through Returns.
+type StreamReaderAddReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Add. A Func
+// override and an injected fault both take precedence over it.
+func (s *StreamReaderAddStub) Returns(err error) *StreamReaderAddStub {
+	s.fallback = &StreamReaderAddReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Add, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *StreamReaderAddStub) Func(fn func(context.Context, streamreader.Value) error) *StreamReaderAddStub {
+	s.fn = fn
+	return s
+}
 
 // StreamReaderListStub controls how the double answers List and records
 // what it was asked.
@@ -118,6 +161,7 @@ func StreamReaderStubStrict() StreamReaderStubOption {
 // production type, which is the point of conformance testing.
 func StreamReaderStubDelegateTo(impl streamreader.StreamReader) StreamReaderStubOption {
 	return func(s *StreamReaderStub) {
+		s.OnAdd.Func(impl.Add)
 		s.OnList.Func(impl.List)
 	}
 }
@@ -154,6 +198,13 @@ func StreamReaderStubBenchMode() StreamReaderStubOption {
 	}
 }
 
+// WithStreamReaderAdd sets Add's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithStreamReaderAdd(fn func(context.Context, streamreader.Value) error) StreamReaderStubOption {
+	return func(s *StreamReaderStub) { s.OnAdd.Func(fn) }
+}
+
 // WithStreamReaderList sets List's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -166,6 +217,7 @@ func WithStreamReaderList(fn func(context.Context) iter.Seq2[streamreader.Value,
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type StreamReaderStub struct {
+	OnAdd  *StreamReaderAddStub
 	OnList *StreamReaderListStub
 
 	// all is every method stub above, viewed through the surface that does
@@ -191,9 +243,11 @@ var _ streamreader.StreamReader = (*StreamReaderStub)(nil)
 // and non-test callers want.
 func NewStreamReaderStub(tb testing.TB, opts ...StreamReaderStubOption) *StreamReaderStub {
 	s := &StreamReaderStub{
+		OnAdd:  &StreamReaderAddStub{MethodStub: stub.NewMethodStub[StreamReaderAddCall](tb, "StreamReader.Add")},
 		OnList: &StreamReaderListStub{MethodStub: stub.NewMethodStub[StreamReaderListCall](tb, "StreamReader.List")},
 	}
 	s.all = []stub.Configurable{
+		s.OnAdd.MethodStub,
 		s.OnList.MethodStub,
 	}
 	for _, opt := range opts {
@@ -233,6 +287,38 @@ func (s *StreamReaderStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *StreamReaderAddStub) invoke(ctx context.Context, v streamreader.Value) func() StreamReaderAddReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() StreamReaderAddReturn {
+		r0 := s.fn(ctx, v)
+		return StreamReaderAddReturn{Err: r0}
+	}
+}
+
+// Add records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *StreamReaderStub) Add(ctx context.Context, v streamreader.Value) error {
+	call := StreamReaderAddCall{Ctx: ctx, V: v}
+	r := stub.Answer(s.OnAdd.MethodStub, &call, stub.Arms[StreamReaderAddCall, StreamReaderAddReturn]{
+		Invoke:   s.OnAdd.invoke(ctx, v),
+		Fallback: s.OnAdd.fallback,
+		Fault:    func(err error) StreamReaderAddReturn { return StreamReaderAddReturn{Err: err} },
+		Stamp: func(c *StreamReaderAddCall, r StreamReaderAddReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *StreamReaderListStub) invoke(ctx context.Context) func() StreamReaderListReturn {
 	if s.fn == nil {
 		return nil
@@ -262,4 +348,4 @@ func (s *StreamReaderStub) List(ctx context.Context) iter.Seq2[streamreader.Valu
 }
 
 // testkit: end of generated content.
-// testkit:provenance f3741908509af94735ef11bfd9c8367eaca5117320964c3cf5abeec208094935
+// testkit:provenance f857018193b7269b4b916afb97983e09b052ba98404e049b96974b1c1687b7ee

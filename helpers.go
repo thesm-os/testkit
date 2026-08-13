@@ -7,6 +7,7 @@ import (
 	"cmp"
 	"fmt"
 	"hash/fnv"
+	"iter"
 	"math/rand/v2"
 	"net"
 	"os"
@@ -174,4 +175,26 @@ func TableTest[T any](t *testing.T, cases []T, run func(t *testing.T, tc T)) {
 			run(t, tc)
 		})
 	}
+}
+
+// EmptySeq answers an empty sequence shaped like the one handed in.
+//
+// For a generated defect worn on a method that streams. The zero value of an
+// iterator is a nil function, and ranging over one panics — so a mutant that
+// "answers nothing" by returning the zero takes the run down instead of
+// testing anything, and the law it was worn for never gets a verdict.
+//
+// The argument is read for its type and nothing else: an empty sequence
+// cannot be written without naming the element types, and inference supplies
+// them from the real call the mutant is standing in for. Passing the
+// subject's own sequence keeps the generated line honest about what it
+// replaced.
+func EmptySeq[V any](iter.Seq[V]) iter.Seq[V] {
+	return func(func(V) bool) {}
+}
+
+// EmptySeq2 answers an empty two-value sequence shaped like the one handed
+// in — [EmptySeq] for the `iter.Seq2` half, and for the same reason.
+func EmptySeq2[K, V any](iter.Seq2[K, V]) iter.Seq2[K, V] {
+	return func(func(K, V) bool) {}
 }

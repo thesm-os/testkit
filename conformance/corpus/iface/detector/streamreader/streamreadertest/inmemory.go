@@ -9,6 +9,7 @@ package streamreadertest
 
 import (
 	"context"
+	"errors"
 	"iter"
 	"sync"
 
@@ -26,6 +27,20 @@ var _ streamreader.StreamReader = (*InMemory)(nil)
 
 // NewInMemory returns an empty stream.
 func NewInMemory() *InMemory { return &InMemory{} }
+
+// Add appends an element, so the stream has something to yield.
+func (s *InMemory) Add(ctx context.Context, v streamreader.Value) error {
+	if ctx == nil {
+		return errors.New("streamreadertest: nil context")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.values = append(s.values, v)
+	return nil
+}
 
 // List yields lazily and stops when the consumer does, which is the shape's own
 // law: a consumer may break out of the range, so the implementation must not

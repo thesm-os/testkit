@@ -626,7 +626,7 @@ func overshootOf(b *Bindings, harness *suite.Contract, lb *LawBinding, method st
 // integer. Wider vocabularies earn their kinds when a surviving law names
 // the need.
 func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
-	base := SatMutant{Method: m.Name, TakesCtx: m.TakesContext()}
+	base := SatMutant{Method: m.Name, TakesCtx: m.TakesContext(), Seq: seqArity(m)}
 	for _, p := range m.Params {
 		base.Params = append(base.Params, p.Type)
 	}
@@ -2462,6 +2462,31 @@ func roleMethod(
 		return nil, "names " + from + ", which the selecting method does not stamp"
 	}
 	return nil, "names " + from + ", which nothing resolves"
+}
+
+// seqArity reports how many values a method's streamed result yields — 1 for
+// an `iter.Seq`, 2 for an `iter.Seq2` — and zero where the method streams
+// nothing.
+//
+// Named types from the standard library rather than a shape stamp, because
+// this is not a classification: it is the fact that the result's zero value
+// is a nil function. A defect that answers the zero for a stream hands the
+// law a nil iterator, and ranging over one panics before the law is asked.
+func seqArity(m *suite.Method) int {
+	if len(m.Returns) != 1 || m.Returns[0].Source == nil {
+		return 0
+	}
+	t := m.Returns[0].Source
+	if t.Package != "iter" {
+		return 0
+	}
+	switch t.Name {
+	case "Seq":
+		return 1
+	case "Seq2":
+		return 2
+	}
+	return 0
 }
 
 // returnsSlice reports whether the method's first result is a slice.

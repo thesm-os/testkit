@@ -2518,6 +2518,30 @@ func TestSaturationDerivation(t *testing.T) {
 			"a method answering nothing has nothing to flicker")
 	})
 
+	t.Run("a streamed result answers empty rather than nil", func(t *testing.T) {
+		t.Parallel()
+		// A stream's zero value is a nil function, and ranging over one
+		// panics — so a wear answering the zero takes the run down before
+		// the law it was worn for is asked anything.
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		seq2 := projected("List", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("iter", "Seq2"))})
+		for _, sm := range satMutantsOf(b, seq2) {
+			testkit.Equal(t, sm.Seq, 2, "the arity rides every wear on the method")
+			testkit.Equal(t, sm.SeqHelper(), "EmptySeq2", "and names its helper")
+		}
+
+		seq1 := projected("Each", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("iter", "Seq"))})
+		testkit.Equal(t, satMutantsOf(b, seq1)[0].SeqHelper(), "EmptySeq",
+			"the one-value form names its own")
+
+		plain := projected("Get", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		testkit.Equal(t, satMutantsOf(b, plain)[0].SeqHelper(), "",
+			"a result that is not a stream names no helper")
+	})
+
 	t.Run("the surface knows its reach and its restatement", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
