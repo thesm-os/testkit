@@ -6,5 +6,5 @@ value where both succeeded and the miss where both failed.
 {{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
 				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Value }}, error) {
 					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}k)
-				})
+				}{{ if .Sentinel }}, {{ renderExpr (external .ActionPkg "WithSentinel") }}({{ renderExpr .Sentinel }}){{ end }})
 {{- end -}}

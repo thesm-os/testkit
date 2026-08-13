@@ -1,10 +1,13 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
-// provides the [FoldMachine] reference for
-// kernel-grade interfaces that accumulate state via a fold over a
-// stream of events. Each Apply(p) advances the state via the
-// supplied fold function; State() returns the current accumulation.
+// This file provides the [FoldMachine] reference for kernel-grade
+// interfaces that accumulate state via a fold over a stream of events.
+// Each Apply(p) advances the state via the supplied fold function;
+// State() returns the current accumulation. No concurrent leg derives
+// from the shape: a keyless fold has one accumulation and no partition,
+// and the order-insensitivity its mixins claim is exactly what
+// linearizability cannot observe — the sequential laws carry it.
 
 package ref
 

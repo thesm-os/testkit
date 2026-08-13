@@ -7,5 +7,5 @@ the whole answer.
 {{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
 				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, ks ...{{ renderType .Key }}) ([]{{ renderType .Value }}, error) {
 					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}ks...)
-				})
+				}{{ if .Sentinel }}, {{ renderExpr (external .ActionPkg "WithSentinel") }}({{ renderExpr .Sentinel }}){{ end }})
 {{- end -}}

@@ -66,9 +66,17 @@ the tier — and the engine dependency with it.
 {{- else if eq .ConcFamily "lease" }}
 //	Concurrent: {{ .ConcAcquire.Method }} and {{ .ConcRelease.Method }} interleave across four workers,
 //	           Porcupine-checked against the lease-table model per key
+{{- else if eq .ConcFamily "cas" }}
+//	Concurrent: {{ .ConcWriter.Method }} and {{ .ConcReader.Method }} interleave across four workers,
+//	           Porcupine-checked against the versioned-cell model in the
+//	           oracle's own dialect
+{{- else if eq .ConcFamily "append" }}
+//	Concurrent: {{ .ConcWriter.Method }} interleaves across four workers,
+//	           Porcupine-checked against the shared append-log model — the
+//	           offsets of one linearizable order
 {{- end }}
 {{- with .Laws }}
-//	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ if $l.Clocked }} (clocked){{ end }}{{ if $l.Supplied }} (supplied: {{ range $j, $s := $l.Supplied }}{{ if $j }}, {{ end }}{{ $s }}{{ end }}){{ end }}{{ end }}
+//	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ if $l.Clocked }} (clocked){{ end }}{{ if $l.Supplied }} (supplied: {{ range $j, $s := $l.Supplied }}{{ if $j }}, {{ end }}{{ $s }}{{ end }}){{ end }}{{ if $l.Unarmed }} (unarmed: {{ range $j, $u := $l.Unarmed }}{{ if $j }}, {{ end }}{{ $u }}{{ end }}){{ end }}{{ end }}
 {{- end }}
 {{- if .UsesClock }}
 //	Clock:     the (clocked) laws arm only under {{ .IfaceName }}ModelClocked,
@@ -308,6 +316,44 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 					func({{ if .ConcRelease.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, k {{ renderType .Keys.Type }}) error {
 						return s.{{ .ConcRelease.Method }}({{ if .ConcRelease.TakesCtx }}ctx, {{ end }}k)
 					}, func(k {{ renderType .Keys.Type }}) {{ renderType .Keys.Type }} { return k }),
+			},
+		}),
+{{- else if eq .ConcFamily "cas" }}
+		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
+			// The cell model speaks the live oracle's own dialect — the stamp
+			// is seen+1 and an empty cell matches only the zero version. The
+			// mismatch is the declaration's stamped identity, the same one the
+			// sequential oracle consumes; the subject's own empty error is not
+			// knowable here, and nil reads any non-nil answer on an empty cell
+			// as the miss. The op spellings are the model's canonical
+			// vocabulary — it switches on them, and an alias checks nothing.
+			Model: {{ renderExpr (external .LinearizePkg "CASCell") }}[{{ renderType .Reference.ContractArg }}, int64](nil, {{ with .CasMismatch }}{{ if .Sym }}{{ renderExpr .Sym }}{{ else }}{{ .Name }}{{ end }}{{ end }},
+				func(v {{ renderType .Reference.ContractArg }}) int64 { return int64(v.{{ .Reference.VersionField }}) },
+				func(ver int64) int64 { return ver + 1 }),
+			Actions: []{{ renderExpr (external .ModelPkg "ConcurrentAction") }}[{{ renderType .IfaceRef }}]{
+				{{ renderExpr (external .LinearizePkg "ConcurrentCAS") }}({{ renderExpr (external .LinearizePkg "OpCAS") }}, {{ .ConcWriter.Pool }},
+					func({{ if .ConcWriter.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, v {{ renderType .Reference.ContractArg }}) error {
+						return s.{{ .ConcWriter.Method }}({{ if .ConcWriter.TakesCtx }}ctx, {{ end }}v)
+					}),
+				{{ renderExpr (external .LinearizePkg "ConcurrentCellReader") }}({{ renderExpr (external .LinearizePkg "OpGet") }},
+					func({{ if .ConcReader.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}) ({{ renderType .Reference.ContractArg }}, error) {
+						return s.{{ .ConcReader.Method }}({{ if .ConcReader.TakesCtx }}ctx{{ end }})
+					}),
+			},
+		}),
+{{- else if eq .ConcFamily "append" }}
+		{{ renderExpr (external .ModelPkg "WithConcurrent") }}({{ renderExpr (external .ModelPkg "ConcurrentConfig") }}[{{ renderType .IfaceRef }}]{
+			// One shared history: concurrent appends must answer the offsets
+			// of one linearizable order. The monotonic-offsets law states the
+			// claim per client; this leg states it across them, which is
+			// where a torn append hides. The op spelling is the model's
+			// canonical vocabulary.
+			Model: {{ renderExpr (external .LinearizePkg "AppendLog") }}[{{ renderType .ConcEntry }}](),
+			Actions: []{{ renderExpr (external .ModelPkg "ConcurrentAction") }}[{{ renderType .IfaceRef }}]{
+				{{ renderExpr (external .LinearizePkg "ConcurrentAppend") }}({{ renderExpr (external .LinearizePkg "OpAppend") }}, {{ .ConcWriter.Pool }},
+					func({{ if .ConcWriter.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, v {{ renderType .ConcEntry }}) (int64, error) {
+						return s.{{ .ConcWriter.Method }}({{ if .ConcWriter.TakesCtx }}ctx, {{ end }}v)
+					}),
 			},
 		}),
 {{- end }}

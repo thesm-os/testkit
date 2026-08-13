@@ -57,6 +57,21 @@ func TestCASCell(t *testing.T) {
 		testkit.True(t, porcupine.CheckOperations(m, history), "absent key returns sentinel")
 	})
 
+	t.Run("a non-zero first version yields mismatch", func(t *testing.T) {
+		t.Parallel()
+		m := linearize.CASCell[casEntry, int](notFound, mismatch, versionOf, nextVer)
+		refused := []porcupine.Operation{
+			opCAS(0, "CAS", "k", casEntry{Version: 99, Value: "v"}, linearize.WriterResult{Err: mismatch}),
+		}
+		testkit.True(t, porcupine.CheckOperations(m, refused),
+			"an empty cell has seen nothing, and only the zero version matches")
+		accepted := []porcupine.Operation{
+			opCAS(0, "CAS", "k", casEntry{Version: 99, Value: "v"}, linearize.WriterResult{}),
+		}
+		testkit.False(t, porcupine.CheckOperations(m, accepted),
+			"a first write admitted past the dialect must surface as a mismatch")
+	})
+
 	t.Run("CAS with wrong version yields mismatch error", func(t *testing.T) {
 		t.Parallel()
 		m := linearize.CASCell[casEntry, int](notFound, mismatch, versionOf, nextVer)

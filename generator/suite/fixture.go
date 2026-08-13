@@ -315,7 +315,7 @@ func withChecks(
 	for _, m := range methods {
 		kept := make([]*Check, 0, 6)
 		family := signatureChecks(c, iface, f, m)
-		family = append(family, detectorChecks(c, iface, f, m)...)
+		family = append(family, detectorChecks(c, iface, f, m, methods)...)
 		family = append(family, mixinChecks(c, iface, f, m, methods)...)
 		family = append(family, contractChecks(c, iface, f, m, methods)...)
 		for _, ck := range family {

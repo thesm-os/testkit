@@ -23,6 +23,13 @@ import (
 // than *testing.T is what lets a stand-in drive it and prove it can fail.
 type ContractPublishCheck func(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value)
 
+// ContractReplayCheck is one assertion about Replay.
+//
+// Every generated check for Replay is a value of it, and so is one you
+// write — so they compose, reorder, and each runs standalone. testing.TB rather
+// than *testing.T is what lets a stand-in drive it and prove it can fail.
+type ContractReplayCheck func(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value)
+
 // ContractSubscribeCheck is one assertion about Subscribe.
 //
 // Every generated check for Subscribe is a value of it, and so is one you
@@ -64,12 +71,12 @@ func DefaultContractFixture() ContractFixture {
 
 // AssertContractContract runs every generated check against every declared subject.
 //
-//	Checks:   8 across 2 methods, per subject
+//	Checks:   12 across 3 methods, per subject
 //	Subjects: declare each with ContractSubject
 //	Double:   every subject runs a second time wrapped in ContractStub, so
 //	          anything the wrapper fails that the subject passes is the double
 //	          lying. ContractWithoutDouble declines it.
-//	Extend:   ContractOnPublish, ContractOnSubscribe
+//	Extend:   ContractOnPublish, ContractOnReplay, ContractOnSubscribe
 //	Drop:     ContractWithout, by the path each check reports under
 //
 // # What is checked somewhere else
@@ -77,8 +84,8 @@ func DefaultContractFixture() ContractFixture {
 // These need a reference implementation to compare against, which a suite run
 // has no way to build. Nothing here asserts them and nothing here should:
 //
-//   - writer, on Publish
-//   - publisher, on Publish, Subscribe
+//   - writer, on Publish, Replay
+//   - publisher, on Publish, Replay, Subscribe
 //   - aggregator, on Subscribe
 //
 // //testkit:model on the interface derives that reference, and the
@@ -132,6 +139,27 @@ func runContractChecks(
 			})
 			for _, c := range cfg.onPublish {
 				cfg.run(t, "Publish"+"/"+c.name, c.name, func(tb testing.TB) {
+					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+				})
+			}
+		})
+
+		t.Run("Replay", func(t *testing.T) {
+			t.Parallel()
+			cfg.run(t, "Replay/smoke", "smoke", func(tb testing.TB) {
+				AssertContractReplaySmoke(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			cfg.run(t, "Replay/reports a cancelled context", "reports a cancelled context", func(tb testing.TB) {
+				AssertContractReplayCancels(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			cfg.run(t, "Replay/reports an expired deadline", "reports an expired deadline", func(tb testing.TB) {
+				AssertContractReplayHonoursDeadline(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			cfg.run(t, "Replay/tolerates a nil context", "tolerates a nil context", func(tb testing.TB) {
+				AssertContractReplayToleratesNilContext(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
+			})
+			for _, c := range cfg.onReplay {
+				cfg.run(t, "Replay"+"/"+c.name, c.name, func(tb testing.TB) {
 					c.fn(tb, cfg.subject(tb, factory, wrap), cfg.Fixture.V)
 				})
 			}
@@ -255,6 +283,81 @@ func AssertContractPublishToleratesNilContext(tb testing.TB, subject publisherex
 	//nolint:staticcheck // passing nil is the check.
 	var ctx context.Context
 	_ = subject.Publish(ctx, v)
+}
+
+// AssertContractReplaySmoke asserts Replay survives a call with derived inputs.
+//
+// Fails when: Replay panics. The weakest check in this file and the one
+// that catches the most — a method that panics on a derived value is one no
+// other check here reaches.
+func AssertContractReplaySmoke(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Fatalf("Replay panicked on a derived value (%v); supply one it "+
+				"accepts through ContractWithFixture", r)
+		}
+	}()
+	ctx := tb.Context()
+	_ = subject.Replay(ctx, v)
+}
+
+// AssertContractReplayCancels asserts Replay reports a cancelled context as cancelled.
+//
+// Fails when: Replay returns nil for a context cancelled before the
+// call, or returns an error that does not answer to context.Canceled. Both
+// matter and they are different defects: the first is work done that the caller
+// asked not to be, the second is a caller who wrote
+// `errors.Is(err, context.Canceled)` and gets false for a call that was.
+//
+// The error rather than merely its presence is what separates this from the
+// deadline check. Asserting only that something came back makes the two one
+// check written twice.
+func AssertContractReplayCancels(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	err := subject.Replay(ctx, v)
+	testkit.ErrorIs(tb, err, context.Canceled,
+		"Replay must report a cancelled context as context.Canceled")
+}
+
+// AssertContractReplayHonoursDeadline asserts Replay reports an expired deadline as exceeded.
+//
+// Fails when: Replay returns nil for a context whose deadline has
+// passed, or returns an error that does not answer to
+// context.DeadlineExceeded. Distinct from cancellation in what the caller
+// learns: a cancelled call was called off, an expired one ran out of time, and
+// only the second is worth retrying.
+//
+// The deadline is the zero time, which is unconditionally in the past. No clock
+// is read: a generated check that consults the wall clock is one whose subject
+// is partly the machine it runs on.
+func AssertContractReplayHonoursDeadline(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value) {
+	tb.Helper()
+	ctx, cancel := context.WithDeadline(tb.Context(), time.Time{})
+	defer cancel()
+	err := subject.Replay(ctx, v)
+	testkit.ErrorIs(tb, err, context.DeadlineExceeded,
+		"Replay must report an expired deadline as context.DeadlineExceeded")
+}
+
+// AssertContractReplayToleratesNilContext asserts Replay does not panic on a nil context.
+//
+// Fails when: Replay panics. Returning an error is correct and
+// succeeding is correct — a nil context reaches production through a caller
+// that forgot one, and a panic turns that into an outage rather than a failed
+// request.
+func AssertContractReplayToleratesNilContext(tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("Replay panicked on a nil context (%v); return an error instead", r)
+		}
+	}()
+	//nolint:staticcheck // passing nil is the check.
+	var ctx context.Context
+	_ = subject.Replay(ctx, v)
 }
 
 // AssertContractSubscribeSmoke asserts Subscribe survives a call with derived inputs.
@@ -393,6 +496,13 @@ func ContractOnPublish(name string, fn ContractPublishCheck) ContractOption {
 	}
 }
 
+// ContractOnReplay adds a named check to Replay.
+func ContractOnReplay(name string, fn ContractReplayCheck) ContractOption {
+	return func(c *contractConfig) {
+		c.onReplay = append(c.onReplay, namedContractReplayCheck{name, fn})
+	}
+}
+
 // ContractOnSubscribe adds a named check to Subscribe.
 func ContractOnSubscribe(name string, fn ContractSubscribeCheck) ContractOption {
 	return func(c *contractConfig) {
@@ -416,6 +526,11 @@ func ContractWithout(paths ...string) ContractOption {
 type namedContractPublishCheck struct {
 	name string
 	fn   ContractPublishCheck
+}
+
+type namedContractReplayCheck struct {
+	name string
+	fn   ContractReplayCheck
 }
 
 type namedContractSubscribeCheck struct {
@@ -469,6 +584,7 @@ type contractConfig struct {
 	without       map[string]struct{}
 	extensions    []contractContractExtension
 	onPublish     []namedContractPublishCheck
+	onReplay      []namedContractReplayCheck
 	onSubscribe   []namedContractSubscribeCheck
 }
 
@@ -551,4 +667,4 @@ func (c *contractConfig) run(t *testing.T, path, name string, fn func(tb testing
 }
 
 // testkit: end of generated content.
-// testkit:provenance e28502d6c80841ca8351d59b613f09c3a5ddb4b65fee902f2867cb0699f8afb4
+// testkit:provenance 86a3d36059a7fb5e6424c086eec65f3ecef712b7e1ef52b45429d8e7d39e666a

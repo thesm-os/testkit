@@ -23,8 +23,10 @@ type casCellState[V any, Version comparable] struct {
 
 // CASCell builds a porcupine.Model for compare-and-swap cells
 // partitioned by key. Each key holds at most one value; a write
-// succeeds iff its version matches the current cell's version (an
-// empty cell accepts any first write). Step functions:
+// succeeds if its version matches the current cell's version, and an
+// empty cell accepts only the zero version — the shipped VersionedCell
+// oracle's own dialect, where the stamp is seen+1 and an empty cell has
+// seen nothing. Step functions:
 //
 //   - Get:     output matches the stored value plus current version,
 //     or the configured sentinel error when empty.
@@ -78,13 +80,18 @@ func CASCell[V any, Version comparable](
 					return false, s
 				}
 				if !s.present {
+					if versionOf(v) != zeroVer {
+						// Nothing has been seen, so only the zero version
+						// matches — the same refusal the live oracle makes.
+						return errors.Is(r.Err, mismatch), s
+					}
 					if r.Err != nil {
 						return false, s
 					}
 					return true, casCellState[V, Version]{
 						present: true,
 						value:   v,
-						version: nextVer(versionOf(v)),
+						version: nextVer(zeroVer),
 					}
 				}
 				if versionOf(v) != s.version {
@@ -101,7 +108,6 @@ func CASCell[V any, Version comparable](
 
 			default:
 				_ = zeroV
-				_ = zeroVer
 				return false, s
 			}
 		},

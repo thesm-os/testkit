@@ -41,6 +41,8 @@ const (
 	KindViolateMissFlag    sdk.Kind = "suite.violate.missflag"
 	KindViolateTimeout     sdk.Kind = "suite.violate.timeout"
 
+	KindViolateAnswerRoundTrip sdk.Kind = "suite.violate.answerroundtrip"
+
 	KindViolateCloseIdempotent sdk.Kind = "suite.violate.closeidempotent"
 	KindViolateUseAfterClose   sdk.Kind = "suite.violate.useafterclose"
 	KindViolateConcurrentSmoke sdk.Kind = "suite.violate.concurrentsmoke"
@@ -182,7 +184,7 @@ func unfalsifiableReason(iface *sdk.Interface, doubles map[sdk.Node]*stub.Stub) 
 func CheckKinds() []sdk.Kind {
 	return []sdk.Kind{
 		KindSmoke, KindCancel, KindDeadline, KindNilContext, KindZeroOnError,
-		KindMissZero, KindMissFlag, KindBatchSize,
+		KindMissZero, KindMissFlag, KindBatchSize, KindAnswerRoundTrip,
 		KindNilSafe, KindTimeout, KindOrderAfter, KindSideEffect, KindPartition,
 		KindHooks, KindSample, KindValidates, KindWrappedVia,
 		KindIfAbsent, KindIfMatch, KindOutbox,
@@ -472,6 +474,12 @@ var violators = map[sdk.Kind]struct {
 		violation: KindViolatePartition,
 		reason:    "a store with a single flat namespace",
 		because:   "not the other's",
+		spans:     true,
+	},
+	KindAnswerRoundTrip: {
+		violation: KindViolateAnswerRoundTrip,
+		reason:    "a write answering a state it did not store",
+		because:   "the state the write answered",
 		spans:     true,
 	},
 }

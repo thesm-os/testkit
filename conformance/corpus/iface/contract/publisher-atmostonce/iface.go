@@ -6,8 +6,9 @@
 //
 // The mode rides the directive, and the bound law it selects counts each
 // subscriber's copies of a published message against it. The redeliver role
-// stays undeclared here, so the bound is exercised on the single publish —
-// the redelivery arm waits on a fixture that declares the role.
+// stays undeclared here, so the bound is exercised on the single publish and
+// the header says the arm went unarmed — `publisher-redeliver` and the
+// exactly-once sibling are the fixtures that declare the role.
 package publisheratmostonce
 
 import (

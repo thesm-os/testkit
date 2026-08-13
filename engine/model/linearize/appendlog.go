@@ -16,9 +16,9 @@ import (
 // a slice of E entries shared across the whole history. Step
 // functions:
 //
-//   - Append: state = append(state, input). Output is the offset
-//     (int64) of the newly appended entry; valid only if the offset
-//     equals the prior length.
+//   - Append: state = append(state, input). Output is an
+//     [AppendResult]; a refusal leaves the log unchanged, and a
+//     success is valid only if its offset equals the prior length.
 //   - At:     output equals state[input.(int64)] when in range; the
 //     zero E with a non-nil error otherwise.
 //   - Len:    output equals int64(len(state)); state unchanged.
@@ -39,11 +39,16 @@ func AppendLog[E any]() porcupine.Model {
 				if !ok {
 					return false, s
 				}
-				off, ok := out.Result.(int64)
+				r, ok := out.Result.(AppendResult)
 				if !ok {
 					return false, s
 				}
-				if off != int64(len(s)) {
+				if r.Err != nil {
+					// A refused append leaves the log; one that lied about
+					// refusing surfaces at the next offset it displaced.
+					return true, s
+				}
+				if r.Off != int64(len(s)) {
 					return false, s
 				}
 				next := make([]E, len(s)+1)

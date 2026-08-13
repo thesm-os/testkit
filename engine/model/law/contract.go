@@ -590,8 +590,8 @@ func (l PublisherDelivers[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error {
 }
 
 // DeliveryMode selects the per-message delivery guarantee a
-// [PublisherDeliveryBound] enforces, mirroring the
-// //testkit:delivery <mode> directive argument.
+// [PublisherDeliveryBound] enforces, mirroring the publisher contract
+// directive's mode= parameter.
 type DeliveryMode int
 
 const (
@@ -609,17 +609,19 @@ const (
 
 // PublisherDeliveryBound verifies the per-subscriber delivery count
 // of a published message against the bound implied by Mode. Auto-
-// emitted for Publisher methods carrying //testkit:delivery <mode>;
-// the law ID is the per-mode variant.
+// emitted for publisher contracts carrying a mode= parameter; the law
+// ID is the per-mode variant.
 //
 // The law publishes one message, optionally triggers a redelivery
 // via Redeliver (re-publish for at-least-once, replay for
 // exactly-once; nil to skip), then counts how many copies each
-// subscriber drained and checks the count against Mode.
+// subscriber drained and checks the count against Mode. A refused
+// redelivery is a precondition this run supplies, so it holds
+// vacuously rather than counting a delivery that never happened.
 type PublisherDeliveryBound[T any, M comparable, Sub any] struct {
 	Subscribe func(rt *rapid.T, sut T) (Sub, error)
 	Publish   func(rt *rapid.T, sut T, msg M) error
-	Redeliver func(rt *rapid.T, sut T, msg M)
+	Redeliver func(rt *rapid.T, sut T, msg M) error
 	Drain     func(rt *rapid.T, sut T, sub Sub) ([]M, error)
 	Messages  *rapid.Generator[M]
 	Mode      DeliveryMode
@@ -666,11 +668,15 @@ func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error 
 		return Vacuous // a precondition this run supplies was refused
 	}
 	if l.Redeliver != nil {
-		l.Redeliver(rt, sut, msg)
+		if err := l.Redeliver(rt, sut, msg); err != nil {
+			return Vacuous // a precondition this run supplies was refused
+		}
 	}
 	// The whole cycle lands on both sides — the mirrored half of the [Law]
 	// conduct contract — redelivery included, so the pair's residue stays
-	// symmetric whatever the mode.
+	// symmetric whatever the mode. The reference's own redelivery refusal is
+	// swallowed: the count below reads the subject, and a mirror that failed
+	// the law for the reference's slack would fail a correct pair.
 	if err := mirror("PublisherDeliveryBound", func() error {
 		refSub, subErr := l.Subscribe(rt, ref)
 		if subErr != nil {
@@ -680,7 +686,7 @@ func (l PublisherDeliveryBound[T, M, Sub]) Check(rt *rapid.T, sut, ref T) error 
 			return pubErr
 		}
 		if l.Redeliver != nil {
-			l.Redeliver(rt, ref, msg)
+			_ = l.Redeliver(rt, ref, msg)
 		}
 		_, drainErr := l.Drain(rt, ref, refSub)
 		return drainErr

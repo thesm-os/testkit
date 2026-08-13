@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.26.2"
+const Version = "0.29.3"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -172,6 +172,8 @@ const (
 	shapeWriter          = "writer"
 	shapeAnsweringWriter = "answeringwriter"
 	shapeAggregator      = "aggregator"
+	shapeMultiReader     = "multireader"
+	shapeBatchReader     = "batchreader"
 )
 
 // Plugin is the model-tier generator: it turns an interface's classifications
@@ -340,6 +342,11 @@ type Bindings struct {
 	RecordsHistory bool
 	HistoryElem    sdk.Ref
 
+	// ConcEntry is the append leg's entry type — the appender method's own
+	// argument, because the writer action's value stamp is the answered
+	// offset there, not the entry the log holds.
+	ConcEntry sdk.Ref
+
 	// ConcFamily picks the concurrent leg's model: empty for none, "kv" for
 	// the keyed-store pair, "lease" for the acquire/release table.
 	ConcFamily string
@@ -375,6 +382,12 @@ const (
 	concFamilyKV      = "kv"
 	concFamilyLease   = "lease"
 	concFamilySession = "session"
+	concFamilyCAS     = "cas"
+	concFamilyAppend  = "append"
+
+	// shapeCASWriter is the re-pointed shape the contract-role pass spells
+	// for the cas write, matched here when the cell leg derives.
+	shapeCASWriter = "cas.writer"
 )
 
 // Kind returns [KindBindings].
@@ -423,6 +436,16 @@ func (b *Bindings) LeaseHeld() CtorErr {
 		}
 	}
 	return CtorErr{}
+}
+
+// CasMismatch is the stale-version sentinel the cas leg's model matches —
+// the spec's first error row, the same identity the sequential oracle's
+// constructor consumes.
+func (b *Bindings) CasMismatch() CtorErr {
+	if len(b.Reference.CtorErrs) == 0 {
+		return CtorErr{}
+	}
+	return b.Reference.CtorErrs[0]
 }
 
 // LinearizePkg surfaces the Porcupine wiring's import path to the templates.
@@ -757,7 +780,25 @@ type Action struct {
 	// Records marks the append the no-drops law watches: the closure logs
 	// every successful call into the property's append history.
 	Records bool
+
+	// Sentinel is the declaration's stamped miss identity, armed on the
+	// error-answering reader shapes: where both sides err, the pair must
+	// also agree on whether the error is this one. Nil where nothing is
+	// stamped, and the comparison stays presence-only.
+	Sentinel *sdk.Expr
+
+	// TxCommit and TxRollback spell the two-phase composite's terminal
+	// methods, with their ctx flags beside them: the template threads one
+	// begin's handle into its own drawn terminal, which is the driving a
+	// standalone commit could never do — its handles came from a pool no
+	// begin filled. Value carries the handle type.
+	TxCommit, TxRollback       string
+	TxCommitCtx, TxRollbackCtx bool
 }
+
+// ActionPkg is the engine constructors' import path, for the option a
+// template appends beside the closure.
+func (*Action) ActionPkg() string { return actionPkg }
 
 // ActionArg is one drawn argument of a multi-argument writer or a
 // parameterised pure call.
@@ -1188,6 +1229,20 @@ func bindingsOf(
 			a.Pool = poolKeys
 		}
 	}
+	// The declaration's miss identity, armed on every error-answering
+	// reader: the actions were composed before the reference resolved it,
+	// and the identity agreed on here is the same one the derived oracle's
+	// constructor consumes — a subject answering a private error where the
+	// declaration stamped a sentinel stops reading as agreement.
+	if sym := b.Reference.MissSym; sym != nil {
+		for _, a := range b.Actions {
+			switch a.Shape {
+			case shapeReader, shapeMultiReader, shapeBatchReader:
+				a.Sentinel = sym
+			}
+		}
+	}
+	contractActionsOf(b, harness)
 	// The oracle derivation sees only the canonical reader and writer; the
 	// pools serve every drawing action, so their sources widen to the
 	// fallbacks where the canonical shapes are absent.
@@ -1212,7 +1267,7 @@ func bindingsOf(
 	poolsOf(ctx, b, harness, keySrc, valueSrc, composite, genFunc)
 	lawsOf(b, harness, partners, keyed)
 	saturationOf(b, harness)
-	concurrentOf(b, keyed, valued)
+	concurrentOf(b, harness, keyed, valued)
 	return b, true
 }
 
@@ -1223,7 +1278,13 @@ func bindingsOf(
 // sequential actions, so both legs draw from the same pools and spell the
 // same closures; concurrency that never collides checks nothing, which is
 // the mistake the shared pools exist to rule out.
-func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
+//
+// A keyless fold is not here on purpose: its state is one accumulation, so
+// no partition derives, and a commutative or associative fold is
+// order-insensitive by its own claim — linearizability over an operation
+// whose order is unobservable checks close to nothing, and the claims that
+// do bite are already bound as sequential laws.
+func concurrentOf(b *Bindings, harness *suite.Contract, keyed, valued *suite.Method) {
 	// The lease leg: acquire and release over the shared keys pool, checked
 	// against the lease-table model — the same op vocabulary the model
 	// switches on, and the same lenient release the oracle speaks.
@@ -1261,6 +1322,38 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 		}
 		b.ConcReader, b.ConcWriter = nil, nil
 	}
+	// The cas leg: the version-guarded write against the cell model, in the
+	// live oracle's own dialect — stamp is seen+1, an empty cell matches
+	// only the zero version. Only the shipped VersionedCell derives it,
+	// because the model matches the stamped mismatch identity the same
+	// constructor consumes.
+	if b.Reference.Oracle == OracleContract && b.Reference.ContractStore == "VersionedCell" &&
+		b.Reference.VersionField != "" {
+
+		var w, r *Action
+		for _, a := range b.Actions {
+			switch a.Shape {
+			case shapeCASWriter:
+				w = a
+			case shapeAggregator:
+				r = a
+			}
+		}
+		if w != nil && r != nil && w.Pool != "" {
+			b.ConcWriter, b.ConcReader = w, r
+			b.ConcFamily = concFamilyCAS
+		}
+		return
+	}
+	// The append leg: offset-answering appends into the one shared history.
+	// The monotonic-offsets law states the claim per client; this leg states
+	// it across them, which is where a torn append hides.
+	if a, entry := appendActionOf(b, harness); a != nil {
+		b.ConcWriter = a
+		b.ConcEntry = entry
+		b.ConcFamily = concFamilyAppend
+		return
+	}
 	if b.Reference.Oracle != OracleMap || !b.Reference.Derived() || b.Reference.Pins || keyed == nil || valued == nil {
 		return
 	}
@@ -1279,6 +1372,28 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 		return
 	}
 	b.ConcFamily = concFamilyKV
+}
+
+// appendActionOf answers the driven offset-answering append of an appender
+// contract, nil where the interface carries none. The offset type is held
+// to int64 because the shared-history model counts in it; a log offsetting
+// otherwise keeps its sequential law and no leg.
+func appendActionOf(b *Bindings, harness *suite.Contract) (*Action, sdk.Ref) {
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		if !slices.Contains(m.Contracts, "appender") {
+			continue
+		}
+		if len(m.CallArgs()) != 1 || len(m.Returns) == 0 ||
+			shape.QName(m.Returns[0].Source) != "int64" {
+
+			continue
+		}
+		if a := b.actionFor(m.Name); a != nil && a.Pool != "" {
+			return a, m.CallArgs()[0].Type
+		}
+	}
+	return nil, nil
 }
 
 // historyDrained reports whether any classification marks the drained
@@ -1322,9 +1437,9 @@ func missSentinelOf(harness *suite.Contract) *sdk.Expr {
 }
 
 // sessionVersionOf reports the first session mixin carrying a version=
-// param anywhere in the method set: the mixin, the member it names, and
-// whether one was found.
-func sessionVersionOf(harness *suite.Contract) (member string, stamped bool) {
+// param anywhere in the method set: the carrying method, the member it
+// names, and whether one was found.
+func sessionVersionOf(harness *suite.Contract) (carrier *suite.Method, member string, stamped bool) {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		for _, mx := range m.Mixins {
@@ -1332,11 +1447,52 @@ func sessionVersionOf(harness *suite.Contract) (member string, stamped bool) {
 				continue
 			}
 			if v, given := shape.MixinParamKey(mx, "version").Get(m.Source.Meta()); given && v != "" {
-				return v, true
+				return m, v, true
 			}
 		}
 	}
-	return "", false
+	return nil, "", false
+}
+
+// versionFieldDiag holds version= to the value struct's own fields. Every
+// projection of the ordering stamp is a field selector — the session
+// classifier reads it, and the cas cell assigns it (v.Rev = cur.Rev + 1),
+// which no method form can satisfy — so a method or a missing member is
+// refused here by name. Without the refusal the stamp passes every layer
+// unvalidated and the failure surfaces as a build error in the consumer's
+// package, attributed to generated code rather than to the directive that
+// caused it. A value type whose struct declaration is out of reach passes
+// through: the compile keeps that case honest, and refusing what cannot be
+// seen would break a witnessed value spelled by its parameter name.
+func versionFieldDiag(ctx *sdk.GeneratorContext, iface *sdk.Interface, valueQ, member string) bool {
+	var s *sdk.Struct
+	for cand := range ctx.Reader.Structs().All() {
+		if cand.Package+"."+cand.Name == valueQ {
+			s = cand
+			break
+		}
+	}
+	if s == nil {
+		return true
+	}
+	for _, f := range s.Fields {
+		if f.Name == member {
+			return true
+		}
+	}
+	for _, m := range s.Methods {
+		if m != nil && m.Name == member {
+			ctx.Diag.Errorf(iface.Pos(),
+				"%s: version=%q on %q names a method of %s; the ordering stamp is "+
+					"read and assigned as a field, and no method can stand there",
+				Name, member, iface.Name, valueQ)
+			return false
+		}
+	}
+	ctx.Diag.Errorf(iface.Pos(),
+		"%s: version=%q on %q names no member of %s",
+		Name, member, iface.Name, valueQ)
+	return false
 }
 
 // actionOf builds one method's action, or says why there is none.
@@ -1566,7 +1722,10 @@ func referenceOf(
 	// upsert inference reads, and the twin carries no adapter to ask. This
 	// arm runs before the defeat scan because a session mixin can sit in
 	// both tables, and only this arm derives what the classifier needs.
-	if _, stamped := sessionVersionOf(harness); stamped {
+	if vm, member, stamped := sessionVersionOf(harness); stamped {
+		if q, _ := b.valueQOf(vm); q != "" && !versionFieldDiag(ctx, iface, q, member) {
+			return false
+		}
 		if keyed != nil {
 			if q, _ := b.valueQOf(keyed); q != "" {
 				b.sessionKeyField, _ = upsertKeyField(ctx, b, q)
@@ -1589,7 +1748,10 @@ func referenceOf(
 	// A contract claim outranks the shapes: its roles say what each method
 	// is FOR, and the shipped store carries the claim's own semantics —
 	// which is more than any shape-derived map can promise.
-	handled, lenified := contractOf(b, harness, partners, names)
+	handled, lenified, refused := contractOf(ctx, iface, b, harness, partners, names)
+	if refused {
+		return false
+	}
 	if handled {
 		return true
 	}
@@ -1696,8 +1858,17 @@ func referenceOf(
 // method or the family stays underived — half a lease checks nothing a twin
 // does not. The store's one type argument is spoken by the type-arg role's
 // own signature, and the constructor's error arguments are minted sentinels
-// or the lenient nil, per the family's row.
-func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string, names Reference) (bool, string) {
+// or the lenient nil, per the family's row. refused reports a directive
+// invalid by name — a version= that no field projection can satisfy — and
+// aborts the whole binding rather than falling through to a weaker oracle.
+func contractOf(
+	ctx *sdk.GeneratorContext,
+	iface *sdk.Interface,
+	b *Bindings,
+	harness *suite.Contract,
+	partners map[string]string,
+	names Reference,
+) (handled bool, lenified string, refused bool) {
 	for i := range harness.Methods {
 		carrier := &harness.Methods[i]
 		for _, contract := range carrier.Contracts {
@@ -1715,11 +1886,14 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 				continue
 			}
 			var arg sdk.Ref
+			var argQ string
 			switch {
 			case spec.TypeArgResult && len(src.Returns) > 0:
 				arg = src.Returns[0].Type
+				argQ = shape.QName(src.Returns[0].Source)
 			case !spec.TypeArgResult && len(src.CallArgs()) > 0:
 				arg = src.CallArgs()[0].Type
+				argQ = shape.QName(src.CallArgs()[0].Source)
 			}
 			if arg == nil {
 				continue
@@ -1732,6 +1906,9 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 					// The cell cannot guard what nothing names; the twins
 					// stand in and the header's floor says so.
 					continue
+				}
+				if !versionFieldDiag(ctx, iface, b.substQ(argQ), field) {
+					return false, "", true
 				}
 				names.VersionField = field
 			}
@@ -1775,7 +1952,7 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 				// cannot see its own methods go inert. The twins say so
 				// instead of a store pretending to check.
 				return false, "the claims lenify every sentinel the " + contract +
-					" oracle could disagree with"
+					" oracle could disagree with", false
 			}
 			b.Reference = names
 			b.Adapter = contractAdapterOf(harness, partners, contract, roles)
@@ -1788,10 +1965,10 @@ func contractOf(b *Bindings, harness *suite.Contract, partners map[string]string
 				b.concAcquireName = roles[roleLeaseAcquire].Name
 				b.concReleaseName = roles[roleLeaseRelease].Name
 			}
-			return true, ""
+			return true, "", false
 		}
 	}
-	return false, ""
+	return false, "", false
 }
 
 // stampedSentinel resolves a contract error's declared sentinel, false where
@@ -1811,6 +1988,89 @@ func stampedSentinel(
 		return nil, false
 	}
 	return sdk.NewExternal(pkg, name), true
+}
+
+// contractActionsOf re-points contract-role actions to the constructors that
+// drive the role as itself. The actions were composed before the contract
+// resolved its roles — the keyed-pool pass one loop up is the precedent —
+// and the single-method rows are deliberately renames: the writer closure is
+// already the constructor's shape, so only the name and the header change.
+// The tx composite is the exception with teeth: the begin's action becomes
+// the whole begin-terminal cycle and the terminal siblings' standalone
+// actions are dropped, because a commit drawn from a value pool operates on
+// a handle no begin minted — agreement over bogus handles was the entire
+// content of that driving. A recording append keeps its recording closure:
+// the rename touches the constructor, never the history log the writer
+// template emits around it.
+func contractActionsOf(b *Bindings, harness *suite.Contract) {
+	for i := range harness.Methods {
+		carrier := &harness.Methods[i]
+		for _, contract := range carrier.Contracts {
+			roles := contractRoleMethods(harness, carrier, contract)
+			for role, rm := range roles {
+				ctor, mapped := tiers.ContractActionFor(contract, role)
+				if !mapped || rm == nil {
+					continue
+				}
+				a := b.actionFor(rm.Name)
+				if a == nil {
+					continue
+				}
+				consumed := tiers.ContractActionConsumes(contract, role)
+				if len(consumed) == 0 {
+					a.Ctor = sdk.NewExternal(actionPkg, ctor)
+					a.Shape = contract + "." + role
+					continue
+				}
+				commit, rollback := roles[consumed[0]], roles[consumed[1]]
+				if commit == nil || rollback == nil ||
+					len(rm.Returns) == 0 || golang.IsError(rm.Returns[0].Source) {
+
+					continue // half a trio, or a begin answering no handle
+				}
+				cAct, rAct := b.actionFor(commit.Name), b.actionFor(rollback.Name)
+				if cAct == nil || rAct == nil {
+					continue
+				}
+				a.Ctor = sdk.NewExternal(actionPkg, ctor)
+				a.KindName = sdk.Kind(ActionKindPrefix + "twophase")
+				a.Shape = contract + "." + role
+				a.Pool = ""
+				a.Value = rm.Returns[0].Type
+				a.TxCommit, a.TxCommitCtx = commit.Name, commit.TakesContext()
+				a.TxRollback, a.TxRollbackCtx = rollback.Name, rollback.TakesContext()
+				reason := "driven through the " + rm.Name +
+					" composite — a standalone terminal would operate on handles no begin minted"
+				b.dropAction(commit.Name, reason)
+				b.dropAction(rollback.Name, reason)
+			}
+		}
+	}
+}
+
+// actionFor answers the driven action on the named method, nil where the
+// method drives nothing.
+func (b *Bindings) actionFor(method string) *Action {
+	for _, a := range b.Actions {
+		if a.Method == method {
+			return a
+		}
+	}
+	return nil
+}
+
+// dropAction removes the named method's action and records why in the
+// header's not-driven block.
+func (b *Bindings) dropAction(method, reason string) {
+	kept := b.Actions[:0]
+	for _, a := range b.Actions {
+		if a.Method == method {
+			b.Skipped = append(b.Skipped, Skip{Method: method, Reason: reason})
+			continue
+		}
+		kept = append(kept, a)
+	}
+	b.Actions = kept
 }
 
 // roleClaims reports whether the role's method carries the named mixin — the

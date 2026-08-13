@@ -27,6 +27,17 @@ type ContractPublishCall struct {
 	Err error
 }
 
+// ContractReplayCall records one invocation of Contract.Replay.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractReplayCall struct {
+	Ctx context.Context
+	V   publisherexactlyonce.Value
+	Err error
+}
+
 // ContractSubscribeCall records one invocation of Contract.Subscribe.
 //
 // Fields take their names from the source signature — parameters and named
@@ -68,6 +79,38 @@ func (s *ContractPublishStub) Returns(err error) *ContractPublishStub {
 // Func supplies a body for Publish, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
 func (s *ContractPublishStub) Func(fn func(context.Context, publisherexactlyonce.Value) error) *ContractPublishStub {
+	s.fn = fn
+	return s
+}
+
+// ContractReplayStub controls how the double answers Replay and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractReplayStub struct {
+	*stub.MethodStub[ContractReplayCall]
+
+	fn       func(context.Context, publisherexactlyonce.Value) error
+	fallback *ContractReplayReturn
+}
+
+// ContractReplayReturn holds the fixed answer configured through Returns.
+type ContractReplayReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Replay. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractReplayStub) Returns(err error) *ContractReplayStub {
+	s.fallback = &ContractReplayReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Replay, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractReplayStub) Func(fn func(context.Context, publisherexactlyonce.Value) error) *ContractReplayStub {
 	s.fn = fn
 	return s
 }
@@ -125,6 +168,7 @@ func ContractStubStrict() ContractStubOption {
 func ContractStubDelegateTo(impl publisherexactlyonce.Contract) ContractStubOption {
 	return func(s *ContractStub) {
 		s.OnPublish.Func(impl.Publish)
+		s.OnReplay.Func(impl.Replay)
 		s.OnSubscribe.Func(impl.Subscribe)
 	}
 }
@@ -168,6 +212,13 @@ func WithContractPublish(fn func(context.Context, publisherexactlyonce.Value) er
 	return func(s *ContractStub) { s.OnPublish.Func(fn) }
 }
 
+// WithContractReplay sets Replay's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractReplay(fn func(context.Context, publisherexactlyonce.Value) error) ContractStubOption {
+	return func(s *ContractStub) { s.OnReplay.Func(fn) }
+}
+
 // WithContractSubscribe sets Subscribe's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -181,6 +232,7 @@ func WithContractSubscribe(fn func(context.Context) (<-chan publisherexactlyonce
 // method returns its zero value and records the call.
 type ContractStub struct {
 	OnPublish   *ContractPublishStub
+	OnReplay    *ContractReplayStub
 	OnSubscribe *ContractSubscribeStub
 
 	// all is every method stub above, viewed through the surface that does
@@ -207,10 +259,12 @@ var _ publisherexactlyonce.Contract = (*ContractStub)(nil)
 func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
 		OnPublish:   &ContractPublishStub{MethodStub: stub.NewMethodStub[ContractPublishCall](tb, "Contract.Publish")},
+		OnReplay:    &ContractReplayStub{MethodStub: stub.NewMethodStub[ContractReplayCall](tb, "Contract.Replay")},
 		OnSubscribe: &ContractSubscribeStub{MethodStub: stub.NewMethodStub[ContractSubscribeCall](tb, "Contract.Subscribe")},
 	}
 	s.all = []stub.Configurable{
 		s.OnPublish.MethodStub,
+		s.OnReplay.MethodStub,
 		s.OnSubscribe.MethodStub,
 	}
 	for _, opt := range opts {
@@ -282,6 +336,38 @@ func (s *ContractStub) Publish(ctx context.Context, v publisherexactlyonce.Value
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *ContractReplayStub) invoke(ctx context.Context, v publisherexactlyonce.Value) func() ContractReplayReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractReplayReturn {
+		r0 := s.fn(ctx, v)
+		return ContractReplayReturn{Err: r0}
+	}
+}
+
+// Replay records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) Replay(ctx context.Context, v publisherexactlyonce.Value) error {
+	call := ContractReplayCall{Ctx: ctx, V: v}
+	r := stub.Answer(s.OnReplay.MethodStub, &call, stub.Arms[ContractReplayCall, ContractReplayReturn]{
+		Invoke:   s.OnReplay.invoke(ctx, v),
+		Fallback: s.OnReplay.fallback,
+		Fault:    func(err error) ContractReplayReturn { return ContractReplayReturn{Err: err} },
+		Stamp: func(c *ContractReplayCall, r ContractReplayReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *ContractSubscribeStub) invoke(ctx context.Context) func() ContractSubscribeReturn {
 	if s.fn == nil {
 		return nil
@@ -313,4 +399,4 @@ func (s *ContractStub) Subscribe(ctx context.Context) (<-chan publisherexactlyon
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4a209f741f36566e663a9d6a81993fe667c4400268306957bc03fe6b914afac5
+// testkit:provenance b58a2332e5d8e9fa5476df12640dfcde945514b7ad2ef4c3197cc8ecc0fe180a

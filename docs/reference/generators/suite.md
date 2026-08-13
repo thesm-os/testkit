@@ -259,6 +259,15 @@ per-classification tables live in
 [RFC-0002](../../rfc/0002-the-suite-generator.md); the generated header
 records which tier owns each check the file carries.
 
+One detector claim lives in a success value rather than in an absence: an
+`answeringwriter` beside a keyed reader of the same state earns
+`Assert<Iface><Method>AnswersWhatItStored` — the write's answer, read back
+under the fixture's own key, must be what the read observes. Nothing else
+can state it: the derived seed discards the answer, and the model tier's
+twin floor compares two subjects wearing the same lie. A lone answering
+writer derives nothing and stays listed as unchecked, which is the truth
+of it.
+
 ## Generic interfaces
 
 The harness is generic where the interface is — the entry point and check

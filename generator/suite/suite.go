@@ -10,9 +10,11 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/answeringwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/reader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/concurrent"
@@ -44,7 +46,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.3.0"
+const Version = "1.4.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -91,6 +93,13 @@ const (
 	KindMissZero sdk.Kind = "suite.check.misszero"
 	KindMissFlag sdk.Kind = "suite.check.missflag"
 )
+
+// KindAnswerRoundTrip is the emit kind for the answering writer's check: the
+// write's answer, read back through the keyed reader, is the state it
+// stored. The one detector claim that lives in a success value rather than
+// in an absence, and the one nothing else states — the seed discards the
+// answer by design.
+const KindAnswerRoundTrip sdk.Kind = "suite.check.answerroundtrip"
 
 // The emit kinds for the mixin-derived checks.
 const (
@@ -1008,8 +1017,11 @@ var missShapes = map[string]struct{}{
 // HasInput for the same reason zero-on-error needs it: the miss is reached by
 // choosing an input that is not there, and a method taking nothing after its
 // context offers nowhere to put one.
-func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method) []*Check {
+func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method) []*Check {
 	if ck, ok := batchSizeCheck(c, iface, f, m); ok {
+		return []*Check{ck}
+	}
+	if ck, ok := answerRoundTripCheck(c, iface, f, m, methods); ok {
 		return []*Check{ck}
 	}
 	if _, owned := missShapes[shape.Get(m.Source.Meta())]; !owned || !m.HasInput() {
@@ -1037,6 +1049,65 @@ func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method
 		NeedsDerivedInput: true,
 		Method:            m,
 	}}
+}
+
+// answerRoundTripCheck builds "answers the state it stored" for the
+// answeringwriter shape beside a keyed reader of the same state: the write's
+// answer, read back under the fixture's own key, must be what the read then
+// observes. The claim is the detector's whole content, and nothing else can
+// state it — the derived seed discards the answer, and the twin-floored
+// model tier compares two subjects wearing the same lie — so without this
+// check a subject answering a state it never stored is green everywhere.
+// The fixture's key and value cohere by derivation, which is what lets the
+// read use the fixture's key argument rather than a projection this
+// generator would have to invent. A lone answering writer derives nothing:
+// with no reader there is nothing to compare the answer through, which is
+// the twin ceiling's own clause for the detector fixture.
+func answerRoundTripCheck(
+	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
+) (*Check, bool) {
+	if shape.Get(m.Source.Meta()) != answeringwriter.Name || len(m.ValueReturns()) != 1 {
+		return nil, false
+	}
+	value := m.CallArgs()
+	if len(value) != 1 {
+		return nil, false
+	}
+	for i := range methods {
+		p := &methods[i]
+		if shape.Get(p.Source.Meta()) != reader.Name ||
+			len(p.CallArgs()) != 1 || len(p.ValueReturns()) != 1 {
+
+			continue
+		}
+		if shape.QName(p.ValueReturns()[0].Source) != shape.QName(m.ValueReturns()[0].Source) {
+			continue // a reader of some other state observes nothing about the answer
+		}
+		key := p.CallArgs()[0]
+		if key.Name == value[0].Name {
+			continue // one identifier cannot serve both parameters
+		}
+		field, held := f.Field(f.FieldFor(key))
+		if !held || !field.OK() {
+			continue
+		}
+		ck := &Check{
+			BaseEmit: sdk.EmitBase(c, iface),
+			Subject:  subjectOf(iface),
+			KindName: KindAnswerRoundTrip,
+			Subtest:  "answers the state it stored",
+			Func:     "Assert" + iface.Name + m.Name + "AnswersWhatItStored",
+			Path:     m.Name + "/answers the state it stored",
+			Args:     fixtureArgs(f, m, false),
+			Method:   m,
+		}
+		ck.Partner = p
+		ck.Extra = []ExtraArg{{Name: key.Name, Field: field.Name, Type: key.Type}}
+		ck.PartnerArgs = []string{key.Name}
+		ck.CompareAgainst = value[0].Name
+		return ck, true
+	}
+	return nil, false
 }
 
 // mixinChecks selects the family a method owes for the classifications attached

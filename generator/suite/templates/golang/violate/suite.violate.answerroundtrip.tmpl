@@ -1,0 +1,31 @@
+{{- /*
+The stand-in stores faithfully and answers the zero instead — the
+pre-assignment struct, the classic spelling of this bug — while the read
+answers what was actually stored. Two methods overridden, sharing one
+captured slot, the partition violator's own construction.
+*/ -}}
+{{- define "suite.violate.answerroundtrip" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in answers a state it did not store. A check that let that pass
+// reads the answer the way the derived seed does: not at all.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	// What the write actually stored, for the read to answer.
+	var stored {{ renderType (index $p.ValueReturns 0).Type }}
+
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.namedparams" $m }}){{ template "suite.violate.results" $m }} {
+			stored = {{ .Check.CompareAgainst }}
+			var drift {{ renderType (index $m.ValueReturns 0).Type }}
+			return drift, nil
+		}),
+		{{ renderExpr (external .HarnessPkg .PartnerOption) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $p }}){{ template "suite.violate.results" $p }} {
+			return stored, nil
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

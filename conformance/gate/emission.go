@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	backendgolang "go.thesmos.sh/eidos/backend/golang"
 	"go.thesmos.sh/eidos/frontend/golang"
@@ -32,6 +33,28 @@ type Emitted struct {
 	// Laws are the bound identifiers; Twin reports the reference floor.
 	Laws []string
 	Twin bool
+
+	// Dir is the fixture's corpus-relative directory and IfaceName its bare
+	// interface name — together what the unarmed-door census needs to find
+	// the consumer tests and compose the option spellings they would call.
+	Dir       string
+	IfaceName string
+
+	// Doors maps each guarded law to the config fields its registration
+	// reads, and Clocked lists the laws armed only on the run's clock —
+	// both invisible skips unless a consumer arms them or a register row
+	// argues why not. Unarmed maps each law to the optional roles nothing
+	// declared.
+	Doors   map[string][]string
+	Clocked []string
+	Unarmed map[string][]string
+
+	// SentinelStamped reports a declaration whose miss identity the derived
+	// oracle routes; SentinelArmed that the sequences carry it. The census
+	// holds the first to imply the second — a stamp that stops reaching the
+	// sequences is a silent regression of the identity comparison.
+	SentinelStamped bool
+	SentinelArmed   bool
 }
 
 // Emission runs the real generators over the corpus in memory and reports
@@ -86,14 +109,37 @@ func Emission(ctx context.Context, root string, patterns ...string) ([]Emitted, 
 
 	out := make([]Emitted, 0, 128)
 	for origin, b := range sdk.PendingByOrigin[*model.Bindings](pipe.Store().Emit()) {
-		e := Emitted{Fixture: b.IfaceName, Twin: b.Reference.Twin()}
+		e := Emitted{Fixture: b.IfaceName, IfaceName: b.IfaceName, Twin: b.Reference.Twin()}
 		if iface, ok := origin.(*sdk.Interface); ok {
 			e.Fixture = iface.Package + "." + iface.Name
+			e.Dir = strings.TrimPrefix(iface.Package, "go.thesmos.sh/testkit/conformance/corpus/")
 		}
 		for _, l := range b.Laws {
 			e.Laws = append(e.Laws, l.ID)
+			if len(l.Supplied) > 0 {
+				if e.Doors == nil {
+					e.Doors = map[string][]string{}
+				}
+				e.Doors[l.ID] = append(e.Doors[l.ID], l.Supplied...)
+			}
+			if l.Clocked {
+				e.Clocked = append(e.Clocked, l.ID)
+			}
+			if len(l.Unarmed) > 0 {
+				if e.Unarmed == nil {
+					e.Unarmed = map[string][]string{}
+				}
+				e.Unarmed[l.ID] = append(e.Unarmed[l.ID], l.Unarmed...)
+			}
+		}
+		e.SentinelStamped = b.Reference.MissSym != nil && b.Reference.Derived()
+		for _, a := range b.Actions {
+			if a.Sentinel != nil {
+				e.SentinelArmed = true
+			}
 		}
 		sort.Strings(e.Laws)
+		sort.Strings(e.Clocked)
 		out = append(out, e)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Fixture < out[j].Fixture })

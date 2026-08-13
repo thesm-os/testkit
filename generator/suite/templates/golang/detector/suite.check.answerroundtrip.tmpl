@@ -1,0 +1,34 @@
+{{- /*
+The answer is an observation: a write that answers the stored state hands
+back what a read must then see, and comparing the two is the only place the
+claim can fail — the seed discards the answer by design, and the twin-floored
+model tier compares two subjects wearing the same lie. The fixture's key and
+value cohere by derivation, which is what lets the read use the fixture's key
+argument instead of a projection.
+*/ -}}
+{{- define "suite.check.answerroundtrip" -}}
+{{ $m := .Method }}
+{{ $p := .Partner }}
+// {{ .Func }} asserts the write's answer is the state it stored.
+//
+// Fails when: reading the fixture's key back disagrees with what the write
+// answered — a subject answering a state it never stored, which no other
+// generated check reads at all.
+func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
+	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}
+	{{- range .Extra }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
+	tb.Helper()
+{{- if or $m.TakesContext $p.TakesContext }}
+	ctx := tb.Context()
+{{- end }}
+	got, err := subject.{{ $m.Name }}({{ template "suite.args" . }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, err,
+		"the write must succeed for its answer to mean anything")
+
+	back, readErr := subject.{{ $p.Name }}({{ template "suite.partnerargs" $ }})
+	{{ renderExpr (external $.Runtime "NoError") }}(tb, readErr,
+		"and the stored state is readable under the fixture's key")
+	{{ renderExpr (external $.Runtime "Equal") }}(tb, back, got,
+		"the read must answer the state the write answered")
+}
+{{- end -}}

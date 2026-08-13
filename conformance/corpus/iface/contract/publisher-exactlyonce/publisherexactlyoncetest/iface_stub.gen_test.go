@@ -139,6 +139,126 @@ func TestContractStubPublish(t *testing.T) {
 	})
 }
 
+// contractStubReplaySubject binds Replay into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubReplaySubject(tb testing.TB) stub.Subject[publisherexactlyoncetest.ContractReplayCall, publisherexactlyoncetest.ContractReplayReturn] {
+	tb.Helper()
+	s := publisherexactlyoncetest.NewContractStub(tb)
+	return stub.Subject[publisherexactlyoncetest.ContractReplayCall, publisherexactlyoncetest.ContractReplayReturn]{
+		Stub: s.OnReplay.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 publisherexactlyonce.Value
+			_ = s.Replay(a0, a1)
+		},
+		Result: func() publisherexactlyoncetest.ContractReplayReturn {
+			var a0 context.Context
+			var a1 publisherexactlyonce.Value
+			got0 := s.Replay(a0, a1)
+			return publisherexactlyoncetest.ContractReplayReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnReplay.Func(func(_ context.Context, _ publisherexactlyonce.Value) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 publisherexactlyonce.Value
+			r0 := s.Replay(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestContractStubReplay pins how Replay answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubReplay(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Replay", contractStubReplaySubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := publisherexactlyoncetest.NewContractStub(t)
+		var want0 error
+		s.OnReplay.Returns(want0)
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		got0 := s.Replay(a0, a1)
+		testkit.Equal(t, got0, want0, "Replay must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := publisherexactlyoncetest.NewContractStub(t)
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		_ = s.Replay(a0, a1)
+		got := s.OnReplay.AssertCalledOnce(t, "Replay must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.V, a1, "the recorded call carries V")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := publisherexactlyoncetest.NewContractStub(t)
+		var seen []publisherexactlyoncetest.ContractReplayCall
+		s.OnReplay.OnRecord(func(c publisherexactlyoncetest.ContractReplayCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		_ = s.Replay(a0, a1)
+		_ = s.Replay(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Replay call")
+	})
+
+	t.Run("wires WithContractReplay at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := publisherexactlyoncetest.NewContractStub(t, publisherexactlyoncetest.WithContractReplay(func(_ context.Context, _ publisherexactlyonce.Value) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		_ = s.Replay(a0, a1)
+		testkit.True(t, called, "WithContractReplay must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := publisherexactlyoncetest.NewContractStub(t)
+		var want0 error
+		s.OnReplay.Returns(want0)
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		_ = s.Replay(a0, a1)
+		s.ResetCalls()
+		got0 := s.Replay(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // contractStubSubscribeSubject binds Subscribe into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -332,6 +452,25 @@ func TestContractStubDelegateTo(t *testing.T) {
 		testkit.ErrorIs(t, r0, want, "Publish must surface the wrapped answer")
 	})
 
+	t.Run("forwards Replay to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		_ = s.Replay(a0, a1)
+		inner.OnReplay.AssertCalledOnce(t, "Replay must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Replay answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Replay-delegate")
+		inner.OnReplay.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 publisherexactlyonce.Value
+		r0 := s.Replay(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Replay must surface the wrapped answer")
+	})
+
 	t.Run("forwards Subscribe to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		_, _ = s.Subscribe(a0)
@@ -351,4 +490,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 27c2308ec273da33ac53a547f223de8331f0f4fb6def706b19a62cc571c173af
+// testkit:provenance 62075d254e4e88fa4944f596760aefc732401e9c4ef167cb88a08381c64858b5

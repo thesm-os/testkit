@@ -158,3 +158,39 @@ func TestContractSaturation(t *testing.T) {
 		return s.(*txtest.InMemory).PutInTx(h, key, v)
 	}))
 }
+
+// commitRefuses is the defect only the composite driving can see: every
+// Commit claims its handle is already settled. The laws tolerate it — a
+// commit-after-rollback answering the closed sentinel is exactly what the
+// mutex law wants, and a refused first commit holds the or-rollback law
+// vacuously — and the old standalone writers drove the terminals with
+// handles no Begin minted, where both sides refusing bogus handles read as
+// agreement. Only a driving that threads one Begin's own handle into its
+// own commit diverges from the reference here.
+type commitRefuses struct{ tx.Contract }
+
+func (commitRefuses) Commit(context.Context, tx.Tx) error {
+	return tx.ErrTxClosed
+}
+
+// The composite threads one Begin's handle into its own terminal, so a
+// commit that refuses what its begin minted diverges from the reference at
+// the step's own name.
+func TestTwoPhaseCompositeCatchesARefusedOwnHandle(t *testing.T) {
+	t.Parallel()
+
+	got := testkit.Rejects(t, "a commit refusing the handle its own begin minted",
+		func(tb testing.TB) {
+			tb.Helper()
+			// The clean factory stands as reference — the twin would wear
+			// the same defect and agree, which is the saturation prover's
+			// own reason for this option.
+			model.Check(tb, txtest.ContractModelProperty(func() tx.Contract {
+				return commitRefuses{txtest.NewInMemory()}
+			}, txtest.ContractModelReference(func() tx.Contract {
+				return txtest.NewInMemory()
+			})))
+		})
+	testkit.Assert(t, got).Contains("Commit: SUT err=",
+		"and rejects it at the terminal step the composite drove")
+}

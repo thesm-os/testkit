@@ -100,6 +100,10 @@ var checkedBy = map[string][]sdk.Kind{
 	"readerwithbool": {KindMissZero, KindMissFlag},
 	"lookup":         {KindMissZero, KindMissFlag},
 	"batchreader":    {KindBatchSize},
+	// Conditional the way reader's is: the round trip derives only beside a
+	// keyed reader of the same state, and a lone answering writer stays
+	// listed as unchecked — which is the truth of it.
+	"answeringwriter": {KindAnswerRoundTrip},
 }
 
 // DetectorCheck reports whether a kind is the check a shape stamp earns, rather
@@ -110,7 +114,7 @@ var checkedBy = map[string][]sdk.Kind{
 // the mapping, and only the second can be missing from it.
 func DetectorCheck(kind sdk.Kind) bool {
 	switch kind {
-	case KindMissZero, KindMissFlag, KindBatchSize, KindZeroOnError:
+	case KindMissZero, KindMissFlag, KindBatchSize, KindZeroOnError, KindAnswerRoundTrip:
 		return true
 	default:
 		return false

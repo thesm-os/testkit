@@ -51,6 +51,18 @@ func TestCensusCarriesNoRetiredConstructor(t *testing.T) {
 			reached[ctor] = true
 		}
 	}
+	// The contract-role rows reach constructors no detector names: the role
+	// table re-points them after the shape chose, and they are in use for
+	// exactly as long as a row says so.
+	for key, ctor := range tiers.ContractActionRows() {
+		fn, shipped := gate.ActionCtors[ctor]
+		testkit.True(t, shipped, key+"'s constructor "+ctor+" is in the census")
+		if shipped {
+			testkit.Equal(t, reflect.TypeOf(fn).Kind(), reflect.Func,
+				ctor+" is a function")
+		}
+		reached[ctor] = true
+	}
 	for name := range gate.ActionCtors {
 		testkit.True(t, reached[name], name+" is reached by some detector's row")
 	}

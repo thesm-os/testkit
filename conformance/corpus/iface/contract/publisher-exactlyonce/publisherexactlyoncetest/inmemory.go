@@ -29,16 +29,21 @@ var ErrFull = errors.New("publisherexactlyoncetest: a subscriber is too far behi
 // No backlog, deliberately. `outbox` carries the same two methods and keeps
 // every record until somebody reads it; a publisher delivers to whoever is
 // listening at the time, and a subject that replayed history to a late
-// subscriber would satisfy both contracts and be neither.
+// subscriber would satisfy both contracts and be neither. The delivered set
+// is what makes the mode true rather than claimed: Replay consults it, and
+// dropping the lookup is precisely the defect the bound law reddens on.
 type InMemory struct {
 	mu          sync.Mutex
 	subscribers []chan publisherexactlyonce.Value
+	delivered   map[publisherexactlyonce.Value]bool
 }
 
 var _ publisherexactlyonce.Contract = (*InMemory)(nil)
 
 // NewInMemory returns a publisher with no subscribers.
-func NewInMemory() *InMemory { return &InMemory{} }
+func NewInMemory() *InMemory {
+	return &InMemory{delivered: map[publisherexactlyonce.Value]bool{}}
+}
 
 // Publish delivers a message to every current subscriber.
 //
@@ -51,6 +56,27 @@ func (s *InMemory) Publish(ctx context.Context, v publisherexactlyonce.Value) er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.deliver(v)
+}
+
+// Replay re-offers a message, suppressing the duplicate exactly-once
+// forbids: a message the broker already delivered is not sent again, and one
+// it never delivered — a loss being repaired — goes out now.
+func (s *InMemory) Replay(ctx context.Context, v publisherexactlyonce.Value) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.delivered[v] {
+		return nil
+	}
+	return s.deliver(v)
+}
+
+// deliver fans one message out and records it as delivered; the caller holds
+// the lock.
+func (s *InMemory) deliver(v publisherexactlyonce.Value) error {
 	for _, ch := range s.subscribers {
 		select {
 		case ch <- v:
@@ -58,6 +84,7 @@ func (s *InMemory) Publish(ctx context.Context, v publisherexactlyonce.Value) er
 			return ErrFull
 		}
 	}
+	s.delivered[v] = true
 	return nil
 }
 

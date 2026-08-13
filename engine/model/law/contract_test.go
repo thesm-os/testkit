@@ -618,7 +618,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 		l := law.PublisherDeliveryBound[*ref.AtLeastOnce[int], int, int]{
 			Subscribe: func(rt *rapid.T, s *ref.AtLeastOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
 			Publish:   func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) },
-			Redeliver: func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) { _ = s.Publish(rt.Context(), m) },
+			Redeliver: func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) },
 			Drain: func(rt *rapid.T, s *ref.AtLeastOnce[int], sub int) ([]int, error) {
 				return s.Drain(rt.Context(), sub)
 			},
@@ -663,7 +663,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 				lastID = id
 				return err
 			},
-			Redeliver: func(rt *rapid.T, s *ref.ExactlyOnce[int], m int) { _ = s.Replay(rt.Context(), lastID, m) },
+			Redeliver: func(rt *rapid.T, s *ref.ExactlyOnce[int], m int) error { return s.Replay(rt.Context(), lastID, m) },
 			Drain: func(rt *rapid.T, s *ref.ExactlyOnce[int], sub int) ([]int, error) {
 				return s.Drain(rt.Context(), sub)
 			},
@@ -683,7 +683,7 @@ func TestPublisherDeliveryBound(t *testing.T) {
 		l := law.PublisherDeliveryBound[*ref.AtLeastOnce[int], int, int]{
 			Subscribe: func(rt *rapid.T, s *ref.AtLeastOnce[int]) (int, error) { return s.Subscribe(rt.Context()) },
 			Publish:   func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) },
-			Redeliver: func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) { _ = s.Publish(rt.Context(), m) }, // duplicates
+			Redeliver: func(rt *rapid.T, s *ref.AtLeastOnce[int], m int) error { return s.Publish(rt.Context(), m) }, // duplicates
 			Drain: func(rt *rapid.T, s *ref.AtLeastOnce[int], sub int) ([]int, error) {
 				return s.Drain(rt.Context(), sub)
 			},
@@ -1794,7 +1794,7 @@ func TestPublisherDeliveryBoundModes(t *testing.T) {
 		rapid.Check(t, func(rt *rapid.T) {
 			b := &pubsubBox{deliveries: 1}
 			l := mk(b, law.DeliveryAtLeastOnce)
-			l.Redeliver = func(*rapid.T, *pubsubBox, string) { redelivered = true }
+			l.Redeliver = func(*rapid.T, *pubsubBox, string) error { redelivered = true; return nil }
 			_ = l.Check(rt, b, b)
 		})
 		if !redelivered {
@@ -1818,6 +1818,20 @@ func TestPublisherDeliveryBoundModes(t *testing.T) {
 			b := &pubsubBox{pubErr: errors.New("topic closed")}
 			if err := mk(b, law.DeliveryExactlyOnce).Check(rt, b, b); !law.Holds(err) {
 				rt.Fatalf("a broker that refuses the publish is a precondition: %v", err)
+			}
+		})
+	})
+
+	t.Run("a refused redelivery holds vacuously", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			b := &pubsubBox{deliveries: 1}
+			l := mk(b, law.DeliveryAtLeastOnce)
+			l.Redeliver = func(*rapid.T, *pubsubBox, string) error {
+				return errors.New("replay window closed")
+			}
+			if err := l.Check(rt, b, b); !law.Holds(err) {
+				rt.Fatalf("a broker that refuses the redelivery is a precondition: %v", err)
 			}
 		})
 	})
@@ -2365,7 +2379,7 @@ func TestPublisherPairRefusals(t *testing.T) {
 			Subscribe: func(_ *rapid.T, s *pubsubBox) (int, error) { return s.sub() },
 			Publish:   func(_ *rapid.T, s *pubsubBox, _ string) error { return s.publish() },
 			Drain:     func(_ *rapid.T, s *pubsubBox, _ int) ([]string, error) { return s.drain("m") },
-			Redeliver: func(_ *rapid.T, s *pubsubBox, _ string) {},
+			Redeliver: func(_ *rapid.T, s *pubsubBox, _ string) error { return nil },
 			Messages:  rapid.Just("m"),
 			Mode:      law.DeliveryAtLeastOnce,
 		}

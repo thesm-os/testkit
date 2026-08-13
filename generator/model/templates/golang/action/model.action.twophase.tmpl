@@ -1,0 +1,17 @@
+{{- /*
+The two-phase composite drives the whole cycle — one begin, its own handle,
+a drawn choice of terminal — which is the driving a standalone commit could
+never honestly do: its handles came from a pool no begin filled.
+*/ -}}
+{{- define "model.action.twophase" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}) ({{ renderType .Value }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx{{ end }})
+				},
+				func({{ if .TxCommitCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, handle {{ renderType .Value }}) error {
+					return s.{{ .TxCommit }}({{ if .TxCommitCtx }}ctx, {{ end }}handle)
+				},
+				func({{ if .TxRollbackCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, handle {{ renderType .Value }}) error {
+					return s.{{ .TxRollback }}({{ if .TxRollbackCtx }}ctx, {{ end }}handle)
+				})
+{{- end -}}

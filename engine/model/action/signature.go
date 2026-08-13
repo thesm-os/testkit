@@ -80,12 +80,15 @@ func PointerReader[T any, K comparable, V any](
 
 // MultiReader creates an action for a MultiReader-shaped method:
 // func(ctx?, K) (V1, V2, error). Draws a key, calls both SUT and
-// ref, compares both non-error values when err is nil.
+// ref, compares both non-error values when err is nil — and the error's
+// identity where [WithSentinel] arms it.
 func MultiReader[T any, K comparable, V1, V2 any](
 	name string,
 	keys *rapid.Generator[K],
 	read func(context.Context, T, K) (V1, V2, error),
+	options ...Opt,
 ) model.Action[T] {
+	o := optsOf(options)
 	return model.Action[T]{
 		Name: name,
 		Kind: model.FailureSemantic,
@@ -99,6 +102,11 @@ func MultiReader[T any, K comparable, V1, V2 any](
 					Err:    fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr),
 					Input:  k,
 					Output: out,
+				}
+			}
+			if sutErr != nil {
+				if err := o.identity(name, k, sutErr, refErr); err != nil {
+					return model.ActionResult{Err: err, Input: k, Output: out}
 				}
 			}
 			if sutErr == nil {
@@ -124,12 +132,15 @@ func MultiReader[T any, K comparable, V1, V2 any](
 
 // BatchReader creates an action for a BatchReader-shaped method:
 // func(ctx?, ...K) ([]V, error). Draws a slice of keys (1..maxBatch),
-// calls both SUT and ref, compares results.
+// calls both SUT and ref, compares results — and the error's identity
+// where [WithSentinel] arms it.
 func BatchReader[T any, K comparable, V any](
 	name string,
 	keys *rapid.Generator[K],
 	read func(context.Context, T, ...K) ([]V, error),
+	options ...Opt,
 ) model.Action[T] {
+	o := optsOf(options)
 	return model.Action[T]{
 		Name: name,
 		Kind: model.FailureSemantic,
@@ -142,6 +153,11 @@ func BatchReader[T any, K comparable, V any](
 					Err:    fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, batch, sutErr, refErr),
 					Input:  batch,
 					Output: sutGot,
+				}
+			}
+			if sutErr != nil {
+				if err := o.identity(name, batch, sutErr, refErr); err != nil {
+					return model.ActionResult{Err: err, Input: batch, Output: sutGot}
 				}
 			}
 			if sutErr == nil {

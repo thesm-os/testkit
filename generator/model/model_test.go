@@ -333,6 +333,214 @@ func TestDiagnostics(t *testing.T) {
 	})
 }
 
+// TestActionSentinel pins the identity arm of the action comparison: a
+// declaration that stamps a miss sentinel arms it on every error-answering
+// reader, and one that stamps nothing leaves the comparison presence-only.
+func TestActionSentinel(t *testing.T) {
+	t.Parallel()
+
+	readerOf := func(t *testing.T, b *model.Bindings) *model.Action {
+		t.Helper()
+		for _, a := range b.Actions {
+			if a.Method == "Read" {
+				return a
+			}
+		}
+		t.Fatal("the fixture's reader was not driven")
+		return nil
+	}
+
+	t.Run("a stamped sentinel rides the reader", func(t *testing.T) {
+		t.Parallel()
+		s := mixed(t)
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name != "Read" {
+					continue
+				}
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"deleteremoves"}, "test")
+				shape.MixinParamKey("deleteremoves", "sentinel").
+					Set(m.EnsureMeta(), "example.com/validates.ErrGone", "test")
+			}
+		}
+		b := bindingsOf(t, s)
+		testkit.True(t, readerOf(t, b).Sentinel != nil,
+			"the declaration's miss identity reaches the sequences, not only the oracle")
+	})
+
+	t.Run("an unstamped declaration stays presence-only", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, mixed(t))
+		testkit.True(t, readerOf(t, b).Sentinel == nil,
+			"no stamp, no identity to hold the pair to")
+	})
+}
+
+// sessionStore is a session fixture in store form: a reader carrying a
+// session mixin whose version= names the given member of a value struct
+// declared with field Rev and zero-arg method Stamp — the two spellings the
+// refusal must tell apart.
+func sessionStore(t *testing.T, member string) *sdk.Store {
+	t.Helper()
+	valueRef := func() *sdk.TypeRef { return storefixture.PkgNamed("example.com/sess", "Value") }
+	s := storefixture.New().
+		Package("sess", "example.com/sess").
+		Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("sess/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Rev", storefixture.Named("int64"), nil)
+			b.Method("Stamp", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("int64"))
+			})
+		}).
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("sess/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Store", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", valueRef())
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(valueRef())
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampShape(s, "Store", "writer", "", "example.com/sess.Value")
+	stampShape(s, "Get", "reader", "string", "example.com/sess.Value")
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Get" {
+				continue
+			}
+			shape.MetaMixins.Set(m.EnsureMeta(), []string{"monotonicreads"}, "test")
+			shape.MixinParamKey("monotonicreads", "version").Set(m.EnsureMeta(), member, "test")
+		}
+	}
+	return s
+}
+
+// TestVersionMemberRefusal holds version= to the field projection every
+// consumer of the stamp performs: a method or a missing member is refused at
+// the directive, not left to surface as a build error in the generated
+// package that nothing attributes.
+func TestVersionMemberRefusal(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a field passes and elects the twin", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, sessionStore(t, "Rev"))
+		testkit.True(t, b.Reference.Twin(), "the stamped fixture rides the twin floor")
+		testkit.Assert(t, b.Reference.TwinWhy).Contains("version member",
+			"for the version arm's own reason")
+	})
+
+	t.Run("a zero-arg method is refused by name", func(t *testing.T) {
+		t.Parallel()
+		got := generateBoth(t, sessionStore(t, "Stamp")).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("names a method",
+			"the stamp is read and assigned as a field, and the message says which spelling broke that")
+	})
+
+	t.Run("a missing member is refused by name", func(t *testing.T) {
+		t.Parallel()
+		got := generateBoth(t, sessionStore(t, "Gone")).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("names no member",
+			"a typo dies at the directive rather than in the consumer's build")
+	})
+
+	t.Run("an out-of-reach struct passes through", func(t *testing.T) {
+		t.Parallel()
+		s := sessionStore(t, "Rev")
+		// Re-point the reader's value stamp at a declaration the store does
+		// not hold: refusing what cannot be seen would break a witnessed
+		// value, so the compile keeps this case honest instead.
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Get" {
+					shape.MetaValueType.Set(m.EnsureMeta(), "example.com/elsewhere.Value", "test")
+				}
+			}
+		}
+		got := generateBoth(t, s).Diagnostics()
+		testkit.Equal(t, len(got), 0, "no declaration in reach, no refusal to make")
+	})
+
+	// The cas path shares the validator but not the site: the cell assigns
+	// the stamp it guards (v.Rev = cur.Rev + 1), so the method form breaks
+	// an lvalue there, not merely a projection.
+	t.Run("a cas version method is refused before the cell derives", func(t *testing.T) {
+		t.Parallel()
+		got := generateBoth(t, casStore(t, "Next")).Diagnostics()
+		testkit.Equal(t, len(got), 1, "one diagnostic")
+		testkit.Assert(t, got[0].Message).Contains("names a method",
+			"the cell's stamp is an lvalue, and the refusal happens at the directive")
+	})
+
+	t.Run("a cas version field derives the cell", func(t *testing.T) {
+		t.Parallel()
+		b := bindingsOf(t, casStore(t, "Version"))
+		testkit.True(t, b.Reference.IsContract(), "the shipped cell holds")
+		testkit.Equal(t, b.Reference.VersionField, "Version", "guarding the stamped field")
+	})
+}
+
+// casStore is the cas-contract fixture in store form: a writer carrying the
+// contract whose version= names the given member of the cell's value struct,
+// declared with field Version and zero-arg method Next.
+func casStore(t *testing.T, member string) *sdk.Store {
+	t.Helper()
+	valueRef := func() *sdk.TypeRef { return storefixture.PkgNamed("example.com/cc", "Value") }
+	s := storefixture.New().
+		Package("cc", "example.com/cc").
+		Struct("Value", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("cc/iface.go", 1, 1))
+			b.Field("Body", storefixture.Named("string"), nil)
+			b.Field("Version", storefixture.Named("int64"), nil)
+			b.Method("Next", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("int64"))
+			})
+		}).
+		Interface("Cell", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("cc/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", valueRef())
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Return(valueRef())
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampShape(s, "Put", "writer", "", "example.com/cc.Value")
+	stampShape(s, "Get", "aggregator", "", "example.com/cc.Value")
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name != "Put" {
+				continue
+			}
+			bag := m.EnsureMeta()
+			shape.MetaContracts.Set(bag, []string{"cas"}, "test")
+			shape.ContractRoleKey("cas").Set(bag, "writer", "test")
+			shape.ContractParamKey("cas", "version").Set(bag, member, "test")
+			shape.ContractParamKey("cas", "mismatch").
+				Set(bag, "example.com/cc.ErrMismatch", "test")
+		}
+	}
+	return s
+}
+
 // TestTwinFloor walks the fallback that arms what no store models: the
 // reference becomes the subject's own factory, the header carries why, and
 // nothing derived — no adapter, no companion — rides along.

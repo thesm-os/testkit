@@ -21,8 +21,8 @@ func TestAppendLog(t *testing.T) {
 		t.Parallel()
 		m := linearize.AppendLog[string]()
 		history := []porcupine.Operation{
-			opIO(0, "Append", "a", int64(0)),
-			opIO(1, "Append", "b", int64(1)),
+			opIO(0, "Append", "a", linearize.AppendResult{Off: 0}),
+			opIO(1, "Append", "b", linearize.AppendResult{Off: 1}),
 			opIO(2, "At", int64(1), linearize.ReaderResult[string]{Value: "b"}),
 			opIO(3, "Len", nil, int64(2)),
 		}
@@ -30,12 +30,23 @@ func TestAppendLog(t *testing.T) {
 			"matching append-log history should be linearizable")
 	})
 
+	t.Run("a refused append leaves the log", func(t *testing.T) {
+		t.Parallel()
+		m := linearize.AppendLog[string]()
+		history := []porcupine.Operation{
+			opIO(0, "Append", "a", linearize.AppendResult{Err: errors.New("full")}),
+			opIO(1, "Append", "b", linearize.AppendResult{Off: 0}),
+		}
+		testkit.True(t, porcupine.CheckOperations(m, history),
+			"the refusal appended nothing, so the next offset is still zero")
+	})
+
 	t.Run("non-monotonic Append offset is rejected", func(t *testing.T) {
 		t.Parallel()
 		m := linearize.AppendLog[string]()
 		history := []porcupine.Operation{
-			opIO(0, "Append", "a", int64(0)),
-			opIO(1, "Append", "b", int64(99)),
+			opIO(0, "Append", "a", linearize.AppendResult{Off: 0}),
+			opIO(1, "Append", "b", linearize.AppendResult{Off: 99}),
 		}
 		testkit.False(t, porcupine.CheckOperations(m, history),
 			"non-contiguous offset should be rejected")
@@ -55,7 +66,7 @@ func TestAppendLog(t *testing.T) {
 		t.Parallel()
 		m := linearize.AppendLog[string]()
 		history := []porcupine.Operation{
-			opIO(0, "Append", "a", int64(0)),
+			opIO(0, "Append", "a", linearize.AppendResult{Off: 0}),
 			opIO(1, "At", int64(0), linearize.ReaderResult[string]{Value: "wrong"}),
 		}
 		testkit.False(t, porcupine.CheckOperations(m, history),
@@ -66,7 +77,7 @@ func TestAppendLog(t *testing.T) {
 		t.Parallel()
 		m := linearize.AppendLog[string]()
 		history := []porcupine.Operation{
-			opIO(0, "Append", "a", int64(0)),
+			opIO(0, "Append", "a", linearize.AppendResult{Off: 0}),
 			opIO(1, "Len", nil, int64(99)),
 		}
 		testkit.False(t, porcupine.CheckOperations(m, history),
@@ -86,18 +97,18 @@ func TestAppendLogModelBranches(t *testing.T) {
 
 	t.Run("Append must return the index it wrote at", func(t *testing.T) {
 		t.Parallel()
-		ok, next := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		ok, next := m.Step(m.Init(), in("Append", "a"), out(linearize.AppendResult{Off: 0}))
 		testkit.True(t, ok, "the first append lands at offset 0")
-		ok, _ = m.Step(next, in("Append", "b"), out(int64(1)))
+		ok, _ = m.Step(next, in("Append", "b"), out(linearize.AppendResult{Off: 1}))
 		testkit.True(t, ok, "the second append lands at offset 1")
 
-		ok, _ = m.Step(next, in("Append", "b"), out(int64(7)))
+		ok, _ = m.Step(next, in("Append", "b"), out(linearize.AppendResult{Off: 7}))
 		testkit.False(t, ok, "an offset that is not the current length is wrong")
 	})
 
 	t.Run("Append rejects mis-typed args and results", func(t *testing.T) {
 		t.Parallel()
-		ok, _ := m.Step(m.Init(), in("Append", 42), out(int64(0)))
+		ok, _ := m.Step(m.Init(), in("Append", 42), out(linearize.AppendResult{Off: 0}))
 		testkit.False(t, ok, "the value must match the log's element type")
 		ok, _ = m.Step(m.Init(), in("Append", "a"), out("zero"))
 		testkit.False(t, ok, "the offset must be an int64")
@@ -105,7 +116,7 @@ func TestAppendLogModelBranches(t *testing.T) {
 
 	t.Run("At returns the element at an in-range index", func(t *testing.T) {
 		t.Parallel()
-		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		_, one := m.Step(m.Init(), in("Append", "a"), out(linearize.AppendResult{Off: 0}))
 		ok, _ := m.Step(one, in("At", int64(0)), out(linearize.ReaderResult[string]{Value: "a"}))
 		testkit.True(t, ok, "index 0 holds the first appended value")
 		ok, _ = m.Step(one, in("At", int64(0)), out(linearize.ReaderResult[string]{Value: "z"}))
@@ -116,7 +127,7 @@ func TestAppendLogModelBranches(t *testing.T) {
 	// ends — a negative index is as invalid as one past the end.
 	t.Run("At out of range must error", func(t *testing.T) {
 		t.Parallel()
-		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		_, one := m.Step(m.Init(), in("Append", "a"), out(linearize.AppendResult{Off: 0}))
 		for _, idx := range []int64{-1, 5} {
 			ok, _ := m.Step(one, in("At", idx), out(linearize.ReaderResult[string]{Err: errors.New("range")}))
 			testkit.True(t, ok, "an out-of-range read errors")
@@ -135,7 +146,7 @@ func TestAppendLogModelBranches(t *testing.T) {
 
 	t.Run("Len reports the element count", func(t *testing.T) {
 		t.Parallel()
-		_, one := m.Step(m.Init(), in("Append", "a"), out(int64(0)))
+		_, one := m.Step(m.Init(), in("Append", "a"), out(linearize.AppendResult{Off: 0}))
 		ok, _ := m.Step(one, in("Len", nil), out(int64(1)))
 		testkit.True(t, ok, "one element means length 1")
 		ok, _ = m.Step(one, in("Len", nil), out(int64(9)))
@@ -153,10 +164,12 @@ func TestAppendLogModelBranches(t *testing.T) {
 	t.Run("state helpers", func(t *testing.T) {
 		t.Parallel()
 		empty := m.Init()
-		_, one := m.Step(empty, in("Append", "a"), out(int64(0)))
+		_, one := m.Step(empty, in("Append", "a"), out(linearize.AppendResult{Off: 0}))
 		testkit.True(t, m.Equal(empty, m.Init()), "two empty logs are equal")
 		testkit.False(t, m.Equal(empty, one), "contents are the state")
 		testkit.Equal(t, m.DescribeState(one), "len=1", "renders the length")
-		testkit.Contains(t, m.DescribeOperation(in("Append", "a"), out(int64(0))), "Append", "names the operation")
+		testkit.Contains(t,
+			m.DescribeOperation(in("Append", "a"), out(linearize.AppendResult{Off: 0})),
+			"Append", "names the operation")
 	})
 }

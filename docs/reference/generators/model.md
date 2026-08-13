@@ -152,8 +152,11 @@ parameter with no hint is a diagnostic at the parameter.
   delivered. That is the synchronous floor — an asynchronous publisher
   supplies `<Iface>ModelDrain`, which outranks the derivation, or the floor
   reads its in-flight deliveries as loss; the header states which drain is
-  in play. The redelivery arm stays unexercised until a fixture declares
-  the redeliver role, and the header says so.
+  in play. The redelivery arm binds where the directive names a redeliver
+  role — an error-returning method the law re-offers the published message
+  through, a refusal holding vacuously — and where nothing declares one
+  the header's `(unarmed: Redeliver)` annotation says the bound was
+  exercised on the single publish alone.
 - **The contract-shape closures** — laws over roles whose signatures carry
   a handle, a callable or a cursor bind through closures the shared pools
   cannot spell. A `Begin(ctx) (Tx, error)` threads its handle into the
@@ -213,6 +216,32 @@ parameter with no hint is a diagnostic at the parameter.
   against `linearize.KV` per key. It registers beside the sequential leg
   as `model/concurrent`; the laws stay sequential, whose step boundary
   they need, and the companion holds the leg to the derived reference.
+- **Contract-role sequences** — a role method joins the sequences as
+  itself where a constructor fits its fixture shape: the tx trio is driven
+  as one `action.TwoPhase` cycle threading each begin's own handle into
+  its drawn terminal (the standalone terminals are dropped, because a
+  commit drawn from a value pool operates on handles no begin minted),
+  and updater, upserter, cas and chain writes carry their role's own
+  constructor name. The family members whose shapes the constructors do
+  not fit are argued refusals in the tiers table, not gaps.
+- **The miss identity in the sequences** — where the declaration stamps a
+  sentinel, every error-answering reader action carries
+  `action.WithSentinel`: a pair agreeing a read fails must also agree on
+  whether the failure is the declared identity, so a subject missing
+  under a private error stops reading as agreement.
+- **The versioned-cell and append-log legs** — a `cas` contract on the
+  shipped VersionedCell oracle earns a Porcupine leg against
+  `linearize.CASCell` in the oracle's own dialect (stamp is seen+1, an
+  empty cell matches only the zero version, the stamped mismatch is the
+  identity matched); an `appender` contract whose method answers `int64`
+  offsets earns one against the shared `linearize.AppendLog`, where a
+  torn append hides from the per-client law. A chain append answering no
+  offset and a keyless fold derive no leg, for reasons recorded at the
+  derivation.
+- **`version=` refused by name** — the ordering stamp is read and
+  assigned as a field selector, so a `version=` naming a zero-arg method
+  or nothing at all dies at the directive with a diagnostic instead of
+  surfacing as an unattributed build error in the consumer's package.
 - **The saturation prover** — binding a law is necessary;
   `<Iface>ModelSaturation(t, factory, opts...)` is what makes it
   sufficient. Per bound law, a defect is worn on each method the law's

@@ -58,6 +58,12 @@ type LawBinding struct {
 	// registration arms it only when every one is set, and the header names
 	// the options that would.
 	Supplied []string
+
+	// Unarmed names the optional roles nothing declared: the law binds in
+	// its unrefined form, and the header says which arm went unexercised —
+	// a green bound law that never redelivered reads as more than it
+	// proved unless the header confesses it.
+	Unarmed []string
 }
 
 // Kind returns the one template every binding renders through.
@@ -434,6 +440,28 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 				continue
 			}
 			seen[key] = true
+			// An optional role resolves only from the directive's own
+			// carrier, and the same rule re-selected from a partner binds
+			// the law again without it — one law twice, disagreeing about
+			// its refinement, and the poorer twin's header calling armed
+			// work unarmed. The richer binding subsumes the poorer in
+			// either arrival order; genuinely distinct same-ID bindings —
+			// one per method — share no field spelling and both stay.
+			subsumed := false
+			for i, held := range b.Laws {
+				if lawSubsumes(held, binding) {
+					subsumed = true
+					break
+				}
+				if lawSubsumes(binding, held) {
+					b.Laws[i] = binding
+					subsumed = true
+					break
+				}
+			}
+			if subsumed {
+				continue
+			}
 			b.Laws = append(b.Laws, binding)
 			for _, field := range binding.Fields {
 				// The flags ride the appended binding, never the attempt: a
@@ -600,6 +628,26 @@ func bindingFingerprint(lb *LawBinding) string {
 	return out.String()
 }
 
+// lawSubsumes reports whether have covers want: the same law, with every
+// resolved field of want — name and method both — present in have. A field
+// have carries beyond that is the optional refinement want's carrier could
+// not resolve.
+func lawSubsumes(have, want *LawBinding) bool {
+	if have.ID != want.ID || len(want.Fields) > len(have.Fields) {
+		return false
+	}
+	got := make(map[string]bool, len(have.Fields))
+	for _, f := range have.Fields {
+		got[f.Name+"\x00"+f.Method] = true
+	}
+	for _, f := range want.Fields {
+		if !got[f.Name+"\x00"+f.Method] {
+			return false
+		}
+	}
+	return true
+}
+
 // negatedBy resolves the first conflict row a held claim triggers, in the
 // table's own order so the generated header is deterministic.
 func negatedBy(claims map[string]bool, law string) (string, bool) {
@@ -658,6 +706,8 @@ func lawOf(
 		}
 		if field != nil {
 			lb.Fields = append(lb.Fields, field)
+		} else if f.Optional && f.Kind == tiers.KindRole {
+			lb.Unarmed = append(lb.Unarmed, f.Name)
 		}
 	}
 	for _, field := range lb.Fields {

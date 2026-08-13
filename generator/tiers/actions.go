@@ -3,7 +3,10 @@
 
 package tiers
 
-import "slices"
+import (
+	"maps"
+	"slices"
+)
 
 // ActionFor returns the `engine/model/action` constructor that drives a method
 // of the given detector shape, and whether the shape names one.
@@ -46,6 +49,57 @@ var actionCtors = map[string]string{
 	shapeStreamReader:    "Stream",
 	shapeVoidLifecycle:   "VoidLifecycle",
 	shapeWriter:          "Writer",
+}
+
+// ContractActionFor returns the constructor that drives a contract role as
+// itself rather than as whatever its raw signature shape selected, and
+// whether the role names one. The rows are the family members whose fixture
+// shapes the shipped constructors actually fit; the absences are verdicts,
+// not gaps: AcquireLease renames Lifecycle for a keyless acquire and the
+// lease fixture's acquire draws its key; Cursor drains to exhaustion and
+// closes, which reddens the second invocation on a correct cursor-shaped
+// subject; Persister compares save-answered IDs the persister fixture's
+// writer never answers. A recording append keeps its recording closure —
+// the rename touches the constructor, never the history log.
+func ContractActionFor(contract, role string) (string, bool) {
+	ctor, ok := contractActionCtors[contract+"."+role]
+	return ctor, ok
+}
+
+// ContractActionConsumes returns the sibling roles a composite constructor
+// claims: their methods are driven through the primary's action, and a
+// standalone action on them would drive the terminal half with handles no
+// begin ever minted — the defect the composite exists to retire.
+func ContractActionConsumes(contract, role string) []string {
+	return contractActionConsumes[contract+"."+role]
+}
+
+// ContractActionRows returns the whole role table, keyed `contract.role`,
+// for the census that holds each value to a shipped constructor in both
+// directions.
+func ContractActionRows() map[string]string {
+	return maps.Clone(contractActionCtors)
+}
+
+// The tx trio's role spellings, as the carrier's directive names them.
+const (
+	roleBegin      = "begin"
+	roleTxCommit   = "commit"
+	roleTxRollback = "rollback"
+)
+
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var contractActionCtors = map[string]string{
+	contractUpdater + "." + roleWriter:  "Updater",
+	contractUpserter + "." + roleWriter: "Upserter",
+	contractCAS + "." + roleWriter:      "CompareAndSwap",
+	contractChain + "." + roleAppend:    "ChainAppend",
+	contractTx + "." + roleBegin:        "TwoPhase",
+}
+
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var contractActionConsumes = map[string][]string{
+	contractTx + "." + roleBegin: {roleTxCommit, roleTxRollback},
 }
 
 // MapStoreOp returns the [engine/model/ref.MapStore] method a shape delegates

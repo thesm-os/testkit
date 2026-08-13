@@ -39,6 +39,22 @@ func TestContractContract(t *testing.T) {
 				"a message published afterwards is accepted")
 			testkit.Equal(tb, <-stream, fixture.VOther, "and reaches them")
 		}),
+		publisherexactlyoncetest.ContractOnReplay("suppresses the duplicate and repairs the loss", func(
+			tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value,
+		) {
+			tb.Helper()
+			stream, err := subject.Subscribe(tb.Context())
+			testkit.NoError(tb, err, "a subscriber attaches")
+
+			testkit.NoError(tb, subject.Publish(tb.Context(), v), "the original lands")
+			testkit.NoError(tb, subject.Replay(tb.Context(), v), "a replay of it is accepted")
+			testkit.NoError(tb, subject.Replay(tb.Context(), fixture.VOther),
+				"and so is a replay of a message that was lost")
+
+			testkit.Equal(tb, <-stream, v, "the subscriber takes the original once")
+			testkit.Equal(tb, <-stream, fixture.VOther,
+				"then the repaired loss — never the duplicate")
+		}),
 		publisherexactlyoncetest.ContractOnPublish("reports a subscriber it can no longer reach", func(
 			tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value,
 		) {

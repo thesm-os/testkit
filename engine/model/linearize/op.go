@@ -32,6 +32,17 @@ type WriterResult struct {
 	Err error
 }
 
+// AppendResult is the output for offset-answering appends: the offset the
+// subject assigned, beside the refusal that means it assigned none.
+type AppendResult struct {
+	Off int64
+	Err error
+}
+
+// TraceOutput surfaces the assigned offset and the append's own error to
+// the trace.
+func (r AppendResult) TraceOutput() (any, error) { return r.Off, r.Err }
+
 // TraceOutput surfaces the write's own error to the trace.
 func (r WriterResult) TraceOutput() (any, error) { return nil, r.Err }
 

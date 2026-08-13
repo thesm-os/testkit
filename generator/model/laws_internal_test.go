@@ -1350,21 +1350,22 @@ func TestSessionVersionScan(t *testing.T) {
 	reader.Mixins = []string{"monotonicreads"}
 	shape.MixinParamKey(mixinMonotonicReads, "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
 
-	member, stamped := sessionVersionOf(&suite.Contract{Methods: []suite.Method{*reader}})
+	carrier, member, stamped := sessionVersionOf(&suite.Contract{Methods: []suite.Method{*reader}})
 	testkit.True(t, stamped && member == "Rev", "a stamped session mixin names its member")
+	testkit.True(t, carrier != nil && carrier.Name == "Get", "and the carrying method rides along")
 
 	bare := projected("Get",
 		[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
 	bare.Mixins = []string{"monotonicreads"}
-	_, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*bare}})
+	_, _, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*bare}})
 	testkit.False(t, stamped, "a session mixin without version= stamps no ordering")
 
 	other := projected("Put",
 		[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
 		[]golang.Return{errRet})
 	other.Mixins = []string{"idempotent"}
-	_, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*other}})
+	_, _, stamped = sessionVersionOf(&suite.Contract{Methods: []suite.Method{*other}})
 	testkit.False(t, stamped, "a non-session mixin is not in the scan")
 }
 
@@ -1387,7 +1388,7 @@ func TestSessionConcurrentDerivation(t *testing.T) {
 		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
 		Actions: []*Action{{Method: "Get"}, {Method: "Persist"}},
 	}
-	concurrentOf(b, keyed, valued)
+	concurrentOf(b, &suite.Contract{}, keyed, valued)
 	testkit.Equal(t, b.ConcFamily, "session", "both halves in hand derive the stepless leg")
 
 	half := &Bindings{
@@ -1395,7 +1396,7 @@ func TestSessionConcurrentDerivation(t *testing.T) {
 		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
 		Actions: []*Action{{Method: "Get"}},
 	}
-	concurrentOf(half, keyed, valued)
+	concurrentOf(half, &suite.Contract{}, keyed, valued)
 	testkit.Equal(t, half.ConcFamily, "", "half a pair interleaves nothing worth checking")
 	testkit.True(t, half.ConcReader == nil && half.ConcWriter == nil,
 		"and the halves are reset rather than left dangling")
@@ -2565,4 +2566,29 @@ func TestSaturationSkipsUnprojectedMethods(t *testing.T) {
 	testkit.Equal(t, b.SatLaws[0].Methods, []string{"Nonesuch"},
 		"the law still names its reach")
 	testkit.Len(t, b.SatMutants, 0, "and nothing unprojected is dressed")
+}
+
+// TestLawSubsumption pins the dedup the optional roles forced: the same law
+// re-selected from a partner carrier binds without the refinement only the
+// directive's host resolves, and the richer binding must subsume the poorer
+// in either arrival order — while genuinely distinct same-ID bindings, one
+// per method, both stay.
+func TestLawSubsumption(t *testing.T) {
+	t.Parallel()
+
+	rich := &LawBinding{ID: "AUTO-X", Fields: []*LawField{
+		{Name: "Publish", Method: "Publish"},
+		{Name: "Redeliver", Method: "Republish"},
+	}}
+	poor := &LawBinding{ID: "AUTO-X", Fields: []*LawField{
+		{Name: "Publish", Method: "Publish"},
+	}}
+	other := &LawBinding{ID: "AUTO-X", Fields: []*LawField{
+		{Name: "Publish", Method: "Broadcast"},
+	}}
+
+	testkit.True(t, lawSubsumes(rich, poor), "the refinement covers its own omission")
+	testkit.False(t, lawSubsumes(poor, rich), "and never the other way around")
+	testkit.False(t, lawSubsumes(rich, other), "a different resolved method is a different law instance")
+	testkit.False(t, lawSubsumes(&LawBinding{ID: "AUTO-Y"}, poor), "as is a different identifier")
 }

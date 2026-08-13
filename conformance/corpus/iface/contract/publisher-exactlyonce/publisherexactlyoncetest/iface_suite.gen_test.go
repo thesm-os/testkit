@@ -18,7 +18,7 @@ import (
 // Every generated check for Contract, driven against a stand-in built
 // to violate it.
 //
-//	Proved:   8 checks
+//	Proved:   12 checks
 //
 // Each guard asserts the *reason* the check rejected, not merely that it did. A
 // stand-in that failed for some unrelated reason — a nil map, a closed channel
@@ -117,6 +117,98 @@ func TestAssertContractPublishToleratesNilContextCanFail(t *testing.T) {
 		"and rejects it for the reason the check is about")
 }
 
+// TestAssertContractReplaySmokeCanFail holds AssertContractReplaySmoke to being able to fail.
+//
+// The stand-in panics on the value the fixture derived. A check that let that
+// pass would leave a panicking method reported as a crashed run rather than as
+// a failed assertion — with no line naming the method that did it.
+func TestAssertContractReplaySmokeCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := publisherexactlyoncetest.DefaultContractFixture()
+	subject := publisherexactlyoncetest.NewContractStub(t,
+		publisherexactlyoncetest.WithContractReplay(func(context.Context, publisherexactlyonce.Value) error {
+			panic("Contract.Replay: violating the smoke check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a derived value",
+		func(tb testing.TB) {
+			tb.Helper()
+			publisherexactlyoncetest.AssertContractReplaySmoke(tb, subject, fixture.V)
+		})
+	testkit.Assert(t, got).Contains("panicked on a derived value",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractReplayCancelsCanFail holds AssertContractReplayCancels to being able to fail.
+//
+// The stand-in answers a cancelled context as though nothing were wrong. A
+// check that let that pass would report success for a subject doing work its
+// caller had already abandoned.
+func TestAssertContractReplayCancelsCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := publisherexactlyoncetest.DefaultContractFixture()
+	subject := publisherexactlyoncetest.NewContractStub(t,
+		publisherexactlyoncetest.WithContractReplay(func(context.Context, publisherexactlyonce.Value) error {
+			return nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for a cancelled context",
+		func(tb testing.TB) {
+			tb.Helper()
+			publisherexactlyoncetest.AssertContractReplayCancels(tb, subject, fixture.V)
+		})
+	testkit.Assert(t, got).Contains("must report a cancelled context",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractReplayHonoursDeadlineCanFail holds AssertContractReplayHonoursDeadline to being able to fail.
+//
+// The stand-in answers an expired deadline as though nothing were wrong. A
+// check that let that pass would report success for a subject that keeps
+// working past the point its caller stopped waiting.
+func TestAssertContractReplayHonoursDeadlineCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := publisherexactlyoncetest.DefaultContractFixture()
+	subject := publisherexactlyoncetest.NewContractStub(t,
+		publisherexactlyoncetest.WithContractReplay(func(context.Context, publisherexactlyonce.Value) error {
+			return nil
+		}))
+
+	got := testkit.Rejects(t, "a method that reports nothing for an expired deadline",
+		func(tb testing.TB) {
+			tb.Helper()
+			publisherexactlyoncetest.AssertContractReplayHonoursDeadline(tb, subject, fixture.V)
+		})
+	testkit.Assert(t, got).Contains("must report an expired deadline",
+		"and rejects it for the reason the check is about")
+}
+
+// TestAssertContractReplayToleratesNilContextCanFail holds AssertContractReplayToleratesNilContext to being able to fail.
+//
+// The stand-in panics rather than reporting. A check that let that pass would
+// leave a caller who forgot a context taking the process down instead of
+// getting an error back.
+func TestAssertContractReplayToleratesNilContextCanFail(t *testing.T) {
+	t.Parallel()
+
+	fixture := publisherexactlyoncetest.DefaultContractFixture()
+	subject := publisherexactlyoncetest.NewContractStub(t,
+		publisherexactlyoncetest.WithContractReplay(func(context.Context, publisherexactlyonce.Value) error {
+			panic("Contract.Replay: violating the nil-context check")
+		}))
+
+	got := testkit.Rejects(t, "a method that panics on a nil context",
+		func(tb testing.TB) {
+			tb.Helper()
+			publisherexactlyoncetest.AssertContractReplayToleratesNilContext(tb, subject, fixture.V)
+		})
+	testkit.Assert(t, got).Contains("panicked on a nil context",
+		"and rejects it for the reason the check is about")
+}
+
 // TestAssertContractSubscribeSmokeCanFail holds AssertContractSubscribeSmoke to being able to fail.
 //
 // The stand-in panics on the value the fixture derived. A check that let that
@@ -208,4 +300,4 @@ func TestAssertContractSubscribeToleratesNilContextCanFail(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f1cd1ae609b1ef414bd166a3cd8a684d98761e64166082070ef20439ede1949d
+// testkit:provenance 2d5ffc86da0aa8e39c8c8e2222da18ead551ae6b5a6459c1b002c55e4ce0b12c

@@ -153,3 +153,62 @@ func ConcurrentAnsweringWriter[T any, K comparable, V any](
 		},
 	}
 }
+
+// ConcurrentCAS creates a ConcurrentAction for a version-guarded write at a
+// single cell. One partition, deliberately: the cell is the unit the
+// compare-and-set guards, and a drawn version that misses is itself a
+// modeled outcome rather than noise.
+func ConcurrentCAS[T, V any](
+	name string,
+	values *rapid.Generator[V],
+	cas func(context.Context, T, V) error,
+) model.ConcurrentAction[T] {
+	return model.ConcurrentAction[T]{
+		Name: name,
+		Gen: func(rt *rapid.T) any {
+			return values.Draw(rt, name+"_value")
+		},
+		Apply: func(ctx context.Context, impl T, input any) any {
+			err := cas(ctx, impl, input.(V))
+			return WriterResult{Err: err}
+		},
+		PartitionKey: func(any) string { return "" },
+	}
+}
+
+// ConcurrentCellReader creates a ConcurrentAction for a keyless read of the
+// whole cell — nothing to draw, and the one partition is the cell itself.
+func ConcurrentCellReader[T, V any](
+	name string,
+	read func(context.Context, T) (V, error),
+) model.ConcurrentAction[T] {
+	return model.ConcurrentAction[T]{
+		Name: name,
+		Gen:  func(*rapid.T) any { return nil },
+		Apply: func(ctx context.Context, impl T, _ any) any {
+			v, err := read(ctx, impl)
+			return ReaderResult[V]{Value: v, Err: err}
+		},
+		PartitionKey: func(any) string { return "" },
+	}
+}
+
+// ConcurrentAppend creates a ConcurrentAction for an offset-answering
+// append into the single shared history the [AppendLog] model checks.
+func ConcurrentAppend[T, V any](
+	name string,
+	values *rapid.Generator[V],
+	appendFn func(context.Context, T, V) (int64, error),
+) model.ConcurrentAction[T] {
+	return model.ConcurrentAction[T]{
+		Name: name,
+		Gen: func(rt *rapid.T) any {
+			return values.Draw(rt, name+"_value")
+		},
+		Apply: func(ctx context.Context, impl T, input any) any {
+			off, err := appendFn(ctx, impl, input.(V))
+			return AppendResult{Off: off, Err: err}
+		},
+		PartitionKey: func(any) string { return "" },
+	}
+}

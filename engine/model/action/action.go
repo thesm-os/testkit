@@ -23,12 +23,14 @@ import (
 
 // Reader creates an action for a Reader-shaped method: func(ctx, K) (V, error).
 // Draws a key from the provided generator, calls both SUT and ref, and
-// compares results.
+// compares results — presence always, identity where [WithSentinel] arms it.
 func Reader[T any, K comparable, V any](
 	name string,
 	keys *rapid.Generator[K],
 	read func(context.Context, T, K) (V, error),
+	options ...Opt,
 ) model.Action[T] {
+	o := optsOf(options)
 	return model.Action[T]{
 		Name: name,
 		Kind: model.FailureSemantic,
@@ -41,6 +43,11 @@ func Reader[T any, K comparable, V any](
 					Err:    fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, k, sutErr, refErr),
 					Input:  k,
 					Output: sutGot,
+				}
+			}
+			if sutErr != nil {
+				if err := o.identity(name, k, sutErr, refErr); err != nil {
+					return model.ActionResult{Err: err, Input: k, Output: sutGot}
 				}
 			}
 			if sutErr == nil {
