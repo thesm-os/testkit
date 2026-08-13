@@ -1,0 +1,9 @@
+{{- /*
+A subscription draw: the handle is kept for the drain, never compared —
+which is what separates this from a scalar observation.
+*/ -}}
+{{- define "model.lawfield.Subscribe" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+		}
+{{- end -}}

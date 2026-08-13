@@ -3,5 +3,5 @@ Values reuses the shared pool, never a generator of its own: a law drawing
 values the sequences never wrote is a law checked over an empty history.
 */ -}}
 {{- define "model.lawfield.Values" -}}
-Values: {{ .Pool }}
+{{ .Name }}: {{ .Pool }}
 {{- end -}}

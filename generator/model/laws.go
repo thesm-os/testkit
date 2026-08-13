@@ -170,6 +170,7 @@ const (
 	shapeCtxOpFixed  lawShape = "CtxOpFixed"  // func(ctx, T) error — fixed fixture arg
 	shapeScheduleAt  lawShape = "ScheduleAt"  // func(rt, T, at time.Duration) error
 	shapeCountObs    lawShape = "CountObs"    // func(rt, T) int — loud on error
+	shapeSubscribe   lawShape = "Subscribe"   // func(rt, T) (Sub, error) — the handle kept, never compared
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -191,6 +192,14 @@ const (
 	// handleClassifier is the manifest spelling of the per-client
 	// trace-classifier handle.
 	handleClassifier = "trace-classifier"
+
+	// The publisher rows' role spellings, and the drain option's manifest
+	// name.
+	fSubscribe = "Subscribe"
+	fPublish   = "Publish"
+	fRedeliver = "Redeliver"
+	optDrain   = "drain"
+	builtin64  = "int64"
 )
 
 //nolint:gochecknoglobals // a lookup table, read-only after init.
@@ -252,9 +261,14 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.TamperEvident:         {fWrite: shapeValueOp, "Tamper": shapeOkOp, "Verify": shapeErrOp},
 	lawid.CursorCloseIdempotent: {fClose: shapeErrOp},
 	lawid.CursorNextAfterClose:  {fClose: shapeErrOp, "Next": shapeNextOp},
-	lawid.IdempotentLifecycle:   {fCall: shapeErrOp},
-	lawid.LifecycleAfterClose:   {fClose: shapeErrOp, "Op": shapeErrOp},
-	lawid.PoisonConsistent:      {"Poison": shapeDoOp, fProbe: shapeErrOp},
+
+	lawid.PublisherDelivers:    {fSubscribe: shapeSubscribe, fPublish: shapeValueOp},
+	lawid.PublisherAtLeastOnce: {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
+	lawid.PublisherAtMostOnce:  {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
+	lawid.PublisherExactlyOnce: {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
+	lawid.IdempotentLifecycle:  {fCall: shapeErrOp},
+	lawid.LifecycleAfterClose:  {fClose: shapeErrOp, "Op": shapeErrOp},
+	lawid.PoisonConsistent:     {"Poison": shapeDoOp, fProbe: shapeErrOp},
 
 	lawid.TTLExpiry:                  {"Put": shapePinnedWrite, fRead: shapeKeyedRead},
 	lawid.DeadlineRespecting:         {"Op": shapeCtxOpFixed},
@@ -660,6 +674,9 @@ func lawFieldOf(
 		// a generated value would race the binding it already gets.
 		return nil, ""
 	case tiers.KindSupplied:
+		if f.From == optDrain {
+			return drainFieldOf(b, harness, f, field, m, keyed)
+		}
 		if f.Optional {
 			// The manifest says zero is sound: the law reads the field's
 			// absence as the claim's unrefined form, so the binding omits it
@@ -668,7 +685,14 @@ func lawFieldOf(
 		}
 		return nil, f.Name + " waits on the " + f.From + " option, which no generated value can stand in for"
 	case tiers.KindRole:
-		return roleFieldOf(b, harness, r, f, field, m, keyed)
+		got, reason := roleFieldOf(b, harness, r, f, field, m, keyed)
+		if reason != "" && f.Optional {
+			// The manifest says absence is the claim's unrefined form — a
+			// redeliver nothing declares skips the redelivery arm, never
+			// the law.
+			return nil, ""
+		}
+		return got, reason
 	case tiers.KindConstant:
 		return constFieldOf(harness, r, f, field, m)
 	case tiers.KindGenerator:
@@ -873,6 +897,17 @@ func roleFieldOf(
 		field.Out = out
 		return field, ""
 
+	case shapeSubscribe:
+		if len(role.CallArgs()) > 0 {
+			return nil, f.Name + " closes over " + role.Name + ", which takes inputs no subscription draw supplies"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		field.Out = out
+		return field, ""
+
 	case shapeOkOp:
 		if len(role.CallArgs()) > 0 || !errOnly(role) {
 			return nil, f.Name + " closes over " + role.Name + ", which is not a nullary error operation"
@@ -1018,6 +1053,20 @@ func constFieldOf(
 		return field, ""
 	}
 
+	if r.Law == lawid.PublisherAtLeastOnce || r.Law == lawid.PublisherAtMostOnce ||
+		r.Law == lawid.PublisherExactlyOnce {
+		// The mode spelling is the engine's own enum, not a symbol the
+		// source declares — the directive says which claim, the law package
+		// says what it is called.
+		mode, spelled := deliveryModes[value]
+		if !spelled {
+			return nil, f.Name + "'s stamp names " + value + ", which is not a delivery mode"
+		}
+		field.Const = sdk.NewExternal(LawPkg, mode)
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Sentinel")
+		return field, ""
+	}
+
 	if pkg, name, qualified := splitQualified(value); qualified {
 		field.Const = sdk.NewExternal(pkg, name)
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Sentinel")
@@ -1037,6 +1086,15 @@ func constFieldOf(
 	}
 	return nil, f.Name + "'s stamp names " + value +
 		", which is neither a qualified symbol nor a number"
+}
+
+// deliveryModes maps the directive's mode spellings to the engine enum.
+//
+//nolint:gochecknoglobals // a vocabulary table, read-only after init.
+var deliveryModes = map[string]string{
+	"at-least-once": "DeliveryAtLeastOnce",
+	"at-most-once":  "DeliveryAtMostOnce",
+	"exactly-once":  "DeliveryExactlyOnce",
 }
 
 // generatorFieldOf fills a pool field: the run's shared pools, or a
@@ -1080,6 +1138,17 @@ func generatorFieldOf(
 		field.Pool = poolPayloads
 		field.KindName = sdk.Kind(LawFieldKindPrefix + "Pool")
 		return field, ""
+	case "messages":
+		// The publish role is the writer feeding the values pool, so the
+		// messages a law publishes are the values the sequences publish —
+		// one pool, colliding by construction.
+		if !b.UsesValues() {
+			return nil, f.Name + " draws from the values pool, which no action here declares"
+		}
+		field.Pool = poolValues
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "Values")
+		return field, ""
+
 	case poolOffsets:
 		// Bounded durations rather than arbitrary ones: an offset past the
 		// advance horizon never fires inside the law's own window, and a
@@ -1223,7 +1292,7 @@ func hashElem(
 	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *suite.Method,
 ) (sdk.Ref, string) {
 	for _, f := range r.Fields {
-		if f.Kind != tiers.KindRole || (f.Name != "Drain" && f.Name != "Collect") {
+		if f.Kind != tiers.KindRole || (f.Name != fDrain && f.Name != "Collect") {
 			continue
 		}
 		role, reason := roleMethod(b, harness, f.From, m, keyed)
@@ -1292,7 +1361,7 @@ func integerResult(ret *golang.Return) bool {
 //
 //nolint:gochecknoglobals // vocabulary tables, read-only after init.
 var (
-	builtinInts    = []string{builtinInt, "int8", "int16", "int32", "int64"}
+	builtinInts    = []string{builtinInt, "int8", "int16", "int32", builtin64}
 	builtinOrdered = append(append([]string{}, builtinInts...),
 		"uint", "uint8", "uint16", "uint32", "uint64", "float32", "float64", builtinString)
 )
@@ -1390,6 +1459,54 @@ func sessionSpecOf(
 	}
 	b.Session = spec
 	return spec, ""
+}
+
+// drainFieldOf derives the subscription sweep where the subscribe role
+// answers a channel, or refuses with the option that would serve instead.
+//
+// The derived form is the synchronous floor: everything a subscriber is
+// owed is in its channel by the time Publish returns, and the sweep reads
+// what is there without blocking. An asynchronous publisher supplies its
+// own drain through the generated option, which outranks this derivation —
+// the property prefers the config's closure and falls back to the sweep.
+func drainFieldOf(
+	b *Bindings, harness *suite.Contract, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	role, reason := roleMethod(b, harness, "publisher.subscribe", m, keyed)
+	if reason != "" {
+		return nil, f.Name + " " + reason
+	}
+	out, ret, why := resultType(role)
+	if why != "" {
+		return nil, f.Name + " " + why
+	}
+	isChan := false
+	if ret.Source != nil {
+		isChan, _ = golang.MetaIsChannel.Get(ret.Source.Meta())
+	}
+	if !isChan {
+		return nil, f.Name + " waits on the " + f.From + " option — the subscription " +
+			"answers no channel this sweep can read"
+	}
+	if b.Publisher == nil {
+		msgQ, stamped := golang.MetaChanElem.Get(ret.Source.Meta())
+		if !stamped || msgQ == "" {
+			return nil, f.Name + " drains a channel whose element no stamp names"
+		}
+		msg, err := golang.RefForQualified(b.substQ(msgQ), b.IfaceName)
+		if err != nil {
+			return nil, f.Name + " drains " + msgQ + ", which no closure can spell: " + err.Error()
+		}
+		b.Publisher = &PublisherSpec{
+			DrainName: strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:] + "DrainSubscription",
+			Sub:       out,
+			Msg:       msg,
+		}
+	}
+	field.KindName = sdk.Kind(LawFieldKindPrefix + "DrainSub")
+	field.KeyOfName = "drainSub"
+	return field, ""
 }
 
 // answeringWriterOf finds a write that answers the stored state — one value

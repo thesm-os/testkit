@@ -103,6 +103,17 @@ func (a BindArg) Qualifier() (form, field string, ok bool) {
 	return "", "", false
 }
 
+// publisherBoundType is the one struct all three delivery bounds
+// instantiate; the mode field is what tells them apart.
+const publisherBoundType = "PublisherDeliveryBound"
+
+// publisherArgs is the instantiation the publisher family shares: the
+// message at the publish role's input, the subscription at the subscribe
+// role's result.
+func publisherArgs() []BindArg {
+	return []BindArg{InputOf("Publish"), ResultOf("Subscribe")}
+}
+
 // BindingFor returns the named law's instantiation spec, and whether the
 // column carries one yet.
 func BindingFor(law string) (Binding, bool) {
@@ -217,6 +228,11 @@ var bindings = map[string]Binding{
 	// factory builds the subject on the run's own test clock — a law that
 	// advances a clock the subject does not read fails every correct
 	// implementation.
+	lawid.PublisherDelivers:    {Type: "PublisherDelivers", Args: publisherArgs()},
+	lawid.PublisherAtLeastOnce: {Type: publisherBoundType, Args: publisherArgs()},
+	lawid.PublisherAtMostOnce:  {Type: publisherBoundType, Args: publisherArgs()},
+	lawid.PublisherExactlyOnce: {Type: publisherBoundType, Args: publisherArgs()},
+
 	lawid.MonotonicReads:    {Type: "MonotonicReads", Ptr: true, Args: []BindArg{BindKey}},
 	lawid.MonotonicWrites:   {Type: "MonotonicWrites", Ptr: true, Args: []BindArg{BindKey}},
 	lawid.ReadYourWrites:    {Type: "ReadYourWrites", Ptr: true, Args: []BindArg{BindKey}},

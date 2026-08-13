@@ -40,6 +40,11 @@ the tier — and the engine dependency with it.
 //	           concurrent leg interleaves real clients over a stepless model —
 //	           a store-assigned stamp defeats value equality, so the laws carry it
 {{- end }}
+{{- if .Publisher }}
+//	Drain:     derived — a non-blocking sweep asserting fan-out synchronous
+//	           with Publish; an async subject supplies {{ .IfaceName }}ModelDrain or this
+//	           floor reads its in-flight deliveries as loss
+{{- end }}
 {{- if .UsesValues }}
 {{- if .Values.GenFunc }}
 //	Values:    the fixture pair blended with {{ .Values.GenFunc }}'s draws — the gen= supply
@@ -145,6 +150,14 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	// The laws the classifications earned, each reporting under its AUTO-
 	// identifier when it fails. Observational: a law never mutates, so running
 	// them inside the sequences is safe for every step that follows.
+{{- if .Publisher }}
+	// The supplied drain outranks the derived sweep: the sweep is the
+	// synchronous floor, and an asynchronous publisher knows better.
+	drainSub := cfg.drain
+	if drainSub == nil {
+		drainSub = {{ .Publisher.DrainName }}
+	}
+{{- end }}
 	laws := {{ renderExpr (external .ModelPkg "NewRegistry") }}[{{ renderType .IfaceRef }}]()
 {{- range .Laws }}
 {{- if not .Clocked }}
@@ -407,6 +420,24 @@ func {{ .Session.ClassifyName }}(ev {{ renderExpr (external .TracePath "Event") 
 	return {{ renderExpr (external .LawPath "ClientOp") }}[{{ renderType .Session.Key }}]{}, false
 }
 {{ end }}
+{{ if .Publisher }}
+// {{ .Publisher.DrainName }} sweeps what Publish already delivered. The
+// derived form asserts synchronous fan-out: everything a subscriber is owed
+// is in its channel by the time Publish returns. An asynchronous publisher
+// supplies its own through {{ .IfaceName }}ModelDrain — this floor would read its
+// in-flight deliveries as loss.
+func {{ .Publisher.DrainName }}(_ *{{ renderExpr (external .ModelPkg "T") }}, _ {{ renderType .IfaceRef }}, sub {{ renderType .Publisher.Sub }}) ([]{{ renderType .Publisher.Msg }}, error) {
+	var got []{{ renderType .Publisher.Msg }}
+	for {
+		select {
+		case v := <-sub:
+			got = append(got, v)
+		default:
+			return got, nil
+		}
+	}
+}
+{{ end }}
 // {{ .OptionTypeName }} configures the model run.
 type {{ .OptionTypeName }} func(*{{ .ConfigName }})
 
@@ -416,6 +447,14 @@ func {{ .IfaceName }}ModelReference(factory func() {{ renderType .IfaceRef }}) {
 	return func(c *{{ .ConfigName }}) { c.reference = factory }
 }
 {{ if .UsesClock }}
+{{ if .Publisher }}
+// {{ .IfaceName }}ModelDrain replaces the derived subscription sweep — the door an
+// asynchronous publisher takes, because the sweep asserts fan-out synchronous
+// with Publish and would read in-flight deliveries as loss.
+func {{ .IfaceName }}ModelDrain(fn func(*{{ renderExpr (external .ModelPkg "T") }}, {{ renderType .IfaceRef }}, {{ renderType .Publisher.Sub }}) ([]{{ renderType .Publisher.Msg }}, error)) {{ .OptionTypeName }} {
+	return func(c *{{ .ConfigName }}) { c.drain = fn }
+}
+{{ end }}
 // {{ .IfaceName }}ModelClocked supplies a factory that builds the subject on
 // the run's own test clock — what arms the aging laws, whose Advance moves
 // exactly the time the subject reads. Without it those laws stay dropped,
@@ -436,6 +475,9 @@ func {{ .IfaceName }}ModelValues(values *{{ renderExpr (external .ModelPkg "Gene
 {{ end -}}
 type {{ .ConfigName }} struct {
 	reference func() {{ renderType .IfaceRef }}
+{{- if .Publisher }}
+	drain func(*{{ renderExpr (external .ModelPkg "T") }}, {{ renderType .IfaceRef }}, {{ renderType .Publisher.Sub }}) ([]{{ renderType .Publisher.Msg }}, error)
+{{- end }}
 {{- if .UsesValues }}
 	values *{{ renderExpr (external .ModelPkg "Generator") }}[{{ renderType .Values.Type }}]
 {{- end }}

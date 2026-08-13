@@ -7,8 +7,6 @@ package gate
 const (
 	historyDebt = "waits on the history option — a subject that cannot report " +
 		"its own transactions cannot be asked about isolation"
-	drainDebt = "waits on the drain option — the subscription hands back a live " +
-		"channel no generated closure drains honestly"
 	twoPhase   = "waits on a begin that returns the transaction handle commit and rollback thread"
 	pageDebt   = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
 	comparator = "waits on the supplied comparator its manifest names, which no generated value can stand in for"
@@ -64,14 +62,6 @@ var UnboundLaws = map[string]string{
 	// differential; the law's paired-attempt shape stays out of reach until
 	// a draw can ask the cell where it stands.
 	"AUTO-CAS-ATOMIC-ONE-WINNER": "waits on version-coherent draws — a static pool cannot read the cell's version at draw time",
-
-	// Waiting on a live subscription drain: the publisher's subscribe hands
-	// back a channel, and a generated closure draining one honestly needs
-	// the delivery design the twin-floor programme scopes.
-	"AUTO-PUBLISHER-AT-LEAST-ONCE": drainDebt,
-	"AUTO-PUBLISHER-AT-MOST-ONCE":  drainDebt,
-	"AUTO-PUBLISHER-DELIVERS":      drainDebt,
-	"AUTO-PUBLISHER-EXACTLY-ONCE":  drainDebt,
 
 	// Waiting on an observable lifecycle carrier: the corpus's only
 	// idempotent teardown is a Close-only interface, and the law reads

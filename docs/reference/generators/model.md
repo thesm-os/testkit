@@ -133,6 +133,15 @@ parameter with no hint is a diagnostic at the parameter.
   `(ctx, V) (V, error)` shape whose answered state carries the stamp — and
   refuse by name on a writer answering only an error, which hides the
   version the store assigned from the trace.
+- **A derived subscription drain, where a publisher claims delivery** — the
+  publisher contract's laws (delivers, and the `mode=` bounds at-least-,
+  at-most- and exactly-once) bind through one generated sweep over the
+  subscription channel: a non-blocking read of everything Publish already
+  delivered. That is the synchronous floor — an asynchronous publisher
+  supplies `<Iface>ModelDrain`, which outranks the derivation, or the floor
+  reads its in-flight deliveries as loss; the header states which drain is
+  in play. The redelivery arm stays unexercised until a fixture declares
+  the redeliver role, and the header says so.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history

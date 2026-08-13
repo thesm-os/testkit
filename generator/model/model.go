@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.16.0"
+const Version = "0.17.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -107,6 +107,17 @@ type SessionSpec struct {
 
 	// Key is the pool key type the laws instantiate at.
 	Key sdk.Ref
+}
+
+// PublisherSpec is the derived subscription drain: the file-level sweep's
+// identifier and the types its closure is spelled at.
+type PublisherSpec struct {
+	// DrainName is the generated sweep's identifier.
+	DrainName string
+
+	// Sub is the subscription handle's type — the receive channel — and Msg
+	// the element it carries.
+	Sub, Msg sdk.Ref
 }
 
 // The two shared pool locals the generated property declares. Every draw in
@@ -205,6 +216,12 @@ type Bindings struct {
 	// in hand.
 	Session         *SessionSpec
 	sessionKeyField string
+
+	// Publisher is the derived subscription sweep, nil where no publisher
+	// law binds through a channel-answering subscribe. One derivation: the
+	// file-level sweep, the option that outranks it, and the property local
+	// every drain field reads.
+	Publisher *PublisherSpec
 
 	// OptionName is `<Iface>Model` — the option a consumer passes to the
 	// contract entry to run this tier. PropertyName is `<Iface>ModelProperty`,
@@ -2000,7 +2017,7 @@ func unmakeable(ctx *sdk.GeneratorContext, typeQ string, seen map[string]bool) s
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var scalarKinds = map[string]bool{
 	"bool": true, builtinString: true, "byte": true, "rune": true,
-	builtinInt: true, "int8": true, "int16": true, "int32": true, "int64": true,
+	builtinInt: true, "int8": true, "int16": true, "int32": true, builtin64: true,
 	"uint": true, "uint8": true, "uint16": true, "uint32": true, "uint64": true,
 	"uintptr": true, "float32": true, "float64": true,
 }

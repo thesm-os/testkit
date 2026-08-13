@@ -167,6 +167,15 @@ func chanRef() *node.TypeRef {
 	return r
 }
 
+// projectedReturns is [projected] with the raw returns handed through — for
+// a return whose Source carries stamps the res helper cannot spell.
+func projectedReturns(name string, params []golang.Param, returns []golang.Return) *suite.Method {
+	src := &node.Method{Name: name}
+	return &suite.Method{Sig: &golang.Sig{
+		Name: name, Params: params, Returns: returns, Source: src,
+	}}
+}
+
 // projected builds a projection method by hand: the signature the arms read,
 // with the classification stamps the tests choose.
 func projected(name string, params []golang.Param, returns []golang.Return) *suite.Method {
@@ -772,6 +781,10 @@ func TestGeneratorFieldArms(t *testing.T) {
 		testkit.True(t, reason == "" && field.Pool == "payloads", "the payloads pool declares: "+reason)
 
 		_, reason = genField(b, lawid.PublisherDelivers, "messages", nil)
+		testkit.Assert(t, reason).Contains("no action here declares",
+			"the messages pool is the values pool, and a fixture whose sequences publish nothing has none")
+
+		_, reason = genField(b, lawid.PublisherDelivers, "nonesuch", nil)
 		testkit.Assert(t, reason).Contains("does not compose", "an unbuilt pool refuses by name")
 	})
 }
@@ -1385,4 +1398,190 @@ func TestSessionConcurrentDerivation(t *testing.T) {
 	testkit.Equal(t, half.ConcFamily, "", "half a pair interleaves nothing worth checking")
 	testkit.True(t, half.ConcReader == nil && half.ConcWriter == nil,
 		"and the halves are reset rather than left dangling")
+}
+
+// TestPublisherDrainDerivation pins the derived sweep's arms: it derives
+// exactly where the subscribe role answers a channel, refuses everywhere
+// else with what is missing, and derives once however many laws drain.
+func TestPublisherDrainDerivation(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	drainRule := tiers.Rule{Law: lawid.PublisherDelivers, Fields: []tiers.Field{
+		{Name: fDrain, Kind: tiers.KindSupplied, From: optDrain},
+	}}
+	chanReturn := func() golang.Return {
+		ch := namedRef("chan")
+		golang.MetaIsChannel.Set(ch.EnsureMeta(), true, "test")
+		golang.MetaChanElem.Set(ch.EnsureMeta(), "example.com/p.Value", "test")
+		return golang.Return{Type: sdk.Builtin("sub"), Source: ch}
+	}
+	subscribeWith := func(ret golang.Return) suite.Method {
+		return *projectedReturns("Subscribe",
+			[]golang.Param{arg("ctx", ctxRef())}, []golang.Return{ret, errRet})
+	}
+	carrier := func() *suite.Method {
+		m := projected("Publish",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
+			[]golang.Return{errRet})
+		shape.ContractPartnerKey("publisher", "subscribe").Set(m.Source.EnsureMeta(), "Subscribe", "test")
+		return m
+	}
+
+	t.Run("a channel-answering subscribe derives the sweep once", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []suite.Method{subscribeWith(chanReturn())}}
+		m := carrier()
+		field, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], m, nil)
+		testkit.True(t, reason == "" && field != nil, "the sweep derives: "+reason)
+		testkit.Equal(t, field.KeyOfName, "drainSub", "through the property local the option outranks")
+		testkit.True(t, b.Publisher != nil && b.Publisher.DrainName == "contractDrainSubscription",
+			"and the file-level sweep is named once")
+
+		again, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], m, nil)
+		testkit.True(t, reason == "" && again.KeyOfName == field.KeyOfName,
+			"a second law reads the same derivation: "+reason)
+	})
+
+	t.Run("a subscription that answers no channel keeps the refusal", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []suite.Method{subscribeWith(res(pkgRef("example.com/p", "Handle")))}}
+		_, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], carrier(), nil)
+		testkit.Assert(t, reason).Contains("no channel", "an object handle is the drain option's territory")
+	})
+
+	t.Run("a carrier that stamps no subscribe partner refuses", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []suite.Method{subscribeWith(chanReturn())}}
+		unstampedCarrier := projected("Publish",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
+			[]golang.Return{res(namedRef("error"))})
+		_, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], unstampedCarrier, nil)
+		testkit.Assert(t, reason).Contains("does not stamp", "the partner is the directive's to name")
+	})
+}
+
+// TestPublisherModeConstant pins the mode spelling map: the three directive
+// spellings land on the engine enum, and anything else refuses by name.
+func TestPublisherModeConstant(t *testing.T) {
+	t.Parallel()
+
+	modeField := func(law, value string) (*LawField, string) {
+		r := tiers.Rule{Law: law, Fields: []tiers.Field{
+			{Name: "Mode", Kind: tiers.KindConstant, From: "shape.contract.publisher.param.mode"},
+		}}
+		m := unstamped()
+		sdk.EnsureKey("shape.contract.publisher.param.mode", sdk.StringParser).
+			Set(m.Source.EnsureMeta(), value, "test")
+		return lawFieldOf(&Bindings{Subject: suite.Subject{IfaceName: "Contract"}}, nil, r, r.Fields[0], m, nil)
+	}
+
+	field, reason := modeField(lawid.PublisherAtLeastOnce, "at-least-once")
+	testkit.True(t, reason == "" && field.Const != nil, "the at-least bound spells its enum: "+reason)
+	_, reason = modeField(lawid.PublisherAtMostOnce, "at-most-once")
+	testkit.True(t, reason == "", "the at-most bound spells its enum: "+reason)
+	_, reason = modeField(lawid.PublisherExactlyOnce, "exactly-once")
+	testkit.True(t, reason == "", "the exactly bound spells its enum: "+reason)
+	_, reason = modeField(lawid.PublisherExactlyOnce, "sometimes")
+	testkit.Assert(t, reason).Contains("not a delivery mode", "an unknown spelling refuses by name")
+}
+
+// TestSubscribeShape pins the subscription closure: the handle is kept for
+// the drain, never compared, and the shape takes nothing.
+func TestSubscribeShape(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	field, reason := bindField(b, lawid.PublisherDelivers, "Subscribe",
+		projected("Subscribe", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(pkgRef("example.com/p", "Handle")), errRet}))
+	testkit.True(t, reason == "" && field.Out != nil, "a nullary subscription binds: "+reason)
+
+	_, reason = bindField(b, lawid.PublisherDelivers, "Subscribe",
+		projected("Subscribe", []golang.Param{arg("ctx", ctxRef()), arg("topic", namedRef(qStr))},
+			[]golang.Return{res(pkgRef("example.com/p", "Handle")), errRet}))
+	testkit.Assert(t, reason).Contains("no subscription draw supplies", "a topic is an input nothing draws")
+}
+
+// TestPublisherPoolAndDrainRefusals pins the remaining arms: the messages
+// pool rides the values pool where one exists, a law pool redeclared at a
+// second type refuses, and a drain over the wrong subscription says which
+// half is missing.
+func TestPublisherPoolAndDrainRefusals(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+
+	t.Run("messages ride the values pool", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject: suite.Subject{IfaceName: "Contract"},
+			Values:  Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Body"},
+			Actions: []*Action{{Method: "Publish", Pool: "values"}},
+		}
+		r := tiers.Rule{Law: lawid.PublisherDelivers, Fields: []tiers.Field{
+			{Name: "Messages", Kind: tiers.KindGenerator, From: "messages"},
+		}}
+		field, reason := lawFieldOf(b, nil, r, r.Fields[0], nil, nil)
+		testkit.True(t, reason == "" && field.Pool == "values",
+			"one pool, colliding by construction: "+reason)
+	})
+
+	t.Run("a law pool redeclared at a second type refuses", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b.LawPools = append(b.LawPools, LawPool{Name: "payloads", Q: "int", Elem: sdk.Builtin("int")})
+		r := tiers.Rule{Law: lawid.XSSSafe, Fields: []tiers.Field{
+			{Name: "Payloads", Kind: tiers.KindGenerator, From: "payloads"},
+		}}
+		_, reason := lawFieldOf(b, nil, r, r.Fields[0], nil, nil)
+		testkit.True(t, reason != "", "two laws asking one name at two types are caught")
+
+		b2 := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b2.LawPools = append(b2.LawPools, LawPool{Name: "offsets", Q: builtin64, Elem: sdk.Builtin(builtin64)})
+		r2 := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
+			{Name: "Offsets", Kind: tiers.KindGenerator, From: "offsets"},
+		}}
+		_, reason = lawFieldOf(b2, nil, r2, r2.Fields[0], nil, nil)
+		testkit.True(t, reason != "", "the offsets pool holds one type too")
+	})
+
+	t.Run("a subscription answering nothing refuses the drain", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		bare := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
+		h := &suite.Contract{Methods: []suite.Method{*bare}}
+		m := projected("Publish",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
+			[]golang.Return{errRet})
+		shape.ContractPartnerKey("publisher", "subscribe").Set(m.Source.EnsureMeta(), "Subscribe", "test")
+		r := tiers.Rule{Law: lawid.PublisherDelivers, Fields: []tiers.Field{
+			{Name: fDrain, Kind: tiers.KindSupplied, From: optDrain},
+		}}
+		_, reason := lawFieldOf(b, h, r, r.Fields[0], m, nil)
+		testkit.Assert(t, reason).Contains("nothing to observe", "no result, no channel to sweep")
+	})
+
+	t.Run("a channel whose element no stamp names refuses", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		ch := namedRef("chan")
+		golang.MetaIsChannel.Set(ch.EnsureMeta(), true, "test")
+		sub := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{{Type: sdk.Builtin("sub"), Source: ch}, errRet})
+		h := &suite.Contract{Methods: []suite.Method{*sub}}
+		m := projected("Publish",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
+			[]golang.Return{errRet})
+		shape.ContractPartnerKey("publisher", "subscribe").Set(m.Source.EnsureMeta(), "Subscribe", "test")
+		r := tiers.Rule{Law: lawid.PublisherDelivers, Fields: []tiers.Field{
+			{Name: fDrain, Kind: tiers.KindSupplied, From: optDrain},
+		}}
+		_, reason := lawFieldOf(b, h, r, r.Fields[0], m, nil)
+		testkit.Assert(t, reason).Contains("no stamp names", "the sweep is typed at the element")
+	})
 }
