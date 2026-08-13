@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.20.0"
+const Version = "0.21.1"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -72,7 +72,7 @@ const ActionKindPrefix = "model.action."
 // generated session classifier reads.
 const TracePkg = "go.thesmos.sh/testkit/core/trace"
 
-// sessionMixins are the four per-client guarantees, each carrying the
+// sessionMixins are the five per-client guarantees, each carrying the
 // version= param that names the ordering stamp on the value.
 //
 // mixinMonotonicReads is the read-ordering session mixin's spelling — the
@@ -82,6 +82,7 @@ const mixinMonotonicReads = "monotonicreads"
 //nolint:gochecknoglobals // a vocabulary list, read-only after init.
 var sessionMixins = []string{
 	mixinMonotonicReads, "monotonicwrites", "readyourwrites", "writesfollowreads",
+	"causal",
 }
 
 // SessionSpec is the derived per-client classification: the one closure the
@@ -1266,10 +1267,15 @@ func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action,
 		return nil, "no action drives the " + name + " shape"
 	}
 	for _, r := range m.Returns {
-		// A live handle — a channel, a function — compares by identity, and
-		// two sides' handles never share one; the comparison would fail
-		// every correct subject on its first answer.
-		if r.Source != nil && (golang.IsChannel(r.Source) || r.Source.IsFunc()) {
+		if r.Source == nil || golang.IsError(r.Source) {
+			// The error return is an interface too, and it is the one every
+			// action already knows how to compare.
+			continue
+		}
+		// A live handle — a channel, a function, an interface — compares by
+		// identity, and two sides' handles never share one; the comparison
+		// would fail every correct subject on its first answer.
+		if golang.IsChannel(r.Source) || r.Source.IsFunc() || golang.IsInterface(r.Source) {
 			return nil, "answers a live handle only identity could compare"
 		}
 	}

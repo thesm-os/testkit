@@ -43,9 +43,9 @@ func contractStubWatchSubject(tb testing.TB) stub.Subject[watchertest.ContractWa
 			return watchertest.ContractWatchReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnWatch.Func(func(_ context.Context, _ string) (<-chan watcher.Value, error) {
+			s.OnWatch.Func(func(_ context.Context, _ string) (watcher.Subscription, error) {
 				mark()
-				var z0 <-chan watcher.Value
+				var z0 watcher.Subscription
 				var z1 error
 				return z0, z1
 			})
@@ -73,7 +73,7 @@ func TestContractStubWatch(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := watchertest.NewContractStub(t)
-		var want0 <-chan watcher.Value
+		var want0 watcher.Subscription
 		var want1 error
 		s.OnWatch.Returns(want0, want1)
 		var a0 context.Context
@@ -114,9 +114,9 @@ func TestContractStubWatch(t *testing.T) {
 	t.Run("wires WithContractWatch at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := watchertest.NewContractStub(t, watchertest.WithContractWatch(func(_ context.Context, _ string) (<-chan watcher.Value, error) {
+		s := watchertest.NewContractStub(t, watchertest.WithContractWatch(func(_ context.Context, _ string) (watcher.Subscription, error) {
 			called = true
-			var z0 <-chan watcher.Value
+			var z0 watcher.Subscription
 			var z1 error
 			return z0, z1
 		}))
@@ -132,7 +132,7 @@ func TestContractStubWatch(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := watchertest.NewContractStub(t)
-		var want0 <-chan watcher.Value
+		var want0 watcher.Subscription
 		var want1 error
 		s.OnWatch.Returns(want0, want1)
 		var a0 context.Context
@@ -160,16 +160,18 @@ func contractStubTriggerSubject(tb testing.TB) stub.Subject[watchertest.Contract
 		Call: func() {
 			var a0 context.Context
 			var a1 string
-			_ = s.Trigger(a0, a1)
+			var a2 watcher.Value
+			_ = s.Trigger(a0, a1, a2)
 		},
 		Result: func() watchertest.ContractTriggerReturn {
 			var a0 context.Context
 			var a1 string
-			got0 := s.Trigger(a0, a1)
+			var a2 watcher.Value
+			got0 := s.Trigger(a0, a1, a2)
 			return watchertest.ContractTriggerReturn{Err: got0}
 		},
 		Override: func(mark func()) {
-			s.OnTrigger.Func(func(_ context.Context, _ string) error {
+			s.OnTrigger.Func(func(_ context.Context, _ string, _ watcher.Value) error {
 				mark()
 				var z0 error
 				return z0
@@ -178,7 +180,8 @@ func contractStubTriggerSubject(tb testing.TB) stub.Subject[watchertest.Contract
 		Fails: func() error {
 			var a0 context.Context
 			var a1 string
-			r0 := s.Trigger(a0, a1)
+			var a2 watcher.Value
+			r0 := s.Trigger(a0, a1, a2)
 			return r0
 		},
 	}
@@ -202,7 +205,8 @@ func TestContractStubTrigger(t *testing.T) {
 		s.OnTrigger.Returns(want0)
 		var a0 context.Context
 		var a1 string
-		got0 := s.Trigger(a0, a1)
+		var a2 watcher.Value
+		got0 := s.Trigger(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "Trigger must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
@@ -213,10 +217,12 @@ func TestContractStubTrigger(t *testing.T) {
 		s := watchertest.NewContractStub(t)
 		var a0 context.Context
 		var a1 string
-		_ = s.Trigger(a0, a1)
+		var a2 watcher.Value
+		_ = s.Trigger(a0, a1, a2)
 		got := s.OnTrigger.AssertCalledOnce(t, "Trigger must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 		testkit.Equal(t, got.Key, a1, "the recorded call carries Key")
+		testkit.Equal(t, got.V, a2, "the recorded call carries V")
 	})
 
 	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
@@ -229,22 +235,24 @@ func TestContractStubTrigger(t *testing.T) {
 		s.OnTrigger.OnRecord(func(c watchertest.ContractTriggerCall) { seen = append(seen, c) })
 		var a0 context.Context
 		var a1 string
-		_ = s.Trigger(a0, a1)
-		_ = s.Trigger(a0, a1)
+		var a2 watcher.Value
+		_ = s.Trigger(a0, a1, a2)
+		_ = s.Trigger(a0, a1, a2)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Trigger call")
 	})
 
 	t.Run("wires WithContractTrigger at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := watchertest.NewContractStub(t, watchertest.WithContractTrigger(func(_ context.Context, _ string) error {
+		s := watchertest.NewContractStub(t, watchertest.WithContractTrigger(func(_ context.Context, _ string, _ watcher.Value) error {
 			called = true
 			var z0 error
 			return z0
 		}))
 		var a0 context.Context
 		var a1 string
-		_ = s.Trigger(a0, a1)
+		var a2 watcher.Value
+		_ = s.Trigger(a0, a1, a2)
 		testkit.True(t, called, "WithContractTrigger must install the override")
 	})
 
@@ -258,9 +266,10 @@ func TestContractStubTrigger(t *testing.T) {
 		s.OnTrigger.Returns(want0)
 		var a0 context.Context
 		var a1 string
-		_ = s.Trigger(a0, a1)
+		var a2 watcher.Value
+		_ = s.Trigger(a0, a1, a2)
 		s.ResetCalls()
-		got0 := s.Trigger(a0, a1)
+		got0 := s.Trigger(a0, a1, a2)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
 	})
 }
@@ -344,7 +353,8 @@ func TestContractStubDelegateTo(t *testing.T) {
 	t.Run("forwards Trigger to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 string
-		_ = s.Trigger(a0, a1)
+		var a2 watcher.Value
+		_ = s.Trigger(a0, a1, a2)
 		inner.OnTrigger.AssertCalledOnce(t, "Trigger must reach the wrapped implementation")
 	})
 
@@ -356,10 +366,11 @@ func TestContractStubDelegateTo(t *testing.T) {
 		inner.OnTrigger.FaultsFor(time.Hour, want)
 		var a0 context.Context
 		var a1 string
-		r0 := s.Trigger(a0, a1)
+		var a2 watcher.Value
+		r0 := s.Trigger(a0, a1, a2)
 		testkit.ErrorIs(t, r0, want, "Trigger must surface the wrapped answer")
 	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 15f7ddca22204fc6165282cbfa2b473aec93c493b43c82dd87024ee57e48f611
+// testkit:provenance c1a50bfb3911a75022abbfb454a42307dc3fabe78aa86a904bc680e953c34cbe

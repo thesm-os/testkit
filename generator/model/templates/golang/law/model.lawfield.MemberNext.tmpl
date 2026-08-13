@@ -1,0 +1,10 @@
+{{- /*
+The next= member of the watch's handle: the bounded read the law waits on.
+The member's shape is held by the compile gate in the armed package — the
+stamp names the method, the law's field declares what it must look like.
+*/ -}}
+{{- define "model.lawfield.MemberNext" -}}
+{{ .Name }}: func(w {{ renderType .Out }}, timeout {{ renderExpr (external "time" "Duration") }}) ({{ renderType .Value }}, bool) {
+			return w.{{ .KeyField }}(timeout)
+		}
+{{- end -}}

@@ -285,6 +285,13 @@ var bindings = map[string]Binding{
 		Type: "PaginatorResumable",
 		Args: []BindArg{ElemOf("Page"), InputOf("Page")},
 	},
+	// The handle at the watch role's answer, and the pools at the trigger's
+	// key and value — the member closures read through the handle, so its
+	// type is the instantiation's anchor.
+	lawid.WatcherReturnsOnChange: {
+		Type: "WatcherReturnsOnChange",
+		Args: []BindArg{ResultOf("Watch"), BindKey, BindValue},
+	},
 
 	lawid.TTLExpiry: {
 		Type: "TTLExpiryAfterAdvance", Timeaware: true,

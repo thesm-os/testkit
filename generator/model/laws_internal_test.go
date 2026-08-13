@@ -2195,3 +2195,128 @@ func TestVersionStampCellAndReplayResolution(t *testing.T) {
 	_, reason = lawFieldOf(b, harnessOf(app), r, r.Fields[1], app, nil)
 	testkit.Assert(t, reason).Contains("is not a method", "the partner points at nothing here")
 }
+
+// TestWatcherMemberClosures pins the member-scope wiring: the keyed handle
+// draw, the keyed write beside it, and the two closures derived from the
+// next=/stop= member stamps — each binding at the fixture's types or
+// refusing with what is missing.
+func TestWatcherMemberClosures(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{
+		Subject: suite.Subject{IfaceName: "Contract"},
+		Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr},
+		Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value"},
+	}
+	watch := projected("Watch",
+		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+		[]golang.Return{res(namedRef("Subscription")), errRet})
+	shape.ContractRoleKey("watcher").Set(watch.Source.EnsureMeta(), "watch", "test")
+	shape.ContractPartnerKey("watcher", "trigger").Set(watch.Source.EnsureMeta(), "Trigger", "test")
+	trigger := projected("Trigger",
+		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr)), arg("v", namedRef("Value"))},
+		[]golang.Return{errRet})
+
+	r := tiers.Rule{Law: lawid.WatcherReturnsOnChange, Fields: []tiers.Field{
+		{Name: "Watch", Kind: tiers.KindRole, From: "watcher.watch"},
+		{Name: "Mutate", Kind: tiers.KindRole, From: "watcher.trigger"},
+		{Name: "Next", Kind: tiers.KindSupplied, From: memberNext},
+		{Name: "Stop", Kind: tiers.KindSupplied, From: memberStop},
+	}}
+	h := harnessOf(watch, trigger)
+
+	t.Run("the roles bind at their shapes", func(t *testing.T) {
+		t.Parallel()
+		field, reason := lawFieldOf(b, h, r, r.Fields[0], watch, nil)
+		testkit.True(t, reason == "" && field.Out != nil, "the keyed handle binds: "+reason)
+
+		field, reason = lawFieldOf(b, h, r, r.Fields[1], watch, nil)
+		testkit.True(t, reason == "" && field.Value != nil, "the keyed write binds: "+reason)
+	})
+
+	t.Run("the member stamps derive their closures", func(t *testing.T) {
+		t.Parallel()
+		stamped := projected("Watch",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Subscription")), errRet})
+		shape.ContractRoleKey("watcher").Set(stamped.Source.EnsureMeta(), "watch", "test")
+		sdk.EnsureKey(paramWatcherKey+memberNext, sdk.StringParser).
+			Set(stamped.Source.EnsureMeta(), "example.com/w.Subscription.Next", "test")
+		sdk.EnsureKey(paramWatcherKey+memberStop, sdk.StringParser).
+			Set(stamped.Source.EnsureMeta(), "example.com/w.Subscription.Stop", "test")
+
+		field, reason := lawFieldOf(b, harnessOf(stamped, trigger), r, r.Fields[2], stamped, nil)
+		testkit.True(t, reason == "", "the next member binds: "+reason)
+		testkit.Equal(t, field.KeyField, "Next", "at the stamped member's local name")
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.MemberNext", "as the bounded read")
+
+		field, reason = lawFieldOf(b, harnessOf(stamped, trigger), r, r.Fields[3], stamped, nil)
+		testkit.True(t, reason == "", "the stop member binds: "+reason)
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.MemberStop", "as the teardown")
+	})
+
+	t.Run("an unstamped member refuses by name", func(t *testing.T) {
+		t.Parallel()
+		_, reason := lawFieldOf(b, h, r, r.Fields[2], watch, nil)
+		testkit.Assert(t, reason).Contains("does not name", "no stamp, no member to call")
+	})
+
+	t.Run("a wide watch and a bare trigger refuse", func(t *testing.T) {
+		t.Parallel()
+		wide := projected("Watch",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr)), arg("opts", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Subscription")), errRet})
+		_, reason := bindField(b, lawid.WatcherReturnsOnChange, "Watch", wide)
+		testkit.Assert(t, reason).Contains("does not watch one key", "two inputs watch nothing")
+
+		bare := projected("Trigger",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))}, []golang.Return{errRet})
+		_, reason = bindField(b, lawid.WatcherReturnsOnChange, "Mutate", bare)
+		testkit.Assert(t, reason).Contains("does not write one value under one key",
+			"a valueless trigger publishes nothing the watch could compare")
+	})
+}
+
+// TestMemberClosureResolutionClauses walks the member arm's remaining
+// refusals: a rule that names no watch, a watch answering nothing, and a
+// next member with no value pool to yield into.
+func TestMemberClosureResolutionClauses(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+
+	watch := projected("Watch",
+		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+		[]golang.Return{res(namedRef("Subscription")), errRet})
+	shape.ContractRoleKey("watcher").Set(watch.Source.EnsureMeta(), "watch", "test")
+	sdk.EnsureKey(paramWatcherKey+memberNext, sdk.StringParser).
+		Set(watch.Source.EnsureMeta(), "example.com/w.Subscription.Next", "test")
+
+	watchless := tiers.Rule{Law: lawid.WatcherReturnsOnChange, Fields: []tiers.Field{
+		{Name: "Next", Kind: tiers.KindSupplied, From: memberNext},
+	}}
+	_, reason := lawFieldOf(b, harnessOf(watch), watchless, watchless.Fields[0], watch, nil)
+	testkit.Assert(t, reason).Contains("does not name", "no watch field, no handle to read through")
+
+	r := tiers.Rule{Law: lawid.WatcherReturnsOnChange, Fields: []tiers.Field{
+		{Name: "Watch", Kind: tiers.KindRole, From: "watcher.watch"},
+		{Name: "Next", Kind: tiers.KindSupplied, From: memberNext},
+	}}
+	flat := projected("Watch",
+		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))}, []golang.Return{errRet})
+	shape.ContractRoleKey("watcher").Set(flat.Source.EnsureMeta(), "watch", "test")
+	sdk.EnsureKey(paramWatcherKey+memberNext, sdk.StringParser).
+		Set(flat.Source.EnsureMeta(), "example.com/w.Subscription.Next", "test")
+	_, reason = lawFieldOf(b, harnessOf(flat), r, r.Fields[1], flat, nil)
+	testkit.Assert(t, reason).Contains("answers none", "a flat watch has no handle")
+
+	_, reason = lawFieldOf(b, harnessOf(watch), r, r.Fields[1], watch, nil)
+	testkit.Assert(t, reason).Contains("yields a value no method here draws",
+		"no pool, nothing for the read to answer")
+
+	_, reason = bindField(b, lawid.WatcherReturnsOnChange, "Watch", flat)
+	testkit.Assert(t, reason).Contains("answers no handle to read through",
+		"the keyed handle refuses a flat watch too")
+}

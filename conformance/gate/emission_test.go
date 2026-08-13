@@ -133,15 +133,16 @@ func TestModelDirectiveSpelling(t *testing.T) {
 		"one directive, two modules, one spelling")
 }
 
-// twinCeiling is the corpus's twin count, ratcheted: 88 of 111 references
+// twinCeiling is the corpus's twin count, ratcheted: 89 of 111 references
 // ride the twin floor today, and the number only sinks — an oracle upgrade
 // lowers it, and a derived fixture regressing to the twin raises it past the
 // ceiling and reddens this build by name. Lower the constant with every
 // floor raised; raise it only for a fixture whose floor is argued, as
 // scheduled's is (a schedule beside a firing count derives no map oracle,
-// twins on one clock fire together), as the four session fixtures' are (the
+// twins on one clock fire together), as the five session fixtures' are (the
 // subject assigns the version member on write, which no value-storing
-// oracle stamps), as the answeringwriter detector fixture's is (a lone
+// oracle stamps — causal joined the four when its version= param landed
+// upstream), as the answeringwriter detector fixture's is (a lone
 // writer derives nothing to compare through), as the publisher mode
 // family's are (no store models a delivery relation, and the delivery
 // claims themselves live in the drain-fed laws rather than the reference),
@@ -150,7 +151,7 @@ func TestModelDirectiveSpelling(t *testing.T) {
 // refused writes, a derived map refuses nothing, and the corpus proved it —
 // the first one-sided draw read as a semantic disagreement on a correct
 // subject, in both the sequential and the Porcupine leg.
-const twinCeiling = 88
+const twinCeiling = 89
 
 // TestTwinFloorOnlySinks is the twin-count ratchet the audit's second item
 // commissioned: the twin is the honest floor, not the resting state, and a

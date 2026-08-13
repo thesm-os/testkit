@@ -190,6 +190,9 @@ const (
 	shapeComputeCall lawShape = "ComputeCall" // func(ctx, T, K, compute) (V, error) — the deduplicated call
 	shapeBodyRun     lawShape = "BodyRun"     // func(rt, T, body) error — the transactional scope
 	shapePageRead    lawShape = "PageRead"    // func(rt, T, C) ([]V, C, bool) — one page, loud on error
+
+	shapeKeyedHandle lawShape = "KeyedHandle" // func(rt, T, K) (W, error) — the handle kept, never compared
+	shapeKeyedWrite  lawShape = "KeyedWrite"  // func(rt, T, K, V) error — a keyed write at both pools
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -240,6 +243,15 @@ const (
 	// paramCASVersion is the cas contract's version member stamp — the
 	// field of the attempt the compare-and-set guards by.
 	paramCASVersion = "shape.contract.cas.param.version"
+
+	// The watcher contract's member params: methods of the handle the
+	// watch role answers, resolved by the member scope and read here as
+	// qualified stamps.
+	memberNext      = "next"
+	memberStop      = "stop"
+	paramWatcherKey = "shape.contract.watcher.param."
+	fNext           = "Next"
+	fWatch          = "Watch"
 )
 
 //nolint:gochecknoglobals // a lookup table, read-only after init.
@@ -301,7 +313,7 @@ var lawRoleShapes = map[string]map[string]lawShape{
 
 	lawid.TamperEvident:         {fWrite: shapeValueOp, "Tamper": shapeOkOp, "Verify": shapeErrOp},
 	lawid.CursorCloseIdempotent: {fClose: shapeErrOp},
-	lawid.CursorNextAfterClose:  {fClose: shapeErrOp, "Next": shapeNextOp},
+	lawid.CursorNextAfterClose:  {fClose: shapeErrOp, fNext: shapeNextOp},
 
 	lawid.LeaseReleasedOnCancel: {"Acquire": shapeCtxKeyedOp},
 
@@ -321,9 +333,11 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.TransactionRollback:   {fRun: shapeBodyRun, fRead: shapeKeyedRead},
 	lawid.PaginatorNoDuplicates: {fPage: shapePageRead},
 	lawid.PaginatorResumable:    {fPage: shapePageRead},
-	lawid.IdempotentLifecycle:   {fCall: shapeErrOp},
-	lawid.LifecycleAfterClose:   {fClose: shapeErrOp, "Op": shapeErrOp},
-	lawid.PoisonConsistent:      {"Poison": shapeDoOp, fProbe: shapeErrOp},
+
+	lawid.WatcherReturnsOnChange: {fWatch: shapeKeyedHandle, "Mutate": shapeKeyedWrite},
+	lawid.IdempotentLifecycle:    {fCall: shapeErrOp},
+	lawid.LifecycleAfterClose:    {fClose: shapeErrOp, "Op": shapeErrOp},
+	lawid.PoisonConsistent:       {"Poison": shapeDoOp, fProbe: shapeErrOp},
 
 	lawid.TTLExpiry:                  {"Put": shapePinnedWrite, fRead: shapeKeyedRead},
 	lawid.DeadlineRespecting:         {"Op": shapeCtxOpFixed},
@@ -767,6 +781,12 @@ func lawFieldOf(
 		if f.From == optDrain {
 			return drainFieldOf(b, harness, f, field, m, keyed)
 		}
+		if f.From == memberNext || f.From == memberStop {
+			// A member param resolves against the handle the watch role
+			// answers — the scope the resolver gained — so the closure is
+			// derived from the stamp rather than opened as a door.
+			return memberFieldOf(b, harness, r, f, field, m, keyed)
+		}
 		if f.Optional {
 			// The manifest says zero is sound: the law reads the field's
 			// absence as the claim's unrefined form, so the binding omits it
@@ -1178,6 +1198,35 @@ func roleFieldOf(
 		}
 		field.In = role.CallArgs()[0].Type
 		field.Out = elem
+		return field, ""
+
+	case shapeKeyedHandle:
+		if len(role.CallArgs()) != 1 {
+			return nil, f.Name + " closes over " + role.Name +
+				", which does not watch one key"
+		}
+		out, _, why := resultType(role)
+		if why != "" {
+			return nil, f.Name + " closes over " + role.Name +
+				", which answers no handle to read through"
+		}
+		field.Key = role.CallArgs()[0].Type
+		field.Out = out
+		return field, ""
+
+	case shapeKeyedWrite:
+		if len(role.CallArgs()) != 2 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which does not write one value under one key"
+		}
+		if b.Keys.Q != "" {
+			if q, _ := b.keyQOf(role); q != "" && q != b.Keys.Q {
+				return nil, f.Name + " closes over " + role.Name +
+					", which keys on " + q + " beside a pool of " + b.Keys.Q
+			}
+		}
+		field.Key = role.CallArgs()[0].Type
+		field.Value = role.CallArgs()[1].Type
 		return field, ""
 	}
 	return nil, f.Name + " has the unrendered shape " + string(sh)
@@ -1843,6 +1892,40 @@ func suppliedFieldOf(
 // what is there without blocking. An asynchronous publisher supplies its
 // own drain through the generated option, which outranks this derivation —
 // the property prefers the config's closure and falls back to the sweep.
+// memberFieldOf fills a closure over a member of the handle the watch role
+// answers: the resolver stamped the member's qualified name, the closure
+// spells the call, and the compile gate in the armed package holds the
+// member to the shape the law's field declares.
+func memberFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	watch, reason := ruleFieldRole(b, harness, r, fWatch, m, keyed)
+	if reason != "" {
+		return nil, f.Name + " " + reason
+	}
+	out, _, why := resultType(watch)
+	if why != "" {
+		return nil, f.Name + " reads through " + watch.Name + "'s handle, and it answers none"
+	}
+	member, stamped := stampValue(harness, m, paramWatcherKey+f.From)
+	if !stamped {
+		return nil, f.Name + " reads the " + f.From + "= member, which the watcher directive does not name"
+	}
+	if f.From == memberNext && b.Values.Type == nil {
+		return nil, f.Name + " yields a value no method here draws"
+	}
+	field.Out = out
+	field.KeyField = golang.LocalName(member)
+	switch f.From {
+	case memberNext:
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "MemberNext")
+	case memberStop:
+		field.KindName = sdk.Kind(LawFieldKindPrefix + "MemberStop")
+	}
+	return field, ""
+}
+
 func drainFieldOf(
 	b *Bindings, harness *suite.Contract, f tiers.Field,
 	field *LawField, m, keyed *suite.Method,

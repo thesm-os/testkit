@@ -24,7 +24,7 @@ import (
 type ContractWatchCall struct {
 	Ctx    context.Context
 	Key    string
-	Result <-chan watcher.Value
+	Result watcher.Subscription
 	Err    error
 }
 
@@ -36,6 +36,7 @@ type ContractWatchCall struct {
 type ContractTriggerCall struct {
 	Ctx context.Context
 	Key string
+	V   watcher.Value
 	Err error
 }
 
@@ -50,26 +51,26 @@ type ContractTriggerCall struct {
 type ContractWatchStub struct {
 	*stub.MethodStub[ContractWatchCall]
 
-	fn       func(context.Context, string) (<-chan watcher.Value, error)
+	fn       func(context.Context, string) (watcher.Subscription, error)
 	fallback *ContractWatchReturn
 }
 
 // ContractWatchReturn holds the fixed answer configured through Returns.
 type ContractWatchReturn struct {
-	Result <-chan watcher.Value
+	Result watcher.Subscription
 	Err    error
 }
 
 // Returns pins a fixed result for every call to Watch. A Func
 // override and an injected fault both take precedence over it.
-func (s *ContractWatchStub) Returns(result <-chan watcher.Value, err error) *ContractWatchStub {
+func (s *ContractWatchStub) Returns(result watcher.Subscription, err error) *ContractWatchStub {
 	s.fallback = &ContractWatchReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Watch, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractWatchStub) Func(fn func(context.Context, string) (<-chan watcher.Value, error)) *ContractWatchStub {
+func (s *ContractWatchStub) Func(fn func(context.Context, string) (watcher.Subscription, error)) *ContractWatchStub {
 	s.fn = fn
 	return s
 }
@@ -83,7 +84,7 @@ func (s *ContractWatchStub) Func(fn func(context.Context, string) (<-chan watche
 type ContractTriggerStub struct {
 	*stub.MethodStub[ContractTriggerCall]
 
-	fn       func(context.Context, string) error
+	fn       func(context.Context, string, watcher.Value) error
 	fallback *ContractTriggerReturn
 }
 
@@ -101,7 +102,7 @@ func (s *ContractTriggerStub) Returns(err error) *ContractTriggerStub {
 
 // Func supplies a body for Trigger, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *ContractTriggerStub) Func(fn func(context.Context, string) error) *ContractTriggerStub {
+func (s *ContractTriggerStub) Func(fn func(context.Context, string, watcher.Value) error) *ContractTriggerStub {
 	s.fn = fn
 	return s
 }
@@ -165,14 +166,14 @@ func ContractStubBenchMode() ContractStubOption {
 // WithContractWatch sets Watch's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractWatch(fn func(context.Context, string) (<-chan watcher.Value, error)) ContractStubOption {
+func WithContractWatch(fn func(context.Context, string) (watcher.Subscription, error)) ContractStubOption {
 	return func(s *ContractStub) { s.OnWatch.Func(fn) }
 }
 
 // WithContractTrigger sets Trigger's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithContractTrigger(fn func(context.Context, string) error) ContractStubOption {
+func WithContractTrigger(fn func(context.Context, string, watcher.Value) error) ContractStubOption {
 	return func(s *ContractStub) { s.OnTrigger.Func(fn) }
 }
 
@@ -267,7 +268,7 @@ func (s *ContractWatchStub) invoke(ctx context.Context, key string) func() Contr
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Watch(ctx context.Context, key string) (<-chan watcher.Value, error) {
+func (s *ContractStub) Watch(ctx context.Context, key string) (watcher.Subscription, error) {
 	call := ContractWatchCall{Ctx: ctx, Key: key}
 	r := stub.Answer(s.OnWatch.MethodStub, &call, stub.Arms[ContractWatchCall, ContractWatchReturn]{
 		Invoke:   s.OnWatch.invoke(ctx, key),
@@ -284,12 +285,12 @@ func (s *ContractStub) Watch(ctx context.Context, key string) (<-chan watcher.Va
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
-func (s *ContractTriggerStub) invoke(ctx context.Context, key string) func() ContractTriggerReturn {
+func (s *ContractTriggerStub) invoke(ctx context.Context, key string, v watcher.Value) func() ContractTriggerReturn {
 	if s.fn == nil {
 		return nil
 	}
 	return func() ContractTriggerReturn {
-		r0 := s.fn(ctx, key)
+		r0 := s.fn(ctx, key, v)
 		return ContractTriggerReturn{Err: r0}
 	}
 }
@@ -300,10 +301,10 @@ func (s *ContractTriggerStub) invoke(ctx context.Context, key string) func() Con
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *ContractStub) Trigger(ctx context.Context, key string) error {
-	call := ContractTriggerCall{Ctx: ctx, Key: key}
+func (s *ContractStub) Trigger(ctx context.Context, key string, v watcher.Value) error {
+	call := ContractTriggerCall{Ctx: ctx, Key: key, V: v}
 	r := stub.Answer(s.OnTrigger.MethodStub, &call, stub.Arms[ContractTriggerCall, ContractTriggerReturn]{
-		Invoke:   s.OnTrigger.invoke(ctx, key),
+		Invoke:   s.OnTrigger.invoke(ctx, key, v),
 		Fallback: s.OnTrigger.fallback,
 		Fault:    func(err error) ContractTriggerReturn { return ContractTriggerReturn{Err: err} },
 		Stamp: func(c *ContractTriggerCall, r ContractTriggerReturn) {
@@ -314,4 +315,4 @@ func (s *ContractStub) Trigger(ctx context.Context, key string) error {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 50618424cc0a4fb8837bc93b3230e20d827e27c651104ef61070a3c033004c7d
+// testkit:provenance 4bebc43b0856df3163d9cafea2c0554208aa32765dad04c520f2423fa6b4f0df

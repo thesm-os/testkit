@@ -22,6 +22,7 @@ var ErrNotFound = errors.New("causaltest: not found")
 // against.
 type InMemory struct {
 	mu     sync.Mutex
+	rev    int64
 	values map[string]causal.Value
 }
 
@@ -32,15 +33,18 @@ func NewInMemory() *InMemory {
 	return &InMemory{values: map[string]causal.Value{}}
 }
 
-// Store records the value under its own key.
-func (s *InMemory) Store(ctx context.Context, v causal.Value) error {
+// Store records the value under its own key, stamping the store-assigned
+// revision the causal order is judged by.
+func (s *InMemory) Store(ctx context.Context, v causal.Value) (causal.Value, error) {
 	if err := contextErr(ctx); err != nil {
-		return err
+		return causal.Value{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.rev++
+	v.Rev = s.rev
 	s.values[v.Key] = v
-	return nil
+	return v, nil
 }
 
 // Get returns what Store recorded, and reports a miss with the zero value.

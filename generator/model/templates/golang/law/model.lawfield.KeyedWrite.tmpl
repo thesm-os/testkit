@@ -1,0 +1,9 @@
+{{- /*
+A keyed write at both pools: the change the watch must observe, drawn from
+the same pools the sequences write.
+*/ -}}
+{{- define "model.lawfield.KeyedWrite" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}, v {{ renderType .Value }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}k, v)
+		}
+{{- end -}}

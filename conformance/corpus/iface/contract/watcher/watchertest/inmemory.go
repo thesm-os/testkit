@@ -10,11 +10,12 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/watcher"
 )
 
-// watcherBuffer is how many changes a watcher's channel holds.
+// watcherBuffer is how many changes a subscription holds.
 //
 // Small enough that a check can fill it: a bound nothing can reach is a report
 // nothing proves.
@@ -31,6 +32,28 @@ var ErrUnwatchable = errors.New("watchertest: a watch needs a key")
 // ErrFull reports a watcher too far behind to take the change.
 var ErrFull = errors.New("watchertest: a watcher is too far behind to take the change")
 
+// subscription is the handle Watch answers: one key's pending changes,
+// read with a bounded wait and ended by Stop.
+type subscription struct {
+	ch   chan watcher.Value
+	stop func()
+	once sync.Once
+}
+
+// Next answers the next change within the wait, or reports that none arrived.
+func (s *subscription) Next(timeout time.Duration) (watcher.Value, bool) {
+	select {
+	case v := <-s.ch:
+		return v, true
+	case <-time.After(timeout):
+		return watcher.Value{}, false
+	}
+}
+
+// Stop ends the subscription; stopping twice is the deferred double-stop a
+// harness performs, so it is safe.
+func (s *subscription) Stop() { s.once.Do(s.stop) }
+
 // InMemory is the implementation the generated conformance harness is run
 // against.
 //
@@ -39,22 +62,18 @@ var ErrFull = errors.New("watchertest: a watcher is too far behind to take the c
 // a subject notifying everybody wakes every caller on every write.
 type InMemory struct {
 	mu       sync.Mutex
-	watchers map[string][]chan watcher.Value
+	watchers map[string][]*subscription
 }
 
 var _ watcher.Contract = (*InMemory)(nil)
 
 // NewInMemory returns a store with nothing watched.
 func NewInMemory() *InMemory {
-	return &InMemory{watchers: map[string][]chan watcher.Value{}}
+	return &InMemory{watchers: map[string][]*subscription{}}
 }
 
-// Watch returns a stream of changes to one key.
-//
-// The channel is never closed, because nothing here says when watching ends. A
-// real implementation would close on the context; this one is driven by a
-// harness that builds a fresh subject per check, so the lifetime is the check's.
-func (s *InMemory) Watch(ctx context.Context, key string) (<-chan watcher.Value, error) {
+// Watch returns a subscription to one key's changes.
+func (s *InMemory) Watch(ctx context.Context, key string) (watcher.Subscription, error) {
 	if err := contextErr(ctx); err != nil {
 		return nil, err
 	}
@@ -63,9 +82,20 @@ func (s *InMemory) Watch(ctx context.Context, key string) (<-chan watcher.Value,
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	ch := make(chan watcher.Value, watcherBuffer)
-	s.watchers[key] = append(s.watchers[key], ch)
-	return ch, nil
+	sub := &subscription{ch: make(chan watcher.Value, watcherBuffer)}
+	sub.stop = func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		held := s.watchers[key]
+		for i, candidate := range held {
+			if candidate == sub {
+				s.watchers[key] = append(held[:i], held[i+1:]...)
+				break
+			}
+		}
+	}
+	s.watchers[key] = append(s.watchers[key], sub)
+	return sub, nil
 }
 
 // Trigger records a change and wakes everybody watching that key.
@@ -73,15 +103,15 @@ func (s *InMemory) Watch(ctx context.Context, key string) (<-chan watcher.Value,
 // A trigger with nobody watching succeeds and wakes nothing. There is no
 // backlog here: a watcher asks about changes from now on, and replaying history
 // to a late watcher is `outbox`.
-func (s *InMemory) Trigger(ctx context.Context, key string) error {
+func (s *InMemory) Trigger(ctx context.Context, key string, v watcher.Value) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, ch := range s.watchers[key] {
+	for _, sub := range s.watchers[key] {
 		select {
-		case ch <- watcher.Value{Key: key, Body: "changed"}:
+		case sub.ch <- v:
 		default:
 			return ErrFull
 		}

@@ -120,9 +120,12 @@ parameter with no hint is a diagnostic at the parameter.
   satisfy reports vacuously, counted apart from a pass — a law vacuous on
   every check past the census floor is named in the run's log, because
   sixty vacuous returns are sixty times a binding asserted nothing.
-- **Per-client session laws, where a version is named** — the four session
-  mixins accept `version=<member>`, naming the field of the value that
-  carries the store-assigned ordering stamp. The generator emits one
+- **Per-client session laws, where a version is named** — the five session
+  mixins (the four read/write-ordering guarantees, and `causal` since its
+  param landed upstream) accept `version=<member>`, naming the field of
+  the value that carries the store-assigned ordering stamp. The causal law
+  additionally binds through its supplied `HappensBefore` door — the
+  ordering is the consumer's domain relation, never a shape's. The generator emits one
   classifier per interface — trace event in, per-client read or write out —
   and binds the read-ordering law over it; the laws run over the sequential
   trace and, with real client IDs, over the concurrent leg's multi-client
@@ -168,6 +171,14 @@ parameter with no hint is a diagnostic at the parameter.
   from. The atomic mixin joins the oracle-defeating claims: its law is
   about refused writes, a derived map refuses nothing, and the twin shares
   the policy.
+- **Member closures, where a directive names a handle's methods** — the
+  watcher contract's `next=`/`stop=` params resolve against the
+  subscription the watch role answers (the resolver's member scope), and
+  the generator derives the bounded read and the teardown as calls on the
+  handle — the stamp names the method, the law's field declares its shape,
+  and the compile gate in the armed package holds the two together. A
+  handle-answering read drops from the drawn sequences: an interface
+  compares by identity, and two runs' handles never share one.
 - **Version-coherent CAS draws, and an append log the runner clears** —
   the cas contract's one-winner law stamps both drawn attempts at the
   cell's current version before racing them (the VersionedCell dialect:

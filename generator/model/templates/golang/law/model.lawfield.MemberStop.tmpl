@@ -1,0 +1,8 @@
+{{- /*
+The stop= member of the watch's handle: the teardown the law defers.
+*/ -}}
+{{- define "model.lawfield.MemberStop" -}}
+{{ .Name }}: func(w {{ renderType .Out }}) {
+			w.{{ .KeyField }}()
+		}
+{{- end -}}

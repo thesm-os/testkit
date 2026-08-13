@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/causal"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/causal/causaltest"
+	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // The generated contract, run against the in-memory subject.
@@ -19,9 +20,16 @@ func TestMixedContract(t *testing.T) {
 		causaltest.MixedSubject("in-memory", func() causal.Mixed {
 			return causaltest.NewInMemory()
 		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		causaltest.MixedModel(),
+		// The model tier: random sequences against the twin reference,
+		// reporting under "model/twin" beside the per-method checks.
+		causaltest.MixedModel(
+			// The happens-before door: this store's causal order is the
+			// revision order within one key — an earlier same-key write is
+			// the cause every later observation of that key must respect.
+			causaltest.MixedModelHappensBefore(func(a, b law.ClientOp[string]) bool {
+				return a.Write && a.Key == b.Key && a.Version < b.Version
+			}),
+		),
 		causaltest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject causal.Mixed, key string,
 		) {

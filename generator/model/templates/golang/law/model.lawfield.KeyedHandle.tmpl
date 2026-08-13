@@ -1,0 +1,9 @@
+{{- /*
+A keyed handle draw: the watch's answer, kept to read the change through —
+never compared, because two runs' handles need not agree.
+*/ -}}
+{{- define "model.lawfield.KeyedHandle" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}k)
+		}
+{{- end -}}
