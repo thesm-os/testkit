@@ -34,16 +34,16 @@ func NewInMemory() *InMemory {
 }
 
 // Store records the value under its own key.
-func (s *InMemory) Store(ctx context.Context, v readyourwrites.Value) error {
+func (s *InMemory) Store(ctx context.Context, v readyourwrites.Value) (readyourwrites.Value, error) {
 	if err := contextErr(ctx); err != nil {
-		return err
+		return readyourwrites.Value{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.rev++
 	v.Rev = s.rev
 	s.values[v.Key] = v
-	return nil
+	return v, nil
 }
 
 // Get returns what Store recorded, and reports a miss with the zero value.

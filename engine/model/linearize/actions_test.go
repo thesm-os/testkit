@@ -161,3 +161,43 @@ func TestConcurrentLookup(t *testing.T) {
 		}
 	})
 }
+
+// TestConcurrentAnsweringWriter pins the answering wrapper: the stored
+// state the subject answered rides to the trace whole, and the call's own
+// error travels beside it rather than dying with the call.
+func TestConcurrentAnsweringWriter(t *testing.T) {
+	t.Parallel()
+
+	type stamped struct {
+		Key string
+		Rev int64
+	}
+	store := map[string]stamped{}
+	a := linearize.ConcurrentAnsweringWriter("Store",
+		rapid.Just(stamped{Key: "a"}),
+		func(_ context.Context, _ struct{}, v stamped) (stamped, error) {
+			v.Rev = int64(len(store) + 1)
+			store[v.Key] = v
+			return v, nil
+		},
+		func(v stamped) string { return v.Key })
+
+	rapid.Check(t, func(rt *rapid.T) {
+		in := a.Gen(rt)
+		out := a.Apply(t.Context(), struct{}{}, in)
+		res, ok := out.(linearize.AnsweringResult[stamped])
+		if !ok {
+			t.Fatalf("the wrapper answers its typed result, got %T", out)
+		}
+		val, err := res.TraceOutput()
+		if err != nil {
+			t.Fatalf("a clean write carries no error: %v", err)
+		}
+		if val.(stamped).Rev == 0 {
+			t.Fatal("the store-assigned stamp must survive to the trace")
+		}
+		if a.PartitionKey(in) != "a" {
+			t.Fatal("partitioned by the value's own key")
+		}
+	})
+}

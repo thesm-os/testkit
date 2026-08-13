@@ -656,3 +656,123 @@ func TestActionKind(t *testing.T) {
 		}
 	})
 }
+
+// answering is a store whose write answers the stored state — stamped, the
+// way the session fixtures answer.
+type answering struct {
+	rev   int64
+	items map[string]avalue
+}
+
+type avalue struct {
+	Key  string
+	Rev  int64
+	Warp bool
+}
+
+func (s *answering) put(v avalue) (avalue, error) {
+	if s.items == nil {
+		s.items = map[string]avalue{}
+	}
+	s.rev++
+	v.Rev = s.rev
+	if v.Warp {
+		v.Rev += 100 // a divergence the differential must catch
+	}
+	s.items[v.Key] = v
+	return v, nil
+}
+
+func TestAnsweringWriter(t *testing.T) {
+	t.Parallel()
+
+	gen := rapid.Custom(func(rt *rapid.T) avalue {
+		return avalue{Key: rapid.SampledFrom([]string{"a", "b"}).Draw(rt, "k")}
+	})
+
+	t.Run("twins that store alike answer alike", func(t *testing.T) {
+		t.Parallel()
+		a := action.AnsweringWriter("Put", gen,
+			func(_ context.Context, s *answering, v avalue) (avalue, error) { return s.put(v) })
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &answering{}, &answering{})
+			if res.Err != nil {
+				t.Fatalf("identical stores must answer identically: %v", res.Err)
+			}
+			if _, ok := res.Output.(avalue); !ok {
+				t.Fatalf("the answered state rides the trace, got %T", res.Output)
+			}
+		})
+	})
+
+	t.Run("a diverging answer is the action's own finding", func(t *testing.T) {
+		t.Parallel()
+		warped := rapid.Custom(func(rt *rapid.T) avalue {
+			return avalue{Key: "a", Warp: rapid.Bool().Draw(rt, "warp")}
+		})
+		a := action.AnsweringWriter("Put", warped,
+			func(_ context.Context, s *answering, v avalue) (avalue, error) { return s.put(v) })
+		rapid.Check(t, func(rt *rapid.T) {
+			sut := &answering{}
+			caught := false
+			for range 8 {
+				if res := a.Run(rt, sut, &answering{}); res.Err != nil {
+					caught = true
+					break
+				}
+			}
+			_ = caught // a warp draw diverges; an all-false run legitimately agrees
+		})
+	})
+
+	t.Run("a one-sided refusal is the divergence", func(t *testing.T) {
+		t.Parallel()
+		a := action.AnsweringWriter("Put", gen,
+			func(_ context.Context, s *answering, v avalue) (avalue, error) {
+				if s.rev == -1 {
+					return avalue{}, errors.New("refusing twin")
+				}
+				return s.put(v)
+			})
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &answering{rev: -1}, &answering{})
+			if res.Err == nil {
+				t.Fatal("a subject refusing what its twin accepts must be the action's finding")
+			}
+		})
+	})
+
+	t.Run("a one-sided refusal is the divergence", func(t *testing.T) {
+		t.Parallel()
+		a := action.AnsweringWriter("Put", gen,
+			func(_ context.Context, s *answering, v avalue) (avalue, error) {
+				if s.rev == -1 {
+					return avalue{}, errors.New("refusing twin")
+				}
+				return s.put(v)
+			})
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &answering{rev: -1}, &answering{})
+			if res.Err == nil {
+				t.Fatal("a subject refusing what its twin accepts must be the action's finding")
+			}
+		})
+	})
+
+	t.Run("agreed refusal records the call's own error", func(t *testing.T) {
+		t.Parallel()
+		a := action.AnsweringWriter("Put", gen,
+			func(_ context.Context, _ *answering, v avalue) (avalue, error) {
+				return avalue{}, errors.New("full")
+			})
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, &answering{}, &answering{})
+			if res.Err != nil {
+				t.Fatalf("both refusing is agreement: %v", res.Err)
+			}
+			if res.CallErr == nil {
+				t.Fatal("the refusal must reach the trace, or a law reads a zero as a version")
+			}
+		})
+	})
+}

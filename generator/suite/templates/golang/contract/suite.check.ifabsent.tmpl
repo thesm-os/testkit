@@ -29,5 +29,9 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} = subject.{{ $m.Name }}({{ template "suite.args" . }})
 	{{ renderExpr (external $.Runtime "Error") }}(tb, err,
 		"a second write for a key already present must be refused")
+{{- if .Sentinel }}
+	{{ renderExpr (external $.Runtime "ErrorIs") }}(tb, err, {{ renderExpr .Sentinel }},
+		"and the refusal reports the declared conflict sentinel")
+{{- end }}
 }
 {{- end -}}

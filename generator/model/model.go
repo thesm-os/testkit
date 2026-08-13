@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.15.1"
+const Version = "0.16.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -124,6 +124,7 @@ const (
 	shapeCompositeWriter = "compositewriter"
 	shapeReader          = "reader"
 	shapeWriter          = "writer"
+	shapeAnsweringWriter = "answeringwriter"
 	shapeAggregator      = "aggregator"
 )
 
@@ -944,7 +945,7 @@ func bindingsOf(
 		switch pseudoShape(m) {
 		case shapeReader:
 			keyed = m
-		case shapeWriter:
+		case shapeWriter, shapeAnsweringWriter:
 			writers = append(writers, m)
 		case shapeCompositeWriter:
 			composite = m
@@ -1221,6 +1222,9 @@ func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action,
 				a.Pool = poolKeys
 			}
 		}
+	case shapeAnsweringWriter:
+		a.Pool = poolValues
+		a.Value = m.CallArgs()[0].Type
 	case "mutator":
 		a.Pool = poolValues
 		a.Value = m.CallArgs()[0].Type

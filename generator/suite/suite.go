@@ -44,7 +44,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.2.0"
+const Version = "1.3.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -339,8 +339,11 @@ type Check struct {
 	Partner     *Method
 	PartnerArgs []string
 
-	// Sentinel is the resolver-qualified error a directive names — what a
-	// use-after-close operation must report once teardown ran.
+	// Sentinel is the resolver-qualified error a declaration names — what a
+	// use-after-close operation must report once teardown ran, the conflict=
+	// a duplicate write answers, the unready= an early call answers. Nil
+	// where the declaration stamps none, which keeps the presence-only
+	// check.
 	Sentinel *sdk.Expr
 }
 
@@ -1444,10 +1447,32 @@ func mixinChecks(
 	if p := m.MixinPartner(MixinOrderAfter, MixinOrderAfterParam); p != "" && m.ReturnsError() {
 		// ReturnsError because the claim is that calling early *fails*, and a
 		// method with nowhere to report failure cannot make it.
-		out = append(out, base(KindOrderAfter, MixinOrderAfter, "RequiresItsPrerequisite",
-			fixtureArgs(f, m, false)))
+		ck := base(KindOrderAfter, MixinOrderAfter, "RequiresItsPrerequisite",
+			fixtureArgs(f, m, false))
+		ck.Sentinel = stampedSentinel(m, shape.MixinParamKey(MixinOrderAfter, "unready"))
+		out = append(out, ck)
 	}
 	return out
+}
+
+// stampedSentinel lifts a classification's declared refusal sentinel into a
+// renderable reference, nil where the declaration stamps none. The stamp
+// arrives qualified from the sibling-var resolver, so a spelling that does
+// not lift is a resolver defect surfacing here rather than a consumer typo.
+func stampedSentinel(m Method, key sdk.Key[string]) *sdk.Expr {
+	q, stamped := key.Get(m.Source.Meta())
+	if !stamped || q == "" {
+		return nil
+	}
+	ref, err := golang.RefForQualified(q, "")
+	if err != nil {
+		return nil
+	}
+	ext, qualified := ref.(*sdk.ExternalRef)
+	if !qualified {
+		return nil
+	}
+	return sdk.NewExternal(ext.Package, ext.Name)
 }
 
 // doubleOf names the stand-in queued for this interface, or nil.

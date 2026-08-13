@@ -16,7 +16,12 @@ package orderafter
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrNotReady is what Commit reports before Prepare has run — the ordering's
+// own sentinel, declared beside the shape so the directive can name it.
+var ErrNotReady = errors.New("orderafter: not ready")
 
 // Mixed is the fixture interface.
 //
@@ -27,8 +32,10 @@ import (
 type Mixed interface {
 	// Commit is valid only after Prepare. The fn parameter names the
 	// predecessor, and the resolver resolves it to a sibling — so Prepare has
-	// to exist in this interface or the reference dangles.
-	//testkit:mixin orderafter fn=Prepare
+	// to exist in this interface or the reference dangles. The unready key is
+	// what turns "refused" into "refused for being early": without it, an
+	// implementation failing on a nil map passes the ordering check.
+	//testkit:mixin orderafter fn=Prepare unready=ErrNotReady
 	Commit(ctx context.Context) error
 
 	// Prepare is the predecessor fn names.

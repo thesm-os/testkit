@@ -10,6 +10,7 @@ package orderaftertest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/orderafter"
@@ -20,7 +21,10 @@ import (
 // The whole content of the mixin. An ordering constraint nothing enforces is a
 // comment: the second caller to get it wrong finds out in production, and the
 // first one wrote the code that looks correct.
-var ErrNotPrepared = errors.New("orderaftertest: commit before prepare")
+// Wrapping the declaration's own unready sentinel: the sharpened check
+// asserts errors.Is against orderafter.ErrNotReady, and a subject spelling
+// its refusal through the chain is the shape consumers ship.
+var ErrNotPrepared = fmt.Errorf("orderaftertest: commit before prepare: %w", orderafter.ErrNotReady)
 
 // InMemory is the implementation the generated conformance harness is run
 // against.

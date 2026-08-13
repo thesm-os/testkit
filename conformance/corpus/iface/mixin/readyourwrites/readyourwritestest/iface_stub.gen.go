@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/readyourwrites/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package readyourwritestest
 
@@ -22,9 +22,10 @@ import (
 // returns alike — so a failure message names what the author named. A slot
 // the source left unnamed or blank falls back to a positional name.
 type MixedStoreCall struct {
-	Ctx context.Context
-	V   readyourwrites.Value
-	Err error
+	Ctx    context.Context
+	V      readyourwrites.Value
+	Result readyourwrites.Value
+	Err    error
 }
 
 // MixedGetCall records one invocation of Mixed.Get.
@@ -50,25 +51,26 @@ type MixedGetCall struct {
 type MixedStoreStub struct {
 	*stub.MethodStub[MixedStoreCall]
 
-	fn       func(context.Context, readyourwrites.Value) error
+	fn       func(context.Context, readyourwrites.Value) (readyourwrites.Value, error)
 	fallback *MixedStoreReturn
 }
 
 // MixedStoreReturn holds the fixed answer configured through Returns.
 type MixedStoreReturn struct {
-	Err error
+	Result readyourwrites.Value
+	Err    error
 }
 
 // Returns pins a fixed result for every call to Store. A Func
 // override and an injected fault both take precedence over it.
-func (s *MixedStoreStub) Returns(err error) *MixedStoreStub {
-	s.fallback = &MixedStoreReturn{Err: err}
+func (s *MixedStoreStub) Returns(result readyourwrites.Value, err error) *MixedStoreStub {
+	s.fallback = &MixedStoreReturn{Result: result, Err: err}
 	return s
 }
 
 // Func supplies a body for Store, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
-func (s *MixedStoreStub) Func(fn func(context.Context, readyourwrites.Value) error) *MixedStoreStub {
+func (s *MixedStoreStub) Func(fn func(context.Context, readyourwrites.Value) (readyourwrites.Value, error)) *MixedStoreStub {
 	s.fn = fn
 	return s
 }
@@ -165,7 +167,7 @@ func MixedStubBenchMode() MixedStubOption {
 // WithMixedStore sets Store's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
-func WithMixedStore(fn func(context.Context, readyourwrites.Value) error) MixedStubOption {
+func WithMixedStore(fn func(context.Context, readyourwrites.Value) (readyourwrites.Value, error)) MixedStubOption {
 	return func(s *MixedStub) { s.OnStore.Func(fn) }
 }
 
@@ -256,8 +258,8 @@ func (s *MixedStoreStub) invoke(ctx context.Context, v readyourwrites.Value) fun
 		return nil
 	}
 	return func() MixedStoreReturn {
-		r0 := s.fn(ctx, v)
-		return MixedStoreReturn{Err: r0}
+		r0, r1 := s.fn(ctx, v)
+		return MixedStoreReturn{Result: r0, Err: r1}
 	}
 }
 
@@ -267,17 +269,18 @@ func (s *MixedStoreStub) invoke(ctx context.Context, v readyourwrites.Value) fun
 // zero value — is [stub.Answer]'s to decide, so every generated double
 // resolves a call the same way and the ordering is tested once rather than
 // restated per method.
-func (s *MixedStub) Store(ctx context.Context, v readyourwrites.Value) error {
+func (s *MixedStub) Store(ctx context.Context, v readyourwrites.Value) (readyourwrites.Value, error) {
 	call := MixedStoreCall{Ctx: ctx, V: v}
 	r := stub.Answer(s.OnStore.MethodStub, &call, stub.Arms[MixedStoreCall, MixedStoreReturn]{
 		Invoke:   s.OnStore.invoke(ctx, v),
 		Fallback: s.OnStore.fallback,
 		Fault:    func(err error) MixedStoreReturn { return MixedStoreReturn{Err: err} },
 		Stamp: func(c *MixedStoreCall, r MixedStoreReturn) {
+			c.Result = r.Result
 			c.Err = r.Err
 		},
 	})
-	return r.Err
+	return r.Result, r.Err
 }
 
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
@@ -314,4 +317,4 @@ func (s *MixedStub) Get(ctx context.Context, key string) (readyourwrites.Value, 
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9ced95d24759fccccacda0a87a97c351c4cd486587273f9140e3f7f3871f5064
+// testkit:provenance a1928e963c29a6e974167f0a15f2af5154a639718baff1f48fe961256de2c421

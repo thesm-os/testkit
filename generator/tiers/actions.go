@@ -26,6 +26,7 @@ func ActionFor(shape string) (string, bool) {
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var actionCtors = map[string]string{
 	shapeAggregator:      "Aggregator",
+	shapeAnsweringWriter: "AnsweringWriter",
 	shapeBatchReader:     "BatchReader",
 	shapeCompositeWriter: "CompositeWriter",
 	shapeLifecycle:       "Lifecycle",

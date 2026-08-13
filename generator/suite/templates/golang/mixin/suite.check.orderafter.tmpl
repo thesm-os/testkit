@@ -24,5 +24,9 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
 	{{ renderExpr (external $.Runtime "Error") }}(tb, err,
 		"{{ $m.Name }} must be refused until {{ $prereq }} has run")
+{{- if .Sentinel }}
+	{{ renderExpr (external $.Runtime "ErrorIs") }}(tb, err, {{ renderExpr .Sentinel }},
+		"and the refusal reports the declared unready sentinel")
+{{- end }}
 }
 {{- end -}}

@@ -8,6 +8,7 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/answeringwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
@@ -476,7 +477,7 @@ func seedOf(f Fixture, methods []Method) *Seed {
 		if _, _, undeliverable := undeliverableArgs(f, args); undeliverable {
 			continue
 		}
-		return &Seed{Method: m, Args: args}
+		return &Seed{Method: m, Args: args, AnswersState: answersState(m)}
 	}
 	return nil
 }
@@ -490,6 +491,9 @@ func seedOf(f Fixture, methods []Method) *Seed {
 // something it has to know. Keying on `writer` alone left a `Put(ctx, key, v)`
 // interface unable to seed itself, which is the ordinary keyed store.
 //
+// `answeringwriter` writes and answers the stored state; the seed discards
+// the answer and keeps the error, which is all a seed reports.
+//
 // `mutator` is deliberately absent even though it writes: it returns nothing, so
 // a seed through one cannot report its own failure, and a seed that fails
 // silently leaves every check after it asserting against an empty subject. That
@@ -497,11 +501,17 @@ func seedOf(f Fixture, methods []Method) *Seed {
 // would refuse it anyway.
 func writesSomething(m Method) bool {
 	switch shape.Get(m.Source.Meta()) {
-	case writer.Name, compositewriter.Name, multiargwriter.Name:
+	case writer.Name, compositewriter.Name, multiargwriter.Name, answeringwriter.Name:
 		return true
 	default:
 		return false
 	}
+}
+
+// answersState reports whether the seed's writer answers the stored state
+// beside its error, so the derived seed discards the value it does not read.
+func answersState(m Method) bool {
+	return shape.Get(m.Source.Meta()) == answeringwriter.Name
 }
 
 // Seed is the write a harness populates each fresh subject with.
@@ -511,6 +521,10 @@ type Seed struct {
 
 	// Args names the fixture fields it is handed.
 	Args []string
+
+	// AnswersState marks an answering writer: the seed discards the stored
+	// state it does not read and keeps the error, which is all it reports.
+	AnswersState bool
 }
 
 // undeliverableArgs names the first argument the fixture cannot supply, with

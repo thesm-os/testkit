@@ -151,7 +151,12 @@ func new{{ .IfaceName }}Config{{ renderTypeParams .TypeParams }}(opts ...{{ .Ifa
 	// Derived: {{ .Seed.Method.Name }} is classified writer, so the interface
 	// populates itself and a reader has something to read.
 	c.seed = func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) error {
+{{- if .Seed.AnswersState }}
+		_, err := subject.{{ .Seed.Method.Name }}(ctx{{ range .Seed.Args }}, c.Fixture.{{ . }}{{ end }})
+		return err
+{{- else }}
 		return subject.{{ .Seed.Method.Name }}(ctx{{ range .Seed.Args }}, c.Fixture.{{ . }}{{ end }})
+{{- end }}
 	}
 	c.seedIsDerived = true
 {{- end }}

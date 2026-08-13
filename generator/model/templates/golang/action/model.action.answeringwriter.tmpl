@@ -1,0 +1,11 @@
+{{- /*
+An answering writer draws a value from the shared pool, writes it to both
+sides, and compares the answered state the way a read would — the answer is
+an observation, and a pair that stores alike must answer alike.
+*/ -}}
+{{- define "model.action.answeringwriter" -}}
+{{ renderExpr .Ctor }}({{ printf "%q" .Method }}, {{ .Pool }},
+				func({{ if .TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, v {{ renderType .Value }}) ({{ renderType .Value }}, error) {
+					return s.{{ .Method }}({{ if .TakesCtx }}ctx, {{ end }}v)
+				})
+{{- end -}}

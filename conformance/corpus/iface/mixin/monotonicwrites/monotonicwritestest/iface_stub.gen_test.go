@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/monotonicwrites/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package monotonicwritestest_test
 
@@ -34,26 +34,27 @@ func mixedStubStoreSubject(tb testing.TB) stub.Subject[monotonicwritestest.Mixed
 		Call: func() {
 			var a0 context.Context
 			var a1 monotonicwrites.Value
-			_ = s.Store(a0, a1)
+			_, _ = s.Store(a0, a1)
 		},
 		Result: func() monotonicwritestest.MixedStoreReturn {
 			var a0 context.Context
 			var a1 monotonicwrites.Value
-			got0 := s.Store(a0, a1)
-			return monotonicwritestest.MixedStoreReturn{Err: got0}
+			got0, got1 := s.Store(a0, a1)
+			return monotonicwritestest.MixedStoreReturn{Result: got0, Err: got1}
 		},
 		Override: func(mark func()) {
-			s.OnStore.Func(func(_ context.Context, _ monotonicwrites.Value) error {
+			s.OnStore.Func(func(_ context.Context, _ monotonicwrites.Value) (monotonicwrites.Value, error) {
 				mark()
-				var z0 error
-				return z0
+				var z0 monotonicwrites.Value
+				var z1 error
+				return z0, z1
 			})
 		},
 		Fails: func() error {
 			var a0 context.Context
 			var a1 monotonicwrites.Value
-			r0 := s.Store(a0, a1)
-			return r0
+			_, r1 := s.Store(a0, a1)
+			return r1
 		},
 	}
 }
@@ -72,12 +73,14 @@ func TestMixedStubStore(t *testing.T) {
 	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
 		t.Parallel()
 		s := monotonicwritestest.NewMixedStub(t)
-		var want0 error
-		s.OnStore.Returns(want0)
+		var want0 monotonicwrites.Value
+		var want1 error
+		s.OnStore.Returns(want0, want1)
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		got0 := s.Store(a0, a1)
+		got0, got1 := s.Store(a0, a1)
 		testkit.Equal(t, got0, want0, "Store must answer with what Returns pinned")
+		testkit.Equal(t, got1, want1, "Store must answer with what Returns pinned")
 	})
 	t.Run("records what it was called with", func(t *testing.T) {
 		t.Parallel()
@@ -87,7 +90,7 @@ func TestMixedStubStore(t *testing.T) {
 		s := monotonicwritestest.NewMixedStub(t)
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		_ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
 		got := s.OnStore.AssertCalledOnce(t, "Store must record the call")
 		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
 		testkit.Equal(t, got.V, a1, "the recorded call carries V")
@@ -103,22 +106,23 @@ func TestMixedStubStore(t *testing.T) {
 		s.OnStore.OnRecord(func(c monotonicwritestest.MixedStoreCall) { seen = append(seen, c) })
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		_ = s.Store(a0, a1)
-		_ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
 		testkit.Len(t, seen, 2, "OnRecord must fire once per Store call")
 	})
 
 	t.Run("wires WithMixedStore at construction", func(t *testing.T) {
 		t.Parallel()
 		called := false
-		s := monotonicwritestest.NewMixedStub(t, monotonicwritestest.WithMixedStore(func(_ context.Context, _ monotonicwrites.Value) error {
+		s := monotonicwritestest.NewMixedStub(t, monotonicwritestest.WithMixedStore(func(_ context.Context, _ monotonicwrites.Value) (monotonicwrites.Value, error) {
 			called = true
-			var z0 error
-			return z0
+			var z0 monotonicwrites.Value
+			var z1 error
+			return z0, z1
 		}))
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		_ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
 		testkit.True(t, called, "WithMixedStore must install the override")
 	})
 
@@ -128,14 +132,16 @@ func TestMixedStubStore(t *testing.T) {
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
 		s := monotonicwritestest.NewMixedStub(t)
-		var want0 error
-		s.OnStore.Returns(want0)
+		var want0 monotonicwrites.Value
+		var want1 error
+		s.OnStore.Returns(want0, want1)
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		_ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
 		s.ResetCalls()
-		got0 := s.Store(a0, a1)
+		got0, got1 := s.Store(a0, a1)
 		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+		testkit.Equal(t, got1, want1, "a reset must keep what Returns pinned")
 	})
 }
 
@@ -278,7 +284,7 @@ func mixedStubDouble() stub.Double[monotonicwritestest.MixedStoreCall] {
 			Call: func() {
 				var a0 context.Context
 				var a1 monotonicwrites.Value
-				_ = s.Store(a0, a1)
+				_, _ = s.Store(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
@@ -325,7 +331,7 @@ func TestMixedStubDelegateTo(t *testing.T) {
 	t.Run("forwards Store to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		_ = s.Store(a0, a1)
+		_, _ = s.Store(a0, a1)
 		inner.OnStore.AssertCalledOnce(t, "Store must reach the wrapped implementation")
 	})
 
@@ -337,8 +343,8 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		inner.OnStore.FaultsFor(time.Hour, want)
 		var a0 context.Context
 		var a1 monotonicwrites.Value
-		r0 := s.Store(a0, a1)
-		testkit.ErrorIs(t, r0, want, "Store must surface the wrapped answer")
+		_, r1 := s.Store(a0, a1)
+		testkit.ErrorIs(t, r1, want, "Store must surface the wrapped answer")
 	})
 
 	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
@@ -362,4 +368,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e94a5062fa31ea91338c68c52c39f68d3ca084f2b5298928efa4a6191be09e21
+// testkit:provenance 521d3b146663d04b469425cec0a8dfad877c73c8ebd7948eb443079d4aa86768

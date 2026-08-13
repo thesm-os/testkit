@@ -1218,7 +1218,7 @@ func TestSessionClassifierDerivation(t *testing.T) {
 		reader := stampedReader()
 		shape.MixinParamKey("monotonicwrites", "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
 		_, reason := lawFieldOf(b, &suite.Contract{}, r, r.Fields[0], reader, reader)
-		testkit.Assert(t, reason).Contains("upserter", "the shape that would surface the stamp is named")
+		testkit.Assert(t, reason).Contains("answering", "the shape that would surface the stamp is named")
 	})
 
 	t.Run("the read-ordering law binds and the derivation memoizes", func(t *testing.T) {
@@ -1250,6 +1250,41 @@ func TestSessionClassifierDerivation(t *testing.T) {
 		testkit.Assert(t, reason).Contains("key type", "the laws instantiate at the pool's key")
 	})
 
+	t.Run("a reader with several results observes no single version", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject:         suite.Subject{IfaceName: "Mixed"},
+			Keys:            Pool{Type: sdk.Builtin(qStr)},
+			sessionKeyField: fieldKey,
+		}
+		multi := projected("Get",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(pkgRef("example.com/s", "Value")), res(namedRef("bool")), res(namedRef("error"))})
+		shape.MixinParamKey(mixinMonotonicReads, "version").Set(multi.Source.EnsureMeta(), "Rev", "test")
+		_, reason := classify(b, lawid.MonotonicReads, multi, multi)
+		testkit.Assert(t, reason).Contains("several results", "the classifier reads one value")
+	})
+
+	t.Run("an answering writer joins the classification", func(t *testing.T) {
+		t.Parallel()
+		errRet := res(namedRef("error"))
+		b := &Bindings{
+			Subject:         suite.Subject{IfaceName: "Mixed"},
+			Keys:            Pool{Type: sdk.Builtin(qStr)},
+			sessionKeyField: fieldKey,
+		}
+		up := projected("Persist",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/s", "Value"))},
+			[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
+		h := &suite.Contract{Methods: []suite.Method{*up}}
+		r := tiers.Rule{Law: lawid.MonotonicReads, Needs: []string{mixinMonotonicReads}, Fields: []tiers.Field{
+			{Name: "Classify", Kind: tiers.KindHandle, From: handleClassifier},
+		}}
+		field, reason := lawFieldOf(b, h, r, r.Fields[0], stampedReader(), stampedReader())
+		testkit.True(t, reason == "" && field != nil, "the spec derives beside the writer: "+reason)
+		testkit.Equal(t, b.Session.Writer, "Persist", "and the write arm classifies through it")
+	})
+
 	t.Run("a value with no conventional key member refuses", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
@@ -1261,9 +1296,9 @@ func TestSessionClassifierDerivation(t *testing.T) {
 	})
 }
 
-// TestUpserterDetection pins the shape the write-ordering laws hold out
-// for: one value in, the same type out beside the error.
-func TestUpserterDetection(t *testing.T) {
+// TestAnsweringWriterDetection pins the shape the write-ordering laws hold
+// out for: one value in, the same type out beside the error.
+func TestAnsweringWriterDetection(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
@@ -1280,12 +1315,12 @@ func TestUpserterDetection(t *testing.T) {
 		[]golang.Return{res(namedRef("int64")), errRet})
 
 	h := &suite.Contract{Methods: []suite.Method{*plain, *up, *crossed}}
-	found := upserterOf(h)
+	found := answeringWriterOf(h)
 	testkit.True(t, found != nil && found.Name == "Persist",
-		"the answered-state write is the upserter")
+		"the answered-state write is the answering writer")
 
 	none := &suite.Contract{Methods: []suite.Method{*plain, *crossed}}
-	testkit.True(t, upserterOf(none) == nil,
+	testkit.True(t, answeringWriterOf(none) == nil,
 		"an error-only write and a scalar-answering write both hide the stored state")
 }
 

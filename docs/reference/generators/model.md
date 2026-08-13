@@ -129,9 +129,10 @@ parameter with no hint is a diagnostic at the parameter.
   interleaving, where Porcupine stays out (a store-assigned stamp defeats
   value equality — the model is stepless and the trace laws are the check).
   A version-stamped fixture forces the twin reference for the same reason.
-  The write-ordering laws hold out for a write the trace can see — an
-  upserter shape answering the stored state — and refuse by name until the
-  upstream detector for it lands.
+  The write-ordering laws bind beside an answering writer — the
+  `(ctx, V) (V, error)` shape whose answered state carries the stamp — and
+  refuse by name on a writer answering only an error, which hides the
+  version the store assigned from the trace.
 - **A concurrent path** — where the unrefined map pair derives,
   `<Iface>ModelConcurrent` runs four workers interleaving the reader and
   writer over the same shared pools, Porcupine-checking the history

@@ -9,6 +9,7 @@ package ifabsenttest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	ifabsent "go.thesmos.sh/testkit/conformance/corpus/iface/contract/if-absent"
@@ -19,7 +20,10 @@ import (
 // Named rather than anonymous because refusal is the contract: a caller
 // distinguishing "somebody else got there first" from "the store is down"
 // cannot do it against an unlabelled error.
-var ErrPresent = errors.New("ifabsenttest: key already present")
+// Wrapping the declaration's own conflict sentinel: the sharpened check
+// asserts errors.Is against ifabsent.ErrExists, and a subject spelling its
+// refusal through the chain is the shape consumers ship.
+var ErrPresent = fmt.Errorf("ifabsenttest: key already present: %w", ifabsent.ErrExists)
 
 // InMemory is the implementation the generated conformance harness is run
 // against.

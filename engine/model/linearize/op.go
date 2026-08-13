@@ -35,6 +35,17 @@ type WriterResult struct {
 // TraceOutput surfaces the write's own error to the trace.
 func (r WriterResult) TraceOutput() (any, error) { return nil, r.Err }
 
+// AnsweringResult is the outcome of an answering write: the stored state
+// the subject answered, beside the call's own error.
+type AnsweringResult[V any] struct {
+	Value V
+	Err   error
+}
+
+// TraceOutput surfaces the answered state and the call's own error, so a
+// trace-scanning law reads the version the store assigned off the value.
+func (r AnsweringResult[V]) TraceOutput() (any, error) { return r.Value, r.Err }
+
 // OpSpec defines a single operation for a linearizability model.
 type OpSpec struct {
 	// Name is the operation name (e.g., "Get", "Put", "Delete").

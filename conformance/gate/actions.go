@@ -25,6 +25,7 @@ import (
 //nolint:gochecknoglobals // a census table, read-only, test-facing.
 var ActionCtors = map[string]any{
 	"Aggregator":      action.Aggregator[any, int],
+	"AnsweringWriter": action.AnsweringWriter[any, string],
 	"BatchReader":     action.BatchReader[any, string, string],
 	"CompositeWriter": action.CompositeWriter[any, string, string],
 	"Lifecycle":       action.Lifecycle[any],

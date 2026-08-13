@@ -236,10 +236,17 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 			// no value-equality model survives a stamp it cannot predict. The
 			// per-client laws over the recorded interleaving are the check.
 			Actions: []{{ renderExpr (external .ModelPkg "ConcurrentAction") }}[{{ renderType .IfaceRef }}]{
+{{- if eq .Session.Writer .ConcWriter.Method }}
+				{{ renderExpr (external .LinearizePkg "ConcurrentAnsweringWriter") }}("{{ .ConcWriter.Method }}", values,
+					func({{ if .ConcWriter.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, v {{ renderType .Values.Type }}) ({{ renderType .Values.Type }}, error) {
+						return s.{{ .ConcWriter.Method }}({{ if .ConcWriter.TakesCtx }}ctx, {{ end }}v)
+					}, func(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type }} { return v.{{ .Session.KeyField }} }),
+{{- else }}
 				{{ renderExpr (external .LinearizePkg "ConcurrentWriter") }}("{{ .ConcWriter.Method }}", values,
 					func({{ if .ConcWriter.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, v {{ renderType .Values.Type }}) error {
 						return s.{{ .ConcWriter.Method }}({{ if .ConcWriter.TakesCtx }}ctx, {{ end }}v)
 					}, func(v {{ renderType .Values.Type }}) {{ renderType .Keys.Type }} { return v.{{ .Session.KeyField }} }),
+{{- end }}
 				{{ renderExpr (external .LinearizePkg "ConcurrentReader") }}("{{ .ConcReader.Method }}", keys,
 					func({{ if .ConcReader.TakesCtx }}ctx{{ else }}_{{ end }} {{ renderExpr (external "context" "Context") }}, s {{ renderType .IfaceRef }}, k {{ renderType .Keys.Type }}) ({{ renderType .Values.Type }}, error) {
 						return s.{{ .ConcReader.Method }}({{ if .ConcReader.TakesCtx }}ctx, {{ end }}k)

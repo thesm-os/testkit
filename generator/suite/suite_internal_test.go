@@ -7,6 +7,9 @@ import (
 	"testing"
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
@@ -52,4 +55,27 @@ func TestModelWillRun(t *testing.T) {
 	testkit.True(t, modelWillRun(modelFixture(t, true,
 		storefixture.Directive(ModelDirective, storefixture.KV(ModelWitnessKey, "int")))),
 		"and the witness list is what makes it run")
+}
+
+// TestStampedSentinel pins the sentinel lift: a qualified stamp arrives as a
+// renderable reference, and every form that cannot render keeps the
+// presence-only check rather than a dangling name.
+func TestStampedSentinel(t *testing.T) {
+	t.Parallel()
+
+	key := shape.MixinParamKey(MixinOrderAfter, "unready")
+	method := func(stamp string) Method {
+		src := &node.Method{Name: "Commit"}
+		if stamp != "" {
+			key.Set(src.EnsureMeta(), stamp, "test")
+		}
+		return Method{Sig: &golang.Sig{Name: "Commit", Source: src}}
+	}
+
+	testkit.True(t, stampedSentinel(method(""), key) == nil,
+		"an unstamped declaration keeps the presence-only check")
+	got := stampedSentinel(method("example.com/order.ErrNotReady"), key)
+	testkit.True(t, got != nil, "a qualified stamp lifts")
+	testkit.True(t, stampedSentinel(method("ErrNotReady"), key) == nil,
+		"a bare spelling resolves to no package and stays presence-only")
 }

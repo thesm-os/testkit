@@ -11,7 +11,12 @@ package ifabsent
 
 import (
 	"context"
+	"errors"
 )
+
+// ErrExists is what a duplicate write reports — the contract's own conflict
+// sentinel, declared beside the shape so the directive can name it.
+var ErrExists = errors.New("ifabsent: exists")
 
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
@@ -24,7 +29,9 @@ type Value struct{ Key, Body string }
 //testkit:model
 type Contract interface {
 	// Put is the if-absent contract's writer role, and hosts the directive
-	// that names its partners.
-	//testkit:contract if-absent role=writer
+	// that names its partners. The conflict key is what turns "refused" into
+	// "refused for being present": without it, a subject failing on a nil
+	// map passes the duplicate check.
+	//testkit:contract if-absent role=writer conflict=ErrExists
 	Put(ctx context.Context, v Value) error
 }

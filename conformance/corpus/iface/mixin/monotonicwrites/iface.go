@@ -32,7 +32,9 @@ type Value struct {
 //testkit:model
 type Mixed interface {
 	// Store is the write the read is judged against.
-	Store(ctx context.Context, v Value) error
+	// Store answers the stored state — the Rev it assigned rides back to
+	// the caller, which is what lets a trace order this client's writes.
+	Store(ctx context.Context, v Value) (Value, error)
 
 	// Get reads back what the ordered writes produced.
 	//testkit:mixin monotonicwrites version=Rev

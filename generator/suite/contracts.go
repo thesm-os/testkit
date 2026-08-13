@@ -149,6 +149,7 @@ func ifAbsentCheck(f Fixture, m Method, base checkBuilder) (*Check, bool) {
 	}
 	ck := base(KindIfAbsent, ContractIfAbsent, "RefusesADuplicate", fixtureArgs(f, m, true))
 	ck.NeedsDerivedInput = true
+	ck.Sentinel = stampedSentinel(m, shape.ContractParamKey(ContractIfAbsent, "conflict"))
 	return ck, true
 }
 

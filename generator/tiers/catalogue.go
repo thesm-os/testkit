@@ -34,6 +34,7 @@ const (
 	shapeStreamReader    = "streamreader"
 	shapeVoidLifecycle   = "voidlifecycle"
 	shapeWriter          = "writer"
+	shapeAnsweringWriter = "answeringwriter"
 
 	// Mixins.
 	mixinAssociative       = "associative"

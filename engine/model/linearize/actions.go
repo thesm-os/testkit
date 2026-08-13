@@ -127,3 +127,29 @@ func ConcurrentLookup[T any, K comparable, R1, R2 any](
 		},
 	}
 }
+
+// ConcurrentAnsweringWriter creates a ConcurrentAction for an
+// answeringwriter-shaped method: func(ctx, V) (V, error). The answered
+// state carries the store-assigned stamp the per-client laws order writes
+// by, so the result reaches the trace whole.
+func ConcurrentAnsweringWriter[T any, K comparable, V any](
+	name string,
+	values *rapid.Generator[V],
+	write func(context.Context, T, V) (V, error),
+	keyOf func(V) K,
+) model.ConcurrentAction[T] {
+	return model.ConcurrentAction[T]{
+		Name: name,
+		Gen: func(rt *rapid.T) any {
+			return values.Draw(rt, name+"_value")
+		},
+		Apply: func(ctx context.Context, impl T, input any) any {
+			v := input.(V)
+			got, err := write(ctx, impl, v)
+			return AnsweringResult[V]{Value: got, Err: err}
+		},
+		PartitionKey: func(input any) string {
+			return fmt.Sprint(keyOf(input.(V)))
+		},
+	}
+}

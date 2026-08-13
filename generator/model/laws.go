@@ -1359,10 +1359,10 @@ func sessionSpecOf(
 	if !given || version == "" {
 		return nil, "names no version= member, and a session guarantee is defined against the value's ordering stamp"
 	}
-	if r.Law != lawid.MonotonicReads && upserterOf(harness) == nil {
+	if r.Law != lawid.MonotonicReads && answeringWriterOf(harness) == nil {
 		return nil, "orders writes the trace cannot see — the writer answers only an error, " +
-			"and the version the store assigned dies with the call; an upserter-shaped " +
-			"write (ctx, V) (V, error) would surface it"
+			"and the version the store assigned dies with the call; an answering " +
+			"write (ctx, V) (V, error) surfaces it"
 	}
 	if b.Session != nil {
 		return b.Session, ""
@@ -1385,16 +1385,18 @@ func sessionSpecOf(
 		VersionField: version,
 		Key:          b.Keys.Type,
 	}
-	if up := upserterOf(harness); up != nil {
+	if up := answeringWriterOf(harness); up != nil {
 		spec.Writer = up.Name
 	}
 	b.Session = spec
 	return spec, ""
 }
 
-// upserterOf finds a write that answers the stored state — one value in,
-// the same type out beside the error — or nil.
-func upserterOf(harness *suite.Contract) *suite.Method {
+// answeringWriterOf finds a write that answers the stored state — one value
+// in, the same type out beside the error — or nil. Structural rather than
+// stamped, so a hand-built projection in a test answers the same way the
+// annotated corpus does.
+func answeringWriterOf(harness *suite.Contract) *suite.Method {
 	if harness == nil {
 		return nil
 	}

@@ -409,3 +409,41 @@ func sortByString[V any](s []V) {
 		return fmt.Sprint(s[i]) < fmt.Sprint(s[j])
 	})
 }
+
+// AnsweringWriter creates an action for an answeringwriter-shaped method:
+// func(ctx, V) (V, error) — a write that answers the stored state. Draws a
+// value, calls both SUT and ref, and compares the answered values the way a
+// read would: the answer is an observation, and a pair that stores alike
+// must answer alike.
+func AnsweringWriter[T, V any](
+	name string,
+	values *rapid.Generator[V],
+	write func(context.Context, T, V) (V, error),
+) model.Action[T] {
+	return model.Action[T]{
+		Name: name,
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
+			v := values.Draw(rt, name+"_value")
+			sutGot, sutErr := write(rt.Context(), sut, v)
+			refGot, refErr := write(rt.Context(), ref, v)
+			if (sutErr == nil) != (refErr == nil) {
+				return model.ActionResult{
+					Err:    fmt.Errorf("%s(%v): SUT err=%v, ref err=%v", name, v, sutErr, refErr),
+					Input:  v,
+					Output: sutGot,
+				}
+			}
+			if sutErr == nil {
+				if diff := cmp.Diff(refGot, sutGot); diff != "" {
+					return model.ActionResult{
+						Err:    fmt.Errorf("%s(%v): SUT/ref disagree on the answered state:\n%s", name, v, diff),
+						Input:  v,
+						Output: sutGot,
+					}
+				}
+			}
+			return model.ActionResult{Input: v, Output: sutGot, CallErr: sutErr}
+		},
+	}
+}
