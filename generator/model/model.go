@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.47.0"
+const Version = "0.48.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -1204,10 +1204,11 @@ func bindingsOf(
 		}
 	}
 	valued := feederOf(b, keyed, collector, writers)
+	valueSrc := valueSourceOf(valued, composite, valueFallback)
 
 	valueQ := ""
-	if valued != nil {
-		valueQ, _ = b.valueQOf(valued)
+	if valueSrc != nil {
+		valueQ, _ = b.valueQOf(valueSrc)
 	}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
@@ -1220,11 +1221,18 @@ func bindingsOf(
 			b.Skipped = append(b.Skipped, Skip{Method: m.Name, Reason: skip})
 			continue
 		}
-		if a.Shape == shapeWriter && a.Pool == poolValues && m != valued {
+		// Every shape drawing from the values pool is measured against the
+		// one method that types it, whatever shape that method is. The pool
+		// is a single local of a single type, so a second drawer taking
+		// another type reads values no signature of its accepts — and the
+		// only place that surfaces is the Go compiler, over generated code
+		// the consumer did not write. Refusing here trades a driven method
+		// for a named line in the header.
+		if a.Pool == poolValues && m != valueSrc {
 			if q, _ := b.valueQOf(m); q != valueQ {
 				b.Skipped = append(b.Skipped, Skip{
 					Method: m.Name,
-					Reason: "takes " + q + " where the values pool draws " + valueQ,
+					Reason: "takes " + spelling(q) + " where the values pool draws " + spelling(valueQ),
 				})
 				continue
 			}
@@ -1291,16 +1299,15 @@ func bindingsOf(
 	contractActionsOf(b, harness)
 	// The oracle derivation sees only the canonical reader and writer; the
 	// pools serve every drawing action, so their sources widen to the
-	// fallbacks where the canonical shapes are absent.
-	keySrc, valueSrc := keyed, valued
+	// fallbacks where the canonical shapes are absent. The value side was
+	// resolved before the actions were built, because the mismatch guard
+	// above measures against it.
+	keySrc := keyed
 	if keySrc == nil {
 		keySrc = keyFallback
 	}
 	if keySrc == nil {
 		keySrc = b.contractKeySrc
-	}
-	if valueSrc == nil && composite == nil {
-		valueSrc = valueFallback
 	}
 	genFunc, _ := directiveValue(iface, GenKey)
 	if strings.Contains(genFunc, ".") {
@@ -2543,6 +2550,39 @@ func feederOf(b *Bindings, keyed, collector *suite.Method, writers []*suite.Meth
 		}
 	}
 	return writers[0]
+}
+
+// valueSourceOf names the one method whose value type the values pool takes,
+// in the order [poolsOf] resolves it: a composite writer outranks a plain one
+// because its second argument is the body a store holds, and where neither
+// exists the first mutator's argument is all the pool has to go on.
+//
+// Two callers, one answer, deliberately: [poolsOf] types the pool from this
+// method and the mismatch guard in [bindingsOf] refuses every other drawer
+// that disagrees with it. Deriving the guard's baseline separately is what
+// let a composite type the pool while the guard measured against a writer —
+// admitting a drawer that mismatched and refusing one that matched, both
+// silently, and both surfacing only as generated code that will not compile.
+func valueSourceOf(valued, composite, valueFallback *suite.Method) *suite.Method {
+	switch {
+	case composite != nil:
+		return composite
+	case valued != nil:
+		return valued
+	default:
+		return valueFallback
+	}
+}
+
+// spelling renders a value type for a refusal reason, naming the absence
+// where a method carries no stamp at all — "takes  where" reads as a
+// rendering bug and sends the reader to the generator instead of to the
+// method whose classification is missing.
+func spelling(q string) string {
+	if q == "" {
+		return "no stamped value type"
+	}
+	return q
 }
 
 // partnerMethods maps each method excluded by a mixin's sibling reference to

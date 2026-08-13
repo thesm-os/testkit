@@ -1524,6 +1524,174 @@ func TestInertActionsAreSkipped(t *testing.T) {
 	}
 }
 
+// TestValuePoolGuardsEveryDrawer holds the refusal that stands between a
+// mistyped pool and the generator's worst output: code that does not compile.
+//
+// The values pool is one local of one type. Any action drawing from it hands
+// that local to its method, so a second drawer taking another type produces a
+// call no signature accepts — and nothing before `go build` says so, over a
+// file the consumer did not write. Four shapes draw from the pool; before
+// this guard covered them, three drew unchecked.
+func TestValuePoolGuardsEveryDrawer(t *testing.T) {
+	t.Parallel()
+
+	// No reader, so the reference is the twin — which is the configuration
+	// these two shapes ship in. Under a derived oracle they are held inert
+	// before the guard is reached, so a fixture with a reader would prove
+	// nothing about the guard: the corpus's own answeringwriter and mutator
+	// fixtures both report under "model/twin" and both drive their action.
+	t.Run("the answering writer and the mutator are measured too", func(t *testing.T) {
+		t.Parallel()
+
+		s := drawersOnly(t)
+		b := bindingsOf(t, s)
+		testkit.True(t, b.Reference.Twin(),
+			"the twin is what lets these shapes drive at all")
+
+		reasons := map[string]string{}
+		for _, sk := range b.Skipped {
+			reasons[sk.Method] = sk.Reason
+		}
+		testkit.Assert(t, reasons["Note"]).Contains("where the values pool draws",
+			"an answering writer taking another type is refused, not driven")
+		testkit.Assert(t, reasons["Bump"]).Contains("where the values pool draws",
+			"and so is a mutator")
+
+		driven := map[string]bool{}
+		for _, a := range b.Actions {
+			driven[a.Method] = true
+		}
+		testkit.True(t, driven["Store"], "the writer that types the pool still drives")
+		testkit.False(t, driven["Note"], "neither mistyped drawer reaches the sequences")
+		testkit.False(t, driven["Bump"], "neither mistyped drawer reaches the sequences")
+	})
+
+	// The baseline half: with a composite present, the pool takes *its* type,
+	// so measuring against the plain writer inverts both verdicts — admitting
+	// the drawer that mismatches and refusing the one that matches.
+	t.Run("a composite writer supplies the baseline it types the pool with", func(t *testing.T) {
+		t.Parallel()
+
+		s := compositePoolWith(t)
+		b := bindingsOf(t, s)
+
+		testkit.Equal(t, b.Values.Q, "example.com/two.Body",
+			"the composite types the pool, which is the premise of this test")
+
+		reasons := map[string]string{}
+		for _, sk := range b.Skipped {
+			reasons[sk.Method] = sk.Reason
+		}
+		testkit.Assert(t, reasons["Stash"]).Contains("example.com/two.Tag",
+			"the writer taking another type is refused, naming what it takes")
+		testkit.Assert(t, reasons["Stash"]).Contains("example.com/two.Body",
+			"and naming what the pool draws")
+
+		driven := map[string]bool{}
+		for _, a := range b.Actions {
+			driven[a.Method] = true
+		}
+		testkit.True(t, driven["Save"],
+			"the writer agreeing with the composite is driven, not refused for disagreeing with a writer")
+		testkit.False(t, driven["Stash"], "and the disagreeing one never reaches the sequences")
+	})
+}
+
+// drawersOnly builds one writer, one answering writer and one mutator at
+// three different value types, with no reader.
+//
+// The absence of a reader is deliberate twice over: it drops the reference to
+// the twin, which is the only configuration where an answering writer or a
+// mutator survives to the pool guard rather than being held inert by an
+// oracle that does not model its shape; and it leaves feederOf on its
+// fallback, so the first declared writer types the pool.
+func drawersOnly(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("drawers", "example.com/drawers").
+		Struct("Payload", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("drawers/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("drawers/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Store", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.PkgNamed("example.com/drawers", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Note", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("n", storefixture.Named("string"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Bump", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("n", storefixture.Named("int"))
+			})
+		}).
+		Build()
+	stampShape(s, "Store", "writer", "", "example.com/drawers.Payload")
+	stampShape(s, "Note", "answeringwriter", "", "string")
+	stampShape(s, "Bump", "mutator", "", "int")
+	return s
+}
+
+// compositePoolWith builds the shape that separates the two candidate
+// baselines: a composite writer, no reader, and two plain writers at
+// different value types.
+//
+// No reader is the point. feederOf picks the writer matching the reader's
+// value type where one exists, so a reader would make the plain writer agree
+// with the composite by construction and the two baselines would coincide —
+// the bug would be invisible. Without one it falls to the first writer, which
+// is Stash, and the two candidates finally disagree.
+func compositePoolWith(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("two", "example.com/two").
+		Struct("Body", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("two/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Text", storefixture.Named("string"), nil)
+		}).
+		Struct("Tag", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("two/iface.go", 1, 1))
+			b.Field("Name", storefixture.Named("string"), nil)
+		}).
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("two/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			// Declared first, so feederOf's fallback lands on it.
+			i.Method("Stash", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("t", storefixture.PkgNamed("example.com/two", "Tag"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Param("v", storefixture.PkgNamed("example.com/two", "Body"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Save", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.PkgNamed("example.com/two", "Body"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	stampShape(s, "Stash", "writer", "", "example.com/two.Tag")
+	stampShape(s, "Put", "compositewriter", "string", "example.com/two.Body")
+	stampShape(s, "Save", "writer", "", "example.com/two.Body")
+	return s
+}
+
 // TestConcurrentLeg pins where the linearizability leg derives — the
 // unrefined map pair, whose reader and writer the Porcupine keyed-store
 // model speaks — and where it must not: a pin changes what a read means, a
