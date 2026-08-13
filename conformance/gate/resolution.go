@@ -159,7 +159,8 @@ func qualified(value string) bool {
 }
 
 // mixinSiblingParams maps each registered mixin to the parameter keys whose
-// values name a sibling callable.
+// values name a sibling callable — the callable-kinded entries of the param
+// schema, now that each key declares its kind beside it.
 //
 // Read from the registry rather than listed here, for the same reason
 // [Registered] is: a mixin that gains a sibling parameter upstream starts being
@@ -167,8 +168,14 @@ func qualified(value string) bool {
 func mixinSiblingParams() map[string][]string {
 	out := make(map[string][]string)
 	for _, m := range mixins.All() {
-		if len(m.SiblingParams) > 0 {
-			out[m.Name] = slices.Clone(m.SiblingParams)
+		var keys []string
+		for _, p := range m.Params {
+			if p.Kind == shape.KindCallable {
+				keys = append(keys, p.Key)
+			}
+		}
+		if len(keys) > 0 {
+			out[m.Name] = keys
 		}
 	}
 	return out

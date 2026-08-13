@@ -2158,11 +2158,21 @@ func partnerMethods(iface *sdk.Interface) map[string]string {
 	return out
 }
 
-// siblingParams returns the named mixin's sibling-reference parameters.
+// siblingParams returns the named mixin's sibling-reference parameters —
+// the callable-kinded keys, whose values name methods of this interface.
+// Member-kinded keys stay out: they name methods of a role's answered
+// handle, and a sibling scan claiming them would mark an interface method
+// that merely shares the name.
 func siblingParams(name string) []string {
 	for _, m := range mixins.All() {
 		if m.Name == name {
-			return m.SiblingParams
+			var out []string
+			for _, p := range m.Params {
+				if p.Kind == shape.KindCallable {
+					out = append(out, p.Key)
+				}
+			}
+			return out
 		}
 	}
 	return nil

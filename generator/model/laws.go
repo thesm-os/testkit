@@ -2101,7 +2101,7 @@ func paramsOf(harness *suite.Contract, m *suite.Method) map[string]string {
 func mixinParamNames(name string) []string {
 	for _, mx := range mixins.All() {
 		if mx.Name == name {
-			return mx.Params
+			return paramKeys(mx.Params)
 		}
 	}
 	return nil
@@ -2111,8 +2111,18 @@ func mixinParamNames(name string) []string {
 func contractParamNames(name string) []string {
 	for _, c := range contracts.All() {
 		if c.Name == name {
-			return c.Params
+			return paramKeys(c.Params)
 		}
 	}
 	return nil
+}
+
+// paramKeys flattens a param schema to its keys — the spelling the stamp
+// lookups compose with; the kinds are the resolver's business.
+func paramKeys(params []shape.Param) []string {
+	out := make([]string, len(params))
+	for i, p := range params {
+		out[i] = p.Key
+	}
+	return out
 }

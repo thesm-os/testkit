@@ -6,6 +6,7 @@ package tiers_test
 import (
 	"testing"
 
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 
 	"go.thesmos.sh/testkit"
@@ -23,9 +24,12 @@ func TestEverySiblingReferenceIsClassified(t *testing.T) {
 	t.Parallel()
 
 	for _, m := range mixins.All() {
-		for _, p := range m.SiblingParams {
-			testkit.True(t, tiers.PartnerClassified(m.Name, p),
-				m.Name+"."+p+" carries a drive-or-exclude verdict")
+		for _, p := range m.Params {
+			if p.Kind != shape.KindCallable {
+				continue
+			}
+			testkit.True(t, tiers.PartnerClassified(m.Name, p.Key),
+				m.Name+"."+p.Key+" carries a drive-or-exclude verdict")
 		}
 	}
 }

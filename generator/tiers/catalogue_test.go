@@ -167,7 +167,7 @@ func contractVocabulary() (roles, params []string) {
 			roles = append(roles, c.Name+"."+role)
 		}
 		for _, p := range c.Params {
-			params = append(params, shape.ContractParamKey(c.Name, p).Name())
+			params = append(params, shape.ContractParamKey(c.Name, p.Key).Name())
 		}
 	}
 	slices.Sort(roles)
@@ -181,7 +181,7 @@ func mixinVocabulary() map[string]string {
 	out := map[string]string{}
 	for _, m := range mixins.All() {
 		for _, p := range m.Params {
-			out[m.Name+"."+p] = shape.MixinParamKey(m.Name, p).Name()
+			out[m.Name+"."+p.Key] = shape.MixinParamKey(m.Name, p.Key).Name()
 		}
 	}
 	return out
