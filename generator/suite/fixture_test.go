@@ -20,11 +20,44 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/causal"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/suite"
 )
+
+// An integer parameter on a Go interface is usually a position or a size, and
+// eidos's 42 is an index panic against anything a fixture seeds.
+func TestIntegerSample(t *testing.T) {
+	t.Parallel()
+
+	t.Run("draws a value any collection admits", func(t *testing.T) {
+		t.Parallel()
+		f := fieldOf(t, contractIn(t, indexed(t)).Fixture, "I")
+		testkit.Equal(t, f.Sample.Text, "1", "small enough to index what the harness seeded")
+		testkit.Equal(t, f.Other.Text, "2", "and the alternate with it")
+	})
+
+	t.Run("keeps the pair discriminating", func(t *testing.T) {
+		t.Parallel()
+		// Zero would read as "the subject dropped the field", which is the
+		// vacuity a sample exists to rule out.
+		f := fieldOf(t, contractIn(t, indexed(t)).Fixture, "I")
+		testkit.False(t, f.Sample.Text == "0" || f.Other.Text == "0",
+			"neither half is the zero value")
+		testkit.False(t, f.Sample.Text == f.Other.Text, "and the two differ")
+	})
+
+	t.Run("narrows an integer field of a struct too", func(t *testing.T) {
+		t.Parallel()
+		// One policy across both derivations: a field and the parameter
+		// carrying it must not disagree about what an int is.
+		f := fieldOf(t, contractIn(t, indexed(t)).Fixture, "P")
+		testkit.Equal(t, partNamed(t, f, "Offset").Sample.Text, "1",
+			"the composed part draws the same pair")
+	})
+}
 
 // A sample exists to be distinguishable, and how much of a struct it sets is
 // the difference between a suite that catches a dropped field and one that
@@ -712,6 +745,91 @@ func nestedStruct(t *testing.T) *sdk.Store {
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
 				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 				m.Param("o", storefixture.PkgNamed("example.com/nest", "Outer"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// causalEntry declares a log whose element names its causes, under the mixin
+// that makes naming them a precondition — the shape whose derived seed the
+// subject correctly refuses.
+func causalEntry(t *testing.T, carriesMixin bool) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("log", "example.com/log").
+		Struct("Entry", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("log/iface.go", 1, 1))
+			b.Field("ID", storefixture.Named("string"), nil)
+			b.Field("DependsOn", storefixture.Slice(storefixture.Named("string")), nil)
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Log", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("log/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Append", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("e", storefixture.PkgNamed("example.com/log", "Entry"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	if carriesMixin {
+		forMethod(s, "Append", func(bag *sdk.Bag) {
+			shape.MetaMixins.Set(bag, []string{causal.Name}, "test")
+		})
+	}
+	return s
+}
+
+// An admission precondition is a claim about the subject's history, and a
+// derived value cannot satisfy one: the causes it names have never landed.
+func TestAdmissionConstrainedFields(t *testing.T) {
+	t.Parallel()
+
+	t.Run("leaves the dependency collection at its zero", func(t *testing.T) {
+		t.Parallel()
+		// The whole seed is refused otherwise — the harness's first act fails,
+		// and every check after it reports against a subject that was never
+		// populated. The subject is right and the fixture is wrong.
+		f := fieldOf(t, contractIn(t, causalEntry(t, true)).Fixture, "E")
+		testkit.Equal(t, partNames(f), []string{"ID", "Body"},
+			"the scalar fields still discriminate; the cause list is dropped")
+	})
+
+	t.Run("keeps it where nothing claims a precondition", func(t *testing.T) {
+		t.Parallel()
+		// The same struct without the claim is an ordinary value, and dropping
+		// a field there would lose discrimination for nothing.
+		f := fieldOf(t, contractIn(t, causalEntry(t, false)).Fixture, "E")
+		testkit.Equal(t, partNames(f), []string{"ID", "DependsOn", "Body"},
+			"every exported field is set when the value is self-contained")
+	})
+}
+
+// indexed declares the shape the integer policy exists for: a comparator
+// taking two bare-int positions, beside a defined type over an integer and a
+// struct carrying one.
+func indexed(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("idx", "example.com/idx").
+		Struct("Page", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("idx/iface.go", 1, 1))
+			b.Field("Name", storefixture.Named("string"), nil)
+			b.Field("Offset", storefixture.Named("int"), nil)
+		}).
+		Interface("Sorter", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("idx/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Less", func(m *storefixture.MethodBuilder) {
+				m.Param("i", storefixture.Named("int"))
+				m.Param("j", storefixture.Named("int"))
+				m.Return(storefixture.Named("bool"))
+			})
+			i.Method("Seek", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("p", storefixture.PkgNamed("example.com/idx", "Page"))
 				m.Return(storefixture.Named("error"))
 			})
 		}).

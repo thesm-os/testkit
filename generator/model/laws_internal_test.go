@@ -2488,17 +2488,17 @@ func TestSaturationDerivation(t *testing.T) {
 		reader := stamp(projected("Get",
 			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 			[]golang.Return{res(namedRef("Value")), errRet}), "", "", "Value")
-		testkit.Equal(t, kinds(reader), []string{"inert", "sputter", "flap"},
+		testkit.Equal(t, kinds(reader), []string{"inert", "flicker", "sputter", "flap"},
 			"a pool-typed reader flaps beside the shared kinds")
 
 		scalar := projected("Count", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("int")), errRet})
-		testkit.Equal(t, kinds(scalar), []string{"inert", "sputter", "wane", "wax"},
+		testkit.Equal(t, kinds(scalar), []string{"inert", "flicker", "sputter", "wane", "wax"},
 			"an integer scalar wanes and waxes")
 
 		replay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(sliceRef(namedRef("Entry"))), errRet})
-		testkit.Equal(t, kinds(replay), []string{"inert", "sputter", "fade"},
+		testkit.Equal(t, kinds(replay), []string{"inert", "flicker", "sputter", "fade"},
 			"a slice reader fades")
 
 		page := projected("Page",
@@ -2506,8 +2506,16 @@ func TestSaturationDerivation(t *testing.T) {
 			[]golang.Return{
 				res(sliceRef(namedRef("Value"))), res(namedRef("Cursor")), res(namedRef("bool")), errRet,
 			})
-		testkit.Equal(t, kinds(page), []string{"inert", "sputter", "echo"},
+		testkit.Equal(t, kinds(page), []string{"inert", "flicker", "sputter", "echo"},
 			"a page-shaped walk echoes")
+
+		// Every shape above carries flicker, and that is the point: a claim
+		// about two calls agreeing is broken by an answer that changes, and
+		// no shape-specific kind supplies one. Only a method answering
+		// nothing has no flicker to wear.
+		void := projected("Ping", []golang.Param{arg("ctx", ctxRef())}, nil)
+		testkit.Equal(t, kinds(void), []string{"inert"},
+			"a method answering nothing has nothing to flicker")
 	})
 
 	t.Run("the surface knows its reach and its restatement", func(t *testing.T) {

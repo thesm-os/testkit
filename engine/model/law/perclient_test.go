@@ -158,7 +158,7 @@ func TestWritesFollowReads(t *testing.T) {
 		t.Parallel()
 		tr := trace.New()
 		tr.Record(rd(1, "a", 5))
-		tr.Record(wr(1, "b", 2)) // write is older than a value already read
+		tr.Record(wr(1, "a", 2)) // write is older than a value already read
 		l := &law.WritesFollowReads[struct{}, string]{Classify: clientClassify}
 		l.BindTrace(tr)
 		rapid.Check(t, func(rt *rapid.T) {
@@ -265,20 +265,49 @@ func TestPerClientLawsIgnoreTheOtherOperation(t *testing.T) {
 	})
 }
 
-// WritesFollowReads is deliberately key-agnostic: it tracks the highest
-// version a client has read across all keys, so a write below that mark fails
-// even when it targets a key the client never read.
-func TestWritesFollowReadsIsKeyAgnostic(t *testing.T) {
+// WritesFollowReads scopes its watermark to (client, key), like the three
+// laws beside it. A version is a fact about one key, so comparing one key's
+// version against another's asserts an ordering that per-key versioning — the
+// dominant design — does not have.
+func TestWritesFollowReadsIsPerKey(t *testing.T) {
 	t.Parallel()
 
-	t.Run("a write below a read on another key is flagged", func(t *testing.T) {
+	t.Run("a write below a read on another key passes", func(t *testing.T) {
 		t.Parallel()
+		// The case that made the law unsound. A store versioning each key
+		// independently answers 9 for a and stamps 3 on b, and there is
+		// nothing wrong with either number: they are counters of different
+		// things. The key-agnostic form failed this correct history.
 		tr := trace.New()
 		tr.Record(rd(1, "a", 9))
 		tr.Record(wr(1, "b", 3))
 		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("versions of different keys are incomparable: %v", err)
+		}
+	})
+
+	t.Run("a write below a read of the same key is flagged", func(t *testing.T) {
+		t.Parallel()
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(wr(1, "a", 3))
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
 		if err := l.Check(nil, nil, nil); err == nil {
-			t.Fatal("a write older than any prior read must be flagged")
+			t.Fatal("a write behind what the client read of that key must be flagged")
+		}
+	})
+
+	t.Run("one client's reads do not constrain another's writes", func(t *testing.T) {
+		t.Parallel()
+		// The guarantee is per-session. Client 2 never read anything, so
+		// nothing it writes can fail to follow a read.
+		tr := trace.New()
+		tr.Record(rd(1, "a", 9))
+		tr.Record(wr(2, "a", 3))
+		l := &law.WritesFollowReads[any, string]{Classify: clientClassify, Trace: tr}
+		if err := l.Check(nil, nil, nil); err != nil {
+			t.Fatalf("a client that has read nothing cannot violate this law: %v", err)
 		}
 	})
 

@@ -121,6 +121,26 @@ type Config[T any] struct {
 	// Laws are the invariants checked after every action.
 	Laws *Registry[T]
 
+	// LawsOnly makes the laws the run's only oracle: an action's
+	// SUT-versus-reference disagreement stops being a failure, and
+	// nothing but a law's own verdict ends an iteration.
+	//
+	// For asking whether a law can fail. The two oracles compete: the
+	// actions compare every call against the reference and abort on
+	// divergence, so a subject broken on purpose almost always dies of
+	// the differential at step 0 and the laws are never reached. The
+	// question "can this law catch a defect" then has no way to be
+	// answered — every defect is caught by something else first.
+	//
+	// The reference is still built and still driven, so a law that
+	// compares the two sides has both, and the subject's state stays
+	// the state a real sequence would produce.
+	//
+	// Not for a conformance run. The differential is the strongest
+	// oracle the tier has, and a run that silences it asserts only
+	// what the laws happen to cover.
+	LawsOnly bool
+
 	// Cleanup is called on SUT and ref after each iteration.
 	// Optional. Use for impls that hold resources (connections,
 	// goroutines, file handles).
@@ -351,7 +371,12 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					})
 				}
 
-				if result.Err != nil {
+				// Under LawsOnly the differential is not an oracle, so the
+				// disagreement it reports is not a failure. Only the
+				// semantic kind is silenced: a structural or liveness
+				// result is the action saying it could not run at all,
+				// which no law can speak for.
+				if result.Err != nil && (!cfg.LawsOnly || a.Kind != FailureSemantic) {
 					f := &Failure{
 						Kind:         a.Kind,
 						StepRan:      StepID{WorkerID: -1, Index: step},
@@ -512,6 +537,19 @@ func WithSaturationThreshold[T any](n int) Option[T] {
 // in place across iterations; read it after the run returns.
 func WithCoverageSink[T any](sink *coverage.ComponentCoverage) Option[T] {
 	return func(c *Config[T]) { c.Coverage = sink }
+}
+
+// WithLawsOnly makes the laws the run's only oracle — see
+// [Config.LawsOnly] for what that silences and why it is not a
+// conformance setting.
+//
+// Takes the flag rather than being nullary because the one caller that
+// wants it decides per run: a generated saturation prover isolates one
+// law and asks whether it can fail, and the same generated property
+// serves the ordinary conformance run where the differential must
+// stay armed.
+func WithLawsOnly[T any](on bool) Option[T] {
+	return func(c *Config[T]) { c.LawsOnly = on }
 }
 
 // SkipLaw removes an auto-derived law by ID.

@@ -4,7 +4,6 @@
 package causalchaintest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -12,22 +11,20 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/composite/causal-chain/causalchaintest"
 )
 
-// seed is the smallest true history this log has: the suite seeds through
-// Append, and a derived entry carries dependencies nothing landed — so the
-// seed lands one entry that depends on nothing.
-func seed(ctx context.Context, subject causalchain.Log) error {
-	return subject.Append(ctx, causalchain.Entry{ID: "seed", Body: "seeded"})
-}
-
 // causal-chain is the model tier's: `AUTO-REPLAY-CAUSAL-ORDERING` walks the
 // replay against the dependency graph the two doors below spell — the
 // identifiers and edges are the domain's, which is why they are supplied
 // rather than derived.
+//
+// The seed is not supplied, and that is the assertion. The derived one lands
+// the fixture's own entry through Append, which a log admitting only settled
+// causes accepts precisely because the derivation leaves the cause list at its
+// zero. Both call sites here once passed a hand-written seed to work around a
+// derived entry that named a cause nothing had landed.
 func TestLogContract(t *testing.T) {
 	t.Parallel()
 
 	causalchaintest.AssertLogContract(t,
-		causalchaintest.LogSeed(seed),
 		causalchaintest.LogModel(
 			causalchaintest.LogModelEntryID(func(e causalchain.Entry) string { return e.ID }),
 			causalchaintest.LogModelDependsOn(func(e causalchain.Entry) []string { return e.DependsOn }),
@@ -57,7 +54,6 @@ func TestLogContractWithoutTheDouble(t *testing.T) {
 	t.Parallel()
 
 	causalchaintest.AssertLogContract(t,
-		causalchaintest.LogSeed(seed),
 		causalchaintest.LogSubject("in-memory", func() causalchain.Log {
 			return causalchaintest.NewInMemory()
 		}),

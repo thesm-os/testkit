@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/total/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package totaltest
 
@@ -26,6 +26,16 @@ type MixedClassifyCall struct {
 	In     string
 	Result string
 	Err    error
+}
+
+// MixedNormalizeCall records one invocation of Mixed.Normalize.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedNormalizeCall struct {
+	In     string
+	Result string
 }
 
 // --- Per-method configuration ---
@@ -63,6 +73,38 @@ func (s *MixedClassifyStub) Func(fn func(context.Context, string) (string, error
 	return s
 }
 
+// MixedNormalizeStub controls how the double answers Normalize and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedNormalizeStub struct {
+	*stub.MethodStub[MixedNormalizeCall]
+
+	fn       func(string) string
+	fallback *MixedNormalizeReturn
+}
+
+// MixedNormalizeReturn holds the fixed answer configured through Returns.
+type MixedNormalizeReturn struct {
+	Result string
+}
+
+// Returns pins a fixed result for every call to Normalize. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedNormalizeStub) Returns(result string) *MixedNormalizeStub {
+	s.fallback = &MixedNormalizeReturn{Result: result}
+	return s
+}
+
+// Func supplies a body for Normalize, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedNormalizeStub) Func(fn func(string) string) *MixedNormalizeStub {
+	s.fn = fn
+	return s
+}
+
 // --- MixedStub ---
 
 // MixedStubOption configures a [MixedStub] at construction time.
@@ -83,6 +125,7 @@ func MixedStubStrict() MixedStubOption {
 func MixedStubDelegateTo(impl total.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnClassify.Func(impl.Classify)
+		s.OnNormalize.Func(impl.Normalize)
 	}
 }
 
@@ -125,12 +168,20 @@ func WithMixedClassify(fn func(context.Context, string) (string, error)) MixedSt
 	return func(s *MixedStub) { s.OnClassify.Func(fn) }
 }
 
+// WithMixedNormalize sets Normalize's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedNormalize(fn func(string) string) MixedStubOption {
+	return func(s *MixedStub) { s.OnNormalize.Func(fn) }
+}
+
 // MixedStub is a recording test double for Mixed.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type MixedStub struct {
-	OnClassify *MixedClassifyStub
+	OnClassify  *MixedClassifyStub
+	OnNormalize *MixedNormalizeStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -155,10 +206,12 @@ var _ total.Mixed = (*MixedStub)(nil)
 // and non-test callers want.
 func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
-		OnClassify: &MixedClassifyStub{MethodStub: stub.NewMethodStub[MixedClassifyCall](tb, "Mixed.Classify")},
+		OnClassify:  &MixedClassifyStub{MethodStub: stub.NewMethodStub[MixedClassifyCall](tb, "Mixed.Classify")},
+		OnNormalize: &MixedNormalizeStub{MethodStub: stub.NewMethodStub[MixedNormalizeCall](tb, "Mixed.Normalize")},
 	}
 	s.all = []stub.Configurable{
 		s.OnClassify.MethodStub,
+		s.OnNormalize.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -227,5 +280,36 @@ func (s *MixedStub) Classify(ctx context.Context, in string) (string, error) {
 	return r.Result, r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *MixedNormalizeStub) invoke(in string) func() MixedNormalizeReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedNormalizeReturn {
+		r0 := s.fn(in)
+		return MixedNormalizeReturn{Result: r0}
+	}
+}
+
+// Normalize records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Normalize(in string) string {
+	call := MixedNormalizeCall{In: in}
+	r := stub.Answer(s.OnNormalize.MethodStub, &call, stub.Arms[MixedNormalizeCall, MixedNormalizeReturn]{
+		Invoke:   s.OnNormalize.invoke(in),
+		Fallback: s.OnNormalize.fallback,
+		Stamp: func(c *MixedNormalizeCall, r MixedNormalizeReturn) {
+			c.Result = r.Result
+		},
+	})
+	return r.Result
+}
+
 // testkit: end of generated content.
-// testkit:provenance 94e09f57be93ffb0e1104425abea2eb766e822990f1df5ef5cc72fc1058d4291
+// testkit:provenance d44e1abe7017e82e84e9f649d217de17246bd83d252cc92326dcf3c319b85a48

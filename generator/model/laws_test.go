@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/poisonable"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
@@ -68,6 +70,76 @@ func TestIteratorStreamLawsBind(t *testing.T) {
 			"through the collect-loop template, not the slice spelling")
 	}
 	testkit.True(t, bound[lawid.StreamReentrant] != nil, "and so does the reentrancy claim")
+}
+
+// poisonProbe is the corpus poisonaccessor fixture in store form: a nullary
+// bare-error probe, with the latch declared or not. One fixture for both
+// tests, so the only variable between them is the claim.
+func poisonProbe(t *testing.T, declared bool) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("poison", "example.com/poison").
+		Interface("Probe", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("poison/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Directive(storefixture.Directive("model"))
+			i.Method("Err", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Trip", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			})
+		}).
+		Build()
+	stampShape(s, "Err", "poisonaccessor", "", "")
+	if declared {
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name != "Err" {
+					continue
+				}
+				bag := m.EnsureMeta()
+				shape.MetaMixins.Set(bag, []string{poisonable.Name}, "test")
+				shape.MixinParamKey(poisonable.Name, poisonable.ParamInduce).
+					Set(bag, "example.com/poison.Probe.Trip", "test")
+			}
+		}
+	}
+	return s
+}
+
+// TestPoisonNeedsTheDeclaredLatch pins what selects the poison pair. The
+// signature is a nullary bare-error callable, which `Err`, `Close` and `Ping`
+// all are — so selecting on the shape claimed every one of them, and the
+// read-purity law failed every correct close-once teardown. The latch is a
+// claim, not a shape, and `poisonable induce=` is where it is made.
+func TestPoisonNeedsTheDeclaredLatch(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, poisonProbe(t, false))
+	for _, l := range b.Laws {
+		testkit.True(t, l.ID != lawid.PoisonNilOnFresh && l.ID != lawid.PoisonIdempotentRead,
+			"an undeclared probe is a signature, not a latch")
+	}
+	for _, u := range b.Unbound {
+		testkit.True(t, u.Method != lawid.PoisonNilOnFresh && u.Method != lawid.PoisonIdempotentRead,
+			"and it is not a refusal either — the rule never selected")
+	}
+}
+
+// TestPoisonBindsTheDeclaredLatch is the control: the same signature under
+// the claim earns both laws.
+func TestPoisonBindsTheDeclaredLatch(t *testing.T) {
+	t.Parallel()
+
+	b := bindingsOf(t, poisonProbe(t, true))
+
+	bound := map[string]bool{}
+	for _, l := range b.Laws {
+		bound[l.ID] = true
+	}
+	testkit.True(t, bound[lawid.PoisonNilOnFresh], "the fresh-probe law binds")
+	testkit.True(t, bound[lawid.PoisonIdempotentRead], "and the read-purity law binds")
 }
 
 // TestNoReaderWriterPairAtAll covers the other half of the twin floor: a

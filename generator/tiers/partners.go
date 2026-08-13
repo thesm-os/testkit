@@ -47,7 +47,12 @@ func PartnerClassified(mixin, param string) bool {
 //
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var drivenPartners = map[string]bool{
-	mixinDeleteRemoves + ".read":    true,
+	mixinDeleteRemoves + ".read": true,
+	// The sizing method is an ordinary read that happens to bound an index.
+	// Excluding it would drop a real observation from the sequences on the
+	// strength of a second method naming it — and a subject whose size no
+	// sequence ever reads is one whose size nothing checks.
+	mixinIndexed + ".by":            true,
 	mixinPartition + ".read":        true,
 	mixinReadAfterWrite + ".write":  true,
 	mixinSideEffect + ".observe":    true,

@@ -13,6 +13,23 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 )
 
+// # Which anomalies snapshot isolation actually forbids
+//
+// The three checkers here implement Adya's phenomena, and only two of
+// them are snapshot isolation's to forbid. SI rules out G0 (dirty
+// write) and G1 (dirty, intermediate and circular reads). It
+// *permits* G2: write skew — two transactions each reading what the
+// other is about to invalidate, both committing — is the canonical
+// anomaly SI allows, and the reason a system wanting serializability
+// asks for more than SI.
+//
+// So a correct SI store passes G0 and G1 and can legitimately fail
+// G2, and the generated tier binds the first two from the
+// snapshotisolation claim. CheckSIG2 is a correct serializability
+// checker with no claim to select it — see the conformance gate's
+// unreachable-law register, which carries the reason and the
+// vocabulary that would restore it.
+
 // TxnOp is one read or write observation inside a transaction: the
 // key touched and the version read or produced. Versions are the
 // store-assigned per-key ordering oracle (a read of version 0 with

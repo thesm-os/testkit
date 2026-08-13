@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/total/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package totaltest_test
 
@@ -144,6 +144,112 @@ func TestMixedStubClassify(t *testing.T) {
 	})
 }
 
+// mixedStubNormalizeSubject binds Normalize into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubNormalizeSubject(tb testing.TB) stub.Subject[totaltest.MixedNormalizeCall, totaltest.MixedNormalizeReturn] {
+	tb.Helper()
+	s := totaltest.NewMixedStub(tb)
+	return stub.Subject[totaltest.MixedNormalizeCall, totaltest.MixedNormalizeReturn]{
+		Stub: s.OnNormalize.MethodStub,
+		Call: func() {
+			var a0 string
+			_ = s.Normalize(a0)
+		},
+		Result: func() totaltest.MixedNormalizeReturn {
+			var a0 string
+			got0 := s.Normalize(a0)
+			return totaltest.MixedNormalizeReturn{Result: got0}
+		},
+		Override: func(mark func()) {
+			s.OnNormalize.Func(func(_ string) string {
+				mark()
+				var z0 string
+				return z0
+			})
+		},
+	}
+}
+
+// TestMixedStubNormalize pins how Normalize answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubNormalize(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Normalize", mixedStubNormalizeSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := totaltest.NewMixedStub(t)
+		var want0 string
+		s.OnNormalize.Returns(want0)
+		var a0 string
+		got0 := s.Normalize(a0)
+		testkit.Equal(t, got0, want0, "Normalize must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := totaltest.NewMixedStub(t)
+		var a0 string
+		_ = s.Normalize(a0)
+		got := s.OnNormalize.AssertCalledOnce(t, "Normalize must record the call")
+		testkit.Equal(t, got.In, a0, "the recorded call carries In")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := totaltest.NewMixedStub(t)
+		var seen []totaltest.MixedNormalizeCall
+		s.OnNormalize.OnRecord(func(c totaltest.MixedNormalizeCall) { seen = append(seen, c) })
+		var a0 string
+		_ = s.Normalize(a0)
+		_ = s.Normalize(a0)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Normalize call")
+	})
+
+	t.Run("wires WithMixedNormalize at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := totaltest.NewMixedStub(t, totaltest.WithMixedNormalize(func(_ string) string {
+			called = true
+			var z0 string
+			return z0
+		}))
+		var a0 string
+		_ = s.Normalize(a0)
+		testkit.True(t, called, "WithMixedNormalize must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := totaltest.NewMixedStub(t)
+		var want0 string
+		s.OnNormalize.Returns(want0)
+		var a0 string
+		_ = s.Normalize(a0)
+		s.ResetCalls()
+		got0 := s.Normalize(a0)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // mixedStubDouble describes how to build a MixedStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -219,7 +325,13 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		_, r1 := s.Classify(a0, a1)
 		testkit.ErrorIs(t, r1, want, "Classify must surface the wrapped answer")
 	})
+
+	t.Run("forwards Normalize to the wrapped implementation", func(t *testing.T) {
+		var a0 string
+		_ = s.Normalize(a0)
+		inner.OnNormalize.AssertCalledOnce(t, "Normalize must reach the wrapped implementation")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance cdeb1f81b5de09e281edb3840ac0528153694eb73962e4618e72cec8f6afad11
+// testkit:provenance 908e7074f9a984fedc8d001de1f5eb879a6fd37bb63b73c69d6461ba9af02d69

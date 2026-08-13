@@ -16,6 +16,7 @@ const (
 	// Detectors.
 	shapeAggregator      = "aggregator"
 	shapeBatchReader     = "batchreader"
+	shapeCloser          = "closer"
 	shapeCompositeWriter = "compositewriter"
 	shapeLifecycle       = "lifecycle"
 	shapeLookup          = "lookup"
@@ -50,6 +51,7 @@ const (
 	mixinEventually        = "eventually"
 	mixinHooks             = "hooks"
 	mixinIdempotent        = "idempotent"
+	mixinIndexed           = "indexed"
 	mixinInjectionSafe     = "injectionsafe"
 	mixinLeakFree          = "leakfree"
 	mixinLifecycleAfter    = "lifecycleafterclose"
@@ -67,6 +69,7 @@ const (
 	mixinReadYourWrites    = "readyourwrites"
 	mixinSample            = "sample"
 	mixinScheduled         = "scheduled"
+	mixinSerializable      = "serializable"
 	mixinSideEffect        = "sideeffect"
 	mixinSnapshotIsolation = "snapshotisolation"
 	mixinStableOrder       = "stableorder"
@@ -300,11 +303,15 @@ func convergent(law, mixin string, extra ...Field) Rule {
 	return Rule{Law: law, Needs: []string{mixin}, Fields: append(fields, extra...)}
 }
 
-// snapshotIsolation is the manifest the three anomaly laws share.
-func snapshotIsolation(law string) Rule {
+// snapshotIsolation is the manifest the anomaly laws share.
+func snapshotIsolation(law string) Rule { return anomaly(law, mixinSnapshotIsolation) }
+
+// anomaly is the manifest every Adya-phenomenon law shares, under whichever
+// claim forbids it.
+func anomaly(law, claim string) Rule {
 	return Rule{
 		Law:   law,
-		Needs: []string{mixinSnapshotIsolation},
+		Needs: []string{claim},
 		Fields: []Field{
 			// The transaction history the subject exposes. Not a stamp's to
 			// name: a subject that cannot report its own history cannot be
@@ -378,9 +385,20 @@ var rules = []Rule{
 		},
 	},
 
+	// Both need the mixin beside the shape, and the mixin is what makes them
+	// true. `poisonaccessor` is a signature — a nullary bare-error callable —
+	// and `Err() error`, `Close() error` and `Ping() error` are all of them.
+	// Selecting a latch's laws from a signature claimed every method of that
+	// shape, and the read-purity law then failed every correct close-once
+	// teardown: the first call answers nil, the second an error, which is what
+	// `(a==nil)!=(b==nil)` reports as a defect.
+	//
+	// `poisonable induce=` is the declaration that a latch exists, naming the
+	// operation that trips it. A latch nothing can trip is not a latch, so the
+	// claim is exactly the evidence these laws were missing.
 	{
 		Law:   lawid.PoisonNilOnFresh,
-		Needs: []string{shapePoisonAccessor},
+		Needs: []string{shapePoisonAccessor, mixinPoisonable},
 		Fields: []Field{
 			{Name: fieldFactory, Kind: KindHandle, From: handleFactory},
 			{Name: "Probe", Kind: KindRole, From: roleSelf},
@@ -388,7 +406,7 @@ var rules = []Rule{
 	},
 	{
 		Law:    lawid.PoisonIdempotentRead,
-		Needs:  []string{shapePoisonAccessor},
+		Needs:  []string{shapePoisonAccessor, mixinPoisonable},
 		Fields: []Field{{Name: "Probe", Kind: KindRole, From: roleSelf}},
 	},
 
@@ -630,9 +648,20 @@ var rules = []Rule{
 		},
 	},
 
+	// Two claims, and the split is the whole point. Snapshot isolation forbids
+	// dirty writes and dirty, intermediate and circular reads, and it
+	// *permits* G2 — write skew is its canonical allowed anomaly, the price
+	// the model is defined to pay. Selecting the anti-dependency-cycle check
+	// from it reddened every correct SI store, and the claim could not be
+	// declared without declaring the check that contradicts it.
+	//
+	// `serializable` is the claim that forbids G2, and it is a sibling rather
+	// than a level: a store is not snapshot-isolated at level serializable.
+	// A store claiming both earns all three, which is what a serializable
+	// store owes.
 	snapshotIsolation(lawid.SnapshotIsolationG0),
 	snapshotIsolation(lawid.SnapshotIsolationG1),
-	snapshotIsolation(lawid.SnapshotIsolationG2),
+	anomaly(lawid.SnapshotIsolationG2, mixinSerializable),
 
 	{
 		Law:   lawid.Sticky,

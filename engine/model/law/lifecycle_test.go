@@ -7,9 +7,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"pgregory.net/rapid"
 
@@ -19,6 +21,30 @@ import (
 type lifecycleSUT struct {
 	closed bool
 	calls  int
+}
+
+// settleGoroutines waits until the process-wide goroutine count stops falling,
+// so a census taken after it measures this test rather than the last one.
+//
+// Polls rather than synchronises because there is nothing to synchronise on: a
+// goroutine that has returned is still counted until the runtime reaps it, and
+// the runtime exposes no signal for that. Three consecutive equal samples, and
+// a bounded number of attempts so a genuinely busy process fails the assertion
+// it came for instead of hanging here.
+func settleGoroutines(tb testing.TB) {
+	tb.Helper()
+	stable, last := 0, -1
+	for range 200 {
+		n := runtime.NumGoroutine()
+		if n == last {
+			if stable++; stable == 3 {
+				return
+			}
+		} else {
+			stable, last = 0, n
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func TestIdempotentLifecycle(t *testing.T) {
@@ -531,6 +557,14 @@ func TestLifecycleLawBranches(t *testing.T) {
 	//nolint:paralleltest // goroutine counting needs exclusive control
 	t.Run("LeakFree flags a cycle that leaks goroutines", func(t *testing.T) {
 		const leaks = 256
+		// Under -count>1 this test's own previous iteration is the noise. Its
+		// goroutines have returned from their function by the time Wait
+		// released, but the runtime counts one until it has finished tearing
+		// it down — so the next iteration's baseline is inflated by up to
+		// `leaks`, they exit mid-bracket, and the growth this run causes is
+		// cancelled out exactly. The law reads no drift and the test that
+		// proves it can report drift fails.
+		settleGoroutines(t)
 		park := make(chan struct{})
 		var spawned sync.WaitGroup
 		l := law.LeakFree[*lifecycleSUT]{

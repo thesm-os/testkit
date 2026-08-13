@@ -38,6 +38,15 @@ func (*InMemory) Classify(ctx context.Context, in string) (string, error) {
 	return "populated", nil
 }
 
+// Normalize answers for every string, with no error return to refuse through.
+//
+// Total by construction and by signature both: trimming and folding are
+// defined on every string, and the method could not report a refusal if one
+// existed. The law's closure supplies the nil its own spelling threads.
+func (*InMemory) Normalize(in string) string {
+	return strings.ToLower(strings.TrimSpace(in))
+}
+
 // contextErr reports a cancelled or expired context, and tolerates a nil one.
 func contextErr(ctx context.Context) error {
 	if ctx == nil {

@@ -247,6 +247,9 @@ const (
 	kindInert           = "inert"
 	kindSputter         = "sputter"
 	kindFlap            = "flap"
+	kindOvershoot       = "overshoot"
+	kindFlicker         = "flicker"
+	fieldMax            = "Max"
 	fromFamilyCell      = "family.cell"
 	handleKeyProjection = "key-projection"
 	handleCoalesce      = "coalesce-probe"
@@ -535,15 +538,86 @@ func saturationOf(b *Bindings, harness *suite.Contract) {
 		sl.AcceptSemantic = lb.ID == lawid.CountEqualsReference
 		b.SatLaws = append(b.SatLaws, sl)
 		for _, name := range sl.Methods {
-			if worn[name] {
-				continue
+			if !worn[name] {
+				worn[name] = true
+				if m := methodOf(harness, name); m != nil {
+					b.SatMutants = append(b.SatMutants, satMutantsOf(b, m)...)
+				}
 			}
-			worn[name] = true
-			if m := methodOf(harness, name); m != nil {
-				b.SatMutants = append(b.SatMutants, satMutantsOf(b, m)...)
+			// The boundary wear is the law's, not the method's: two laws over
+			// one method cross different lines, and the shared wardrobe keyed
+			// by method alone would keep only the first.
+			if over, ok := overshootOf(b, harness, lb, name); ok && !worn[name+"\x00"+kindOvershoot] {
+				worn[name+"\x00"+kindOvershoot] = true
+				b.SatMutants = append(b.SatMutants, over)
 			}
 		}
 	}
+}
+
+// overshootOf spells the defect a bound law's own declaration defines: an
+// answer one past the line the stamp drew.
+//
+// The manifest marks which of a law's fields come from a stamp, and a numeric
+// one is a boundary — `bounded limit=5` fills Max with 5, so 6 is the
+// smallest answer that leaves the range. Nothing about the method's shape
+// carries that number, which is why the generic wardrobe cannot violate a
+// bound: zeros, alternations and waning counts all answer *inside* it.
+//
+// Only the upper bound. A lower one is optional in the manifest and defaults
+// to the floor of the counting shapes it attaches to, so crossing it means
+// answering a negative count — which the shapes cannot express.
+func overshootOf(b *Bindings, harness *suite.Contract, lb *LawBinding, method string) (SatMutant, bool) {
+	var bound, read *LawField
+	for _, f := range lb.Fields {
+		switch {
+		case f.Name == fieldMax && f.Lit != "":
+			bound = f
+		case f.Method == method:
+			read = f
+		}
+	}
+	if bound == nil || read == nil {
+		return SatMutant{}, false
+	}
+	n, err := strconv.Atoi(bound.Lit)
+	if err != nil {
+		// A fractional bound crossed by one is a different arithmetic, and
+		// no counting shape answers a fraction.
+		return SatMutant{}, false
+	}
+	m := methodOf(harness, method)
+	if m == nil {
+		return SatMutant{}, false
+	}
+	over := SatMutant{
+		Method:   method,
+		Kind:     kindOvershoot,
+		TakesCtx: m.TakesContext(),
+		Over:     strconv.Itoa(n + 1),
+		ViaLen:   read.Kind() == sdk.Kind(LawFieldKindPrefix+string(shapeScalarLen)),
+	}
+	for _, p := range m.Params {
+		over.Params = append(over.Params, p.Type)
+	}
+	for i := range m.Returns {
+		over.Returns = append(over.Returns, m.Returns[i].Type)
+	}
+	over.Last = len(over.Returns) - 1
+	if over.ViaLen {
+		elem, why := drainedElem(b, m)
+		if why != "" {
+			return SatMutant{}, false
+		}
+		over.Out = elem
+		return over, true
+	}
+	ref, _, why := resultType(m)
+	if why != "" {
+		return SatMutant{}, false
+	}
+	over.Out = ref
+	return over, true
 }
 
 // satMutantsOf spells the defects one method can wear: inert always, and —
@@ -563,6 +637,21 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 	inert := base
 	inert.Kind = kindInert
 	out := []SatMutant{inert}
+	if len(m.Returns) > 0 {
+		// The flickering defect: every second call answers zeros where the
+		// subject would have answered.
+		//
+		// The wear the whole stability family needs, and the one the
+		// wardrobe had no shape for. Cacheable, deterministic, consistent,
+		// non-decreasing — every such claim is about two calls agreeing, and
+		// `inert` satisfies all of them: zeros forever is perfectly stable.
+		// What breaks a stability claim is an answer that *changes*, and the
+		// smallest change available at any return type is the subject's own
+		// answer alternating with its zero.
+		flicker := base
+		flicker.Kind = kindFlicker
+		out = append(out, flicker)
+	}
 	if m.ReturnsError() {
 		// The sputtering defect: alternating minted refusals, for the laws
 		// about what an error must coincide with.
@@ -1115,6 +1204,13 @@ func roleFieldOf(
 		}
 		field.In = role.CallArgs()[0].Type
 		field.Out = out
+		if !role.ReturnsError() {
+			// The law threads an error the method has no way to report, and
+			// the closure's own signature is what supplies the nil. Adapted
+			// rather than refused: an errorless transformation is the most
+			// total thing a method can be, and totality is the claim.
+			field.KindName = sdk.Kind(LawFieldKindPrefix + "InputCallNoErr")
+		}
 		return field, ""
 
 	case shapeCtxOp:

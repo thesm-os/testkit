@@ -113,11 +113,18 @@ markdown:
   # files; entries prefixed with `#` exclude paths. A missing
   # markdownlint-cli2 binary surfaces as a warning naming
   # `ergon bootstrap`; the rest of the run proceeds.
+  #
+  # `docs/superpowers` is excluded because `.gitignore` already declares that
+  # tree is not part of the repository — it holds agent working notes, which
+  # never ship and which nobody reviews as prose. Linting it means a dropped
+  # note breaks the build for a file git does not track, and the failure reads
+  # as a defect in the product.
   globs:
     - "**/*.md"
     - "#vendor"
     - "#dist"
     - "#node_modules"
+    - "#docs/superpowers"
 
 # test — `ergon test` and its subcommands (race, bench, fuzz, coverage)
 test:

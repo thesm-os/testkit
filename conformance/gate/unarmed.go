@@ -3,8 +3,8 @@
 
 package gate
 
-// passiveLog is the snapshot-isolation verdict, shared by the three
-// anomaly doors because it is one judgment about one subject.
+// passiveLog is the snapshot-isolation verdict, shared by the anomaly
+// doors because it is one judgment about one subject.
 const passiveLog = "the subject is a passive log; a history drawn from pools fabricates its anomalies, which arming proved on its first run"
 
 // UnarmedDoors registers every generated door, clock, and optional role no
@@ -34,7 +34,7 @@ var UnarmedDoors = map[string]string{
 	"iface/contract/pool/AUTO-POOL-LEAK-FREE.balanced":                 "the claim holds at quiescence and the shared walk checks between steps, where a taken value is legitimately still out",
 	"iface/mixin/snapshotisolation/AUTO-SNAPSHOT-ISOLATION-G0.history": passiveLog,
 	"iface/mixin/snapshotisolation/AUTO-SNAPSHOT-ISOLATION-G1.history": passiveLog,
-	"iface/mixin/snapshotisolation/AUTO-SNAPSHOT-ISOLATION-G2.history": passiveLog,
+	"iface/mixin/serializable/AUTO-SNAPSHOT-ISOLATION-G2.history":      passiveLog,
 
 	// The stream doors take the domain's own knowledge, and these subjects
 	// expose nothing beside the drain — a door armed from the drain would

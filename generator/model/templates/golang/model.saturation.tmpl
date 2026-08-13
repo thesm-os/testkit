@@ -46,6 +46,14 @@ func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by d
 	dress({{ printf "%q" .Method }}, "sputter", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatSputter{{ .Method }}{ {{ $b.IfaceName }}: s }
 	})
+{{- else if eq .Kind "flicker" }}
+	dress({{ printf "%q" .Method }}, "flicker", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatFlicker{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "overshoot" }}
+	dress({{ printf "%q" .Method }}, "overshoot", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatOvershoot{{ .Method }}{s}
+	})
 {{- else if eq .Kind "fade" }}
 	dress({{ printf "%q" .Method }}, "fade", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatFade{{ .Method }}{ {{ $b.IfaceName }}: s }
@@ -87,20 +95,49 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 		killed := func() bool {
 			for _, method := range []string{ {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ printf "%q" $m }}{{ end }} } {
 				for _, wear := range {{ lower $b.IfaceName }}SatWears[method] {
+				// Two references per defect. Silencing the differential leaves
+				// the law as the only witness, but not every action reports
+				// through it: a shape whose action fails structurally still
+				// ends the iteration, and a reference wearing the same defect
+				// behaves the same way the subject does, so nothing diverges
+				// and the law is reached. A law that *is* the comparison needs
+				// the opposite — with both sides worn it has nothing to
+				// disagree with — so the clean reference runs too and either
+				// kill counts. The corpus measured both: dropping either one
+				// loses laws that only the other can saturate.
+				for _, blind := range []bool{true, false} {
 					surrogate := "{{ $b.IfaceName }}Sat_{{ .ID }}_" + method + "_" + wear.kind
+					if blind {
+						surrogate += "_blind"
+					}
 					t.Cleanup(func() {
 						_ = {{ renderExpr (external "os" "RemoveAll") }}({{ renderExpr (external "path/filepath" "Join") }}("testdata", "rapid", surrogate))
 						_ = {{ renderExpr (external "os" "Remove") }}({{ renderExpr (external "path/filepath" "Join") }}(
 							{{ renderExpr (external $b.ModelPkg "ResolveArtifactDir") }}(""), "failure-"+surrogate+".json"))
 					})
+					reference := factory
+					if blind {
+						reference = func() {{ renderType $b.IfaceRef }} { return wear.wrap(fx, factory()) }
+					}
 					f := {{ renderExpr (external $b.RootPkg "NewFailableTB") }}().WithName(surrogate)
 					worn := append({{ renderExpr (external "slices" "Clone") }}(opts),
-						{{ $b.IfaceName }}ModelReference(factory))
+						{{ $b.IfaceName }}ModelReference(reference),
+						{{ lower $b.IfaceName }}ModelOnlyLaw({{ printf "%q" .ID }}))
 					{{ renderExpr (external $b.ModelPkg "Check") }}(f, {{ $b.PropertyName }}(func() {{ renderType $b.IfaceRef }} {
 						return wear.wrap(fx, factory())
 					}, worn...))
-					if f.Failed() && ({{ if .AcceptSemantic }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), "[semantic]") || {{ end }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), {{ printf "%q" .ID }})) {
+					// The reporter's own rendering, not the bare identifier.
+					// rapid echoes the TB's name into its final message and the
+					// surrogate above is named for this law, so matching the
+					// identifier alone matched the name — the criterion reduced
+					// to f.Failed() and every defect "killed" every law. The
+					// verdict's format carries the identifier where no name can:
+					// after the kind, which is the one place only the reporter
+					// writes. The suffix rather than the whole prefix because a
+					// REQ-tagged law renders "[REQ-1 invariant]".
+					if f.Failed() && ({{ if .AcceptSemantic }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), "semantic]") || {{ end }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), {{ printf "%q" (printf "invariant] %s" .ID) }})) {
 						return true
+					}
 					}
 				}
 			}
@@ -177,6 +214,45 @@ func (m *{{ lower $b.IfaceName }}SatSputter{{ .Method }}) {{ .Method }}({{ range
 		return
 	}
 	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "flicker" }}
+
+// {{ lower $b.IfaceName }}SatFlicker{{ .Method }} answers zeros every second
+// call, where {{ .Method }} should answer the same thing twice.
+//
+// The defect every stability claim names: cacheable, deterministic,
+// consistent, non-decreasing are all about two calls agreeing, and a subject
+// that answers zeros *forever* agrees with itself perfectly. Only an answer
+// that changes breaks them, and alternating with the zero is the smallest
+// change available at any return type.
+type {{ lower $b.IfaceName }}SatFlicker{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatFlicker{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }} {{ renderType $r }}{{ end }}) {
+	if m.flip.Add(1)%2 == 0 {
+		return
+	}
+	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "overshoot" }}
+
+// {{ lower $b.IfaceName }}SatOvershoot{{ .Method }} answers one past the bound
+// the declaration drew, where {{ .Method }} should stay inside it.
+//
+// The only wear built from a law rather than from a signature: the stamp says
+// where the line is, and nothing in the shape does. Every other defect this
+// prover wears answers within the range, which is why a bound law survived
+// all of them.
+type {{ lower $b.IfaceName }}SatOvershoot{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func ({{ lower $b.IfaceName }}SatOvershoot{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}) ({{ if .ViaLen }}[]{{ end }}{{ renderType .Out }}, error) {
+{{- if .ViaLen }}
+	return make([]{{ renderType .Out }}, {{ .Over }}), nil
+{{- else }}
+	return {{ renderType .Out }}({{ .Over }}), nil
+{{- end }}
 }
 {{- else if eq .Kind "fade" }}
 

@@ -31,6 +31,13 @@ var actionCtors = map[string]string{
 	shapeAggregator:      "Aggregator",
 	shapeAnsweringWriter: "AnsweringWriter",
 	shapeBatchReader:     "BatchReader",
+	// A teardown and a latch probe are one signature — nullary, error only —
+	// so they are driven the same way: call both sides, compare whether each
+	// refused. The two classifications differ in what they *claim*, which is
+	// what selects laws, and nothing about how a sequence drives them. This is
+	// also what `Close() error` was already driven by, back when the poison
+	// detector claimed the shape.
+	shapeCloser:          "PoisonCheck",
 	shapeCompositeWriter: "CompositeWriter",
 	shapeLifecycle:       "Lifecycle",
 	shapeLookup:          "Lookup",
@@ -258,6 +265,7 @@ func DrainsHistory(classification string) bool {
 //nolint:gochecknoglobals // a lookup table, read-only after init.
 var historyDrains = map[string]bool{
 	mixinSnapshotIsolation: true,
+	mixinSerializable:      true,
 	contractChain:          true,
 }
 

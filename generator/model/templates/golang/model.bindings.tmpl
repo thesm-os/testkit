@@ -201,10 +201,31 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	}
 {{- end }}
 {{- end }}
+{{- if .SatLaws }}
+	// The saturation prover's isolation: with siblings registered, the first
+	// law to catch a defect ends the iteration and every other law bound on
+	// the same methods reads as unsaturatable.
+	if cfg.onlyLaw != "" {
+		for _, l := range laws.Laws() {
+			if l.ID() != cfg.onlyLaw {
+				laws.SkipByID(l.ID())
+			}
+		}
+	}
+{{- end }}
 	return {{ renderExpr (external .ModelPkg "Property") }}(factory,
 		{{ renderExpr (external .ModelPkg "WithReference") }}(reference),
 {{- if .Laws }}
 		{{ renderExpr (external .ModelPkg "WithLaws") }}(laws),
+{{- end }}
+{{- if .SatLaws }}
+		// Isolating one law is the prover asking whether that law can fail,
+		// and the differential answers first for almost any defect — the
+		// worn subject disagrees with the clean reference at step 0 and the
+		// iteration ends before a law is consulted. Silencing it is what
+		// leaves the law as the only witness. A conformance run isolates
+		// nothing, so this is false there and the differential stays armed.
+		{{ renderExpr (external .ModelPkg "WithLawsOnly") }}[{{ renderType .IfaceRef }}](cfg.onlyLaw != ""),
 {{- end }}
 {{- if .RecordsHistory }}
 		{{ renderExpr (external .ModelPkg "WithHistoryReset") }}[{{ renderType .IfaceRef }}](appendHist.Reset),
@@ -551,8 +572,29 @@ func {{ .IfaceName }}ModelValues(values *{{ renderExpr (external .ModelPkg "Gene
 	return func(c *{{ .ConfigName }}) { c.values = values }
 }
 {{ end -}}
+{{ if .SatLaws -}}
+// {{ lower .IfaceName }}ModelOnlyLaw narrows the run to one law.
+//
+// Unexported: this is the saturation prover's instrument, not a knob. A
+// conformance run asserts every law the classifications earned, and dropping
+// all but one is only ever right when the question is "can this law fail",
+// which is the one question the prover asks.
+//
+// Without it the prover cannot answer that question at all. The runner stops
+// the iteration at the first law that fails, so a defect worn for law A is
+// reported under whichever law happens to catch it first — the corpus showed
+// 114 such runs, each one a law that looked unsaturatable because a sibling
+// spoke over it.
+func {{ lower .IfaceName }}ModelOnlyLaw(id string) {{ .OptionTypeName }} {
+	return func(c *{{ .ConfigName }}) { c.onlyLaw = id }
+}
+
+{{ end -}}
 type {{ .ConfigName }} struct {
 	reference func() {{ renderType .IfaceRef }}
+{{- if .SatLaws }}
+	onlyLaw string
+{{- end }}
 {{- range .SuppliedOptions }}
 	{{ .Config }} {{ template "model.suppliedtype" . }}
 {{- end }}

@@ -64,11 +64,8 @@ func TestPoisonAccessorContractWithoutTheDouble(t *testing.T) {
 	)
 }
 
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestPoisonAccessorSaturation(t *testing.T) {
-	t.Parallel()
-	poisonaccessortest.PoisonAccessorModelSaturation(t, func() poisonaccessor.PoisonAccessor {
-		return poisonaccessortest.NewInMemory()
-	})
-}
+// No saturation prover: this fixture binds no laws, and that is the point of
+// the axis. `poisonaccessor` is a signature — a nullary bare-error callable —
+// and the latch is a claim made with `poisonable induce=`, which the mixin
+// fixture next door makes. A detector fixture proves the stamp lands; the
+// laws that stamp once earned failed every correct close-once teardown.

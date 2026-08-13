@@ -13,8 +13,8 @@ operation reports the declared sentinel — not merely something.
 func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}
 	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }}) {
 	tb.Helper()
-	ctx := tb.Context()
-	{{ renderExpr (external $.Runtime "NoError") }}(tb, subject.{{ $p.Name }}({{ if $p.TakesContext }}ctx{{ end }}),
+	{{ if or $m.TakesContext $p.TakesContext }}ctx := tb.Context()
+	{{ end }}{{ renderExpr (external $.Runtime "NoError") }}(tb, subject.{{ $p.Name }}({{ if $p.TakesContext }}ctx{{ end }}),
 		"{{ $p.Name }} must tear down cleanly for the claim to be reachable")
 	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
 	{{ renderExpr (external $.Runtime "ErrorIs") }}(tb, err, {{ renderExpr .Sentinel }},

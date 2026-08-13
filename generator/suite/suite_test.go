@@ -455,6 +455,19 @@ func TestRender(t *testing.T) {
 		gen.AssertVets(t)
 	})
 
+	t.Run("compiles a closure claim over a context-free pair", func(t *testing.T) {
+		t.Parallel()
+		// The claim needs no context — `Ping() error` after `Close() error` is
+		// as much a closure discipline as the ctx-taking form — but the check
+		// declared one unconditionally and Go refuses a local nothing reads.
+		// The corpus never caught it: its one fixture takes ctx on both halves.
+		gen := golangtest.Render(t, backendgolang.New(), packageOf(t, closerPair(t)), suite.New()).
+			WithSource(golangtest.GoFile("closer/iface.go", closerPairSource())).
+			WithRequire(suite.Module, filepath.Join("..", ".."))
+		gen.AssertCompiles(t)
+		gen.AssertVets(t)
+	})
+
 	t.Run("compiles every contract-derived check", func(t *testing.T) {
 		t.Parallel()
 		// Three templates that each reach a second method and one that receives
@@ -468,6 +481,48 @@ func TestRender(t *testing.T) {
 		gen.AssertCompiles(t)
 		gen.AssertVets(t)
 	})
+}
+
+// closerPair declares the lifecycleafterclose claim over two methods that
+// take no context — the shape the corpus has no fixture for.
+func closerPair(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := storefixture.New().
+		Package("closer", "example.com/closer").
+		Interface("Session", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("closer/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Close", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+	forMethod(s, "Ping", func(bag *sdk.Bag) {
+		shape.MetaMixins.Set(bag, []string{suite.MixinAfterClose}, "test")
+		shape.MixinParamKey(suite.MixinAfterClose, suite.MixinAfterCloseClose).
+			Set(bag, "example.com/closer.Session.Close", "test")
+		shape.MixinParamKey(suite.MixinAfterClose, suite.MixinAfterCloseSentinel).
+			Set(bag, "example.com/closer.ErrClosed", "test")
+	})
+	return s
+}
+
+// closerPairSource is the hand-written half [closerPair] projects.
+func closerPairSource() string {
+	return `package closer
+
+import "errors"
+
+var ErrClosed = errors.New("closer: closed")
+
+type Session interface {
+	Ping() error
+	Close() error
+}
+`
 }
 
 // contracted carries all three suite-owned contracts on one interface, so a

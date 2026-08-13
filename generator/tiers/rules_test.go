@@ -79,6 +79,28 @@ func TestSelectRequiresEveryClassification(t *testing.T) {
 	})
 }
 
+// Snapshot isolation forbids G0 and G1 and permits G2 — write skew is the
+// anomaly the model is defined to allow. The engine's own checkers agree
+// (a write-skew history passes G0 and G1 and fails G2), so binding all three
+// from one claim meant a correct SI store could not be declared without being
+// reddened by the check its own model licenses.
+func TestSnapshotIsolationSelectsOnlyWhatItForbids(t *testing.T) {
+	t.Parallel()
+
+	rules := tiers.Select([]string{"snapshotisolation"}, nil)
+	selected := make([]string, 0, len(rules))
+	for _, r := range rules {
+		selected = append(selected, r.Law)
+	}
+
+	testkit.True(t, slices.Contains(selected, lawid.SnapshotIsolationG0),
+		"a dirty write is forbidden under snapshot isolation")
+	testkit.True(t, slices.Contains(selected, lawid.SnapshotIsolationG1),
+		"and so is a dirty, intermediate or circular read")
+	testkit.False(t, slices.Contains(selected, lawid.SnapshotIsolationG2),
+		"write skew is permitted; G2 is a serializability claim and needs one")
+}
+
 // TestSelectReadsParameterConditions covers the three forms of [tiers.Condition].
 //
 // Each exists for a law the classification alone cannot choose. Getting the

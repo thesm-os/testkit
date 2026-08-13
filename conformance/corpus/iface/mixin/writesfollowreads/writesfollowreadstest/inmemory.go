@@ -20,9 +20,16 @@ var ErrNotFound = errors.New("writesfollowreadstest: not found")
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
+//
+// Versions are per key, which is what most stores do and what the law has to
+// accept: a revision counts writes to one key, so two keys' revisions are
+// counters of different things and comparing them orders nothing. A single
+// global counter would also satisfy the claim, and satisfies a stronger one
+// besides — which is exactly why it is the wrong subject to pin the law
+// against.
 type InMemory struct {
 	mu     sync.Mutex
-	rev    int64
+	revs   map[string]int64
 	values map[string]writesfollowreads.Value
 }
 
@@ -30,18 +37,21 @@ var _ writesfollowreads.Mixed = (*InMemory)(nil)
 
 // NewInMemory returns an empty store.
 func NewInMemory() *InMemory {
-	return &InMemory{values: map[string]writesfollowreads.Value{}}
+	return &InMemory{
+		revs:   map[string]int64{},
+		values: map[string]writesfollowreads.Value{},
+	}
 }
 
-// Store records the value under its own key.
+// Store records the value under its own key, at that key's own revision.
 func (s *InMemory) Store(ctx context.Context, v writesfollowreads.Value) (writesfollowreads.Value, error) {
 	if err := contextErr(ctx); err != nil {
 		return writesfollowreads.Value{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.rev++
-	v.Rev = s.rev
+	s.revs[v.Key]++
+	v.Rev = s.revs[v.Key]
 	s.values[v.Key] = v
 	return v, nil
 }

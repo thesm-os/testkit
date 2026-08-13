@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.29.3"
+const Version = "0.38.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -576,6 +576,18 @@ type SatMutant struct {
 	TakesCtx bool
 	Out      sdk.Ref
 	Last     int
+
+	// Over is the literal a boundary-crossing wear answers, and ViaLen says
+	// the crossing is a length rather than a value — a slice of that many
+	// elements instead of the number itself.
+	//
+	// Derived from the law's own stamped bound, which is the only place the
+	// line is written down. A wear invented from the shape cannot know it:
+	// every generic defect this prover wears answers *inside* an aggregate's
+	// declared range, which is why a bound law survived all of them and
+	// read as unsaturatable.
+	Over   string
+	ViaLen bool
 }
 
 // Pool is one shared value source: a fixture field and its companion, and how

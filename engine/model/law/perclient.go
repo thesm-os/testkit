@@ -168,14 +168,26 @@ func (l *MonotonicWrites[T, K]) Check(_ *rapid.T, _, _ T) error {
 	return nil
 }
 
-// WritesFollowReads verifies that, within a single client, every
-// write is stamped no older than any version the client has read so
-// far — a write causally follows the reads that preceded it.
-// Auto-emitted for the //testkit:writes-follow-reads directive.
+// WritesFollowReads verifies that, within a single client and key,
+// every write is stamped no older than any version the client has
+// read of that key — a write causally follows the reads that
+// preceded it. Auto-emitted for the //testkit:writes-follow-reads
+// directive.
 //
-// The check is conservative and key-agnostic: it tracks the maximum
-// version a client has read across all keys and fails a write whose
-// version is strictly below it.
+// # Why the key is part of the state
+//
+// It was not, once. The check tracked the highest version a client
+// had read across every key and failed a write below it, and called
+// that conservative. It is not conservative, it is unsound: under
+// per-key versioning — the dominant design, and the one the three
+// sibling laws in this file already assume — reading key A at
+// version 9 and then writing key B at version 2 is correct
+// behaviour, and the key-agnostic form reddens it. A check that
+// fails correct code is worse than one that misses a defect: the
+// first costs an adopter, the second costs a bug.
+//
+// The narrower claim it can still make is the one stated here, and
+// it is the claim the directive's name describes.
 type WritesFollowReads[T any, K comparable] struct {
 	Classify ClientClassifier[K]
 	Trace    *trace.Trace
@@ -191,30 +203,32 @@ func (*WritesFollowReads[T, K]) ID() string { return lawid.WritesFollowReads }
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (*WritesFollowReads[T, K]) REQID() string { return "" }
 
-// Check scans the trace and fails if any client issues a write with
-// a version older than the newest version it has read.
+// Check scans the trace and fails if any client issues a write to a
+// key with a version older than the newest version it has read of
+// that key.
 func (l *WritesFollowReads[T, K]) Check(_ *rapid.T, _, _ T) error {
-	maxRead := make(map[int]int64)
-	seen := make(map[int]bool)
+	maxRead := make(map[clientKey[K]]int64)
+	seen := make(map[clientKey[K]]bool)
 	for _, ev := range l.Trace.Snapshot() {
 		op, ok := l.Classify(ev)
 		if !ok {
 			continue
 		}
-		c := ev.ClientID
+		ck := clientKey[K]{client: ev.ClientID, key: op.Key}
 		if !op.Write {
-			if !seen[c] || op.Version > maxRead[c] {
-				maxRead[c] = op.Version
-				seen[c] = true
+			if !seen[ck] || op.Version > maxRead[ck] {
+				maxRead[ck] = op.Version
+				seen[ck] = true
 			}
 			continue
 		}
-		if seen[c] && op.Version < maxRead[c] {
+		if seen[ck] && op.Version < maxRead[ck] {
 			return fmt.Errorf(
-				"WritesFollowReads: client %d wrote version %d after reading %d (write does not follow read)",
-				c,
+				"WritesFollowReads: client %d key %v wrote version %d after reading %d (write does not follow read)",
+				ev.ClientID,
+				op.Key,
 				op.Version,
-				maxRead[c],
+				maxRead[ck],
 			)
 		}
 	}

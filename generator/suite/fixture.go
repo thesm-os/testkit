@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/causal"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/builder"
@@ -215,11 +216,51 @@ func fixtureOf(ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method
 			Variadic:  g.param.Variadic,
 			Sample:    sample,
 			Other:     other,
-			Parts:     partsFor(g.param, ctx.Reader),
+			Parts:     partsFor(g.param, ctx.Reader, admitsFresh(methods, g.method)),
 			Companion: companionFor(ctx, g.param.Source),
 		})
 	}
 	return f
+}
+
+// The mixins whose claim is an admission precondition on the method's own
+// input: the call is refused unless something the value names already
+// happened.
+//
+// `causal` is the whole list today. Its claim is that an entry naming its
+// causes lands only after they do, so a derived value carrying causes names
+// entries no fresh subject holds — and the seed, which is the first thing a
+// generated harness runs, fails before any check does. The subject is correct
+// and the fixture is wrong, which is the worst way round.
+//
+// A table rather than a signature test because nothing in the signature says
+// it. eidos's causal directive carries one parameter, `version`, and no stamp
+// names the member that holds the dependencies — so the claim is the only
+// evidence the derivation has that this input is not self-contained.
+//
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var admissionMixins = map[string]string{
+	causal.Name: "the causal claim admits an entry only once its causes have landed",
+}
+
+// admitsFresh reports whether a value derived for this parameter can be handed
+// to a subject holding no state yet.
+//
+// False where the method introducing the parameter claims an admission
+// precondition over it. The composed value then drops the parts that could
+// express one — see [partsFor].
+func admitsFresh(methods []Method, method string) bool {
+	for _, m := range methods {
+		if m.Name != method {
+			continue
+		}
+		for _, name := range m.Mixins {
+			if _, constrained := admissionMixins[name]; constrained {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // paramGroup is one fixture field: a parameter name at one type, and the first
@@ -375,7 +416,50 @@ func undeliverable(f Fixture, c *Check) (string, FixtureField, bool) {
 // Nesting is left to [golang.SampleRefFor], so a struct inside a struct gets
 // eidos's one-field form: the field that matters is the parameter's own.
 func sampleFor(p golang.Param, r golang.Resolver) (sample, alternate golang.Sample) {
-	return golang.SampleRefFor(p.Source, p.Name, r)
+	return derivedPair(p.Source, p.Name, r)
+}
+
+// The bare-integer pair a conformance fixture draws.
+//
+// eidos samples an integer as 42 and 7, which is right for a builder — a
+// magnitude set and read back — and wrong here. A generated suite hands its
+// fixture values to the subject, and the integers a Go interface takes are
+// mostly positions and sizes: `Less(i, j int)` against the five-element slice
+// the harness seeded is an index panic, not a failed claim, and the consumer
+// reads it as the tool being broken.
+//
+// Small enough to be a valid index into anything the fixtures build, and
+// non-zero on purpose: a sample equal to the zero value cannot tell a subject
+// that stored the field from one that dropped it, which is the vacuity the
+// builder seeds already suffer from. 1 and 2 are the smallest pair that is
+// both in-range and discriminating.
+//
+// Bare builtins only. A defined type over an integer — a `Weekday`, a
+// `Priority` — is a domain of its own, and eidos spells it `Weekday(42)`; the
+// value is not an index into anything and narrowing it would only make the
+// sample less distinguishable.
+//
+// This is the interim. The real answer is an index-domain vocabulary that
+// says "this parameter is bounded by Len()", so the fixture derives a value
+// the subject's own state admits rather than one small enough to usually fit.
+const (
+	smallIntSample    = "1"
+	smallIntAlternate = "2"
+)
+
+// derivedPair is [golang.SampleRefFor] under testkit's integer policy — the
+// one derivation both the parameter and the struct-field paths draw from, so
+// a field and the parameter carrying it cannot disagree about what an int is.
+func derivedPair(
+	t *sdk.TypeRef, name string, r golang.Resolver,
+) (sample, alternate golang.Sample) {
+	sample, alternate = golang.SampleRefFor(t, name, r)
+	if !golang.IsInteger(t) {
+		return sample, alternate
+	}
+	sample.Text = smallIntSample
+	alternate.Text = smallIntAlternate
+	return sample, alternate
 }
 
 // partsFor composes a struct parameter's value field by field.
@@ -396,7 +480,16 @@ func sampleFor(p golang.Param, r golang.Resolver) (sample, alternate golang.Samp
 // is testkit's, and that is a testing decision rather than a fact about Go.
 // Each is carried as a [golang.Sample] rather than as text, so a field whose own
 // type is a struct keeps the reference the backend needs to spell it.
-func partsFor(p golang.Param, r golang.Resolver) []FixturePart {
+//
+// admissible false leaves every collection-typed field at its zero. The
+// method claims a precondition over this value — see [admissionMixins] — and
+// a collection is the only shape a precondition can be written in: a set of
+// things that must already exist. Derived, it names things that do not, and
+// the fresh subject the harness seeds correctly refuses the whole value.
+// Zeroing costs the discrimination those fields would have carried, which is
+// the cheaper half of the trade: a check that compares less still runs, and a
+// seed that cannot land runs nothing at all.
+func partsFor(p golang.Param, r golang.Resolver, admissible bool) []FixturePart {
 	decl, resolved := r.Resolve(p.Source)
 	s, ok := decl.(*sdk.Struct)
 	if !resolved || !ok {
@@ -405,7 +498,10 @@ func partsFor(p golang.Param, r golang.Resolver) []FixturePart {
 
 	var parts []FixturePart
 	for _, f := range golang.ExportedFields(s) {
-		inner, innerAlt := golang.SampleRefFor(f.Type, f.Name, r)
+		if !admissible && f.Type != nil && (f.Type.IsSlice() || f.Type.IsMap()) {
+			continue
+		}
+		inner, innerAlt := derivedPair(f.Type, f.Name, r)
 		if !inner.OK() {
 			// A field no literal can be written for is left at its zero rather
 			// than losing the whole sample: the fields around it still

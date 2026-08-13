@@ -1,0 +1,9 @@
+{{- /*
+A one-input transformation whose method answers no error: the closure supplies
+the nil the law's spelling threads.
+*/ -}}
+{{- define "model.lawfield.InputCallNoErr" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, in {{ renderType .In }}) ({{ renderType .Out }}, error) {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}in), nil
+		}
+{{- end -}}

@@ -133,7 +133,7 @@ func TestModelDirectiveSpelling(t *testing.T) {
 		"one directive, two modules, one spelling")
 }
 
-// twinCeiling is the corpus's twin count, ratcheted: 92 of 113 references
+// twinCeiling is the corpus's twin count, ratcheted: 93 of 114 references
 // ride the twin floor today, and the number only sinks — an oracle upgrade
 // lowers it, and a derived fixture regressing to the twin raises it past the
 // ceiling and reddens this build by name. Lower the constant with every
@@ -156,8 +156,13 @@ func TestModelDirectiveSpelling(t *testing.T) {
 // the floor for the causal defeat's reason: the claim is an admission
 // policy, and a derived log admits everything. bounded and batched-mixins
 // ride it for the bounded defeat's: the claim clamps what the reader
-// answers, and a derived collection clamps nothing.
-const twinCeiling = 92
+// answers, and a derived collection clamps nothing. indexed rides it for a
+// reason of its own: its reader addresses a *position*, and every store
+// oracle addresses a key. A position is a fact about the order the
+// collection is holding its elements in, which no map models — so the twin,
+// which holds them in the same order for the same reason, is the only
+// reference that can answer.
+const twinCeiling = 93
 
 // TestTwinFloorOnlySinks is the twin-count ratchet the audit's second item
 // commissioned: the twin is the honest floor, not the resting state, and a
