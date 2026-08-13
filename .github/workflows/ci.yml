@@ -102,7 +102,7 @@ jobs:
       # log's reproduction line dies with the runner — the artifact is what
       # survives to become the regression seed.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fuzz-corpus
           path: '**/testdata/fuzz/**'

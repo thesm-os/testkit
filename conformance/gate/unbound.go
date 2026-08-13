@@ -18,14 +18,6 @@ package gate
 //
 //nolint:gochecknoglobals // a census table, read-only, test-facing.
 var UnboundLaws = map[string]string{
-	// Waiting on the multi-replica role closures: Sync and Settle range
-	// over replicas no transcribed shape spells.
-	"AUTO-EVENTUAL-CONVERGENCE": "waits on the multi-replica role closures — Sync and Settle range over replicas no transcribed shape spells",
-
-	// Waiting on a fixture that can honestly stamp the pair: the rule needs
-	// chain beside causal, and no corpus interface carries both.
-	"AUTO-REPLAY-CAUSAL-ORDERING": "waits on a fixture stamping chain beside causal — the rule needs both, and no corpus interface carries the pair",
-
 	// The member scope reaches the handle now; what remains is the carrier:
 	// the law's TxPut and TxRollback take the handle alone, so the handle
 	// must carry its own transaction, and no fixture declares one that does.

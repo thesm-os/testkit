@@ -17,7 +17,7 @@ require (
 	go.thesmos.sh/eidos/backend/golang v1.13.3 // indirect
 	go.thesmos.sh/eidos/frontend/golang v1.14.0 // indirect
 	go.thesmos.sh/eidos/plugins v1.14.1-0.20260813122544-7f32ab2229f8 // indirect
-	golang.org/x/mod v0.38.0 // indirect
+	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/tools v0.48.0 // indirect
 )

@@ -37,6 +37,17 @@ type MixedSettleCall struct {
 	Err error
 }
 
+// MixedSyncCall records one invocation of Mixed.Sync.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedSyncCall struct {
+	Ctx  context.Context
+	Peer eventually.Mixed
+	Err  error
+}
+
 // MixedItemsCall records one invocation of Mixed.Items.
 //
 // Fields take their names from the source signature — parameters and named
@@ -114,6 +125,38 @@ func (s *MixedSettleStub) Func(fn func(context.Context) error) *MixedSettleStub 
 	return s
 }
 
+// MixedSyncStub controls how the double answers Sync and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedSyncStub struct {
+	*stub.MethodStub[MixedSyncCall]
+
+	fn       func(context.Context, eventually.Mixed) error
+	fallback *MixedSyncReturn
+}
+
+// MixedSyncReturn holds the fixed answer configured through Returns.
+type MixedSyncReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Sync. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedSyncStub) Returns(err error) *MixedSyncStub {
+	s.fallback = &MixedSyncReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Sync, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedSyncStub) Func(fn func(context.Context, eventually.Mixed) error) *MixedSyncStub {
+	s.fn = fn
+	return s
+}
+
 // MixedItemsStub controls how the double answers Items and records
 // what it was asked.
 //
@@ -168,6 +211,7 @@ func MixedStubDelegateTo(impl eventually.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnPublish.Func(impl.Publish)
 		s.OnSettle.Func(impl.Settle)
+		s.OnSync.Func(impl.Sync)
 		s.OnItems.Func(impl.Items)
 	}
 }
@@ -218,6 +262,13 @@ func WithMixedSettle(fn func(context.Context) error) MixedStubOption {
 	return func(s *MixedStub) { s.OnSettle.Func(fn) }
 }
 
+// WithMixedSync sets Sync's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedSync(fn func(context.Context, eventually.Mixed) error) MixedStubOption {
+	return func(s *MixedStub) { s.OnSync.Func(fn) }
+}
+
 // WithMixedItems sets Items's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -232,6 +283,7 @@ func WithMixedItems(fn func(context.Context) ([]string, error)) MixedStubOption 
 type MixedStub struct {
 	OnPublish *MixedPublishStub
 	OnSettle  *MixedSettleStub
+	OnSync    *MixedSyncStub
 	OnItems   *MixedItemsStub
 
 	// all is every method stub above, viewed through the surface that does
@@ -259,11 +311,13 @@ func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
 		OnPublish: &MixedPublishStub{MethodStub: stub.NewMethodStub[MixedPublishCall](tb, "Mixed.Publish")},
 		OnSettle:  &MixedSettleStub{MethodStub: stub.NewMethodStub[MixedSettleCall](tb, "Mixed.Settle")},
+		OnSync:    &MixedSyncStub{MethodStub: stub.NewMethodStub[MixedSyncCall](tb, "Mixed.Sync")},
 		OnItems:   &MixedItemsStub{MethodStub: stub.NewMethodStub[MixedItemsCall](tb, "Mixed.Items")},
 	}
 	s.all = []stub.Configurable{
 		s.OnPublish.MethodStub,
 		s.OnSettle.MethodStub,
+		s.OnSync.MethodStub,
 		s.OnItems.MethodStub,
 	}
 	for _, opt := range opts {
@@ -367,6 +421,38 @@ func (s *MixedStub) Settle(ctx context.Context) error {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *MixedSyncStub) invoke(ctx context.Context, peer eventually.Mixed) func() MixedSyncReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedSyncReturn {
+		r0 := s.fn(ctx, peer)
+		return MixedSyncReturn{Err: r0}
+	}
+}
+
+// Sync records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Sync(ctx context.Context, peer eventually.Mixed) error {
+	call := MixedSyncCall{Ctx: ctx, Peer: peer}
+	r := stub.Answer(s.OnSync.MethodStub, &call, stub.Arms[MixedSyncCall, MixedSyncReturn]{
+		Invoke:   s.OnSync.invoke(ctx, peer),
+		Fallback: s.OnSync.fallback,
+		Fault:    func(err error) MixedSyncReturn { return MixedSyncReturn{Err: err} },
+		Stamp: func(c *MixedSyncCall, r MixedSyncReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *MixedItemsStub) invoke(ctx context.Context) func() MixedItemsReturn {
 	if s.fn == nil {
 		return nil
@@ -398,4 +484,4 @@ func (s *MixedStub) Items(ctx context.Context) ([]string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a518e1316c6bc2419351cf2ea97277352c5a40b776c3aa5a9b84d745de5a94aa
+// testkit:provenance 4bd5890da39ea76f5340ee1bb52c314f2f6c29ad713a5b0931844ed68ad58095

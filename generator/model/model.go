@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.21.1"
+const Version = "0.22.2"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -1456,23 +1456,14 @@ func referenceOf(
 		return true
 	}
 
-	// A claim that defeats store modeling outranks every derivation: the
-	// twins lag together, where an immediate oracle reads the claim's own
-	// slack as divergence.
-	for i := range harness.Methods {
-		for _, mixin := range harness.Methods[i].Mixins {
-			if reason, defeated := tiers.DefeatsOracles(mixin); defeated {
-				return twin(reason)
-			}
-		}
-	}
-
-	// A version-stamped fixture is one more claim no store oracle survives:
-	// the subject assigns the ordering member on write, a value-storing
-	// oracle holds the input's zero, and the first read-back diverges on a
-	// correct store. Twins stamp together. The key member is derived here,
-	// where the reader is in hand — the classifier needs the same identity
-	// the upsert inference reads, and the twin carries no adapter to ask.
+	// A version-stamped fixture is a claim no store oracle survives: the
+	// subject assigns the ordering member on write, a value-storing oracle
+	// holds the input's zero, and the first read-back diverges on a correct
+	// store. Twins stamp together. The key member is derived here, where
+	// the reader is in hand — the classifier needs the same identity the
+	// upsert inference reads, and the twin carries no adapter to ask. This
+	// arm runs before the defeat scan because a session mixin can sit in
+	// both tables, and only this arm derives what the classifier needs.
 	if _, stamped := sessionVersionOf(harness); stamped {
 		if keyed != nil {
 			if q, _ := b.valueQOf(keyed); q != "" {
@@ -1480,6 +1471,17 @@ func referenceOf(
 			}
 		}
 		return twin("the subject assigns the version member on write, which no value-storing oracle stamps")
+	}
+
+	// A claim that defeats store modeling outranks every remaining
+	// derivation: the twins lag together, where an immediate oracle reads
+	// the claim's own slack as divergence.
+	for i := range harness.Methods {
+		for _, mixin := range harness.Methods[i].Mixins {
+			if reason, defeated := tiers.DefeatsOracles(mixin); defeated {
+				return twin(reason)
+			}
+		}
 	}
 
 	// A contract claim outranks the shapes: its roles say what each method

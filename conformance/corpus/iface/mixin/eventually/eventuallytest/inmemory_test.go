@@ -4,8 +4,13 @@
 package eventuallytest_test
 
 import (
+	"context"
+	"errors"
+	"maps"
+	"slices"
 	"testing"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually/eventuallytest"
 )
@@ -22,7 +27,21 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	eventuallytest.AssertMixedContract(t,
-		eventuallytest.MixedModel(),
+		eventuallytest.MixedModel(
+			// The merge door: the join of this lattice is set union, spelled
+			// sorted because the subjects answer sorted — the consumer's
+			// algebra, which is the one field of the law nothing derives.
+			eventuallytest.MixedModelMerge(func(a, b []string) []string {
+				seen := map[string]bool{}
+				for _, item := range a {
+					seen[item] = true
+				}
+				for _, item := range b {
+					seen[item] = true
+				}
+				return slices.Sorted(maps.Keys(seen))
+			}),
+		),
 		eventuallytest.MixedSubject("in-memory", func() eventually.Mixed {
 			return eventuallytest.NewInMemory()
 		}),
@@ -40,4 +59,26 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		eventuallytest.MixedWithout("Publish/smoke"),
 		eventuallytest.MixedWithoutDouble(),
 	)
+}
+
+// unreadablePeer answers no items — the peer whose failure Sync must carry
+// out rather than half-apply.
+type unreadablePeer struct{ eventually.Mixed }
+
+func (unreadablePeer) Items(context.Context) ([]string, error) {
+	return nil, errors.New("eventuallytest_test: unreadable")
+}
+
+// A peer that cannot be read is a sync that reports, not one that guesses:
+// nothing lands from a partial exchange.
+func TestSyncCarriesThePeersFailure(t *testing.T) {
+	t.Parallel()
+
+	replica := eventuallytest.NewInMemory()
+	testkit.Error(t, replica.Sync(t.Context(), unreadablePeer{}),
+		"the unreadable peer's failure is the sync's answer")
+
+	items, err := replica.Items(t.Context())
+	testkit.NoError(t, err, "the replica is still readable")
+	testkit.Len(t, items, 0, "and nothing landed from the failed exchange")
 }

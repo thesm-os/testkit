@@ -1,0 +1,22 @@
+{{- /*
+The star round over the pairwise sync: the hub absorbs every spoke, then
+every spoke absorbs the hub — two passes that provably carry any join to
+every replica of a lattice. The topology is the harness's choice, not the
+contract's: it is the minimal exchange that reaches the join, and a subject
+whose anti-entropy needs a different one supplies its own reference.
+*/ -}}
+{{- define "model.lawfield.PeerSync" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, replicas []{{ renderType .Iface }}) error {
+			for _, peer := range replicas[1:] {
+				if err := replicas[0].{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}peer); err != nil {
+					return err
+				}
+			}
+			for _, peer := range replicas[1:] {
+				if err := peer.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}replicas[0]); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+{{- end -}}

@@ -506,7 +506,10 @@ var rules = []Rule{
 			// anti-entropy round. Settle is skippable; Sync is the law.
 			{Name: "Settle", Kind: KindRole, From: "eventually.settle", Optional: true},
 			{Name: "Sync", Kind: KindRole, From: "eventually.sync"},
-			{Name: "Snapshot", Kind: KindRole, From: familyReader},
+			// The whole-state observation, not the keyed reader: the binding
+			// row instantiates S at the observation, and one derivation must
+			// answer for both or two laws disagree about what "the state" is.
+			{Name: "Snapshot", Kind: KindHandle, From: handleObserve},
 			// The join of the replica lattice — the consumer's algebra, and
 			// the one field on this law nothing could derive.
 			{Name: "Merge", Kind: KindSupplied, From: "merge"},

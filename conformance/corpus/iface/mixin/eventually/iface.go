@@ -26,13 +26,19 @@ import (
 //testkit:model
 type Mixed interface {
 	// Publish is not observable on return. The law is that it becomes so,
-	// which needs a settle step and a read to observe after it.
-	//testkit:mixin eventually
+	// which needs a settle step, an anti-entropy exchange, and a read to
+	// observe after both — the members the directive names.
+	//testkit:mixin eventually settle=Settle sync=Sync
 	Publish(ctx context.Context, item string) error
 
 	// Settle advances the quiet window the law waits out.
 	Settle(ctx context.Context) error
 
-	// Items observes the eventual state.
+	// Sync pulls one peer's settled state into this replica — the pairwise
+	// anti-entropy step the law composes into a full round.
+	Sync(ctx context.Context, peer Mixed) error
+
+	// Items observes the eventual state, in sorted order, so two converged
+	// replicas answer identically.
 	Items(ctx context.Context) ([]string, error)
 }

@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/clock"
+	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually/eventuallytest"
 	"go.thesmos.sh/testkit/rand"
 	"go.thesmos.sh/testkit/stub"
@@ -249,6 +250,126 @@ func TestMixedStubSettle(t *testing.T) {
 	})
 }
 
+// mixedStubSyncSubject binds Sync into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubSyncSubject(tb testing.TB) stub.Subject[eventuallytest.MixedSyncCall, eventuallytest.MixedSyncReturn] {
+	tb.Helper()
+	s := eventuallytest.NewMixedStub(tb)
+	return stub.Subject[eventuallytest.MixedSyncCall, eventuallytest.MixedSyncReturn]{
+		Stub: s.OnSync.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 eventually.Mixed
+			_ = s.Sync(a0, a1)
+		},
+		Result: func() eventuallytest.MixedSyncReturn {
+			var a0 context.Context
+			var a1 eventually.Mixed
+			got0 := s.Sync(a0, a1)
+			return eventuallytest.MixedSyncReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnSync.Func(func(_ context.Context, _ eventually.Mixed) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 eventually.Mixed
+			r0 := s.Sync(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestMixedStubSync pins how Sync answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubSync(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Sync", mixedStubSyncSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := eventuallytest.NewMixedStub(t)
+		var want0 error
+		s.OnSync.Returns(want0)
+		var a0 context.Context
+		var a1 eventually.Mixed
+		got0 := s.Sync(a0, a1)
+		testkit.Equal(t, got0, want0, "Sync must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := eventuallytest.NewMixedStub(t)
+		var a0 context.Context
+		var a1 eventually.Mixed
+		_ = s.Sync(a0, a1)
+		got := s.OnSync.AssertCalledOnce(t, "Sync must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Peer, a1, "the recorded call carries Peer")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := eventuallytest.NewMixedStub(t)
+		var seen []eventuallytest.MixedSyncCall
+		s.OnSync.OnRecord(func(c eventuallytest.MixedSyncCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 eventually.Mixed
+		_ = s.Sync(a0, a1)
+		_ = s.Sync(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Sync call")
+	})
+
+	t.Run("wires WithMixedSync at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := eventuallytest.NewMixedStub(t, eventuallytest.WithMixedSync(func(_ context.Context, _ eventually.Mixed) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 eventually.Mixed
+		_ = s.Sync(a0, a1)
+		testkit.True(t, called, "WithMixedSync must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := eventuallytest.NewMixedStub(t)
+		var want0 error
+		s.OnSync.Returns(want0)
+		var a0 context.Context
+		var a1 eventually.Mixed
+		_ = s.Sync(a0, a1)
+		s.ResetCalls()
+		got0 := s.Sync(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // mixedStubItemsSubject binds Items into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -459,6 +580,25 @@ func TestMixedStubDelegateTo(t *testing.T) {
 		testkit.ErrorIs(t, r0, want, "Settle must surface the wrapped answer")
 	})
 
+	t.Run("forwards Sync to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 eventually.Mixed
+		_ = s.Sync(a0, a1)
+		inner.OnSync.AssertCalledOnce(t, "Sync must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Sync answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Sync-delegate")
+		inner.OnSync.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 eventually.Mixed
+		r0 := s.Sync(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Sync must surface the wrapped answer")
+	})
+
 	t.Run("forwards Items to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		_, _ = s.Items(a0)
@@ -478,4 +618,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7f79612d714c8635a7f8dd0a96afce2c713ad516b7186bac59b62555bcd1a4de
+// testkit:provenance 84bc26254314176a5d20dcf41ecea2b7ca75a5cbea92d5b31c5501da5dc48bd5

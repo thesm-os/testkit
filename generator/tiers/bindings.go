@@ -170,7 +170,12 @@ var bindings = map[string]Binding{
 	lawid.LeaseReleasedOnCancel: {Type: "LeaseReleasedOnCancel", Args: []BindArg{BindKey}},
 	lawid.PoolBalanced:          {Type: "PoolBalancedGetPut"},
 	lawid.PoolLeakFree:          {Type: "PoolLeakFree"},
-	lawid.ReplayCausalOrdering:  {Type: "ReplayRespectsCausality", Args: []BindArg{BindKey, ElemOf("Replay")}},
+	// K is the partition key, like the rest of the chain family — the
+	// anonymous single partition until a partition projection is declared.
+	lawid.ReplayCausalOrdering: {
+		Type: "ReplayRespectsCausality",
+		Args: []BindArg{BindPartition, ElemOf(fieldReplay)},
+	},
 	lawid.StreamReflectsMutations: {
 		Type: "StreamReflectsMutations",
 		Args: []BindArg{ElemOf(fieldDrain), ElemOf(fieldDrain)},

@@ -133,7 +133,7 @@ func TestModelDirectiveSpelling(t *testing.T) {
 		"one directive, two modules, one spelling")
 }
 
-// twinCeiling is the corpus's twin count, ratcheted: 89 of 111 references
+// twinCeiling is the corpus's twin count, ratcheted: 90 of 112 references
 // ride the twin floor today, and the number only sinks — an oracle upgrade
 // lowers it, and a derived fixture regressing to the twin raises it past the
 // ceiling and reddens this build by name. Lower the constant with every
@@ -150,8 +150,10 @@ func TestModelDirectiveSpelling(t *testing.T) {
 // derives no store at all), and as atomic's is: the atomic claim is about
 // refused writes, a derived map refuses nothing, and the corpus proved it —
 // the first one-sided draw read as a semantic disagreement on a correct
-// subject, in both the sequential and the Porcupine leg.
-const twinCeiling = 89
+// subject, in both the sequential and the Porcupine leg. causal-chain rides
+// the floor for the causal defeat's reason: the claim is an admission
+// policy, and a derived log admits everything.
+const twinCeiling = 90
 
 // TestTwinFloorOnlySinks is the twin-count ratchet the audit's second item
 // commissioned: the twin is the honest floor, not the resting state, and a

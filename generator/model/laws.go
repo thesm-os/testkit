@@ -193,6 +193,9 @@ const (
 
 	shapeKeyedHandle lawShape = "KeyedHandle" // func(rt, T, K) (W, error) — the handle kept, never compared
 	shapeKeyedWrite  lawShape = "KeyedWrite"  // func(rt, T, K, V) error — a keyed write at both pools
+
+	shapePeerSync   lawShape = "PeerSync"   // func(rt, []T) error — the star round over pairwise sync
+	shapeEachSettle lawShape = "EachSettle" // func(rt, []T) — one settle per replica
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -308,6 +311,7 @@ var lawRoleShapes = map[string]map[string]lawShape{
 
 	lawid.AppendOnlyGrows:          {fReplay: shapeReplay},
 	lawid.AppendOnlyNoDrops:        {fReplay: shapeReplay},
+	lawid.ReplayCausalOrdering:     {fReplay: shapeReplay},
 	lawid.HashChainIntegrityVerify: {"Verify": shapeErrOp},
 	lawid.ReplayDeterministic:      {fReplay: shapeReplay},
 
@@ -335,9 +339,13 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.PaginatorResumable:    {fPage: shapePageRead},
 
 	lawid.WatcherReturnsOnChange: {fWatch: shapeKeyedHandle, "Mutate": shapeKeyedWrite},
-	lawid.IdempotentLifecycle:    {fCall: shapeErrOp},
-	lawid.LifecycleAfterClose:    {fClose: shapeErrOp, "Op": shapeErrOp},
-	lawid.PoisonConsistent:       {"Poison": shapeDoOp, fProbe: shapeErrOp},
+
+	lawid.EventualConvergence: {
+		fWrite: shapeValueOp, "Sync": shapePeerSync, "Settle": shapeEachSettle,
+	},
+	lawid.IdempotentLifecycle: {fCall: shapeErrOp},
+	lawid.LifecycleAfterClose: {fClose: shapeErrOp, "Op": shapeErrOp},
+	lawid.PoisonConsistent:    {"Poison": shapeDoOp, fProbe: shapeErrOp},
 
 	lawid.TTLExpiry:                  {"Put": shapePinnedWrite, fRead: shapeKeyedRead},
 	lawid.DeadlineRespecting:         {"Op": shapeCtxOpFixed},
@@ -1227,6 +1235,24 @@ func roleFieldOf(
 		}
 		field.Key = role.CallArgs()[0].Type
 		field.Value = role.CallArgs()[1].Type
+		return field, ""
+
+	case shapePeerSync:
+		if len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which does not sync with one peer"
+		}
+		if peer := golang.LocalName(shape.QName(role.CallArgs()[0].Source)); peer != b.IfaceName {
+			return nil, f.Name + " closes over " + role.Name +
+				", which syncs with a " + peer + " where the replicas are " + b.IfaceName
+		}
+		return field, ""
+
+	case shapeEachSettle:
+		if len(role.CallArgs()) > 0 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a nullary settle"
+		}
 		return field, ""
 	}
 	return nil, f.Name + " has the unrendered shape " + string(sh)

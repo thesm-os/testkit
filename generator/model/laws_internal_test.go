@@ -2320,3 +2320,38 @@ func TestMemberClosureResolutionClauses(t *testing.T) {
 	testkit.Assert(t, reason).Contains("answers no handle to read through",
 		"the keyed handle refuses a flat watch too")
 }
+
+// TestReplicaClosureShapes pins the multi-replica family: the pairwise sync
+// composed into the star round, the per-replica settle, and the refusals a
+// wrong peer or a wide settle earns.
+func TestReplicaClosureShapes(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+
+	syncRole := projected("Sync",
+		[]golang.Param{arg("ctx", ctxRef()), arg("peer", namedRef("Mixed"))}, []golang.Return{errRet})
+	field, reason := bindField(b, lawid.EventualConvergence, "Sync", syncRole)
+	testkit.True(t, reason == "" && field != nil, "the pairwise sync binds: "+reason)
+
+	stranger := projected("Sync",
+		[]golang.Param{arg("ctx", ctxRef()), arg("peer", namedRef("Other"))}, []golang.Return{errRet})
+	_, reason = bindField(b, lawid.EventualConvergence, "Sync", stranger)
+	testkit.Assert(t, reason).Contains("syncs with a Other", "a foreign peer is named, not guessed")
+
+	wide := projected("Sync",
+		[]golang.Param{arg("ctx", ctxRef()), arg("a", namedRef("Mixed")), arg("b", namedRef("Mixed"))},
+		[]golang.Return{errRet})
+	_, reason = bindField(b, lawid.EventualConvergence, "Sync", wide)
+	testkit.Assert(t, reason).Contains("does not sync with one peer", "two peers are another protocol")
+
+	settle := projected("Settle", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
+	field, reason = bindField(b, lawid.EventualConvergence, "Settle", settle)
+	testkit.True(t, reason == "" && field != nil, "the per-replica settle binds: "+reason)
+
+	wideSettle := projected("Settle",
+		[]golang.Param{arg("ctx", ctxRef()), arg("n", namedRef("int"))}, []golang.Return{errRet})
+	_, reason = bindField(b, lawid.EventualConvergence, "Settle", wideSettle)
+	testkit.Assert(t, reason).Contains("not a nullary settle", "a parameterised settle draws nothing")
+}

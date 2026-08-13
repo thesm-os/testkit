@@ -231,6 +231,13 @@ var oracleDefeats = map[string]string{
 	// and a derived map accepts everything, so the first refusal reads as a
 	// semantic disagreement on a correct subject. Twins share the policy.
 	mixinAtomic: "the atomic claim is about refused writes, and a derived store refuses nothing",
+	// The causal claim is an admission policy — an entry lands only after
+	// its dependencies — and a derived log admits everything, so a correct
+	// subject's first refusal reads as disagreement. Twins share the policy.
+	// (The session fixture reaches the twin through its version stamp
+	// already; this row covers causal claims with no stamp, like the
+	// chain's.)
+	mixinCausal: "the causal claim is an admission policy, and a derived store admits everything",
 }
 
 // MapStorePins reports whether the named mixin turns the map oracle into its

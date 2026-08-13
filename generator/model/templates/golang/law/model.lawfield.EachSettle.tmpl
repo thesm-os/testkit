@@ -1,0 +1,12 @@
+{{- /*
+One settle per replica — the quiet window advanced everywhere before the
+pre-sync snapshots. A refusal is ignored here: an unsettled replica shows
+up as the convergence failure it causes, with the diff that names it.
+*/ -}}
+{{- define "model.lawfield.EachSettle" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, replicas []{{ renderType .Iface }}) {
+			for _, r := range replicas {
+				_ = r.{{ .Method }}({{ if .TakesCtx }}rt.Context(){{ end }})
+			}
+		}
+{{- end -}}

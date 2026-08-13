@@ -171,6 +171,17 @@ parameter with no hint is a diagnostic at the parameter.
   from. The atomic mixin joins the oracle-defeating claims: its law is
   about refused writes, a derived map refuses nothing, and the twin shares
   the policy.
+- **Multi-replica closures, where convergence is the claim** — the
+  eventually mixin's `settle=`/`sync=` members compose into closures over
+  the whole replica set: settle runs per replica, and the pairwise sync
+  becomes the star round (the hub absorbs every spoke, then every spoke
+  absorbs the hub — the minimal exchange that provably reaches a lattice's
+  join). The snapshot is the shared whole-state observation, and the merge
+  stays the consumer's door: the join is the domain's algebra. The
+  replay-causality law binds the same way on a chain co-stamped `causal`,
+  through its supplied identifier and dependency doors — and causal joins
+  the oracle-defeating claims, because an admission policy is a refusal a
+  derived log never makes.
 - **Member closures, where a directive names a handle's methods** — the
   watcher contract's `next=`/`stop=` params resolve against the
   subscription the watch role answers (the resolver's member scope), and
