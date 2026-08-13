@@ -68,7 +68,7 @@ the tier — and the engine dependency with it.
 //	           Porcupine-checked against the lease-table model per key
 {{- end }}
 {{- with .Laws }}
-//	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ if $l.Clocked }} (clocked){{ end }}{{ end }}
+//	Laws:      {{ range $i, $l := . }}{{ if $i }}, {{ end }}{{ $l.ID }}{{ if $l.Clocked }} (clocked){{ end }}{{ if $l.Supplied }} (supplied: {{ range $j, $s := $l.Supplied }}{{ if $j }}, {{ end }}{{ $s }}{{ end }}){{ end }}{{ end }}
 {{- end }}
 {{- if .UsesClock }}
 //	Clock:     the (clocked) laws arm only under {{ .IfaceName }}ModelClocked,
@@ -161,7 +161,13 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 	laws := {{ renderExpr (external .ModelPkg "NewRegistry") }}[{{ renderType .IfaceRef }}]()
 {{- range .Laws }}
 {{- if not .Clocked }}
+{{- if .Supplied }}
+	if {{ range $i, $s := .Supplied }}{{ if $i }} && {{ end }}cfg.{{ $s }} != nil{{ end }} {
+		laws.Add({{ render . }})
+	}
+{{- else }}
 	laws.Add({{ render . }})
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if .UsesClock }}
@@ -446,6 +452,14 @@ type {{ .OptionTypeName }} func(*{{ .ConfigName }})
 func {{ .IfaceName }}ModelReference(factory func() {{ renderType .IfaceRef }}) {{ .OptionTypeName }} {
 	return func(c *{{ .ConfigName }}) { c.reference = factory }
 }
+{{ range .SuppliedOptions }}
+// {{ $b.IfaceName }}Model{{ .Field }} supplies the {{ .Config }} closure — a domain fact
+// no derivation can invent. Every law reading it arms only under this
+// option; unarmed, the header still names the door.
+func {{ $b.IfaceName }}Model{{ .Field }}(fn {{ template "model.suppliedtype" . }}) {{ $b.OptionTypeName }} {
+	return func(c *{{ $b.ConfigName }}) { c.{{ .Config }} = fn }
+}
+{{ end }}
 {{ if .UsesClock }}
 {{ if .Publisher }}
 // {{ .IfaceName }}ModelDrain replaces the derived subscription sweep — the door an
@@ -475,6 +489,9 @@ func {{ .IfaceName }}ModelValues(values *{{ renderExpr (external .ModelPkg "Gene
 {{ end -}}
 type {{ .ConfigName }} struct {
 	reference func() {{ renderType .IfaceRef }}
+{{- range .SuppliedOptions }}
+	{{ .Config }} {{ template "model.suppliedtype" . }}
+{{- end }}
 {{- if .Publisher }}
 	drain func(*{{ renderExpr (external .ModelPkg "T") }}, {{ renderType .IfaceRef }}, {{ renderType .Publisher.Sub }}) ([]{{ renderType .Publisher.Msg }}, error)
 {{- end }}
@@ -605,4 +622,33 @@ every splice site is unconditional.
 */ -}}
 {{- define "model.witnessuse" -}}
 {{- if .Witnesses }}[{{ range $i, $w := .Witnesses }}{{ if $i }}, {{ end }}{{ renderType $w }}{{ end }}]{{ end -}}
+{{- end -}}
+
+{{- /*
+model.suppliedtype spells one supplied door's closure type at the fixture's
+own instantiation — the same spelling the option, the config field and the
+consumer's closure share.
+*/ -}}
+{{- define "model.suppliedtype" -}}
+{{- if eq .Shape "ClientOpPred" -}}
+func(a, b {{ renderExpr (external "go.thesmos.sh/testkit/engine/model/law" "ClientOp") }}[{{ renderType .Key }}]) bool
+{{- else if eq .Shape "ElemPred" -}}
+func(a, b {{ renderType .Elem }}) bool
+{{- else if eq .Shape "ElemList" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}) []{{ renderType .Elem }}
+{{- else if eq .Shape "TxnHistory" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}) []{{ renderExpr (external "go.thesmos.sh/testkit/engine/model/law" "Txn") }}[{{ renderType .Key }}]
+{{- else if eq .Shape "Merge" -}}
+func(a, b {{ renderType .Out }}) {{ renderType .Out }}
+{{- else if eq .Shape "KeyPred" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}, {{ renderType .Key }}) bool
+{{- else if eq .Shape "SubjPred" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}) bool
+{{- else if eq .Shape "Stats" -}}
+func(*{{ renderExpr (external "go.thesmos.sh/testkit/engine/model" "T") }}, {{ renderType .Iface }}) (gets, puts, outstanding int)
+{{- else if eq .Shape "EntryID" -}}
+func({{ renderType .Elem }}) string
+{{- else if eq .Shape "DependsOn" -}}
+func({{ renderType .Elem }}) []string
+{{- end -}}
 {{- end -}}

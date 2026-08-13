@@ -96,6 +96,15 @@ func TestWitnessSpelling(t *testing.T) {
 	testkit.Equal(t, witnessSpelling(nil), "", "and nothing else spells")
 }
 
+// TestTemplateImportAccessors pins the paths the templates qualify
+// through: each is a constant the emit layer registers as an import.
+func TestTemplateImportAccessors(t *testing.T) {
+	t.Parallel()
+	b := &Bindings{}
+	testkit.True(t, b.TracePath() != "" && b.LawPath() != "",
+		"the trace and law packages are spelled for the classifier and the doors")
+}
+
 // TestSubstQ pins the substitution's two arms: a bound parameter name lands
 // at its witness, everything else passes through.
 func TestSubstQ(t *testing.T) {

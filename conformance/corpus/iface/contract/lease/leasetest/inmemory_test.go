@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/lease"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/lease/leasetest"
+	"go.thesmos.sh/testkit/engine/model"
 )
 
 // lease is the model tier's under ADR-0018: `AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS`
@@ -22,7 +23,17 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	leasetest.AssertContractContract(t,
-		leasetest.ContractModel(),
+		leasetest.ContractModel(
+			// Freeness probed the only way the interface offers: a key that
+			// can be acquired was free, and the probe releases what it took.
+			leasetest.ContractModelFree(func(t *model.T, subject lease.Contract, k string) bool {
+				if err := subject.Acquire(t.Context(), k); err != nil {
+					return false
+				}
+				_ = subject.Release(t.Context(), k)
+				return true
+			}),
+		),
 		leasetest.ContractSubject("in-memory", func() lease.Contract {
 			return leasetest.NewInMemory()
 		}),

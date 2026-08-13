@@ -47,6 +47,16 @@ func (s *InMemory) Acquire(ctx context.Context, key string) error {
 		return lease.ErrHeld
 	}
 	s.held[key] = true
+	// The lease is bound to the acquiring context: cancellation releases
+	// it, which is the contract's whole claim — a holder that walked away
+	// must not pin the key forever. The armed released-on-cancel law is
+	// what caught this subject holding keys past their context.
+	go func() {
+		<-ctx.Done()
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		delete(s.held, key)
+	}()
 	return nil
 }
 

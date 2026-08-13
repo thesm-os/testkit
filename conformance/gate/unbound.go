@@ -5,11 +5,8 @@ package gate
 
 // The chokepoints several laws share, spelled once.
 const (
-	historyDebt = "waits on the history option — a subject that cannot report " +
-		"its own transactions cannot be asked about isolation"
-	twoPhase   = "waits on a begin that returns the transaction handle commit and rollback thread"
-	pageDebt   = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
-	comparator = "waits on the supplied comparator its manifest names, which no generated value can stand in for"
+	twoPhase = "waits on a begin that returns the transaction handle commit and rollback thread"
+	pageDebt = "waits on a page-shaped reader — the pagination fixture's keyed read has no cursor to resume from"
 )
 
 // UnboundLaws is the debt register the assertion gate carries: model-owned
@@ -27,26 +24,24 @@ const (
 //
 //nolint:gochecknoglobals // a census table, read-only, test-facing.
 var UnboundLaws = map[string]string{
-	// Waiting on a consumer-supplied option no generated value can stand in
-	// for — an equality, an order, a projection only a domain knows. Each
-	// reason names the option the generated header points at.
-	"AUTO-CAUSAL-ORDERING":                  "waits on the happens-before option — causality is a relation over operations no stamp can state",
-	"AUTO-EVENTUAL-CONVERGENCE":             "waits on the merge option — the replica lattice's join is the consumer's algebra",
-	"AUTO-LEASE-RELEASED-ON-CANCEL":         "waits on the free option, which no generated value can stand in for",
-	"AUTO-POOL-BALANCED":                    "waits on the stats option, which no generated value can stand in for",
-	"AUTO-POOL-LEAK-FREE":                   "waits on the balanced option, which no generated value can stand in for",
-	"AUTO-REPLAY-CAUSAL-ORDERING":           "waits on the entry-id and depends-on options — a dependency graph over entries is the consumer's causality",
-	"AUTO-SNAPSHOT-ISOLATION-G0":            historyDebt,
-	"AUTO-SNAPSHOT-ISOLATION-G1":            historyDebt,
-	"AUTO-SNAPSHOT-ISOLATION-G2":            historyDebt,
-	"AUTO-STREAM-OVER-MATCH":                comparator,
-	"AUTO-STREAM-PERMUTATION":               comparator,
-	"AUTO-STREAM-STABLE-ORDER":              "waits on the supplied Less its manifest names, which no generated value can stand in for",
-	"AUTO-TRANSACTION-NO-MID-TX-VISIBILITY": "waits on the tx-put option — both mid-transaction writes live on a handle the roles do not reach",
-	"AUTO-WATCHER-RETURNS-ON-CHANGE":        "waits on the next and stop options — both live on the handle Watch returns, which the roles do not reach",
+	// Waiting on a piece beside the generated door: the supplied-option
+	// surface exists for both, and what still refuses is the classifier's
+	// missing ordering stamp and the multi-replica role closures.
+	"AUTO-CAUSAL-ORDERING":      "waits on a version= member for its classifier — the causal mixin declares none, and per-client ops need the ordering stamp",
+	"AUTO-EVENTUAL-CONVERGENCE": "waits on the multi-replica role closures — Sync and Settle range over replicas no transcribed shape spells",
 
-	// Waiting on a role shape no fixture can declare within the contract's
-	// current vocabulary: a callable-taking call, a handle-returning begin.
+	// Waiting on a fixture that can honestly stamp the pair: the rule needs
+	// chain beside causal, and no corpus interface carries both.
+	"AUTO-REPLAY-CAUSAL-ORDERING": "waits on a fixture stamping chain beside causal — the rule needs both, and no corpus interface carries the pair",
+
+	"AUTO-TRANSACTION-NO-MID-TX-VISIBILITY": "waits on the handle-member scope — the mid-transaction write is a method of the handle Begin answers, which neither resolver scope reaches; upstream owns the scope",
+	"AUTO-WATCHER-RETURNS-ON-CHANGE":        "waits on the handle-member scope — Next and Stop are methods of the handle Watch answers, which neither resolver scope reaches; upstream owns the scope",
+
+	// Waiting on fixture shapes and their closure derivations — ours, not
+	// vocabulary: the contract roles are name-anchored, so a
+	// handle-answering begin, a callable-taking call and a cursor-shaped
+	// page read all resolve today; what is missing is a fixture that
+	// declares each shape and the generator arms that spell its closures.
 	"AUTO-SAGA-FULL-COMPENSATION":          "waits on a run the mirrored pair can repeat and an observation of compensated state, and the saga's step role offers neither",
 	"AUTO-SINGLEFLIGHT-COALESCES":          "waits on a compute-taking call shape the singleflight fixture's role method does not declare",
 	"AUTO-TRANSACTION-ROLLBACK":            "waits on a run role that accepts the failing body its manifest threads through the transaction",

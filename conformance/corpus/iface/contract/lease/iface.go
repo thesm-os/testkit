@@ -30,7 +30,7 @@ var ErrHeld = errors.New("lease: the lease is already held")
 type Contract interface {
 	// Acquire is the lease contract's acquire role, and hosts the directive
 	// that names its partners.
-	//testkit:contract lease role=acquire release=Release held=ErrHeld
+	//testkit:contract lease role=acquire release=Release timeout=100ms held=ErrHeld
 	Acquire(ctx context.Context, key string) error
 
 	// Release is the lease contract's release role.

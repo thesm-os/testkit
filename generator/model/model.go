@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.17.1"
+const Version = "0.18.2"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -118,6 +118,40 @@ type PublisherSpec struct {
 	// Sub is the subscription handle's type — the receive channel — and Msg
 	// the element it carries.
 	Sub, Msg sdk.Ref
+}
+
+// SuppliedOption is one consumer-supplied door: the law field it fills, the
+// config field the guarded registration reads, and the closure type spelled
+// at the fixture's own instantiation.
+type SuppliedOption struct {
+	// Field is the law struct's field — the option is <Iface>Model<Field>.
+	Field string
+
+	// Config is the config struct's field — the field's name with its first
+	// rune lowered, which the law literal and the guard both read.
+	Config string
+
+	// Shape selects the closure type's template arm; Iface, Key, Elem and
+	// Out are the refs each arm spells.
+	Shape                 string
+	Iface, Key, Elem, Out sdk.Ref
+}
+
+// addSuppliedOption records a door once: two laws reading one field — the
+// three isolation levels share History — get one option, and a second law
+// asking the same name at a different shape is a refusal, not a shadow.
+func (b *Bindings) addSuppliedOption(o *SuppliedOption) string {
+	for _, have := range b.SuppliedOptions {
+		if have.Config != o.Config {
+			continue
+		}
+		if have.Shape != o.Shape {
+			return "asks the " + o.Config + " option at a second shape"
+		}
+		return ""
+	}
+	b.SuppliedOptions = append(b.SuppliedOptions, o)
+	return ""
 }
 
 // The two shared pool locals the generated property declares. Every draw in
@@ -222,6 +256,11 @@ type Bindings struct {
 	// file-level sweep, the option that outranks it, and the property local
 	// every drain field reads.
 	Publisher *PublisherSpec
+
+	// SuppliedOptions are the typed doors this file generates: one option
+	// and one config field per supplied law field, spelled at the fixture's
+	// own types. A law reading one registers only when it is set.
+	SuppliedOptions []*SuppliedOption
 
 	// OptionName is `<Iface>Model` — the option a consumer passes to the
 	// contract entry to run this tier. PropertyName is `<Iface>ModelProperty`,
@@ -1146,6 +1185,22 @@ func concurrentOf(b *Bindings, keyed, valued *suite.Method) {
 	b.ConcFamily = concFamilyKV
 }
 
+// historyDrained reports whether any classification marks the drained
+// slice as an event log — the refinement that outranks every keyed
+// election, because a map oracle collapses the repeats a log faithfully
+// holds.
+func historyDrained(harness *suite.Contract) bool {
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		drains := slices.ContainsFunc(m.Mixins, tiers.DrainsHistory) ||
+			slices.ContainsFunc(m.Contracts, tiers.DrainsHistory)
+		if drains {
+			return true
+		}
+	}
+	return false
+}
+
 // sessionVersionOf reports the first session mixin carrying a version=
 // param anywhere in the method set: the mixin, the member it names, and
 // whether one was found.
@@ -1409,10 +1464,15 @@ func referenceOf(
 		return twin(lenified)
 	}
 
-	if keyed == nil && collector != nil && valued != nil {
-		// A value writer beside a collector, nothing keyed to read. The one
+	if (keyed == nil || historyDrained(harness)) && collector != nil && valued != nil {
+		// A value writer beside a collector. Ordinarily nothing keyed reads
+		// beside them — and where a history claim stands, a keyed read does
+		// not change the election: the claim says the drain is an event log,
+		// a map oracle collapses the log's repeats, and the corpus caught
+		// exactly that when the isolation fixture grew its read. The one
 		// agreement to check is that the writer adds what the collector
-		// returns.
+		// returns; the keyed read stays inert on the log oracle, and the
+		// header says so.
 		wroteV, _ := b.valueQOf(valued)
 		elem := shape.QName(shape.GoSliceElem(collector.Returns[0].Source))
 		if wroteV == "" || wroteV != elem {
@@ -1427,11 +1487,10 @@ func referenceOf(
 		// forks — every keyed-map subject diverged from a log at the first
 		// repeated add, and the first history subject held two identical
 		// events the inferred upsert map collapsed to one.
-		history, dedupe := false, false
+		history, dedupe := historyDrained(harness), false
 		for i := range harness.Methods {
 			m := &harness.Methods[i]
 			for _, c := range append(append([]string{}, m.Mixins...), m.Contracts...) {
-				history = history || tiers.DrainsHistory(c)
 				dedupe = dedupe || tiers.CollectionDedupes(c)
 			}
 		}

@@ -16,6 +16,9 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/snapshotisolation"
 )
 
+// ErrNotFound is what Get reports for a key nothing recorded.
+var ErrNotFound = errors.New("snapshotisolationtest: not found")
+
 // InMemory is the implementation the generated conformance harness is run
 // against.
 type InMemory struct {
@@ -51,6 +54,22 @@ func (s *InMemory) History(ctx context.Context) ([]snapshotisolation.Entry, erro
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.entries), nil
+}
+
+// Get answers the latest recorded entry for a key, and reports a miss with
+// the zero value — the read half the anomaly laws instantiate their key at.
+func (s *InMemory) Get(ctx context.Context, key string) (snapshotisolation.Entry, error) {
+	if err := contextErr(ctx); err != nil {
+		return snapshotisolation.Entry{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, e := range slices.Backward(s.entries) {
+		if e.Key == key {
+			return e, nil
+		}
+	}
+	return snapshotisolation.Entry{}, ErrNotFound
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

@@ -2,7 +2,7 @@
 //
 // Source:    corpus/iface/mixin/snapshotisolation/iface.go
 // Plugins:   golang 1.0.0, stub 1.0.0, backend.golang 1.0.0
-// Command:   testkit run ./corpus/iface/mixin/...
+// Command:   testkit run ./corpus/...
 
 package snapshotisolationtest
 
@@ -35,6 +35,18 @@ type MixedRecordCall struct {
 type MixedHistoryCall struct {
 	Ctx    context.Context
 	Result []snapshotisolation.Entry
+	Err    error
+}
+
+// MixedGetCall records one invocation of Mixed.Get.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedGetCall struct {
+	Ctx    context.Context
+	Key    string
+	Result snapshotisolation.Entry
 	Err    error
 }
 
@@ -105,6 +117,39 @@ func (s *MixedHistoryStub) Func(fn func(context.Context) ([]snapshotisolation.En
 	return s
 }
 
+// MixedGetStub controls how the double answers Get and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedGetStub struct {
+	*stub.MethodStub[MixedGetCall]
+
+	fn       func(context.Context, string) (snapshotisolation.Entry, error)
+	fallback *MixedGetReturn
+}
+
+// MixedGetReturn holds the fixed answer configured through Returns.
+type MixedGetReturn struct {
+	Result snapshotisolation.Entry
+	Err    error
+}
+
+// Returns pins a fixed result for every call to Get. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedGetStub) Returns(result snapshotisolation.Entry, err error) *MixedGetStub {
+	s.fallback = &MixedGetReturn{Result: result, Err: err}
+	return s
+}
+
+// Func supplies a body for Get, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedGetStub) Func(fn func(context.Context, string) (snapshotisolation.Entry, error)) *MixedGetStub {
+	s.fn = fn
+	return s
+}
+
 // --- MixedStub ---
 
 // MixedStubOption configures a [MixedStub] at construction time.
@@ -126,6 +171,7 @@ func MixedStubDelegateTo(impl snapshotisolation.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
 		s.OnRecord.Func(impl.Record)
 		s.OnHistory.Func(impl.History)
+		s.OnGet.Func(impl.Get)
 	}
 }
 
@@ -175,6 +221,13 @@ func WithMixedHistory(fn func(context.Context) ([]snapshotisolation.Entry, error
 	return func(s *MixedStub) { s.OnHistory.Func(fn) }
 }
 
+// WithMixedGet sets Get's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedGet(fn func(context.Context, string) (snapshotisolation.Entry, error)) MixedStubOption {
+	return func(s *MixedStub) { s.OnGet.Func(fn) }
+}
+
 // MixedStub is a recording test double for Mixed.
 //
 // Each On<Method> field is that method's configuration point. Left alone, a
@@ -182,6 +235,7 @@ func WithMixedHistory(fn func(context.Context) ([]snapshotisolation.Entry, error
 type MixedStub struct {
 	OnRecord  *MixedRecordStub
 	OnHistory *MixedHistoryStub
+	OnGet     *MixedGetStub
 
 	// all is every method stub above, viewed through the surface that does
 	// not depend on a signature. It is what lets a setting apply to the whole
@@ -208,10 +262,12 @@ func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
 		OnRecord:  &MixedRecordStub{MethodStub: stub.NewMethodStub[MixedRecordCall](tb, "Mixed.Record")},
 		OnHistory: &MixedHistoryStub{MethodStub: stub.NewMethodStub[MixedHistoryCall](tb, "Mixed.History")},
+		OnGet:     &MixedGetStub{MethodStub: stub.NewMethodStub[MixedGetCall](tb, "Mixed.Get")},
 	}
 	s.all = []stub.Configurable{
 		s.OnRecord.MethodStub,
 		s.OnHistory.MethodStub,
+		s.OnGet.MethodStub,
 	}
 	for _, opt := range opts {
 		opt(s)
@@ -312,5 +368,38 @@ func (s *MixedStub) History(ctx context.Context) ([]snapshotisolation.Entry, err
 	return r.Result, r.Err
 }
 
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
+func (s *MixedGetStub) invoke(ctx context.Context, key string) func() MixedGetReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedGetReturn {
+		r0, r1 := s.fn(ctx, key)
+		return MixedGetReturn{Result: r0, Err: r1}
+	}
+}
+
+// Get records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Get(ctx context.Context, key string) (snapshotisolation.Entry, error) {
+	call := MixedGetCall{Ctx: ctx, Key: key}
+	r := stub.Answer(s.OnGet.MethodStub, &call, stub.Arms[MixedGetCall, MixedGetReturn]{
+		Invoke:   s.OnGet.invoke(ctx, key),
+		Fallback: s.OnGet.fallback,
+		Fault:    func(err error) MixedGetReturn { return MixedGetReturn{Err: err} },
+		Stamp: func(c *MixedGetCall, r MixedGetReturn) {
+			c.Result = r.Result
+			c.Err = r.Err
+		},
+	})
+	return r.Result, r.Err
+}
+
 // testkit: end of generated content.
-// testkit:provenance f0e7593cb1478c5a8718171f1b047902037d11c85f3daa03c779237ff5e7ba0c
+// testkit:provenance e0b8d2e835497a4fb01251aa35ddc5eb25109b29730d6d1556a7fd15731cf643

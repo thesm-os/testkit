@@ -1,0 +1,9 @@
+{{- /*
+A context-first keyed operation: the law draws the key and owns the
+context — a cancellation claim needs one it controls.
+*/ -}}
+{{- define "model.lawfield.CtxKeyedOp" -}}
+{{ .Name }}: func(ctx {{ renderExpr (external "context" "Context") }}, s {{ renderType .Iface }}, k {{ renderType .Key }}) error {
+			return s.{{ .Method }}(ctx, k)
+		}
+{{- end -}}

@@ -1,0 +1,13 @@
+# 2026/08/13 12:11:45.246224 [TestContractContract/in-memory/model] [rapid] draw LeaseDoubleAcquireBlocks_key: "test-key"
+# 2026/08/13 12:11:45.246233 [TestContractContract/in-memory/model] [rapid] draw LeaseReleasedOnCancel_key: "test-key"
+# 2026/08/13 12:11:45.347358 [TestContractContract/in-memory/model] [invariant] AUTO-LEASE-RELEASED-ON-CANCEL at step 0: LeaseReleasedOnCancel: key test-key not released within 100ms of context cancellation
+#   invariant: AUTO-LEASE-RELEASED-ON-CANCEL
+#     sut: &{mu:{_:{} mu:{state:0 sema:0}} held:map[test-key:true]}
+#     ref: &{store:0x125ffb7db740}
+#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestContractContract_in-memory_model.json
+# 
+v0.4.8#17631068489891900725
+0x1a0a59d41eb346
+0x0
+0x1981d67e9604ee
+0x0

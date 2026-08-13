@@ -21,7 +21,14 @@ func TestMixedContract(t *testing.T) {
 		}),
 		// The model tier: random sequences against the derived reference,
 		// reporting under "model" beside the per-method checks.
-		stableordertest.MixedModel(),
+		stableordertest.MixedModel(
+			// The subject's stated order is key-ascending; the Less that
+			// arms the stable-order law is the same fact, supplied — the
+			// one field here no derivation could invent.
+			stableordertest.MixedModelLess(func(a, b stableorder.Value) bool {
+				return a.Key < b.Key
+			}),
+		),
 		stableordertest.MixedOnItems("yields what Add put in, once each", func(
 			tb testing.TB, subject stableorder.Mixed,
 		) {

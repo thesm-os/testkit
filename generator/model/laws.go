@@ -53,6 +53,11 @@ type LawBinding struct {
 	Fields  []*LawField
 	Clocked bool
 	Session bool
+
+	// Supplied names the config fields this law reads — the guarded
+	// registration arms it only when every one is set, and the header names
+	// the options that would.
+	Supplied []string
 }
 
 // Kind returns the one template every binding renders through.
@@ -171,6 +176,7 @@ const (
 	shapeScheduleAt  lawShape = "ScheduleAt"  // func(rt, T, at time.Duration) error
 	shapeCountObs    lawShape = "CountObs"    // func(rt, T) int — loud on error
 	shapeSubscribe   lawShape = "Subscribe"   // func(rt, T) (Sub, error) — the handle kept, never compared
+	shapeCtxKeyedOp  lawShape = "CtxKeyedOp"  // func(ctx, T, K) error — the law draws the key
 )
 
 // lawRoleShapes transcribes each rowed law's role-field closure types from
@@ -200,6 +206,9 @@ const (
 	fRedeliver = "Redeliver"
 	optDrain   = "drain"
 	builtin64  = "int64"
+	fMerge     = "Merge"
+	fHistory   = "History"
+	fEntryID   = "EntryID"
 )
 
 //nolint:gochecknoglobals // a lookup table, read-only after init.
@@ -238,7 +247,7 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.AtomicWrite:      {fWrite: shapeValueOp},
 	lawid.CommutativeWrite: {fWrite: shapeValueOp},
 	lawid.Conservative:     {fWrite: shapeValueOp, "Sum": shapeSum},
-	lawid.CRDTMerge:        {fWrite: shapeValueOp, "Merge": shapeMerge},
+	lawid.CRDTMerge:        {fWrite: shapeValueOp, fMerge: shapeMerge},
 	lawid.IdempotentWrite:  {fWrite: shapeValueOp},
 	lawid.InjectionSafe:    {"Store": shapeKVOp, "Load": shapeKeyedRead},
 	lawid.XSSSafe:          {"Render": shapeInputCall},
@@ -261,6 +270,8 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.TamperEvident:         {fWrite: shapeValueOp, "Tamper": shapeOkOp, "Verify": shapeErrOp},
 	lawid.CursorCloseIdempotent: {fClose: shapeErrOp},
 	lawid.CursorNextAfterClose:  {fClose: shapeErrOp, "Next": shapeNextOp},
+
+	lawid.LeaseReleasedOnCancel: {"Acquire": shapeCtxKeyedOp},
 
 	lawid.PublisherDelivers:    {fSubscribe: shapeSubscribe, fPublish: shapeValueOp},
 	lawid.PublisherAtLeastOnce: {fSubscribe: shapeSubscribe, fPublish: shapeValueOp, fRedeliver: shapeValueOp},
@@ -433,6 +444,9 @@ func lawOf(
 		}
 		if field.Kind() == sdk.Kind(LawFieldKindPrefix+"Classify") {
 			lb.Session = true
+		}
+		if field.Kind() == sdk.Kind(LawFieldKindPrefix+"SuppliedField") {
+			lb.Supplied = append(lb.Supplied, field.Pool)
 		}
 		if reason, held := inert[field.Method]; field.Method != "" && held {
 			b.Unbound = append(b.Unbound, Skip{
@@ -683,7 +697,7 @@ func lawFieldOf(
 			// and the option that would fill it stays a consumer's choice.
 			return nil, ""
 		}
-		return nil, f.Name + " waits on the " + f.From + " option, which no generated value can stand in for"
+		return suppliedFieldOf(b, harness, r, f, field, m, keyed)
 	case tiers.KindRole:
 		got, reason := roleFieldOf(b, harness, r, f, field, m, keyed)
 		if reason != "" && f.Optional {
@@ -895,6 +909,14 @@ func roleFieldOf(
 		}
 		field.In = role.CallArgs()[0].Type
 		field.Out = out
+		return field, ""
+
+	case shapeCtxKeyedOp:
+		if !role.TakesContext() || len(role.CallArgs()) != 1 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which is not a one-key context operation"
+		}
+		field.Key = role.CallArgs()[0].Type
 		return field, ""
 
 	case shapeSubscribe:
@@ -1459,6 +1481,105 @@ func sessionSpecOf(
 	}
 	b.Session = spec
 	return spec, ""
+}
+
+// suppliedShapes transcribes each supplied law field's closure type from
+// the engine structs — the third transcription beside the binding rows and
+// the role shapes. An entry is what lets the generator spell the typed
+// option a consumer arms the law through.
+//
+//nolint:gochecknoglobals // a lookup table, read-only after init.
+var suppliedShapes = map[string]map[string]string{
+	lawid.CausalOrdering:        {"HappensBefore": supClientOpPred},
+	lawid.StreamStableOrder:     {"Less": supElemPred},
+	lawid.StreamOverMatch:       {"Required": supElemList},
+	lawid.StreamPermutation:     {"Expected": supElemList},
+	lawid.SnapshotIsolationG0:   {fHistory: supTxnHistory},
+	lawid.SnapshotIsolationG1:   {fHistory: supTxnHistory},
+	lawid.SnapshotIsolationG2:   {fHistory: supTxnHistory},
+	lawid.EventualConvergence:   {fMerge: supMerge},
+	lawid.LeaseReleasedOnCancel: {"Free": supKeyPred},
+	lawid.PoolBalanced:          {"Stats": supStats},
+	lawid.PoolLeakFree:          {"Balanced": supSubjPred},
+	lawid.ReplayCausalOrdering:  {fEntryID: supEntryID, "DependsOn": supDependsOn},
+}
+
+// The supplied-shape vocabulary — each names one closure type arm in the
+// option templates.
+const (
+	supClientOpPred = "ClientOpPred" // func(a, b law.ClientOp[K]) bool
+	supElemPred     = "ElemPred"     // func(a, b V) bool
+	supElemList     = "ElemList"     // func(*model.T, T) []V
+	supTxnHistory   = "TxnHistory"   // func(*model.T, T) []law.Txn[K]
+	supMerge        = "Merge"        // func(a, b S) S
+	supKeyPred      = "KeyPred"      // func(*model.T, T, K) bool
+	supSubjPred     = "SubjPred"     // func(*model.T, T) bool
+	supStats        = "Stats"        // func(*model.T, T) (int, int, int)
+	supEntryID      = "EntryID"      // func(E) string
+	supDependsOn    = "DependsOn"    // func(E) []string
+)
+
+// suppliedFieldOf builds a consumer-supplied door: the closure type spelled
+// at this fixture's instantiation, the config field the guarded
+// registration reads, and the option that fills it. A type the fixture
+// cannot spell keeps the refusal, naming what is missing.
+func suppliedFieldOf(
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	shapes, known := suppliedShapes[r.Law]
+	sh, mapped := shapes[f.Name]
+	if !known || !mapped {
+		return nil, f.Name + " waits on the " + f.From + " option, which no generated value can stand in for"
+	}
+
+	opt := &SuppliedOption{
+		Field:  f.Name,
+		Config: strings.ToLower(f.Name[:1]) + f.Name[1:],
+		Shape:  sh,
+		Iface:  b.IfaceRef,
+	}
+	switch sh {
+	case supClientOpPred, supTxnHistory, supKeyPred:
+		if b.Keys.Type == nil {
+			return nil, f.Name + " is typed at a key no method here draws"
+		}
+		opt.Key = b.Keys.Type
+	case supElemPred, supElemList:
+		elem, why := drainedElem(b, m)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		opt.Elem = elem
+	case supMerge:
+		if harness == nil {
+			return nil, f.Name + " merges the observed state, and this interface observes state through no method here"
+		}
+		obs, why := observationOf(b, harness, keyed)
+		if why != "" {
+			return nil, f.Name + " merges the observed state, and this interface " + why
+		}
+		opt.Out = obs.Out
+	case supEntryID, supDependsOn:
+		role, reason := roleMethod(b, harness, "chain.replay", m, keyed)
+		if reason != "" {
+			return nil, f.Name + " " + reason
+		}
+		elem, why := drainedElem(b, role)
+		if why != "" {
+			return nil, f.Name + " " + why
+		}
+		opt.Elem = elem
+	case supSubjPred, supStats:
+		// The subject alone; nothing more to resolve.
+	}
+
+	if why := b.addSuppliedOption(opt); why != "" {
+		return nil, f.Name + " " + why
+	}
+	field.KindName = sdk.Kind(LawFieldKindPrefix + "SuppliedField")
+	field.Pool = opt.Config
+	return field, ""
 }
 
 // drainFieldOf derives the subscription sweep where the subscribe role

@@ -31,6 +31,8 @@ type InMemory struct {
 	mu    sync.Mutex
 	free  []pool.Value
 	inUse int
+	gets  int
+	puts  int
 }
 
 var _ pool.Contract = (*InMemory)(nil)
@@ -54,7 +56,18 @@ func (s *InMemory) Get(ctx context.Context) (pool.Value, error) {
 	v := s.free[len(s.free)-1]
 	s.free = s.free[:len(s.free)-1]
 	s.inUse++
+	s.gets++
 	return v, nil
+}
+
+// Stats reports the accounting the balance law reads: takes, returns, and
+// what is still out. On the concrete type rather than the interface — the
+// counters are the subject's own bookkeeping, and the consumer that arms
+// the law knows which subject it built.
+func (s *InMemory) Stats() (gets, puts, outstanding int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.gets, s.puts, s.inUse
 }
 
 // Put returns a value to the pool.
@@ -67,6 +80,7 @@ func (s *InMemory) Put(ctx context.Context, v pool.Value) error {
 	s.free = append(s.free, v)
 	if s.inUse > 0 {
 		s.inUse--
+		s.puts++
 	}
 	return nil
 }

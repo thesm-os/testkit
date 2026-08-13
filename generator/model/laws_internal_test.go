@@ -1585,3 +1585,135 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 		testkit.Assert(t, reason).Contains("no stamp names", "the sweep is typed at the element")
 	})
 }
+
+// TestSuppliedDoors pins the door builder's arms: each shape spells its
+// closure at the fixture's types or refuses with what is missing, a field
+// shared by several laws builds one door, and a name asked at two shapes is
+// a conflict rather than a shadow.
+func TestSuppliedDoors(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+	door := func(b *Bindings, law, field, from string, m *suite.Method) (*LawField, string) {
+		r := tiers.Rule{Law: law, Fields: []tiers.Field{
+			{Name: field, Kind: tiers.KindSupplied, From: from},
+		}}
+		return lawFieldOf(b, nil, r, r.Fields[0], m, nil)
+	}
+
+	t.Run("a key-typed door needs the keys pool", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := door(b, lawid.CausalOrdering, "HappensBefore", "happens-before", nil)
+		testkit.Assert(t, reason).Contains("key no method", "ClientOp is keyed")
+
+		b.Keys = Pool{Type: sdk.Builtin(qStr)}
+		field, reason := door(b, lawid.CausalOrdering, "HappensBefore", "happens-before", nil)
+		testkit.True(t, reason == "" && field.Pool == "happensBefore",
+			"the door opens at the pool's key: "+reason)
+	})
+
+	t.Run("an element-typed door reads the drained slice", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		scalar := projected("Items", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef(qStr)), errRet})
+		_, reason := door(b, lawid.StreamStableOrder, "Less", "order", scalar)
+		testkit.True(t, reason != "", "a non-slice drain spells no element")
+
+		drain := projected("Items", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(sliceRef(namedRef(qStr))), errRet})
+		field, reason := door(b, lawid.StreamStableOrder, "Less", "order", drain)
+		testkit.True(t, reason == "" && field.Pool == "less", "the door opens at the element: "+reason)
+
+		_, reason = door(b, lawid.StreamOverMatch, "Required", "required", drain)
+		testkit.True(t, reason == "", "the list door shares the element: "+reason)
+	})
+
+	t.Run("the history door is one door for three laws", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
+		_, reason := door(b, lawid.SnapshotIsolationG0, "History", "history", nil)
+		testkit.True(t, reason == "", "the first isolation level opens the door: "+reason)
+		_, reason = door(b, lawid.SnapshotIsolationG1, "History", "history", nil)
+		testkit.True(t, reason == "", "the second reads the same one: "+reason)
+		testkit.Equal(t, len(b.SuppliedOptions), 1, "one door, three laws")
+	})
+
+	t.Run("a name asked at two shapes is a conflict", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		testkit.Equal(t, b.addSuppliedOption(&SuppliedOption{Config: "x", Shape: supSubjPred}), "",
+			"the first spelling lands")
+		testkit.Assert(t, b.addSuppliedOption(&SuppliedOption{Config: "x", Shape: supStats})).
+			Contains("second shape", "and the second is a conflict, not a shadow")
+	})
+
+	t.Run("the subject-only doors open unconditionally", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := door(b, lawid.PoolLeakFree, "Balanced", "balanced", nil)
+		testkit.True(t, reason == "", "the balance door: "+reason)
+		_, reason = door(b, lawid.PoolBalanced, "Stats", "stats", nil)
+		testkit.True(t, reason == "", "the stats door: "+reason)
+		free := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
+		_, reason = door(free, lawid.LeaseReleasedOnCancel, "Free", "free", nil)
+		testkit.True(t, reason == "", "the free door: "+reason)
+	})
+
+	t.Run("the merge door reads the observation", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := door(b, lawid.EventualConvergence, "Merge", "merge", nil)
+		testkit.Assert(t, reason).Contains("observes state through no method",
+			"no observation, no lattice to join")
+
+		agg := projected("Count", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("int")), res(namedRef("error"))})
+		stamp(agg, "aggregator", "", "")
+		h := &suite.Contract{Methods: []suite.Method{*agg}}
+		field, reason := lawFieldOf(b, h, tiers.Rule{
+			Law:    lawid.EventualConvergence,
+			Fields: []tiers.Field{{Name: "Merge", Kind: tiers.KindSupplied, From: "merge"}},
+		},
+			tiers.Field{Name: "Merge", Kind: tiers.KindSupplied, From: "merge"}, nil, nil)
+		testkit.True(t, reason == "" && field.Pool == "merge",
+			"an aggregate is the lattice's state: "+reason)
+	})
+
+	t.Run("the replay doors open beside the drained log", func(t *testing.T) {
+		t.Parallel()
+		errRet := res(namedRef("error"))
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		replay := projected("Replay",
+			[]golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(sliceRef(pkgRef("example.com/c", "Entry"))), errRet})
+		carrier := projected("Append",
+			[]golang.Param{arg("ctx", ctxRef()), arg("e", pkgRef("example.com/c", "Entry"))},
+			[]golang.Return{errRet})
+		shape.ContractPartnerKey("chain", "replay").Set(carrier.Source.EnsureMeta(), "Replay", "test")
+		h := &suite.Contract{Methods: []suite.Method{*replay, *carrier}}
+		field, reason := lawFieldOf(b, h, tiers.Rule{
+			Law:    lawid.ReplayCausalOrdering,
+			Fields: []tiers.Field{{Name: fEntryID, Kind: tiers.KindSupplied, From: "entry-id"}},
+		},
+			tiers.Field{Name: fEntryID, Kind: tiers.KindSupplied, From: "entry-id"}, carrier, nil)
+		testkit.True(t, reason == "" && field.Pool == "entryID",
+			"the entry door opens at the log's element: "+reason)
+	})
+
+	t.Run("the replay doors need the replay role", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := door(b, lawid.ReplayCausalOrdering, fEntryID, "entry-id", unstamped())
+		testkit.True(t, reason != "", "no chain.replay stamp, no entry to identify")
+	})
+
+	t.Run("a field the table does not transcribe keeps the refusal", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		_, reason := door(b, lawid.ReadAfterWrite, "Nonesuch", "nonesuch", nil)
+		testkit.Assert(t, reason).Contains("no generated value can stand in for",
+			"an untranscribed field is not a door")
+	})
+}

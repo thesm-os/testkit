@@ -161,6 +161,16 @@ var bindings = map[string]Binding{
 	lawid.StreamPermutation:  {Type: "StreamPermutation", Args: []BindArg{BindValue, BindValue}},
 	lawid.StreamReentrant:    {Type: "StreamReentrancy", Args: []BindArg{ElemOf("Collect")}},
 	lawid.StreamStableOrder:  {Type: "StreamStableOrder", Args: []BindArg{BindValue}},
+
+	lawid.CausalOrdering:        {Type: "CausalOrdering", Ptr: true, Args: []BindArg{BindKey}},
+	lawid.SnapshotIsolationG0:   {Type: "SnapshotIsolationG0", Args: []BindArg{BindKey}},
+	lawid.SnapshotIsolationG1:   {Type: "SnapshotIsolationG1", Args: []BindArg{BindKey}},
+	lawid.SnapshotIsolationG2:   {Type: "SnapshotIsolationG2", Args: []BindArg{BindKey}},
+	lawid.EventualConvergence:   {Type: "EventualConvergence", Args: []BindArg{BindValue, BindObservation}},
+	lawid.LeaseReleasedOnCancel: {Type: "LeaseReleasedOnCancel", Args: []BindArg{BindKey}},
+	lawid.PoolBalanced:          {Type: "PoolBalancedGetPut"},
+	lawid.PoolLeakFree:          {Type: "PoolLeakFree"},
+	lawid.ReplayCausalOrdering:  {Type: "ReplayRespectsCausality", Args: []BindArg{BindKey, ElemOf("Replay")}},
 	lawid.StreamReflectsMutations: {
 		Type: "StreamReflectsMutations",
 		Args: []BindArg{ElemOf(fieldDrain), ElemOf(fieldDrain)},

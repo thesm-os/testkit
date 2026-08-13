@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/pool"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/pool/pooltest"
+	"go.thesmos.sh/testkit/engine/model"
 )
 
 // pool is the model tier's under ADR-0018: `AUTO-POOL-BALANCED` and
@@ -24,7 +25,15 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	pooltest.AssertContractContract(t,
-		pooltest.ContractModel(),
+		pooltest.ContractModel(
+			// The accounting identity, read off the subject's own counters.
+			// The leak-free door stays unarmed: its claim holds at
+			// quiescence, and the shared walk checks between steps, where a
+			// taken value is legitimately still out.
+			pooltest.ContractModelStats(func(_ *model.T, subject pool.Contract) (int, int, int) {
+				return subject.(*pooltest.InMemory).Stats()
+			}),
+		),
 		pooltest.ContractSubject("in-memory", func() pool.Contract {
 			return pooltest.NewInMemory()
 		}),

@@ -133,6 +133,15 @@ parameter with no hint is a diagnostic at the parameter.
   `(ctx, V) (V, error)` shape whose answered state carries the stamp — and
   refuse by name on a writer answering only an error, which hides the
   version the store assigned from the trace.
+- **A typed door for every supplied law field** — a law whose closure is a
+  domain fact (a merge algebra, an ordering, a transaction history) cannot
+  be derived, so the generator builds the door instead: one
+  `<Iface>Model<Field>` option per supplied field, spelled at the
+  fixture's own types, with the law registering only when armed and the
+  header marking it `(supplied: field)`. The corpus arms the stable-order
+  `Less`, the lease `Free` and the pool `Stats` doors end to end — the
+  lease door's first run caught the reference subject holding keys past
+  their cancelled context.
 - **A derived subscription drain, where a publisher claims delivery** — the
   publisher contract's laws (delivers, and the `mode=` bounds at-least-,
   at-most- and exactly-once) bind through one generated sweep over the

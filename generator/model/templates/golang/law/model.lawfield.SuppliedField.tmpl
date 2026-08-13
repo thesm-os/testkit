@@ -1,0 +1,7 @@
+{{- /*
+A consumer-supplied field: the law literal reads the config, and the guard
+around the registration is what keeps a nil closure from ever being called.
+*/ -}}
+{{- define "model.lawfield.SuppliedField" -}}
+{{ .Name }}: cfg.{{ .Pool }}
+{{- end -}}

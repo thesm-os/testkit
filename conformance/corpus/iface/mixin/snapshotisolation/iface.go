@@ -40,4 +40,9 @@ type Mixed interface {
 	// checks read.
 	//testkit:mixin snapshotisolation
 	History(ctx context.Context) ([]Entry, error)
+
+	// Get reads a key's latest recorded entry — the read half a store under
+	// isolation genuinely has, and the draw that gives the anomaly laws a
+	// key type to instantiate at.
+	Get(ctx context.Context, key string) (Entry, error)
 }

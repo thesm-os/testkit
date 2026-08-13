@@ -16,6 +16,13 @@ func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
 	snapshotisolationtest.AssertMixedContract(t,
+		// The anomaly doors stay unarmed here, deliberately: this subject is
+		// a passive log, and the entries the property records are drawn from
+		// pools — a fabricated history whose "anomalies" are the draws'
+		// collisions, not any subject's interleaving. Arming History proved
+		// exactly that on its first run. The doors are generated and typed;
+		// a transactional subject whose History reports its own commits is
+		// what arms them honestly.
 		snapshotisolationtest.MixedModel(),
 		snapshotisolationtest.MixedSubject("in-memory", func() snapshotisolation.Mixed {
 			return snapshotisolationtest.NewInMemory()
