@@ -48,3 +48,12 @@ func TestLifecycleContractWithoutTheDouble(t *testing.T) {
 		lifecycletest.LifecycleWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestLifecycleSaturation(t *testing.T) {
+	t.Parallel()
+	lifecycletest.LifecycleModelSaturation(t, func() lifecycle.Lifecycle {
+		return lifecycletest.NewInMemory()
+	})
+}

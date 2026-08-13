@@ -61,3 +61,18 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		leasetest.ContractWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same freeness door armed that arms the tier.
+func TestContractSaturation(t *testing.T) {
+	t.Parallel()
+	leasetest.ContractModelSaturation(t, func() lease.Contract {
+		return leasetest.NewInMemory()
+	}, leasetest.ContractModelFree(func(t *model.T, subject lease.Contract, k string) bool {
+		if err := subject.Acquire(t.Context(), k); err != nil {
+			return false
+		}
+		_ = subject.Release(t.Context(), k)
+		return true
+	}))
+}

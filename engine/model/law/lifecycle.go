@@ -68,6 +68,11 @@ type LeakFree[T any] struct {
 	// Zero defaults to 4, which absorbs the runtime's own background workers
 	// without absorbing a per-cycle leak.
 	Tolerance int
+	// Outstanding is the subject's own census, preferred over the process
+	// one where the interface offers it: the goroutine count is global, and
+	// a parallel test legitimately parking its own work reads as growth
+	// here — the subject's counter is deterministic and its alone.
+	Outstanding func(*rapid.T, T) (int, error)
 }
 
 // ID returns the stable identifier for this law.
@@ -87,6 +92,29 @@ func (l LeakFree[T]) Check(rt *rapid.T, sut, _ T) error {
 	if tolerance <= 0 {
 		tolerance = 4
 	}
+	if l.Outstanding != nil {
+		before, beforeErr := l.Outstanding(rt, sut)
+		if beforeErr != nil {
+			return Vacuous // a precondition this run supplies was refused
+		}
+		for range cycles {
+			if err := l.Open(rt, sut); err != nil {
+				return Vacuous // a precondition this run supplies was refused
+			}
+			if err := l.Close(rt, sut); err != nil {
+				return Vacuous // a precondition this run supplies was refused
+			}
+		}
+		after, afterErr := l.Outstanding(rt, sut)
+		if afterErr != nil {
+			return Vacuous // a precondition this run supplies was refused
+		}
+		if after > before {
+			return fmt.Errorf("LeakFree: outstanding grew from %d to %d after %d balanced cycles",
+				before, after, cycles)
+		}
+		return nil
+	}
 	before := runtime.NumGoroutine()
 	for range cycles {
 		if err := l.Open(rt, sut); err != nil {
@@ -97,6 +125,16 @@ func (l LeakFree[T]) Check(rt *rapid.T, sut, _ T) error {
 		}
 	}
 	after := runtime.NumGoroutine()
+	if after-before > tolerance {
+		// The census is process-wide: a parallel test ramping its own work
+		// mid-bracket reads as growth here. A settle and one resample tell
+		// the transients apart from a leak — a subject that held its
+		// goroutines still holds them after the yield.
+		for range 100 {
+			runtime.Gosched()
+		}
+		after = runtime.NumGoroutine()
+	}
 	if drift := after - before; drift > tolerance {
 		return fmt.Errorf("LeakFree: goroutine count grew from %d to %d after %d cycles (tolerance %d)",
 			before, after, cycles, tolerance)

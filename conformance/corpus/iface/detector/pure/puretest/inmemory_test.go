@@ -60,3 +60,12 @@ func TestPureContractWithoutTheDouble(t *testing.T) {
 		puretest.PureWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestPureSaturation(t *testing.T) {
+	t.Parallel()
+	puretest.PureModelSaturation(t, func() pure.Pure {
+		return puretest.NewInMemory("first")
+	})
+}

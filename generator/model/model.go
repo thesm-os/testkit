@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.23.0"
+const Version = "0.26.2"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -272,6 +272,14 @@ type Bindings struct {
 	// and ConfigName carry the tier's own option surface.
 	OptionName, PropertyName, OptionTypeName, ConfigName string
 
+	// SatLaws and SatMutants are the saturation surface: per bound law, the
+	// methods its closures reach; per reached method, the mutant wrappers
+	// the generated prover wears. Binding a law is necessary; this is what
+	// makes it sufficient — a law no mutant of its own methods can redden
+	// is bound but unsaturatable, and the prover says so by name.
+	SatLaws    []SatLaw
+	SatMutants []SatMutant
+
 	// EntryName is the harness entry the option is passed to, for the header.
 	EntryName string
 
@@ -424,6 +432,21 @@ func (*Bindings) LinearizePkg() string { return LinearizePkg }
 // declares the recording local.
 func (*Bindings) HistoryPkg() string { return HistoryPkg }
 
+// RootPkg surfaces the runtime module's import path — the prover's
+// FailableTB lives there.
+func (*Bindings) RootPkg() string { return RootPkg }
+
+// SatNeedsFixture reports whether any wearable defect flaps the fixture
+// pair, which obliges the prover to construct the fixture.
+func (b *Bindings) SatNeedsFixture() bool {
+	for _, m := range b.SatMutants {
+		if m.Kind == kindFlap {
+			return true
+		}
+	}
+	return false
+}
+
 // ModelPkg surfaces the runner's import path to the templates, which can
 // reach a method and not a const.
 func (*Bindings) ModelPkg() string { return ModelPkg }
@@ -495,6 +518,43 @@ func (b *Bindings) UsesKeys() bool {
 	return false
 }
 
+// SatLaw is one bound law's saturation obligation: its identifier, the
+// methods its closures reach, and the arming it waits on — supplied doors
+// or the clocked factory — without which the prover skips it visibly.
+type SatLaw struct {
+	ID      string
+	Methods []string
+	Guards  []string
+	Clocked bool
+
+	// Unwearable marks a law whose closures reach no method — doors and
+	// traces only — which the prover skips by name rather than dooms.
+	Unwearable bool
+
+	// AcceptSemantic widens the kill criterion to the runner's semantic
+	// divergence — for the one law that is the differential restated, whose
+	// violation the actions catch before the law can speak.
+	AcceptSemantic bool
+}
+
+// SatMutant is one wearable defect: a method answered wrongly in one of
+// the prover's kinds — inert (zeros), flap (the fixture pair alternated),
+// or wane (a descending count). Params and Returns carry the signature the
+// override renders.
+type SatMutant struct {
+	Method  string
+	Kind    string
+	Params  []sdk.Ref
+	Returns []sdk.Ref
+
+	// TakesCtx marks the leading context parameter; Out is the flapped,
+	// waned or faded result's type where the kind answers one; Last indexes
+	// the trailing error return the sputtering kind mints into.
+	TakesCtx bool
+	Out      sdk.Ref
+	Last     int
+}
+
 // Pool is one shared value source: a fixture field and its companion, and how
 // far past them the draws reach.
 type Pool struct {
@@ -531,6 +591,13 @@ type Reference struct {
 	// oracle is derived. When set, nothing else here is: the arguments belong
 	// to the consumer's own constructor.
 	SuppliedCtor *sdk.Expr
+
+	// MissSym is the declaration's own miss sentinel, routed into the
+	// oracle's constructor where a mixin stamps one — the guard a
+	// sentinel-checking law reads then matches the identity the fixture
+	// declared, instead of a minted private error it can never equal.
+	// Nil falls back to the minted MissName var.
+	MissSym *sdk.Expr
 
 	// TypeName, CtorName and MissName are the derived adapter's identifiers:
 	// the struct over the oracle, its constructor, and the sentinel the oracle
@@ -794,6 +861,11 @@ type Companion struct {
 	PropertyName, RefCtorName, ReferenceOptionName, FixtureCtor string
 	HarnessPkg                                                  string
 
+	// Saturated marks a harness that emitted the saturation prover, which
+	// the companion then holds to the derived reference — the proof ships
+	// with the derivation.
+	Saturated bool
+
 	// ConcurrentName is the concurrent leg's runner, empty where none
 	// derives. The companion holds the leg to the derived reference: a
 	// mutex-guarded store is linearizable, so a red run is the wiring's own.
@@ -856,6 +928,7 @@ func companionOf(c *sdk.Provenance, iface *sdk.Interface, b *Bindings) *Companio
 	if b.Concurrent() {
 		comp.ConcurrentName = b.IfaceName + "ModelConcurrent"
 	}
+	comp.Saturated = len(b.SatLaws) > 0
 	comp.LowerIface = strings.ToLower(b.IfaceName[:1]) + b.IfaceName[1:]
 	// One kill-matrix row per driven method: the coherence rule already
 	// guarantees each has a live adapter op, so its inertness is observable —
@@ -1138,6 +1211,7 @@ func bindingsOf(
 	}
 	poolsOf(ctx, b, harness, keySrc, valueSrc, composite, genFunc)
 	lawsOf(b, harness, partners, keyed)
+	saturationOf(b, harness)
 	concurrentOf(b, keyed, valued)
 	return b, true
 }
@@ -1221,6 +1295,30 @@ func historyDrained(harness *suite.Contract) bool {
 		}
 	}
 	return false
+}
+
+// missSentinelOf reports the declaration's own miss sentinel: the first
+// sentinel= or notfound= a mixin stamps anywhere in the method set,
+// qualified by the resolver. Routed into the derived oracle's constructor,
+// it is what lets a sentinel-checking law's guard match the identity the
+// fixture declared — against a minted private error the guard never passes,
+// and the law it feeds is dead without anyone saying so.
+func missSentinelOf(harness *suite.Contract) *sdk.Expr {
+	for i := range harness.Methods {
+		m := &harness.Methods[i]
+		for _, mx := range m.Mixins {
+			for _, key := range []string{"sentinel", "notfound"} {
+				v, stamped := shape.MixinParamKey(mx, key).Get(m.Source.Meta())
+				if !stamped || v == "" {
+					continue
+				}
+				if pkg, name, qualified := splitQualified(v); qualified {
+					return sdk.NewExternal(pkg, name)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // sessionVersionOf reports the first session mixin carrying a version=
@@ -1452,6 +1550,7 @@ func referenceOf(
 		// would — and a consumer comparing against it gets the same door.
 		CtorName: "New" + harness.IfaceName + "ModelReference",
 		MissName: lower + "ModelMiss",
+		MissSym:  missSentinelOf(harness),
 	}
 
 	twin := func(why string) bool {

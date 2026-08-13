@@ -91,3 +91,12 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		leaderelectiontest.ContractWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestContractSaturation(t *testing.T) {
+	t.Parallel()
+	leaderelectiontest.ContractModelSaturation(t, func() leaderelection.Contract {
+		return leaderelectiontest.NewInMemory()
+	})
+}

@@ -577,6 +577,7 @@ var rules = []Rule{
 			{Name: fieldClose, Kind: KindRole, From: "leakfree.close"},
 			{Name: "Cycles", Kind: KindDefault},
 			{Name: "Tolerance", Kind: KindDefault},
+			{Name: "Outstanding", Kind: KindRole, From: "family.aggregator", Optional: true},
 		},
 	},
 

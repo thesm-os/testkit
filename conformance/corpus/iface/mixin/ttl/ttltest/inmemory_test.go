@@ -62,3 +62,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		ttltest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself;
+// the clocked laws skip themselves — their factory is the clock's.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	ttltest.MixedModelSaturation(t, func() ttl.Mixed {
+		return ttltest.NewInMemory()
+	})
+}

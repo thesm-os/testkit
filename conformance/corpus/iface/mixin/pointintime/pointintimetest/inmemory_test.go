@@ -47,3 +47,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		pointintimetest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	pointintimetest.MixedModelSaturation(t, func() pointintime.Mixed {
+		return pointintimetest.NewInMemory()
+	})
+}

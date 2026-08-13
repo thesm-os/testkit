@@ -232,7 +232,7 @@ func TestPointInTimeBranches(t *testing.T) {
 			disturbed := false
 			l := law.PointInTime[int, string, int]{
 				Read:    func(*rapid.T, int, string) (int, error) { return 1, nil },
-				Disturb: func(*rapid.T, int, string) { disturbed = true },
+				Disturb: func(*rapid.T, int, int, string) { disturbed = true },
 				Keys:    rapid.Just("k"),
 			}
 			if err := l.Check(rt, 0, 0); err != nil {
@@ -508,7 +508,7 @@ func TestPointInTimePair(t *testing.T) {
 	l := law.PointInTime[*store, string, int]{
 		Read:    func(_ *rapid.T, _ *store, _ string) (int, error) { return 7, nil },
 		Keys:    rapid.Just("k"),
-		Disturb: func(_ *rapid.T, s *store, _ string) { s.disturbed = true },
+		Disturb: func(_ *rapid.T, sut, ref *store, _ string) { sut.disturbed, ref.disturbed = true, true },
 	}
 	rapid.Check(t, func(rt *rapid.T) {
 		sut, ref := &store{}, &store{}

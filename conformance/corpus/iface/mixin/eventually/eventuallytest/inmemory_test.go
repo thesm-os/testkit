@@ -82,3 +82,21 @@ func TestSyncCarriesThePeersFailure(t *testing.T) {
 	testkit.NoError(t, err, "the replica is still readable")
 	testkit.Len(t, items, 0, "and nothing landed from the failed exchange")
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same merge door armed that arms the tier.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	eventuallytest.MixedModelSaturation(t, func() eventually.Mixed {
+		return eventuallytest.NewInMemory()
+	}, eventuallytest.MixedModelMerge(func(a, b []string) []string {
+		seen := map[string]bool{}
+		for _, item := range a {
+			seen[item] = true
+		}
+		for _, item := range b {
+			seen[item] = true
+		}
+		return slices.Sorted(maps.Keys(seen))
+	}))
+}

@@ -96,9 +96,12 @@ func (l DefaultOnError[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 // by the consumer via Disturb; the law itself only verifies
 // stability across the pair).
 type PointInTime[T any, K comparable, V any] struct {
-	Read    func(*rapid.T, T, K) (V, error)
-	Keys    *rapid.Generator[K]
-	Disturb func(*rapid.T, T, K) // optional concurrent disturber
+	Read func(*rapid.T, T, K) (V, error)
+	Keys *rapid.Generator[K]
+	// Disturb lands one disturbance on both subjects between the reads. Both
+	// in one call, because the closure draws its own writes: two calls would
+	// draw twice and desynchronize the pair it is supposed to keep level.
+	Disturb func(rt *rapid.T, sut, ref T, k K)
 }
 
 // ID returns the stable identifier for this law.
@@ -113,12 +116,12 @@ func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 	k := l.Keys.Draw(rt, "PointInTime_key")
 	v1, err1 := l.Read(rt, sut, k)
 	if l.Disturb != nil {
-		// The disturbance lands on both sides — the mirrored half of the
-		// [Law] conduct contract. Disturb reports nothing, so there is no
-		// refusal to relay; a divergence it causes is the next action's to
-		// find, on a pair that at least saw the same calls.
-		l.Disturb(rt, sut, k)
-		l.Disturb(rt, ref, k)
+		// The disturbance lands on both sides in one call — the mirrored
+		// half of the [Law] conduct contract, with the draws made once.
+		// Disturb reports nothing, so there is no refusal to relay; a
+		// divergence it causes is the next action's to find, on a pair that
+		// at least saw the same calls.
+		l.Disturb(rt, sut, ref, k)
 	}
 	v2, err2 := l.Read(rt, sut, k)
 	if (err1 == nil) != (err2 == nil) {

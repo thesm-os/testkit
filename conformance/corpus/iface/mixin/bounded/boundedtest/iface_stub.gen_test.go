@@ -18,6 +18,126 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
+// mixedStubAddSubject binds Add into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func mixedStubAddSubject(tb testing.TB) stub.Subject[boundedtest.MixedAddCall, boundedtest.MixedAddReturn] {
+	tb.Helper()
+	s := boundedtest.NewMixedStub(tb)
+	return stub.Subject[boundedtest.MixedAddCall, boundedtest.MixedAddReturn]{
+		Stub: s.OnAdd.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 string
+			_ = s.Add(a0, a1)
+		},
+		Result: func() boundedtest.MixedAddReturn {
+			var a0 context.Context
+			var a1 string
+			got0 := s.Add(a0, a1)
+			return boundedtest.MixedAddReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnAdd.Func(func(_ context.Context, _ string) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 string
+			r0 := s.Add(a0, a1)
+			return r0
+		},
+	}
+}
+
+// TestMixedStubAdd pins how Add answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestMixedStubAdd(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Add", mixedStubAddSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := boundedtest.NewMixedStub(t)
+		var want0 error
+		s.OnAdd.Returns(want0)
+		var a0 context.Context
+		var a1 string
+		got0 := s.Add(a0, a1)
+		testkit.Equal(t, got0, want0, "Add must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := boundedtest.NewMixedStub(t)
+		var a0 context.Context
+		var a1 string
+		_ = s.Add(a0, a1)
+		got := s.OnAdd.AssertCalledOnce(t, "Add must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Item, a1, "the recorded call carries Item")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := boundedtest.NewMixedStub(t)
+		var seen []boundedtest.MixedAddCall
+		s.OnAdd.OnRecord(func(c boundedtest.MixedAddCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 string
+		_ = s.Add(a0, a1)
+		_ = s.Add(a0, a1)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Add call")
+	})
+
+	t.Run("wires WithMixedAdd at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := boundedtest.NewMixedStub(t, boundedtest.WithMixedAdd(func(_ context.Context, _ string) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 string
+		_ = s.Add(a0, a1)
+		testkit.True(t, called, "WithMixedAdd must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := boundedtest.NewMixedStub(t)
+		var want0 error
+		s.OnAdd.Returns(want0)
+		var a0 context.Context
+		var a1 string
+		_ = s.Add(a0, a1)
+		s.ResetCalls()
+		got0 := s.Add(a0, a1)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // mixedStubListSubject binds List into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -138,34 +258,35 @@ func TestMixedStubList(t *testing.T) {
 // mixedStubDouble describes how to build a MixedStub under each
 // option whose effect is the same whatever a method's signature.
 //
-// List stands in for the double as a whole: what these checks assert
+// Add stands in for the double as a whole: what these checks assert
 // is that an option reached it at all, and the first method witnesses that as
 // well as any other would.
-func mixedStubDouble() stub.Double[boundedtest.MixedListCall] {
-	instance := func(s *boundedtest.MixedStub) stub.Instance[boundedtest.MixedListCall] {
-		return stub.Instance[boundedtest.MixedListCall]{
-			Stub: s.OnList.MethodStub,
+func mixedStubDouble() stub.Double[boundedtest.MixedAddCall] {
+	instance := func(s *boundedtest.MixedStub) stub.Instance[boundedtest.MixedAddCall] {
+		return stub.Instance[boundedtest.MixedAddCall]{
+			Stub: s.OnAdd.MethodStub,
 			Call: func() {
 				var a0 context.Context
-				_, _ = s.List(a0)
+				var a1 string
+				_ = s.Add(a0, a1)
 			},
 			Reset: s.ResetCalls,
 		}
 	}
-	return stub.Double[boundedtest.MixedListCall]{
-		New: func(tb testing.TB) stub.Instance[boundedtest.MixedListCall] {
+	return stub.Double[boundedtest.MixedAddCall]{
+		New: func(tb testing.TB) stub.Instance[boundedtest.MixedAddCall] {
 			return instance(boundedtest.NewMixedStub(tb))
 		},
-		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[boundedtest.MixedListCall] {
+		WithClock: func(tb testing.TB, clk clock.Clock) stub.Instance[boundedtest.MixedAddCall] {
 			return instance(boundedtest.NewMixedStub(tb, boundedtest.MixedStubWithClock(clk)))
 		},
-		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[boundedtest.MixedListCall] {
+		WithRandSource: func(tb testing.TB, src rand.Source) stub.Instance[boundedtest.MixedAddCall] {
 			return instance(boundedtest.NewMixedStub(tb, boundedtest.MixedStubWithRandSource(src)))
 		},
-		BenchMode: func(tb testing.TB) stub.Instance[boundedtest.MixedListCall] {
+		BenchMode: func(tb testing.TB) stub.Instance[boundedtest.MixedAddCall] {
 			return instance(boundedtest.NewMixedStub(tb, boundedtest.MixedStubBenchMode()))
 		},
-		Strict: func(tb testing.TB) stub.Instance[boundedtest.MixedListCall] {
+		Strict: func(tb testing.TB) stub.Instance[boundedtest.MixedAddCall] {
 			return instance(boundedtest.NewMixedStub(tb, boundedtest.MixedStubStrict()))
 		},
 	}
@@ -191,6 +312,25 @@ func TestMixedStubDelegateTo(t *testing.T) {
 	inner := boundedtest.NewMixedStub(t)
 	s := boundedtest.NewMixedStub(t, boundedtest.MixedStubDelegateTo(inner))
 
+	t.Run("forwards Add to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 string
+		_ = s.Add(a0, a1)
+		inner.OnAdd.AssertCalledOnce(t, "Add must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Add answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Add-delegate")
+		inner.OnAdd.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 string
+		r0 := s.Add(a0, a1)
+		testkit.ErrorIs(t, r0, want, "Add must surface the wrapped answer")
+	})
+
 	t.Run("forwards List to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		_, _ = s.List(a0)
@@ -210,4 +350,4 @@ func TestMixedStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d1084a31daae73c9ecf26008fe4abda9b7b5ee45a0661c3cc284985505f1b082
+// testkit:provenance 7285e0d1793915d66eb380766df6c57900522d7dabaf2ac71a2ab25dbc465b8e

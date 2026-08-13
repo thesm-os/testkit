@@ -16,6 +16,17 @@ import (
 	"go.thesmos.sh/testkit/stub"
 )
 
+// MixedAddCall records one invocation of Mixed.Add.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type MixedAddCall struct {
+	Ctx  context.Context
+	Item string
+	Err  error
+}
+
 // MixedListCall records one invocation of Mixed.List.
 //
 // Fields take their names from the source signature — parameters and named
@@ -28,6 +39,38 @@ type MixedListCall struct {
 }
 
 // --- Per-method configuration ---
+
+// MixedAddStub controls how the double answers Add and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type MixedAddStub struct {
+	*stub.MethodStub[MixedAddCall]
+
+	fn       func(context.Context, string) error
+	fallback *MixedAddReturn
+}
+
+// MixedAddReturn holds the fixed answer configured through Returns.
+type MixedAddReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Add. A Func
+// override and an injected fault both take precedence over it.
+func (s *MixedAddStub) Returns(err error) *MixedAddStub {
+	s.fallback = &MixedAddReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Add, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *MixedAddStub) Func(fn func(context.Context, string) error) *MixedAddStub {
+	s.fn = fn
+	return s
+}
 
 // MixedListStub controls how the double answers List and records
 // what it was asked.
@@ -81,6 +124,7 @@ func MixedStubStrict() MixedStubOption {
 // production type, which is the point of conformance testing.
 func MixedStubDelegateTo(impl bounded.Mixed) MixedStubOption {
 	return func(s *MixedStub) {
+		s.OnAdd.Func(impl.Add)
 		s.OnList.Func(impl.List)
 	}
 }
@@ -117,6 +161,13 @@ func MixedStubBenchMode() MixedStubOption {
 	}
 }
 
+// WithMixedAdd sets Add's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithMixedAdd(fn func(context.Context, string) error) MixedStubOption {
+	return func(s *MixedStub) { s.OnAdd.Func(fn) }
+}
+
 // WithMixedList sets List's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -129,6 +180,7 @@ func WithMixedList(fn func(context.Context) ([]string, error)) MixedStubOption {
 // Each On<Method> field is that method's configuration point. Left alone, a
 // method returns its zero value and records the call.
 type MixedStub struct {
+	OnAdd  *MixedAddStub
 	OnList *MixedListStub
 
 	// all is every method stub above, viewed through the surface that does
@@ -154,9 +206,11 @@ var _ bounded.Mixed = (*MixedStub)(nil)
 // and non-test callers want.
 func NewMixedStub(tb testing.TB, opts ...MixedStubOption) *MixedStub {
 	s := &MixedStub{
+		OnAdd:  &MixedAddStub{MethodStub: stub.NewMethodStub[MixedAddCall](tb, "Mixed.Add")},
 		OnList: &MixedListStub{MethodStub: stub.NewMethodStub[MixedListCall](tb, "Mixed.List")},
 	}
 	s.all = []stub.Configurable{
+		s.OnAdd.MethodStub,
 		s.OnList.MethodStub,
 	}
 	for _, opt := range opts {
@@ -196,6 +250,38 @@ func (s *MixedStub) ResetCalls() {
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *MixedAddStub) invoke(ctx context.Context, item string) func() MixedAddReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() MixedAddReturn {
+		r0 := s.fn(ctx, item)
+		return MixedAddReturn{Err: r0}
+	}
+}
+
+// Add records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *MixedStub) Add(ctx context.Context, item string) error {
+	call := MixedAddCall{Ctx: ctx, Item: item}
+	r := stub.Answer(s.OnAdd.MethodStub, &call, stub.Arms[MixedAddCall, MixedAddReturn]{
+		Invoke:   s.OnAdd.invoke(ctx, item),
+		Fallback: s.OnAdd.fallback,
+		Fault:    func(err error) MixedAddReturn { return MixedAddReturn{Err: err} },
+		Stamp: func(c *MixedAddCall, r MixedAddReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *MixedListStub) invoke(ctx context.Context) func() MixedListReturn {
 	if s.fn == nil {
 		return nil
@@ -227,4 +313,4 @@ func (s *MixedStub) List(ctx context.Context) ([]string, error) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f95b11b2c557fe161b78c310e923ed463b80c68432d73bd1f636490ac82b361a
+// testkit:provenance fdf3dd1e7b33e855de26eaf8a92a47ba03794e71b609f980b836a6ff9b5c3af8

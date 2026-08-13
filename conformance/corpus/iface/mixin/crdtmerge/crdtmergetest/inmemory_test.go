@@ -103,3 +103,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		crdtmergetest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestReplicaSaturation(t *testing.T) {
+	t.Parallel()
+	crdtmergetest.ReplicaModelSaturation(t, func() crdtmerge.Replica {
+		return crdtmergetest.NewInMemory()
+	})
+}

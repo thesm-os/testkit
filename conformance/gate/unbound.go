@@ -6,7 +6,7 @@ package gate
 // UnboundLaws is the debt register the assertion gate carries: model-owned
 // laws the corpus's stamps select, whose engine implementations ship tested,
 // and which no fixture binds — each with the chokepoint that holds it. The
-// generated-suite audit (docs/internal/generated-suite-audit.md) proved the
+// generated-suite audit (docs/superpowers/model-audit.md) proved the
 // class by deleting a fixture's whole claim and watching the corpus stay
 // green; this register is that finding turned into a contract.
 //

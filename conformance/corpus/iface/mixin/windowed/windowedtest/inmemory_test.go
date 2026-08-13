@@ -53,3 +53,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		windowedtest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself;
+// the clocked laws skip themselves — their factory is the clock's.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	windowedtest.MixedModelSaturation(t, func() windowed.Mixed {
+		return windowedtest.NewInMemory()
+	})
+}

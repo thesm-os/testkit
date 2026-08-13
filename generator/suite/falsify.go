@@ -186,6 +186,7 @@ func CheckKinds() []sdk.Kind {
 		KindNilSafe, KindTimeout, KindOrderAfter, KindSideEffect, KindPartition,
 		KindHooks, KindSample, KindValidates, KindWrappedVia,
 		KindIfAbsent, KindIfMatch, KindOutbox,
+		KindCloseIdempotent, KindUseAfterClose, KindConcurrentSmoke,
 	}
 }
 

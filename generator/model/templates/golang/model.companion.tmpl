@@ -36,6 +36,16 @@ func Test{{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T
 func Fuzz{{ .IfaceName }}Model(f *{{ renderExpr (external "testing" "F") }}) {
 	{{ renderExpr (external .HarnessPkg (printf "%sModelFuzz" .IfaceName)) }}(f, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
 }
+{{ if .Saturated }}
+// Test{{ .IfaceName }}ModelSaturation holds every bound law to its own
+// falsifiability: a defect worn on each method the law's closures reach
+// must redden a run naming the law — against the derived reference, so the
+// proof ships with the derivation that made the claim.
+func Test{{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+	{{ renderExpr (external .HarnessPkg (printf "%sModelSaturation" .IfaceName)) }}(t, {{ renderExpr (external .HarnessPkg .RefCtorName) }})
+}
+{{ end }}
 {{ if .Mutants }}
 {{ $c := . }}
 // Test{{ .IfaceName }}ModelKillsInertMutants measures the tier's teeth: for

@@ -1,0 +1,226 @@
+{{- /*
+The saturation prover: binding a law is necessary, this is what makes it
+sufficient. Per bound law, a defect is worn on each method the law's
+closures reach, and at least one worn run must fail naming the law's own
+identifier — with the clean factory standing as reference, so the twin
+floor has real teeth against every mutant.
+*/ -}}
+{{- define "model.saturation" -}}
+{{- if .SatLaws }}
+{{ $b := . }}
+// {{ .IfaceName }}SatWear is one wearable defect: a kind, and the wrap that
+// dresses a subject in it.
+type {{ lower .IfaceName }}SatWear struct {
+	kind string
+	wrap func(fx {{ .IfaceName }}Fixture, s {{ renderType .IfaceRef }}) {{ renderType .IfaceRef }}
+}
+
+{{- if .SatMutants }}
+//nolint:gochecknoglobals // the prover's wardrobe, read-only after init.
+var {{ lower .IfaceName }}SatWears = map[string][]{{ lower .IfaceName }}SatWear{}
+
+//nolint:gochecknoinits // the wardrobe fills once, keyed by method.
+func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by design.
+	dress := func(method, kind string, wrap func(fx {{ .IfaceName }}Fixture, s {{ renderType .IfaceRef }}) {{ renderType .IfaceRef }}) {
+		{{ lower .IfaceName }}SatWears[method] = append({{ lower .IfaceName }}SatWears[method],
+			{{ lower .IfaceName }}SatWear{kind: kind, wrap: wrap})
+	}
+{{- range $m := .SatMutants }}
+{{- if eq .Kind "inert" }}
+	dress({{ printf "%q" .Method }}, "inert", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatInert{{ .Method }}{s}
+	})
+{{- else if eq .Kind "flap" }}
+	dress({{ printf "%q" .Method }}, "flap", func(fx {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatFlap{{ .Method }}{ {{ $b.IfaceName }}: s, a: fx.{{ $b.Values.Field }}, b: fx.{{ $b.Values.OtherField }} }
+	})
+{{- else if eq .Kind "wane" }}
+	dress({{ printf "%q" .Method }}, "wane", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatWane{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "wax" }}
+	dress({{ printf "%q" .Method }}, "wax", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatWax{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "sputter" }}
+	dress({{ printf "%q" .Method }}, "sputter", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatSputter{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "fade" }}
+	dress({{ printf "%q" .Method }}, "fade", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatFade{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else }}
+	dress({{ printf "%q" .Method }}, "echo", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatEcho{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- end }}
+{{- end }}
+}
+{{- end }}
+
+// {{ .IfaceName }}ModelSaturation proves the bound laws can fail: per law, a
+// defect is worn on each method the law's closures reach — zeros, the
+// fixture pair alternated, a waning count — and at least one worn run must
+// fail naming the law's own identifier, with the clean factory standing as
+// reference. A law every defect survives is bound but unsaturatable, and
+// fails here by name. Pass the same options that arm the tier: a law behind
+// an unarmed door or the clocked factory is skipped visibly, never counted.
+func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }}, factory func() {{ renderType .IfaceRef }}, opts ...{{ .OptionTypeName }}) {
+	t.Helper()
+	cfg := new{{ .IfaceName }}ModelConfig(opts...)
+	_ = cfg
+	fx := {{ .FixtureCtor }}()
+	_ = fx
+{{- range .SatLaws }}
+	t.Run({{ printf "%q" .ID }}, func(t *{{ renderExpr (external "testing" "T") }}) {
+{{- if .Clocked }}
+		t.Skip("a clocked law's factory builds its own subjects on the run's clock; a worn defect never reaches it")
+{{- else if .Unwearable }}
+		t.Skip("the law closes over no method a defect can wear — its closures are doors and traces")
+{{- else }}
+{{- range .Guards }}
+		if cfg.{{ . }} == nil {
+			t.Skip("the {{ . }} door is not armed here, and the law registers only armed")
+		}
+{{- end }}
+		killed := func() bool {
+			for _, method := range []string{ {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ printf "%q" $m }}{{ end }} } {
+				for _, wear := range {{ lower $b.IfaceName }}SatWears[method] {
+					surrogate := "{{ $b.IfaceName }}Sat_{{ .ID }}_" + method + "_" + wear.kind
+					t.Cleanup(func() {
+						_ = {{ renderExpr (external "os" "RemoveAll") }}({{ renderExpr (external "path/filepath" "Join") }}("testdata", "rapid", surrogate))
+						_ = {{ renderExpr (external "os" "Remove") }}({{ renderExpr (external "path/filepath" "Join") }}(
+							{{ renderExpr (external $b.ModelPkg "ResolveArtifactDir") }}(""), "failure-"+surrogate+".json"))
+					})
+					f := {{ renderExpr (external $b.RootPkg "NewFailableTB") }}().WithName(surrogate)
+					worn := append({{ renderExpr (external "slices" "Clone") }}(opts),
+						{{ $b.IfaceName }}ModelReference(factory))
+					{{ renderExpr (external $b.ModelPkg "Check") }}(f, {{ $b.PropertyName }}(func() {{ renderType $b.IfaceRef }} {
+						return wear.wrap(fx, factory())
+					}, worn...))
+					if f.Failed() && ({{ if .AcceptSemantic }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), "[semantic]") || {{ end }}{{ renderExpr (external "strings" "Contains") }}(f.Msg(), {{ printf "%q" .ID }})) {
+						return true
+					}
+				}
+			}
+			return false
+		}()
+		if !killed {
+			t.Errorf("{{ .ID }} survived every defect worn on its own methods — bound but unsaturatable")
+		}
+{{- end }}
+	})
+{{- end }}
+}
+{{- range .SatMutants }}
+{{- if eq .Kind "inert" }}
+
+// {{ lower $b.IfaceName }}SatInert{{ .Method }} answers zeros where {{ .Method }} should act.
+type {{ lower $b.IfaceName }}SatInert{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func ({{ lower $b.IfaceName }}SatInert{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}){{ if .Returns }} ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }} {{ renderType $r }}{{ end }}){{ end }} {
+	return
+}
+{{- else if eq .Kind "flap" }}
+
+// {{ lower $b.IfaceName }}SatFlap{{ .Method }} alternates the fixture pair where
+// {{ .Method }} should answer the store.
+type {{ lower $b.IfaceName }}SatFlap{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+	a, b {{ renderType .Out }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatFlap{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	if m.flip.Add(1)%2 == 0 {
+		return m.a, nil
+	}
+	return m.b, nil
+}
+{{- else if eq .Kind "wane" }}
+
+// {{ lower $b.IfaceName }}SatWane{{ .Method }} answers a strictly waning count
+// where {{ .Method }} should observe.
+type {{ lower $b.IfaceName }}SatWane{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatWane{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	return {{ renderType .Out }}(1000 - m.flip.Add(1)), nil
+}
+{{- else if eq .Kind "wax" }}
+
+// {{ lower $b.IfaceName }}SatWax{{ .Method }} answers a count that only grows
+// where {{ .Method }} should return to rest.
+type {{ lower $b.IfaceName }}SatWax{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatWax{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}_ {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	return {{ renderType .Out }}(m.flip.Add(1)), nil
+}
+{{- else if eq .Kind "sputter" }}
+
+// {{ lower $b.IfaceName }}SatSputter{{ .Method }} alternates a minted refusal
+// with the real answer where {{ .Method }} should be steady.
+type {{ lower $b.IfaceName }}SatSputter{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatSputter{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}){{ if .Returns }} ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}z{{ $i }} {{ renderType $r }}{{ end }}){{ end }} {
+	if m.flip.Add(1)%2 == 1 {
+		z{{ .Last }} = {{ renderExpr (external "errors" "New") }}("{{ $b.MissPrefix }}: saturation sputtered a refusal")
+		return
+	}
+	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "fade" }}
+
+// {{ lower $b.IfaceName }}SatFade{{ .Method }} answers every second replay
+// reversed and short one — the log lying about what it already showed.
+type {{ lower $b.IfaceName }}SatFade{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	flip {{ renderExpr (external "sync/atomic" "Int64") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatFade{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ([]{{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil || m.flip.Add(1)%2 == 1 || len(out) == 0 {
+		return out, err
+	}
+	faded := {{ renderExpr (external "slices" "Clone") }}(out)
+	{{ renderExpr (external "slices" "Reverse") }}(faded)
+	return faded[:len(faded)-1], nil
+}
+{{- else }}
+
+// {{ lower $b.IfaceName }}SatEcho{{ .Method }} answers the first page forever,
+// with more always promised — the walk that never advances.
+type {{ lower $b.IfaceName }}SatEcho{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	mu   {{ renderExpr (external "sync" "Mutex") }}
+	held bool
+	z0   {{ index .Returns 0 | renderType }}
+	z1   {{ index .Returns 1 | renderType }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatEcho{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ index .Returns 0 | renderType }}, {{ index .Returns 1 | renderType }}, {{ index .Returns 2 | renderType }}, error) {
+	items, next, more, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil {
+		return items, next, more, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if !m.held {
+		m.held, m.z0, m.z1 = true, items, next
+	}
+	return m.z0, m.z1, true, nil
+}
+{{- end }}
+{{- end }}
+{{ end }}
+{{- end -}}

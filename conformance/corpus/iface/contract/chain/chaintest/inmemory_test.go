@@ -55,3 +55,12 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		chaintest.ContractWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestContractSaturation(t *testing.T) {
+	t.Parallel()
+	chaintest.ContractModelSaturation(t, func() chain.Contract {
+		return chaintest.NewInMemory()
+	})
+}

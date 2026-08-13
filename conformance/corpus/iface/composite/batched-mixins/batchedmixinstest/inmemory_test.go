@@ -98,3 +98,12 @@ func TestBatchedContractWithoutTheDouble(t *testing.T) {
 		batchedmixinstest.BatchedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestBatchedSaturation(t *testing.T) {
+	t.Parallel()
+	batchedmixinstest.BatchedModelSaturation(t, func() batchedmixins.Batched {
+		return batchedmixinstest.NewInMemory()
+	})
+}

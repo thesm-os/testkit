@@ -15,9 +15,9 @@ import (
 )
 
 // Limit is the ceiling the source declares through `//testkit:mixin bounded
-// limit=100`, restated here because the subject has to honour it and nothing
+// limit=5`, restated here because the subject has to honour it and nothing
 // generated reads it: bounded is the model tier's under ADR-0018.
-const Limit = 100
+const Limit = 5
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
@@ -30,6 +30,18 @@ var _ bounded.Mixed = (*InMemory)(nil)
 
 // NewInMemory returns an empty collection.
 func NewInMemory() *InMemory { return &InMemory{} }
+
+// Add grows the collection; what List answers stays clamped to Limit
+// regardless, which is the mixin's whole claim.
+func (s *InMemory) Add(ctx context.Context, item string) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = append(s.items, item)
+	return nil
+}
 
 // List never returns more than Limit, which is the whole of the mixin and no
 // part of the signature — `List(ctx) ([]string, error)` is the same shape

@@ -1,0 +1,19 @@
+{{- /*
+The disturbance between a point-in-time law's two reads: a drawn value
+written under an adjacent key, landed on both subjects from one draw —
+concurrent activity elsewhere must not perturb the key being read.
+Adjacent deliberately: a same-key overwrite is invisible-by-right only
+under resolution pinning, which is the sticky claim, not this one.
+*/ -}}
+{{- define "model.lawfield.DisturbWrite" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, sut, ref {{ renderType .Iface }}, k {{ renderType .Key }}) {
+			other := keys.Draw(rt, "{{ .Name }}_key")
+			if other == k {
+				return
+			}
+			v := {{ .Pool }}.Draw(rt, "{{ .Name }}_write")
+			v.{{ .KeyField }} = other
+			_ = sut.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
+			_ = ref.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}v)
+		}
+{{- end -}}

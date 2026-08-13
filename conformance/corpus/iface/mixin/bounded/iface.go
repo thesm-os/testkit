@@ -25,8 +25,15 @@ import (
 //testkit:suite
 //testkit:model
 type Mixed interface {
+	// Add grows the collection the ceiling bounds. Without a writer the
+	// subject stays empty and the bound holds by vacancy — a limit nothing
+	// can approach is a claim nothing checks.
+	Add(ctx context.Context, item string) error
+
 	// List carries the ceiling as a parameter, because the law cannot be
-	// stated without a number to compare against.
-	//testkit:mixin bounded limit=100
+	// stated without a number to compare against. Five, deliberately: a
+	// bound the drawn sequences cross in a handful of writes is one a
+	// broken subject fails inside a single iteration.
+	//testkit:mixin bounded limit=5
 	List(ctx context.Context) ([]string, error)
 }

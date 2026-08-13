@@ -123,3 +123,12 @@ func TestSlowAbandonsItsWaitWhenTheCallerGivesUp(t *testing.T) {
 	testkit.ErrorIs(t, <-done, context.Canceled,
 		"the wait ends where the caller did, not where the clock would have")
 }
+
+// The saturation prover: every bound law must be able to fail as itself;
+// the clocked laws skip themselves — their factory is the clock's.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	timeouttest.MixedModelSaturation(t, func() timeout.Mixed {
+		return timeouttest.NewInMemory()
+	})
+}

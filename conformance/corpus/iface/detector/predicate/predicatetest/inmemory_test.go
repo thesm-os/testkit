@@ -47,3 +47,12 @@ func TestPredicateContractWithoutTheDouble(t *testing.T) {
 		predicatetest.PredicateWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestPredicateSaturation(t *testing.T) {
+	t.Parallel()
+	predicatetest.PredicateModelSaturation(t, func() predicate.Predicate {
+		return predicatetest.NewInMemory()
+	})
+}

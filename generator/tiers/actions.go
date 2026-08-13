@@ -238,6 +238,10 @@ var oracleDefeats = map[string]string{
 	// already; this row covers causal claims with no stamp, like the
 	// chain's.)
 	mixinCausal: "the causal claim is an admission policy, and a derived store admits everything",
+	// The bounded claim clamps what its reader answers; a derived
+	// collection answers everything it was fed, so a correct subject's
+	// first clamped read counts as disagreement. Twins clamp together.
+	mixinBounded: "the bounded claim clamps what the reader answers, and a derived collection clamps nothing",
 }
 
 // MapStorePins reports whether the named mixin turns the map oracle into its

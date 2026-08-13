@@ -57,7 +57,14 @@ func (Associative[T, V, Obs]) ID() string { return lawid.Associative }
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (Associative[T, V, Obs]) REQID() string { return "" }
 
-// Check applies three values in both groupings and compares.
+// Check applies three values in two orders and compares.
+//
+// Order, not grouping: a fold exposes no pairwise operation to regroup, so
+// grouping-independence is unobservable through this shape — what a fold
+// CAN show is that the applications commute, which is the observable half
+// of the associative-commutative algebra the mixin's carriers declare. The
+// second instance receives the reversal, the same two-order shape
+// [CommutativeWrite] uses, and an order-sensitive fold fails by name.
 func (l Associative[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 	a := l.Values.Draw(rt, "Associative_a")
 	b := l.Values.Draw(rt, "Associative_b")
@@ -69,15 +76,15 @@ func (l Associative[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 	}
 
 	right := l.Factory()
-	if l.Apply(rt, right, a) != nil || l.Apply(rt, right, b) != nil || l.Apply(rt, right, c) != nil {
+	if l.Apply(rt, right, c) != nil || l.Apply(rt, right, b) != nil || l.Apply(rt, right, a) != nil {
 		return Vacuous // a precondition this run supplies was refused
 	}
 
 	leftObs := l.Observe(rt, left)
 	rightObs := l.Observe(rt, right)
 	if fmt.Sprint(leftObs) != fmt.Sprint(rightObs) {
-		return fmt.Errorf("associative law: (%v;%v);%v != %v;(%v;%v): left=%v right=%v",
-			a, b, c, a, b, c, leftObs, rightObs)
+		return fmt.Errorf("associative law: %v;%v;%v != %v;%v;%v: left=%v right=%v",
+			a, b, c, c, b, a, leftObs, rightObs)
 	}
 	return nil
 }

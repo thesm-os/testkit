@@ -52,3 +52,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		leakfreetest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	leakfreetest.MixedModelSaturation(t, func() leakfree.Mixed {
+		return leakfreetest.NewInMemory()
+	})
+}

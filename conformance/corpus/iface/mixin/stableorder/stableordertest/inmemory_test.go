@@ -64,3 +64,14 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		stableordertest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same order door armed that arms the tier.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	stableordertest.MixedModelSaturation(t, func() stableorder.Mixed {
+		return stableordertest.NewInMemory()
+	}, stableordertest.MixedModelLess(func(a, b stableorder.Value) bool {
+		return a.Key < b.Key
+	}))
+}

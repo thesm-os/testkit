@@ -24,9 +24,23 @@ var ErrNotHeld = errors.New("leakfreetest: nothing to release")
 
 // InMemory is the implementation the generated conformance harness is run
 // against.
+//
+// Each acquire parks a goroutine until its release, so the resource the
+// fixture counts is the resource the leak-free law counts — a subject that
+// never releases accumulates parked goroutines, and the law's census sees
+// exactly the leak the claim is about.
 type InMemory struct {
 	mu   sync.Mutex
-	held int
+	held []*hold
+}
+
+// hold is one outstanding acquire: the gate its goroutine parks on, and the
+// acknowledgement that it exited — awaited by Release, so the goroutine
+// census the law reads is deterministic rather than a race with the
+// scheduler's teardown.
+type hold struct {
+	release chan struct{}
+	exited  chan struct{}
 }
 
 var _ leakfree.Mixed = (*InMemory)(nil)
@@ -34,14 +48,20 @@ var _ leakfree.Mixed = (*InMemory)(nil)
 // NewInMemory returns a subject holding nothing.
 func NewInMemory() *InMemory { return &InMemory{} }
 
-// Acquire takes the resource.
+// Acquire takes the resource, parking a goroutine that lives exactly as
+// long as the hold does.
 func (s *InMemory) Acquire(ctx context.Context) error {
 	if err := contextErr(ctx); err != nil {
 		return err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.held++
+	h := &hold{release: make(chan struct{}), exited: make(chan struct{})}
+	go func() {
+		<-h.release
+		close(h.exited)
+	}()
+	s.held = append(s.held, h)
 	return nil
 }
 
@@ -52,10 +72,14 @@ func (s *InMemory) Release(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.held == 0 {
+	if len(s.held) == 0 {
 		return ErrNotHeld
 	}
-	s.held--
+	last := len(s.held) - 1
+	h := s.held[last]
+	s.held = s.held[:last]
+	close(h.release)
+	<-h.exited
 	return nil
 }
 
@@ -66,7 +90,7 @@ func (s *InMemory) Outstanding(ctx context.Context) (int, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.held, nil
+	return len(s.held), nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

@@ -81,3 +81,12 @@ func retryUntilSuccess(ctx context.Context, subject retrysucceeds.Mixed, key str
 
 // maxAttempts bounds the seed'"'"'s retry loop.
 const maxAttempts = 8
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	retrysucceedstest.MixedModelSaturation(t, func() retrysucceeds.Mixed {
+		return retrysucceedstest.NewInMemory()
+	})
+}

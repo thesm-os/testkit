@@ -237,6 +237,10 @@ const (
 	fPage               = "Page"
 	fReplay             = "Replay"
 	fCAS                = "CAS"
+	fStore              = "Store"
+	kindInert           = "inert"
+	kindSputter         = "sputter"
+	kindFlap            = "flap"
 	fromFamilyCell      = "family.cell"
 	handleKeyProjection = "key-projection"
 	handleCoalesce      = "coalesce-probe"
@@ -281,7 +285,7 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	},
 
 	lawid.AggregatorBounded:        {fRead: shapeScalar},
-	lawid.CountEqualsReference:     {"Count": shapeScalar},
+	lawid.CountEqualsReference:     {fCount: shapeScalar},
 	lawid.LifecycleRespectsContext: {"Op": shapeCtxOp},
 	lawid.MonotonicNonDecreasing:   {fRead: shapeScalar},
 	lawid.PoisonIdempotentRead:     {fProbe: shapeErrOp},
@@ -296,12 +300,12 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.Conservative:     {fWrite: shapeValueOp, "Sum": shapeSum},
 	lawid.CRDTMerge:        {fWrite: shapeValueOp, fMerge: shapeMerge},
 	lawid.IdempotentWrite:  {fWrite: shapeValueOp},
-	lawid.InjectionSafe:    {"Store": shapeKVOp, "Load": shapeKeyedRead},
+	lawid.InjectionSafe:    {fStore: shapeKVOp, "Load": shapeKeyedRead},
 	lawid.XSSSafe:          {"Render": shapeInputCall},
 
 	lawid.AppenderMonotonicOffsets: {"Append": shapeAppendOff},
 	lawid.CASAtomicOneWinner:       {fCAS: shapeValueOp, fRead: shapeScalar},
-	lawid.LeakFree:                 {"Open": shapeErrOp, "Close": shapeErrOp},
+	lawid.LeakFree:                 {"Open": shapeErrOp, "Close": shapeErrOp, "Outstanding": shapeScalar},
 	lawid.LeaseDoubleAcquireBlocks: {"Acquire": shapeKeyedOp, "Release": shapeKeyedOp},
 	lawid.PersisterRetrievable:     {"Save": shapeSave, fRead: shapeKeyedRead},
 	lawid.Roundtrip:                {"Forward": shapeInputCall, "Inverse": shapeInputCall},
@@ -465,6 +469,124 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 		}
 	}
 	b.Unbound = kept
+}
+
+// saturationOf derives the saturation surface from what lawsOf bound: per
+// law, the methods its closures reach; per reached method, the defects the
+// prover can wear. Clocked laws stay out — the clocked factory builds its
+// own subjects, so a worn defect never reaches the run — and a witnessed
+// interface emits no prover at all, because its wrappers would need the
+// witness instantiation the surface does not thread.
+func saturationOf(b *Bindings, harness *suite.Contract) {
+	if len(b.Witnesses) > 0 {
+		return
+	}
+	worn := map[string]bool{}
+	for _, lb := range b.Laws {
+		sl := SatLaw{ID: lb.ID, Guards: lb.Supplied, Clocked: lb.Clocked}
+		mset := map[string]bool{}
+		for _, f := range lb.Fields {
+			if f.Method == "" || mset[f.Method] {
+				continue
+			}
+			mset[f.Method] = true
+			sl.Methods = append(sl.Methods, f.Method)
+		}
+		if lb.Session && b.Session != nil {
+			// A trace law closes over no method directly; what a defect can
+			// wear is the reader and writer whose calls the trace records.
+			for _, name := range []string{b.Session.Reader, b.Session.Writer} {
+				if name != "" && !mset[name] {
+					mset[name] = true
+					sl.Methods = append(sl.Methods, name)
+				}
+			}
+		}
+		slices.Sort(sl.Methods)
+		sl.Unwearable = len(sl.Methods) == 0
+		sl.AcceptSemantic = lb.ID == lawid.CountEqualsReference
+		b.SatLaws = append(b.SatLaws, sl)
+		for _, name := range sl.Methods {
+			if worn[name] {
+				continue
+			}
+			worn[name] = true
+			if m := methodOf(harness, name); m != nil {
+				b.SatMutants = append(b.SatMutants, satMutantsOf(b, m)...)
+			}
+		}
+	}
+}
+
+// satMutantsOf spells the defects one method can wear: inert always, and —
+// for a single-result reader beside its error — the fixture pair flapped
+// where the result is the pool's own type, or a waning count where it is an
+// integer. Wider vocabularies earn their kinds when a surviving law names
+// the need.
+func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
+	base := SatMutant{Method: m.Name, TakesCtx: m.TakesContext()}
+	for _, p := range m.Params {
+		base.Params = append(base.Params, p.Type)
+	}
+	for i := range m.Returns {
+		base.Returns = append(base.Returns, m.Returns[i].Type)
+	}
+	base.Last = len(base.Returns) - 1
+	inert := base
+	inert.Kind = kindInert
+	out := []SatMutant{inert}
+	if m.ReturnsError() {
+		// The sputtering defect: alternating minted refusals, for the laws
+		// about what an error must coincide with.
+		sputter := base
+		sputter.Kind = kindSputter
+		out = append(out, sputter)
+	}
+	if len(m.CallArgs()) == 1 && len(m.Returns) == 4 && m.ReturnsError() && returnsSlice(m) {
+		// The echoing defect: the first page answered forever, with more
+		// always promised — the walk that never advances.
+		echo := base
+		echo.Kind = "echo"
+		out = append(out, echo)
+	}
+	if len(m.Returns) != 2 || !m.ReturnsError() {
+		return out
+	}
+	if returnsSlice(m) {
+		// The fading defect: every second answer reversed and short one —
+		// the replay that lies about the log it already showed.
+		fade := base
+		fade.Kind = "fade"
+		if elem, why := drainedElem(b, m); why == "" {
+			fade.Out = elem
+			out = append(out, fade)
+		}
+		return out
+	}
+	ref, ret, why := resultType(m)
+	if why != "" {
+		return out
+	}
+	switch {
+	case b.Values.Q != "" && shape.QName(ret.Source) == b.Values.Q &&
+		b.Values.Field != "" && b.Values.OtherField != "":
+		flap := base
+		flap.Kind = kindFlap
+		flap.Out = ref
+		out = append(out, flap)
+	case integerResult(ret):
+		wane := base
+		wane.Kind = "wane"
+		wane.Out = ref
+		out = append(out, wane)
+		// And the rising twin: a count that only grows, for the laws about
+		// what must return to rest.
+		wax := base
+		wax.Kind = "wax"
+		wax.Out = ref
+		out = append(out, wax)
+	}
+	return out
 }
 
 // bindingFingerprint spells what makes two bindings the same law twice: the
@@ -799,6 +921,13 @@ func lawFieldOf(
 			// answers — the scope the resolver gained — so the closure is
 			// derived from the stamp rather than opened as a door.
 			return memberFieldOf(b, harness, r, f, field, m, keyed)
+		}
+		if f.From == "disturb" {
+			// The disturbance is derived from the driven writer where one
+			// feeds the pool: two adjacent reads with nothing between them
+			// check nothing, and the writer is what there is to interleave.
+			// Underivable falls back to the optional omission.
+			return disturbFieldOf(b, harness, field, m, keyed)
 		}
 		if f.Optional {
 			// The manifest says zero is sound: the law reads the field's
@@ -1973,6 +2102,29 @@ func suppliedFieldOf(
 // what is there without blocking. An asynchronous publisher supplies its
 // own drain through the generated option, which outranks this derivation —
 // the property prefers the config's closure and falls back to the sweep.
+// disturbFieldOf derives the point-in-time disturbance: a drawn value
+// written under an adjacent key, between the law's two reads. Adjacent
+// deliberately — a same-key overwrite is invisible-by-right only under
+// resolution pinning, which is the sticky claim; what this shape can
+// promise is that concurrent activity elsewhere does not perturb the key
+// being read. The write rides the values-feeding writer and the key
+// projection the reference keys on; where either is absent the field stays
+// omitted — the law then checks read purity alone, the claim's floor.
+func disturbFieldOf(
+	b *Bindings, harness *suite.Contract, field *LawField, m, keyed *suite.Method,
+) (*LawField, string) {
+	writer, reason := roleMethod(b, harness, "family.writer", m, keyed)
+	if reason != "" || !b.UsesValues() || !b.UsesKeys() || b.Reference.KeyField == "" {
+		return nil, ""
+	}
+	field.Method = writer.Name
+	field.TakesCtx = writer.TakesContext()
+	field.Pool = poolValues
+	field.KeyField = b.Reference.KeyField
+	field.KindName = sdk.Kind(LawFieldKindPrefix + "DisturbWrite")
+	return field, ""
+}
+
 // memberFieldOf fills a closure over a member of the handle the watch role
 // answers: the resolver stamped the member's qualified name, the closure
 // spells the call, and the compile gate in the armed package holds the

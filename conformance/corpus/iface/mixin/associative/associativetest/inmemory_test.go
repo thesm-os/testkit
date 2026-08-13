@@ -44,3 +44,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		associativetest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	associativetest.MixedModelSaturation(t, func() associative.Mixed {
+		return associativetest.NewInMemory()
+	})
+}

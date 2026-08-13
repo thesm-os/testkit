@@ -53,3 +53,12 @@ func TestCloserContractWithoutTheDouble(t *testing.T) {
 		idempotentclosetest.CloserWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestCloserSaturation(t *testing.T) {
+	t.Parallel()
+	idempotentclosetest.CloserModelSaturation(t, func() idempotentclose.Closer {
+		return idempotentclosetest.NewInMemory()
+	})
+}

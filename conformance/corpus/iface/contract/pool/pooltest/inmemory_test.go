@@ -98,3 +98,14 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 		pooltest.ContractWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same accounting door armed that arms the tier.
+func TestContractSaturation(t *testing.T) {
+	t.Parallel()
+	pooltest.ContractModelSaturation(t, func() pool.Contract {
+		return pooltest.NewInMemory()
+	}, pooltest.ContractModelStats(func(_ *model.T, subject pool.Contract) (int, int, int) {
+		return subject.(*pooltest.InMemory).Stats()
+	}))
+}

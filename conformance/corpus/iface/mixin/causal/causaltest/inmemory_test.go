@@ -55,3 +55,14 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		causaltest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same door armed that arms the tier.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	causaltest.MixedModelSaturation(t, func() causal.Mixed {
+		return causaltest.NewInMemory()
+	}, causaltest.MixedModelHappensBefore(func(a, b law.ClientOp[string]) bool {
+		return a.Write && a.Key == b.Key && a.Version < b.Version
+	}))
+}

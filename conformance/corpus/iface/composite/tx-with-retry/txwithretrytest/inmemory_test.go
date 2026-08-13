@@ -196,3 +196,12 @@ func TestTxWithRetryContractWithoutTheDouble(t *testing.T) {
 		txwithretrytest.TxWithRetryWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestTxWithRetrySaturation(t *testing.T) {
+	t.Parallel()
+	txwithretrytest.TxWithRetryModelSaturation(t, func() txwithretry.TxWithRetry {
+		return txwithretrytest.NewInMemory(transientCommits)
+	})
+}

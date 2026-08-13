@@ -91,7 +91,7 @@ the tier — and the engine dependency with it.
 func {{ .OptionName }}(opts ...{{ .OptionTypeName }}) {{ .IfaceName }}Option{{ template "model.witnessuse" . }} {
 	return func(c *{{ lower .IfaceName }}Config{{ template "model.witnessuse" . }}) {
 		c.extensions = append(c.extensions, {{ lower .IfaceName }}ContractExtension{{ template "model.witnessuse" . }}{
-			name: "{{ .TierName }}",
+			name: "{{ .TierPath }}",
 			run: func(t *{{ renderExpr (external "testing" "T") }}, _ string, factory func() {{ renderType .IfaceRef }}, _ *{{ lower .IfaceName }}Config{{ template "model.witnessuse" . }}) {
 				{{ renderExpr (external .ModelPkg "Check") }}(t, {{ .PropertyName }}(factory, opts...))
 			},
@@ -315,11 +315,12 @@ func {{ .IfaceName }}ModelConcurrent(t *{{ renderExpr (external "testing" "T") }
 }
 {{ end }}
 {{- if .Reference.Derived }}
-{{ if and (not .Reference.Collects) (not .Reference.IsContract) -}}
+{{ if and (not .Reference.Collects) (not .Reference.IsContract) (not .Reference.MissSym) -}}
 // {{ .Reference.MissName }} is what the reference reports for a key nothing
 // wrote. Only its presence is compared — a subject reports its own miss
 // sentinel, and the run asks whether both sides missed, not how they spelled
-// it.
+// it. Where the declaration stamps a sentinel of its own, the oracle takes
+// that identity instead and this var is not declared.
 var {{ .Reference.MissName }} = {{ renderExpr (external "errors" "New") }}("{{ .MissPrefix }}: the model reference holds nothing under the key")
 
 {{ end -}}
@@ -381,7 +382,7 @@ func {{ .Reference.CtorName }}() {{ renderType .IfaceRef }} {
 {{- if not .Reference.Keyed }}
 		{{ .KeyOfName }},
 {{- end }}
-		{{ .Reference.MissName }},
+		{{ if .Reference.MissSym }}{{ renderExpr .Reference.MissSym }}{{ else }}{{ .Reference.MissName }}{{ end }},
 {{- end }}
 	)}
 }
@@ -476,6 +477,7 @@ func {{ $b.IfaceName }}Model{{ .Field }}(fn {{ template "model.suppliedtype" . }
 	return func(c *{{ $b.ConfigName }}) { c.{{ .Config }} = fn }
 }
 {{ end }}
+{{ template "model.saturation" . }}
 {{ if .UsesClock }}
 {{ if .Publisher }}
 // {{ .IfaceName }}ModelDrain replaces the derived subscription sweep — the door an

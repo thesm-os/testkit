@@ -145,3 +145,16 @@ func TestStagingRefusesASettledHandle(t *testing.T) {
 	testkit.NoError(t, err, "the committed write is readable")
 	testkit.Equal(t, got.Body, "kept", "whole, as staged")
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same staging door armed that arms the tier.
+func TestContractSaturation(t *testing.T) {
+	t.Parallel()
+	txtest.ContractModelSaturation(t, func() tx.Contract {
+		return txtest.NewInMemory()
+	}, txtest.ContractModelTxPut(func(
+		_ *model.T, s tx.Contract, h tx.Tx, key string, v tx.Value,
+	) error {
+		return s.(*txtest.InMemory).PutInTx(h, key, v)
+	}))
+}

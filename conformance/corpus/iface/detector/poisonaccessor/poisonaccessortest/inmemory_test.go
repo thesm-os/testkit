@@ -63,3 +63,12 @@ func TestPoisonAccessorContractWithoutTheDouble(t *testing.T) {
 		poisonaccessortest.PoisonAccessorWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestPoisonAccessorSaturation(t *testing.T) {
+	t.Parallel()
+	poisonaccessortest.PoisonAccessorModelSaturation(t, func() poisonaccessor.PoisonAccessor {
+		return poisonaccessortest.NewInMemory()
+	})
+}

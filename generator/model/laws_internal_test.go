@@ -2410,3 +2410,159 @@ func TestMidTxDoorAndReadbackPool(t *testing.T) {
 		testkit.Assert(t, reason).Contains("no keyed reader", "no read-back, no domain to draw")
 	})
 }
+
+// TestMissSentinelAndDisturb pins the saturation fixes' derivations: the
+// stamped miss sentinel routed into the oracle, and the adjacent-key
+// disturbance derived from the driven writer — each omitted rather than
+// guessed where its anchor is absent.
+func TestMissSentinelAndDisturb(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+
+	t.Run("a stamped sentinel routes and an unstamped one minted", func(t *testing.T) {
+		t.Parallel()
+		read := projected("Read",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		read.Mixins = []string{"deleteremoves"}
+		shape.MixinParamKey("deleteremoves", "sentinel").
+			Set(read.Source.EnsureMeta(), "example.com/dr.ErrGone", "test")
+		sym := missSentinelOf(harnessOf(read))
+		testkit.True(t, sym != nil, "the stamped sentinel is the oracle's miss")
+
+		bare := projected("Read",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		testkit.True(t, missSentinelOf(harnessOf(bare)) == nil,
+			"nothing stamped, nothing routed — the minted var stands")
+	})
+
+	t.Run("the disturbance derives from the feeding writer or stays omitted", func(t *testing.T) {
+		t.Parallel()
+		writer := stamp(projected("Store",
+			[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))},
+			[]golang.Return{errRet}), "writer", "", "Value")
+		b := &Bindings{
+			Subject:   suite.Subject{IfaceName: "Mixed"},
+			Values:    Pool{Type: sdk.Builtin("Value"), Q: "Value"},
+			Keys:      Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
+			Actions:   []*Action{{Method: "Store", Pool: poolValues}, {Method: "Get", Pool: poolKeys}},
+			Reference: Reference{KeyField: "Key"},
+		}
+		field := &LawField{BaseEmit: b.BaseEmit, Name: "Disturb", Iface: b.IfaceRef, Key: b.Keys.Type}
+		got, reason := disturbFieldOf(b, harnessOf(writer), field, nil, nil)
+		testkit.True(t, reason == "" && got != nil, "the writer-fed disturbance binds: "+reason)
+		testkit.Equal(t, string(got.Kind()), "model.lawfield.DisturbWrite", "as the adjacent-key write")
+
+		keyless := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		omitted, reason := disturbFieldOf(keyless, harnessOf(writer), field, nil, nil)
+		testkit.True(t, omitted == nil && reason == "",
+			"no pools, no projection — the field stays omitted, never guessed")
+	})
+}
+
+// TestSaturationDerivation pins the prover's own derivation: the wardrobe's
+// kinds per method shape, the session laws' reachable pair, the unwearable
+// skip, and the one law whose kill criterion is the differential itself.
+func TestSaturationDerivation(t *testing.T) {
+	t.Parallel()
+
+	errRet := res(namedRef("error"))
+
+	t.Run("the kinds follow the method's shape", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{
+			Subject: suite.Subject{IfaceName: "Mixed"},
+			Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value", Field: "V", OtherField: "VOther"},
+		}
+		kinds := func(m *suite.Method) []string {
+			out := make([]string, 0, 4)
+			for _, sm := range satMutantsOf(b, m) {
+				out = append(out, sm.Kind)
+			}
+			return out
+		}
+
+		reader := stamp(projected("Get",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Value")), errRet}), "", "", "Value")
+		testkit.Equal(t, kinds(reader), []string{"inert", "sputter", "flap"},
+			"a pool-typed reader flaps beside the shared kinds")
+
+		scalar := projected("Count", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("int")), errRet})
+		testkit.Equal(t, kinds(scalar), []string{"inert", "sputter", "wane", "wax"},
+			"an integer scalar wanes and waxes")
+
+		replay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(sliceRef(namedRef("Entry"))), errRet})
+		testkit.Equal(t, kinds(replay), []string{"inert", "sputter", "fade"},
+			"a slice reader fades")
+
+		page := projected("Page",
+			[]golang.Param{arg("ctx", ctxRef()), arg("cur", namedRef("Cursor"))},
+			[]golang.Return{
+				res(sliceRef(namedRef("Value"))), res(namedRef("Cursor")), res(namedRef("bool")), errRet,
+			})
+		testkit.Equal(t, kinds(page), []string{"inert", "sputter", "echo"},
+			"a page-shaped walk echoes")
+	})
+
+	t.Run("the surface knows its reach and its restatement", func(t *testing.T) {
+		t.Parallel()
+		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b.Session = &SessionSpec{Reader: "Get", Writer: "Store"}
+		b.Laws = []*LawBinding{
+			{ID: lawid.MonotonicReads, Session: true},
+			{ID: lawid.CountEqualsReference, Fields: []*LawField{{Name: "Count", Method: "Count"}}},
+			{ID: lawid.PoolBalanced},
+		}
+		get := projected("Get", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		store := projected("Store", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))},
+			[]golang.Return{errRet})
+		count := projected("Count", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{res(namedRef("int")), errRet})
+		saturationOf(b, harnessOf(get, store, count))
+
+		testkit.Equal(t, b.SatLaws[0].Methods, []string{"Get", "Store"},
+			"a trace law wears defects on the session pair")
+		testkit.True(t, b.SatLaws[1].AcceptSemantic,
+			"the differential restated accepts the differential's own divergence")
+		testkit.True(t, b.SatLaws[2].Unwearable,
+			"a door-only law is skipped by name, never doomed")
+	})
+}
+
+// A witnessed interface emits no prover: its wrappers would need the
+// witness instantiation the surface does not thread.
+func TestSaturationSkipsWitnessedInterfaces(t *testing.T) {
+	t.Parallel()
+
+	b := &Bindings{
+		Subject:   suite.Subject{IfaceName: "Store"},
+		Witnesses: []sdk.Ref{sdk.Builtin(qStr)},
+		Laws:      []*LawBinding{{ID: lawid.ReadAfterWrite}},
+	}
+	saturationOf(b, harnessOf())
+	testkit.Len(t, b.SatLaws, 0, "no prover over a generic surface")
+}
+
+// A law naming a method the projection does not carry wears nothing there —
+// the prover's wardrobe stays honest about what it can dress.
+func TestSaturationSkipsUnprojectedMethods(t *testing.T) {
+	t.Parallel()
+
+	b := &Bindings{
+		Subject: suite.Subject{IfaceName: "Mixed"},
+		Laws: []*LawBinding{{
+			ID:     lawid.ReadAfterWrite,
+			Fields: []*LawField{{Name: "Read", Method: "Nonesuch"}},
+		}},
+	}
+	saturationOf(b, harnessOf())
+	testkit.Equal(t, b.SatLaws[0].Methods, []string{"Nonesuch"},
+		"the law still names its reach")
+	testkit.Len(t, b.SatMutants, 0, "and nothing unprojected is dressed")
+}

@@ -57,3 +57,12 @@ func TestAggregatorContractWithoutTheDouble(t *testing.T) {
 		aggregatortest.AggregatorWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestAggregatorSaturation(t *testing.T) {
+	t.Parallel()
+	aggregatortest.AggregatorModelSaturation(t, func() aggregator.Aggregator {
+		return aggregatortest.NewInMemory()
+	})
+}

@@ -65,3 +65,15 @@ func TestLogContractWithoutTheDouble(t *testing.T) {
 		causalchaintest.LogWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// with the same doors armed that arm the tier.
+func TestLogSaturation(t *testing.T) {
+	t.Parallel()
+	causalchaintest.LogModelSaturation(t, func() causalchain.Log {
+		return causalchaintest.NewInMemory()
+	},
+		causalchaintest.LogModelEntryID(func(e causalchain.Entry) string { return e.ID }),
+		causalchaintest.LogModelDependsOn(func(e causalchain.Entry) []string { return e.DependsOn }),
+	)
+}

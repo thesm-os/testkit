@@ -213,6 +213,17 @@ parameter with no hint is a diagnostic at the parameter.
   against `linearize.KV` per key. It registers beside the sequential leg
   as `model/concurrent`; the laws stay sequential, whose step boundary
   they need, and the companion holds the leg to the derived reference.
+- **The saturation prover** — binding a law is necessary;
+  `<Iface>ModelSaturation(t, factory, opts...)` is what makes it
+  sufficient. Per bound law, a defect is worn on each method the law's
+  closures reach — zeros, the fixture pair alternated, a waning or waxing
+  count, a sputtered refusal, a fading replay, an echoed page — and at
+  least one worn run must fail naming the law's own identifier, with the
+  clean factory standing as reference so the twin floor has real teeth.
+  A law every defect survives is bound but unsaturatable and fails by
+  name; a law behind an unarmed door or the clocked factory is skipped
+  visibly. The derived-tier companions run it automatically; the corpus's
+  consumers run it against their subjects, and so can any consumer.
 - **A report header** — the generated docblock is a per-method table of
   what the run derived: actions, law IDs, the cluster map, what was skipped
   and the option that arms it.

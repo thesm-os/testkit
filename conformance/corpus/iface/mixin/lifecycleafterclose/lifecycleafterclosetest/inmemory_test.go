@@ -50,3 +50,12 @@ func TestMixedContractWithoutTheDouble(t *testing.T) {
 		lifecycleafterclosetest.MixedWithoutDouble(),
 	)
 }
+
+// The saturation prover: every bound law must be able to fail as itself,
+// a defect worn on its own methods reddening the run by name.
+func TestMixedSaturation(t *testing.T) {
+	t.Parallel()
+	lifecycleafterclosetest.MixedModelSaturation(t, func() lifecycleafterclose.Mixed {
+		return lifecycleafterclosetest.NewInMemory()
+	})
+}
