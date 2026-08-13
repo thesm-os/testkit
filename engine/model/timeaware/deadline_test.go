@@ -5,6 +5,7 @@ package timeaware_test
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,6 +16,38 @@ import (
 
 func TestDeadlineRespecting(t *testing.T) {
 	t.Parallel()
+
+	t.Run("an Op that ignores its deadline is caught", func(t *testing.T) {
+		t.Parallel()
+		// The implementation the claim exists to catch, and the one the law
+		// used to pass: it never reads the context, answers nil at once, and
+		// so returns well inside the wait window. Only the error tells it
+		// apart from an Op that honoured the deadline.
+		l := timeaware.DeadlineRespecting[struct{}]{
+			Op:       func(context.Context, struct{}) error { return nil },
+			Deadline: 5 * time.Millisecond,
+			Advance:  func(time.Duration) {},
+			AwaitFor: 50 * time.Millisecond,
+		}
+		if err := l.Check(nil, struct{}{}, struct{}{}); err == nil {
+			t.Fatal("an Op that answers nil never saw a deadline")
+		}
+	})
+
+	t.Run("an Op failing for its own reasons is not a deadline", func(t *testing.T) {
+		t.Parallel()
+		// Returning promptly with some unrelated error is not evidence the
+		// deadline was respected either — the claim names a context error.
+		l := timeaware.DeadlineRespecting[struct{}]{
+			Op:       func(context.Context, struct{}) error { return errors.New("disk on fire") },
+			Deadline: 5 * time.Millisecond,
+			Advance:  func(time.Duration) {},
+			AwaitFor: 50 * time.Millisecond,
+		}
+		if err := l.Check(nil, struct{}{}, struct{}{}); err == nil {
+			t.Fatal("an unrelated failure is not a deadline being honoured")
+		}
+	})
 
 	t.Run("compliant Op returns when ctx is cancelled", func(t *testing.T) {
 		t.Parallel()

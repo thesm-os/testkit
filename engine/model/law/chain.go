@@ -140,6 +140,19 @@ func (HashChainIntegrityViaVerify[T]) ID() string { return lawid.HashChainIntegr
 func (HashChainIntegrityViaVerify[T]) REQID() string { return "" }
 
 // Check calls Verify on both SUT and ref; both must return nil.
+//
+// # What this does not check
+//
+// Detection. Nothing here corrupts the chain, so a run proves only that the
+// subject reports intact through the operations the sequences drove — which
+// is a real claim, and a real failure for a chain that breaks its own links
+// under append, but it is not evidence that tampering would be noticed.
+//
+// That claim is [TamperEvident]'s, which carries the corruption step this
+// one deliberately lacks: a law that both tampers and verifies would make
+// the two indistinguishable in a report, and the tamper is the half a
+// consumer must supply because only they know what corrupting their storage
+// looks like.
 func (l HashChainIntegrityViaVerify[T]) Check(rt *rapid.T, sut, ref T) error {
 	sutErr := l.Verify(rt, sut)
 	refErr := l.Verify(rt, ref)

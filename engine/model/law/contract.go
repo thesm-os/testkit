@@ -179,7 +179,23 @@ func (CASAtomicOneWinner[T, V]) ID() string { return lawid.CASAtomicOneWinner }
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (CASAtomicOneWinner[T, V]) REQID() string { return "" }
 
-// Check races two CAS calls; expects exactly one success.
+// Check applies two CAS attempts stamped at one version; expects exactly one
+// success and one mismatch.
+//
+// # Sequential, and why that is still contention
+//
+// Nothing here runs concurrently. Both attempts are stamped before either
+// runs, so both carry the version the cell held at the start — which is the
+// whole of what makes them contend. The second arrives stale by
+// construction, and a subject that checks versions refuses it. One that
+// ignores them accepts both and fails here; one that refuses everything
+// accepts neither and fails here too.
+//
+// So the claim this settles is the version arithmetic, not atomicity under
+// real concurrency. Interleaving two callers is the Porcupine leg's, where
+// the linearizability check has a history to reason about. The identifier
+// says atomic and means this — the sequential half — which is the half a
+// subject can be wrong about without any scheduler help.
 func (l CASAtomicOneWinner[T, V]) Check(rt *rapid.T, sut, ref T) error {
 	v1 := l.Values.Draw(rt, "CASAtomicOneWinner_v1")
 	v2 := l.Values.Draw(rt, "CASAtomicOneWinner_v2")

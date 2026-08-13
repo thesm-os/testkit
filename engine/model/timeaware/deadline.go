@@ -6,6 +6,7 @@ package timeaware
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,7 +49,24 @@ func (DeadlineRespecting[T]) ID() string { return lawid.DeadlineRespecting }
 // REQID returns an empty string (auto-derived).
 func (DeadlineRespecting[T]) REQID() string { return "" }
 
-// Check verifies Op returns after the deadline advance.
+// Check verifies Op returns a deadline error once its deadline passes.
+//
+// # What the verdict rests on
+//
+// The returned error, not merely the return. Discarding it made the law
+// unfalsifiable: an Op that never looked at its context and answered nil
+// immediately returned promptly, which was the whole of what was checked, so
+// the one implementation the claim exists to catch passed it.
+//
+// # The clock this law is actually on
+//
+// The context's deadline is real time, because a [clock.TestClock] hands out
+// no context and a fake deadline cannot cancel a real one. Advance releases a
+// subject sleeping on the test clock; the context expires on its own. So this
+// law is honest about a subject that respects its context and about one that
+// ignores it, and it is not a test of the fake clock's plumbing — a subject
+// that watches only the injected clock and never the context is outside what
+// it can judge.
 func (l DeadlineRespecting[T]) Check(_ *rapid.T, sut, _ T) error {
 	ctx, cancel := context.WithTimeout(context.Background(), l.Deadline)
 	defer cancel()
@@ -66,7 +84,17 @@ func (l DeadlineRespecting[T]) Check(_ *rapid.T, sut, _ T) error {
 		wait = time.Second
 	}
 	select {
-	case <-done:
+	case err := <-done:
+		if err == nil {
+			return errors.New(
+				"timeaware: deadline-respecting law: Op returned nil after its deadline passed, so it never saw one",
+			)
+		}
+		if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+			return fmt.Errorf(
+				"deadline-respecting law: Op returned %v after its deadline passed, not a context error", err,
+			)
+		}
 		return nil
 	case <-time.After(wait):
 		return fmt.Errorf("deadline-respecting law: Op did not return within %v of deadline advance", wait)
