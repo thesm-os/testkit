@@ -4,16 +4,20 @@
 package model
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
-// logRecorder captures the census's once-per-run warning.
+// logRecorder captures what the once-per-run reports actually say.
+//
+// Formatted rather than kept as the template: a recorder holding "%s" can
+// tell you a line was emitted and nothing about whether it named the thing
+// the reader needs.
 type logRecorder struct{ lines []string }
 
 func (l *logRecorder) Logf(format string, args ...any) {
-	l.lines = append(l.lines, format)
-	_ = args
+	l.lines = append(l.lines, fmt.Sprintf(format, args...))
 }
 
 // The vacuity census warns exactly once, and only for a law vacuous on every
@@ -61,4 +65,33 @@ func TestNoteVacuousWarnsOnceAtTheFloor(t *testing.T) {
 			t.Fatalf("a law that engaged once is not all-vacuous, got %d warnings", len(rec.lines))
 		}
 	})
+}
+
+// TestDeclinedNamesTheDoorOnce holds the unarmed-law report to saying each
+// name once and naming what would arm it.
+func TestDeclinedNamesTheDoorOnce(t *testing.T) {
+	t.Parallel()
+
+	r := NewRegistry[struct{}]()
+	r.Declined("AUTO-DEADLINE-RESPECTING", "MixedModelClocked")
+	r.Declined("AUTO-TTL-EXPIRY", "MixedModelClocked")
+
+	var rec logRecorder
+	r.sayDeclined(&rec)
+	r.sayDeclined(&rec)
+
+	// Twice called, once said: rapid repeats the step and this is a fact
+	// about the configuration, not the draw.
+	if len(rec.lines) != 2 {
+		t.Fatalf("two declines, said once each: got %d lines", len(rec.lines))
+	}
+
+	// The door, not just the absence. "A law did not run" sends the reader
+	// looking; the option name is the fix.
+	joined := strings.Join(rec.lines, "\n")
+	for _, want := range []string{"AUTO-DEADLINE-RESPECTING", "AUTO-TTL-EXPIRY", "MixedModelClocked"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("the report must name %q, got: %s", want, joined)
+		}
+	}
 }

@@ -185,6 +185,9 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 {{- if .Supplied }}
 	if {{ range $i, $s := .Supplied }}{{ if $i }} && {{ end }}cfg.{{ $s }} != nil{{ end }} {
 		laws.Add({{ render . }})
+	} else {
+		laws.Declined({{ printf "%q" .ID }},
+			"{{ range $i, $s := .Supplied }}{{ if $i }} and {{ end }}{{ $b.IfaceName }}Model{{ title $s }}{{ end }}")
 	}
 {{- else }}
 	laws.Add({{ render . }})
@@ -196,6 +199,15 @@ func {{ .PropertyName }}(factory func() {{ renderType .IfaceRef }}, opts ...{{ .
 {{- range .Laws }}
 {{- if .Clocked }}
 		laws.Add({{ render . }})
+{{- end }}
+{{- end }}
+	} else {
+		// The door the header names, said again where the run can hear it. A
+		// clocked law without a clocked factory used to vanish: selected,
+		// listed as bound, and never registered.
+{{- range .Laws }}
+{{- if .Clocked }}
+		laws.Declined({{ printf "%q" .ID }}, "{{ $b.IfaceName }}ModelClocked")
 {{- end }}
 {{- end }}
 	}
