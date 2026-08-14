@@ -133,7 +133,7 @@ func TestModelDirectiveSpelling(t *testing.T) {
 		"one directive, two modules, one spelling")
 }
 
-// twinCeiling is the corpus's twin count, ratcheted: 93 of 114 references
+// twinCeiling is the corpus's twin count, ratcheted: 92 of 114 references
 // ride the twin floor today, and the number only sinks — an oracle upgrade
 // lowers it, and a derived fixture regressing to the twin raises it past the
 // ceiling and reddens this build by name. Lower the constant with every
@@ -162,7 +162,13 @@ func TestModelDirectiveSpelling(t *testing.T) {
 // collection is holding its elements in, which no map models — so the twin,
 // which holds them in the same order for the same reason, is the only
 // reference that can answer.
-const twinCeiling = 93
+//
+// The transaction fixture left the floor when its staging writer landed:
+// a run taking a callable derives no oracle, but the keyed write the
+// rollback claim needed pairs with the read, and Get/Put is a map. The
+// oracle upgrade was a side effect of making the law falsifiable, which is
+// the direction this ratchet exists to record.
+const twinCeiling = 92
 
 // TestTwinFloorOnlySinks is the twin-count ratchet the audit's second item
 // commissioned: the twin is the honest floor, not the resting state, and a

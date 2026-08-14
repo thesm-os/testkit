@@ -1595,6 +1595,34 @@ func TestValuePoolGuardsEveryDrawer(t *testing.T) {
 			"the writer agreeing with the composite is driven, not refused for disagreeing with a writer")
 		testkit.False(t, driven["Stash"], "and the disagreeing one never reaches the sequences")
 	})
+
+	// A method whose classification carried no value type at all still has to
+	// read as a method problem. "takes  where the values pool draws X" reads
+	// as a rendering bug and sends the reader to the generator, which is the
+	// one place the fix is not.
+	t.Run("an unstamped drawer names the absence rather than rendering a blank", func(t *testing.T) {
+		t.Parallel()
+
+		s := drawersOnly(t)
+		// Cleared rather than never set: stampShape skips an empty value, and
+		// the state being modelled is a detector that claimed the shape and
+		// said nothing about the type it carries.
+		for _, iface := range s.Nodes().Interfaces().Items() {
+			for _, m := range iface.Methods {
+				if m.Name == "Note" {
+					shape.MetaValueType.Set(m.EnsureMeta(), "", "test")
+				}
+			}
+		}
+		b := bindingsOf(t, s)
+
+		reasons := map[string]string{}
+		for _, sk := range b.Skipped {
+			reasons[sk.Method] = sk.Reason
+		}
+		testkit.Assert(t, reasons["Note"]).Contains("no stamped value type",
+			"the refusal names the missing classification")
+	})
 }
 
 // drawersOnly builds one writer, one answering writer and one mutator at

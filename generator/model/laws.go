@@ -236,23 +236,37 @@ const (
 	fEntryID   = "EntryID"
 
 	// The contract-shape family's field and handle spellings.
-	fBegin              = "Begin"
-	fCommit             = "Commit"
-	fRollback           = "Rollback"
-	fRun                = "Run"
-	fPage               = "Page"
-	fReplay             = "Replay"
-	fCAS                = "CAS"
-	fStore              = "Store"
-	kindInert           = "inert"
-	kindSputter         = "sputter"
-	kindFlap            = "flap"
-	kindOvershoot       = "overshoot"
-	kindFlicker         = "flicker"
-	kindFadeSeq         = "fadeseq"
-	kindDupSeq          = "dupseq"
+	fBegin          = "Begin"
+	fCommit         = "Commit"
+	fRollback       = "Rollback"
+	fRun            = "Run"
+	fPage           = "Page"
+	fReplay         = "Replay"
+	fCAS            = "CAS"
+	fStore          = "Store"
+	kindInert       = "inert"
+	kindSputter     = "sputter"
+	kindFlap        = "flap"
+	kindOvershoot   = "overshoot"
+	kindFlicker     = "flicker"
+	kindFadeSeq     = "fadeseq"
+	kindDupSeq      = "dupseq"
+	kindJumble      = "jumble"
+	kindDupDrain    = "dupdrain"
+	kindFlood       = "flood"
+	kindRegress     = "regress"
+	kindPassthrough = "passthrough"
+
+	// satFloodItems is what a flooding drain answers, and it is pinned to
+	// [law.StreamCompletion]'s own default limit rather than derived: the
+	// field is KindDefault everywhere, so the law's constant is the only
+	// number in play. A wear yielding fewer would prove nothing, and one
+	// yielding without bound is what took 30 GB of a machine — every drain
+	// the generator emits ranges to exhaustion before its limit is read.
+	satFloodItems       = 10000
 	fieldMax            = "Max"
 	fromFamilyCell      = "family.cell"
+	fromFamilyKeyedWr   = "family.keyedwriter"
 	handleKeyProjection = "key-projection"
 	handleCoalesce      = "coalesce-probe"
 	handleVersionStamp  = "version-stamp"
@@ -350,7 +364,9 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	},
 	lawid.SagaFullCompensation:  {fRun: shapeSagaRun},
 	lawid.SingleflightCoalesces: {fCall: shapeComputeCall},
-	lawid.TransactionRollback:   {fRun: shapeBodyRun, fRead: shapeKeyedRead},
+	lawid.TransactionRollback: {
+		fRun: shapeBodyRun, fRead: shapeKeyedRead, fWrite: shapeKeyedWrite,
+	},
 	lawid.PaginatorNoDuplicates: {fPage: shapePageRead},
 	lawid.PaginatorResumable:    {fPage: shapePageRead},
 
@@ -661,6 +677,21 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		sputter.Kind = kindSputter
 		out = append(out, sputter)
 	}
+	if b.Session != nil && b.Session.VersionField != "" && m.Name == b.Session.Reader {
+		// The regressing defect: the subject's own answer with its ordering
+		// stamp walked backwards, and every other field left alone.
+		//
+		// The session laws key their state on the value's own key member, so
+		// a wear that answers a zero files each read under a different key
+		// and the law compares nothing — which is why an ordering claim
+		// survived inert and flicker alike. Rewriting one member is the only
+		// defect that keeps the reads comparable and makes the order wrong.
+		regress := base
+		regress.Kind = kindRegress
+		regress.Out = b.Session.Value
+		regress.Member = b.Session.VersionField
+		out = append(out, regress)
+	}
 	if base.Seq > 0 {
 		// The stream defects, which the slice form has had all along: a drain
 		// reversed and short one, and a drain that repeats. `fade` was dressed
@@ -671,7 +702,13 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		faded.Kind = kindFadeSeq
 		dup := base
 		dup.Kind = kindDupSeq
-		out = append(out, faded, dup)
+		// The stream that will not end. Bounded at the completion law's own
+		// limit, and it stops when the consumer stops: a wear that ignored
+		// the yield's verdict would run until the machine gave out, which is
+		// how this one was learned.
+		flood := base
+		flood.Kind = kindFlood
+		out = append(out, faded, dup, flood)
 	}
 	if len(m.CallArgs()) == 1 && len(m.Returns) == 4 && m.ReturnsError() && returnsSlice(m) {
 		// The echoing defect: the first page answered forever, with more
@@ -684,19 +721,56 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		return out
 	}
 	if returnsSlice(m) {
+		elem, why := drainedElem(b, m)
+		if why != "" {
+			return out
+		}
 		// The fading defect: every second answer reversed and short one —
 		// the replay that lies about the log it already showed.
 		fade := base
 		fade.Kind = "fade"
-		if elem, why := drainedElem(b, m); why == "" {
-			fade.Out = elem
-			out = append(out, fade)
-		}
+		fade.Out = elem
+		out = append(out, fade)
+
+		// The three single-drain defects, which alternation cannot express.
+		//
+		// A claim read off one drain — sorted, duplicate-free, terminating —
+		// is answered by whichever call the law happens to make, and the
+		// prover isolates one law at a time, so that is exactly one call per
+		// step. An every-second defect then lands entirely on the parity the
+		// law never sees, and the claim survives a wear built to break it.
+		// These fire on every call for that reason.
+		jumble := base
+		jumble.Kind = kindJumble
+		jumble.Out = elem
+		dup := base
+		dup.Kind = kindDupDrain
+		dup.Out = elem
+		flood := base
+		flood.Kind = kindFlood
+		flood.Out = elem
+		out = append(out, jumble, dup, flood)
 		return out
 	}
 	ref, ret, why := resultType(m)
 	if why != "" {
 		return out
+	}
+	if args := m.CallArgs(); len(args) == 1 &&
+		shape.QName(args[0].Source) == shape.QName(ret.Source) {
+		// The passthrough defect: the input answered verbatim, where the
+		// method's whole job was to change it.
+		//
+		// Every wear above answers something the subject did not — a zero, a
+		// stale repeat, a wrong count. A claim about what a transformation
+		// *removes* survives all of them, because a zero has had everything
+		// removed and passes trivially. Escaping, sanitising, normalising:
+		// the defect is always that the dangerous thing came through, and
+		// the only way to spell that is to answer the argument.
+		pass := base
+		pass.Kind = kindPassthrough
+		pass.Out = ref
+		out = append(out, pass)
 	}
 	switch {
 	case b.Values.Q != "" && shape.QName(ret.Source) == b.Values.Q &&
@@ -801,7 +875,14 @@ func lawOf(
 		lb.Args = append(lb.Args, ref)
 	}
 
+	// Fields the law drives on the subject alone. An oracle that cannot model
+	// one of these cannot fall behind, because the call's whole effect is one
+	// the subject discards before Check returns.
+	sutOnly := map[string]bool{}
 	for _, f := range r.Fields {
+		if f.SUTOnly {
+			sutOnly[f.Name] = true
+		}
 		field, reason := lawFieldOf(b, harness, r, f, m, keyed)
 		if reason != "" {
 			b.Unbound = append(b.Unbound, Skip{Method: r.Law, Reason: reason})
@@ -825,6 +906,9 @@ func lawOf(
 		}
 		if field.Kind() == sdk.Kind(LawFieldKindPrefix+"SuppliedField") {
 			lb.Supplied = append(lb.Supplied, field.Pool)
+		}
+		if sutOnly[field.Name] {
+			continue
 		}
 		if reason, held := inert[field.Method]; field.Method != "" && held {
 			b.Unbound = append(b.Unbound, Skip{
@@ -1219,10 +1303,22 @@ func roleFieldOf(
 		field.In = role.CallArgs()[0].Type
 		field.Out = out
 		if !role.ReturnsError() {
+			if r.Law == lawid.TotalOver {
+				// Totality is the one claim on this shape that reads nothing
+				// but the error, so a method with no error to report cannot
+				// fail it — the closure supplies the nil and the check finds
+				// it. "The most total thing a method can be" is exactly the
+				// problem: nothing is left to verify, and a bound check that
+				// cannot fail is worth less than an absent one, because the
+				// header counts it.
+				return nil, f.Name + " closes over " + role.Name +
+					", which reports no error, and totality is the claim that it does not — " +
+					"the check would pass on every input by construction"
+			}
 			// The law threads an error the method has no way to report, and
-			// the closure's own signature is what supplies the nil. Adapted
-			// rather than refused: an errorless transformation is the most
-			// total thing a method can be, and totality is the claim.
+			// the closure's own signature supplies the nil. Adapted rather
+			// than refused for the claims that read the *result*: an
+			// errorless transformation still has an answer to be wrong.
 			field.KindName = sdk.Kind(LawFieldKindPrefix + "InputCallNoErr")
 		}
 		return field, ""
@@ -2422,6 +2518,22 @@ func roleMethod(
 			}
 		}
 		return nil, "names the writer family, and the interface has no value writer feeding the pool"
+	case fromFamilyKeyedWr:
+		if harness != nil {
+			for i := range harness.Methods {
+				candidate := &harness.Methods[i]
+				if pseudoShape(candidate) != shapeCompositeWriter {
+					continue
+				}
+				// Same discipline as the plain writer family: the pool's own
+				// feeder, so a law writing through this method writes values
+				// the reads can draw and compare.
+				if q, _ := b.valueQOf(candidate); q == b.Values.Q {
+					return candidate, ""
+				}
+			}
+		}
+		return nil, "names the keyed-writer family, and the interface has no keyed write feeding the pool"
 	case "family.aggregator":
 		if harness != nil {
 			for i := range harness.Methods {

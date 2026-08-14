@@ -99,6 +99,23 @@ type Field struct {
 	// forgot, and the manifest would have to choose between rejecting sound
 	// bindings and admitting broken ones.
 	Optional bool
+
+	// SUTOnly marks a field the law calls on the subject alone, whose effect
+	// the subject itself undoes before Check returns.
+	//
+	// A law field normally may not reach a method the derived oracle answers
+	// inertly: the subject would move and the reference would not, and every
+	// comparison after it would report a divergence the subject never caused.
+	// That reasoning assumes the call leaves something behind. Where the law's
+	// whole point is a scope the subject discards — an errored transaction, an
+	// acquire it releases — nothing is left to fall behind, and refusing the
+	// binding costs the claim for a desync that cannot happen.
+	//
+	// The safety argument lives with the conduct register, which records the
+	// same laws as self-cleaning. Setting this on a field of a law that is not
+	// self-cleaning is how a shared pair silently desynchronizes, so the two
+	// must be read together.
+	SUTOnly bool
 }
 
 // FieldKind names how a law's field is filled.

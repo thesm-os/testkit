@@ -35,6 +35,15 @@ type Contract interface {
 	//testkit:contract transaction role=fn notfound=ErrNotFound
 	Run(ctx context.Context, body func(ctx context.Context) error) error
 
+	// Put is the write a body performs inside the scope Run opened, and the
+	// reason the rollback claim is checkable at all: a claim about what an
+	// erroring body leaves behind needs the body to leave something behind.
+	//
+	// Called outside a run it writes through, which is the ordinary store
+	// behaviour a keyed writer promises; called inside one it stages, and an
+	// erroring body discards the staging whole.
+	Put(ctx context.Context, key string, v Value) error
+
 	// Get observes the committed state a rolled-back run must not have
 	// touched.
 	Get(ctx context.Context, key string) (Value, error)

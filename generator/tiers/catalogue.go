@@ -200,6 +200,13 @@ const (
 	familyWriter     = "family.writer"
 	familyAggregator = "family.aggregator"
 
+	// familyKeyedWriter is a write at both pools — `(ctx, K, V) error` — for
+	// a law whose claim names the key it wrote as well as the value. The
+	// plain writer family cannot stand in: a law that reads back what it
+	// wrote has to have chosen the key, and a one-argument writer decides
+	// that for itself.
+	familyKeyedWriter = "family.keyedwriter"
+
 	// familyCell is a nullary read of a single-slot subject — `(ctx) (V,
 	// error)` — the observation a cell-shaped law compares against, which
 	// the keyed reader family cannot stand in for.
@@ -1071,9 +1078,30 @@ var rules = []Rule{
 		Law:   lawid.TransactionRollback,
 		Needs: []string{contractTransaction},
 		Fields: []Field{
-			{Name: "Run", Kind: KindRole, From: "transaction.fn"},
+			// SUTOnly: the law drives Run on the subject with a body that
+			// always errors, so the transaction it opens is one the subject
+			// discards whole. A derived oracle cannot model a callable-taking
+			// method and holds it inert, and without this the whole claim
+			// would decline for a divergence a rolled-back run cannot cause.
+			// Conduct register: self-cleaning.
+			{Name: "Run", Kind: KindRole, From: "transaction.fn", SUTOnly: true},
 			observed(fieldRead),
+			// The staged mutation the rollback must discard. From the
+			// keyed-writer family rather than a contract role: the
+			// transaction contract declares only fn, and what a store writes
+			// with is its own keyed writer — the same method the sequences
+			// drive, so a defect worn on it reaches the law. Keyed rather
+			// than plain because the law reads the key back, which means it
+			// has to have chosen it.
+			//
+			// This field is why the law can fail at all. Without a write
+			// inside the body there is nothing for an erroring transaction
+			// to leave behind, and an interface declaring the contract
+			// without a keyed writer now declines the law by name instead of
+			// binding a check that always passed.
+			{Name: fieldWrite, Kind: KindRole, From: familyKeyedWriter},
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},
+			{Name: fieldValues, Kind: KindGenerator, From: genValues},
 			{Name: "NotFound", Kind: KindConstant, From: paramTransactionNotFound},
 		},
 	},

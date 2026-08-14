@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.48.0"
+const Version = "0.55.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -589,6 +589,17 @@ type SatMutant struct {
 	Over   string
 	ViaLen bool
 
+	// Member names the field a wear rewrites inside the value it answers,
+	// rather than replacing the value whole.
+	//
+	// A session guarantee is stated against an ordering stamp the subject
+	// assigns, and the trace classifier reads the key off the same value. A
+	// wear that answers a zero therefore changes the key too, and the law
+	// files the two reads under different keys and compares neither — which
+	// is how a version-ordering claim survived every defect that replaced
+	// its subject's answer outright.
+	Member string
+
 	// Seq is the arity of a streamed result — 1 for an `iter.Seq`, 2 for an
 	// `iter.Seq2`, zero for anything else. A wear answering the zero value
 	// for one of those hands back a nil function, and ranging over it panics
@@ -615,8 +626,11 @@ func (m SatMutant) SeqHelper() string {
 // faded drain or the doubled one, at the wear's own arity.
 func (m SatMutant) SeqDefect() string {
 	base := "Faded"
-	if m.Kind == "dupseq" {
+	switch m.Kind {
+	case "dupseq":
 		base = "Doubled"
+	case "flood":
+		base = "Flooded"
 	}
 	if m.Seq == 2 {
 		return base + "Seq2"

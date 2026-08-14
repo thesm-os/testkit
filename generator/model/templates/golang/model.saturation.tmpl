@@ -46,9 +46,29 @@ func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by d
 	dress({{ printf "%q" .Method }}, "sputter", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatSputter{{ .Method }}{ {{ $b.IfaceName }}: s }
 	})
-{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") }}
+{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") (and (eq .Kind "flood") .Seq) }}
 	dress({{ printf "%q" .Method }}, {{ printf "%q" .Kind }}, func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }}{s}
+	})
+{{- else if eq .Kind "jumble" }}
+	dress({{ printf "%q" .Method }}, "jumble", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatJumble{{ .Method }}{s}
+	})
+{{- else if eq .Kind "dupdrain" }}
+	dress({{ printf "%q" .Method }}, "dupdrain", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatDupdrain{{ .Method }}{s}
+	})
+{{- else if eq .Kind "flood" }}
+	dress({{ printf "%q" .Method }}, "flood", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatFlood{{ .Method }}{s}
+	})
+{{- else if eq .Kind "regress" }}
+	dress({{ printf "%q" .Method }}, "regress", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatRegress{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "passthrough" }}
+	dress({{ printf "%q" .Method }}, "passthrough", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatPassthrough{{ .Method }}{s}
 	})
 {{- else if eq .Kind "flicker" }}
 	dress({{ printf "%q" .Method }}, "flicker", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
@@ -227,11 +247,11 @@ func (m *{{ lower $b.IfaceName }}SatSputter{{ .Method }}) {{ .Method }}({{ range
 	}
 	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
 }
-{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") }}
+{{- else if or (eq .Kind "fadeseq") (eq .Kind "dupseq") (and (eq .Kind "flood") .Seq) }}
 
 // {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }} answers a drain the
 // claims about {{ .Method }}'s stream say is impossible — reversed and short
-// one, or with every element repeated.
+// one, with every element repeated, or past any limit a test can wait for.
 //
 // The slice-returning shape has had these defects all along. A method that
 // streams had only the zero and the flicker, and a claim about order or
@@ -240,6 +260,115 @@ type {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }} struct{ {{ renderType $
 
 func (m {{ lower $b.IfaceName }}Sat{{ .Kind }}{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) {{ index .Returns 0 | renderType }} {
 	return {{ renderExpr (external $b.RootPkg .SeqDefect) }}(m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }}))
+}
+{{- else if eq .Kind "jumble" }}
+
+// {{ lower $b.IfaceName }}SatJumble{{ .Method }} answers every drain
+// reversed, where {{ .Method }}'s order claim says one order holds.
+//
+// Every drain, not every second one. A claim read off a single drain is
+// answered by whichever call the law makes, and the prover isolates one law
+// at a time — so an alternating defect lands entirely on the parity the law
+// never sees, and survives a wear built to break it.
+type {{ lower $b.IfaceName }}SatJumble{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatJumble{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ([]{{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil {
+		return out, err
+	}
+	jumbled := {{ renderExpr (external "slices" "Clone") }}(out)
+	{{ renderExpr (external "slices" "Reverse") }}(jumbled)
+	return jumbled, nil
+}
+{{- else if eq .Kind "dupdrain" }}
+
+// {{ lower $b.IfaceName }}SatDupdrain{{ .Method }} answers every drain with
+// its first element repeated at the end, where {{ .Method }}'s claim says no
+// element appears twice.
+//
+// Appended rather than doubled in place: a drain whose every element repeats
+// is also out of order under most comparisons, and a defect that trips two
+// claims cannot show which one it belongs to.
+type {{ lower $b.IfaceName }}SatDupdrain{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatDupdrain{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ([]{{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil || len(out) == 0 {
+		return out, err
+	}
+	return append({{ renderExpr (external "slices" "Clone") }}(out), out[0]), nil
+}
+{{- else if eq .Kind "passthrough" }}
+
+// {{ lower $b.IfaceName }}SatPassthrough{{ .Method }} answers {{ .Method }}'s
+// argument verbatim, where the method's whole job was to change it.
+//
+// Every other wear answers something the subject did not — a zero, a stale
+// repeat, a wrong count. A claim about what a transformation *removes*
+// survives all of them, because a zero has had everything removed and passes
+// trivially. The escaper that escapes nothing is spelled only by answering
+// the input.
+type {{ lower $b.IfaceName }}SatPassthrough{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatPassthrough{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	if _, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }}); err != nil {
+		var zero {{ renderType .Out }}
+		return zero, err
+	}
+	return p{{ if .TakesCtx }}1{{ else }}0{{ end }}, nil
+}
+{{- else if eq .Kind "regress" }}
+
+// {{ lower $b.IfaceName }}SatRegress{{ .Method }} answers {{ .Method }}'s own
+// value with {{ .Member }} walked backwards, and every other member left as
+// the subject set it.
+//
+// One member rather than the whole value, because the session laws read the
+// key off the same answer they order. A wear replacing the value files each
+// read under a different key, and a law that never compares two reads of one
+// key cannot fail — which is what every zero-answering defect did here.
+//
+// The stamp descends from whatever the subject last returned, so the second
+// read of a key is strictly older than the first however the subject numbers
+// its versions.
+type {{ lower $b.IfaceName }}SatRegress{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	mu   {{ renderExpr (external "sync" "Mutex") }}
+	held bool
+	prev {{ renderType .Out }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatRegress{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil {
+		return out, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.held {
+		out.{{ .Member }} = m.prev.{{ .Member }} - 1
+	}
+	m.held, m.prev = true, out
+	return out, nil
+}
+{{- else if eq .Kind "flood" }}
+
+// {{ lower $b.IfaceName }}SatFlood{{ .Method }} answers a drain past any
+// limit a test can wait for, where {{ .Method }}'s claim says it terminates.
+//
+// Bounded, because the drain is what runs out of memory otherwise: the
+// completion law reads its limit after the drain returns, so an endless
+// answer takes the machine rather than the test.
+type {{ lower $b.IfaceName }}SatFlood{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatFlood{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ([]{{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil {
+		return out, err
+	}
+	return append({{ renderExpr (external "slices" "Clone") }}(out),
+		make([]{{ renderType .Out }}, {{ renderExpr (external $b.RootPkg "FloodLimit") }})...), nil
 }
 {{- else if eq .Kind "flicker" }}
 

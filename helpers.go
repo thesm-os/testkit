@@ -274,3 +274,62 @@ func DoubledSeq2[K, V any](seq iter.Seq2[K, V]) iter.Seq2[K, V] {
 		}
 	}
 }
+
+// FloodLimit is how many elements the flooding drains yield.
+//
+// It matches the completion law's own default ceiling, which is the only
+// number in play: nothing binds that field, so a drain has not "failed to
+// terminate" until it reaches this. One more than the ceiling would be
+// tidier arithmetic and a worse defect — a stream that stops at all is a
+// stream that terminated, and the law is entitled to say so.
+const FloodLimit = 10000
+
+// FloodedSeq is the drain that will not end within any budget a test can
+// wait for: the subject's own elements, then [FloodLimit] repeats of the
+// last one.
+//
+// It stops. An endless version is the obvious way to write this and the
+// wrong one — every drain the generator emits ranges to exhaustion and
+// appends, and the completion law reads its limit only after the drain
+// returns, so an unbounded yield takes the machine rather than the test.
+// That is not hypothetical: it cost 30 GB and a session.
+//
+// The yield's verdict is honoured on every send, so a consumer that stops
+// early stops this too.
+func FloodedSeq[V any](seq iter.Seq[V]) iter.Seq[V] {
+	return func(yield func(V) bool) {
+		var last V
+		for v := range seq {
+			last = v
+			if !yield(v) {
+				return
+			}
+		}
+		for range FloodLimit {
+			if !yield(last) {
+				return
+			}
+		}
+	}
+}
+
+// FloodedSeq2 is [FloodedSeq] for the two-value form.
+func FloodedSeq2[K, V any](seq iter.Seq2[K, V]) iter.Seq2[K, V] {
+	return func(yield func(K, V) bool) {
+		var (
+			lastK K
+			lastV V
+		)
+		for k, v := range seq {
+			lastK, lastV = k, v
+			if !yield(k, v) {
+				return
+			}
+		}
+		for range FloodLimit {
+			if !yield(lastK, lastV) {
+				return
+			}
+		}
+	}
+}

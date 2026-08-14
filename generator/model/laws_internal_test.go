@@ -2498,8 +2498,13 @@ func TestSaturationDerivation(t *testing.T) {
 
 		replay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(sliceRef(namedRef("Entry"))), errRet})
-		testkit.Equal(t, kinds(replay), []string{"inert", "flicker", "sputter", "fade"},
-			"a slice reader fades")
+		// fade alternates; the other three do not. A claim read off a single
+		// drain is answered by whichever call the law makes, and the prover
+		// isolates one law at a time — so an every-second defect lands on the
+		// parity the law never sees.
+		testkit.Equal(t, kinds(replay),
+			[]string{"inert", "flicker", "sputter", "fade", "jumble", "dupdrain", "flood"},
+			"a slice reader fades, jumbles, repeats and floods")
 
 		page := projected("Page",
 			[]golang.Param{arg("ctx", ctxRef()), arg("cur", namedRef("Cursor"))},
@@ -2535,6 +2540,21 @@ func TestSaturationDerivation(t *testing.T) {
 			[]golang.Return{res(pkgRef("iter", "Seq"))})
 		testkit.Equal(t, satMutantsOf(b, seq1)[0].SeqHelper(), "EmptySeq",
 			"the one-value form names its own")
+
+		// Each stream defect names the runtime helper that wears it, at the
+		// arity the signature declares. A wrong name here is a template that
+		// renders a call to a function that does not exist, which the corpus
+		// catches — but only after a regeneration, and only for the arities
+		// the corpus happens to hold.
+		defects := map[string]string{}
+		for _, sm := range satMutantsOf(b, seq2) {
+			defects[sm.Kind] = sm.SeqDefect()
+		}
+		testkit.Equal(t, defects[kindFadeSeq], "FadedSeq2", "the faded drain")
+		testkit.Equal(t, defects[kindDupSeq], "DoubledSeq2", "the doubled one")
+		testkit.Equal(t, defects[kindFlood], "FloodedSeq2", "and the one that will not end")
+		testkit.Equal(t, satMutantsOf(b, seq1)[0].SeqDefect(), "FadedSeq",
+			"the one-value arity spells its own")
 
 		plain := projected("Get", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("Value")), errRet})

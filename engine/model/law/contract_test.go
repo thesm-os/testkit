@@ -6,6 +6,7 @@ package law_test
 import (
 	"context"
 	"errors"
+	"maps"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -413,7 +414,12 @@ func TestTransactionRollbackOnError(t *testing.T) {
 				}
 				return v, nil
 			},
+			// The staged write this subject discards: Run hands the body
+			// straight through and the subject holds no staging area, so a
+			// write that never lands is the rollback the law is watching for.
+			Write:    func(*rapid.T, *updaterSUT, string, string) error { return nil },
 			Keys:     rapid.Just("a"),
+			Values:   rapid.Just("v"),
 			NotFound: notFound,
 		}
 		rapid.Check(t, func(rt *rapid.T) {
@@ -1407,59 +1413,129 @@ func TestCASAtomicOneWinnerOutcomes(t *testing.T) {
 
 // A rolled-back transaction must leave the store observationally identical —
 // both in what it holds and in whether the probed key exists at all.
+// txStore is a store whose writes land in a staging area while a run is open,
+// with a switch for the defect the rollback claim exists to name.
+//
+// applyInPlace is the implementation every real system ships once by accident:
+// the write goes straight to committed state and the failed run has nothing
+// staged to discard. It is indistinguishable from a correct store until
+// something both writes inside the body and reads afterwards, which is exactly
+// what the law now does and exactly what it could not do before.
+type txStore struct {
+	committed    map[string]string
+	staged       map[string]string
+	applyInPlace bool
+}
+
+func newTxStore() *txStore { return &txStore{committed: map[string]string{}} }
+
+func (s *txStore) run(body func(context.Context) error) error {
+	if !s.applyInPlace {
+		s.staged = map[string]string{}
+	}
+	err := body(context.Background())
+	staged := s.staged
+	s.staged = nil
+	if err != nil {
+		return err
+	}
+	maps.Copy(s.committed, staged)
+	return nil
+}
+
+func (s *txStore) put(k, v string) error {
+	if s.staged != nil {
+		s.staged[k] = v
+		return nil
+	}
+	s.committed[k] = v
+	return nil
+}
+
+func (s *txStore) get(k string) (string, error) {
+	v, ok := s.committed[k]
+	if !ok {
+		return "", errors.New("not found")
+	}
+	return v, nil
+}
+
 func TestTransactionRollbackOnErrorOutcomes(t *testing.T) {
 	t.Parallel()
 
-	mk := func(read func(*rapid.T, *kvStore, string) (string, error)) law.TransactionRollbackOnError[*kvStore, string, string] {
-		return law.TransactionRollbackOnError[*kvStore, string, string]{
-			Run: func(rt *rapid.T, _ *kvStore, body func(context.Context) error) error {
-				return body(rt.Context())
+	mk := func(s *txStore) law.TransactionRollbackOnError[*txStore, string, string] {
+		return law.TransactionRollbackOnError[*txStore, string, string]{
+			Run: func(_ *rapid.T, st *txStore, body func(context.Context) error) error {
+				return st.run(body)
 			},
-			Read: read,
-			Keys: rapid.Just("k"),
+			Read:   func(_ *rapid.T, st *txStore, k string) (string, error) { return st.get(k) },
+			Write:  func(_ *rapid.T, st *txStore, k, v string) error { return st.put(k, v) },
+			Keys:   rapid.Just("k"),
+			Values: rapid.Just("staged"),
 		}
 	}
 
-	t.Run("a clean rollback passes", func(t *testing.T) {
+	t.Run("a store that discards its staging passes", func(t *testing.T) {
 		t.Parallel()
-		s := newKVStore()
-		l := mk(func(_ *rapid.T, st *kvStore, k string) (string, error) { return st.get(k) })
+		s := newTxStore()
+		l := mk(s)
 		rapid.Check(t, func(rt *rapid.T) {
 			if err := l.Check(rt, s, s); err != nil {
-				rt.Fatalf("a store unchanged by a failed body must pass: %v", err)
+				rt.Fatalf("a store that rolled back must pass: %v", err)
 			}
 		})
 	})
 
-	t.Run("a key materialising across the rollback is a violation", func(t *testing.T) {
+	// The true positive the law could not produce before Write existed: this
+	// store never rolls anything back, and every earlier form of the check
+	// reported it green because the body left nothing behind to notice.
+	t.Run("a store that applies in place is caught", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
-			reads := 0
-			s := newKVStore()
-			l := mk(func(_ *rapid.T, st *kvStore, k string) (string, error) {
-				reads++
-				if reads == 1 {
-					return "", errors.New("absent")
-				}
-				return "leaked", nil
-			})
-			if err := l.Check(rt, s, s); err == nil {
-				rt.Fatal("a key that appears after a rollback is a violation")
+			s := newTxStore()
+			s.applyInPlace = true
+			err := mk(s).Check(rt, s, s)
+			if err == nil {
+				rt.Fatal("a write surviving a failed transaction is the violation this law names")
+			}
+			if errors.Is(err, law.Vacuous) {
+				rt.Fatal("the claim was engaged: a write was staged and a body errored")
+			}
+			if !strings.Contains(err.Error(), "changed presence") {
+				rt.Fatalf("the verdict must name what the failed rollback did to the probe: %v", err)
 			}
 		})
 	})
 
+	// The complement, on the same store: a key that already held a value and
+	// whose value the doomed body overwrote.
 	t.Run("a value changed across the rollback is a violation", func(t *testing.T) {
 		t.Parallel()
 		rapid.Check(t, func(rt *rapid.T) {
-			reads := 0
-			s := newKVStore()
-			l := mk(func(*rapid.T, *kvStore, string) (string, error) {
-				reads++
-				return string(rune('a' + reads)), nil
-			})
-			if err := l.Check(rt, s, s); err == nil {
+			s := newTxStore()
+			s.applyInPlace = true
+			_ = s.put("k", "original")
+			err := mk(s).Check(rt, s, s)
+			if err == nil {
 				rt.Fatal("a value mutated by a rolled-back body is a violation")
+			}
+			if !strings.Contains(err.Error(), "value changed across error") {
+				rt.Fatalf("the verdict must name the overwrite rather than a presence change: %v", err)
+			}
+		})
+	})
+
+	// Without a way to stage there is no claim to engage, and saying so is
+	// what keeps the all-vacuous warning able to see it. Reporting a pass
+	// here is the exact false green this field was added to end.
+	t.Run("no writer is vacuous, not a pass", func(t *testing.T) {
+		t.Parallel()
+		rapid.Check(t, func(rt *rapid.T) {
+			s := newTxStore()
+			l := mk(s)
+			l.Write = nil
+			if err := l.Check(rt, s, s); !errors.Is(err, law.Vacuous) {
+				rt.Fatalf("a law with nothing to stage engages nothing: %v", err)
 			}
 		})
 	})

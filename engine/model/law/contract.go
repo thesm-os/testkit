@@ -343,10 +343,30 @@ func (l SingleflightCoalesces[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 // TransactionFunc returns an error, no buffered writes are visible
 // after the call returns. Auto-emitted for methods carrying
 // //testkit:transaction.
+//
+// # Why Write is a field and not an optional convenience
+//
+// The claim is about what an erroring body leaves behind, so the body has to
+// leave something behind or there is nothing to be wrong about. Without a
+// staged write the check reduced to "an errored run did not change a key
+// nobody touched", which every implementation satisfies — including one that
+// applies in place and never rolls back at all. Both failure branches were
+// unreachable and the law reported a pass on every run it ever made.
+//
+// Write is therefore the mutation the rollback must discard, invoked inside
+// the body against the same key the reads probe.
 type TransactionRollbackOnError[T any, K comparable, V any] struct {
-	Run      func(*rapid.T, T, func(_ context.Context) error) error
-	Read     func(*rapid.T, T, K) (V, error)
+	Run  func(*rapid.T, T, func(_ context.Context) error) error
+	Read func(*rapid.T, T, K) (V, error)
+
+	// Write stages a mutation from inside the transaction body. It is the
+	// subject's own write, not a test double: a closure reaching past the
+	// interface to the concrete store would make the law unfalsifiable by
+	// construction, because no defect worn on the interface could reach it.
+	Write func(*rapid.T, T, K, V) error
+
 	Keys     *rapid.Generator[K]
+	Values   *rapid.Generator[V]
 	NotFound error
 }
 
@@ -356,12 +376,30 @@ func (TransactionRollbackOnError[T, K, V]) ID() string { return lawid.Transactio
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (TransactionRollbackOnError[T, K, V]) REQID() string { return "" }
 
-// Check runs a body that always errors and verifies a probe key
-// remains absent after the call returns.
+// Check stages a write inside a body that always errors, then verifies the
+// probe key is observationally what it was before the call.
+//
+// The staged write is the whole of the law's evidence. A subject that
+// discards its staging leaves the probe exactly as it found it; one that
+// applies in place, or commits despite the error, shows the staged value
+// through the read that follows — which is the defect the identifier names
+// and the only one this check can now pass over in silence if Write is
+// absent.
 func (l TransactionRollbackOnError[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
+	if l.Write == nil {
+		// Nothing to stage, so nothing an erroring body could fail to
+		// discard. Vacuous rather than a pass: the run engaged no claim, and
+		// counting it would restore the false green this field exists to end.
+		return Vacuous
+	}
 	probe := l.Keys.Draw(rt, "TransactionRollbackOnError_key")
+	staged := l.Values.Draw(rt, "TransactionRollbackOnError_value")
 	before, beforeErr := l.Read(rt, sut, probe)
 	_ = l.Run(rt, sut, func(_ context.Context) error {
+		// The write's own error is not the claim: a store may legitimately
+		// refuse a write inside a doomed transaction. What the claim forbids
+		// is the write surviving the rollback.
+		_ = l.Write(rt, sut, probe, staged)
 		return errors.New("law: induced rollback")
 	})
 	after, afterErr := l.Read(rt, sut, probe)

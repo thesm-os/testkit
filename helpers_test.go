@@ -347,6 +347,63 @@ func TestSeqDefects(t *testing.T) {
 		}
 	})
 
+	t.Run("flooded runs past any limit a test can wait for", func(t *testing.T) {
+		t.Parallel()
+		// The source's own elements first, then the repeats — enough of them
+		// that a completion claim reads the drain as never having terminated.
+		n := 0
+		for range testkit.FloodedSeq(slices.Values([]int{1, 2})) {
+			n++
+		}
+		testkit.Equal(t, n, testkit.FloodLimit+2, "the source, then the flood")
+
+		n = 0
+		for range testkit.FloodedSeq2(slices.All([]int{1, 2})) {
+			n++
+		}
+		testkit.Equal(t, n, testkit.FloodLimit+2, "and the same at two-value arity")
+	})
+
+	t.Run("flooded stops when the consumer stops", func(t *testing.T) {
+		t.Parallel()
+		// The property that separates this from the wear that took 30 GB: the
+		// flood is bounded, and it is also brakeable. Either alone is not
+		// enough — a bounded drain a consumer cannot stop still holds the
+		// whole of its bound in memory before anyone can object.
+		// Both brake points, at both arities: the source has its own yield and
+		// the flood has another, and a drain that honoured one but not the
+		// other would still run past a consumer that had seen enough.
+		stops := func(seq func(yield func(int) bool), at int) int {
+			n := 0
+			for range seq {
+				n++
+				if n == at {
+					break
+				}
+			}
+			return n
+		}
+		testkit.Equal(t, stops(testkit.FloodedSeq(slices.Values([]int{1, 2, 3})), 2), 2,
+			"stopped inside the source")
+		testkit.Equal(t, stops(testkit.FloodedSeq(slices.Values([]int{1})), 3), 3,
+			"and stopped inside the flood itself")
+
+		stops2 := func(seq func(yield func(int, int) bool), at int) int {
+			n := 0
+			for range seq {
+				n++
+				if n == at {
+					break
+				}
+			}
+			return n
+		}
+		testkit.Equal(t, stops2(testkit.FloodedSeq2(slices.All([]int{1, 2, 3})), 2), 2,
+			"the two-value form stops inside its source")
+		testkit.Equal(t, stops2(testkit.FloodedSeq2(slices.All([]int{1})), 3), 3,
+			"and inside its flood")
+	})
+
 	t.Run("doubled stops on the repeat too", func(t *testing.T) {
 		t.Parallel()
 		// The other half of the brake: a consumer that takes the element and

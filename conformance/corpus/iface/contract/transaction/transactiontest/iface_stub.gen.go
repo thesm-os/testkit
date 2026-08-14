@@ -27,6 +27,18 @@ type ContractRunCall struct {
 	Err  error
 }
 
+// ContractPutCall records one invocation of Contract.Put.
+//
+// Fields take their names from the source signature — parameters and named
+// returns alike — so a failure message names what the author named. A slot
+// the source left unnamed or blank falls back to a positional name.
+type ContractPutCall struct {
+	Ctx context.Context
+	Key string
+	V   transaction.Value
+	Err error
+}
+
 // ContractGetCall records one invocation of Contract.Get.
 //
 // Fields take their names from the source signature — parameters and named
@@ -69,6 +81,38 @@ func (s *ContractRunStub) Returns(err error) *ContractRunStub {
 // Func supplies a body for Run, for when the answer depends on the
 // arguments. An injected fault still takes precedence.
 func (s *ContractRunStub) Func(fn func(context.Context, func(context.Context) error) error) *ContractRunStub {
+	s.fn = fn
+	return s
+}
+
+// ContractPutStub controls how the double answers Put and records
+// what it was asked.
+//
+// The embedded MethodStub supplies the machinery every method shares: call
+// recording, fault injection, latency against a virtual clock, gates,
+// call-count expectations, and strict mode.
+type ContractPutStub struct {
+	*stub.MethodStub[ContractPutCall]
+
+	fn       func(context.Context, string, transaction.Value) error
+	fallback *ContractPutReturn
+}
+
+// ContractPutReturn holds the fixed answer configured through Returns.
+type ContractPutReturn struct {
+	Err error
+}
+
+// Returns pins a fixed result for every call to Put. A Func
+// override and an injected fault both take precedence over it.
+func (s *ContractPutStub) Returns(err error) *ContractPutStub {
+	s.fallback = &ContractPutReturn{Err: err}
+	return s
+}
+
+// Func supplies a body for Put, for when the answer depends on the
+// arguments. An injected fault still takes precedence.
+func (s *ContractPutStub) Func(fn func(context.Context, string, transaction.Value) error) *ContractPutStub {
 	s.fn = fn
 	return s
 }
@@ -126,6 +170,7 @@ func ContractStubStrict() ContractStubOption {
 func ContractStubDelegateTo(impl transaction.Contract) ContractStubOption {
 	return func(s *ContractStub) {
 		s.OnRun.Func(impl.Run)
+		s.OnPut.Func(impl.Put)
 		s.OnGet.Func(impl.Get)
 	}
 }
@@ -169,6 +214,13 @@ func WithContractRun(fn func(context.Context, func(context.Context) error) error
 	return func(s *ContractStub) { s.OnRun.Func(fn) }
 }
 
+// WithContractPut sets Put's body at construction
+// time, for the common case of configuring one method and taking the
+// defaults for the rest.
+func WithContractPut(fn func(context.Context, string, transaction.Value) error) ContractStubOption {
+	return func(s *ContractStub) { s.OnPut.Func(fn) }
+}
+
 // WithContractGet sets Get's body at construction
 // time, for the common case of configuring one method and taking the
 // defaults for the rest.
@@ -182,6 +234,7 @@ func WithContractGet(fn func(context.Context, string) (transaction.Value, error)
 // method returns its zero value and records the call.
 type ContractStub struct {
 	OnRun *ContractRunStub
+	OnPut *ContractPutStub
 	OnGet *ContractGetStub
 
 	// all is every method stub above, viewed through the surface that does
@@ -208,10 +261,12 @@ var _ transaction.Contract = (*ContractStub)(nil)
 func NewContractStub(tb testing.TB, opts ...ContractStubOption) *ContractStub {
 	s := &ContractStub{
 		OnRun: &ContractRunStub{MethodStub: stub.NewMethodStub[ContractRunCall](tb, "Contract.Run")},
+		OnPut: &ContractPutStub{MethodStub: stub.NewMethodStub[ContractPutCall](tb, "Contract.Put")},
 		OnGet: &ContractGetStub{MethodStub: stub.NewMethodStub[ContractGetCall](tb, "Contract.Get")},
 	}
 	s.all = []stub.Configurable{
 		s.OnRun.MethodStub,
+		s.OnPut.MethodStub,
 		s.OnGet.MethodStub,
 	}
 	for _, opt := range opts {
@@ -283,6 +338,38 @@ func (s *ContractStub) Run(ctx context.Context, body func(context.Context) error
 // invoke adapts the Func override to the shape [stub.Answer] consumes, or
 // returns nil when no override is set — which is how Answer tells "no
 // override" from "an override that returns zero".
+func (s *ContractPutStub) invoke(ctx context.Context, key string, v transaction.Value) func() ContractPutReturn {
+	if s.fn == nil {
+		return nil
+	}
+	return func() ContractPutReturn {
+		r0 := s.fn(ctx, key, v)
+		return ContractPutReturn{Err: r0}
+	}
+}
+
+// Put records the call and answers it.
+//
+// Which arm answers — injected fault, Func override, Returns fallback, or the
+// zero value — is [stub.Answer]'s to decide, so every generated double
+// resolves a call the same way and the ordering is tested once rather than
+// restated per method.
+func (s *ContractStub) Put(ctx context.Context, key string, v transaction.Value) error {
+	call := ContractPutCall{Ctx: ctx, Key: key, V: v}
+	r := stub.Answer(s.OnPut.MethodStub, &call, stub.Arms[ContractPutCall, ContractPutReturn]{
+		Invoke:   s.OnPut.invoke(ctx, key, v),
+		Fallback: s.OnPut.fallback,
+		Fault:    func(err error) ContractPutReturn { return ContractPutReturn{Err: err} },
+		Stamp: func(c *ContractPutCall, r ContractPutReturn) {
+			c.Err = r.Err
+		},
+	})
+	return r.Err
+}
+
+// invoke adapts the Func override to the shape [stub.Answer] consumes, or
+// returns nil when no override is set — which is how Answer tells "no
+// override" from "an override that returns zero".
 func (s *ContractGetStub) invoke(ctx context.Context, key string) func() ContractGetReturn {
 	if s.fn == nil {
 		return nil
@@ -314,4 +401,4 @@ func (s *ContractStub) Get(ctx context.Context, key string) (transaction.Value, 
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5894c7f8384dcdc36c8856dcb45fbd5c22f9f24bcd58056b4180d878ea7a320c
+// testkit:provenance 992752e5eb993de47a257aaca4901ae008f73100645278dd181013467518252a
