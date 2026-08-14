@@ -88,11 +88,17 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 	{{ renderExpr $behaviour }}(t, "{{ $m.Name }}", {{ camel $stub }}{{ $m.Name }}Subject{{ $.TypeArgs }})
 {{- if $m.HasResults }}
 
+{{- if $m.Pinnable }}
+
 	t.Run("answers with the value pinned by Returns", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-{{- range $i, $r := $m.Returns }}
-		var want{{ $i }} {{ renderType $r.Type }}
+		// Distinguishable from the zero wherever a literal can be written.
+		// Pinning the zero and asserting the call answers it is what an
+		// unconfigured double does by design, so the check passed for a
+		// double that ignored Returns entirely.
+{{- range $i, $p := $m.Pins }}
+		var want{{ $i }} {{ renderType $p.Type }}{{ if $p.Text }} = {{ $p.Text }}{{ end }}
 {{- end }}
 		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
 {{- template "stub.testargs" $m }}
@@ -101,6 +107,13 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "{{ $m.Name }} must answer with what Returns pinned")
 {{- end }}
 	})
+{{- else }}
+
+	// No check that {{ $m.Name }} answers what Returns pinned: no result of
+	// its signature admits a literal this generator can write, so the only
+	// value available to pin is the zero — which an unconfigured double
+	// answers anyway. stub.Behaviour asserts that half honestly.
+{{- end }}
 {{- end }}
 	t.Run("records what it was called with", func(t *{{ renderExpr $T }}) {
 		t.Parallel()

@@ -57,7 +57,7 @@ const (
 // template edit, and a golden diff would stop isolating what actually changed
 // in the output. Stability in the header is worth the discipline; during
 // development `--no-cache` covers the gap.
-const Version = "1.1.0"
+const Version = "1.2.0"
 
 // WitnessKey is the directive key naming the concrete types a generic
 // double's companion is instantiated at, in type-parameter order —
@@ -272,6 +272,61 @@ type Method struct {
 	// corpus gate measures coverage against it, and a second declaration here
 	// would be free to drift from it.
 	Mixins []string
+}
+
+// Pin is one return position's literal for the check that Returns is honoured.
+type Pin struct {
+	// Type is the return's type, for the `var` declaration that carries the
+	// literal.
+	Type sdk.Ref
+
+	// Text is a value distinguishable from the zero, empty where none can be
+	// written for this type.
+	Text string
+}
+
+// Pins returns one entry per result, each carrying a value the check can tell
+// apart from an unconfigured double.
+//
+// The whole of what "answers with the value pinned by Returns" is worth. That
+// check declared `var want T`, handed the zero to Returns and asserted the
+// call answered it — which an implementation ignoring Returns entirely also
+// does, because an unconfigured double answers the zero by design. Seven
+// hundred and six generated sites asserted it, and none of the four hundred
+// and sixty-two Returns calls passed a value that was not the zero.
+//
+// The runtime helper had already refused this exact check, in those words,
+// and delegated it here on the grounds that a distinguishable value needs the
+// type — which is true, and is what this derives. [stub.Behaviour] asserts the
+// honest half beside it: an unconfigured double answers the zero.
+//
+// Empty Text is not a failure. A return whose type admits no literal this
+// generator can write keeps the zero and the check says so rather than
+// pretending; see the template's suppression.
+func (m Method) Pins() []Pin {
+	out := make([]Pin, 0, len(m.Returns))
+	for i := range m.Returns {
+		p := Pin{Type: m.Returns[i].Type}
+		if b, ok := m.Returns[i].Type.(*sdk.BuiltinRef); ok {
+			p.Text, _ = golang.SampleValues(b.Name, m.Name)
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// Pinnable reports whether any result admits a distinguishable literal.
+//
+// One is enough: a call answering several results is wrong if any position
+// comes back unconfigured, so the check earns its name as soon as a single
+// position can be told apart.
+func (m Method) Pinnable() bool {
+	for _, p := range m.Pins() {
+		if p.Text != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // HasMixin reports whether the source attached the named mixin, which is how
