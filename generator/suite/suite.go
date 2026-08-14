@@ -46,7 +46,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.11.0"
+const Version = "1.12.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -174,6 +174,11 @@ func directives() []sdk.DirectiveSchema {
 					"//testkit:bench and //testkit:fuzz, which scope to a method.",
 			).
 			On(sdk.NodeKindInterface).
+			// The Describe text says it takes no arguments; this is what makes
+			// that true. An empty AllowedKeys means unrestricted, so before
+			// DenyKeys existed a stray key parsed, validated and stamped
+			// nothing, and whoever wrote it believed it had an effect.
+			DenyKeys().
 			DenyNegation().
 			Build(),
 	}

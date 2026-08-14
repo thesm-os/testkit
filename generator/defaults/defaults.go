@@ -22,7 +22,7 @@ const Name = "defaults"
 //
 // Bump it whenever what gets stamped changes: a different parse, a changed
 // validation rule, a new key.
-const Version = "1.0.0"
+const Version = "1.1.0"
 
 // DirectiveName is the directive this annotator owns, written under testkit's
 // namespace as `//testkit:default`.
@@ -76,6 +76,10 @@ func directives() []sdk.DirectiveSchema {
 			).
 			Positional("value", sdk.Required()).
 			On(sdk.NodeKindField).
+			// One positional and nothing else: the value is the whole
+			// directive, and a key beside it names something this generator
+			// has never read.
+			DenyKeys().
 			DenyNegation().
 			Build(),
 	}

@@ -57,7 +57,7 @@ const (
 // template edit, and a golden diff would stop isolating what actually changed
 // in the output. Stability in the header is worth the discipline; during
 // development `--no-cache` covers the gap.
-const Version = "1.0.0"
+const Version = "1.1.0"
 
 // WitnessKey is the directive key naming the concrete types a generic
 // double's companion is instantiated at, in type-parameter order —
@@ -168,11 +168,20 @@ func directives() []sdk.DirectiveSchema {
 			Describe(
 				"Generates a recording test double for the annotated interface, " +
 					"plus a companion test file proving the double satisfies it. " +
-					"Takes no arguments. The negated form is rejected — a stub " +
+					"Optional `witness=<types>` names the concrete types the " +
+					"compile-time guard instantiates a generic interface at, " +
+					"comma-separated; without it a generic interface gets the " +
+					"double but no guard. The negated form is rejected — a stub " +
 					"exists only where declared, so removing the directive is the " +
 					"suppression.",
 			).
 			On(sdk.NodeKindInterface).
+			// One key, declared. The Describe text said "takes no arguments"
+			// while the generator read witness= three hundred lines below, and
+			// nothing could catch the contradiction: an empty AllowedKeys means
+			// unrestricted, so the directive accepted witness= and every typo
+			// of it alike.
+			AllowedKeys(WitnessKey).
 			DenyNegation().
 			Build(),
 	}
