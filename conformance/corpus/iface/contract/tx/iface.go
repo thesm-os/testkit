@@ -46,6 +46,17 @@ type Contract interface {
 	// Rollback terminally discards the handle's transaction.
 	Rollback(ctx context.Context, tx Tx) error
 
+	// Put stages a write under the handle's open transaction.
+	//
+	// On the interface rather than beside it, and that is a claim about
+	// claims: an interface stating that its staging is invisible outside the
+	// transaction is stating something about an operation, and an operation
+	// nobody can call through the interface is one no conformance check can
+	// reach. Held off it, the mid-transaction law bound a closure reaching
+	// past to the concrete store, and no defect worn on the interface could
+	// make the claim false — bound, green, and unfalsifiable.
+	Put(ctx context.Context, tx Tx, key string, v Value) error
+
 	// Get observes the committed state — what an open transaction staged
 	// must not have touched, which is the mid-transaction claim's outside
 	// read.

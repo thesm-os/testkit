@@ -199,6 +199,7 @@ const (
 
 	shapeKeyedHandle lawShape = "KeyedHandle" // func(rt, T, K) (W, error) — the handle kept, never compared
 	shapeKeyedWrite  lawShape = "KeyedWrite"  // func(rt, T, K, V) error — a keyed write at both pools
+	shapeHandleWrite lawShape = "HandleWrite" // func(rt, T, H, K, V) error — a keyed write inside an open handle
 
 	shapePeerSync   lawShape = "PeerSync"   // func(rt, []T) error — the star round over pairwise sync
 	shapeEachSettle lawShape = "EachSettle" // func(rt, []T) — one settle per replica
@@ -213,6 +214,7 @@ const (
 const (
 	fRead    = "Read"
 	fWrite   = "Write"
+	fTxPut   = "TxPut"
 	fDrain   = "Drain"
 	fCall    = "Call"
 	fCount   = "Count"
@@ -256,6 +258,10 @@ const (
 	kindFlood       = "flood"
 	kindRegress     = "regress"
 	kindPassthrough = "passthrough"
+	kindStick       = "stick"
+	kindSpill       = "spill"
+	kindLatch       = "latch"
+	kindGreedy      = "greedy"
 
 	// satFloodItems is what a flooding drain answers, and it is pinned to
 	// [law.StreamCompletion]'s own default limit rather than derived: the
@@ -267,6 +273,7 @@ const (
 	fieldMax            = "Max"
 	fromFamilyCell      = "family.cell"
 	fromFamilyKeyedWr   = "family.keyedwriter"
+	fromFamilyHandleWr  = "family.handlewriter"
 	handleKeyProjection = "key-projection"
 	handleCoalesce      = "coalesce-probe"
 	handleVersionStamp  = "version-stamp"
@@ -373,7 +380,8 @@ var lawRoleShapes = map[string]map[string]lawShape{
 	lawid.WatcherReturnsOnChange: {fWatch: shapeKeyedHandle, "Mutate": shapeKeyedWrite},
 
 	lawid.TransactionNoMidTxVisibility: {
-		fBegin: shapeHandleCall, "TxRollback": shapeHandleOp, fRead: shapeKeyedRead,
+		fBegin: shapeHandleCall, fTxPut: shapeHandleWrite,
+		"TxRollback": shapeHandleOp, fRead: shapeKeyedRead,
 	},
 
 	lawid.EventualConvergence: {
@@ -677,6 +685,56 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		sputter.Kind = kindSputter
 		out = append(out, sputter)
 	}
+	if errOnly(m) {
+		// The sticking defect: the operation works once and refuses forever
+		// after — the close that is not idempotent, the release that cannot
+		// be repeated.
+		//
+		// sputter cannot express it. An idempotence law calls twice and
+		// discards the first answer, so an alternating refusal is absorbed by
+		// the very call the law is not reading, on every iteration, forever.
+		// What the claim forbids is the *second* call failing, and only a
+		// defect that arrives after the first can say so.
+		stick := base
+		stick.Kind = kindStick
+		out = append(out, stick)
+
+		// The latching defect: the first call takes effect and every later
+		// one is quietly dropped.
+		//
+		// The order-sensitive fold, which is the one defect a commutativity
+		// claim can see. That law builds both its instances from the same
+		// worn factory and applies the same values in opposite orders, so
+		// every wear reaches both sides identically and the two observations
+		// agree however wrong they are. A fold that keeps only what it saw
+		// first keeps a different thing on each side, and the claim fails as
+		// itself.
+		latch := base
+		latch.Kind = kindLatch
+		out = append(out, latch)
+	}
+	for i, p := range m.Params {
+		// Nullary: a computation the method runs, not a callback it feeds.
+		// Calling one that takes arguments would need values invented here,
+		// and a defect that has to invent its own inputs is a different
+		// subject under test.
+		if p.Source == nil || !p.Source.IsFunc() || len(p.Source.FuncParams) > 0 {
+			continue
+		}
+		// The greedy defect: the caller's callback run one extra time.
+		//
+		// A method taking a computation promises something about how often it
+		// runs it — deduplicated, memoised, once. Nothing the wardrobe wore
+		// could touch that: every other defect changes what the method
+		// *answers*, and a coalescing claim counts what it *called*. The
+		// counter the law reads lives inside the closure the law passed in,
+		// so the only way to move it is to invoke that closure.
+		greedy := base
+		greedy.Kind = kindGreedy
+		greedy.Member = strconv.Itoa(i)
+		out = append(out, greedy)
+		break
+	}
 	if b.Session != nil && b.Session.VersionField != "" && m.Name == b.Session.Reader {
 		// The regressing defect: the subject's own answer with its ordering
 		// stamp walked backwards, and every other field left alone.
@@ -756,6 +814,19 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 	if why != "" {
 		return out
 	}
+	// The spilling defect: a refusal carrying the answer the subject found —
+	// "whatever the failed lookup left behind", which is the exact phrase the
+	// default-on-error claim exists to forbid.
+	//
+	// Every refusal the wardrobe could mint until now arrived with the zero
+	// value beside it, and the value a failed read is supposed to answer is
+	// usually the zero. So the defect and the claim agreed, and a law about
+	// what an error must coincide with had nothing that could disagree.
+	spill := base
+	spill.Kind = kindSpill
+	spill.Out = ref
+	out = append(out, spill)
+
 	if args := m.CallArgs(); len(args) == 1 &&
 		shape.QName(args[0].Source) == shape.QName(ret.Source) {
 		// The passthrough defect: the input answered verbatim, where the
@@ -1627,6 +1698,17 @@ func roleFieldOf(
 		field.Value = role.CallArgs()[1].Type
 		return field, ""
 
+	case shapeHandleWrite:
+		args := role.CallArgs()
+		if len(args) != 3 || !errOnly(role) {
+			return nil, f.Name + " closes over " + role.Name +
+				", which does not write one value under one key inside an open handle"
+		}
+		field.In = args[0].Type
+		field.Key = args[1].Type
+		field.Value = args[2].Type
+		return field, ""
+
 	case shapePeerSync:
 		if len(role.CallArgs()) != 1 || !errOnly(role) {
 			return nil, f.Name + " closes over " + role.Name +
@@ -2241,8 +2323,6 @@ var suppliedShapes = map[string]map[string]string{
 	lawid.PoolBalanced:          {"Stats": supStats},
 	lawid.PoolLeakFree:          {"Balanced": supSubjPred},
 	lawid.ReplayCausalOrdering:  {fEntryID: supEntryID, "DependsOn": supDependsOn},
-
-	lawid.TransactionNoMidTxVisibility: {"TxPut": supTxPut},
 }
 
 // The supplied-shape vocabulary — each names one closure type arm in the
@@ -2258,7 +2338,6 @@ const (
 	supStats        = "Stats"        // func(*model.T, T) (int, int, int)
 	supEntryID      = "EntryID"      // func(E) string
 	supDependsOn    = "DependsOn"    // func(E) []string
-	supTxPut        = "TxPut"        // func(*model.T, T, Tx, K, V) error
 )
 
 // suppliedFieldOf builds a consumer-supplied door: the closure type spelled
@@ -2312,32 +2391,6 @@ func suppliedFieldOf(
 			return nil, f.Name + " " + why
 		}
 		opt.Elem = elem
-	case supTxPut:
-		// The mid-transaction write: the handle Begin answers, the key and
-		// the read-back's value — spelled at the fixture's own types so the
-		// consumer's closure reaches its subject's staging API directly.
-		begin, reason := ruleFieldRole(b, harness, r, fBegin, m, keyed)
-		if reason != "" {
-			return nil, f.Name + " " + reason
-		}
-		handle, why := firstResultType(begin)
-		if why != "" {
-			return nil, f.Name + " threads " + begin.Name + "'s handle, and it answers none"
-		}
-		if b.Keys.Type == nil {
-			return nil, f.Name + " is typed at a key no method here draws"
-		}
-		read, reason := ruleFieldRole(b, harness, r, fRead, m, keyed)
-		if reason != "" {
-			return nil, f.Name + " " + reason
-		}
-		out, _, whyOut := resultType(read)
-		if whyOut != "" {
-			return nil, f.Name + " " + whyOut
-		}
-		opt.Out = handle
-		opt.Key = b.Keys.Type
-		opt.Elem = out
 	case supSubjPred, supStats:
 		// The subject alone; nothing more to resolve.
 	}
@@ -2534,6 +2587,26 @@ func roleMethod(
 			}
 		}
 		return nil, "names the keyed-writer family, and the interface has no keyed write feeding the pool"
+	case fromFamilyHandleWr:
+		// A write threading an open handle: three arguments, the first the
+		// handle a begin role answers. Found by shape rather than named by a
+		// role, because a contract that declares begin/settle/observe has no
+		// word for the staging in between — and a claim about what staging
+		// does needs the staging on the interface, not reached past it.
+		//
+		// By shape alone, with no pool agreement demanded: a law reaching for
+		// this family declares its own value domain, because the shared pool
+		// on a handle-threading interface draws handles. Requiring the match
+		// refuses the one method that fits.
+		if harness != nil {
+			for i := range harness.Methods {
+				candidate := &harness.Methods[i]
+				if len(candidate.CallArgs()) == 3 && errOnly(candidate) {
+					return candidate, ""
+				}
+			}
+		}
+		return nil, "names the handle-writer family, and the interface declares no write threading an open handle"
 	case "family.aggregator":
 		if harness != nil {
 			for i := range harness.Methods {

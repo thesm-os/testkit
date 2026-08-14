@@ -36,16 +36,10 @@ func TestContractContract(t *testing.T) {
 	t.Parallel()
 
 	txtest.AssertContractContract(t,
-		txtest.ContractModel(
-			// The mid-transaction write door: how a store stages is its own
-			// business, so the closure reaches this subject's staging API —
-			// which is exactly why the field is supplied rather than derived.
-			txtest.ContractModelTxPut(func(
-				_ *model.T, s tx.Contract, h tx.Tx, key string, v tx.Value,
-			) error {
-				return s.(*txtest.InMemory).PutInTx(h, key, v)
-			}),
-		),
+		// The mid-transaction write is derived now: Put is on the interface,
+		// so the law reaches it the way a consumer would and a defect worn on
+		// the interface reaches the law back.
+		txtest.ContractModel(),
 		txtest.ContractSubject("in-memory", func() tx.Contract {
 			return txtest.NewInMemory()
 		}),
@@ -117,28 +111,28 @@ func TestContractContractWithoutTheDouble(t *testing.T) {
 	)
 }
 
-// Staging is the subject's own API, so its refusals are this package's to
-// prove: a settled handle stages nothing, and what an open one staged never
-// reaches an outside read.
+// Staging is on the interface now, and the generated law drives it — but its
+// refusals still belong here: a settled handle stages nothing, which is a
+// claim about this subject's own error rather than about the contract.
 func TestStagingRefusesASettledHandle(t *testing.T) {
 	t.Parallel()
 
 	s := txtest.NewInMemory()
 	h, err := s.Begin(t.Context())
 	testkit.NoError(t, err, "a transaction opens")
-	testkit.NoError(t, s.PutInTx(h, "k", tx.Value{Key: "k", Body: "staged"}),
+	testkit.NoError(t, s.Put(t.Context(), h, "k", tx.Value{Key: "k", Body: "staged"}),
 		"the open transaction stages")
 
 	_, err = s.Get(t.Context(), "k")
 	testkit.ErrorIs(t, err, tx.ErrNotFound, "and the outside read sees nothing of it")
 
 	testkit.NoError(t, s.Rollback(t.Context(), h), "the transaction rolls back")
-	testkit.ErrorIs(t, s.PutInTx(h, "k", tx.Value{Key: "k", Body: "late"}), tx.ErrTxClosed,
+	testkit.ErrorIs(t, s.Put(t.Context(), h, "k", tx.Value{Key: "k", Body: "late"}), tx.ErrTxClosed,
 		"a settled handle stages nothing")
 
 	h2, err := s.Begin(t.Context())
 	testkit.NoError(t, err, "a second transaction opens")
-	testkit.NoError(t, s.PutInTx(h2, "k", tx.Value{Key: "k", Body: "kept"}), "and stages")
+	testkit.NoError(t, s.Put(t.Context(), h2, "k", tx.Value{Key: "k", Body: "kept"}), "and stages")
 	testkit.NoError(t, s.Commit(t.Context(), h2), "and commits")
 
 	got, err := s.Get(t.Context(), "k")
@@ -147,16 +141,12 @@ func TestStagingRefusesASettledHandle(t *testing.T) {
 }
 
 // The saturation prover: every bound law must be able to fail as itself,
-// with the same staging door armed that arms the tier.
+// with nothing to arm: the staging write is derived from the interface.
 func TestContractSaturation(t *testing.T) {
 	t.Parallel()
 	txtest.ContractModelSaturation(t, func() tx.Contract {
 		return txtest.NewInMemory()
-	}, txtest.ContractModelTxPut(func(
-		_ *model.T, s tx.Contract, h tx.Tx, key string, v tx.Value,
-	) error {
-		return s.(*txtest.InMemory).PutInTx(h, key, v)
-	}))
+	})
 }
 
 // commitRefuses is the defect only the composite driving can see: every

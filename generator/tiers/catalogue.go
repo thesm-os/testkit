@@ -207,6 +207,13 @@ const (
 	// that for itself.
 	familyKeyedWriter = "family.keyedwriter"
 
+	// familyHandleWriter is a write threading an open handle — `(ctx, H, K,
+	// V) error` — for a claim about what a scope stages before it settles.
+	// A contract declaring begin, settle and observe has no word for the
+	// staging in between, and a claim about what staging does needs the
+	// staging on the interface rather than reached past it.
+	familyHandleWriter = "family.handlewriter"
+
 	// familyCell is a nullary read of a single-slot subject — `(ctx) (V,
 	// error)` — the observation a cell-shaped law compares against, which
 	// the keyed reader family cannot stand in for.
@@ -1114,7 +1121,7 @@ var rules = []Rule{
 		Needs: []string{contractTx},
 		Fields: []Field{
 			{Name: "Begin", Kind: KindRole, From: "tx.begin"},
-			{Name: "TxPut", Kind: KindSupplied, From: "tx-put"},
+			{Name: "TxPut", Kind: KindRole, From: familyHandleWriter},
 			{Name: "TxRollback", Kind: KindRole, From: "tx.rollback"},
 			observed(fieldRead),
 			{Name: fieldKeys, Kind: KindGenerator, From: genKeys},

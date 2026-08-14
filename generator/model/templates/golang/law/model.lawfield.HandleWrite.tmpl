@@ -1,0 +1,16 @@
+{{- /*
+A write threading an open handle: the staging operation a mid-transaction
+claim is stated about, drawn from the same pools the sequences write.
+
+Bound from a method rather than supplied as a closure, and that is the whole
+point. A supplied closure reaches past the interface to the concrete store —
+`s.(*Impl).StageIt(...)` — and a defect worn on the interface then fails the
+type assertion before the law observes anything, so no mutant can make the
+claim false and it reads as bound but unsaturatable. An interface declaring a
+claim about what its staging does has to declare the staging.
+*/ -}}
+{{- define "model.lawfield.HandleWrite" -}}
+{{ .Name }}: func(rt *{{ renderExpr (external .ModelPkg "T") }}, s {{ renderType .Iface }}, h {{ renderType .In }}, k {{ renderType .Key }}, v {{ renderType .Value }}) error {
+			return s.{{ .Method }}({{ if .TakesCtx }}rt.Context(), {{ end }}h, k, v)
+		}
+{{- end -}}

@@ -53,11 +53,16 @@ func (s *InMemory) Begin(ctx context.Context) (tx.Tx, error) {
 	return tx.Tx{ID: s.nextID}, nil
 }
 
-// PutInTx stages a write under the handle's transaction — the subject's own
-// staging API, deliberately off the interface: the contract states begin,
-// settle and observe, and how a store stages is its own business. The
-// generated TxPut door is armed with exactly this.
-func (s *InMemory) PutInTx(h tx.Tx, key string, v tx.Value) error {
+// Put stages a write under the handle's transaction.
+//
+// On the interface, where a claim about staging can reach it. Held off it —
+// as this was, as the subject's own private API — the mid-transaction law
+// bound a closure asserting through to this concrete type, and every mutant
+// the prover wore failed that assertion before the law observed anything.
+func (s *InMemory) Put(ctx context.Context, h tx.Tx, key string, v tx.Value) error {
+	if err := contextErr(ctx); err != nil {
+		return err
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	stage, open := s.staged[h.ID]

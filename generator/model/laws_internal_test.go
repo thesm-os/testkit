@@ -1754,6 +1754,31 @@ func TestContractShapeArms(t *testing.T) {
 		testkit.Assert(t, reason).Contains("no handle draw supplies", "an input nothing draws")
 	})
 
+	// The staging write a mid-transaction claim is stated about. Bound from
+	// the interface rather than supplied as a closure, because a supplied one
+	// reaches past to the concrete store and no defect worn on the interface
+	// can then reach the law — bound, green, and unfalsifiable.
+	t.Run("a staging write threads the handle beside a key and a value", func(t *testing.T) {
+		t.Parallel()
+		staging := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+
+		field, reason := bindField(staging, lawid.TransactionNoMidTxVisibility, "TxPut",
+			projected("Put", []golang.Param{
+				arg("ctx", ctxRef()), arg("h", namedRef("Tx")),
+				arg("k", namedRef(qStr)), arg("v", namedRef("Value")),
+			}, []golang.Return{errRet}))
+		testkit.True(t, reason == "", "the staging write binds: "+reason)
+		testkit.True(t, field != nil && field.In != nil && field.Key != nil && field.Value != nil,
+			"and carries the handle, the key and the value it writes")
+
+		_, reason = bindField(staging, lawid.TransactionNoMidTxVisibility, "TxPut",
+			projected("Put", []golang.Param{
+				arg("ctx", ctxRef()), arg("k", namedRef(qStr)), arg("v", namedRef("Value")),
+			}, []golang.Return{errRet}))
+		testkit.Assert(t, reason).Contains("inside an open handle",
+			"a keyed write with no handle stages nothing a transaction owns")
+	})
+
 	t.Run("a terminal operation threads begin's handle", func(t *testing.T) {
 		t.Parallel()
 		begin := projected("Begin", []golang.Param{arg("ctx", ctxRef())},
@@ -2360,7 +2385,7 @@ func TestReplicaClosureShapes(t *testing.T) {
 // door spelled at the handle, key and read-back types, the readback pool at
 // the observed reader's answer, and the refusals each earns without its
 // anchors.
-func TestMidTxDoorAndReadbackPool(t *testing.T) {
+func TestMidTxStagingAndReadbackPool(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
@@ -2370,42 +2395,46 @@ func TestMidTxDoorAndReadbackPool(t *testing.T) {
 	get := stamp(projected("Get",
 		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
 		[]golang.Return{res(namedRef("Value")), errRet}), "reader", qStr, "Value")
+	// The staging write is derived from the interface now, not supplied. A
+	// door reaching past to the concrete store is what made this law
+	// unfalsifiable: every mutant the prover wore failed the type assertion
+	// inside the consumer's closure before the law observed anything.
+	put := projected("Put", []golang.Param{
+		arg("ctx", ctxRef()), arg("h", namedRef("Tx")),
+		arg("key", namedRef(qStr)), arg("v", namedRef("Value")),
+	}, []golang.Return{errRet})
 	r := tiers.Rule{Law: lawid.TransactionNoMidTxVisibility, Fields: []tiers.Field{
 		{Name: fBegin, Kind: tiers.KindRole, From: "tx.begin"},
-		{Name: "TxPut", Kind: tiers.KindSupplied, From: "tx-put"},
+		{Name: fTxPut, Kind: tiers.KindRole, From: "family.handlewriter"},
 		{Name: fRead, Kind: tiers.KindRole, From: "family.reader"},
 		{Name: "Values", Kind: tiers.KindGenerator, From: "readback"},
 	}}
 
-	t.Run("the door and the pool bind at the fixture's types", func(t *testing.T) {
+	t.Run("the staging write and the pool bind at the fixture's types", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
 			Subject: suite.Subject{IfaceName: "Contract"},
 			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
 		}
-		field, reason := lawFieldOf(b, harnessOf(begin, get), r, r.Fields[1], begin, get)
-		testkit.True(t, reason == "", "the mid-tx door binds: "+reason)
-		testkit.Equal(t, string(field.Kind()), "model.lawfield.SuppliedField", "as a guarded door")
+		field, reason := lawFieldOf(b, harnessOf(begin, put, get), r, r.Fields[1], begin, get)
+		testkit.True(t, reason == "", "the staging write binds: "+reason)
+		testkit.Equal(t, string(field.Kind()), "model.lawfield.HandleWrite",
+			"as a closure over a real method, not a door")
 
-		field, reason = lawFieldOf(b, harnessOf(begin, get), r, r.Fields[3], begin, get)
+		field, reason = lawFieldOf(b, harnessOf(begin, put, get), r, r.Fields[3], begin, get)
 		testkit.True(t, reason == "", "the readback pool binds: "+reason)
 		testkit.Equal(t, field.Pool, "readback", "at the observed reader's answer")
 	})
 
 	t.Run("each anchor's absence refuses by name", func(t *testing.T) {
 		t.Parallel()
-		keyless := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
-		_, reason := lawFieldOf(keyless, harnessOf(begin, get), r, r.Fields[1], begin, get)
-		testkit.Assert(t, reason).Contains("a key no method here draws", "no key pool, no probe")
-
 		pooled := &Bindings{
 			Subject: suite.Subject{IfaceName: "Contract"},
 			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
 		}
-		flat := projected("Begin", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
-		shape.ContractRoleKey("tx").Set(flat.Source.EnsureMeta(), "begin", "test")
-		_, reason = lawFieldOf(pooled, harnessOf(flat, get), r, r.Fields[1], flat, get)
-		testkit.Assert(t, reason).Contains("answers none", "no handle to stage through")
+		_, reason := lawFieldOf(pooled, harnessOf(begin, get), r, r.Fields[1], begin, get)
+		testkit.Assert(t, reason).Contains("no write threading an open handle",
+			"nothing on the interface stages, so the claim declines")
 
 		_, reason = lawFieldOf(pooled, harnessOf(begin), r, r.Fields[3], begin, nil)
 		testkit.Assert(t, reason).Contains("no keyed reader", "no read-back, no domain to draw")
@@ -2488,12 +2517,14 @@ func TestSaturationDerivation(t *testing.T) {
 		reader := stamp(projected("Get",
 			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 			[]golang.Return{res(namedRef("Value")), errRet}), "", "", "Value")
-		testkit.Equal(t, kinds(reader), []string{"inert", "flicker", "sputter", "flap"},
-			"a pool-typed reader flaps beside the shared kinds")
+		testkit.Equal(t, kinds(reader),
+			[]string{"inert", "flicker", "sputter", "spill", "flap"},
+			"a pool-typed reader spills and flaps beside the shared kinds")
 
 		scalar := projected("Count", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("int")), errRet})
-		testkit.Equal(t, kinds(scalar), []string{"inert", "flicker", "sputter", "wane", "wax"},
+		testkit.Equal(t, kinds(scalar),
+			[]string{"inert", "flicker", "sputter", "spill", "wane", "wax"},
 			"an integer scalar wanes and waxes")
 
 		replay := projected("Replay", []golang.Param{arg("ctx", ctxRef())},
@@ -2513,6 +2544,37 @@ func TestSaturationDerivation(t *testing.T) {
 			})
 		testkit.Equal(t, kinds(page), []string{"inert", "flicker", "sputter", "echo"},
 			"a page-shaped walk echoes")
+
+		// An operation reporting only an error carries the pair no
+		// alternating defect can express: one that refuses after its first
+		// call, and one that silently drops after it. An idempotence law
+		// calls twice and discards the first answer, so a defect on every
+		// other call is absorbed by the call nobody reads.
+		op := projected("Close", []golang.Param{arg("ctx", ctxRef())},
+			[]golang.Return{errRet})
+		testkit.Equal(t, kinds(op),
+			[]string{"inert", "flicker", "sputter", "stick", "latch"},
+			"an error-only operation sticks and latches")
+
+		// A method taking a computation promises how often it runs it, and
+		// only invoking that computation can break the promise.
+		compute := projected("Run",
+			[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr)), arg("fn", funcRef())},
+			[]golang.Return{res(namedRef(qStr)), errRet})
+		testkit.Assert(t, kinds(compute)).Contains("greedy",
+			"a nullary computation parameter earns the extra invocation")
+
+		// One that takes arguments does not: calling it would mean inventing
+		// its inputs here, and a defect supplying its own inputs is testing
+		// something else.
+		fed := funcRef()
+		fed.FuncParams = []*node.TypeRef{namedRef(qStr)}
+		callback := projected("Each",
+			[]golang.Param{arg("ctx", ctxRef()), arg("fn", fed)},
+			[]golang.Return{errRet})
+		for _, k := range kinds(callback) {
+			testkit.NotEqual(t, k, "greedy", "a callback taking arguments is left alone")
+		}
 
 		// Every shape above carries flicker, and that is the point: a claim
 		// about two calls agreeing is broken by an answer that changes, and

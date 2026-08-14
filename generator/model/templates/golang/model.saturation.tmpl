@@ -70,6 +70,22 @@ func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by d
 	dress({{ printf "%q" .Method }}, "passthrough", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return {{ lower $b.IfaceName }}SatPassthrough{{ .Method }}{s}
 	})
+{{- else if eq .Kind "stick" }}
+	dress({{ printf "%q" .Method }}, "stick", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatStick{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "spill" }}
+	dress({{ printf "%q" .Method }}, "spill", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatSpill{{ .Method }}{s}
+	})
+{{- else if eq .Kind "latch" }}
+	dress({{ printf "%q" .Method }}, "latch", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return &{{ lower $b.IfaceName }}SatLatch{{ .Method }}{ {{ $b.IfaceName }}: s }
+	})
+{{- else if eq .Kind "greedy" }}
+	dress({{ printf "%q" .Method }}, "greedy", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
+		return {{ lower $b.IfaceName }}SatGreedy{{ .Method }}{s}
+	})
 {{- else if eq .Kind "flicker" }}
 	dress({{ printf "%q" .Method }}, "flicker", func(_ {{ $b.IfaceName }}Fixture, s {{ renderType $b.IfaceRef }}) {{ renderType $b.IfaceRef }} {
 		return &{{ lower $b.IfaceName }}SatFlicker{{ .Method }}{ {{ $b.IfaceName }}: s }
@@ -298,6 +314,86 @@ func (m {{ lower $b.IfaceName }}SatDupdrain{{ .Method }}) {{ .Method }}({{ range
 		return out, err
 	}
 	return append({{ renderExpr (external "slices" "Clone") }}(out), out[0]), nil
+}
+{{- else if eq .Kind "stick" }}
+
+// {{ lower $b.IfaceName }}SatStick{{ .Method }} lets {{ .Method }} work once
+// and refuses forever after — the close that is not idempotent.
+//
+// sputter cannot express this. An idempotence law calls twice and discards
+// the first answer, so an alternating refusal is absorbed by the very call
+// the law is not reading, on every iteration. What the claim forbids is the
+// *second* call failing, and only a defect that arrives after the first can
+// say so.
+type {{ lower $b.IfaceName }}SatStick{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	used {{ renderExpr (external "sync/atomic" "Bool") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatStick{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) error {
+	if m.used.Swap(true) {
+		return {{ renderExpr (external "errors" "New") }}("{{ $b.MissPrefix }}: saturation stuck {{ .Method }} after its first call")
+	}
+	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "greedy" }}
+
+// {{ lower $b.IfaceName }}SatGreedy{{ .Method }} runs the caller's own
+// computation one extra time before doing the work.
+//
+// A method taking a computation promises something about how often it runs
+// it — deduplicated, memoised, once. No other wear can touch that: every one
+// of them changes what the method *answers*, and a coalescing claim counts
+// what it *called*. The counter such a law reads lives inside the closure the
+// law passed in, so the only way to move it is to invoke that closure.
+type {{ lower $b.IfaceName }}SatGreedy{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatGreedy{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ range $i, $r := .Returns }}{{ if $i }}, {{ end }}{{ renderType $r }}{{ end }}) {
+	_ = p{{ .Member }}()
+	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "latch" }}
+
+// {{ lower $b.IfaceName }}SatLatch{{ .Method }} lets the first
+// {{ .Method }} through and quietly drops every one after it.
+//
+// The order-sensitive fold, which is the one defect a commutativity claim can
+// see. That law builds both its instances from the same worn factory and
+// applies the same values in opposite orders, so every other wear reaches
+// both sides identically and the two observations agree however wrong they
+// are. A fold that keeps only what it saw first keeps a different thing on
+// each side.
+//
+// Silent, where stick refuses: a claim about what an operation *did* cannot
+// be broken by one that says it failed.
+type {{ lower $b.IfaceName }}SatLatch{{ .Method }} struct {
+	{{ renderType $b.IfaceRef }}
+	used {{ renderExpr (external "sync/atomic" "Bool") }}
+}
+
+func (m *{{ lower $b.IfaceName }}SatLatch{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) error {
+	if m.used.Swap(true) {
+		return nil
+	}
+	return m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+}
+{{- else if eq .Kind "spill" }}
+
+// {{ lower $b.IfaceName }}SatSpill{{ .Method }} refuses while answering what
+// {{ .Method }} actually found — whatever the failed lookup left behind.
+//
+// Every refusal the wardrobe mints elsewhere arrives with the zero value
+// beside it, and the value a failed read is supposed to answer is usually the
+// zero. So the defect and the claim agree, and a law about what an error must
+// coincide with has nothing that can disagree with it.
+type {{ lower $b.IfaceName }}SatSpill{{ .Method }} struct{ {{ renderType $b.IfaceRef }} }
+
+func (m {{ lower $b.IfaceName }}SatSpill{{ .Method }}) {{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }} {{ renderType $p }}{{ end }}) ({{ renderType .Out }}, error) {
+	out, err := m.{{ $b.IfaceName }}.{{ .Method }}({{ range $i, $p := .Params }}{{ if $i }}, {{ end }}p{{ $i }}{{ end }})
+	if err != nil {
+		return out, err
+	}
+	return out, {{ renderExpr (external "errors" "New") }}("{{ $b.MissPrefix }}: saturation spilled a found value into a refusal")
 }
 {{- else if eq .Kind "passthrough" }}
 

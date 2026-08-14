@@ -376,6 +376,144 @@ func TestContractStubRollback(t *testing.T) {
 	})
 }
 
+// contractStubPutSubject binds Put into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubPutSubject(tb testing.TB) stub.Subject[txtest.ContractPutCall, txtest.ContractPutReturn] {
+	tb.Helper()
+	s := txtest.NewContractStub(tb)
+	return stub.Subject[txtest.ContractPutCall, txtest.ContractPutReturn]{
+		Stub: s.OnPut.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			var a1 tx.Tx
+			var a2 string
+			var a3 tx.Value
+			_ = s.Put(a0, a1, a2, a3)
+		},
+		Result: func() txtest.ContractPutReturn {
+			var a0 context.Context
+			var a1 tx.Tx
+			var a2 string
+			var a3 tx.Value
+			got0 := s.Put(a0, a1, a2, a3)
+			return txtest.ContractPutReturn{Err: got0}
+		},
+		Override: func(mark func()) {
+			s.OnPut.Func(func(_ context.Context, _ tx.Tx, _ string, _ tx.Value) error {
+				mark()
+				var z0 error
+				return z0
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			var a1 tx.Tx
+			var a2 string
+			var a3 tx.Value
+			r0 := s.Put(a0, a1, a2, a3)
+			return r0
+		},
+	}
+}
+
+// TestContractStubPut pins how Put answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubPut(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Put", contractStubPutSubject)
+
+	t.Run("answers with the value pinned by Returns", func(t *testing.T) {
+		t.Parallel()
+		s := txtest.NewContractStub(t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		got0 := s.Put(a0, a1, a2, a3)
+		testkit.Equal(t, got0, want0, "Put must answer with what Returns pinned")
+	})
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := txtest.NewContractStub(t)
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		_ = s.Put(a0, a1, a2, a3)
+		got := s.OnPut.AssertCalledOnce(t, "Put must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+		testkit.Equal(t, got.Tx, a1, "the recorded call carries Tx")
+		testkit.Equal(t, got.Key, a2, "the recorded call carries Key")
+		testkit.Equal(t, got.V, a3, "the recorded call carries V")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := txtest.NewContractStub(t)
+		var seen []txtest.ContractPutCall
+		s.OnPut.OnRecord(func(c txtest.ContractPutCall) { seen = append(seen, c) })
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		_ = s.Put(a0, a1, a2, a3)
+		_ = s.Put(a0, a1, a2, a3)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Put call")
+	})
+
+	t.Run("wires WithContractPut at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := txtest.NewContractStub(t, txtest.WithContractPut(func(_ context.Context, _ tx.Tx, _ string, _ tx.Value) error {
+			called = true
+			var z0 error
+			return z0
+		}))
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		_ = s.Put(a0, a1, a2, a3)
+		testkit.True(t, called, "WithContractPut must install the override")
+	})
+
+	t.Run("keeps the Returns configuration across a reset", func(t *testing.T) {
+		t.Parallel()
+		// A reset clears what happened, not what was configured. Losing the
+		// configuration would make a double answer differently in the second
+		// half of a test than in the first, for no reason the reader can see.
+		s := txtest.NewContractStub(t)
+		var want0 error
+		s.OnPut.Returns(want0)
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		_ = s.Put(a0, a1, a2, a3)
+		s.ResetCalls()
+		got0 := s.Put(a0, a1, a2, a3)
+		testkit.Equal(t, got0, want0, "a reset must keep what Returns pinned")
+	})
+}
+
 // contractStubGetSubject binds Get into the shape
 // [stub.Behaviour] drives: how to call it, what it answers with, and how to
 // override it.
@@ -613,6 +751,29 @@ func TestContractStubDelegateTo(t *testing.T) {
 		testkit.ErrorIs(t, r0, want, "Rollback must surface the wrapped answer")
 	})
 
+	t.Run("forwards Put to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		_ = s.Put(a0, a1, a2, a3)
+		inner.OnPut.AssertCalledOnce(t, "Put must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Put answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Put-delegate")
+		inner.OnPut.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		var a1 tx.Tx
+		var a2 string
+		var a3 tx.Value
+		r0 := s.Put(a0, a1, a2, a3)
+		testkit.ErrorIs(t, r0, want, "Put must surface the wrapped answer")
+	})
+
 	t.Run("forwards Get to the wrapped implementation", func(t *testing.T) {
 		var a0 context.Context
 		var a1 string
@@ -634,4 +795,4 @@ func TestContractStubDelegateTo(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5c6dd899a8398923091bda421dba35d88106d6b9267cc362c4b681882690a078
+// testkit:provenance 08b7823969df04580d19a1a929516417670b7f22d59913d71d65daff56ad5975
