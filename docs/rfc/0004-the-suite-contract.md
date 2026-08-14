@@ -92,7 +92,7 @@ package suite
 //
 // Grammar (gated at generation; hand-built IDs are validated by Run):
 //
-// id            = scope-segment *( "/" sub-segment )
+// id            = scope-segment 1*( "/" sub-segment )
 // scope-segment = method / family
 // method        = Go exported identifier   ; begins uppercase: "Append"
 // family        = reserved lowercase word  ; "chain", "model", "poison",
@@ -105,7 +105,9 @@ package suite
 // method cannot begin lowercase, so a method named Chain never collides
 // with the "chain" family. The family registry is declared here and
 // extended only by RFC. Hand checks live under their method's scope or
-// under "x/" (extension). Uniqueness scope: one generated package.
+// under "x/" (extension). A bare scope segment is not a valid ID —
+// every check names at least one sub-segment, so a scope is always a
+// group and never a check. Uniqueness scope: one generated package.
 type ID string
 
 // Class groups checks by the claim family they discharge, axis-qualified
@@ -166,11 +168,19 @@ type Subject[S any] struct {
  // container, the pool). nil = recovery and simulation checks FAIL,
  // naming this field.
  //
- // RESERVED SEMANTICS: what "the durable state" means — committed
- // versus in-flight, and whether crash is a first-class act — is the
- // sim RFC's to define. The field ships now because it is an additive
- // nil-able capability today and a v2 conversation after the freeze;
- // no generated check uses it until the sim RFC lands.
+ // The one commitment the name carries today: Recover makes no claim
+ // about the prior instance's shutdown state, and returns a subject
+ // observing at least the effects of operations the prior instance
+ // ACKNOWLEDGED; the frontier for in-flight operations is
+ // implementation-defined until the sim RFC narrows it.
+ //
+ // RESERVED SEMANTICS beyond that: committed-versus-in-flight, and
+ // whether crash is a first-class act, are the sim RFC's to define —
+ // as a law pair (recover-after-clean-Close ≡ identity;
+ // recover-after-abandon ⊇ acknowledged writes), not prose. The field
+ // ships now because it is an additive nil-able capability today and
+ // a v2 conversation after the freeze; no generated check uses it
+ // until the sim RFC lands.
  Recover func(tb testing.TB) S
 
  // Oracle marks this subject as the differential reference: every
@@ -180,8 +190,10 @@ type Subject[S any] struct {
  // twin leg.
  Oracle bool
 
- // Serial excludes this subject from parallel execution — for real
- // backends that exhaust resources under N-way parallel construction.
+ // Serial excludes this subject from parallel execution AT BOTH
+ // LEVELS — the subject runs after the parallel group, and its checks
+ // run sequentially within it. The field's motive is construction and
+ // resource pressure, which per-check parallelism would reintroduce.
  // Reported in the run report.
  Serial bool
 }
@@ -198,6 +210,11 @@ type Suite[S any] struct {
 func (s Suite[S]) With(extra ...Check[S]) Suite[S]
 func (s Suite[S]) Without(ids ...ID) Suite[S]
 func Merge[S any](suites ...Suite[S]) Suite[S]
+
+// Ctor adapts a plain constructor to the tb-form every constructor
+// position takes. Shape-generic, so it lives here rather than in every
+// veneer: Subject("in-memory", suite.Ctor(kv.NewInMemory)).
+func Ctor[T any](new func() T) func(testing.TB) T
 
 // Run executes every check against every subject as
 // t.Run(subject.Name) → t.Run(string(check.ID)), then emits the report.
@@ -219,6 +236,16 @@ func Run[S any](t *testing.T, s Suite[S], subjects ...Subject[S])
 // versioned ("testkit-report v1", additive-only) and is what the
 // conformance statement and any tooling consume.
 type Report struct { /* … versioned; fields additive-only after v1 */ }
+```
+
+The `Report` encoding, sampled (the full schema is step 1's docs-owed):
+
+```json
+{"format": "testkit-report v1",
+ "suite": "ledgertest", "checks": 64, "subjects": 2,
+ "legs": [{"check": "model/twin", "subject": "pebble",
+   "tier": "differential", "oracle": "in-memory"}],
+ "dropped": ["ShredAttester/AttestCryptoShred/smoke"], "…": null}
 ```
 
 Combinator misuse is specified, not implementation-defined:
@@ -266,12 +293,19 @@ concrete type parameter for the whole chain and lowers once:
 // The consumer never writes the type arguments.
 type Ledger = ledger.Ledger[patchtest.Text, string, string]
 
-// Subject accepts a plain constructor or the tb-form in one name — the
-// constraint is a union of the two shapes, so ledgermem.New and
-// pebbletest.Start both pass without closures.
-func Subject[T Ledger, F interface {
- func() T | func(testing.TB) T
-}](name string, new F) SubjectBuilder[T]
+// Subject takes the tb-form constructor — the one real backends need.
+// A plain constructor adapts with suite.Ctor, still closure-free at
+// the call site:
+//
+//	Subject("in-memory", suite.Ctor(ledgermem.New))
+//	Subject("pebble", pebbletest.Start)
+//
+// (A union constraint over both function shapes was the first design;
+// it does not infer — constraint type inference unifies against the
+// constraint's core type, and a union of two function shapes has
+// none. Settled by compile on go1.26.5; spec-level, so no toolchain
+// bump changes it.)
+func Subject[T Ledger](name string, new func(testing.TB) T) SubjectBuilder[T]
 
 // SubjectBuilder keeps the concrete type T for the whole chain. Every
 // method is typed against T, so method expressions and concrete
@@ -283,7 +317,13 @@ func Subject[T Ledger, F interface {
 type SubjectBuilder[T Ledger] struct{ /* … */ }
 
 func (b SubjectBuilder[T]) OnClock(new func(testing.TB, *clock.TestClock) T) SubjectBuilder[T]
+
+// Induce takes a bare trigger so method expressions fit —
+// (*ledgermem.Ledger).RevokeFence — which deliberately omits tb: a
+// trigger cannot fail the test directly. A trigger that can fail must
+// surface it through the subject; the check reds downstream.
 func (b SubjectBuilder[T]) Induce(sentinel error, trigger func(T)) SubjectBuilder[T]
+
 func (b SubjectBuilder[T]) Recover(new func(testing.TB) T) SubjectBuilder[T]
 func (b SubjectBuilder[T]) Oracle() SubjectBuilder[T]
 func (b SubjectBuilder[T]) Serial() SubjectBuilder[T]
@@ -526,7 +566,7 @@ zero on request structs (inferred), zero on embeddings:
 ```go
 func TestLedgerConformance(t *testing.T) {
  ledgertest.Run(t,
-  ledgertest.Subject("in-memory", ledgermem.New).
+  ledgertest.Subject("in-memory", suite.Ctor(ledgermem.New)).
    OnClock(ledgermem.NewOn).
    Induce(types.ErrFenceRevoked, (*ledgermem.Ledger).RevokeFence).
    Oracle(),
@@ -644,9 +684,10 @@ and the derived-garbage class (a fixture violating the mixin its own carrier
 declares) is unrepresentable under the drawn/stamped/pinned partition.
 
 The `role` keyword set is the one place the contract genuinely leans on the
-motivating interface — which is why the first vocabulary must be argued from
-at least three unrelated domains (a queue, a cache, a workflow engine)
-before it freezes (open questions).
+motivating interface — which is why the first vocabulary was argued from
+three unrelated domains before freezing (the exercise and its result are
+recorded under Open questions: five keywords, an entry rule, and a
+registry policy).
 
 ### Raising the floor: better than today on every shape
 
@@ -674,6 +715,16 @@ the report says which tier ran. Rules: at most one `Oracle()` per run (two
 is a validation failure); the oracle subject itself still runs the full
 deterministic suite and its own twin leg; differential legs are marked in
 the report.
+
+Pairing is never automatic — declaration-order pairing would give two
+textually-adjacent subjects different meanings by position, the silent-
+semantics class this RFC exists to kill. The consumer who never reads the
+report is served instead by the red-with-fix philosophy in its green form:
+a run with two or more subjects and no `Oracle` prints one line in the log
+summary — *"2 subjects, no Oracle(): model legs ran on the twin floor; mark
+your reference subject .Oracle()"* — a nudge at the exact moment of the
+exact omission. Teams that want enforcement get a future additive
+`RequireOracle` gate, never inference.
 
 Honest hazard, with its policy: a live backend can diverge from in-memory on
 legitimate nondeterminism (ordering, timing). A differential red therefore
@@ -767,7 +818,7 @@ Breaking, one release, pre-v1. The mechanical mapping:
 | Today | Under this RFC |
 |---|---|
 | `AssertXContract(t, opts…)` | `xtest.Run(t, opts…)` |
-| `XSubject(name, func() X {…})` | `xtest.Subject(name, ctor)` — closure gone |
+| `XSubject(name, func() X {…})` | `xtest.Subject(name, suite.Ctor(ctor))` — still closure-free at the call site |
 | `XWithout("Method/check")` | `xtest.Without(xtest.Checks.Method.Check)` |
 | `XOnMethod(name, fn)` | `xtest.OnMethod(name, fn)` — unchanged shape |
 | `XWithFixture(fx)` / `XSeed(fn)` | `xtest.Config{…}` with request builders; seed deleted — checks arrange through their own fixtures |
@@ -879,7 +930,8 @@ of the burden tags would have carried.
   - types: `ID` (with its grammar and family registry), `Class` (with the
     axis-qualification rule), `Caps`, `Check[S]`, `Subject[S]`, `Suite[S]`,
     `Report`;
-  - functions: `Run`, `Merge`; methods: `Suite.With`, `Suite.Without`;
+  - functions: `Run`, `Merge`, `Ctor`; methods: `Suite.With`,
+    `Suite.Without`;
   - the field contracts of `Caps`, `Subject` (including `Oracle`, `Serial`,
     and `Recover`-with-reserved-semantics), and `Check`
     (`Run`/`RunWith` exclusivity);
@@ -892,11 +944,12 @@ of the burden tags would have carried.
 - Deliberately absent from v1, additive later: `Wrap`, `Only`,
   `WithoutClass`, per-role runners (harness train).
 - Generated packages emit a veneer of constructors over the data model:
-  one generic `Subject` accepting both constructor forms via a union
-  constraint, the `SubjectBuilder[T]` chain lowering once across the
-  erasure boundary, one variadic `Run` as sugar over the typed
-  `suite.Run` (the documented primary), per-method `On`/`PropOn` hooks, a
-  nested check index, `Config`, request builders, and a witnessed alias.
+  one tb-form `Subject` (plain constructors adapt via `suite.Ctor`,
+  closure-free at the call site), the `SubjectBuilder[T]` chain lowering
+  once across the erasure boundary, one variadic `Run` as sugar over the
+  typed `suite.Run` (the documented primary), per-method `On`/`PropOn`
+  hooks, a nested check index, `Config`, request builders, and a
+  witnessed alias.
 - Unknown drops fail compilation (generated) or fail `Run` naming the known
   set (hand-built); unmet `Caps` fail red with the arming instruction;
   skips never model missing capability; combinator misuse follows the
@@ -930,11 +983,12 @@ of the burden tags would have carried.
   stable ordering — the mechanism exists and is exercised, but not yet at
   this granularity. **De-risked before funding**: the architecture schedules
   a two-toy-plugin slot spike ahead of the step that depends on it.
-- The union-constraint constructor
-  (`Subject[T Ledger, F interface{ func() T | func(testing.TB) T }]`)
-  infers `T` from a plain constructor argument — verified against the
-  toolchain in go.mod during the step-1 spike; the fallback, if inference
-  disappoints at call sites, is the tb-form as the only signature.
+- The subject constructor question is **settled by compile, not spiked**:
+  the union-constraint form fails on go1.26.5 with `cannot infer T` at
+  both call sites — constraint type inference unifies against the
+  constraint's core type, and a union of two function shapes has none, so
+  no toolchain bump changes it. The design is the tb-form single signature
+  plus `suite.Ctor`, verified compiling.
 - rapid's generator streams are deterministic under a pinned version and
   seed, making the canonical draw stable — verified for the pinned version,
   cross-checked on two platforms, re-verified by the drift check on every
@@ -949,35 +1003,69 @@ of the burden tags would have carried.
 
 ## Open questions
 
-- **The closed `role` keyword set.** `stream`, `seq`, `prev`, `payload` are
-  forced by the worked example; `fence`, `epoch`, `checkpoint` are visible
-  in the same types. What ships in the first vocabulary — argued from at
-  least three unrelated domains — and what is the addition policy: RFC per
-  keyword, or a registry with the same census-or-red discipline as
-  classifications?
-- **The optionality directive for harness features.** The publisher must
-  mark which check groups a conformant implementation may decline. On the
-  role (`//testkit:optional` beside the contract claim), or a separate
-  feature declaration? And does declining an optional feature appear in the
-  conformance statement as a tier ("conformant, core") or a list? Must be
-  answered when the harness train is scheduled, not before.
-- **Should the differential oracle ever be automatic?** Two subjects with no
-  `Oracle()` mark could pair by declaration order. Explicit-only is the
-  audit-shaped instinct (silent pairing = silent meaning), but it leaves the
-  twin floor as the default for consumers who never read the report.
-- **What does `Recover` recover from?** The field ships with reserved
-  semantics; the sim RFC defines committed-versus-in-flight and whether
-  `Crash` is a first-class act. The risk of deciding it here is freezing a
-  simulation concept the sim design has not validated.
+None remain open. Every question the draft and review periods carried is
+resolved below, with the reasoning recorded so the debate survives.
 
-Resolved since the first draft (recorded here so the debate survives):
-single-value pools on drawn role fields are **refused**, with `FieldPin`
-explicit — soft guards go unread; the subject constructor is **one name**
-carrying both forms via a union constraint — two names for one concept was
-permanent vocabulary for a transitional distinction; classification `Class`
-strings are the **axis-qualified eidos names** with veneer-generated
-constants — the strings freeze into lock files, so the namespace prefix is
-what makes them safely stable.
+**The `role` keyword set — resolved by the three-domain exercise the RFC
+demanded.** A *queue* maps stream→topic, seq→offset, payload→message: no
+new keyword. A *cache* does not map — its identity is point-addressed, not
+sequence-addressed — which forces **`key`** as a first-class keyword (the
+corpus agrees: cas, cache, kv are keyed shapes, and `key` is what the
+equivalence family's write/observe pairing needs to generalize past the
+ledger). A *workflow engine* maps id→key, step→seq, state→payload: no new
+keyword. The first vocabulary is therefore **`stream`, `seq`, `prev`,
+`payload`, `key`** — the four the ledger forces plus the one the other
+domains force. `fence`, `epoch`, `checkpoint` are held: one domain each,
+and a keyword addition is a row change later while a wrong keyword now is
+frozen inference surface. The entry rule, written down: *a keyword enters
+when a second unrelated domain needs it or a law field cannot bind without
+it.* Addition policy: **registry with census-or-red discipline** (the
+`tiers` precedent), not RFC-per-keyword — a keyword only arms inference,
+which directives override and evidence traces. Two carve-outs stay
+RFC-gated: a new *kind* (beyond drawn/stamped/pinned) changes the partition
+semantics, and the ID *family* registry is consumer-visible string surface
+in lock files — a different bar.
+
+**The optionality directive — resolved by the placement doctrine.**
+`//testkit:optional` sits **on the role interface, beside the contract
+claim**: optionality is a semantic of the role's claim, and "a role's
+semantics: the role interface declaration" gives it exactly one home; a
+separate feature file would be a second home for a role fact. It inherits
+correctly — every embedder gets it for free. Granularity: roles and mixin
+claims, never individual checks — the check is the unit of assertion, the
+role is the unit of capability. The conformance statement renders a
+**list, not a tier** (`"unsupported": ["shred"]`) — the additive-safe
+primitive; a publisher can define named tiers on top of the list later
+without freezing anything today. The harness train implements this; the
+doctrine is decided now so the train cannot reopen it.
+
+**Automatic differential pairing — resolved: never.** Declaration-order
+pairing gives adjacent subjects different meanings by position — silent
+semantics, the class this RFC exists to kill. The consumers-never-read-
+the-report worry is answered by the green-form nudge specified in the
+differential section; enforcement, if a team wants it, is a future
+additive `RequireOracle` gate. Meaning stays explicit.
+
+**What `Recover` recovers from — resolved as a bounded reservation.** The
+name commits today to exactly one thing (acknowledged effects are
+observed; the in-flight frontier is implementation-defined), recorded in
+the field's doc. The sim RFC owes the rest **as a law pair, not prose** —
+recover-after-clean-Close ≡ identity, recover-after-abandon ⊇ acknowledged
+writes — because laws are testable and manifest-able. `Crash` stays out of
+the contract: abandoning-without-Close is already expressible by an
+orchestrating `RunWith` check through the constructors it holds, so a
+`Crash` capability adds surface without power until the sim engine defines
+real fault points — at which point it is an additive `Caps` entry the
+extension-proof table already prices.
+
+Resolved earlier in review: single-value pools on drawn role fields are
+**refused**, with `FieldPin` explicit — soft guards go unread. The subject
+constructor is the **tb-form single signature plus `suite.Ctor`** — the
+union constraint was the first answer and does not infer (settled by
+compile; see What the design rests on); one name survives, via adapter.
+Classification `Class` strings are the **axis-qualified eidos names** with
+veneer-generated constants — the strings freeze into lock files, so the
+namespace prefix is what makes them safely stable.
 
 ## Deferred
 

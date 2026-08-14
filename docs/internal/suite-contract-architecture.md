@@ -89,7 +89,9 @@ beyond what `Run` builds per call.
 2. **Execute** — `t.Run(subject)` → `t.Run(string(id))`, `t.Parallel` at
    both levels (the corpus's current parallelism), **except subjects with
    `Serial: true`**, which run in declaration order after the parallel
-   group. Capability resolution happens per (check, subject) here:
+   group **with check-level parallelism suppressed too** — the field's
+   motive is construction and resource pressure, which per-check
+   parallelism would reintroduce. Capability resolution happens per (check, subject) here:
    `Needs.Clock` with nil `OnClock`, `Needs.Induce` with no inducer,
    `RunWith`-checks against a subject lacking the constructors they name —
    each produces the red-with-fix failure from one message template that
@@ -119,8 +121,10 @@ public data:
 | `config-fields` | generator/model | fields on the generated `Config` struct (pools, Reference), named from role bindings |
 | `fixtures` | generator/builder | request-builder types + `Req()`/`ReqRaw()` constructors |
 
-`generator/suite` emits the spine: `Run`, `RunOpt`, the union-constraint
-`Subject` constructor, `SubjectBuilder[T]` (which holds the concrete type
+`generator/suite` emits the spine: `Run`, `RunOpt`, the tb-form `Subject`
+constructor (plain constructors adapt via `suite.Ctor` — the union
+constraint does not infer, settled by compile), `SubjectBuilder[T]` (which
+holds the concrete type
 for the whole chain and lowers into `suite.Subject[Alias]` once — the
 lowered inducer's assertion back to `T` is safe because every instance it
 can receive originated from this builder's constructors, and a veneer gate
@@ -285,7 +289,7 @@ step fails its exit.
 
 | # | Step | Exit criterion | Owner | Docs owed |
 |---|---|---|---|---|
-| 1 | `suite` package alone | **The castest spike**: hand-write the veneer over `conformance/corpus/iface/contract/cas` — both existing subjects wired, report emitted under parallelism, union-constraint `Subject` inference verified at real call sites, all validate-phase failures exercised. One week; funds nothing else until green. | runtime | `suite` godoc incl. ID grammar, Report v1 schema |
+| 1 | `suite` package alone | **The castest spike**: hand-write the veneer over `conformance/corpus/iface/contract/cas` — both existing subjects wired, report emitted under parallelism, `suite.Ctor` call-site ergonomics verified, all validate-phase failures exercised. One week; funds nothing else until green. | runtime | `suite` godoc incl. ID grammar, Report v1 schema |
 | 2 | `generator/roles` | tables + resolver + evidence; gate censusing the keyword table both directions; `testkit explain` field view. **The ledger fixture lands here** — the RFC's worked example enters the corpus (interface + in-memory impl) as the roles acceptance fixture. | generator | roles vocabulary reference (`docs/reference`) |
 | 3 | Veneer behind the old surface | **entry criterion: the slot spike** — two toy plugins slot-composing one file with stable ordering, run before this step is funded. New files emitted beside current ones; both gated. Only double-surface period, bounded to this step. | generator/suite | — |
 | 4 | Slots | model + builder contributions on named slots; private-config extension seam deleted the same step | generator | — |
@@ -336,10 +340,12 @@ repo); tagging v1 is a scheduling decision taken on that evidence.
 
 ## What this deliberately does not decide
 
-- The closed `role` keyword set — RFC-0004 open question; the tables in
-  `generator/roles` are built to make the answer a row change. (The
-  single-value-pool policy is **decided**: hard-refuse, `FieldPin`
-  explicit.)
+- ~~The closed `role` keyword set~~ — **decided in review**: first
+  vocabulary `stream`, `seq`, `prev`, `payload`, `key`; additions via the
+  registry with census-or-red discipline; new *kinds* and ID *families*
+  stay RFC-gated. The tables in `generator/roles` make an addition a row
+  change. (The single-value-pool policy is likewise decided: hard-refuse,
+  `FieldPin` explicit.)
 - Byte-stream / iterator detectors — vocabulary, upstream, RFC-0005.
 - `FireRate` in the report — the report carries a placeholder field for it;
   wiring is the depth program's, not this port's.
@@ -356,3 +362,5 @@ repo); tagging v1 is a scheduling decision taken on that evidence.
 | A lost manifest line fails `check` unless the lock changed in the same run's write set | the check-weakening ratchet |
 | The veneer is slot-composed over public data; private-config extension is retired | the seam |
 | Report and conformance-statement formats are versioned structs; log text is a view | the machine-readable boundary |
+| The role keyword registry: census-or-red additions; new kinds and ID families RFC-gated | vocabulary governance |
+| `//testkit:optional` lives on the role; the statement renders a list, never a tier | conformance optionality |
