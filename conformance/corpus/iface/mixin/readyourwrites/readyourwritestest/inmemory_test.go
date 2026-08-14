@@ -20,7 +20,8 @@ func TestMixedContract(t *testing.T) {
 			return readyourwritestest.NewInMemory()
 		}),
 		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
+		// reporting under "model/twin" beside the per-method checks — twinned,
+		// because no store oracle stamps the version member this subject assigns.
 		readyourwritestest.MixedModel(),
 		readyourwritestest.MixedOnGet("returns what Store wrote", func(
 			tb testing.TB, subject readyourwrites.Mixed, key string,

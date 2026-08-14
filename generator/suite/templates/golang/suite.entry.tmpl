@@ -42,7 +42,11 @@ per implementation, which is where the statements drift.
 {{- end }}
 //
 // //testkit:model on the interface derives that reference, and the
-// {{ $.IfaceName }}Model option it generates runs them here under "model".
+// {{ $.IfaceName }}Model option it generates runs them here. Its own file
+// names the path it reports under and the {{ $.IfaceName }}Without call that
+// declines it — this header said "model" for every fixture, and a twinned
+// reference registers under "model/twin", so it was wrong wherever the
+// oracle could not be derived.
 {{- end }}
 {{- if .Unfalsifiable }}
 //
@@ -55,6 +59,11 @@ func {{ .EntryName }}{{ renderTypeParams .TypeParams }}(t *{{ renderExpr (extern
 	if len(cfg.subjects) == 0 {
 		t.Fatalf("{{ .EntryName }} was given no subject; declare one with " +
 			"{{ .IfaceName }}Subject(name, factory)")
+	}
+	for _, p := range cfg.phantoms() {
+		t.Errorf("{{ .IfaceName }}Without(%q) declines nothing: no check here reports "+
+			"under that path, so this suite asserts one thing more than its "+
+			"author believes", p)
 	}
 	for _, s := range cfg.subjects {
 		run{{ .IfaceName }}Checks{{ .TypeArgs }}(t, cfg, s.name, s.factory, nil)
@@ -115,7 +124,7 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 		// subject.
 		if wrap == nil {
 			for _, e := range cfg.extensions {
-				if cfg.dropped(e.name) {
+				if cfg.declined(e.name) {
 					t.Run(e.name, func(t *{{ renderExpr (external "testing" "T") }}) {
 						t.Skipf("dropped through {{ .IfaceName }}Without(%q)", e.name)
 					})

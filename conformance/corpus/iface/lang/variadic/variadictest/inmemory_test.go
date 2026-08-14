@@ -75,10 +75,7 @@ func TestFinderContract(t *testing.T) {
 		// the same trade the miss family makes for `(T, bool)`: a shape common
 		// enough to be stamped is not always the thing the stamp's check is
 		// about, and a run that cannot tell them apart should say so by name.
-		variadictest.FinderWithout(
-			"Find/answers once per key",
-			"FindWithLimit/answers once per key",
-		),
+		variadictest.FinderWithout("Find/answers once per key"),
 	)
 }
 
@@ -94,13 +91,11 @@ func TestFinderContractWithoutTheDouble(t *testing.T) {
 		variadictest.FinderSubject("in-memory", func() variadic.Finder {
 			return variadictest.NewInMemory()
 		}),
-		variadictest.FinderWithout(
-			// The same structural stamp and the same finder, so the same two
-			// drops: a run that declines the double still runs every check it
-			// did not drop.
-			"Find/answers once per key",
-			"FindWithLimit/answers once per key",
-		),
+		// The same structural stamp and the same finder, so the same drop: a
+		// run that declines the double still runs every check it did not
+		// drop. One name, not two — FindWithLimit takes a limit, so no count
+		// claim is emitted for it and declining one asserted nothing.
+		variadictest.FinderWithout("Find/answers once per key"),
 		variadictest.FinderWithoutDouble(),
 	)
 }

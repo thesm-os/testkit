@@ -209,16 +209,69 @@ func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) subject(
 // Named rather than inlined because the drop set is read from two places: here,
 // and by whatever registered through the seam — which reports under paths this
 // file has never heard of and must answer the same question about them.
-func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) dropped(path string) bool {
+func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) declined(path string) bool {
 	_, ok := c.without[path]
 	return ok
+}
+
+// {{ lower .IfaceName }}Paths is every path this file reports a check under.
+//
+// The set a {{ .IfaceName }}Without argument has to be a member of. Declared
+// rather than observed: a check that did not run is not a check that does not
+// exist — an integration-only method skips without ever consulting the drop
+// set, and reading that as a phantom would fail a correct suite on a machine
+// with the environment unset.
+//
+//nolint:gochecknoglobals // the emitted check paths, read-only after init.
+var {{ lower .IfaceName }}Paths = map[string]struct{}{
+{{- range $m := .Methods }}
+{{- range $ck := $m.Checks }}
+	{{ printf "%q" $ck.Path }}: {},
+{{- end }}
+{{- end }}
+}
+
+// phantoms names every {{ .IfaceName }}Without path that declines nothing.
+//
+// A drop that drops nothing is this option's silent half: the consumer wrote
+// it against a check since renamed, or never emitted for that method at all,
+// and every run after reads green while asserting one thing more than its
+// author believes. Extensions carry their own names — the seam reports under
+// paths this file has never heard of — so they count as known too.
+func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) phantoms() []string {
+	known := func(p string) bool {
+		if _, ok := {{ lower .IfaceName }}Paths[p]; ok {
+			return true
+		}
+		for _, e := range c.extensions {
+			if e.name == p {
+				return true
+			}
+		}
+{{- range $m := .Methods }}
+		for _, on := range c.on{{ $m.Name }} {
+			if {{ printf "%q" $m.Name }}+"/"+on.name == p {
+				return true
+			}
+		}
+{{- end }}
+		return false
+	}
+	var out []string
+	for p := range c.without {
+		if !known(p) {
+			out = append(out, p)
+		}
+	}
+	{{ renderExpr (external "slices" "Sort") }}(out)
+	return out
 }
 
 // run executes one check unless it was dropped, reporting the drop rather than
 // silently omitting it.
 func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) run(t *{{ renderExpr (external "testing" "T") }}, path, name string, fn func(tb {{ renderExpr (external "testing" "TB") }})) {
 	t.Helper()
-	if c.dropped(path) {
+	if c.declined(path) {
 		t.Run(name, func(t *{{ renderExpr (external "testing" "T") }}) {
 			t.Skipf("dropped through {{ .IfaceName }}Without(%q)", path)
 		})

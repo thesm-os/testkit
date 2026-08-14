@@ -113,14 +113,13 @@ func TestBatchReaderContractWithoutTheDouble(t *testing.T) {
 	)
 }
 
-// The count claim needs both derived keys present; the miss claims need the
-// alternate absent. One fixture cannot be both, so this is a second run rather
-// than a second subject.
+// The count claim needs both derived keys present, which the first run's
+// subject cannot be in — so this is a second run rather than a second subject.
 //
-// Which is the option API doing what it exists for: the same statement of the
-// contract, against a subject in a state the first run cannot put it in, with
-// the checks that contradict that state dropped by name rather than by
-// abandoning the harness.
+// It drops nothing, and that is the correction: it used to decline two miss
+// checks this shape never emitted. A batch read reports a miss by answering
+// fewer results than keys, which the count claim already covers, so there was
+// no check to contradict and the two names asserted a suppression of nothing.
 func TestBatchReaderAnswersPerKeyWhenItHoldsThemAll(t *testing.T) {
 	t.Parallel()
 
@@ -133,9 +132,5 @@ func TestBatchReaderAnswersPerKeyWhenItHoldsThemAll(t *testing.T) {
 			s.Put(batchreader.Value{Key: fixture.KeysOther})
 			return s
 		}),
-		batchreadertest.BatchReaderWithout(
-			"GetAll/reports a miss",
-			"GetAll/returns nothing rather than a partial answer",
-		),
 	)
 }

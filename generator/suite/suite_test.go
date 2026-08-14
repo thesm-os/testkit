@@ -305,7 +305,13 @@ func TestExtensionSlot(t *testing.T) {
 
 	// Read from two places — the generated checks, and whatever an extension
 	// reports under a path this file has never heard of.
-	src.AssertMethod(t, "mixedConfig", "dropped")
+	src.AssertMethod(t, "mixedConfig", "declined")
+
+	// And the other half of the same option: a path that declines nothing is
+	// a suppression the consumer believes in and the suite never performs.
+	// Extension names count as known, which is why this is a method on the
+	// config rather than a lookup in the generated path set alone.
+	src.AssertMethod(t, "mixedConfig", "phantoms")
 }
 
 // An interface whose method set cannot be completed is refused: a harness over
