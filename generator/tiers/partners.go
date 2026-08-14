@@ -26,21 +26,50 @@ package tiers
 // synchronized — and the census is what keeps that arm theoretical.
 func PartnerDriven(mixin, param string) (bool, string) {
 	key := mixin + "." + param
-	if drivenPartners[key] {
-		return true, ""
-	}
-	if reason, classified := excludedPartners[key]; classified {
-		return false, reason
-	}
-	return false, "an unclassified sibling reference, which defaults to excluded"
+	reason, excluded := excludedPartners[key]
+	return partnerVerdict(drivenPartners[key], excluded, reason)
 }
 
-// PartnerClassified reports whether the pair carries a verdict at all — the
-// census's question, exported so the gate can hold the tables total.
+// partnerVerdict resolves the two table lookups into the one answer, including
+// the answer for a pair both tables claim.
+//
+// Split out so all four inputs are reachable from a test. The conflict arm is
+// unreachable through [PartnerDriven] by construction — the census fails a
+// build where any pair is in both tables — and an arm nothing can reach is an
+// arm nothing checks, which is the shape of defect this whole item is about.
+//
+// Neither table wins a conflict. Whichever did would be a verdict decided by
+// the order of two `if`s rather than by anyone, and this pair spent a release
+// in exactly that state: the driven rows won, their exclusion reasons went
+// unread, and by the time anyone read them they described a clock the clocked
+// mode had made moot. So the answer is excluded, which is the safe side, and
+// the reason says the tables disagree — a sentence a reader can act on, where
+// silently taking one side is not.
+func partnerVerdict(driven, excluded bool, reason string) (bool, string) {
+	switch {
+	case driven && excluded:
+		return false, "listed as both driven and excluded, which is a defect in the partner tables"
+	case excluded:
+		return false, reason
+	case driven:
+		return true, ""
+	default:
+		return false, "an unclassified sibling reference, which defaults to excluded"
+	}
+}
+
+// PartnerClassified reports whether the pair carries a verdict in exactly one
+// table — the census's question, exported so the gate can hold the tables both
+// total and disjoint.
+//
+// Exactly one rather than at least one. Totality alone cannot see a pair listed
+// twice, and a census that cannot see its own conflict is how two dead rows
+// survived: they satisfied the question being asked, and the question was the
+// wrong one.
 func PartnerClassified(mixin, param string) bool {
 	key := mixin + "." + param
 	_, excluded := excludedPartners[key]
-	return drivenPartners[key] || excluded
+	return drivenPartners[key] != excluded
 }
 
 // drivenPartners marks the sibling references that name ordinary methods.
@@ -62,8 +91,14 @@ var drivenPartners = map[string]bool{
 	mixinTTL + ".read":              true,
 	mixinWindowed + ".incr":         true,
 	mixinWindowed + ".count":        true,
-	mixinScheduled + ".schedule":    true,
-	mixinScheduled + ".fired":       true,
+	// Both were listed as excluded too, on the grounds that the sequences
+	// never advance the clock. The sequences still do not — the
+	// scheduled-fires law advances it inside its own Check — but excluding
+	// the pair leaves this fixture with no action at all, and the model
+	// generator refuses an interface whose sequences would drive nothing. The
+	// exclusion would have deleted the tier that states the claim.
+	mixinScheduled + ".schedule": true,
+	mixinScheduled + ".fired":    true,
 }
 
 // excludedPartners marks the references whose role overrides their shape,
@@ -84,6 +119,4 @@ var excludedPartners = map[string]string{
 	mixinLifecycleAfter + ".close": "a close, which would end one side of the pair mid-sequence",
 	mixinEventually + ".settle":    "a convergence forcer the derived reference cannot mirror",
 	mixinEventually + ".sync":      "a convergence forcer the derived reference cannot mirror",
-	mixinScheduled + ".schedule":   "schedules against a clock the sequences never advance",
-	mixinScheduled + ".fired":      "counts firings of a clock the sequences never advance",
 }

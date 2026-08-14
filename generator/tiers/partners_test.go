@@ -13,13 +13,19 @@ import (
 	"go.thesmos.sh/testkit/generator/tiers"
 )
 
-// TestEverySiblingReferenceIsClassified holds the partner tables total over
-// the live registry.
+// TestEverySiblingReferenceIsClassified holds the partner tables total and
+// disjoint over the live registry.
 //
 // The unclassified default is excluded, which keeps the pair synchronized —
 // but a verdict reached by default is a judgment nobody made. A mixin landing
 // upstream with a sibling parameter must be classified in the same build,
 // and this is what asks.
+//
+// Disjoint as well as total, which it did not used to be. `scheduled.schedule`
+// and `scheduled.fired` sat in both tables for a release: the driven rows won
+// on `if` order, their exclusion reasons were never read, and by the time
+// anyone read them they described a clock the clocked mode had made moot. An
+// at-least-one census answered "classified" to all of it.
 func TestEverySiblingReferenceIsClassified(t *testing.T) {
 	t.Parallel()
 
@@ -29,8 +35,27 @@ func TestEverySiblingReferenceIsClassified(t *testing.T) {
 				continue
 			}
 			testkit.True(t, tiers.PartnerClassified(m.Name, p.Key),
-				m.Name+"."+p.Key+" carries a drive-or-exclude verdict")
+				m.Name+"."+p.Key+" carries a drive-or-exclude verdict, and only one")
 		}
+	}
+}
+
+// The scheduled siblings are driven, and only driven.
+//
+// The pair this item is about. Both rows sat in both tables for a release; the
+// exclusion side lost on `if` order and its reasons went stale unread, and
+// excluding them would have left the fixture with no action at all — the model
+// generator refuses an interface whose sequences would drive nothing, so the
+// exclusion would have deleted the tier that states the scheduling claim.
+func TestScheduledSiblingsAreDriven(t *testing.T) {
+	t.Parallel()
+
+	for _, param := range []string{"schedule", "fired"} {
+		testkit.True(t, tiers.PartnerClassified("scheduled", param),
+			"scheduled."+param+" carries exactly one verdict")
+		driven, reason := tiers.PartnerDriven("scheduled", param)
+		testkit.True(t, driven, "scheduled."+param+" stays in the sequences")
+		testkit.Equal(t, reason, "", "with no exclusion reason left to print")
 	}
 }
 
