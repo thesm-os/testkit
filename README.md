@@ -54,7 +54,14 @@ Each generator emits both the artifact and the tests that exercise it. testkit's
 
 ## Directives
 
-Conformance generators are driven by `//testkit:` directives on interface methods. Directives are machine-readable, grep-able, and validated at codegen time — unknown directives error, conflicting combinations error, redundant pairs warn.
+Conformance generators are driven by `//testkit:` directives on interface methods. Directives are machine-readable, grep-able, and validated at codegen time: a declared directive's positional arguments, required keys, node kind and negation are all checked, and conflicting combinations error.
+
+Two gaps, stated because a directive that is silently ignored costs you the check it was supposed to arm:
+
+- **An unknown directive *name* is inert, not an error.** `//testkit:sutie` parses and does nothing. Pre-screening names is the consuming tool's job by design ([eidos `Validate` docs](https://github.com/thesm-os/eidos/blob/main/core/directive/validator.go)); testkit does not yet do it.
+- **A directive documented as taking no keys accepts any.** The underlying schema cannot express "no KV pairs permitted" — tracked as [eidos#38](https://github.com/thesm-os/eidos/issues/38). A mistyped mixin parameter key has the same shape: [eidos#35](https://github.com/thesm-os/eidos/issues/35).
+
+Until both close, grep is the check: if a directive you wrote produced no change in the generated header, the name or a key is misspelled.
 
 The matrix below is the directive vocabulary the rebuild targets, grouped by intent. Columns name the consuming generator; `enum` is directive-free. Per-generator directive surfaces are documented in the individual generator doc files.
 
