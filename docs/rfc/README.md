@@ -12,4 +12,4 @@ Numbered, never renumbered. Withdrawn and superseded RFCs stay on disk.
 | [0001](0001-testkit-as-a-generator-platform.md) | testkit as a generator platform | Draft |
 | [0002](0002-the-suite-generator.md) | The suite generator | Draft |
 | [0003](0003-the-projection-consumers.md) | The projection consumers: bench, fuzz, model | Draft |
-| [0004](0004-the-suite-contract.md) | The suite contract | Draft |
+| [0004](0004-the-suite-contract.md) | The suite contract | Accepted |

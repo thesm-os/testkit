@@ -27,3 +27,12 @@ For the shape these decisions add up to, read
 | [0016](0016-directives-are-positive-only.md) | Directives are positive-only | Accepted |
 | [0017](0017-every-classification-owes-an-assertion.md) | Every classification owes an assertion | Superseded by [0018](0018-one-tier-owns-each-classification.md) |
 | [0018](0018-one-tier-owns-each-classification.md) | One tier owns each classification | Accepted |
+| [0019](0019-suite-vocabulary-in-the-root-module.md) | The suite package lives in the root module | Accepted |
+| [0020](0020-check-ids-carry-a-case-split-grammar.md) | Check IDs have a defined grammar | Accepted |
+| [0021](0021-field-roles-resolve-generator-side.md) | Field roles resolve in the generator | Accepted |
+| [0022](0022-canonical-draws-pin-seed-and-version.md) | Canonical draws record their seed and rapid version | Accepted |
+| [0023](0023-a-lost-manifest-line-fails-check.md) | Removing a check from the lock file fails testkit check | Accepted |
+| [0024](0024-the-veneer-is-slot-composed.md) | The veneer is composed through named slots | Accepted |
+| [0025](0025-machine-formats-are-versioned-structs.md) | Machine-read formats are versioned structs | Accepted |
+| [0026](0026-role-keywords-enter-by-registry.md) | Role keywords are added by registry row, kinds by RFC | Accepted |
+| [0027](0027-optionality-lives-on-the-role.md) | Optional features are declared on the role | Accepted |

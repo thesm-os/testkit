@@ -1,7 +1,7 @@
 ---
 rfc: 0004
 title: The suite contract
-status: Review
+status: Accepted
 date: 2026-08-13
 ---
 
@@ -297,8 +297,8 @@ type Ledger = ledger.Ledger[patchtest.Text, string, string]
 // A plain constructor adapts with suite.Ctor, still closure-free at
 // the call site:
 //
-//	Subject("in-memory", suite.Ctor(ledgermem.New))
-//	Subject("pebble", pebbletest.Start)
+// Subject("in-memory", suite.Ctor(ledgermem.New))
+// Subject("pebble", pebbletest.Start)
 //
 // (A union constraint over both function shapes was the first design;
 // it does not infer — constraint type inference unifies against the
