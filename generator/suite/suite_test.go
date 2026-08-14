@@ -956,7 +956,7 @@ func TestCyclicEmbed(t *testing.T) {
 		// has contributed, so the set is short of nothing — which is why this
 		// is a warning and the harness is still emitted.
 		s := cyclicEmbed(t)
-		got := plugintest.Generate(t, suite.New(), s).Diagnostics()
+		got := about(plugintest.Generate(t, suite.New(), s).Diagnostics(), "through a cycle")
 		testkit.Len(t, got, 2, "one warning per interface in the cycle")
 		testkit.Contains(t, got[0].Message, "through a cycle", "and it says which fault it is")
 		testkit.True(t, len(s.Emit().PendingOriginSlots()) > 0,

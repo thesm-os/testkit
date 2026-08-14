@@ -4,6 +4,7 @@
 package suite
 
 import (
+	"strings"
 	"testing"
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
@@ -78,4 +79,28 @@ func TestStampedSentinel(t *testing.T) {
 	testkit.True(t, got != nil, "a qualified stamp lifts")
 	testkit.True(t, stampedSentinel(method("ErrNotReady"), key) == nil,
 		"a bare spelling resolves to no package and stays presence-only")
+}
+
+// TestWhyUnseeded holds the three exits apart, because the fix differs for
+// each and a single "no seed was derived" sends the reader to look for all
+// three.
+func TestWhyUnseeded(t *testing.T) {
+	t.Parallel()
+
+	testkit.Assert(t, whyUnseeded(nil, nil)).Contains("classified as a write",
+		"an interface with no writer wants the consumer's own seed")
+
+	testkit.Assert(t, whyUnseeded([]string{"Touch"}, nil)).Contains("reports no error",
+		"a write that cannot fail out loud cannot seed, and the fix is its signature")
+
+	testkit.Assert(t, whyUnseeded(nil, []string{"Store"})).Contains("through the fixture",
+		"an unwritable argument wants a fixture, not a signature change")
+
+	// Closest-to-usable first. A method that reached its arguments needs one
+	// literal; a mute one needs a new return. Naming the mute writer ahead of
+	// it would point at the larger change.
+	both := whyUnseeded([]string{"Touch"}, []string{"Store"})
+	testkit.Assert(t, both).Contains("Store", "the argument case is named")
+	testkit.False(t, strings.Contains(both, "Touch"),
+		"and the mute one is not, this run")
 }

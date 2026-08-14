@@ -19,6 +19,12 @@ per implementation, which is where the statements drift.
 {{- end }}
 //	Extend:   {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ $.IfaceName }}On{{ $m.Name }}{{ end }}
 //	Drop:     {{ .IfaceName }}Without, by the path each check reports under
+{{- if .Unseeded }}
+//	Unseeded: every check here runs against a fresh subject, because
+//	          {{ .Unseeded }}.
+//	          A read over an empty subject cannot tell a miss from a bug;
+//	          {{ .IfaceName }}Seed is what closes it.
+{{- end }}
 {{- with .Unwritten }}
 //
 // # What this file does not check

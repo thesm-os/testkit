@@ -564,18 +564,53 @@ func companionFor(ctx *sdk.GeneratorContext, t *sdk.TypeRef) *sdk.Expr {
 // Two writers over one value type is a shape this cannot resolve — and where
 // they differ, an author who cares supplies a seed rather than being asked
 // which is meant.
-func seedOf(f Fixture, methods []Method) *Seed {
+func seedOf(f Fixture, methods []Method) (*Seed, string) {
+	var (
+		mute        []string
+		undelivered []string
+	)
 	for _, m := range methods {
-		if !writesSomething(m) || !m.ReturnsError() {
+		if !writesSomething(m) {
+			continue
+		}
+		if !m.ReturnsError() {
+			// A write that cannot report its own failure cannot seed: the
+			// checks after it would assert against whatever state a silent
+			// failure left.
+			mute = append(mute, m.Name)
 			continue
 		}
 		args := fixtureArgs(f, m, false)
 		if _, _, undeliverable := undeliverableArgs(f, args); undeliverable {
+			undelivered = append(undelivered, m.Name)
 			continue
 		}
-		return &Seed{Method: m, Args: args, AnswersState: answersState(m)}
+		return &Seed{Method: m, Args: args, AnswersState: answersState(m)}, ""
 	}
-	return nil
+	return nil, whyUnseeded(mute, undelivered)
+}
+
+// whyUnseeded names which of seedOf's three exits was taken.
+//
+// Three reasons, not one, because the fix differs for each: a mute writer
+// wants an error return, an undeliverable argument wants a fixture, and an
+// interface with no writer at all wants the consumer's own seed. "No seed was
+// derived" sends the reader to look for all three.
+//
+// Order is deliberate. A method that got as far as its arguments is the
+// closest to being usable, so it is named first — that is the one worth
+// fixing.
+func whyUnseeded(mute, undelivered []string) string {
+	switch {
+	case len(undelivered) > 0:
+		return "the arguments " + strings.Join(undelivered, ", ") +
+			" takes cannot be written as literals; supply them through the fixture"
+	case len(mute) > 0:
+		return strings.Join(mute, ", ") + " writes but reports no error, " +
+			"so a failed seed would leave every check after it asserting against an empty subject"
+	default:
+		return "no method here is classified as a write"
+	}
 }
 
 // writesSomething reports whether the shape annotator classified this method as

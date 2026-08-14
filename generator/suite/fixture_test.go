@@ -4,8 +4,10 @@
 package suite_test
 
 import (
+	"strings"
 	"testing"
 
+	"go.thesmos.sh/eidos/core/diag"
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
@@ -251,7 +253,8 @@ func TestFixtureKeying(t *testing.T) {
 
 	t.Run("reports nothing about it", func(t *testing.T) {
 		t.Parallel()
-		got := plugintest.Generate(t, suite.New(), collidingFixture(t)).Diagnostics()
+		got := about(plugintest.Generate(t, suite.New(), collidingFixture(t)).Diagnostics(),
+			"fixture")
 		testkit.Len(t, got, 0, "there is nothing wrong with the source")
 	})
 
@@ -674,7 +677,8 @@ func TestUndeliverableReason(t *testing.T) {
 	t.Run("says so in the diagnostic", func(t *testing.T) {
 		t.Parallel()
 		// The reason is only worth deriving if it reaches the author.
-		got := plugintest.Generate(t, suite.New(), unloadedParamFixture(t)).Diagnostics()
+		got := about(plugintest.Generate(t, suite.New(), unloadedParamFixture(t)).Diagnostics(),
+			"which this run did not resolve")
 		testkit.Len(t, got, 1, "the dropped check is reported once")
 		testkit.Assert(t, got[0].Message).Contains("which this run did not resolve",
 			"the diagnostic carries the refusal, not a fixed phrase")
@@ -1758,4 +1762,20 @@ func pairFixture(t *testing.T, mixinName, param, partner string, sameType bool) 
 		}
 	}
 	return s
+}
+
+// about narrows a diagnostic set to the ones a test is about.
+//
+// Counting the whole set couples every assertion to every other diagnostic
+// the generator learns to emit: the unseeded-harness warning broke three
+// tests that had nothing to say about seeding. A test that names its subject
+// stays true when a new one arrives beside it.
+func about(diags []diag.Diag, subject string) []diag.Diag {
+	out := make([]diag.Diag, 0, len(diags))
+	for _, d := range diags {
+		if strings.Contains(d.Message, subject) {
+			out = append(out, d)
+		}
+	}
+	return out
 }

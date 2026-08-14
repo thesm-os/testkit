@@ -46,7 +46,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.12.0"
+const Version = "1.13.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -618,6 +618,14 @@ type Contract struct {
 	// companion is indistinguishable from a generator that failed to write one.
 	Unfalsifiable string
 
+	// Unseeded says why no seed was derived, empty where one was.
+	//
+	// A harness that seeds nothing runs every read check against a fresh
+	// subject, where a miss and a bug are the same observation. The header
+	// carries the reason so the reader knows which of the three exits was
+	// taken and therefore what would close it.
+	Unseeded string
+
 	// Double is the generated stand-in for this interface, nil where the source
 	// declared no `//testkit:stub`.
 	//
@@ -714,16 +722,28 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		methods := methodsOf(iface, set)
 		fixture := fixtureOf(ctx, iface, methods)
 		methods = withChecks(c, ctx, iface, fixture, methods)
+		seed, unseeded := seedOf(fixture, methods)
 		contract := &Contract{
 			BaseEmit:      sdk.EmitBase(c, iface),
 			Subject:       subjectOf(iface),
 			EntryName:     "Assert" + iface.Name + "Contract",
 			Fixture:       fixture,
-			Seed:          seedOf(fixture, methods),
+			Seed:          seed,
+			Unseeded:      unseeded,
 			Double:        doubleOf(doubles, iface),
 			Methods:       methods,
 			Coverage:      coverageOf(methods, modelWillRun(iface)),
 			Unfalsifiable: unfalsifiableReason(iface, doubles),
+		}
+		if unseeded != "" {
+			// A harness that seeds nothing runs every read check against a
+			// fresh subject, where a miss and a bug look identical. The
+			// header says so, and so does the run that produced it — the
+			// header is read once and this is the moment the reader is
+			// looking. A warning, because the consumer's own seed closes it.
+			ctx.Diag.Warnf(iface.Pos(),
+				"%s: %s derives no seed — %s; supply one with %sSeed",
+				Name, iface.Name, unseeded, iface.Name)
 		}
 		reportUnchecked(ctx, iface, contract)
 		queued := []sdk.EmitNode{contract}
