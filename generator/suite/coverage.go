@@ -221,3 +221,30 @@ func (c Coverage) MethodList() string { return strings.Join(c.Methods, ", ") }
 // UncheckedList spells the carriers still owing a check — the header's
 // sharper answer where coverage is partial rather than absent.
 func (c Coverage) UncheckedList() string { return strings.Join(c.Unchecked, ", ") }
+
+// reportUnchecked warns for every classification this run stamped and did not
+// check, naming the carriers it went silent on.
+//
+// The generated header has always said this, and a header is read once. The
+// consumer who declared `//testkit:mixin bounded` and never opened the output
+// believes the bound is checked, and nothing at the point they would find out
+// — the run that produced the file — said otherwise. A warning costs one line
+// per drop and turns a fact you have to go looking for into one that arrives.
+//
+// A warning rather than an error: an unchecked classification is a gap, not a
+// broken build.
+//
+// Only [Contract.Unwritten], never [Contract.Elsewhere]. A claim needing a
+// reference implementation cannot be checked by a suite run and never will
+// be, so warning about it every run is noise a reader learns to scroll past —
+// and the one thing they must not scroll past is the actionable half beside
+// it. The corpus makes the ratio concrete: 241 classifications go unchecked,
+// and warning on all of them buried the handful anybody can close.
+func reportUnchecked(ctx *sdk.GeneratorContext, iface *sdk.Interface, contract *Contract) {
+	for _, c := range contract.Unwritten() {
+		ctx.Diag.Warnf(iface.Pos(),
+			"%s: %s.%s is declared on %s and no check here asserts it; "+
+				"write it with %sOn%s — the generated header says why it was not derived",
+			Name, iface.Name, c.Name, c.UncheckedList(), iface.Name, c.Unchecked[0])
+	}
+}
