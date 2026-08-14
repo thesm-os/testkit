@@ -1,0 +1,21 @@
+{{- /*
+A teardown that refuses from the first call — the subject whose idempotence
+claim used to be skipped rather than judged.
+*/ -}}
+{{- define "suite.violate.cleanteardown" -}}
+{{ $m := .Method }}
+// {{ .TestName }} holds {{ .Check.Func }} to being able to fail.
+//
+// The stand-in refuses every call including the first. Until this check
+// existed that subject passed the whole tier: the second-call claim skipped
+// on it and deferred to a finding nothing produced.
+func {{ .TestName }}(t *{{ renderExpr (external "testing" "T") }}) {
+{{ template "suite.violate.open" . }}
+	subject := {{ renderExpr (external .HarnessPkg .CtorName) }}{{ template "suite.witnessargs" . }}(t,
+		{{ renderExpr (external .HarnessPkg .Option) }}{{ template "suite.witnessargs" . }}(func({{ template "suite.violate.params" $m }}){{ template "suite.violate.results" $m }} {
+			return {{ renderExpr (external "errors" "New") }}("violate: teardown refused")
+		}))
+
+{{ template "suite.violate.drive" . }}
+}
+{{- end -}}

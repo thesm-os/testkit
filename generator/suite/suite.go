@@ -46,7 +46,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.13.0"
+const Version = "1.14.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -80,6 +80,19 @@ const (
 	KindCloseIdempotent sdk.Kind = "suite.check.closeidempotent"
 	KindUseAfterClose   sdk.Kind = "suite.check.useafterclose"
 	KindConcurrentSmoke sdk.Kind = "suite.check.concurrentsmoke"
+
+	// KindCleanTeardown asserts the first teardown of a fresh subject
+	// returns nil.
+	//
+	// The claim KindCloseIdempotent skips on, and it had nowhere to defer to.
+	// That check's skip said a refused first close was "another check's
+	// finding", and there was no other check: smoke discards the error by
+	// design and the rest assert only adverse-context behaviour, so a subject
+	// whose Close always failed skipped the idempotence claim and passed the
+	// tier. Emitted beside it so the deferral is true, and separate from it
+	// because the two claims fail for different reasons — teardown broken, or
+	// teardown not repeatable.
+	KindCleanTeardown sdk.Kind = "suite.check.cleanteardown"
 )
 
 // The emit kinds for the detector-derived checks.
@@ -1494,7 +1507,14 @@ func mixinChecks(
 		// a second teardown answers what the first did. Gated on the mixin —
 		// a bare lifecycle shape makes no such promise, and os.File-style
 		// subjects legitimately refuse the second call.
-		out = append(out, base(KindCloseIdempotent, MixinIdempotent, "CloseTwice", nil))
+		// The clean teardown first, so the skip below has somewhere to defer.
+		//
+		// Nested under the classification rather than beside it: the two are
+		// one family, and a consumer who declines the idempotence claim by
+		// its own path should still be told their teardown is broken.
+		out = append(out,
+			base(KindCleanTeardown, MixinIdempotent+"/clean teardown", "CloseCleanly", nil),
+			base(KindCloseIdempotent, MixinIdempotent, "CloseTwice", nil))
 	}
 	if slices.Contains(m.Mixins, MixinConcurrent) {
 		// Four callers under the race detector: the mixin's whole claim is

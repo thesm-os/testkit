@@ -14,8 +14,11 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	tb.Helper()
 	ctx := tb.Context()
 	if first := subject.{{ $m.Name }}(ctx); first != nil {
-		// A teardown that refuses outright is another check's finding; the
-		// claim here is only about the second call.
+		// A teardown that refuses outright is the clean-teardown check's
+		// finding, which now exists — this skip named it before it did, and a
+		// subject with a permanently failing {{ $m.Name }} passed the whole
+		// tier on the strength of that deferral. The claim here is only about
+		// the second call.
 		tb.Skipf("{{ $m.Name }} refused its first call; the second-call claim goes unexercised")
 		return
 	}

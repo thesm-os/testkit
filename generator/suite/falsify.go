@@ -43,6 +43,7 @@ const (
 
 	KindViolateAnswerRoundTrip sdk.Kind = "suite.violate.answerroundtrip"
 
+	KindViolateCleanTeardown   sdk.Kind = "suite.violate.cleanteardown"
 	KindViolateCloseIdempotent sdk.Kind = "suite.violate.closeidempotent"
 	KindViolateUseAfterClose   sdk.Kind = "suite.violate.useafterclose"
 	KindViolateConcurrentSmoke sdk.Kind = "suite.violate.concurrentsmoke"
@@ -188,7 +189,7 @@ func CheckKinds() []sdk.Kind {
 		KindNilSafe, KindTimeout, KindOrderAfter, KindSideEffect, KindPartition,
 		KindHooks, KindSample, KindValidates, KindWrappedVia,
 		KindIfAbsent, KindIfMatch, KindOutbox,
-		KindCloseIdempotent, KindUseAfterClose, KindConcurrentSmoke,
+		KindCleanTeardown, KindCloseIdempotent, KindUseAfterClose, KindConcurrentSmoke,
 	}
 }
 
@@ -432,6 +433,11 @@ var violators = map[sdk.Kind]struct {
 		violation: KindViolateTimeout,
 		reason:    "a method that spends twice its declared budget",
 		because:   "over its declared budget",
+	},
+	KindCleanTeardown: {
+		violation: KindViolateCleanTeardown,
+		reason:    "a teardown that refuses from the first call",
+		because:   "must succeed before anything about a second call",
 	},
 	KindCloseIdempotent: {
 		violation: KindViolateCloseIdempotent,
