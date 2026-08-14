@@ -49,8 +49,8 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 			{{ renderExpr (external $.Runtime "Equal") }}(tb, got, {{ $record }},
 				"the subscriber must receive what was appended")
 		case <-clk.After(2 * {{ renderExpr (external "time" "Second") }}):
-			tb.Fatalf("record %d of 2 was appended before {{ $p.Name }} was called "+
-				"and never arrived; an outbox holds a record until it is delivered", i)
+			tb.Fatalf("record %d of 2 that {{ $m.Name }} appended never arrived at {{ $p.Name }}; "+
+				"an outbox holds a record until it is delivered", i)
 		}
 	}
 }

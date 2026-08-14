@@ -29,6 +29,6 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	{{ renderExpr (external $.Runtime "NoError") }}(tb, readErr,
 		"and the stored state is readable under the fixture's key")
 	{{ renderExpr (external $.Runtime "Equal") }}(tb, back, got,
-		"the read must answer the state the write answered")
+		"{{ $p.Name }} must answer the state {{ $m.Name }} answered")
 }
 {{- end -}}

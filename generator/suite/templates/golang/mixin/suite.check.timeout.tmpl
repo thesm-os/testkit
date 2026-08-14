@@ -33,7 +33,7 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	start := clk.Now()
 	{{ if $m.HasResults }}{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}_{{ end }} = {{ end }}subject.{{ $m.Name }}({{ template "suite.args" . }})
 	if elapsed := clk.Now().Sub(start); elapsed > budget {
-		tb.Errorf("{{ $m.Name }} took %s, over its declared budget of %s", elapsed, budget)
+		tb.Errorf("{{ $m.Name }} ran over its declared budget: %s against %s", elapsed, budget)
 	}
 }
 {{- end -}}

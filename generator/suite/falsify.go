@@ -4,6 +4,8 @@
 package suite
 
 import (
+	"strings"
+
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
 
@@ -252,6 +254,11 @@ type Violation struct {
 	// before the check's own assertion ran would satisfy a guard asserting only
 	// that something failed — which is the vacuity this whole output exists to
 	// catch, one level up.
+	//
+	// Because arrives expanded: the table's phrase carries `$M` and `$P` and
+	// [expandBecause] has already put this method's and this partner's names in
+	// them, so the string names one assertion line rather than a family of
+	// them. See the [violators] docblock for why that distinction has teeth.
 	Reason, Because string
 
 	// HarnessPkg is where the check, the fixture and the stub live. See
@@ -339,6 +346,22 @@ func streamElemOf(ck *Check) sdk.Ref {
 // substring is quoted from the check's own template, so a check whose message
 // changes fails its guard rather than passing it silently — which is the drift
 // a second statement of the same claim invites.
+//
+// # Why the phrases carry $M and $P
+//
+// The phrase has to identify one assertion line, not a family of them. A guard
+// asserting only "must accept" is satisfied by any rejection saying so — its
+// own check's other assertions, a different kind's assertion on the same
+// subject, the same kind's assertion about a different method. Each of those is
+// a guard that passes while proving nothing, which is the vacuity this whole
+// output exists to catch, arriving in the catcher.
+//
+// So every phrase names the method it is about, spells the partner where the
+// check has one, and is quoted whole rather than truncated. The tokens expand
+// through [expandBecause] at exactly the identifiers the check's own template
+// interpolates, and [TestBecauseIsQuotedFromItsTemplate] holds each phrase to
+// appearing verbatim in that template — which turns the paragraph above from a
+// convention into something that fails a build.
 var violators = map[sdk.Kind]struct {
 	violation       sdk.Kind
 	reason, because string
@@ -355,145 +378,167 @@ var violators = map[sdk.Kind]struct {
 	KindSmoke: {
 		violation: KindViolateSmoke,
 		reason:    "a method that panics on a derived value",
-		because:   "panicked on a derived value",
+		because:   "$M panicked on a derived value",
 	},
 	KindCancel: {
 		violation: KindViolateCancel,
 		reason:    "a method that reports nothing for a cancelled context",
-		because:   "must report a cancelled context",
+		because:   "$M must report a cancelled context as context.Canceled",
 	},
 	KindDeadline: {
 		violation: KindViolateDeadline,
 		reason:    "a method that reports nothing for an expired deadline",
-		because:   "must report an expired deadline",
+		because:   "$M must report an expired deadline as context.DeadlineExceeded",
 	},
 	KindNilContext: {
 		violation: KindViolateNilContext,
 		reason:    "a method that panics on a nil context",
-		because:   "panicked on a nil context",
+		because:   "$M panicked on a nil context",
 	},
 	KindZeroOnError: {
 		violation:      KindViolateZeroOnError,
 		reason:         "a method answering a believable value beside its error",
-		because:        becauseZeroValue,
+		because:        "$M must return the zero value alongside an error",
 		needsPlausible: true,
 	},
 	KindIfAbsent: {
 		violation: KindViolateIfAbsent,
 		reason:    "a store that accepts every write",
-		because:   "must be refused",
+		because:   "a second $M for a key already present must be refused",
 	},
 	KindSample: {
 		violation: KindViolateSample,
 		reason:    "a method that refuses what its own builder produced",
-		because:   "must accept",
+		because:   "$M must accept what $P produced",
 	},
 	KindValidates: {
 		violation: KindViolateValidates,
 		reason:    "a writer that refuses what its validator admits",
-		because:   "must accept what",
+		because:   "$M must accept what $P admits",
 		spans:     true,
 	},
 	KindWrappedVia: {
 		violation: KindViolateWrappedVia,
 		reason:    "a failure carrying a cause of its own",
-		because:   "where errors.Is can find it",
+		because:   "$M must report $P's cause where errors.Is can find it",
 		spans:     true,
 	},
 	KindBatchSize: {
 		violation: KindViolateBatchSize,
 		reason:    "a reader answering once for every batch",
-		because:   "once per key",
+		because:   "$M must answer once per key it was given",
 	},
 	KindOutbox: {
 		violation: KindViolateOutbox,
 		reason:    "an outbox that accepts every record and delivers none",
-		because:   "never arrived",
+		because:   "that $M appended never arrived at $P",
 		spans:     true,
 	},
 	KindIfMatch: {
 		violation: KindViolateIfMatch,
 		reason:    "a writer that refuses what its own predicate admits",
-		because:   "must accept what",
+		because:   "$M must accept the write $P matched",
 		spans:     true,
 	},
 	KindMissZero: {
 		violation:      KindViolateMissZero,
 		reason:         "a reader answering with a plausible value for a key it does not hold",
-		because:        becauseZeroValue,
+		because:        "$M must return the zero value for an input it does not hold",
 		needsPlausible: true,
 	},
 	KindMissFlag: {
 		violation:      KindViolateMissFlag,
 		reason:         "a reader answering with a plausible value beside a false flag",
-		because:        becauseZeroValue,
+		because:        "$M must return the zero value when it reports a miss",
 		needsPlausible: true,
 	},
 	KindTimeout: {
 		violation: KindViolateTimeout,
 		reason:    "a method that spends twice its declared budget",
-		because:   "over its declared budget",
+		because:   "$M ran over its declared budget",
 	},
 	KindCleanTeardown: {
 		violation: KindViolateCleanTeardown,
 		reason:    "a teardown that refuses from the first call",
-		because:   "must succeed before anything about a second call",
+		because:   "$M on a fresh subject must succeed before anything about a second call can be stated",
 	},
 	KindCloseIdempotent: {
 		violation: KindViolateCloseIdempotent,
 		reason:    "a teardown that refuses its second call",
-		because:   "must be a no-op",
+		because:   "a second $M after a clean one must be a no-op",
 	},
 	KindUseAfterClose: {
 		violation: KindViolateUseAfterClose,
 		reason:    "an operation that answers as though nothing were closed",
-		because:   "must report the declared sentinel",
+		because:   "$M after $P must report the declared sentinel",
 	},
 	KindConcurrentSmoke: {
 		violation: KindViolateConcurrentSmoke,
 		reason:    "a method that panics the moment callers overlap",
-		because:   "panicked under concurrent callers",
+		because:   "$M panicked under concurrent callers",
 	},
 	KindNilSafe: {
 		violation: KindViolateNilSafe,
 		reason:    "a method that panics on zero inputs",
-		because:   "panicked on",
+		because:   "$M panicked on a zero-value input",
 	},
 	KindOrderAfter: {
 		violation: KindViolateOrderAfter,
 		reason:    "a method that accepts the call without its prerequisite",
-		because:   "must be refused",
+		because:   "$M must be refused until",
 	},
 	KindSideEffect: {
 		violation: KindViolateSideEffect,
 		reason:    "a method whose effect nothing can observe",
-		because:   "must change what",
+		because:   "$M must change what $P observes",
 		spans:     true,
 	},
 	KindHooks: {
 		violation: KindViolateHooks,
 		reason:    "a subject that takes a registration and forgets it",
-		because:   "must invoke what",
+		because:   "$M must invoke what $P registered",
 		spans:     true,
 	},
 	KindPartition: {
 		violation: KindViolatePartition,
 		reason:    "a store with a single flat namespace",
-		because:   "not the other's",
+		because:   "$P must return what $M wrote to its own partition, not the other's",
 		spans:     true,
 	},
 	KindAnswerRoundTrip: {
 		violation: KindViolateAnswerRoundTrip,
 		reason:    "a write answering a state it did not store",
-		because:   "the state the write answered",
+		because:   "$P must answer the state $M answered",
 		spans:     true,
 	},
 }
 
-// becauseZeroValue is the failure phrase the three zero-comparison checks
-// share — the zero-on-error claim and both halves of the miss family report
-// the same comparison.
-const becauseZeroValue = "must return the zero value"
+// The tokens a `because` phrase carries where its check's template interpolates
+// an identifier: becauseMethod for the method under check, becausePartner for
+// the second method a spanning check reads through.
+//
+// Two characters rather than `%s`, because the phrase is read next to the
+// template it was quoted from and positional verbs make that comparison a
+// counting exercise. They are also what lets a phrase name the partner first —
+// two checks do, and their templates report the reader rather than the writer.
+const (
+	becauseMethod  = "$M"
+	becausePartner = "$P"
+)
+
+// expandBecause substitutes a phrase's identifiers, giving the exact sentence
+// the check reports for this method.
+//
+// partner is empty for a check that spans nothing, and a phrase naming
+// [becausePartner] under an empty partner would leave the token in the
+// generated string — where the guard's own assertion fails on it, loudly,
+// rather than matching something it should not. That combination is
+// structurally unreachable: the kinds whose phrases name a partner are exactly
+// the kinds the suite generator only selects where one resolved, which
+// [TestBecauseNamesAPartnerOnlyWhereOneExists] holds it to.
+func expandBecause(phrase, method, partner string) string {
+	return strings.NewReplacer(becauseMethod, method, becausePartner, partner).Replace(phrase)
+}
 
 // falsificationOf builds the companion output for one interface, or reports
 // that there is nothing to prove.
@@ -551,9 +596,10 @@ func falsificationOf(
 			// No guard on a spanning kind arriving without its partner: a check
 			// that spans two methods is selected only where the second one
 			// resolved, so the nil cannot reach here.
-			partnerOption := ""
+			partnerOption, partnerName := "", ""
 			if ck.Partner != nil {
 				partnerOption = "With" + iface.Name + ck.Partner.Name
+				partnerName = ck.Partner.Name
 			}
 			f.Cases = append(f.Cases, &Violation{
 				BaseEmit:      sdk.EmitBaseTagged(sdk.EmitBase(c, iface), GoTestOutputTag),
@@ -571,7 +617,7 @@ func falsificationOf(
 				Plausible:     plausible,
 				StreamElem:    streamElemOf(ck),
 				Reason:        v.reason,
-				Because:       v.because,
+				Because:       expandBecause(v.because, m.Name, partnerName),
 				HarnessPkg:    iface.Package,
 			})
 		}

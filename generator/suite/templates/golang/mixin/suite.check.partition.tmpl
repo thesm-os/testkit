@@ -36,6 +36,6 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	{{ renderExpr (external $.Runtime "NoError") }}(tb, readErr,
 		"reading back the first partition must succeed")
 	{{ renderExpr (external $.Runtime "Equal") }}(tb, got, {{ .CompareAgainst }},
-		"{{ $p.Name }} must return its own partition's value, not the other's")
+		"{{ $p.Name }} must return what {{ $m.Name }} wrote to its own partition, not the other's")
 }
 {{- end -}}

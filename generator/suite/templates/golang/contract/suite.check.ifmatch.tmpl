@@ -32,10 +32,10 @@ func {{ .Func }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (external "t
 	{{ range $i, $r := $m.Returns }}{{ if $i }}, {{ end }}{{ if $r.Error }}err{{ else }}_{{ end }}{{ end }} := subject.{{ $m.Name }}({{ template "suite.args" . }})
 	if allowed {
 		{{ renderExpr (external $.Runtime "NoError") }}(tb, err,
-			"{{ $m.Name }} must accept what {{ $p.Name }} admits")
+			"{{ $m.Name }} must accept the write {{ $p.Name }} matched")
 		return
 	}
 	{{ renderExpr (external $.Runtime "Error") }}(tb, err,
-		"{{ $m.Name }} must refuse what {{ $p.Name }} rejects")
+		"{{ $m.Name }} must refuse the write {{ $p.Name }} did not match")
 }
 {{- end -}}
