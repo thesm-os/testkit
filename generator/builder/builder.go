@@ -5,6 +5,7 @@ package builder
 
 import (
 	"fmt"
+	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
@@ -75,7 +76,7 @@ const (
 // every generated file's `Plugins:` header, so a content-derived one would
 // churn the header of every output in every consuming repository on any
 // template edit.
-const Version = "1.0.0"
+const Version = "1.4.0"
 
 // Suffix is the trailer appended to the source type's name to form the
 // builder's identifier.
@@ -294,6 +295,53 @@ func (b *Builder) Seeded() bool {
 
 // Kind returns [KindBuilder].
 func (*Builder) Kind() sdk.Kind { return KindBuilder }
+
+// ZeroDefault reports whether the declared default is the field's zero value,
+// where no check can tell a constructor that seeded it from one that did not.
+//
+// `//testkit:defaults 0` on an int and `nil` on a pointer are legitimate
+// declarations — the author is saying the zero is deliberate — and the
+// generated check for them asserted `0 == 0`. It passed for a constructor
+// that ignored the directive entirely, which is the one thing it was there to
+// notice.
+//
+// Sound in the direction that matters. A spelling this misses keeps a
+// tautological check, which is the state everything was in before; a spelling
+// it wrongly matches is impossible, because every literal listed here is the
+// zero of whatever type accepts it.
+func (f Field) ZeroDefault() bool {
+	switch strings.TrimSpace(f.Default) {
+	case "0", "nil", `""`, "false", "0.0":
+		return true
+	default:
+		return false
+	}
+}
+
+// Seedable returns the fields a generated check can set to a named value.
+//
+// The seed for the round-trip checks, and the reason they assert anything.
+// Both used to build their seed with `var seed T` and compare it against
+// itself, so `From(zero).Build() == zero` passed against a constructor that
+// dropped every field it was given — the exact defect the round trip exists
+// to catch. Set through the setters rather than a struct literal, because a
+// pointer field needs an addressable value and the setter already takes one.
+//
+// Scalar shapes only, and the restriction is about what the *setter* accepts
+// rather than what the sample is. A map field has a sample and a setter taking
+// a map, a slice field a variadic one, a set field an entry at a time — so
+// handing any of them the sample is a type error, which is what the corpus
+// said the first time this was written without the guard. Each is driven
+// through the shape it owns by its own per-field check.
+func (t *Tests) Seedable() []Field {
+	out := make([]Field, 0, len(t.Fields))
+	for _, f := range t.Fields {
+		if f.Shape == Scalar && f.Sample.OK() {
+			out = append(out, f)
+		}
+	}
+	return out
+}
 
 // Tests is the emit value rendered into the tagged test output.
 //

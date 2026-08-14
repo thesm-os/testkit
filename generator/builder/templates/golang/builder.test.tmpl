@@ -47,6 +47,15 @@ func TestNew{{ $src }}(t *{{ renderExpr $T }}) {
 	})
 {{- else if .Seeded }}
 {{- range .Fields }}{{ if .Default }}
+{{- if .ZeroDefault }}
+
+	// No check that New{{ $src }} seeds {{ .Name }}: its declared default is
+	// the zero value, so the assertion would be `{{ .Default }} == {{ .Default }}`
+	// and would pass for a constructor that ignored the directive. The
+	// declaration still stands — the author is saying the zero is deliberate
+	// — and nothing here can tell that apart from the zero arriving by
+	// default.
+{{- else }}
 
 	t.Run("seeds {{ .Name }} with its declared default", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
@@ -55,6 +64,7 @@ func TestNew{{ $src }}(t *{{ renderExpr $T }}) {
 		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().Build().{{ .Name }}, {{ if .DefaultRef }}{{ renderExpr .DefaultRef }}{{ else }}{{ .Default }}{{ end }},
 			"New{{ $src }} must seed {{ .Name }}")
 	})
+{{- end }}
 {{- end }}{{ end }}
 {{- else }}
 
@@ -72,14 +82,27 @@ func TestNew{{ $src }}(t *{{ renderExpr $T }}) {
 func TestNew{{ $src }}From(t *{{ renderExpr $T }}) {
 	t.Parallel()
 
+{{- with .Seedable }}
 	t.Run("carries the value through untouched", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Anything it altered would be a field the caller did not ask to
 		// change, which defeats the point of seeding from a value at all.
-		var seed {{ $val }}{{ $ta }}
-		{{ renderExpr $equal }}(t, {{ renderExpr .FromRef }}{{ $ta }}(seed).Build(), seed,
+		//
+		// Populated, not the zero value. `From(zero).Build() == zero` holds
+		// for a constructor that drops every field it is handed, which is the
+		// one defect this check exists to catch — so the seed is built
+		// through the setters, each already proven above to reach its field.
+		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ template "builder.sample" .Sample }}){{ end }}.Build()
+		{{ renderExpr $equal }}(t, {{ renderExpr $.FromRef }}{{ $ta }}(seed).Build(), seed,
 			"New{{ $src }}From must not alter what it was given")
 	})
+{{- else }}
+
+	// No round-trip check: no field of this struct admits a value this
+	// generator can name, so the only seed available is the zero value and
+	// comparing it against itself would pass against a constructor that
+	// dropped everything.
+{{- end }}
 }
 {{ range $i, $f := .Fields }}
 {{- if eq $f.Shape "slice" }}
@@ -481,12 +504,21 @@ func Test{{ $b }}Clone(t *{{ renderExpr $T }}) {
 func Test{{ $b }}Build(t *{{ renderExpr $T }}) {
 	t.Parallel()
 
+{{- with .Seedable }}
 	t.Run("returns every field that was configured", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
-		var seed {{ $val }}{{ $ta }}
-		{{ renderExpr $equal }}(t, {{ renderExpr .FromRef }}{{ $ta }}(seed).Build(), seed,
+		// Configured, which the name always claimed and the body did not do:
+		// this compared a zero value against itself and passed for any Build
+		// that answered the zero, however much had been set on the way.
+		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ template "builder.sample" .Sample }}){{ end }}.Build()
+		{{ renderExpr $equal }}(t, {{ renderExpr $.FromRef }}{{ $ta }}(seed).Build(), seed,
 			"Build returns the value under construction")
 	})
+{{- else }}
+
+	// No check that Build returns what was configured: nothing here can be
+	// configured to a value this generator can name.
+{{- end }}
 }
 {{- end }}
 {{- end -}}
