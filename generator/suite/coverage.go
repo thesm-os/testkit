@@ -240,6 +240,28 @@ func (c Coverage) UncheckedList() string { return strings.Join(c.Unchecked, ", "
 // and the one thing they must not scroll past is the actionable half beside
 // it. The corpus makes the ratio concrete: 241 classifications go unchecked,
 // and warning on all of them buried the handful anybody can close.
+// reportDeclined warns for every check a classification earned and the
+// derivation could not write, naming what stopped it.
+//
+// [reportUnchecked]'s sibling and deliberately separate. That one answers
+// "this is stamped and nothing asserts it", which the reader can close by
+// writing the check themselves. This one answers "this would have been derived
+// and one parameter stopped it", which they close by renaming a parameter or
+// supplying a fixture — a different action, and one nobody can take from a
+// message that does not name the parameter.
+//
+// The gap this fills was measurable: six selectors declined silently, the
+// header listed the classification among the unchecked, and the only signal
+// distinguishing "your source has a typo" from "this shape is not derivable"
+// was reading the generator.
+func reportDeclined(ctx *sdk.GeneratorContext, iface *sdk.Interface, m Method, declined []decline) {
+	for _, d := range declined {
+		ctx.Diag.Warnf(iface.Pos(),
+			"%s: %s.%s declares %s and no check was derived for it: %s",
+			Name, iface.Name, m.Name, d.classification, d.why)
+	}
+}
+
 func reportUnchecked(ctx *sdk.GeneratorContext, iface *sdk.Interface, contract *Contract) {
 	for _, c := range contract.Unwritten() {
 		ctx.Diag.Warnf(iface.Pos(),

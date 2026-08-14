@@ -23,6 +23,7 @@ var AdapterDebt = map[string]string{
 	"multireturn":       "more than two returns exceeds every driven closure shape the sequences can compare",
 	"namedreturns":      "the axis proves the recorded-call field naming; its methods answer nothing a reference could disagree with",
 	"nocontext":         "the driven closures forward a context the methods refuse to take",
+	"partnernaming":     "the axis proves which relational checks the generator can write down; a model tier states laws about the subject and would say nothing about that",
 	"receivercollision": "the axis proves receiver naming under collision; a model tier would add sequences to a fixture about identifiers",
 	"variadic":          "a variadic tail has no single argument type for a pool to draw",
 }

@@ -46,7 +46,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.15.0"
+const Version = "1.16.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -1169,21 +1169,21 @@ func answerRoundTripCheck(
 // The validator has to answer about the very value the method takes, and to
 // report its verdict as an error — a validator returning something else is a
 // method the directive happened to name.
-func agreementCheck(f Fixture, m, fn Method, base checkBuilder) (*Check, bool) {
+func agreementCheck(f Fixture, m, fn Method, base checkBuilder) (*Check, string) {
 	if !m.ReturnsError() || !fn.ReturnsError() || len(fn.ValueReturns()) > 0 {
-		return nil, false
+		return nil, ""
 	}
 	if !sameArgs(m, fn) {
-		return nil, false
+		return nil, ""
 	}
-	args, spellable := partnerArgs(f, m, fn)
-	if !spellable {
-		return nil, false
+	args, why := partnerArgs(f, m, fn)
+	if why != "" {
+		return nil, why
 	}
 
 	ck := base(KindValidates, MixinValidates, "AgreesWith"+fn.Name, fixtureArgs(f, m, false))
 	ck.Partner, ck.PartnerArgs = &fn, args
-	return ck, true
+	return ck, ""
 }
 
 // wrappingCheck builds "the failure carries the cause the mixin names".
@@ -1193,27 +1193,33 @@ func agreementCheck(f Fixture, m, fn Method, base checkBuilder) (*Check, bool) {
 // simply healthy. So the check asks the cause first and asserts only when there
 // is something to wrap — which is what makes it able to fail without being able
 // to fail wrongly.
-func wrappingCheck(f Fixture, m, cause Method, base checkBuilder) (*Check, bool) {
+func wrappingCheck(f Fixture, m, cause Method, base checkBuilder) (*Check, string) {
 	if !m.ReturnsError() || !cause.ReturnsError() || len(cause.ValueReturns()) > 0 {
-		return nil, false
+		return nil, ""
 	}
-	args, spellable := partnerArgs(f, m, cause)
-	if !spellable {
-		return nil, false
+	args, why := partnerArgs(f, m, cause)
+	if why != "" {
+		return nil, why
 	}
 
 	ck := base(KindWrappedVia, MixinWrappedVia, "Wraps"+cause.Name, fixtureArgs(f, m, false))
 	ck.Partner, ck.PartnerArgs = &cause, args
-	return ck, true
+	return ck, ""
 }
 
-// sameArgs reports whether two methods take the same parameters after their
-// contexts.
+// sameArgs reports whether two methods take the same parameter types, in
+// order, after their contexts.
 //
-// Both the types and the fixture fields, because a check receives the method's
-// own arguments and calls the partner with them: two parameters at one type
-// under different names resolve to different fields, and one of them is not in
-// scope.
+// Types and arity only. The docblock here used to claim it compared fixture
+// fields as well, which it never did — [partnerArgs] is what answers whether
+// the identifiers can be spelled, and it runs immediately after every caller of
+// this. Two statements of one rule, and only one of them was true.
+//
+// The split is worth keeping. This is a question about the pair's shape and has
+// one answer: a validator over another type is a method the directive was
+// pointed at, and no naming makes it the right one. Whether the call can be
+// written is a question about scope, has three answers, and one of them is a
+// reason a consumer can act on.
 func sameArgs(m, other Method) bool {
 	a, b := m.CallArgs(), other.CallArgs()
 	if len(a) != len(b) {
@@ -1284,14 +1290,14 @@ func callbackParam(partner Method) (*CallbackSig, bool) {
 // check passed against an implementation ignoring partitions entirely. A check
 // that cannot fail is worse than no check, so a method naming no axis generates
 // nothing rather than something that looks like coverage.
-func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, bool) {
+func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, string) {
 	axis, named := m.MixinParam(MixinPartition, MixinPartitionAxis)
 	if !named {
-		return nil, false
+		return nil, ""
 	}
-	args, spellable := partnerArgs(f, m, read)
-	if !spellable {
-		return nil, false
+	args, why := partnerArgs(f, m, read)
+	if why != "" {
+		return nil, why
 	}
 
 	// One extra per parameter, but only the axis takes its alternate: holding
@@ -1326,7 +1332,7 @@ func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, bool)
 		field, found := f.Field(f.FieldFor(p))
 		if !found || !field.OK() {
 			// No second value is no second write worth making.
-			return nil, false
+			return nil, ""
 		}
 		ident := OtherIdent(p.Name)
 		extra = append(extra, ExtraArg{Name: ident, Field: field.OtherName(), Type: p.Type})
@@ -1342,20 +1348,20 @@ func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, bool)
 		payload = p.Name
 	}
 	if !isAxis {
-		return nil, false
+		return nil, ""
 	}
 
 	if payload == "" {
 		// Every parameter identifies the slot, so the two writes differ in
 		// where they land and in nothing else — there is no value for the read
 		// to be wrong about.
-		return nil, false
+		return nil, ""
 	}
 
 	ck := base(KindPartition, MixinPartition, "IsolatesPartitions", fixtureArgs(f, m, false))
 	ck.Extra, ck.SecondCall, ck.CompareAgainst = extra, second, payload
 	ck.Partner, ck.PartnerArgs = &read, args
-	return ck, true
+	return ck, ""
 }
 
 // OtherIdent names the identifier a check binds a field's alternate to.
@@ -1364,8 +1370,8 @@ func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, bool)
 // `partition` and does not have to look up which of two values is which.
 func OtherIdent(name string) string { return name + OtherSuffix }
 
-// partnerArgs names the identifiers a call to the partner is handed, and
-// whether the check can spell them all.
+// partnerArgs names the identifiers a call to the partner is handed, and says
+// why it could not be spelled where it could not.
 //
 // A generated check receives the *annotated* method's parameters and nothing
 // else, so the partner can only be called with values already in scope. Both
@@ -1373,9 +1379,28 @@ func OtherIdent(name string) string { return name + OtherSuffix }
 // identifier serving both — which is the ordinary case, since a partner
 // observing an effect keyed on something observes it by the same key.
 //
-// Where the partner needs a field the method does not take, the check is not
-// generated: widening its parameter list would give it a signature no other
-// check has, for a shape the corpus does not contain.
+// # The correspondence has to be derivable, not guessed
+//
+// The rule the `partition` mixin states with `axis=`, generalised. That mixin
+// makes eidos reject an axis the partner does not spell identically, because
+// `Put(ctx, partition, key, v)` and `Read(ctx, partition, key)` have two
+// parameters of one type and nothing else distinguishes them — a generator
+// matching by position would silently write a check about the wrong one.
+//
+// Identical spelling is one way to be unambiguous. Being the only parameter of
+// that type is another, and it is the shape the corpus kept losing: a partner
+// declaring `k` where the method declares `key`, at one `string` each, is not
+// ambiguous by any reading, and matching by identifier alone declined it.
+//
+// So the correspondence is derived in two passes — same fixture field first,
+// then sole remaining parameter of the type — and anything the two passes
+// leave undecided is reported rather than dropped. A check that does not exist
+// and a classification that says nothing about why look identical from the
+// output, and the whole tier this sits in is about that resemblance.
+//
+// The widening never reaches across types: a parameter is spelled from one of
+// the method's own, never invented, so a shape the passes decline is one where
+// a check would have had a signature no other check has.
 // teardownShaped reports the one signature "a second call answers the same"
 // can be stated against without a value: context in, error out, nothing else.
 func teardownShaped(m Method) bool {
@@ -1405,20 +1430,84 @@ func spellableBuilder(f Fixture, p Method) bool {
 	return true
 }
 
-func partnerArgs(f Fixture, m, partner Method) ([]string, bool) {
-	byField := map[string]string{}
-	for _, p := range m.CallArgs() {
-		byField[f.FieldFor(p)] = p.Name
+func partnerArgs(f Fixture, m, partner Method) ([]string, string) {
+	args := m.CallArgs()
+	taken := make([]bool, len(args))
+	at := make([]int, len(partner.CallArgs()))
+	for i := range at {
+		at[i] = -1
 	}
-	out := make([]string, 0, len(partner.CallArgs()))
-	for _, p := range partner.CallArgs() {
-		name, found := byField[f.FieldFor(p)]
-		if !found {
-			return nil, false
+
+	// Pass one: the same fixture field on both sides. A bijection over distinct
+	// fields, so it does not matter what order it runs in.
+	for i, p := range partner.CallArgs() {
+		for j, a := range args {
+			if !taken[j] && f.FieldFor(a) == f.FieldFor(p) {
+				at[i], taken[j] = j, true
+				break
+			}
 		}
-		out = append(out, name)
 	}
-	return out, true
+
+	// Pass two: the sole remaining parameter of that type. Candidates are
+	// collected for every unmatched slot before any is consumed, and a
+	// candidate two slots both want settles nothing — so the answer does not
+	// depend on the order the slots are visited, and "unambiguous" means it in
+	// the strong sense.
+	claims := map[int]int{}
+	sole := make([]int, len(at))
+	for i, p := range partner.CallArgs() {
+		sole[i] = -1
+		if at[i] >= 0 {
+			continue
+		}
+		for j, a := range args {
+			if taken[j] || !a.Source.Equal(p.Source) {
+				continue
+			}
+			if sole[i] >= 0 {
+				sole[i] = -2 // several, and the source has not said which
+				break
+			}
+			sole[i] = j
+		}
+		if sole[i] >= 0 {
+			claims[sole[i]]++
+		}
+	}
+
+	out := make([]string, 0, len(at))
+	for i, p := range partner.CallArgs() {
+		switch {
+		case at[i] >= 0:
+		case sole[i] >= 0 && claims[sole[i]] == 1:
+			at[i] = sole[i]
+		default:
+			return nil, whyUnspellable(partner, p, sole[i] == -2 || claims[sole[i]] > 1)
+		}
+		out = append(out, args[at[i]].Name)
+	}
+	return out, ""
+}
+
+// whyUnspellable says what stopped a partner's parameter being matched, in the
+// terms the author can act on.
+//
+// Two failures, and the advice differs. Nothing of that type means the check
+// would have to invent a value, and the fixture is where a consumer supplies
+// one. Several means the correspondence exists and the source has not said
+// which it is — the same ambiguity `partition` settles with `axis=`, and
+// spelling the two parameters alike is what settles it here.
+func whyUnspellable(partner Method, p golang.Param, ambiguous bool) string {
+	if ambiguous {
+		return partner.Name + " takes " + p.Name + ", and more than one of the " +
+			"annotated method's parameters could be it — spell the two alike, the way " +
+			"`partition` requires of its axis, so the correspondence is stated rather " +
+			"than guessed"
+	}
+	return partner.Name + " takes " + p.Name + ", which the annotated method has " +
+		"nothing to fill: a check is handed the annotated method's arguments and " +
+		"nothing else"
 }
 
 // partnerOf resolves a relational mixin's sibling param to the method it names.
@@ -1460,10 +1549,13 @@ func checkFor(c *sdk.Provenance, iface *sdk.Interface, m Method) checkBuilder {
 
 func mixinChecks(
 	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
-) []*Check {
+) ([]*Check, []decline) {
 	base := checkFor(c, iface, m)
 
-	var out []*Check
+	var (
+		out      []*Check
+		declined []decline
+	)
 	if m.HasMixin(MixinNilSafe) && m.HasInput() {
 		// The check supplies its own zeros, so it takes no argument — but it
 		// needs a parameter to zero, and a method taking none has nothing to
@@ -1537,29 +1629,28 @@ func mixinChecks(
 		}
 	}
 	if p := partnerOf(methods, m, MixinPartition, MixinPartitionRead); p != nil {
-		if ck, ok := partitionCheck(f, m, *p, base); ok {
-			out = append(out, ck)
-		}
+		ck, why := partitionCheck(f, m, *p, base)
+		out, declined = keep(out, declined, ck, MixinPartition, why)
 	}
 	if p := partnerOf(methods, m, MixinSideEffect, MixinSideEffectParam); p != nil && p.ReturnsError() {
 		// The observation is the check, so a partner that cannot report its own
 		// failure leaves the comparison unable to tell "unchanged" from "the
 		// observer broke".
-		if args, spellable := partnerArgs(f, m, *p); spellable {
-			ck := base(KindSideEffect, MixinSideEffect, "HasAnObservableEffect", fixtureArgs(f, m, false))
+		args, why := partnerArgs(f, m, *p)
+		var ck *Check
+		if why == "" {
+			ck = base(KindSideEffect, MixinSideEffect, "HasAnObservableEffect", fixtureArgs(f, m, false))
 			ck.Partner, ck.PartnerArgs = p, args
-			out = append(out, ck)
 		}
+		out, declined = keep(out, declined, ck, MixinSideEffect, why)
 	}
 	if p := partnerOf(methods, m, MixinValidates, MixinValidatesParam); p != nil {
-		if ck, ok := agreementCheck(f, m, *p, base); ok {
-			out = append(out, ck)
-		}
+		ck, why := agreementCheck(f, m, *p, base)
+		out, declined = keep(out, declined, ck, MixinValidates, why)
 	}
 	if p := partnerOf(methods, m, MixinWrappedVia, MixinWrappedViaParam); p != nil {
-		if ck, ok := wrappingCheck(f, m, *p, base); ok {
-			out = append(out, ck)
-		}
+		ck, why := wrappingCheck(f, m, *p, base)
+		out, declined = keep(out, declined, ck, MixinWrappedVia, why)
 	}
 	if p := m.MixinPartner(MixinOrderAfter, MixinOrderAfterParam); p != "" && m.ReturnsError() {
 		// ReturnsError because the claim is that calling early *fails*, and a
@@ -1569,7 +1660,35 @@ func mixinChecks(
 		ck.Sentinel = stampedSentinel(m, shape.MixinParamKey(MixinOrderAfter, "unready"))
 		out = append(out, ck)
 	}
-	return out
+	return out, declined
+}
+
+// decline is one check a classification earned and the derivation could not
+// write, with the reason in terms its author can act on.
+//
+// Unexported and never rendered. The generated header already names every
+// classification nothing checks — what it cannot say is why, because the
+// header is read long after the run that could have explained it. The reason
+// belongs where [reportUnchecked] puts its own: in the run's diagnostics,
+// beside the source position that caused it.
+type decline struct{ classification, why string }
+
+// keep files a selector's answer under its classification: the check where one
+// was derived, the reason where one was not, and neither where the shape
+// simply does not carry the claim.
+//
+// Both slices in and both out, so a call site reads as one statement. Six
+// selectors return this pair and an `if ck != nil { … } else if why != "" { … }`
+// at each of them is six chances to write the second half wrong — which is how
+// the reasons went missing in the first place.
+func keep(out []*Check, declined []decline, ck *Check, classification, why string) ([]*Check, []decline) {
+	switch {
+	case ck != nil:
+		out = append(out, ck)
+	case why != "":
+		declined = append(declined, decline{classification: classification, why: why})
+	}
+	return out, declined
 }
 
 // stampedSentinel lifts a classification's declared refusal sentinel into a

@@ -357,8 +357,11 @@ func withChecks(
 		kept := make([]*Check, 0, 6)
 		family := signatureChecks(c, iface, f, m)
 		family = append(family, detectorChecks(c, iface, f, m, methods)...)
-		family = append(family, mixinChecks(c, iface, f, m, methods)...)
-		family = append(family, contractChecks(c, iface, f, m, methods)...)
+		mixed, declined := mixinChecks(c, iface, f, m, methods)
+		contracted, contractDeclines := contractChecks(c, iface, f, m, methods)
+		family = append(family, mixed...)
+		family = append(family, contracted...)
+		reportDeclined(ctx, iface, m, append(declined, contractDeclines...))
 		for _, ck := range family {
 			if missing, field, ok := undeliverable(f, ck); ok {
 				ctx.Diag.Warnf(iface.Pos(),

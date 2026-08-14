@@ -131,14 +131,34 @@ func TestIfMatchCheck(t *testing.T) {
 			"a predicate taking more than the writer does is one the check cannot call")
 	})
 
-	t.Run("emits nothing where the predicate names its parameter differently", func(t *testing.T) {
+	t.Run("emits the check where the predicate merely names its parameter differently", func(t *testing.T) {
 		t.Parallel()
-		// Matching types are not enough. The fixture keys a field on the
-		// parameter's name as well as its type, so `Match(ctx, candidate
-		// Value)` beside `Put(ctx, v Value)` resolves to a field the check was
-		// not handed — and calling it would name a value not in scope.
-		testkit.False(t, hasCheckIn(t, ifMatchRenamedParamFixture(t), "Put", "if-match"),
-			"a predicate naming its parameter differently reaches a field the check does not hold")
+		// This used to emit nothing, on the grounds that the fixture keys a
+		// field on the parameter's name as well as its type — so `Match(ctx,
+		// candidate Value)` beside `Put(ctx, v Value)` resolved to a field the
+		// check was not handed.
+		//
+		// The premise was wrong. The check is handed `v`, and `v` is the only
+		// parameter of that type, so `Match(ctx, v)` names a value in scope and
+		// says exactly what the contract does. What the old rule actually
+		// required was identical spelling, which is a stronger condition than
+		// the one that makes the call writable.
+		testkit.True(t, hasCheckIn(t, ifMatchRenamedParamFixture(t), "Put", "if-match"),
+			"one parameter of the type is one candidate, and no guess is involved")
+	})
+
+	t.Run("emits nothing where two parameters could be the predicate's", func(t *testing.T) {
+		t.Parallel()
+		// The condition that replaced identical spelling. `Put(ctx, from, to
+		// Value)` beside `Match(ctx, a, b Value)` has two candidates per slot and
+		// nothing choosing between them, so a generated call would be a check
+		// about whichever end the derivation happened to visit first.
+		//
+		// This is the ambiguity `partition` settles with `axis=`, arriving on a
+		// contract that has no such key — so the answer is to decline and say
+		// why, which [TestPartnerArgs] pins the wording of.
+		testkit.False(t, hasCheckIn(t, ifMatchAmbiguousParamFixture(t), "Put", "if-match"),
+			"two candidates of one type is a correspondence the source has not stated")
 	})
 }
 
@@ -407,6 +427,31 @@ func ifMatchRenamedParamFixture(t *testing.T) *sdk.Store {
 		i.Method("Match", func(m *storefixture.MethodBuilder) {
 			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
 			m.Param("candidate", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Return(storefixture.Named("bool"))
+		})
+	})
+	stampContract(s, "Put", suite.ContractIfMatch, suite.ContractIfMatchRole)
+	stampContractPartner(s, "Put", suite.ContractIfMatch, suite.ContractIfMatchMatch, "Match")
+	return s
+}
+
+// ifMatchAmbiguousParamFixture gives the writer two parameters of the
+// predicate's type, so nothing in the source says which one it is about.
+func ifMatchAmbiguousParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	s := valueStore(t, func(i *storefixture.InterfaceBuilder) {
+		i.Method("Put", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("from", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Param("to", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Return(storefixture.Named("error"))
+		})
+		// Same arity and the same types in the same order, so the predicate
+		// passes every structural test and only the correspondence is open.
+		i.Method("Match", func(m *storefixture.MethodBuilder) {
+			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			m.Param("a", storefixture.PkgNamed("example.com/box", "Value"))
+			m.Param("b", storefixture.PkgNamed("example.com/box", "Value"))
 			m.Return(storefixture.Named("bool"))
 		})
 	})

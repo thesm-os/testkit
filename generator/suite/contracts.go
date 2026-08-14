@@ -117,20 +117,21 @@ func (m Method) ContractPartner(contract, role string) string {
 // is asking about the catalogue and not about this function.
 func contractChecks(
 	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
-) []*Check {
+) ([]*Check, []decline) {
 	base := checkFor(c, iface, m)
 
-	var out []*Check
+	var (
+		out      []*Check
+		declined []decline
+	)
 	if ck, ok := ifAbsentCheck(f, m, base); ok {
 		out = append(out, ck)
 	}
-	if ck, ok := ifMatchCheck(f, m, methods, base); ok {
-		out = append(out, ck)
-	}
-	if ck, ok := outboxCheck(f, m, methods, base); ok {
-		out = append(out, ck)
-	}
-	return out
+	ck, why := ifMatchCheck(f, m, methods, base)
+	out, declined = keep(out, declined, ck, ContractIfMatch, why)
+	ck, why = outboxCheck(f, m, methods, base)
+	out, declined = keep(out, declined, ck, ContractOutbox, why)
+	return out, declined
 }
 
 // ifAbsentCheck builds "a second write for one key is refused".
@@ -174,22 +175,22 @@ func ifAbsentCheck(f Fixture, m Method, base checkBuilder) (*Check, bool) {
 // This reads the role. A check has to *call* the predicate, and an expression
 // is not something a generated call site can spell — so the param form is a
 // declaration the model tier can act on and this one cannot.
-func ifMatchCheck(f Fixture, m Method, methods []Method, base checkBuilder) (*Check, bool) {
+func ifMatchCheck(f Fixture, m Method, methods []Method, base checkBuilder) (*Check, string) {
 	if !m.HasContractRole(ContractIfMatch, ContractIfMatchRole) {
-		return nil, false
+		return nil, ""
 	}
 	p := methodNamed(methods, m.ContractPartner(ContractIfMatch, ContractIfMatchMatch))
 	if p == nil || !m.ReturnsError() || !predicateOver(m, *p) {
-		return nil, false
+		return nil, ""
 	}
-	args, spellable := partnerArgs(f, m, *p)
-	if !spellable {
-		return nil, false
+	args, why := partnerArgs(f, m, *p)
+	if why != "" {
+		return nil, why
 	}
 
 	ck := base(KindIfMatch, ContractIfMatch, "AgreesWith"+p.Name, fixtureArgs(f, m, false))
 	ck.Partner, ck.PartnerArgs = p, args
-	return ck, true
+	return ck, ""
 }
 
 // predicateOver reports whether p answers a yes-or-no question about the very
@@ -227,23 +228,23 @@ func predicateOver(m, p Method) bool {
 // would still deliver the seed's and pass. Demanding two arrive is what makes
 // the seed's copy insufficient — and it holds for a consumer who replaced the
 // seed with one that appends nothing, since the check writes both itself.
-func outboxCheck(f Fixture, m Method, methods []Method, base checkBuilder) (*Check, bool) {
+func outboxCheck(f Fixture, m Method, methods []Method, base checkBuilder) (*Check, string) {
 	if !m.HasContractRole(ContractOutbox, ContractOutboxRole) {
-		return nil, false
+		return nil, ""
 	}
 	p := methodNamed(methods, m.ContractPartner(ContractOutbox, ContractOutboxPartner))
 	if p == nil || !deliversOver(m, *p) {
-		return nil, false
+		return nil, ""
 	}
-	args, spellable := partnerArgs(f, m, *p)
-	if !spellable {
-		return nil, false
+	args, why := partnerArgs(f, m, *p)
+	if why != "" {
+		return nil, why
 	}
 
 	ck := base(KindOutbox, ContractOutbox, "ReachesASubscriber", fixtureArgs(f, m, false))
 	ck.Partner, ck.PartnerArgs = p, args
 	ck.NeedsClock = true
-	return ck, true
+	return ck, ""
 }
 
 // deliversOver reports whether p hands back a stream of the very thing m
