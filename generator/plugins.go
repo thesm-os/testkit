@@ -15,6 +15,7 @@ import (
 	"go.thesmos.sh/testkit/generator/enum"
 	"go.thesmos.sh/testkit/generator/fault"
 	"go.thesmos.sh/testkit/generator/model"
+	"go.thesmos.sh/testkit/generator/prescreen"
 	"go.thesmos.sh/testkit/generator/sentinel"
 	"go.thesmos.sh/testkit/generator/stub"
 	"go.thesmos.sh/testkit/generator/suite"
@@ -65,7 +66,54 @@ func Annotator() *shape.Plugin { return full.New() }
 // one whose members contradict each other, passes. Neither shows up in a
 // coverage gate: the declaring side stamps the classification either way.
 func Annotators() []sdk.Annotator {
+	return append(baseAnnotators(), prescreen.New(DirectiveSchemas()))
+}
+
+// baseAnnotators is every annotator that owns a directive schema — which is
+// every annotator except the pre-screen.
+//
+// Split out because the pre-screen has to be handed the schemas the run
+// registers, and composing them from [Annotators] would ask this function for
+// its own result. The split is what makes that impossible rather than merely
+// unwritten.
+func baseAnnotators() []sdk.Annotator {
 	return append(Annotator().Annotators(), defaults.New(), fault.New())
+}
+
+// DirectiveSchemas returns every directive schema this build's plugins
+// declare, in no particular order.
+//
+// Composed from the same two lists the pipeline is built from rather than
+// written out, so a plugin gaining a directive is screened by the pre-screen in
+// the same build that makes it stampable. A hand-kept list would go stale in
+// the one direction that matters: a newly declared directive would be reported
+// as unknown on every source that used it correctly.
+//
+// The framework's own directives are not here. The pipeline registers those
+// itself from an unexported table, so [prescreen.New] names them.
+func DirectiveSchemas() []sdk.DirectiveSchema {
+	var out []sdk.DirectiveSchema
+	for _, a := range baseAnnotators() {
+		out = append(out, schemasOf(a)...)
+	}
+	for _, g := range Generators() {
+		out = append(out, schemasOf(g)...)
+	}
+	return out
+}
+
+// schemasOf returns a plugin's declared directive schemas, empty for one that
+// declares none.
+//
+// The capability is optional and detected by assertion, which is eidos's
+// convention throughout: a plugin that owns no directive simply does not
+// implement the interface.
+func schemasOf(p sdk.Plugin) []sdk.DirectiveSchema {
+	provider, declares := p.(sdk.DirectiveProvider)
+	if !declares {
+		return nil
+	}
+	return provider.Directives()
 }
 
 // Generators returns the generator plugins this build carries.
