@@ -20,6 +20,19 @@ func (l *logRecorder) Logf(format string, args ...any) {
 	l.lines = append(l.lines, fmt.Sprintf(format, args...))
 }
 
+// decline drives the sequence the runner drives: the caller counts the check,
+// then the vacuous arm counts the decline.
+//
+// Driving noteVacuous alone is what let the defect this guards live. It used
+// to increment ran itself, so a test calling it in isolation saw ran == vacuous
+// and a passing warning, while production — where the caller had already
+// counted the check — saw ran == 2*vacuous and could never warn at all. The
+// test exercised a call sequence no runner performs.
+func decline[T any](r *Registry[T], rec *logRecorder, id string) {
+	r.ran[id]++
+	r.noteVacuous(rec, id)
+}
+
 // The vacuity census warns exactly once, and only for a law vacuous on every
 // check past the floor: sixty vacuous returns beside one real pass are a
 // subject that sometimes refuses, not a binding that asserts nothing.
@@ -31,7 +44,7 @@ func TestNoteVacuousWarnsOnceAtTheFloor(t *testing.T) {
 		r := NewRegistry[int]()
 		rec := &logRecorder{}
 		for range vacuityFloor + 50 {
-			r.noteVacuous(rec, "LAW-A")
+			decline(r, rec, "LAW-A")
 		}
 		if len(rec.lines) != 1 {
 			t.Fatalf("the census warns exactly once, got %d warnings", len(rec.lines))
@@ -46,7 +59,7 @@ func TestNoteVacuousWarnsOnceAtTheFloor(t *testing.T) {
 		r := NewRegistry[int]()
 		rec := &logRecorder{}
 		for range vacuityFloor - 1 {
-			r.noteVacuous(rec, "LAW-B")
+			decline(r, rec, "LAW-B")
 		}
 		if len(rec.lines) != 0 {
 			t.Fatalf("under the floor is not a census finding, got %d warnings", len(rec.lines))
@@ -59,10 +72,30 @@ func TestNoteVacuousWarnsOnceAtTheFloor(t *testing.T) {
 		rec := &logRecorder{}
 		r.ran["LAW-C"]++ // one real, engaged check before the vacuous run
 		for range vacuityFloor + 1 {
-			r.noteVacuous(rec, "LAW-C")
+			decline(r, rec, "LAW-C")
 		}
 		if len(rec.lines) != 0 {
 			t.Fatalf("a law that engaged once is not all-vacuous, got %d warnings", len(rec.lines))
+		}
+	})
+
+	// The regression guard. Every counter the warning reads must agree after
+	// the runner's own sequence, because the two that disagreed were exactly
+	// the two this condition compares.
+	t.Run("the runner's sequence leaves ran and vacuous equal", func(t *testing.T) {
+		t.Parallel()
+		r := NewRegistry[int]()
+		rec := &logRecorder{}
+		for range 10 {
+			decline(r, rec, "LAW-D")
+		}
+		c := r.Census()["LAW-D"]
+		if c.Ran != 10 || c.Vacuous != 10 {
+			t.Fatalf("ten declined checks are ten runs and ten declines, got ran=%d vacuous=%d",
+				c.Ran, c.Vacuous)
+		}
+		if c.Engaged() {
+			t.Fatal("a law declined on every check has not engaged")
 		}
 	})
 }

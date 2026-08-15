@@ -4,7 +4,7 @@
 package model
 
 import (
-	"maps"
+	"errors"
 	"slices"
 
 	"pgregory.net/rapid"
@@ -53,8 +53,15 @@ const vacuityFloor = 200
 // noteVacuous records a check the subject declined, and says a law's name
 // once per run when every single check so far declined — the not-applicable
 // census RFC-0003 commissions, surfaced where a reader is already looking.
+//
+// The caller owns the ran counter. This used to increment it too, which made
+// ran exactly twice vacuous on the sequential path and so made the all-vacuous
+// condition below — vacuous == ran — unsatisfiable. The warning could not fire
+// on the one path that runs for nearly every generated suite: a law asserting
+// nothing on every draw, inside the counter built to catch it. The other two
+// vacuity paths always incremented vacuous directly and were never wrong; this
+// now matches them.
 func (r *Registry[T]) noteVacuous(rt interface{ Logf(string, ...any) }, id string) {
-	r.ran[id]++
 	r.vacuous[id]++
 	if !r.warned[id] && r.vacuous[id] >= vacuityFloor && r.vacuous[id] == r.ran[id] {
 		r.warned[id] = true
@@ -122,28 +129,26 @@ func (r *Registry[T]) Laws() []law.Law[T] {
 	return slices.Clone(r.laws)
 }
 
-// CheckAll runs every registered law. Returns the first error.
+// CheckAll runs every registered law. Returns the first violation.
+//
+// A law that returns [law.Vacuous] declined the draw rather than finding a
+// violation, so it is counted apart and the walk continues. Folding it into
+// the fired count — which this did — reports a law that checked nothing as a
+// law that caught something, which is backwards in the direction that hides
+// work rather than the direction that creates it.
 func (r *Registry[T]) CheckAll(rt *rapid.T, sut, ref T) error {
 	r.sayDeclined(rt)
 	for _, l := range r.laws {
 		r.ran[l.ID()]++
 		err := l.Check(rt, sut, ref)
+		if errors.Is(err, law.Vacuous) {
+			r.noteVacuous(rt, l.ID())
+			continue
+		}
 		if err != nil {
 			r.fired[l.ID()]++
 			return err
 		}
 	}
 	return nil
-}
-
-// Coverage returns (ran, fired) counts per law ID. Use to detect:
-//   - Laws that never ran (misconfigured).
-//   - Laws that ran but never fired (possibly too weak).
-//   - Laws that always fired (possibly too strict or broken SUT).
-func (r *Registry[T]) Coverage() (ran, fired map[string]int) {
-	ranCp := make(map[string]int, len(r.ran))
-	maps.Copy(ranCp, r.ran)
-	firedCp := make(map[string]int, len(r.fired))
-	maps.Copy(firedCp, r.fired)
-	return ranCp, firedCp
 }

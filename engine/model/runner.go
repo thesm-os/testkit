@@ -193,16 +193,16 @@ type Config[T any] struct {
 // linearizability runner instead of the sequential property.
 //
 // Use -rapid.checks=N to control iteration count (default 100).
-func Run[T any](t rapid.TB, cfg Config[T]) {
+func Run[T any](t rapid.TB, cfg Config[T]) Outcome {
 	t.Helper()
-	dispatch(t, cfg)
+	return dispatch(t, cfg)
 }
 
 // dispatch is the shared entry point for [Run] and [Assert]. Routes
 // to the sequential or concurrent runner based on [Config.Concurrent]
 // and rejects unsupported combinations rather than silently dropping
 // configuration.
-func dispatch[T any](t rapid.TB, cfg Config[T]) {
+func dispatch[T any](t rapid.TB, cfg Config[T]) Outcome {
 	t.Helper()
 	if cfg.Concurrent != nil {
 		// Laws + concurrent execution is currently unsupported: laws
@@ -224,9 +224,10 @@ func dispatch[T any](t rapid.TB, cfg Config[T]) {
 			}
 		}
 		runConcurrent(t, cfg)
-		return
+		return outcomeOf(cfg.Laws)
 	}
 	rapid.Check(t, propertyFromConfig(cfg))
+	return outcomeOf(cfg.Laws)
 }
 
 // Property builds the rapid property function from a factory and options
@@ -405,7 +406,7 @@ func propertyFromConfig[T any](cfg Config[T]) func(*rapid.T) {
 					// and the shared pair must never meet it.
 					continue
 				}
-				cfg.Laws.ran[l.ID()]++
+				cfg.Laws.ran[l.ID()]++ // vacuity is counted apart, in noteVacuous
 				var err error
 				if sl, ok := l.(law.StatefulLaw[T]); ok {
 					err = sl.CheckWithStep(rt, sut, ref, step)
@@ -589,13 +590,13 @@ func shouldAttachTrace(k FailureKind) bool {
 // options and delegates to [Run] — the dispatcher is shared so the
 // two entry points are observably identical (Concurrent dispatch,
 // Laws validation, defaulting).
-func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) {
+func Assert[T any](t rapid.TB, sutFactory func() T, opts ...Option[T]) Outcome {
 	t.Helper()
 	cfg := Config[T]{SUTFactory: sutFactory}
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	dispatch(t, cfg)
+	return dispatch(t, cfg)
 }
 
 // tagLaw wraps a law with a REQ ID override, keeping whatever the wrapped

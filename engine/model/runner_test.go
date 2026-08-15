@@ -349,31 +349,37 @@ func TestRegistryCheckAll(t *testing.T) {
 	})
 }
 
-func TestRegistryCoverage(t *testing.T) {
+func TestRegistryCensus(t *testing.T) {
 	t.Parallel()
 
 	r := model.NewRegistry[storeIface]()
 	r.Add(law.CountEqualsReference[storeIface, int]{
 		Count: func(rt *rapid.T, s storeIface) (int, error) { return s.Count(rt.Context()) },
 	})
-	// Run CheckAll to populate coverage counters.
+	// Run CheckAll to populate the counters.
 	rapid.Check(t, func(rt *rapid.T) {
 		sut := newStore()
 		ref := newStore()
 		_ = r.CheckAll(rt, sut, ref)
 	})
-	ran, fired := r.Coverage()
-	if ran["AUTO-COUNT-EQUALS-REFERENCE"] == 0 {
+
+	const id = "AUTO-COUNT-EQUALS-REFERENCE"
+	c := r.Census()[id]
+	if c.Ran == 0 {
 		t.Fatal("law must have run at least once")
 	}
-	if fired["AUTO-COUNT-EQUALS-REFERENCE"] != 0 {
+	if c.Fired != 0 {
 		t.Fatal("law must not have fired on identical stores")
 	}
+	if !c.Engaged() {
+		t.Fatal("a law that ran and was never declined has engaged")
+	}
+
 	// Verify defensive copies.
-	ran["MUTATED"] = 99
-	ran2, _ := r.Coverage()
-	if ran2["MUTATED"] == 99 {
-		t.Fatal("Coverage must return defensive copies")
+	m := r.Census()
+	m["MUTATED"] = model.LawCensus{Ran: 99}
+	if _, leaked := r.Census()["MUTATED"]; leaked {
+		t.Fatal("Census must return a fresh map")
 	}
 }
 
