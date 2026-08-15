@@ -28,7 +28,7 @@ const Capability = "model"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "0.62.0"
+const Version = "0.63.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -558,6 +558,23 @@ type SatLaw struct {
 	// divergence — for the one law that is the differential restated, whose
 	// violation the actions catch before the law can speak.
 	AcceptSemantic bool
+
+	// Proves names the wear kinds whose defect class this law's identifier
+	// claims to catch, sorted. Empty where the wardrobe produces none of
+	// them.
+	//
+	// The criterion this prover was missing. Its question was whether *some*
+	// defect made the law fail, which every law answers yes to — a Put that
+	// does nothing breaks every claim about what a Put leaves behind, and
+	// `AUTO-CAS-ATOMIC-ONE-WINNER` was green on exactly that, a law about two
+	// writers contending proved by a subject with no writer at all.
+	//
+	// So the loop skips a wear this law's name never mentions, and a law with
+	// none skips outright with the reason. That second answer is the one the
+	// old criterion could not give: "the wardrobe cannot produce the defect
+	// this law is named for" is a gap in the wardrobe, and it is worth telling
+	// apart from a law that survived defects it should have caught.
+	Proves []string
 }
 
 // SatMutant is one wearable defect: a method answered wrongly in one of

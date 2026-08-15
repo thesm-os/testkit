@@ -126,6 +126,14 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 		t.Skip("a clocked law's factory builds its own subjects on the run's clock; a worn defect never reaches it")
 {{- else if .Unwearable }}
 		t.Skip("the law closes over no method a defect can wear — its closures are doors and traces")
+{{- else if not .Proves }}
+		// Not a survival, and the distinction is the whole point of the
+		// defect-class axis. This law's name promises a defect the wardrobe
+		// cannot produce — every dressing here acts on what a call answers,
+		// and a partial effect or a retained resource is not an answer. The
+		// gap is in the wardrobe, and conformance/gate.UnprovableLaws is where
+		// it is argued and counted.
+		t.Skip("no wear produces the defect {{ .ID }} is named for; the wardrobe owes it one")
 {{- else }}
 {{- range .Guards }}
 		if cfg.{{ . }} == nil {
@@ -186,6 +194,13 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 		if !killed {
 			t.Errorf("{{ .ID }} survived every defect worn on its own methods — bound but unsaturatable")
 		}
+		// Not yet narrowed to this law's own defect class. The wears whose
+		// class its name claims are
+		// {{ range $i, $k := .Proves }}{{ if $i }}, {{ end }}{{ $k }}{{ end }} — requiring the kill to come from one
+		// of those reddens 23 laws across the corpus, and the measurement says
+		// roughly a third are weak laws and the rest are wrong classes. That
+		// triage is 1.10b. What ships here is the skip above, which is the
+		// half the measurement settled.
 {{- end }}
 	})
 {{- end }}

@@ -562,6 +562,11 @@ func saturationOf(b *Bindings, harness *suite.Contract) {
 		slices.Sort(sl.Methods)
 		sl.Unwearable = len(sl.Methods) == 0
 		sl.AcceptSemantic = lb.ID == lawid.CountEqualsReference
+		for _, kind := range Wardrobe() {
+			if Proves(kind, lb.ID) {
+				sl.Proves = append(sl.Proves, kind)
+			}
+		}
 		b.SatLaws = append(b.SatLaws, sl)
 		for _, name := range sl.Methods {
 			if !worn[name] {
