@@ -29,12 +29,27 @@ bootstrap:
   # deterministic; leave empty to track `@latest` for every tool
   # (the local dev default). A pinned entry for an unknown
   # package is silently ignored.
-  pinned: {}
-  # Example (uncomment + adjust):
-  #   pinned:
-  #     mvdan.cc/gofumpt: v0.6.0
-  #     github.com/daixiang0/gci: v0.13.5
-  #     github.com/golangci/golangci-lint/v2/cmd/golangci-lint: v2.0.0
+  #
+  # Pinned rather than tracking @latest, because the two ends of the gate
+  # stopped agreeing. `make bootstrap` reinstalls every tool at @latest, and a
+  # local bootstrap run — needed after the go1.26.6 bump, since gobco had a
+  # GOROOT baked in from install time and panicked on a path that no longer
+  # existed — moved benchstat, gremlins and gobco underneath a CI that
+  # installs its own. A gate whose tools differ between the machine that
+  # reddens it and the machine that clears it is a gate nobody can act on.
+  #
+  # Every version here is the one @latest resolved to on 2026-08-15 and the
+  # one the suite is green against. Bumping is a deliberate edit with a run
+  # behind it, which is the point.
+  pinned:
+    mvdan.cc/gofumpt: v0.11.0
+    github.com/daixiang0/gci: v0.14.0
+    github.com/golangci/golangci-lint/v2/cmd/golangci-lint: v2.12.2
+    golang.org/x/vuln/cmd/govulncheck: v1.7.0
+    github.com/palantir/go-license: v1.45.0
+    golang.org/x/perf/cmd/benchstat: v0.0.0-20260813145340-fd4a688df892
+    github.com/go-gremlins/gremlins/cmd/gremlins: v0.6.0
+    github.com/rillig/gobco: v1.3.4
 
 # license — `ergon license` (apply) and `ergon lint license` (verify)
 license:
