@@ -9,6 +9,7 @@ import (
 	"maps"
 	"slices"
 
+	"go.thesmos.sh/eidos/pipeline"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/suite"
@@ -68,7 +69,12 @@ func Evidenced(ctx context.Context, root string, patterns ...string) ([]Evidence
 	if err != nil {
 		return nil, err
 	}
+	return evidenceFrom(pipe), nil
+}
 
+// evidenceFrom reads the per-classification verdicts off a store the corpus
+// already ran against. Split from [Evidenced] for [Measure]'s sake.
+func evidenceFrom(pipe *pipeline.Pipeline) []Evidence {
 	checked, modeled := map[string]string{}, map[string]string{}
 	for origin, c := range sdk.PendingByOrigin[*suite.Contract](pipe.Store().Emit()) {
 		where := c.IfaceName
@@ -114,7 +120,7 @@ func Evidenced(ctx context.Context, root string, patterns ...string) ([]Evidence
 		}
 		return cmp.Compare(a.Name, b.Name)
 	})
-	return out, nil
+	return out
 }
 
 // Unevidenced returns the classifications no tier asserts and no row argues,
@@ -152,4 +158,32 @@ func ArguedButEvidenced(all []Evidence) []string {
 	}
 	slices.Sort(out)
 	return out
+}
+
+// Census is everything one corpus run measures.
+type Census struct {
+	// Emitted is what each armed interface bound, and Evidence what each
+	// registered classification is asserted by.
+	Emitted  []Emitted
+	Evidence []Evidence
+}
+
+// Measure runs the corpus once and reads every census off the same store.
+//
+// One run rather than one per question, and the reason is not only speed.
+// `go/types` resolves an Alias through an unsynchronized memoization, and the
+// package loader is concurrent — so every additional full corpus load is
+// another chance for the race detector to pair two accesses to it. The gate's
+// TestMain pins GOMAXPROCS to 1 to narrow that window; narrowing a window is
+// not the same as closing it, and the exposure scales with how many times the
+// corpus is loaded.
+//
+// It had grown to six independent loads. This is the one seam where that count
+// is decided, so it is decided here.
+func Measure(ctx context.Context, root string, patterns ...string) (Census, error) {
+	pipe, err := runCorpus(ctx, root, patterns, corpusGenerators())
+	if err != nil {
+		return Census{}, err
+	}
+	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom(pipe)}, nil
 }

@@ -4,9 +4,7 @@
 package gate_test
 
 import (
-	"context"
 	"strings"
-	"sync"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -20,10 +18,12 @@ import (
 // tests asking the same question three times would triple the slowest thing in
 // this package for no additional truth.
 //
-//nolint:gochecknoglobals // memoized measurement, test-only.
-var evidenceOnce = sync.OnceValues(func() ([]gate.Evidence, error) {
-	return gate.Evidenced(context.Background(), corpusRoot, "./corpus/...")
-})
+// evidenceOnce reads the package's single corpus run — see censusOnce for why
+// there is only one.
+func evidenceOnce() ([]gate.Evidence, error) {
+	census, err := censusOnce()
+	return census.Evidence, err
+}
 
 // Every classification eidos ships is asserted by a tier or argued by a row.
 //
@@ -181,4 +181,40 @@ func TestArguedButEvidencedSelects(t *testing.T) {
 	testkit.Equal(t, strings.Join(gate.ArguedButEvidenced(all), ", "), "scope",
 		"a row whose classification a tier now asserts is stale; one still unevidenced is not, "+
 			"and a classification with no row is not the register's business")
+}
+
+// The two single-purpose entry points work on their own.
+//
+// [gate.Measure] runs the corpus once for the whole package, so the narrower
+// [gate.Evidenced] and [gate.Emission] stopped being called on the happy path
+// the moment that landed — and an entry point nothing exercises is one that
+// compiles and nothing else. They are the honest way to ask one question, so
+// they are asked here, over a single fixture rather than the corpus: the point
+// is that the entry point answers, not that it answers about everything.
+func TestSinglePurposeEntryPointsAnswer(t *testing.T) {
+	t.Parallel()
+
+	one := "./corpus/iface/mixin/monotonic"
+
+	evidence, err := gate.Evidenced(t.Context(), corpusRoot, one)
+	testkit.NoError(t, err, "Evidenced runs over one fixture")
+	testkit.True(t, len(evidence) > 0, "and reports the whole registry, measured against it")
+
+	census, err := gate.Measure(t.Context(), corpusRoot, one)
+	testkit.NoError(t, err, "Measure runs over one fixture")
+	testkit.Equal(t, len(census.Evidence), len(evidence),
+		"and its evidence half is what Evidenced answers alone")
+	testkit.True(t, len(census.Emitted) > 0, "with the bindings read off the same run")
+}
+
+// A census run that cannot start is reported, never measured as empty.
+//
+// [Measure]'s own arm. The two narrower entry points each have one and this is
+// the third — an empty census read as "nothing is owed" would silence every
+// register in this package at once.
+func TestMeasureSurfacesARunFailure(t *testing.T) {
+	t.Parallel()
+
+	_, err := gate.Measure(t.Context(), corpusRoot, "./corpus/definitely-not-here/...")
+	testkit.True(t, err != nil, "a failed run reports, never measures empty")
 }

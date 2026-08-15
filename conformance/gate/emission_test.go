@@ -25,6 +25,20 @@ type assertionState struct {
 	err   error
 }
 
+// censusOnce is the single corpus run every measurement in this package reads.
+//
+// One run rather than one per question. `go/types` memoizes an Alias without
+// synchronization and the package loader is concurrent, so each full corpus
+// load is another chance for the detector to pair two accesses to it — the
+// GOMAXPROCS pin in TestMain narrows that window and does not close it. This
+// package had grown to six independent loads and a -race run found the race
+// they add up to.
+//
+//nolint:gochecknoglobals // memoized measurement, test-only.
+var censusOnce = sync.OnceValues(func() (gate.Census, error) {
+	return gate.Measure(context.Background(), corpusRoot, "./corpus/...")
+})
+
 //nolint:gochecknoglobals // memoized measurement, test-only.
 var assertionOnce = sync.OnceValue(func() assertionState {
 	s := assertionState{owed: map[string]bool{}, bound: map[string]bool{}}
@@ -33,7 +47,8 @@ var assertionOnce = sync.OnceValue(func() assertionState {
 		s.err = err
 		return s
 	}
-	emitted, err := gate.Emission(context.Background(), corpusRoot, "./corpus/...")
+	census, err := censusOnce()
+	emitted := census.Emitted
 	if err != nil {
 		s.err = err
 		return s

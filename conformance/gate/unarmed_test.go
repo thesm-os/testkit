@@ -53,7 +53,8 @@ func consumerText(t *testing.T, dir string) string {
 func TestEveryDoorIsArmedOrArgued(t *testing.T) {
 	t.Parallel()
 
-	emitted, err := gate.Emission(t.Context(), corpusRoot, "./corpus/...")
+	census, err := censusOnce()
+	emitted := census.Emitted
 	testkit.NoError(t, err, "the emission census runs")
 
 	seen := map[string]bool{}
@@ -110,7 +111,8 @@ func TestEveryDoorIsArmedOrArgued(t *testing.T) {
 func TestStampedMissIdentityReachesTheSequences(t *testing.T) {
 	t.Parallel()
 
-	emitted, err := gate.Emission(t.Context(), corpusRoot, "./corpus/...")
+	census, err := censusOnce()
+	emitted := census.Emitted
 	testkit.NoError(t, err, "the emission census runs")
 
 	for _, e := range emitted {

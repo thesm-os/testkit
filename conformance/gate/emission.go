@@ -79,7 +79,16 @@ func Emission(ctx context.Context, root string, patterns ...string) ([]Emitted, 
 	if err != nil {
 		return nil, err
 	}
+	return emittedFrom(pipe), nil
+}
 
+// emittedFrom reads the bindings back off a store the corpus already ran
+// against.
+//
+// Split from [Emission] so [Measure] can read it off the same run as the
+// evidence census. See that function for why the number of runs is worth
+// caring about.
+func emittedFrom(pipe *pipeline.Pipeline) []Emitted {
 	out := make([]Emitted, 0, 128)
 	for origin, b := range sdk.PendingByOrigin[*model.Bindings](pipe.Store().Emit()) {
 		e := Emitted{Fixture: b.IfaceName, IfaceName: b.IfaceName, Twin: b.Reference.Twin()}
@@ -116,7 +125,7 @@ func Emission(ctx context.Context, root string, patterns ...string) ([]Emitted, 
 		out = append(out, e)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Fixture < out[j].Fixture })
-	return out, nil
+	return out
 }
 
 // runCorpus builds the pipeline the CLI runs, against a memory sink, and runs
