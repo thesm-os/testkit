@@ -509,12 +509,17 @@ type VacuityRow struct {
 // fatal, which is what testing an assertion helper looks like. Removing them
 // would mean removing the tests.
 //
-// The other two are debt with a named fix, and the detector is what found
-// them. Nothing in this programme's first eleven items named the recorded-call
-// check: it hands the double zero arguments and then asserts the recording
-// carries them, which passes against a recorder that stores nothing. That is
-// 1.5's defect one field over — 1.5 pinned what `Returns` answers, and the
-// arguments a call records were never looked at.
+// The other two are what remains of a class the detector found on its first
+// run and this commit mostly closed. Nothing in the programme's first eleven
+// items named it: the stub's generated tests handed the double a zero per
+// argument and then asserted the recording carried it, and asserted a pinned
+// zero came back from a slot no literal could be written for. Both sides the
+// zero, 832 times. 1.5 pinned what `Returns` answers and stopped there.
+//
+// Pinning the arguments and asserting only the pinnable slots took it to 322.
+// What is left is the arguments no literal exists for — a context first among
+// them, which every method takes — and closing those needs a value from the
+// consumer rather than from the generator.
 //
 //nolint:gochecknoglobals // a debt register, read-only, test-facing.
 var VacuityDebt = map[string]VacuityRow{
@@ -537,17 +542,20 @@ var VacuityDebt = map[string]VacuityRow{
 			"defect this rule is for, and here the discard is the subject",
 	},
 	"zero-expectation conformance/corpus": {
-		Ceiling: 817,
-		Why: "the generated recorded-call check hands the double a zero per parameter and " +
-			"then asserts the recording carries them, which passes against a recorder that " +
-			"stores nothing — 1.5's defect one field over: it pinned what Returns answers " +
-			"and left the arguments a call records at their zero. Closed by the same sample " +
-			"derivation, applied to the call arguments in stub.test.tmpl",
+		Ceiling: 312,
+		Why: "what is left of the generated stub's zero arguments after pinning every one a " +
+			"literal can be written for: a context, an interface, a variadic tail, a type " +
+			"from a package the run never read. Those are handed in at their zero and the " +
+			"recorded-call check compares the recording against the same zero, which passes " +
+			"for a recorder that stored nothing. Closing it needs a value the generator " +
+			"cannot derive — a consumer-supplied one, which is the fixture escape hatch the " +
+			"suite tier already has and the stub tier does not",
 	},
 	"zero-expectation generator/stub/testdata": {
-		Ceiling: 6,
-		Why: "the golden copies of the same generated check, which move when the template " +
-			"that writes them does and close in the same change",
+		Ceiling: 1,
+		Why: "the golden copy of the same residue, which moves when the template that writes " +
+			"it does and closes in the same change; one site rather than the corpus's many " +
+			"because the golden fixture declares one context parameter",
 	},
 }
 

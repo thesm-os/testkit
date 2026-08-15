@@ -6,6 +6,7 @@ package stub
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
@@ -57,7 +58,7 @@ const (
 // template edit, and a golden diff would stop isolating what actually changed
 // in the output. Stability in the header is worth the discipline; during
 // development `--no-cache` covers the gap.
-const Version = "1.2.0"
+const Version = "1.3.0"
 
 // WitnessKey is the directive key naming the concrete types a generic
 // double's companion is instantiated at, in type-parameter order —
@@ -315,6 +316,32 @@ func (m Method) Pins() []Pin {
 	return out
 }
 
+// ArgPins is [Method.Pins] over the parameters a test calls with.
+//
+// The same derivation, one field over, and the reason it is a second method
+// rather than a parameterised one: the two answer different questions and only
+// one of them may skip a slot. A result that admits no literal is left at its
+// zero and [Method.Pinnable] declines the whole check; a *parameter* that
+// admits none still has to be passed, so its zero is written and the call goes
+// ahead.
+//
+// A variadic tail takes no literal either: the declaration spells a slice and
+// a scalar sample does not assign to one. Left at its zero for the same
+// reason, which the recorded-call check then compares against — the residue
+// `gate.VacuityDebt` keeps a ceiling on.
+func (m Method) ArgPins() []Pin {
+	out := make([]Pin, 0, len(m.Params))
+	for i := range m.Params {
+		p := Pin{Type: m.Params[i].Type}
+		b, builtin := m.Params[i].Type.(*sdk.BuiltinRef)
+		if builtin && !m.Params[i].Variadic {
+			p.Text, _ = golang.SampleValues(b.Name, m.Params[i].Name)
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
 // Pinnable reports whether any result admits a distinguishable literal.
 //
 // One is enough: a call answering several results is wrong if any position
@@ -327,6 +354,43 @@ func (m Method) Pinnable() bool {
 		}
 	}
 	return false
+}
+
+// PinTargets names the left-hand side of the pinned call: `got<i>` where the
+// slot admits a literal, `_` where it does not.
+//
+// [Method.Pinnable] answers per method — one slot with a literal earns the
+// check — and the slots beside it were being asserted anyway, at their zero,
+// against a double configured with that same zero. Both sides the zero, which
+// passes for a double that honoured Returns and for one that ignored it. That
+// is the defect the whole check exists to catch, surviving inside the check.
+//
+// So the unpinnable slots are blanked rather than compared, and the generated
+// comment names them. A slot dropped in silence would be the other half of the
+// same mistake.
+func (m Method) PinTargets() []string {
+	pins := m.Pins()
+	out := make([]string, 0, len(pins))
+	for i, p := range pins {
+		if p.Text == "" {
+			out = append(out, "_")
+			continue
+		}
+		out = append(out, "got"+strconv.Itoa(i))
+	}
+	return out
+}
+
+// Unpinned names the result slots no literal can be written for, for the
+// comment that says why the check is silent about them.
+func (m Method) Unpinned() []string {
+	var out []string
+	for i, p := range m.Pins() {
+		if p.Text == "" {
+			out = append(out, "result "+strconv.Itoa(i)+" ("+golang.QName(m.Returns[i].Source)+")")
+		}
+	}
+	return out
 }
 
 // HasMixin reports whether the source attached the named mixin, which is how

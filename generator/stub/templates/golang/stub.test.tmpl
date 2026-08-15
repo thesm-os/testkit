@@ -102,9 +102,17 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 {{- end }}
 		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
 {{- template "stub.testargs" $m }}
-		{{ stub_idents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
-{{- range $i, $r := $m.Returns }}
+		{{ range $i, $t := $m.PinTargets }}{{ if $i }}, {{ end }}{{ $t }}{{ end }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+{{- range $i, $p := $m.Pins }}
+{{- if $p.Text }}
 		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "{{ $m.Name }} must answer with what Returns pinned")
+{{- end }}
+{{- end }}
+{{- with $m.Unpinned }}
+		// Blanked above rather than dropped in silence. No literal exists
+		// for {{ range $i, $u := . }}{{ if $i }}, {{ end }}{{ $u }}{{ end }}, so the only value to pin there
+		// is the zero — and a double that ignored Returns answers the zero
+		// too, which makes the comparison pass either way.
 {{- end }}
 	})
 {{- else }}
@@ -161,24 +169,57 @@ func Test{{ $stub }}{{ $m.Name }}(t *{{ renderExpr $T }}) {
 	})
 {{- if $m.HasResults }}
 
+{{- if $m.Pinnable }}
+
 	t.Run("keeps the Returns configuration across a reset", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// A reset clears what happened, not what was configured. Losing the
 		// configuration would make a double answer differently in the second
 		// half of a test than in the first, for no reason the reader can see.
+		//
+		// Pinned to a literal for the reason the Returns check is: a reset
+		// that lost the configuration answers the zero, and so does one that
+		// kept a configured zero.
 		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
-{{- range $i, $r := $m.Returns }}
-		var want{{ $i }} {{ renderType $r.Type }}
+{{- range $i, $p := $m.Pins }}
+		var want{{ $i }} {{ renderType $p.Type }}{{ if $p.Text }} = {{ $p.Text }}{{ end }}
 {{- end }}
 		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
 {{- template "stub.testargs" $m }}
 		{{ stub_blanks (len $m.Returns) }} = s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
 		s.ResetCalls()
-		{{ stub_idents "got" (len $m.Returns) }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
-{{- range $i, $r := $m.Returns }}
+		{{ range $i, $t := $m.PinTargets }}{{ if $i }}, {{ end }}{{ $t }}{{ end }} := s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+{{- range $i, $p := $m.Pins }}
+{{- if $p.Text }}
 		{{ renderExpr $equal }}(t, got{{ $i }}, want{{ $i }}, "a reset must keep what Returns pinned")
 {{- end }}
+{{- end }}
 	})
+{{- else }}
+
+	t.Run("keeps recording across a reset", func(t *{{ renderExpr $T }}) {
+		t.Parallel()
+		// The weaker claim, and the honest one for this signature. No result
+		// of {{ $m.Name }} admits a literal, so what Returns pinned cannot be
+		// told from the zero and comparing them would pass either way.
+		//
+		// What a reset can still be held to is that it clears the log without
+		// taking the double with it: configure, call, reset, call again, and
+		// exactly one call is recorded. A reset that dropped the whole
+		// configuration fails that, which is the failure the value comparison
+		// was reaching for and could not state.
+		s := {{ renderExpr $.CtorRef }}{{ $.TypeArgs }}(t)
+{{- range $i, $p := $m.Pins }}
+		var want{{ $i }} {{ renderType $p.Type }}
+{{- end }}
+		s.{{ $m.OnField }}.Returns({{ stub_idents "want" (len $m.Returns) }})
+{{- template "stub.testargs" $m }}
+		{{ stub_blanks (len $m.Returns) }} = s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+		s.ResetCalls()
+		{{ stub_blanks (len $m.Returns) }} = s.{{ $m.Name }}({{ stub_identArgs "a" $m.Sig }})
+		s.{{ $m.OnField }}.AssertCalledOnce(t, "{{ $m.Name }} must record the call that followed the reset")
+	})
+{{- end }}
 {{- end }}
 {{- if $m.Sequence.Kind }}
 
@@ -382,9 +423,19 @@ func Test{{ $stub }}DelegateTo(t *{{ renderExpr $T }}) { {{ camel $stub }}Delega
 
 {{- /* Arguments are declared as zero values rather than invented: what these
        tests assert is dispatch, and the argument values are incidental. */ -}}
+{{- /* The arguments every test calls with, pinned to a distinguishable literal
+       wherever one can be written.
+
+       A zero handed in and then compared against what the recording carries is
+       an assertion both of whose sides are the zero: it passes for a double
+       that stored the argument and for one that stored nothing, which is the
+       whole of what the recorded-call check is for. A context, an interface, a
+       variadic tail and a type from a package this run never read admit no
+       literal and stay at their zero — the residue, which the vacuity register
+       keeps a ceiling on rather than pretending is closed. */ -}}
 {{- define "stub.testargs" -}}
-{{ range $i, $p := .Params }}
-			var a{{ $i }} {{ if $p.Variadic }}[]{{ end }}{{ renderType $p.Type }}
+{{ range $i, $p := .ArgPins }}
+			var a{{ $i }} {{ if (index $.Params $i).Variadic }}[]{{ end }}{{ renderType $p.Type }}{{ if $p.Text }} = {{ $p.Text }}{{ end }}
 {{- end }}
 {{- end -}}
 
