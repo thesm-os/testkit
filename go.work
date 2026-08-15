@@ -1,4 +1,4 @@
-go 1.26.5
+go 1.26.6
 
 // Sibling checkouts (eidos) are added locally with `go work use ../eidos`
 // rather than committed, so a clone builds without them present.

@@ -4,6 +4,7 @@
 package gate_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -152,6 +153,11 @@ func TestNoShippedLawIsUnfailable(t *testing.T) {
 func TestEachRuleFiresOnItsOwnShape(t *testing.T) {
 	t.Parallel()
 
+	// The probe sources repeat an expression on purpose — that repetition is
+	// the defect under test — so the duplicate-word check has to be told that
+	// the duplication is the subject rather than a typo.
+	//
+	//nolint:dupword // the repeated operands are the shapes each rule detects
 	cases := []struct {
 		name string
 		rule string
@@ -247,7 +253,10 @@ func fires(t *testing.T, src, rule string) bool {
 
 // writeGo puts one source file in dir.
 func writeGo(dir, name, src string) error {
-	return os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600)
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(src), 0o600); err != nil {
+		return fmt.Errorf("write probe %s: %w", name, err)
+	}
+	return nil
 }
 
 // A walk that cannot run is reported, never measured as clean.
@@ -316,6 +325,10 @@ func TestVacuitiesSortStably(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
+	// Two self-comparisons per file, so each file yields two findings and the
+	// ordering has something to be stable about.
+	//
+	//nolint:dupword // the repeated operands are the defect this probe plants
 	body := `func T(t *testing.T) { testkit.Equal(t, a, a, "m"); testkit.Equal(t, b, b, "m") }`
 	testkit.NoError(t, writeGo(dir, "b.go", "package p\n\n"+body+"\n"), "the second file writes")
 	testkit.NoError(t, writeGo(dir, "a.go", "package p\n\n"+body+"\n"), "the first file writes")
@@ -328,6 +341,7 @@ func TestVacuitiesSortStably(t *testing.T) {
 	for _, v := range found {
 		order = append(order, v.File+":"+strconv.Itoa(v.Line))
 	}
+	//nolint:dupword // two findings per file means each name appears twice
 	testkit.Equal(t, strings.Join(order, " "), "a.go:3 a.go:3 b.go:3 b.go:3",
 		"file first, then line")
 }

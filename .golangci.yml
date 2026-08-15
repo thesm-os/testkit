@@ -129,6 +129,17 @@ linters:
             - "**/conformance/**"
           allow:
             - $gostd
+            # The go/* parsing packages, which $gostd does not expand to —
+            # depguard builds that variable from a list the toolchain's own
+            # go/... tree is absent from, and the same import is refused under
+            # the generator rule for the same reason. Named rather than
+            # worked around: the vacuity detector reads the tree's own source
+            # to find assertions that cannot fail, and there is no way to do
+            # that without a parser.
+            - go/ast
+            - go/parser
+            - go/printer
+            - go/token
             - go.thesmos.sh/testkit
             - go.thesmos.sh/eidos
         # The cmd tier is the binary: the generator set plus the CLI framework.

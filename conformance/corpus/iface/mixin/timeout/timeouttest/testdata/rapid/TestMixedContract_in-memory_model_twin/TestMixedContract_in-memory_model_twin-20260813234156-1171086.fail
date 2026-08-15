@@ -3,5 +3,5 @@
 #     sut: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x33a8a04ff300 delay:0}
 #     ref: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x33a8a04ff300 delay:0}
 #   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model_twin.json
-# 
+#
 v0.4.8#4846378168167769216

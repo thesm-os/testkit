@@ -92,11 +92,12 @@ func baseAnnotators() []sdk.Annotator {
 // The framework's own directives are not here. The pipeline registers those
 // itself from an unexported table, so [prescreen.New] names them.
 func DirectiveSchemas() []sdk.DirectiveSchema {
-	var out []sdk.DirectiveSchema
-	for _, a := range baseAnnotators() {
+	annotators, generators := baseAnnotators(), Generators()
+	out := make([]sdk.DirectiveSchema, 0, len(annotators)+len(generators))
+	for _, a := range annotators {
 		out = append(out, schemasOf(a)...)
 	}
-	for _, g := range Generators() {
+	for _, g := range generators {
 		out = append(out, schemasOf(g)...)
 	}
 	return out

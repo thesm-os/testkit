@@ -1,6 +1,6 @@
 module go.thesmos.sh/testkit/cmd
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/spf13/cobra v1.10.2

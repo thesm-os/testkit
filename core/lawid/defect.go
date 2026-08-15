@@ -288,7 +288,7 @@ var nameSays = map[string]DefectClass{
 // going wrong looks like, and the words it does carry belong to its subject.
 func ClassFromName(id string) ([]DefectClass, bool) {
 	var out []DefectClass
-	for _, word := range strings.Split(strings.TrimPrefix(id, "AUTO-"), "-") {
+	for word := range strings.SplitSeq(strings.TrimPrefix(id, "AUTO-"), "-") {
 		if c, says := nameSays[word]; says && !slices.Contains(out, c) {
 			out = append(out, c)
 		}

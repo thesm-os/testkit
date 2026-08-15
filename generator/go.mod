@@ -1,6 +1,6 @@
 module go.thesmos.sh/testkit/generator
 
-go 1.26.5
+go 1.26.6
 
 require (
 	go.thesmos.sh/eidos v1.14.2-0.20260814083943-86be23f3bb12
