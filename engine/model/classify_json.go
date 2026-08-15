@@ -35,7 +35,7 @@ func modelKindToFailureKind(k FailureKind) failure.Kind {
 	}
 }
 
-// ToUnifiedFailure converts a model-package Failure into a unified
+// toUnifiedFailure converts a model-package Failure into a unified
 // testkit/failure.Failure. The unified envelope carries the same
 // classification, error, and any embedded REQ tag; per-kind
 // details land in the Details map under the "lawID" and
@@ -43,7 +43,7 @@ func modelKindToFailureKind(k FailureKind) failure.Kind {
 //
 // The unified Failure has no Subject/Generator/Seed by default;
 // the caller (the runner) populates those before persistence.
-func ToUnifiedFailure(f *Failure) *failure.Failure {
+func toUnifiedFailure(f *Failure) *failure.Failure {
 	uf := failure.New("model", modelKindToFailureKind(f.Kind), f.Err)
 	uf.REQID = f.REQID
 	uf.Details = map[string]any{
@@ -64,7 +64,7 @@ func ToUnifiedFailure(f *Failure) *failure.Failure {
 func emitClassifiedJSON(rt rapid.TB, override string, f *Failure) string {
 	dir := ResolveArtifactDir(override)
 	seed := sanitizeForFilename(rt.Name())
-	path, err := WriteClassifiedFailure(dir, seed, f)
+	path, err := writeClassifiedFailure(dir, seed, f)
 	if err != nil {
 		rt.Logf("failed to write classified failure: %v", err)
 		return ""
@@ -95,7 +95,7 @@ func emitPerClientJSON(rt rapid.TB, override string, f *Failure) []string {
 		clientF := *f // shallow copy
 		clientF.Trace = filterTraceByClient(f.Trace, id)
 		clientSeed := fmt.Sprintf("%s-client%d", seed, id)
-		path, err := WriteClassifiedFailure(dir, clientSeed, &clientF)
+		path, err := writeClassifiedFailure(dir, clientSeed, &clientF)
 		if err != nil {
 			rt.Logf("failed to write per-client failure for client %d: %v", id, err)
 			continue
@@ -137,7 +137,7 @@ func filterTraceByClient(events []trace.Event, clientID int) []trace.Event {
 	return out
 }
 
-// WriteClassifiedFailure persists the unified-failure JSON
+// writeClassifiedFailure persists the unified-failure JSON
 // representation of f to <dir>/failure-<seed>.json. Returns the
 // resolved path. Creates dir when absent; overwrites any existing
 // file at the target path. seed is the hex-formatted seed value
@@ -147,24 +147,24 @@ func filterTraceByClient(events []trace.Event, clientID int) []trace.Event {
 // This is the third artifact in the three-artifact dump (rapid
 // failfile, Porcupine HTML, classified-Failure JSON). CI tools
 // parse the JSON to drive the unified PR-bot comment.
-func WriteClassifiedFailure(dir, seed string, f *Failure) (string, error) {
+func writeClassifiedFailure(dir, seed string, f *Failure) (string, error) {
 	if dir == "" {
-		return "", errors.New("model: WriteClassifiedFailure: dir is empty")
+		return "", errors.New("model: writeClassifiedFailure: dir is empty")
 	}
 	if seed == "" {
 		seed = "classified"
 	}
 	if err := os.MkdirAll(dir, 0o750); err != nil {
-		return "", fmt.Errorf("model: WriteClassifiedFailure: mkdir: %w", err)
+		return "", fmt.Errorf("model: writeClassifiedFailure: mkdir: %w", err)
 	}
-	// ToUnifiedFailure builds the envelope from a fixed shape — strings,
+	// toUnifiedFailure builds the envelope from a fixed shape — strings,
 	// counts and a []string — so the marshal cannot fail. Discarding the
 	// error is deliberate: a guard here would be a branch no input reaches.
-	uf := ToUnifiedFailure(f)
+	uf := toUnifiedFailure(f)
 	buf, _ := json.MarshalIndent(uf, "", "  ") //nolint:errchkjson // envelope is built from JSON-native values
 	path := filepath.Join(dir, "failure-"+seed+".json")
 	if err := os.WriteFile(path, append(buf, '\n'), 0o600); err != nil {
-		return "", fmt.Errorf("model: WriteClassifiedFailure: write: %w", err)
+		return "", fmt.Errorf("model: writeClassifiedFailure: write: %w", err)
 	}
 	return path, nil
 }

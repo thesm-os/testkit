@@ -51,7 +51,7 @@ func TestToUnifiedFailure(t *testing.T) {
 			Err:           errors.New("boom"),
 			ArtifactPaths: []string{"/tmp/witness.txt"},
 		}
-		uf := ToUnifiedFailure(f)
+		uf := toUnifiedFailure(f)
 		testkit.Equal(t, uf.Generator, "model", "generator tag")
 		testkit.Equal(t, uf.Kind, failure.KindInvariant, "kind mapped")
 		testkit.Equal(t, uf.REQID, "REQ-001", "req preserved")
@@ -75,7 +75,7 @@ func TestWriteClassifiedFailure(t *testing.T) {
 	t.Run("writes <dir>/failure-<seed>.json with valid JSON", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		path, err := WriteClassifiedFailure(dir, "0xDEAD", f)
+		path, err := writeClassifiedFailure(dir, "0xDEAD", f)
 		testkit.NoError(t, err, "write")
 		testkit.True(t, strings.HasSuffix(path, "failure-0xDEAD.json"), "filename")
 
@@ -90,21 +90,21 @@ func TestWriteClassifiedFailure(t *testing.T) {
 	t.Run("empty seed defaults to 'classified'", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		path, err := WriteClassifiedFailure(dir, "", f)
+		path, err := writeClassifiedFailure(dir, "", f)
 		testkit.NoError(t, err, "write")
 		testkit.True(t, strings.HasSuffix(path, "failure-classified.json"), "default seed")
 	})
 
 	t.Run("empty dir errors", func(t *testing.T) {
 		t.Parallel()
-		_, err := WriteClassifiedFailure("", "seed", f)
+		_, err := writeClassifiedFailure("", "seed", f)
 		testkit.True(t, err != nil, "empty dir rejected")
 	})
 
 	t.Run("nested dir is created", func(t *testing.T) {
 		t.Parallel()
 		dir := filepath.Join(t.TempDir(), "a", "b", "c")
-		path, err := WriteClassifiedFailure(dir, "x", f)
+		path, err := writeClassifiedFailure(dir, "x", f)
 		testkit.NoError(t, err, "mkdir + write")
 		_, statErr := os.Stat(path)
 		testkit.NoError(t, statErr, "file exists at nested path")
@@ -216,18 +216,18 @@ func TestClassifiedJSONWriteFailures(t *testing.T) {
 		return filepath.Join(blocker, "sub")
 	}
 
-	t.Run("WriteClassifiedFailure rejects an empty dir", func(t *testing.T) {
+	t.Run("writeClassifiedFailure rejects an empty dir", func(t *testing.T) {
 		t.Parallel()
-		_, err := WriteClassifiedFailure("", "seed", &Failure{Kind: FailureSemantic})
+		_, err := writeClassifiedFailure("", "seed", &Failure{Kind: FailureSemantic})
 		if err == nil {
 			t.Fatal("an empty directory is a caller error, not a silent no-op")
 		}
 	})
 
-	t.Run("WriteClassifiedFailure defaults an empty seed", func(t *testing.T) {
+	t.Run("writeClassifiedFailure defaults an empty seed", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
-		path, err := WriteClassifiedFailure(dir, "", &Failure{Kind: FailureSemantic})
+		path, err := writeClassifiedFailure(dir, "", &Failure{Kind: FailureSemantic})
 		if err != nil {
 			t.Fatalf("an unnamed failure must still be written: %v", err)
 		}
@@ -236,9 +236,9 @@ func TestClassifiedJSONWriteFailures(t *testing.T) {
 		}
 	})
 
-	t.Run("WriteClassifiedFailure reports an unmakeable dir", func(t *testing.T) {
+	t.Run("writeClassifiedFailure reports an unmakeable dir", func(t *testing.T) {
 		t.Parallel()
-		if _, err := WriteClassifiedFailure(blocked(t), "seed", &Failure{}); err == nil {
+		if _, err := writeClassifiedFailure(blocked(t), "seed", &Failure{}); err == nil {
 			t.Fatal("an un-creatable directory must be reported")
 		}
 	})
@@ -290,13 +290,13 @@ func TestClassifiedJSONWriteFailures(t *testing.T) {
 
 	// mkdir succeeds when the parent exists, so an existing directory at the
 	// target path is the only way to reach the write itself.
-	t.Run("WriteClassifiedFailure reports an unwritable target", func(t *testing.T) {
+	t.Run("writeClassifiedFailure reports an unwritable target", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		if err := os.MkdirAll(filepath.Join(dir, "failure-taken.json"), 0o750); err != nil {
 			t.Fatalf("setup: %v", err)
 		}
-		_, err := WriteClassifiedFailure(dir, "taken", &Failure{Kind: FailureSemantic})
+		_, err := writeClassifiedFailure(dir, "taken", &Failure{Kind: FailureSemantic})
 		if err == nil {
 			t.Fatal("a target that cannot be written must be reported")
 		}
