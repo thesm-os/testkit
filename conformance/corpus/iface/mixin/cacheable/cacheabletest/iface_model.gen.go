@@ -169,9 +169,13 @@ func MixedModelSaturation(t *testing.T, factory func() cacheable.Mixed, opts ...
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-CACHEABLE", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Get"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -340,4 +344,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9d32dc6bf80e5730488bae482daee2368bcc37a21d07bb7cb264acd51fb66502
+// testkit:provenance 4b3e66c46b43f6355b7b78623198fc429f98766371227af08a17c921c91353ae

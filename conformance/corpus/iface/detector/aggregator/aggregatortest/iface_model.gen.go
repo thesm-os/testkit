@@ -166,9 +166,13 @@ func AggregatorModelSaturation(t *testing.T, factory func() aggregator.Aggregato
 	fx := DefaultAggregatorFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Count"} {
 				for _, wear := range aggregatorSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -341,4 +345,4 @@ func newAggregatorModelConfig(opts ...AggregatorModelOption) *aggregatorModelCon
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0b64057e6596fd130242f05404c6f34c0f1908b4ef5c0da4cbd56f59654deefa
+// testkit:provenance 59a1f8e407a54ea73ec061499ab61f4dcb15f6d91d0e27fa1091917b66648ace

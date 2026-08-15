@@ -241,9 +241,13 @@ func MixedModelSaturation(t *testing.T, factory func() noduplicates.Mixed, opts 
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -304,9 +308,13 @@ func MixedModelSaturation(t *testing.T, factory func() noduplicates.Mixed, opts 
 		// half the measurement settled.
 	})
 	t.Run("AUTO-STREAM-NO-DUPLICATES", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -520,4 +528,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 006f12ff51e4811fb007ba741f4281d854a30b55643c4052cd245283f76dc175
+// testkit:provenance 052d7af0635d21578a77f58c8db642fc56412743dcf948fa016e71f30f9796fc

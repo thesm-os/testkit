@@ -295,9 +295,13 @@ func ContractModelSaturation(t *testing.T, factory func() tx.Contract, opts ...C
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Begin"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -358,67 +362,10 @@ func ContractModelSaturation(t *testing.T, factory func() tx.Contract, opts ...C
 		// half the measurement settled.
 	})
 	t.Run("AUTO-TRANSACTION-NO-MID-TX-VISIBILITY", func(t *testing.T) {
-		killed := func() bool {
-			for _, method := range []string{"Begin", "Get", "Put", "Rollback"} {
-				for _, wear := range contractSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "ContractSat_AUTO-TRANSACTION-NO-MID-TX-VISIBILITY_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() tx.Contract { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							ContractModelReference(reference),
-							contractModelOnlyLaw("AUTO-TRANSACTION-NO-MID-TX-VISIBILITY"))
-						model.Check(f, ContractModelProperty(func() tx.Contract {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-TRANSACTION-NO-MID-TX-VISIBILITY")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-TRANSACTION-NO-MID-TX-VISIBILITY survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// spill — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches AUTO-TRANSACTION-NO-MID-TX-VISIBILITY: spill crosses a partition boundary; this claim is about a boundary in time — a write staged inside a transaction and read before commit")
 	})
 	t.Run("AUTO-TWO-PHASE-MUTEX", func(t *testing.T) {
 		// Not a survival, and the distinction is the whole point of the
@@ -861,4 +808,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 761e0c4c2fbdea5bb677bfdd524d4790983100be7c9f9f34dac5fc55e712a386
+// testkit:provenance 93b4d1f8b27e234dfc915f9abe7860bd9b2ed1860b1799a30c9497f6b3c38428

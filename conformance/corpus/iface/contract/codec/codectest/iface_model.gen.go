@@ -194,9 +194,13 @@ func ContractModelSaturation(t *testing.T, factory func() codec.Contract, opts .
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-ROUNDTRIP", func(t *testing.T) {
+		proving := map[string]bool{"passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Decode", "Encode"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -442,4 +446,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a9a6357c27da697f060d279bc43331140c4aa380794c8f8d79a115a13cfeda29
+// testkit:provenance 5dde6a21ef1d904c9f6d7b6b5cc852c0b0aa8e0cee99ed01822bd89995b59e46

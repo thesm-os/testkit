@@ -170,9 +170,13 @@ func ReplicaModelSaturation(t *testing.T, factory func() crdtmerge.Replica, opts
 	fx := DefaultReplicaFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range replicaSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -590,9 +594,13 @@ func MixedModelSaturation(t *testing.T, factory func() crdtmerge.Mixed, opts ...
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-CRDT-MERGE", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Add", "Items", "Merge"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -653,9 +661,13 @@ func MixedModelSaturation(t *testing.T, factory func() crdtmerge.Mixed, opts ...
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -1041,4 +1053,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance dfa856753a186569c71c3260e94c983563d8cc8a49b853b4b4044dc31e8f847b
+// testkit:provenance e76042495fe61ad05d2981886a25c390b8b2e4ae437df101d3f13e012a192944

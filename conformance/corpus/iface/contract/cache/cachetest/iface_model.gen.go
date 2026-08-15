@@ -170,9 +170,13 @@ func ContractModelSaturation(t *testing.T, factory func() cache.Contract, opts .
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-CACHEABLE", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Lookup"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -323,4 +327,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c5b4732dbd04981a6a5c8a1e9c7600f25aecd2f066978883264352b60bf1ad6c
+// testkit:provenance 9c39d0b2e8b63f8b01276b6e11cb879295d6ef1e5e919490f2385acd56f35b96

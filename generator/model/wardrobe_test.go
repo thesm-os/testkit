@@ -93,3 +93,40 @@ func TestProvesRequiresASharedClass(t *testing.T) {
 	testkit.False(t, model.Proves("not-a-wear", lawid.MonotonicNonDecreasing),
 		"an unclassified wear proves nothing rather than everything")
 }
+
+// Every registered unreached law names a mechanism.
+//
+// The bar the other registers hold their reasons to, and it bites harder here:
+// this register's rows are the only place a reader learns *why* a wear of the
+// right class does not arrive, and "it does not fire" is the finding restated
+// rather than an answer.
+func TestEveryUnreachedRowNamesAMechanism(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range model.UnreachedLaws() {
+		testkit.True(t, len(model.Unreached(id)) > 70,
+			id+"'s row says how the dressing fails to arrive, not that it does")
+	}
+}
+
+// A law is registered as unreached only where a wear of its class exists.
+//
+// The two registers answer different questions and a law in both would mean
+// nobody decided which. `gate.UnprovableLaws` holds the laws whose class the
+// wardrobe cannot produce at all; this one holds laws where it can and the
+// dressing still does not arrive. A row here for a law with no proving wear is
+// an excuse standing in front of a gap.
+func TestUnreachedOnlyCoversProvableLaws(t *testing.T) {
+	t.Parallel()
+
+	for _, id := range model.UnreachedLaws() {
+		provable := false
+		for _, kind := range model.Wardrobe() {
+			if model.Proves(kind, id) {
+				provable = true
+			}
+		}
+		testkit.True(t, provable,
+			id+" has a wear of its own class; a law that has none belongs in UnprovableLaws")
+	}
+}

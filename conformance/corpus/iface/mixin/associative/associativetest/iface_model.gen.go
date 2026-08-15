@@ -214,9 +214,13 @@ func MixedModelSaturation(t *testing.T, factory func() associative.Mixed, opts .
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-ASSOCIATIVE", func(t *testing.T) {
+		proving := map[string]bool{"jumble": true, "latch": true}
 		killed := func() bool {
 			for _, method := range []string{"Apply", "Total"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -270,16 +274,20 @@ func MixedModelSaturation(t *testing.T, factory func() associative.Mixed, opts .
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// fade, flap, flicker — requiring the kill to come from one
+		// jumble, latch — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Total"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -548,4 +556,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f3ee3477784b612dcdaa3bc4f29b84d3532b255699930222ff9fdd45de332a03
+// testkit:provenance 0d0daf015f19e0ccf50ba642109d207ca55dc25dca802f1f89c6f9459b9b86e8

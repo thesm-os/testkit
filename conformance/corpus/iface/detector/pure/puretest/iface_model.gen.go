@@ -152,9 +152,13 @@ func PureModelSaturation(t *testing.T, factory func() pure.Pure, opts ...PureMod
 	fx := DefaultPureFixture()
 	_ = fx
 	t.Run("AUTO-PURE-DETERMINISTIC", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Describe"} {
 				for _, wear := range pureSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -273,4 +277,4 @@ func newPureModelConfig(opts ...PureModelOption) *pureModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 137a9ca35a06de5cba5dcebf9817cb4d65c0e4cabb9241cac2caa883b7eab963
+// testkit:provenance 5cf11879b5a9c32369888393a94770d63831b16d3265ebf3c21dc3632f458a96

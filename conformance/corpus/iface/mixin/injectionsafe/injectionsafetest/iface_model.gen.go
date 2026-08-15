@@ -237,9 +237,13 @@ func MixedModelSaturation(t *testing.T, factory func() injectionsafe.Mixed, opts
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-INJECTION-SAFE", func(t *testing.T) {
+		proving := map[string]bool{"passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Load", "Store"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -519,4 +523,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4e25c934f886c33db68bffb27df4718aeac6c489569d15662181f53140f2cc7e
+// testkit:provenance 76f3b69fd9ec13da6b263a1acac1a737e91b834529712880f71c8891935e6843

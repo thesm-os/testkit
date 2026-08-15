@@ -194,9 +194,13 @@ func ContractModelSaturation(t *testing.T, factory func() codeclossy.Contract, o
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-LOSSY-ROUNDTRIP", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Decode", "Encode"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -250,7 +254,7 @@ func ContractModelSaturation(t *testing.T, factory func() codeclossy.Contract, o
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// passthrough — requiring the kill to come from one
+		// fade, flap, flicker, passthrough — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
@@ -442,4 +446,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3fbbdd89cc9ab6e02eef9d08c2f5723240b88dc0d0b48ec1e9c1d18a19ba543e
+// testkit:provenance ed432f04e2d71f0fd914d8745ff395c8f34a05b15ee5397d47be869bf1a32125

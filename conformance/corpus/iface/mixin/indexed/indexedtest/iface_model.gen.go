@@ -193,9 +193,13 @@ func RankedModelSaturation(t *testing.T, factory func() indexed.Ranked, opts ...
 	fx := DefaultRankedFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Len"} {
 				for _, wear := range rankedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -378,4 +382,4 @@ func newRankedModelConfig(opts ...RankedModelOption) *rankedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 543f0e7788fdb0b2edb7de40e841b930aea41f2a808c4d767fb8ce242da615aa
+// testkit:provenance a62c7f55cace55766e77ada2f63ae289d71cf87a9a94813240ed918c3335c1cd

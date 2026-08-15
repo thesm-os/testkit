@@ -567,6 +567,7 @@ func saturationOf(b *Bindings, harness *suite.Contract) {
 				sl.Proves = append(sl.Proves, kind)
 			}
 		}
+		sl.Unreached = Unreached(lb.ID)
 		b.SatLaws = append(b.SatLaws, sl)
 		for _, name := range sl.Methods {
 			if !worn[name] {

@@ -219,9 +219,13 @@ func MixedModelSaturation(t *testing.T, factory func() leakfree.Mixed, opts ...M
 		t.Skip("no wear produces the defect AUTO-LEAK-FREE is named for; the wardrobe owes it one")
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Outstanding"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -566,4 +570,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b6ecb48801b568c42c39c0a456cc41e1714aa763ae5e9a6103682bf489c48a58
+// testkit:provenance 5b01114eb0268a4b9176b26b8edb26310f24c77e92a265f94b644c0f4adf0f74

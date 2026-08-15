@@ -194,9 +194,13 @@ func MixedModelSaturation(t *testing.T, factory func() poisonable.Mixed, opts ..
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-POISON-NIL-ON-FRESH", func(t *testing.T) {
+		proving := map[string]bool{"sputter": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Probe"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -250,16 +254,20 @@ func MixedModelSaturation(t *testing.T, factory func() poisonable.Mixed, opts ..
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// inert, passthrough — requiring the kill to come from one
+		// sputter, stick — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-POISON-IDEMPOTENT-READ", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Probe"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -320,9 +328,13 @@ func MixedModelSaturation(t *testing.T, factory func() poisonable.Mixed, opts ..
 		// half the measurement settled.
 	})
 	t.Run("AUTO-POISON-CONSISTENT", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Fail", "Probe"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -586,4 +598,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance fbabf856bad33ca04f3b62129dbd0ec3b608995bcb4c06a4cfc166d39a03ec3d
+// testkit:provenance d27fd9174d5e36ff21a3bae7d5038da904d69d5a1822e8659bb90e78aa4d2f6c

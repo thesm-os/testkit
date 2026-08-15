@@ -218,9 +218,13 @@ func MixedModelSaturation(t *testing.T, factory func() tamperevident.Mixed, opts
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-TAMPER-EVIDENT", func(t *testing.T) {
+		proving := map[string]bool{"inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Corrupt", "Store", "Verify"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -274,7 +278,7 @@ func MixedModelSaturation(t *testing.T, factory func() tamperevident.Mixed, opts
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// passthrough — requiring the kill to come from one
+		// inert, passthrough — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
@@ -580,4 +584,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 812cf8963728e815fd3e1f010993fae9a2f2aeb8ef56090b2d04ef5399c4a6e6
+// testkit:provenance 726dc9ce8b5a6382c5f62f9fa46c5a9f5e736fa0dde4a8553ccfcf7bcb719aba

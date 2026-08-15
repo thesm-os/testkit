@@ -284,9 +284,13 @@ func MixedModelSaturation(t *testing.T, factory func() monotonicreads.Mixed, opt
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-MONOTONIC-READS", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "regress": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Get"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -495,4 +499,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 47b11384a96363a2c23e31e5bc5c4cebe15cd47418d62d4764fd028862b70687
+// testkit:provenance f95d736bd1d0410198610bf9390034f68f51217db210c45039d54dcee3efe8f7

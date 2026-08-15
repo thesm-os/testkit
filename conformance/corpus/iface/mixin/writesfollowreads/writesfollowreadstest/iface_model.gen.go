@@ -9,15 +9,10 @@ package writesfollowreadstest
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/writesfollowreads"
 	"go.thesmos.sh/testkit/core/trace"
 	"go.thesmos.sh/testkit/engine/model"
@@ -304,67 +299,10 @@ func MixedModelSaturation(t *testing.T, factory func() writesfollowreads.Mixed, 
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-WRITES-FOLLOW-READS", func(t *testing.T) {
-		killed := func() bool {
-			for _, method := range []string{"Get", "Store"} {
-				for _, wear := range mixedSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "MixedSat_AUTO-WRITES-FOLLOW-READS_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() writesfollowreads.Mixed { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							MixedModelReference(reference),
-							mixedModelOnlyLaw("AUTO-WRITES-FOLLOW-READS"))
-						model.Check(f, MixedModelProperty(func() writesfollowreads.Mixed {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-WRITES-FOLLOW-READS")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-WRITES-FOLLOW-READS survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// echo, fade, jumble, latch — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches AUTO-WRITES-FOLLOW-READS: the same, over the read a write followed")
 	})
 }
 
@@ -607,4 +545,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3fc5a3ef1dfd5c129144d7c1653a45209e6d28e86a3b0a527bb83d7b00efc06d
+// testkit:provenance fa634947b2931bf0cfafe57cb5ce0bdd2d3bd4e68a1d31a5b657fd055e254c2c

@@ -254,9 +254,13 @@ func MixedModelSaturation(t *testing.T, factory func() permutation.Mixed, opts .
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -320,9 +324,13 @@ func MixedModelSaturation(t *testing.T, factory func() permutation.Mixed, opts .
 		if cfg.expected == nil {
 			t.Skip("the expected door is not armed here, and the law registers only armed")
 		}
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "jumble": true, "latch": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Items"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -537,4 +545,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6416d0256a610364f6449cf9fe4b924208b22fd26c79f0be201e6fa604e24f3a
+// testkit:provenance f4cfaf11843f3e7d112cd56ca0937eba4e7dcdf59dee1d9758b2f45c81687ffc

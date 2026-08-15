@@ -183,9 +183,13 @@ func MixedModelSaturation(t *testing.T, factory func() total.Mixed, opts ...Mixe
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-TOTAL-OVER", func(t *testing.T) {
+		proving := map[string]bool{"sputter": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Classify"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -354,4 +358,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 218e78788e7202a47d987aff1ead26aa261b944a06b0b950fb03e1ec786b5070
+// testkit:provenance a36a64ce14a164f79412b824edacdae48d46e504b2ba7679f3718b92cf46e2f8

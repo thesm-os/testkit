@@ -235,9 +235,13 @@ func MixedModelSaturation(t *testing.T, factory func() idempotent.Mixed, opts ..
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-IDEMPOTENT-WRITE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "stick": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Put", "Read"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -517,4 +521,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ee82666860cdca3a35a16a49f27e4b6b3d6611b2244a230143ee0a7d39aea669
+// testkit:provenance 53dcccfac06a78bb7fcefe8efa9679b82add981042c3de66b0079fd7e7ba02aa

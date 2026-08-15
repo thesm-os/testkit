@@ -77,6 +77,9 @@ var UnprovableLaws = map[string]string{
 		"that did not fire, and no dressing over the interface can remove one",
 	lawid.LeaseDoubleAcquireBlocks: "a second acquire that grants is the same missing refusal, " +
 		"and duplicating a stream element is not the same defect as duplicating a lease holder",
+	lawid.LifecycleRespectsContext: "an op that answers instead of reporting context.Canceled " +
+		"is a guard that did not fire; the wardrobe can make an op fail and cannot make one " +
+		"stop noticing that it was told to stop",
 }
 
 // Unprovable returns every bound law no wear can prove and no row argues.

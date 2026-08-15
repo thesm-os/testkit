@@ -257,9 +257,13 @@ func ContractModelSaturation(t *testing.T, factory func() publisherredeliver.Con
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-PUBLISHER-DELIVERS", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Publish", "Subscribe"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -320,9 +324,13 @@ func ContractModelSaturation(t *testing.T, factory func() publisherredeliver.Con
 		// half the measurement settled.
 	})
 	t.Run("AUTO-PUBLISHER-AT-LEAST-ONCE", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Publish", "Republish", "Subscribe"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -656,4 +664,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0d4f66c9a100a3a178b2f00229ee7078c32d53407795adcad0f46c488c417359
+// testkit:provenance 39e92e3554bffd8ee0ecc1e8c43f452c3414838271ff125592d86500fc17eac5

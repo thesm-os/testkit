@@ -233,9 +233,13 @@ func ContractModelSaturation(t *testing.T, factory func() saga.Contract, opts ..
 		t.Skip("no wear produces the defect AUTO-SAGA-FULL-COMPENSATION is named for; the wardrobe owes it one")
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"State"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -482,4 +486,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 710092d0ad78a3bbb3024715533ac30ff9faacf67e207aa005fe24d8058cee28
+// testkit:provenance f3de1836f4ca66044285df586501604f889e968a89aba7d086563b8f4b094b90

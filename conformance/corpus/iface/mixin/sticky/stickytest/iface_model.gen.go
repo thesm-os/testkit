@@ -229,9 +229,13 @@ func MixedModelSaturation(t *testing.T, factory func() sticky.Mixed, opts ...Mix
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-STICKY", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Get"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -407,4 +411,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c2d160e77fd9e7e985f8044c6919ca69f8bfae9c527b3c6055bcc617775f37db
+// testkit:provenance 394f823f1bc24d57621d1f43b7fbe6ce434b40626e682352df19515ee0c6fb66

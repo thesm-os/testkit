@@ -212,9 +212,13 @@ func ContractModelSaturation(t *testing.T, factory func() appender.Contract, opt
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-APPENDER-MONOTONIC-OFFSETS", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "regress": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Run"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -387,4 +391,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a25d48044bd3d635ee4912aba8de5d62d8757b09e02009a1cd1b50509c6163c2
+// testkit:provenance 9ed314fc7be5aa60f7511e9dfc1ea7258463c89c6a0657e25ee59a258a214b04

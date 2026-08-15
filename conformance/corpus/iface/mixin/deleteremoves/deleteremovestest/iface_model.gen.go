@@ -218,9 +218,13 @@ func MixedModelSaturation(t *testing.T, factory func() deleteremoves.Mixed, opts
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-DELETE-RETURNS-NOT-FOUND", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Read"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -414,4 +418,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 13f6da9637e1c19a526d171455afe9be0086594c24f5a62b89311043520af44f
+// testkit:provenance 1507ca566c46869815adff08fa96e8673dd65a829efc94c4a44e2da37b2d0f13

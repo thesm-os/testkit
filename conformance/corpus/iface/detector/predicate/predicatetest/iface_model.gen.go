@@ -152,9 +152,13 @@ func PredicateModelSaturation(t *testing.T, factory func() predicate.Predicate, 
 	fx := DefaultPredicateFixture()
 	_ = fx
 	t.Run("AUTO-PREDICATE-CONSISTENT", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"IsEmpty"} {
 				for _, wear := range predicateSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -273,4 +277,4 @@ func newPredicateModelConfig(opts ...PredicateModelOption) *predicateModelConfig
 }
 
 // testkit: end of generated content.
-// testkit:provenance 04e3079cdb90a3642de497dd53026bd8b726dfb16c968673978d8d690ed8e6af
+// testkit:provenance 9065652e8d2ab737feffd4cb9bab9f02fe83533c1f7b31f7650577c0a83fdeef

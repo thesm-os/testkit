@@ -208,9 +208,13 @@ func StreamReaderModelSaturation(t *testing.T, factory func() streamreader.Strea
 	fx := DefaultStreamReaderFixture()
 	_ = fx
 	t.Run("AUTO-STREAM-COMPLETION", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "flood": true, "inert": true, "latch": true, "overshoot": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"List"} {
 				for _, wear := range streamreaderSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -264,16 +268,20 @@ func StreamReaderModelSaturation(t *testing.T, factory func() streamreader.Strea
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// fadeseq, flicker, inert, latch, wane — requiring the kill to come from one
+		// fadeseq, flicker, flood, inert, latch, overshoot, wane, wax — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-STREAM-REENTRANT", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"List"} {
 				for _, wear := range streamreaderSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -327,7 +335,7 @@ func StreamReaderModelSaturation(t *testing.T, factory func() streamreader.Strea
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// stick — requiring the kill to come from one
+		// fade, flap, flicker, stick — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
@@ -444,4 +452,4 @@ func newStreamReaderModelConfig(opts ...StreamReaderModelOption) *streamReaderMo
 }
 
 // testkit: end of generated content.
-// testkit:provenance e244f71759a3656e2877056a5e0840aa5c4dbcaac4226506d3f2a8cf5b0f99d4
+// testkit:provenance 529992d9ca6985aa28079811263d2d9547eb4c99002bf780f7bcf34c52c671e7

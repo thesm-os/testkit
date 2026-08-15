@@ -263,9 +263,13 @@ func MixedModelSaturation(t *testing.T, factory func() streamreflectsmutations.M
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-STREAM-COMPLETION", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "flood": true, "inert": true, "latch": true, "overshoot": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Stream"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -319,16 +323,20 @@ func MixedModelSaturation(t *testing.T, factory func() streamreflectsmutations.M
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// fadeseq, flicker, inert, latch, wane — requiring the kill to come from one
+		// fadeseq, flicker, flood, inert, latch, overshoot, wane, wax — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-STREAM-REENTRANT", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Stream"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -382,16 +390,20 @@ func MixedModelSaturation(t *testing.T, factory func() streamreflectsmutations.M
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// stick — requiring the kill to come from one
+		// fade, flap, flicker, stick — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-STREAM-REFLECTS-MUTATIONS", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Add", "Remove", "Stream"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -445,7 +457,7 @@ func MixedModelSaturation(t *testing.T, factory func() streamreflectsmutations.M
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// echo, fade — requiring the kill to come from one
+		// echo, fade, inert, passthrough — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
@@ -734,4 +746,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b185666a28728719d1d9997038775bb26eaaa5341e2d2dd501a8532aba713b31
+// testkit:provenance f6a9e3a53a45efc65847675034172530d8e02a428cf321b174ec779aac59bbdf

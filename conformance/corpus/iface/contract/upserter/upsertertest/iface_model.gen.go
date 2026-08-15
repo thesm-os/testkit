@@ -317,9 +317,13 @@ func ContractModelSaturation(t *testing.T, factory func() upserter.Contract, opt
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-WRITE-OBSERVABLE", func(t *testing.T) {
+		proving := map[string]bool{"inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Get", "Put"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -380,9 +384,13 @@ func ContractModelSaturation(t *testing.T, factory func() upserter.Contract, opt
 		// half the measurement settled.
 	})
 	t.Run("AUTO-UPSERTER-IDEMPOTENT", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "stick": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Get", "Put"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -644,4 +652,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ac82be4e4a2b9a89d294609f2c59260d5362c97d09b2c32cac7b55613a7c5057
+// testkit:provenance 685333ce4ad325b3dd1699a4b4117fe7b0bb1f853b7959fe357df101b57a7ac1

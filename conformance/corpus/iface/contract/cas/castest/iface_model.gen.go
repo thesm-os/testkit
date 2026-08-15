@@ -289,9 +289,13 @@ func ContractModelSaturation(t *testing.T, factory func() cas.Contract, opts ...
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-CAS-ATOMIC-ONE-WINNER", func(t *testing.T) {
+		proving := map[string]bool{"sputter": true, "stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Get", "Put"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -345,16 +349,20 @@ func ContractModelSaturation(t *testing.T, factory func() cas.Contract, opts ...
 		}
 		// Not yet narrowed to this law's own defect class. The wears whose
 		// class its name claims are
-		// dupdrain, dupseq, flood, greedy, wax — requiring the kill to come from one
+		// sputter, stick — requiring the kill to come from one
 		// of those reddens 23 laws across the corpus, and the measurement says
 		// roughly a third are weak laws and the rest are wrong classes. That
 		// triage is 1.10b. What ships here is the skip above, which is the
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Get"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -606,4 +614,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 58ec2e908c218b65425e6703ad51a08884ca03c889e87b3cebd6ab8c7468a045
+// testkit:provenance f046477af877b4b811d69dd714e3604598177b8f6e1cc348250a3a1aa15cd61a

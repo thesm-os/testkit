@@ -206,9 +206,13 @@ func ContractModelSaturation(t *testing.T, factory func() singleflight.Contract,
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-SINGLEFLIGHT-COALESCES", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Run"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -269,9 +273,13 @@ func ContractModelSaturation(t *testing.T, factory func() singleflight.Contract,
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Flights"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -518,4 +526,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c509fae33d940cabc7a0d11c5b1444687861070fe57b1c19f7c0c910bd59d568
+// testkit:provenance 821b391d1360dd96040a09e7cf1c38af5ac870a24e6870a92bdf4b53c5b48df4

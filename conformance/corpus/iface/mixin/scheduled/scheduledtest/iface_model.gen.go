@@ -243,9 +243,13 @@ func MixedModelSaturation(t *testing.T, factory func() scheduled.Mixed, opts ...
 		t.Skip("a clocked law's factory builds its own subjects on the run's clock; a worn defect never reaches it")
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Fired"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -523,4 +527,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f1eed37b2d076f6afcb376d4729b5b3d91ee9275abb6b0db4c4f54ad6728c534
+// testkit:provenance ecf42c53481bb9b57a2ccbf5249430d8b68310cc51ebfcd43463dc5d7f04779e

@@ -120,10 +120,10 @@ func Classes() []DefectClass {
 // that cannot drift: `NO-DUPLICATES` says duplication, `MONOTONIC` says
 // regression, and a law renamed would take its class with it. That was the
 // first design, and measuring it is what settled the question — a keyword
-// table over every defect-bearing word in the catalogue classifies 56 of the
-// 83 laws and cannot reach the other 27.
+// table over every defect-bearing word in the catalogue classifies 54 of the
+// 83 laws and cannot reach the other 29.
 //
-// The 27 are not a tail. `AUTO-READ-AFTER-WRITE`, `AUTO-WRITES-FOLLOW-READS`,
+// The 29 are not a tail. `AUTO-READ-AFTER-WRITE`, `AUTO-WRITES-FOLLOW-READS`,
 // `AUTO-POINT-IN-TIME`, `AUTO-COMMUTATIVE-WRITE` name a *relation between
 // operations* rather than a defect, so no word in them carries a class — and
 // the words they do carry belong to their subject, where teaching `READ` to
@@ -132,7 +132,7 @@ func Classes() []DefectClass {
 // So the classes are declared, and the drift the derivation would have
 // prevented is caught a different way: [ClassFromName] is used as a check
 // rather than as a source, holding a declaration to the identifier wherever
-// the identifier says something. That is 56 of the 83; the other 27 are
+// the identifier says something. That is 54 of the 83; the other 29 are
 // declared against nothing and are
 // listed as such, so a reader reviewing this table knows which rows a machine
 // checked and which rows a person has to.
@@ -150,8 +150,8 @@ func ClassOf(id string) []DefectClass {
 // EXACTLY-ONCE` fails for a message that never arrived and for one that
 // arrived twice, and a wardrobe offering only the first would prove half of it.
 //
-// [TestClassesAgreeWithTheName] holds 56 of these against the words in their
-// own identifier. The other 27 name a relation rather than a defect and are
+// [TestClassesAgreeWithTheName] holds 54 of these against the words in their
+// own identifier. The other 29 name a relation rather than a defect and are
 // declared against nothing a machine can read, which is the cost of the
 // design and is stated in [ClassOf].
 //
@@ -161,10 +161,10 @@ var defectClasses = map[string][]DefectClass{
 	AppendOnlyGrows:              {ClassRegression, ClassLoss},
 	AppendOnlyNoDrops:            {ClassLoss},
 	AppenderMonotonicOffsets:     {ClassRegression, ClassDuplication},
-	Associative:                  {ClassInstability},
+	Associative:                  {ClassOrdering},
 	AtomicWrite:                  {ClassAtomicity},
 	Cacheable:                    {ClassInstability, ClassStaleness},
-	CASAtomicOneWinner:           {ClassAtomicity, ClassDuplication},
+	CASAtomicOneWinner:           {ClassPermissive, ClassSpuriousFailure},
 	CausalOrdering:               {ClassOrdering},
 	CommutativeWrite:             {ClassOrdering, ClassLoss},
 	Conservative:                 {ClassBound},
@@ -173,11 +173,11 @@ var defectClasses = map[string][]DefectClass{
 	CursorCloseIdempotent:        {ClassRepeatability},
 	CursorNextAfterClose:         {ClassPermissive},
 	DeadlineRespecting:           {ClassBound},
-	DefaultOnError:               {ClassNoEffect},
+	DefaultOnError:               {ClassIntegrity},
 	DeleteReturnsNotFound:        {ClassNoEffect, ClassStaleness},
 	EventualConvergence:          {ClassInstability},
 	HashChainIntegrityErr:        {ClassIntegrity},
-	HashChainIntegrityVerify:     {ClassIntegrity},
+	HashChainIntegrityVerify:     {ClassIntegrity, ClassSpuriousFailure},
 	IdempotentLifecycle:          {ClassRepeatability},
 	IdempotentWrite:              {ClassRepeatability, ClassDuplication},
 	InjectionSafe:                {ClassIntegrity},
@@ -185,18 +185,18 @@ var defectClasses = map[string][]DefectClass{
 	LeaseDoubleAcquireBlocks:     {ClassPermissive},
 	LeaseReleasedOnCancel:        {ClassResource},
 	LifecycleAfterClose:          {ClassPermissive},
-	LifecycleRespectsContext:     {ClassBound},
-	LossyRoundtrip:               {ClassIntegrity},
+	LifecycleRespectsContext:     {ClassPermissive},
+	LossyRoundtrip:               {ClassInstability, ClassIntegrity},
 	MonotonicNonDecreasing:       {ClassRegression},
 	MonotonicReads:               {ClassRegression, ClassStaleness},
 	MonotonicWrites:              {ClassRegression, ClassOrdering},
-	PaginatorNoDuplicates:        {ClassDuplication},
+	PaginatorNoDuplicates:        {ClassBound, ClassDuplication},
 	PaginatorResumable:           {ClassLoss, ClassRepeatability},
 	PersisterRetrievable:         {ClassLoss, ClassIntegrity},
 	PointInTime:                  {ClassStaleness, ClassInstability},
 	PoisonConsistent:             {ClassInstability},
 	PoisonIdempotentRead:         {ClassRepeatability, ClassInstability},
-	PoisonNilOnFresh:             {ClassNoEffect},
+	PoisonNilOnFresh:             {ClassSpuriousFailure},
 	PoolBalanced:                 {ClassResource},
 	PoolLeakFree:                 {ClassResource},
 	PredicateConsistent:          {ClassInstability},
@@ -218,14 +218,14 @@ var defectClasses = map[string][]DefectClass{
 	SnapshotIsolationG1:          {ClassIsolation},
 	SnapshotIsolationG2:          {ClassIsolation},
 	Sticky:                       {ClassInstability},
-	StreamCompletion:             {ClassLoss},
+	StreamCompletion:             {ClassBound, ClassLoss},
 	StreamNoDuplicates:           {ClassDuplication},
 	StreamOverMatch:              {ClassLoss},
 	StreamPermutation:            {ClassOrdering, ClassLoss},
-	StreamReentrant:              {ClassRepeatability},
-	StreamReflectsMutations:      {ClassStaleness},
+	StreamReentrant:              {ClassInstability, ClassRepeatability},
+	StreamReflectsMutations:      {ClassNoEffect, ClassStaleness},
 	StreamStableOrder:            {ClassOrdering},
-	TamperEvident:                {ClassIntegrity},
+	TamperEvident:                {ClassNoEffect, ClassIntegrity},
 	TotalOver:                    {ClassSpuriousFailure},
 	TransactionNoMidTxVisibility: {ClassIsolation},
 	TransactionRollback:          {ClassAtomicity},
@@ -264,8 +264,13 @@ var nameSays = map[string]DefectClass{
 	"BOUNDED": ClassBound, "WINDOWED": ClassBound, "CONSERVATIVE": ClassBound,
 	"DEADLINE":  ClassBound,
 	"ROUNDTRIP": ClassIntegrity, "TAMPER": ClassIntegrity, "INTEGRITY": ClassIntegrity,
-	"SAFE":     ClassIntegrity,
-	"ROLLBACK": ClassAtomicity, "ATOMIC": ClassAtomicity, "COMPENSATION": ClassAtomicity,
+	"SAFE": ClassIntegrity,
+	// ATOMIC is deliberately absent. In `AUTO-ATOMIC-WRITE` it names the
+	// defect; in `AUTO-CAS-ATOMIC-ONE-WINNER` it names the operation, whose
+	// defect is two winners. One word, two jobs — the same ambiguity that
+	// keeps ONCE out, where AT-LEAST-ONCE is loss and AT-MOST-ONCE is
+	// duplication.
+	"ROLLBACK": ClassAtomicity, "COMPENSATION": ClassAtomicity,
 	"DROPS": ClassLoss, "DELIVERS": ClassLoss, "COMPLETION": ClassLoss,
 	"MERGE":  ClassLoss,
 	"EXPIRY": ClassStaleness, "REFLECTS": ClassStaleness,
@@ -277,7 +282,7 @@ var nameSays = map[string]DefectClass{
 // whether it named any.
 //
 // The check the declared table is held against, not the source it is built
-// from — see [ClassOf] for why that direction lost. Twenty-seven identifiers
+// from — see [ClassOf] for why that direction lost. Twenty-nine identifiers
 // name a relation between operations rather than a defect and are unreadable
 // here by construction; `AUTO-READ-AFTER-WRITE` carries no word about what
 // going wrong looks like, and the words it does carry belong to its subject.

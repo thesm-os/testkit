@@ -9,15 +9,10 @@ package causaltest
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
-	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 
-	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/causal"
 	"go.thesmos.sh/testkit/core/trace"
 	"go.thesmos.sh/testkit/engine/model"
@@ -318,70 +313,10 @@ func MixedModelSaturation(t *testing.T, factory func() causal.Mixed, opts ...Mix
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-CAUSAL-ORDERING", func(t *testing.T) {
-		if cfg.happensBefore == nil {
-			t.Skip("the happensBefore door is not armed here, and the law registers only armed")
-		}
-		killed := func() bool {
-			for _, method := range []string{"Get", "Store"} {
-				for _, wear := range mixedSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "MixedSat_AUTO-CAUSAL-ORDERING_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() causal.Mixed { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							MixedModelReference(reference),
-							mixedModelOnlyLaw("AUTO-CAUSAL-ORDERING"))
-						model.Check(f, MixedModelProperty(func() causal.Mixed {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-CAUSAL-ORDERING")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-CAUSAL-ORDERING survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// jumble, latch — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches AUTO-CAUSAL-ORDERING: a trace law: Check ignores the subject and the reference and scans the run's recorded operations, which no dressing of a method's answer reorders")
 	})
 }
 
@@ -625,4 +560,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ca8f25a537bd2c2c1f07f8899aa8c7bb700fa5e6316978757bc66d308e87d09b
+// testkit:provenance 3b61aa0a162f03309401016408ae64fb735ef41abbc184312e935331bc8764bd

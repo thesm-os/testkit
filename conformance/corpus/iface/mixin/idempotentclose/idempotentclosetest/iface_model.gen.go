@@ -202,72 +202,22 @@ func CloserModelSaturation(t *testing.T, factory func() idempotentclose.Closer, 
 	fx := DefaultCloserFixture()
 	_ = fx
 	t.Run("AUTO-LIFECYCLE-RESPECTS-CONTEXT", func(t *testing.T) {
-		killed := func() bool {
-			for _, method := range []string{"Close"} {
-				for _, wear := range closerSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "CloserSat_AUTO-LIFECYCLE-RESPECTS-CONTEXT_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() idempotentclose.Closer { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							CloserModelReference(reference),
-							closerModelOnlyLaw("AUTO-LIFECYCLE-RESPECTS-CONTEXT"))
-						model.Check(f, CloserModelProperty(func() idempotentclose.Closer {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-LIFECYCLE-RESPECTS-CONTEXT")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-LIFECYCLE-RESPECTS-CONTEXT survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// flood, overshoot, wax — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// Not a survival, and the distinction is the whole point of the
+		// defect-class axis. This law's name promises a defect the wardrobe
+		// cannot produce — every dressing here acts on what a call answers,
+		// and a partial effect or a retained resource is not an answer. The
+		// gap is in the wardrobe, and conformance/gate.UnprovableLaws is where
+		// it is argued and counted.
+		t.Skip("no wear produces the defect AUTO-LIFECYCLE-RESPECTS-CONTEXT is named for; the wardrobe owes it one")
 	})
 	t.Run("AUTO-IDEMPOTENT-LIFECYCLE", func(t *testing.T) {
+		proving := map[string]bool{"stick": true}
 		killed := func() bool {
 			for _, method := range []string{"Close", "Stats"} {
 				for _, wear := range closerSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -328,9 +278,13 @@ func CloserModelSaturation(t *testing.T, factory func() idempotentclose.Closer, 
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Stats"} {
 				for _, wear := range closerSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -589,4 +543,4 @@ func newCloserModelConfig(opts ...CloserModelOption) *closerModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance bd71dc46ff4a8346990764fd7c161228509e5111e4f4d425e72047b5e1aba952
+// testkit:provenance cee997dca652efeb351fb2eb4e8ad425b8fd1ed8503450bd85e545d3f77faecd

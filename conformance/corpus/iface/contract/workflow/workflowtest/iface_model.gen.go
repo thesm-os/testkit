@@ -217,9 +217,13 @@ func ContractModelSaturation(t *testing.T, factory func() workflow.Contract, opt
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-VALID-TRANSITION", func(t *testing.T) {
+		proving := map[string]bool{"jumble": true, "latch": true}
 		killed := func() bool {
 			for _, method := range []string{"Run", "State"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -499,4 +503,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance cc222daa2444883a7d6f2b8d9b4f87534725155ee58c5276b0f5726a502eecd5
+// testkit:provenance 5ef1d039e75063e9fc284939c218ce9d8ad36fbdb47c3d06526ff9592ddcc96d

@@ -323,9 +323,13 @@ func MixedModelSaturation(t *testing.T, factory func() pointintime.Mixed, opts .
 	fx := DefaultMixedFixture()
 	_ = fx
 	t.Run("AUTO-WRITE-OBSERVABLE", func(t *testing.T) {
+		proving := map[string]bool{"inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Get", "Store"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -386,9 +390,13 @@ func MixedModelSaturation(t *testing.T, factory func() pointintime.Mixed, opts .
 		// half the measurement settled.
 	})
 	t.Run("AUTO-POINT-IN-TIME", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Get", "Store"} {
 				for _, wear := range mixedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -650,4 +658,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance cf709e53c44f4d09780123f43f311a68b74b20ad5e139c3220aa44ecd1234be4
+// testkit:provenance d7f475babada2dd41c0dddf927ab444080867a6aeab2feaeceec44510ba8431c

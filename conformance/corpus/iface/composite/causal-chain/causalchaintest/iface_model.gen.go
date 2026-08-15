@@ -307,9 +307,13 @@ func LogModelSaturation(t *testing.T, factory func() causalchain.Log, opts ...Lo
 	fx := DefaultLogFixture()
 	_ = fx
 	t.Run("AUTO-APPEND-ONLY-GROWS", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "regress": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Replay"} {
 				for _, wear := range logSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -370,9 +374,13 @@ func LogModelSaturation(t *testing.T, factory func() causalchain.Log, opts ...Lo
 		// half the measurement settled.
 	})
 	t.Run("AUTO-APPEND-ONLY-NO-DROPS", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Append", "Replay"} {
 				for _, wear := range logSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -433,9 +441,13 @@ func LogModelSaturation(t *testing.T, factory func() causalchain.Log, opts ...Lo
 		// half the measurement settled.
 	})
 	t.Run("AUTO-REPLAY-DETERMINISTIC", func(t *testing.T) {
+		proving := map[string]bool{"fade": true, "flap": true, "flicker": true}
 		killed := func() bool {
 			for _, method := range []string{"Replay"} {
 				for _, wear := range logSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -496,78 +508,19 @@ func LogModelSaturation(t *testing.T, factory func() causalchain.Log, opts ...Lo
 		// half the measurement settled.
 	})
 	t.Run("AUTO-REPLAY-CAUSAL-ORDERING", func(t *testing.T) {
-		if cfg.entryID == nil {
-			t.Skip("the entryID door is not armed here, and the law registers only armed")
-		}
-		if cfg.dependsOn == nil {
-			t.Skip("the dependsOn door is not armed here, and the law registers only armed")
-		}
-		killed := func() bool {
-			for _, method := range []string{"Replay"} {
-				for _, wear := range logSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "LogSat_AUTO-REPLAY-CAUSAL-ORDERING_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() causalchain.Log { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							LogModelReference(reference),
-							logModelOnlyLaw("AUTO-REPLAY-CAUSAL-ORDERING"))
-						model.Check(f, LogModelProperty(func() causalchain.Log {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-REPLAY-CAUSAL-ORDERING")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-REPLAY-CAUSAL-ORDERING survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// jumble, latch — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches AUTO-REPLAY-CAUSAL-ORDERING: a replay law: the ordering it checks is the chain's on the way back out, and an ordering wear on the append method changes what goes in")
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"Replay"} {
 				for _, wear := range logSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -869,4 +822,4 @@ func newLogModelConfig(opts ...LogModelOption) *logModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6e1e2571c594a0bcfd510e37fc81dc6b2eb6a694652209e8b96eb6251c03420c
+// testkit:provenance 87d7a92fe4f702b7180086926348ec1122d83991344882dd90bf1834fe50bf6e

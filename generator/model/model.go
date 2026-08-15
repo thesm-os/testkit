@@ -575,6 +575,17 @@ type SatLaw struct {
 	// this law is named for" is a gap in the wardrobe, and it is worth telling
 	// apart from a law that survived defects it should have caught.
 	Proves []string
+
+	// Unreached says why a wear of this law's own class never reaches it,
+	// empty where one does.
+	//
+	// The third verdict. [SatLaw.Proves] empty means the wardrobe has no
+	// defect of this law's class at all; this means it has one and the
+	// dressing cannot get to the check — a trace law reading recorded
+	// operations, a bound on redelivery a within-drain duplicate cannot
+	// reach. Both are gaps in the wardrobe and they want different wears, so
+	// the prover says which.
+	Unreached string
 }
 
 // SatMutant is one wearable defect: a method answered wrongly in one of

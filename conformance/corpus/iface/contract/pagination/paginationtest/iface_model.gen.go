@@ -192,72 +192,19 @@ func ContractModelSaturation(t *testing.T, factory func() pagination.Contract, o
 	fx := DefaultContractFixture()
 	_ = fx
 	t.Run("AUTO-PAGINATOR-NO-DUPLICATES", func(t *testing.T) {
-		killed := func() bool {
-			for _, method := range []string{"Page"} {
-				for _, wear := range contractSatWears[method] {
-					// Two references per defect. Silencing the differential leaves
-					// the law as the only witness, but not every action reports
-					// through it: a shape whose action fails structurally still
-					// ends the iteration, and a reference wearing the same defect
-					// behaves the same way the subject does, so nothing diverges
-					// and the law is reached. A law that *is* the comparison needs
-					// the opposite — with both sides worn it has nothing to
-					// disagree with — so the clean reference runs too and either
-					// kill counts. The corpus measured both: dropping either one
-					// loses laws that only the other can saturate.
-					for _, blind := range []bool{true, false} {
-						surrogate := "ContractSat_AUTO-PAGINATOR-NO-DUPLICATES_" + method + "_" + wear.kind
-						if blind {
-							surrogate += "_blind"
-						}
-						t.Cleanup(func() {
-							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
-							_ = os.Remove(filepath.Join(
-								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
-						})
-						reference := factory
-						if blind {
-							reference = func() pagination.Contract { return wear.wrap(fx, factory()) }
-						}
-						f := testkit.NewFailableTB().WithName(surrogate)
-						worn := append(slices.Clone(opts),
-							ContractModelReference(reference),
-							contractModelOnlyLaw("AUTO-PAGINATOR-NO-DUPLICATES"))
-						model.Check(f, ContractModelProperty(func() pagination.Contract {
-							return wear.wrap(fx, factory())
-						}, worn...))
-						// The reporter's own rendering, not the bare identifier.
-						// rapid echoes the TB's name into its final message and the
-						// surrogate above is named for this law, so matching the
-						// identifier alone matched the name — the criterion reduced
-						// to f.Failed() and every defect "killed" every law. The
-						// verdict's format carries the identifier where no name can:
-						// after the kind, which is the one place only the reporter
-						// writes. The suffix rather than the whole prefix because a
-						// REQ-tagged law renders "[REQ-1 invariant]".
-						if f.Failed() && (strings.Contains(f.Msg(), "invariant] AUTO-PAGINATOR-NO-DUPLICATES")) {
-							return true
-						}
-					}
-				}
-			}
-			return false
-		}()
-		if !killed {
-			t.Errorf("AUTO-PAGINATOR-NO-DUPLICATES survived every defect worn on its own methods — bound but unsaturatable")
-		}
-		// Not yet narrowed to this law's own defect class. The wears whose
-		// class its name claims are
-		// dupdrain, dupseq, flood, greedy, wax — requiring the kill to come from one
-		// of those reddens 23 laws across the corpus, and the measurement says
-		// roughly a third are weak laws and the rest are wrong classes. That
-		// triage is 1.10b. What ships here is the skip above, which is the
-		// half the measurement settled.
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches AUTO-PAGINATOR-NO-DUPLICATES: the duplication wears dress the page reader's own answer, and the claim is about a key appearing in two *different* pages — one dressing cannot span the walk")
 	})
 	t.Run("AUTO-PAGINATOR-RESUMABLE", func(t *testing.T) {
+		proving := map[string]bool{"fadeseq": true, "flicker": true, "inert": true, "latch": true, "stick": true, "wane": true}
 		killed := func() bool {
 			for _, method := range []string{"Page"} {
 				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -424,4 +371,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ccccb6d129dad3be83ba29bd62f9f895775ba6db1cd34becfa6a32a0d12780fd
+// testkit:provenance a0e2fe6eedcffe6f4139c68067ae68a3df1ee05997ed89a0cdbaa0c7d21b4038

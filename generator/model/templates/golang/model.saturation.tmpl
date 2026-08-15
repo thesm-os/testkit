@@ -126,6 +126,11 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 		t.Skip("a clocked law's factory builds its own subjects on the run's clock; a worn defect never reaches it")
 {{- else if .Unwearable }}
 		t.Skip("the law closes over no method a defect can wear — its closures are doors and traces")
+{{- else if .Unreached }}
+		// A wear of this law's own class exists and never reaches it. The
+		// reason is a fact about the mechanism rather than about the class, so
+		// it is registered beside the wardrobe rather than inferred here.
+		t.Skip("no wear reaches {{ .ID }}: {{ .Unreached }}")
 {{- else if not .Proves }}
 		// Not a survival, and the distinction is the whole point of the
 		// defect-class axis. This law's name promises a defect the wardrobe
@@ -140,9 +145,13 @@ func {{ .IfaceName }}ModelSaturation(t *{{ renderExpr (external "testing" "T") }
 			t.Skip("the {{ . }} door is not armed here, and the law registers only armed")
 		}
 {{- end }}
+		proving := map[string]bool{ {{ range $i, $k := .Proves }}{{ if $i }}, {{ end }}{{ printf "%q" $k }}: true{{ end }} }
 		killed := func() bool {
 			for _, method := range []string{ {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ printf "%q" $m }}{{ end }} } {
 				for _, wear := range {{ lower $b.IfaceName }}SatWears[method] {
+				if !proving[wear.kind] {
+					continue
+				}
 				// Two references per defect. Silencing the differential leaves
 				// the law as the only witness, but not every action reports
 				// through it: a shape whose action fails structurally still

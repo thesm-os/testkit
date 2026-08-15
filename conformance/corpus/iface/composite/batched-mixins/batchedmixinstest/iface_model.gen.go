@@ -261,9 +261,13 @@ func BatchedModelSaturation(t *testing.T, factory func() batchedmixins.Batched, 
 	fx := DefaultBatchedFixture()
 	_ = fx
 	t.Run("AUTO-IDEMPOTENT-WRITE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "flood": true, "greedy": true, "stick": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"List", "Put"} {
 				for _, wear := range batchedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -324,9 +328,13 @@ func BatchedModelSaturation(t *testing.T, factory func() batchedmixins.Batched, 
 		// half the measurement settled.
 	})
 	t.Run("AUTO-READ-AFTER-WRITE", func(t *testing.T) {
+		proving := map[string]bool{"echo": true, "fade": true, "inert": true, "passthrough": true}
 		killed := func() bool {
 			for _, method := range []string{"Read"} {
 				for _, wear := range batchedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -387,9 +395,13 @@ func BatchedModelSaturation(t *testing.T, factory func() batchedmixins.Batched, 
 		// half the measurement settled.
 	})
 	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"List"} {
 				for _, wear := range batchedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -450,9 +462,13 @@ func BatchedModelSaturation(t *testing.T, factory func() batchedmixins.Batched, 
 		// half the measurement settled.
 	})
 	t.Run("AUTO-AGGREGATOR-BOUNDED", func(t *testing.T) {
+		proving := map[string]bool{"flood": true, "overshoot": true, "wax": true}
 		killed := func() bool {
 			for _, method := range []string{"List"} {
 				for _, wear := range batchedSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
 					// Two references per defect. Silencing the differential leaves
 					// the law as the only witness, but not every action reports
 					// through it: a shape whose action fails structurally still
@@ -857,4 +873,4 @@ func newBatchedModelConfig(opts ...BatchedModelOption) *batchedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0ea055336036e7ea7d8735f8a4b448224e18d3e706cd21629b607a3a7f5c204f
+// testkit:provenance 5a02f65375adfc469c20dfcf46f6f927cf8f0310b9d3c7570e4461eb803f4eff
