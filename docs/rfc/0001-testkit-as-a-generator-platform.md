@@ -32,7 +32,8 @@ machinery that walks a Go package and writes a file is a means. Every hour spent
 on slot topology was an hour not spent on a generator.
 
 **The pipeline was already owned elsewhere.** Shape classification — twenty
-detectors, twenty-four contracts, twenty-eight mixins, seventy-two
+detectors, twenty-four contracts, twenty-eight mixins, seventy-two (the
+vocabulary as of this document; ADR-0018 carries the live count)
 classifications in total — exists in [eidos](https://go.thesmos.sh/eidos) and is
 maintained there.
 testkit reimplemented thirty-nine of forty-four of those packages. Two

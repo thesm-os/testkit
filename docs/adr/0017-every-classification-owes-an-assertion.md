@@ -16,7 +16,8 @@ Accepted
 ## Context
 
 eidos registers seventy-two classifications across three orthogonal axes:
-twenty detectors, twenty-eight mixins, twenty-four contracts. A callable carries
+twenty detectors, twenty-eight mixins, twenty-four contracts. The counts in this record are as of its acceptance; the vocabulary grows upstream and `conformance/gate.Registered` reads the live registries. It stood at one hundred and four when ADR-0018's evidence census landed.
+A callable carries
 one detector stamp and any number of mixin and contract memberships, so the axes
 combine rather than compete.
 

@@ -1149,16 +1149,6 @@ func answerRoundTripCheck(
 	return nil, false
 }
 
-// mixinChecks selects the family a method owes for the classifications attached
-// to it.
-//
-// Three, where the RFC's tier table lists sixteen. What is missing is not
-// unwritten: `validates` and `scope` need a value no run can invent, four name
-// a partner the mixin schema declares no parameter for, `concurrent` and
-// `concurrentreaders` assert nothing without `-race`, `retrysucceeds` has no
-// attempt count to read, `integrationonly` is a build tag rather than an
-// assertion, and `deprecated` is a fact about a method rather than a claim about
-// its behaviour — it is stated in the generated documentation instead.
 // agreementCheck builds "the method refuses what the validator refuses".
 //
 // Agreement rather than rejection, for the reason if-match's is: "what the
@@ -1547,6 +1537,20 @@ func checkFor(c *sdk.Provenance, iface *sdk.Interface, m Method) checkBuilder {
 	}
 }
 
+// mixinChecks selects the family a method owes for the classifications attached
+// to it.
+//
+// Far fewer kinds than eidos registers mixins, and the gap is not unwritten
+// work: some mixins need a value no run can invent, some need a failure the
+// harness cannot induce, some are markers whose checkable quantities belong to
+// the classifications layered on them.
+//
+// The reasons live in `conformance/gate.UnevidencedClassifications`, one row
+// per classification, held true by a census. They used to live in a docblock
+// here — which had detached from this function entirely, sat above
+// [agreementCheck] naming a count from an RFC, and went unread through two
+// upstream growths of the mixin axis. That is the case for a register: a
+// comment goes stale in silence and a row reddens.
 func mixinChecks(
 	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
 ) ([]*Check, []decline) {

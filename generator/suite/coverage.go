@@ -64,6 +64,19 @@ type Coverage struct {
 	Modeled bool
 }
 
+// Asserted reports whether any carrier of this classification has a check,
+// which is a weaker question than [Coverage.Checked] and a different one.
+//
+// Checked is the header's question and is per carrier: a claim asserted on one
+// method and silent on another is a gap in *this file*, and OR-ing across
+// carriers is what used to hide it. Asserted is the vocabulary's question — is
+// there a check for this classification anywhere — and the two disagree
+// wherever a stamp lands on both halves of a pair. `if-match` marks the writer
+// and the predicate; the check lives on the writer and states the whole claim,
+// and the predicate is named a silent carrier because a check on a predicate
+// is not a thing.
+func (c Coverage) Asserted() bool { return len(c.Unchecked) < len(c.Methods) }
+
 // Elsewhere reports whether the evidence for this classification comes from
 // somewhere other than a check a consumer could write.
 //

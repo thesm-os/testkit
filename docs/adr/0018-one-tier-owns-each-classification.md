@@ -15,9 +15,12 @@ Accepted
 
 ## Context
 
-eidos registers seventy-two classifications across three orthogonal axes:
-twenty detectors, twenty-eight mixins, twenty-four contracts. A callable carries
-one detector stamp and any number of mixin and contract memberships.
+eidos registers its classifications across three orthogonal axes — detectors,
+mixins and contracts — and a callable carries one detector stamp and any number
+of mixin and contract memberships. The vocabulary was seventy-two when this
+record was accepted and is one hundred and four as of the last revision
+(twenty-two, fifty-six, twenty-six); the mixin axis has roughly doubled. No
+number here is authoritative, and that is the point of the next paragraph.
 [ADR-0004](0004-consume-only-the-annotator-plugin.md) committed to consuming the
 vocabulary whole, so it grows upstream and testkit learns of the change when the
 dependency moves. `conformance/gate` builds its expected set from the live
@@ -32,7 +35,8 @@ from a `factory func() T`. That is everything a consumer must supply.
 
 The model tier drives rapid-generated action sequences against a subject and a
 reference implementation, with shrinking, linearizability checking and goroutine
-leak detection. `engine/model/law` implements seventy-one laws for it. They are
+leak detection. `engine/model/law` implemented seventy-one laws for it when
+this record was accepted and implements eighty-three now. They are
 observational — a law reads from the subject and the reference and never writes,
 because mutation belongs to the action handlers — and most compare the two:
 `AUTO-READ-AFTER-WRITE` asserts that subject and reference agree on every key
@@ -119,19 +123,34 @@ about it.
   is a stated boundary rather than a suspected defect.
 - A classification added upstream still fails the gate by name, so the work it
   implies is discovered rather than remembered.
+- The union this record decided on is now measured rather than intended.
+  `conformance/gate.Evidenced` runs the real generators over the corpus and
+  asks, per registered classification, whether either tier asserts it; anything
+  neither asserts must carry a row in
+  `conformance/gate.UnevidencedClassifications` saying what the claim is
+  waiting on. Both directions fail: an unargued gap reddens, and so does a row
+  for a classification a tier has since covered. Fifteen rows opened it, of
+  which the four this record already named in prose are now four of the
+  fifteen — which is the difference the register buys. Prose stales silently.
 
 **Negative:**
 
 - A consumer without a reference implementation gets no evidence for the
   model-tier classifications their source declares. The header says so, which is
   honest, but it remains a gap that only writing a reference closes.
-- The assignment is a judgement made once per classification, and the gate can
-  measure the union without measuring whether each was assigned correctly. A
-  classification parked in the model tier to avoid designing a suite check would
-  not be caught.
-- `engine/model`'s laws have to be reachable from a generated binding. Nothing
-  produces one today, so the model tier's share of the obligation is undischarged
-  until a generator for it exists.
+- The assignment is a judgement made once per classification, and the gate
+  measures the union without measuring whether each was assigned correctly. A
+  classification parked in the model tier to avoid designing a suite check
+  would not be caught — the census sees evidence, not whether the evidence
+  came from the right tier.
+- The register's rows are arguments, and an argument can be wrong in a way a
+  build cannot see. What the census enforces is that one exists, is specific,
+  and stops being accepted the moment a tier covers the classification.
+- `engine/model`'s laws have to be reachable from a generated binding. The
+  model generator produces one, so this is discharged; the census reads those
+  bindings back to decide whether a classification's laws are evidence at all,
+  and a law in the catalogue for a fixture the model tier never runs is
+  evidence nowhere.
 
 **Neutral:**
 

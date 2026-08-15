@@ -32,7 +32,9 @@ the signature.
 A generated conformance harness has to answer five questions, and getting any of
 them wrong makes the output worse than nothing.
 
-**What does it assert?** The vocabulary is seventy-two classifications on three
+**What does it assert?** The vocabulary was seventy-two classifications when
+this document was written and is one hundred and four now — ADR-0018 carries
+the live count and `conformance/gate.Registered` derives it. On three
 orthogonal axes, arriving as metadata on a callable. Nothing in a stamp says what
 to assert about it.
 

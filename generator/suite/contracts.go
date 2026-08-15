@@ -14,14 +14,18 @@ import (
 
 // The emit kinds for the contract-derived checks.
 //
-// Three, where eidos registers twenty-four contracts. The other twenty-one are
-// not unwritten: sixteen name a property [engine/model/law] already implements,
-// which makes them the model tier's under docs/adr/0018, and four —
-// `circuit-breaker`, `leader-election`, `rate-limit` and `tx` — need a failing
-// call, a second subject or a controlled clock, none of which a fixed sequence
-// against one subject can produce. `batch-writer` is the model tier's for the
-// same reason `atomic` is: `mode=atomic` is AUTO-ATOMIC-WRITE, which needs an
-// observation and a write that fails on demand.
+// Three, where eidos registers many more, and the difference is not unwritten
+// work. Most name a property [engine/model/law] implements, which makes them
+// the model tier's under docs/adr/0018; the rest need a failing call, a second
+// subject or a controlled clock, none of which a fixed sequence against one
+// subject can produce.
+//
+// The counts and the per-contract reasons used to be written out here. They
+// went stale twice — the contract axis grew upstream and this comment did not,
+// and a reader comparing "twenty-four" against the registry found two more.
+// `conformance/gate.UnevidencedClassifications` holds the reasons now, one row
+// per classification, and a census fails the build when a row stops being
+// true. A comment cannot do that, which is the whole argument for moving them.
 const (
 	KindIfAbsent sdk.Kind = "suite.check.ifabsent"
 	KindIfMatch  sdk.Kind = "suite.check.ifmatch"

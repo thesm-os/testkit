@@ -24,7 +24,8 @@ code.
 That put the shape vocabulary into a published API. And the shape vocabulary is
 not testkit's to fix: it comes from eidos's annotator
 ([ADR-0004](0004-consume-only-the-annotator-plugin.md)), where twenty
-detectors, twenty-four contracts, and twenty-eight mixins are actively
+detectors, twenty-four contracts, and twenty-eight mixins — the vocabulary as
+of this record, since grown; ADR-0018 carries the live count — are actively
 maintained. Upstream adds a mixin and the published surface grows; upstream
 renames one and the published surface breaks.
 

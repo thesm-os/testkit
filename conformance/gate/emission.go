@@ -75,36 +75,9 @@ type Emitted struct {
 // would measure a pipeline production never runs. Like [Annotate], the run
 // is entirely in memory.
 func Emission(ctx context.Context, root string, patterns ...string) ([]Emitted, error) {
-	scoped := make([]string, len(patterns))
-	for i, p := range patterns {
-		scoped[i] = filepath.Join(root, p)
-	}
-
-	builder := pipeline.New().
-		WithBrand(brand.Name).
-		WithDirectivePrefix(brand.DirectivePrefix).
-		WithSourceRoot(root).
-		WithFrontend(golang.New())
-	for _, a := range generator.Annotators() {
-		builder = builder.WithAnnotator(a)
-	}
-	for _, g := range generator.Generators() {
-		// Every testkit generator implements the role; the registry's type
-		// is the plugin universe's, so the assertion narrows it back.
-		if gen, ok := g.(plugin.Generator); ok {
-			builder = builder.WithGenerator(gen)
-		}
-	}
-
-	pipe, err := builder.
-		WithBackend(backendgolang.New()).
-		WithSink(sink.NewMemory()).
-		Build()
+	pipe, err := runCorpus(ctx, root, patterns, corpusGenerators())
 	if err != nil {
-		return nil, fmt.Errorf("gate: build emission pipeline: %w", err)
-	}
-	if err := pipe.Run(ctx, scoped...); err != nil {
-		return nil, fmt.Errorf("gate: run emission pipeline: %w", err)
+		return nil, err
 	}
 
 	out := make([]Emitted, 0, 128)
@@ -144,4 +117,71 @@ func Emission(ctx context.Context, root string, patterns ...string) ([]Emitted, 
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Fixture < out[j].Fixture })
 	return out, nil
+}
+
+// runCorpus builds the pipeline the CLI runs, against a memory sink, and runs
+// it over the corpus — handing back the store for a census to read.
+//
+// One runner for every census that reads the emit queue rather than the files,
+// so they measure one production. A census assembling its own plugin set would
+// measure a pipeline nothing runs, and would keep measuring it after the real
+// set changed — the failure mode a gate can least afford.
+//
+// One function rather than a builder and a runner, because the two error paths
+// are the whole of what a caller has to handle and splitting them multiplied
+// those paths by the number of censuses without adding an answer either of
+// them could give.
+//
+// The generator set is a parameter rather than read here, for two reasons that
+// point the same way. A census cannot quietly assemble its own — the argument
+// is what makes "the same plugins the CLI runs" a fact at the call site. And
+// the malformed-set arm becomes reachable: a gate whose pipeline fails to
+// build must say so, because the alternative is a census that measures nothing
+// and reports every classification as covered by nobody, or as covered by
+// everybody, depending on which direction it reads.
+func runCorpus(
+	ctx context.Context, root string, patterns []string, gens []plugin.Generator,
+) (*pipeline.Pipeline, error) {
+	builder := pipeline.New().
+		WithBrand(brand.Name).
+		WithDirectivePrefix(brand.DirectivePrefix).
+		WithSourceRoot(root).
+		WithFrontend(golang.New())
+	for _, a := range generator.Annotators() {
+		builder = builder.WithAnnotator(a)
+	}
+	for _, g := range gens {
+		builder = builder.WithGenerator(g)
+	}
+	pipe, err := builder.
+		WithBackend(backendgolang.New()).
+		WithSink(sink.NewMemory()).
+		Build()
+	if err != nil {
+		return nil, fmt.Errorf("gate: build corpus pipeline: %w", err)
+	}
+
+	scoped := make([]string, len(patterns))
+	for i, p := range patterns {
+		scoped[i] = filepath.Join(root, p)
+	}
+	if err := pipe.Run(ctx, scoped...); err != nil {
+		return nil, fmt.Errorf("gate: run corpus pipeline: %w", err)
+	}
+	return pipe, nil
+}
+
+// corpusGenerators is the generator half of the plugin set the CLI registers.
+//
+// Every testkit generator implements the role; the registry's type is the
+// plugin universe's, so the assertion narrows it back.
+func corpusGenerators() []plugin.Generator {
+	all := generator.Generators()
+	out := make([]plugin.Generator, 0, len(all))
+	for _, g := range all {
+		if gen, ok := g.(plugin.Generator); ok {
+			out = append(out, gen)
+		}
+	}
+	return out
 }

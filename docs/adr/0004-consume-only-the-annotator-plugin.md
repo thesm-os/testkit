@@ -33,7 +33,8 @@ eidos's generators do.
 
 Annotation is the opposite case. The `shape` annotator's three orthogonal axes —
 twenty detectors, twenty-four contracts, twenty-eight mixins — produce
-seventy-two classifications, all of which the CLI already registers via
+seventy-two classifications (as of this record; see ADR-0018 for the live
+count), all of which the CLI already registers via
 `.All()`. testkit's own classification packages reimplemented thirty-nine of
 forty-four equivalents, and the audited gaps close upstream.
 
