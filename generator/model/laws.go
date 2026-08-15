@@ -772,7 +772,7 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		// The echoing defect: the first page answered forever, with more
 		// always promised — the walk that never advances.
 		echo := base
-		echo.Kind = "echo"
+		echo.Kind = kindEcho
 		out = append(out, echo)
 	}
 	if len(m.Returns) != 2 || !m.ReturnsError() {
@@ -786,7 +786,7 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		// The fading defect: every second answer reversed and short one —
 		// the replay that lies about the log it already showed.
 		fade := base
-		fade.Kind = "fade"
+		fade.Kind = kindFade
 		fade.Out = elem
 		out = append(out, fade)
 
@@ -852,13 +852,13 @@ func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
 		out = append(out, flap)
 	case integerResult(ret):
 		wane := base
-		wane.Kind = "wane"
+		wane.Kind = kindWane
 		wane.Out = ref
 		out = append(out, wane)
 		// And the rising twin: a count that only grows, for the laws about
 		// what must return to rest.
 		wax := base
-		wax.Kind = "wax"
+		wax.Kind = kindWax
 		wax.Out = ref
 		out = append(out, wax)
 	}
