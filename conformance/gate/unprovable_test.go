@@ -81,8 +81,8 @@ func TestEveryClaimedClassIsProducedOrItsLawsAreArgued(t *testing.T) {
 	}
 	// Two, and named: every law claiming either is in the register above, so
 	// the count here and the rows there move together.
-	testkit.Equal(t, strings.Join(gaps, ", "), "atomicity, resource",
-		"the wardrobe cannot produce these two classes, and the laws claiming "+
+	testkit.Equal(t, strings.Join(gaps, ", "), "atomicity, resource, permissive",
+		"the wardrobe cannot produce these three classes, and the laws claiming "+
 			"them are the whole of UnprovableLaws")
 }
 

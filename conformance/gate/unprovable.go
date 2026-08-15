@@ -58,6 +58,25 @@ var UnprovableLaws = map[string]string{
 		"stopped tracking is invisible to every wear that acts on an answer",
 	lawid.LeaseReleasedOnCancel: "a lease held past its cancel is retention rather than a " +
 		"wrong answer, and retention is what the wardrobe has no vocabulary for",
+
+	// permissive — an operation that succeeds where the claim requires a
+	// refusal. Every wear here produces a *wrong answer*; this class needs a
+	// *missing refusal*, and these four were being proved by `stick` or
+	// `spill` — wears that make an operation refuse or leak, which is either
+	// the behaviour the law wants or a different claim entirely.
+	//
+	// The wear this needs strips a guard: it lets a closed subject keep
+	// serving, a held lease grant again, a committed transaction accept a
+	// second terminal op. That is the inverse of every dressing in the
+	// wardrobe, which add wrongness rather than removing a check.
+	lawid.CursorNextAfterClose: "a Next after Close that answers instead of refusing is a " +
+		"missing refusal, and every wear here produces a wrong answer instead",
+	lawid.LifecycleAfterClose: "the same over a lifecycle: `stick` makes the operation refuse " +
+		"after its first call, which is what this law wants rather than what breaks it",
+	lawid.TwoPhaseMutex: "a committed transaction that accepts a second terminal op is a guard " +
+		"that did not fire, and no dressing over the interface can remove one",
+	lawid.LeaseDoubleAcquireBlocks: "a second acquire that grants is the same missing refusal, " +
+		"and duplicating a stream element is not the same defect as duplicating a lease holder",
 }
 
 // Unprovable returns every bound law no wear can prove and no row argues.

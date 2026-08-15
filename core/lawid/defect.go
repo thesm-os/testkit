@@ -86,6 +86,19 @@ const (
 
 	// ClassResource is something taken and not given back.
 	ClassResource DefectClass = "resource"
+
+	// ClassPermissive is an operation that succeeds where the claim requires a
+	// refusal — the read after close that answers, the second acquire that
+	// grants, the terminal op a committed transaction accepts.
+	//
+	// The class the first taxonomy missed, and it was missed for a reason
+	// worth recording: every other class here is a *wrong answer*, and this
+	// one is a *missing refusal*. `stick` — the wear that makes an operation
+	// refuse after its first call — reads as the obvious defect for a
+	// close-then-use law and is in fact that law's desired behaviour, which is
+	// why four laws were being proved by a wear they should have been immune
+	// to. Nothing in the wardrobe produces it.
+	ClassPermissive DefectClass = "permissive"
 )
 
 // Classes returns every class, for a census that has to be total over them.
@@ -94,7 +107,7 @@ func Classes() []DefectClass {
 		ClassNoEffect, ClassInstability, ClassRegression, ClassDuplication,
 		ClassLoss, ClassOrdering, ClassBound, ClassIsolation,
 		ClassRepeatability, ClassStaleness, ClassSpuriousFailure,
-		ClassIntegrity, ClassAtomicity, ClassResource,
+		ClassIntegrity, ClassAtomicity, ClassResource, ClassPermissive,
 	}
 }
 
@@ -158,7 +171,7 @@ var defectClasses = map[string][]DefectClass{
 	CountEqualsReference:         {ClassLoss, ClassDuplication},
 	CRDTMerge:                    {ClassLoss},
 	CursorCloseIdempotent:        {ClassRepeatability},
-	CursorNextAfterClose:         {ClassRepeatability},
+	CursorNextAfterClose:         {ClassPermissive},
 	DeadlineRespecting:           {ClassBound},
 	DefaultOnError:               {ClassNoEffect},
 	DeleteReturnsNotFound:        {ClassNoEffect, ClassStaleness},
@@ -169,9 +182,9 @@ var defectClasses = map[string][]DefectClass{
 	IdempotentWrite:              {ClassRepeatability, ClassDuplication},
 	InjectionSafe:                {ClassIntegrity},
 	LeakFree:                     {ClassResource},
-	LeaseDoubleAcquireBlocks:     {ClassIsolation, ClassDuplication},
+	LeaseDoubleAcquireBlocks:     {ClassPermissive},
 	LeaseReleasedOnCancel:        {ClassResource},
-	LifecycleAfterClose:          {ClassRepeatability},
+	LifecycleAfterClose:          {ClassPermissive},
 	LifecycleRespectsContext:     {ClassBound},
 	LossyRoundtrip:               {ClassIntegrity},
 	MonotonicNonDecreasing:       {ClassRegression},
@@ -217,7 +230,7 @@ var defectClasses = map[string][]DefectClass{
 	TransactionNoMidTxVisibility: {ClassIsolation},
 	TransactionRollback:          {ClassAtomicity},
 	TTLExpiry:                    {ClassStaleness},
-	TwoPhaseMutex:                {ClassIsolation},
+	TwoPhaseMutex:                {ClassPermissive},
 	TwoPhaseRollbackAfterCommit:  {ClassAtomicity},
 	UpdaterReplaces:              {ClassNoEffect, ClassStaleness},
 	UpserterIdempotent:           {ClassRepeatability, ClassDuplication},

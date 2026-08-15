@@ -40,7 +40,7 @@ func TestEveryWearClassIsInTheVocabulary(t *testing.T) {
 	}
 }
 
-// Two classes the wardrobe cannot produce, and no more.
+// Three classes the wardrobe cannot produce, and no more.
 //
 // The join the whole axis turns on, held from this side as a count rather than
 // as an absence: a class the laws claim and the wardrobe cannot produce is a
@@ -48,7 +48,7 @@ func TestEveryWearClassIsInTheVocabulary(t *testing.T) {
 // construction. Which laws those are, and what the missing wear would have to
 // do, is `gate.UnprovableLaws` — this holds the number so a third gap cannot
 // open without somebody deciding it should.
-func TestTwoClassesHaveNoWear(t *testing.T) {
+func TestThreeClassesHaveNoWear(t *testing.T) {
 	t.Parallel()
 
 	produced := map[lawid.DefectClass]bool{}
@@ -63,9 +63,11 @@ func TestTwoClassesHaveNoWear(t *testing.T) {
 			gaps = append(gaps, string(c))
 		}
 	}
-	testkit.Equal(t, strings.Join(gaps, ", "), "atomicity, resource",
-		"a partial effect and a retained resource are what no dressing over a "+
-			"signature can produce; every other class has a wear")
+	testkit.Equal(t, strings.Join(gaps, ", "), "atomicity, resource, permissive",
+		"a partial effect, a retained resource and a missing refusal are what no "+
+			"dressing over a signature can produce — the first two add nothing this "+
+			"wardrobe has words for, and the third would have to *remove* a check "+
+			"where every wear here adds wrongness")
 }
 
 // Proves is an intersection, and answers no where there is none.
