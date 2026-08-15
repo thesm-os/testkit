@@ -1067,6 +1067,159 @@ Classification `Class` strings are the **axis-qualified eidos names** with
 veneer-generated constants — the strings freeze into lock files, so the
 namespace prefix is what makes them safely stable.
 
+## Amendments
+
+2026-08-14, from the engine census
+([engine-revision.md](../internal/engine-revision.md)). The RFC was accepted
+before the census ran; three of its findings change consumer-visible
+semantics and are recorded here rather than edited into the design above.
+
+**A1 — the differential and the laws are separate legs.** The engine's
+`LawsOnly` doc records the problem: the differential compares every call
+against the reference and aborts on divergence, so a broken subject dies at
+step 0 and the laws never run. As accepted, `.Oracle()` therefore masks
+every law exactly when a real reference exists. The fix is structural: the
+model slot emits **two checks** — a differential leg that carries no laws,
+and a laws leg that drives its own sequences and takes no per-call
+differential verdict. Both always run. The Report marks each leg's tier as
+before. No flag; the separation is the check structure.
+
+**A2 — `vacuous` joins the outcome set.** Outcomes are
+`passed | failed | unmet | vacuous`. A check whose preconditions never
+engaged (the engine's `law.Vacuous`: the poison that did not take, the
+write that never errored) reports `vacuous`, not `passed`. This lands
+before `testkit-report v1` freezes, because the encoding is additive-only
+after that and an outcome consumers switch on is the worst place to add a
+value late. The engine's `Registry` census (`ran`/`vacuous`) is the
+producer for law legs; a hand check reports it through the same channel.
+
+**A3 — the concurrent leg gets the flake policy the differential leg has.**
+A concurrent failure's seed reproduces the drawn inputs, not the goroutine
+interleaving, so it may not reproduce at all. Policy: a concurrent red that
+does not reproduce under its own seed is reported as a flake with both
+readings — a real interleaving bug or an over-strong claim — never silently
+retried, and never presented as deterministic. Porcupine's `Unknown` stays
+a failure, with load bounded against the timeout (engine-side fix).
+
+Two mechanism notes, no design change: the canonical draw is implemented by
+rapid's `Generator.Example(seed)` — the "What the design rests on" bullet
+about stream determinism now names a shipping API rather than a property we
+hoped for; and `rapid.MakeCustom{Fields: …}` is the intended mechanism for
+deriving request-struct generators, with role fields overriding the
+reflected defaults — a field only goes named-red when reflection cannot
+terminate on its type and no generator was supplied.
+
+2026-08-15, from the improvement programme's Tier 1 close. Five changes, all
+pre-freeze, all inside the accepted design. Four are field shapes decided
+before `testkit-report v1` and the ID grammar stop being free; the fifth
+changes what the product claims.
+
+**A4 — the report carries falsifiability.** `Report` as accepted says what
+passed. It cannot say what was *able* to fail, and both tiers already compute
+exactly that: the suite tier's falsification companion drives every generated
+check against a stand-in built to break it, and the model tier's saturation
+prover requires the kill to come from a defect of the law's own declared
+class. Neither datum reaches the consumer, so `44 legs, 44 passed` does not
+distinguish a suite that works from one that asserts nothing — which is the
+premise of the tool, stopping at the repository boundary.
+
+Each check reports `proven | argued | unproven`, with the argument where there
+is one. The conformance statement then reads "64 checks, 61 proven able to
+fail, 3 argued". Argued is not a weaker pass: the model tier's own registers
+show three shapes of it — the wardrobe cannot produce the defect the law is
+named for, no wear reaches the law, or the claim needs a value only the
+consumer has.
+
+**A5 — an ID's sub-segments are slugs, not sentences.** As drafted, a
+generated ID is the claim in prose: `Put/reports a cancelled context`. The
+typed constant protects the drop *site* from regeneration; the string is what
+lands in `checks.lock` and the report, and prose is edited. Tier 1's
+falsification work reworded five generated check messages in one change — the
+same generator writes both, so a claim rewording and an ID rewording are one
+edit, and one of them was going to be frozen.
+
+The `label` production becomes `1*( lowercase / DIGIT / "-" )`. `Claim`
+already carries the sentence and stays free to improve forever. Hand-written
+IDs take the same grammar, which `Run` already validates.
+
+**A6 — `Caps` is a keyed set, not a struct of two fields.** The accepted
+`Caps{Clock bool; Induce error}` encodes two capabilities. The engine tracks
+six kinds of door today — the conformance gate's unarmed-door register keys on
+`<law-id>.<field>` and holds `clock`, an induction sentinel, and four
+consumer-supplied values (`balanced`, `history`, `required`, `expected`). A law
+needing an expected multiset cannot declare that need through two fields, so it
+either declares nothing — the silent-green class this RFC exists to kill — or
+`Caps` grows one field per door and is a registry with extra steps.
+
+`Caps` becomes `map[Capability]any` with `CapClock` and `CapInduce` as the
+first two entries and the registry open under the same census-or-red
+discipline the role keywords take. The failure semantics are unchanged: a
+capability the subject cannot meet fails the check with the arming
+instruction.
+
+**A7 — the outcome set is a shape, not an enum.** A2 added `vacuous` before
+the freeze because an outcome consumers switch on is the worst place to add a
+value late. It will not be the last: the model tier has since learned to
+distinguish a law whose defect class no wear produces from one no wear
+reaches, and A4 adds falsifiability.
+
+So the frozen part is three **dispositions** — `passed`, `failed`, `notrun` —
+and every finer answer is a `reason` in an open namespace: `vacuous`, `unmet`,
+`unprovable`, `unreached`, whatever the engine learns next. Consumers switch on
+three values forever and the richness accumulates where addition is free.
+`unmet` and `vacuous` from A2 become reasons under `notrun`, which keeps the
+distinction the POC learned the hard way — a capability the subject cannot
+provide is a different finding from a claim whose preconditions never engaged.
+
+**A8 — `checks.lock` records the classification vocabulary it was written
+against.** `Class` strings are the axis-qualified eidos names, a namespace
+consumed whole and not owned (ADR-0004). It grows — 72 classifications when
+that ADR was accepted, 104 now — and growth is safe. A rename upstream is not:
+it changes a frozen string in every consumer's lock file with nothing to
+detect it. The lock file records the eidos version, so a rename surfaces as a
+migration somebody can attribute.
+
+2026-08-15, second pass. One change, from writing a second interface into the
+worked example.
+
+**A9 — the veneer is a namespace value per interface, not package
+functions.** The design above names the veneer's entry points after the
+concern — `Suite`, `Run`, `Checks`, `Config`, `Subject`, `Without` — and the
+example proved that reads beautifully for one interface and does not compile
+for two. The surface shipped today avoids that by prefixing every symbol with
+the interface name, which is the "~30 exported symbols per generated package,
+relearned per interface" this RFC's own Problem section calls a defect. The
+example had quietly traded the defect for a compile error and neither document
+said which happens at scale.
+
+Everything callable becomes a method on one exported value per interface —
+`StoreSuite.Run`, `StoreSuite.Checks.Put.Smoke()`, `StoreSuite.On.Put(...)`,
+`StoreSuite.Assert.GetMiss(...)`. Four things stay outside it, each for a
+reason that is not taste:
+
+- the witnessed instantiation (`Store`), because a `RunWith` check names
+  `suite.Subject[kvtest.Store]` in a signature;
+- the subject constructor (`StoreSubject`), because it is generic in the
+  concrete implementation type and Go has no generic methods — the same
+  constraint that makes the subject builder exist;
+- the config and fixture types, because a consumer overrides a pool field by
+  name.
+
+Measured on the example: **34 exported symbols for one four-method interface
+became 5, and two interfaces cost 9 rather than 68.** Twenty cost roughly
+ninety rather than roughly seven hundred — four or five names each, against
+thirty-four each — and a reader learns the shape once instead of per
+interface.
+
+Two consequences worth stating. Generated *files* split by concern and not by
+interface — Layout composes a filename from the source file, so twenty
+interfaces declared in one `.go` file produce one checks file holding all
+twenty, and per-interface files need a per-interface `//testkit:out`, which is
+the consumer's call. And ID scope segments are method names, so two interfaces
+in one package that share a method name would collide in the ID space; the
+example asserts they do not rather than leaving it to be discovered, and the
+qualification rule is owed by whichever RFC first needs it.
+
 ## Deferred
 
 - `Wrap` — reintroduced with the fault-injection story that names its
