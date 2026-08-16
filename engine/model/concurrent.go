@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -95,11 +96,33 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 			history []porcupine.Operation
 			clock   atomic.Int64
 			wg      sync.WaitGroup
+
+			panicMu  sync.Mutex
+			panicMsg string
 		)
+
+		// capture turns a worker panic into a failed ITERATION. Without
+		// it, a subject that panics on a worker goroutine — a typed-nil
+		// constructor is the classic — kills the process outside every
+		// recover the runner or the suite installs: no report, and every
+		// sibling subject's evidence erased with it. The first panic is
+		// kept; its stack is the one that names the cause.
+		capture := func() {
+			r := recover()
+			if r == nil {
+				return
+			}
+			panicMu.Lock()
+			if panicMsg == "" {
+				panicMsg = fmt.Sprintf("%v\n%s", r, debug.Stack())
+			}
+			panicMu.Unlock()
+		}
 
 		// Linearizability workers — recorded to Porcupine history.
 		for clientID, ops := range schedule {
 			wg.Go(func() {
+				defer capture()
 				for _, op := range ops {
 					callTS := clock.Add(1)
 					result := op.action.Apply(rt.Context(), sut, op.input)
@@ -124,6 +147,7 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 		// action.Stress which only calls the SUT without comparison.
 		for _, sa := range cc.StressActions {
 			wg.Go(func() {
+				defer capture()
 				for range cc.OpsPerWorker {
 					sa.Run(rt, sut, ref)
 				}
@@ -131,6 +155,15 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 		}
 
 		wg.Wait()
+
+		if panicMsg != "" {
+			// A panicked worker leaves an incomplete history; checking it
+			// would judge an interleaving that never finished. The
+			// iteration fails with the cause, the process survives, and
+			// the run's report still prints.
+			rt.Fatalf("model: a concurrent worker panicked; failing the iteration "+
+				"instead of the process so sibling evidence survives:\n%s", panicMsg)
+		}
 
 		if len(history) == 0 {
 			return

@@ -501,3 +501,40 @@ func TestConcurrentTraceLawVacuousIsCountedApart(t *testing.T) {
 		model.WithLaw(&vacuousTraceLaw{}),
 	)
 }
+
+// TestConcurrentWorkerPanicFailsTheTestNotTheProcess pins the guard the
+// suite layer's promise depends on: a subject that panics on a worker
+// goroutine — a typed-nil constructor is the classic — must become a
+// failed iteration with the cause named, not a dead process with every
+// sibling subject's evidence erased.
+func TestConcurrentWorkerPanicFailsTheTestNotTheProcess(t *testing.T) {
+	t.Parallel()
+
+	f := testkit.NewFailableTB().WithGoexit()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		model.Assert(f,
+			func() storeIface { return newStore() },
+			model.WithConcurrent(model.ConcurrentConfig[storeIface]{
+				Workers:      2,
+				OpsPerWorker: 3,
+				Model:        linearize.KV[string, item](errNotFound),
+				Actions: []model.ConcurrentAction[storeIface]{{
+					Name:         "Boom",
+					Gen:          func(rt *rapid.T) any { return "k" },
+					Apply:        func(context.Context, storeIface, any) any { panic("typed-nil stand-in") },
+					PartitionKey: func(any) string { return "k" },
+				}},
+			}),
+		)
+	}()
+	<-done
+
+	if !f.Failed() {
+		t.Fatal("a panicking worker must fail the test")
+	}
+	if !strings.Contains(f.Msg(), "panicked") || !strings.Contains(f.Msg(), "typed-nil stand-in") {
+		t.Errorf("the failure must carry the panic and its cause, got: %s", f.Msg())
+	}
+}
