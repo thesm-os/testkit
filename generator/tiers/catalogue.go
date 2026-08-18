@@ -619,6 +619,15 @@ var rules = []Rule{
 		Fields: []Field{
 			{Name: fieldClose, Kind: KindRole, From: "lifecycleafterclose.close"},
 			{Name: "Op", Kind: KindRole, From: roleSelf},
+			// Ops is the law's multi-probe arm, deliberately left at its
+			// default here: this generator binds one law per stamped host
+			// through Op, so every stamped method is probed by its own
+			// binding and the probe map has nothing to add. An emitter
+			// that folds the stamped set into ONE binding fills Ops
+			// instead — one probe per stamped method — because a claim
+			// about several methods backed by one probe is the
+			// silent-green class the law widened to kill.
+			{Name: "Ops", Kind: KindDefault},
 			{Name: fieldSentinel, Kind: KindConstant, From: paramLifecycleSentinel},
 		},
 	},
