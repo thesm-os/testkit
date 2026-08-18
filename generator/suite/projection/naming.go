@@ -22,6 +22,11 @@ const ExprCtx Expr = "ctx"
 // the parameter takes the produced type.
 const ExprBorrowed Expr = "borrowed"
 
+// ExprProduced is the local an opener smoke binds its answered handle
+// to before closing it — the body's one name for what the opener
+// owns.
+const ExprProduced Expr = "produced"
+
 // The emitted-surface suffixes, composed only through the policy
 // functions below so each generated identifier's spelling has one
 // home.

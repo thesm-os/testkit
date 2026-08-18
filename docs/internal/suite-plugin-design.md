@@ -162,11 +162,23 @@ generator/suite/
 │   └── fixture.go            # PoolPlan + the member transforms      [BUILT]
 │                             #   (pool[1] test→other, pool[2] hostile;
 │                             #   refusal where a splice would lie)
-└── templates/golang/
+└── templates/gen/            # the rewrite's tree, embedded APART from
+    │                         #   the incumbent's templates/golang — two
+    │                         #   parsers with two function maps must
+    │                         #   never see each other's files
     ├── file/                 # structural: banner-spacing rule lives here
     ├── body/                 # one .tmpl per body variant
+    │                         #   smoke.tmpl [BUILT: three arms, one claim]
     └── defect/               # one .tmpl per defect variant
 ```
+
+The render seam: a body's kind IS its template's {{define}} name, so
+an unregistered variant fails by name; the census holds defined
+templates to registered variants one-way until the set completes,
+then flips to equality. The view carries what no projection does —
+the receiver ident, the check-name constant, the discard arity —
+because those are the METHOD's facts, resolved when the emitter
+walks the inventory beside the methods.
 
 THE FOLD (executed): the derive layer is flat files in the plugin
 package, not a `derive/` subpackage. The subpackage boundary forced a

@@ -1,0 +1,28 @@
+{{/*
+  body.smoke-survives — the smoke family's one template, three arms
+  sharing one claim shape: the method survives an honest call. The
+  borrow arm borrows from the producing sibling first; the opener arm
+  closes the handle it answers; the plain arm just calls. The local
+  idents come through the naming policy, never spelled here.
+*/}}
+{{- define "body.smoke-survives" -}}
+suite.Survives(tb, {{.Check}}, func(ctx context.Context) {
+{{- if .Body.Borrow.Method}}
+	{{borrowedIdent}}, err := {{callExpr .Recv .Body.Borrow}}
+	if err != nil {
+		// Nothing borrowed, nothing to return; the producer's own
+		// smoke judges this path.
+		return
+	}
+	{{.Discard}} {{callExpr .Recv .Body.Call}}
+{{- else if .Body.CloseProduced}}
+	{{producedIdent}}, err := {{callExpr .Recv .Body.Call}}
+	if err != nil {
+		return
+	}
+	_ = {{producedIdent}}.{{.Body.CloseProduced}}(ctx)
+{{- else}}
+	{{.Discard}} {{callExpr .Recv .Body.Call}}
+{{- end}}
+})
+{{- end -}}
