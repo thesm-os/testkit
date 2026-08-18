@@ -145,10 +145,9 @@ generator/suite/
 ├── derive.go                 # Iface input, deriver registry, Refusal   [BUILT]
 ├── derive_signature.go       # smoke/cancel/deadline/nilctx/zero       [BUILT]
 ├── derive_stamps.go          # mixin + detector rules tables, census   [BUILT]
-├── derive_contracts.go       # contract arm: opener smoke [BUILT];
-│                             #   borrowed-input smoke gated on the
-│                             #   SmokeSurvives.Borrow amendment; direct
-│                             #   contract checks pending
+├── derive_contracts.go       # contract arm: opener + borrow smokes
+│                             #   [BUILT]; direct contract checks
+│                             #   (if-absent, if-match, outbox) pending
 ├── derive_caps.go            # Needs derivation: clock, induce, recover, provides
 ├── derive_proofs.go          # defect plans per family; argued() fallbacks
 ├── claims.go                 # the claim wording policy, corpus-pinned [BUILT]
@@ -202,7 +201,13 @@ corpus-amendment decision owed before the flip can reproduce the locks:
   projections. The type-noun rule is already corpus-true for the
   scalar draws (`Lookup(ctx, id Key)` words "a seeded key").
 
-## PROPOSED amendment: the borrowed-input smoke (SmokeSurvives.Borrow)
+Also on the frontier: **context families on a borrowed-input method.**
+The borrow arm derives the smoke alone; a borrowed method under the
+ctx directive would need its cancel/deadline/nilcontext calls to
+borrow too, and no corpus contract declares both. The rule waits for
+an instance rather than guessing one.
+
+## Amendment: the borrowed-input smoke (SmokeSurvives.Borrow) — RATIFIED, BUILT
 
 The pool corpus's `Put survives returning a borrowed resource` needs a
 prologue no approved variant carries: borrow from the producing

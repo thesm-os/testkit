@@ -45,6 +45,22 @@ func SmokeClaim(m Method, seeded bool) string {
 	}
 }
 
+// OpenerSmokeClaim words the producing method's smoke: the call
+// survives and the handle it opens closes. The produced noun is the
+// contract's own name — the vocabulary's one home for what the
+// handle is called.
+func OpenerSmokeClaim(m Method, produced string) string {
+	return m.Name + " survives a call and the " + produced + " it opens closes"
+}
+
+// BorrowSmokeClaim words the returning method's smoke: the resource
+// it returns was borrowed from the producing sibling. "resource" is
+// the corpus's word for the borrowed thing; a second borrowing domain
+// argues for deriving it before a rule invents one.
+func BorrowSmokeClaim(m Method) string {
+	return m.Name + " survives returning a borrowed resource"
+}
+
 // CancelClaim words the cancel family.
 func CancelClaim(m Method) string {
 	return m.Name + " reports a cancelled context as cancelled"

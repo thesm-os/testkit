@@ -56,12 +56,21 @@ func TestClaimWordingsMatchTheCorpus(t *testing.T) {
 		keyParam("key"), {Name: "value", Source: storefixture.Named("Value")},
 	}, errReturn)
 	closeM := claimMethod("Close", nil, errReturn)
+	// Append draws `e Entry`: the reconciled noun form the design doc
+	// records — the type's word, not the parameter's identifier.
+	appendM := claimMethod("Append",
+		[]golang.Param{{Name: "e", Source: storefixture.Named("Entry")}}, errReturn)
+	scan := claimMethod("Scan", nil,
+		golang.Return{Source: storefixture.Named("Cursor")}, errReturn)
 
 	testkit.TableTest(t, []claimCase{
 		{"smoke with one draw names its noun", suite.SmokeClaim(get, false), "Get survives a call with a derived key"},
 		{"smoke with no draws is bare", suite.SmokeClaim(length, false), "Len survives a call"},
 		{"smoke with several draws says derived inputs", suite.SmokeClaim(put, false), "Put survives a call with derived inputs"},
+		{"smoke nouns the declared type", suite.SmokeClaim(appendM, false), "Append survives a call with a derived entry"},
 		{"seeded smoke speaks the seed seam", suite.SmokeClaim(lookup, true), "Lookup survives a call with a seeded key"},
+		{"opener smoke closes what it opens", suite.OpenerSmokeClaim(scan, "cursor"), "Scan survives a call and the cursor it opens closes"},
+		{"borrow smoke returns what it borrowed", suite.BorrowSmokeClaim(put), "Put survives returning a borrowed resource"},
 		{"cancel", suite.CancelClaim(get), "Get reports a cancelled context as cancelled"},
 		{"deadline", suite.DeadlineClaim(get), "Get reports an expired deadline as exceeded"},
 		{"nilcontext", suite.NilCtxClaim(get), "Get returns an error rather than panicking on a nil context"},

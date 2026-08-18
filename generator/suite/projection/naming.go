@@ -17,6 +17,11 @@ type Expr string
 // place that decision is spelled.
 const ExprCtx Expr = "ctx"
 
+// ExprBorrowed is the local a borrow-first smoke binds the producing
+// sibling's answer to; the returning call's args reference it where
+// the parameter takes the produced type.
+const ExprBorrowed Expr = "borrowed"
+
 // Option is a generated stub option's name ("WithLogAppend"),
 // constructed only through [OptionName] so the naming policy has one
 // home.

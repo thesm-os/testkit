@@ -105,6 +105,15 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 			storeIface(true, noErr),
 			[]vocab.ID{"Peek/smoke", "Peek/cancel", "Peek/nilcontext", "Peek/deadline"},
 		},
+		{
+			"declared totality excludes the zero family alone",
+			storeIface(true, func() suite.Method {
+				m := storeGet()
+				m.Mixins = []string{suite.MixinTotal}
+				return m
+			}()),
+			[]vocab.ID{"Get/smoke", "Get/cancel", "Get/nilcontext", "Get/deadline"},
+		},
 	}, func(t *testing.T, tc familyCase) {
 		plans, refusals := suite.Signature{}.Derive(tc.iface)
 		testkit.Len(t, refusals, 0, "derivable shapes refuse nothing")

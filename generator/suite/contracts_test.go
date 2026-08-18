@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifabsent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifmatch"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/outbox"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/pool"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
@@ -39,6 +40,10 @@ func TestContractVocabularyIsUpstream(t *testing.T) {
 			"outbox declares the role the check selects on")
 		testkit.True(t, slices.Contains(outbox.Roles, suite.ContractOutboxPartner),
 			"and the partner role the check reaches through")
+		testkit.True(t, slices.Contains(pool.Roles, suite.ContractPoolGet),
+			"pool declares the producing role the borrow reaches through")
+		testkit.True(t, slices.Contains(pool.Roles, suite.ContractPoolPut),
+			"and the returning role the borrow smoke selects on")
 	})
 
 	t.Run("names the predicate role the contract declares", func(t *testing.T) {

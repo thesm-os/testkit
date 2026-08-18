@@ -6,9 +6,11 @@ package suite
 import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/cursor"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifabsent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifmatch"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/outbox"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/pool"
 	"go.thesmos.sh/eidos/sdk"
 )
 
@@ -51,6 +53,23 @@ const (
 	ContractOutbox        = outbox.Name
 	ContractOutboxRole    = "append"
 	ContractOutboxPartner = "subscribe"
+
+	// The cursor contract's open arm: the producing method's smoke
+	// closes the handle it answers, so the close partner is read here;
+	// the next partner and the sentinel are the laws deriver's inputs
+	// and are not read until it lands.
+	ContractCursor      = cursor.Name
+	ContractCursorOpen  = cursor.RoleOpen
+	ContractCursorClose = cursor.ParamClose
+
+	// The pool contract's put arm: the returning method's smoke
+	// borrows from the get sibling first, because its input is
+	// pool-produced and not the fixture's to derive. eidos publishes
+	// the pool vocabulary as a slice, so the role spellings are
+	// literals held upstream by TestContractVocabularyIsUpstream.
+	ContractPool    = pool.Name
+	ContractPoolGet = "get"
+	ContractPoolPut = "put"
 )
 
 // contractDataOf reads the role and partner stamps of every contract this
@@ -83,6 +102,7 @@ func contractDataOf(bag *sdk.Bag) (roles, partners map[string]string) {
 	wantedPartners := [...]struct{ contract, role string }{
 		{ContractOutbox, ContractOutboxPartner},
 		{ContractIfMatch, ContractIfMatchMatch},
+		{ContractCursor, ContractCursorClose},
 	}
 	for _, w := range wantedPartners {
 		v, found := shape.ContractPartnerKey(w.contract, w.role).Get(bag)

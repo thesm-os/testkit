@@ -39,9 +39,16 @@ type CallPlan struct {
 // renders it.
 
 // SmokeSurvives asserts the call returns without panicking; a produced
-// handle it opens is closed in the same body.
+// handle it opens is closed in the same body. One variant carries the
+// three smoke shapes — plain, opener, borrower — because all three
+// state one claim family and differ only in prologue and epilogue.
 type SmokeSurvives struct {
 	Call CallPlan
+	// Borrow is the producing sibling called first when the smoked
+	// method's input is pool-produced: its result feeds the smoked
+	// call, and a failed borrow returns without judgment — the
+	// producer's own smoke owns that path.
+	Borrow CallPlan
 	// CloseProduced names the produced handle's release method when
 	// the smoked method answers one — the opener owns what it opens.
 	CloseProduced string

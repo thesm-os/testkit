@@ -35,6 +35,14 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 	seeded := f.seeded()
 
 	for _, m := range f.Methods {
+		if plan, borrowed := borrowSmoke(f, m); borrowed {
+			// The produced draw is the borrow's to supply, so the
+			// borrow arm answers before the undeliverable refusal.
+			// Context families on a borrowed method are an open rule
+			// (design-doc frontier); no corpus contract declares both.
+			plans = append(plans, plan)
+			continue
+		}
 		if r, refused := argsRefusal(DeriverSignature, f, m, "'s signature checks"); refused {
 			refusals = append(refusals, r)
 			continue
@@ -54,7 +62,7 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			plans = append(plans,
 				ctxPlan(f, m, vocab.SegDeadline, vocab.ClassDeadline, DeadlineClaim(m), projection.DeadlineCall{Call: call}))
 		}
-		if m.ReturnsError() && len(m.ValueReturns()) > 0 {
+		if m.ReturnsError() && len(m.ValueReturns()) > 0 && !m.HasMixin(MixinTotal) {
 			plans = append(plans, projection.CheckPlan{
 				ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegZeroValue},
 				Class:       vocab.ClassZeroValue,
@@ -69,8 +77,13 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 }
 
 // smokePlan is the always-derived family: proven by the panicking
-// double.
+// double. A contract can override what the smoke must say — the
+// cursor opener closes what it opens — and the contract arm answers
+// first so the smoke ID stays single-sourced.
 func smokePlan(f Iface, m Method, call projection.CallPlan, seeded bool) projection.CheckPlan {
+	if plan, overridden := openerSmoke(f, m, call); overridden {
+		return plan
+	}
 	return projection.CheckPlan{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegSmoke},
 		Class:       vocab.ClassSmoke,
