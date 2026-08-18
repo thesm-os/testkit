@@ -283,7 +283,7 @@ func CheckSIG2[K comparable](txns []Txn[K]) error {
 
 // SnapshotIsolationG0 verifies the recorded transaction history is
 // free of G0 write-cycle anomalies. Auto-emitted for the
-// //testkit:snapshot-isolation directive; History extracts the
+// //testkit:mixin snapshotisolation directive; History extracts the
 // per-iteration transaction history from the SUT (or the runner's
 // trace).
 type SnapshotIsolationG0[T any, K comparable] struct {
@@ -303,7 +303,7 @@ func (l SnapshotIsolationG0[T, K]) Check(rt *rapid.T, sut, _ T) error {
 
 // SnapshotIsolationG1 verifies the recorded transaction history is
 // free of G1 anomalies (aborted reads, intermediate reads, and
-// dependency cycles). Auto-emitted for //testkit:snapshot-isolation.
+// dependency cycles). Auto-emitted for //testkit:mixin snapshotisolation.
 type SnapshotIsolationG1[T any, K comparable] struct {
 	History func(*rapid.T, T) []Txn[K]
 }
@@ -321,7 +321,7 @@ func (l SnapshotIsolationG1[T, K]) Check(rt *rapid.T, sut, _ T) error {
 
 // SnapshotIsolationG2 verifies the recorded transaction history is
 // free of G2 anti-dependency-cycle anomalies (write skew).
-// Auto-emitted for //testkit:snapshot-isolation.
+// Auto-emitted for //testkit:mixin snapshotisolation.
 type SnapshotIsolationG2[T any, K comparable] struct {
 	History func(*rapid.T, T) []Txn[K]
 }

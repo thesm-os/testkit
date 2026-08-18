@@ -15,7 +15,8 @@ import (
 	"go.thesmos.sh/testkit/engine/model/history"
 )
 
-// ChainAppend creates an action for an //testkit:appends method.
+// ChainAppend creates an action for the chain contract's append role
+// (//testkit:contract chain role=append replay=<M>).
 // Draws an entry, calls SUT and ref, compares error outcomes.
 func ChainAppend[T, Entry any](
 	name string,
@@ -71,7 +72,8 @@ func ChainAppendRecording[T any, K comparable, Entry any](
 	}
 }
 
-// ChainVerify creates an action for an //testkit:verifies method.
+// ChainVerify creates an action for the chain contract's verify role
+// (//testkit:contract chain role=verify).
 func ChainVerify[T any](
 	name string,
 	verify func(context.Context, T) error,
@@ -92,9 +94,10 @@ func ChainVerify[T any](
 	}
 }
 
-// ChainReplay creates a partition-aware action for an //testkit:replays
-// method. Draws a partition key from the history's known partitions,
-// drains both SUT and ref iter.Seq2, sorts, compares.
+// ChainReplay creates a partition-aware action for the chain contract's
+// replay partner (named by replay= on the append role's directive). It
+// draws a partition key from the history's known partitions, drains both
+// SUT and ref iter.Seq2, sorts, compares.
 func ChainReplay[T any, K comparable, Entry any](
 	name string,
 	hist *history.History[K, Entry],

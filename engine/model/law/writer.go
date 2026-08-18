@@ -23,7 +23,7 @@ var defaultXSSTokens = []string{"<script", "<img", "<svg", "<iframe"}
 // IdempotentWrite verifies that the second Write of an identical
 // value is observably equivalent to the first — repeated writes
 // of (key, value) produce the same state. Auto-emitted for
-// Writers carrying //testkit:idempotent.
+// Writers carrying //testkit:mixin idempotent.
 //
 // The law performs the comparison via a consumer-supplied probe
 // function that reads enough state to detect divergence (typically
@@ -125,7 +125,7 @@ func (l WriteObservable[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 // data is detectable after the fact: Verify passes on freshly
 // written data and fails once the store is tampered with. Auto-
 // emitted for Writer/Appender methods carrying
-// //testkit:tamper-evident.
+// //testkit:mixin tamperevident tamper=<M> verify=<M>.
 //
 // Tamper corrupts the store's backing state without going through
 // Write, returning false when tampering is not applicable (e.g., an
@@ -171,7 +171,7 @@ func (l TamperEvident[T, V]) Check(rt *rapid.T, sut, _ T) error {
 // XSSSafe verifies that markup passed through Render is neutralized:
 // no script-capable tag-opener survives in the rendered output.
 // Auto-emitted for Writer/Mutator methods carrying
-// //testkit:xss-safe.
+// //testkit:mixin xsssafe.
 //
 // Render stores a payload and returns its HTML-rendered form. The
 // law draws XSS vectors and fails if any token in Dangerous (default
@@ -214,7 +214,7 @@ func (l XSSSafe[T]) Check(rt *rapid.T, sut, _ T) error {
 // metacharacters is treated as literal data: it round-trips through
 // storage unchanged, and a separately-stored canary value is not
 // disturbed by it. Auto-emitted for Writer/Mutator methods carrying
-// //testkit:injection-safe.
+// //testkit:mixin injectionsafe.
 //
 // The law seeds CanaryKey with CanaryValue, stores an injection
 // vector under a distinct key, then asserts both that the vector
@@ -281,7 +281,7 @@ func (l InjectionSafe[T]) Check(rt *rapid.T, sut, ref T) error {
 
 // CommutativeWrite verifies a;b == b;a observationally over the
 // supplied Observe function. Auto-emitted for Mutator/Writer
-// methods carrying //testkit:commutative.
+// methods carrying //testkit:mixin commutative.
 //
 // The law runs the pair-of-writes on two fresh impls — a;b on one,
 // b;a on the other — using the consumer-supplied factory to
@@ -330,7 +330,7 @@ func (l CommutativeWrite[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 
 // AtomicWrite verifies that a Writer returning an error leaves the
 // observable state unchanged — error implies no partial mutation.
-// Auto-emitted for Writers carrying //testkit:atomic.
+// Auto-emitted for Writers carrying //testkit:mixin atomic.
 //
 // The law snapshots observable state via Observe, calls Write, and
 // when Write errors compares the post-error snapshot against the
@@ -369,7 +369,7 @@ func (l AtomicWrite[T, V, Obs]) Check(rt *rapid.T, sut, ref T) error {
 // ValidTransition verifies that Write only advances the named field
 // through transitions allowed by a state-machine graph. Auto-
 // emitted for Mutator/Writer methods carrying
-// //testkit:valid-transition-only <Field>.
+// //testkit:contract workflow role=fn transitions=<From>><To>.
 //
 // The law consults the Allowed predicate to decide whether the
 // observed before→after transition was legal; it does not enforce

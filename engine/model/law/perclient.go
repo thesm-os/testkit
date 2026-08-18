@@ -41,7 +41,7 @@ type clientKey[K comparable] struct {
 // MonotonicReads verifies that, within a single client and key, the
 // versions of successive reads never decrease — once a client reads
 // a value, it never later reads an older one. Auto-emitted for the
-// //testkit:monotonic-reads directive.
+// //testkit:mixin monotonicreads version=<F> directive.
 //
 // Reads are correlated to the bound per-iteration trace via
 // [TraceBinder]; Classify interprets each event.
@@ -85,7 +85,7 @@ func (l *MonotonicReads[T, K]) Check(_ *rapid.T, _, _ T) error {
 // read taken after the client's own write returns a version no
 // older than that write — the client always observes its own
 // effects (or newer ones from other clients). Auto-emitted for the
-// //testkit:read-your-writes directive.
+// //testkit:mixin readyourwrites version=<F> directive.
 type ReadYourWrites[T any, K comparable] struct {
 	Classify ClientClassifier[K]
 	Trace    *trace.Trace
@@ -132,7 +132,7 @@ func (l *ReadYourWrites[T, K]) Check(_ *rapid.T, _, _ T) error {
 // versions assigned to the client's successive writes strictly
 // increase in issue order — the store serializes a client's writes
 // in the order it issued them. Auto-emitted for the
-// //testkit:monotonic-writes directive.
+// //testkit:mixin monotonicwrites version=<F> directive.
 type MonotonicWrites[T any, K comparable] struct {
 	Classify ClientClassifier[K]
 	Trace    *trace.Trace
@@ -171,7 +171,7 @@ func (l *MonotonicWrites[T, K]) Check(_ *rapid.T, _, _ T) error {
 // WritesFollowReads verifies that, within a single client and key,
 // every write is stamped no older than any version the client has
 // read of that key — a write causally follows the reads that
-// preceded it. Auto-emitted for the //testkit:writes-follow-reads
+// preceded it. Auto-emitted for the //testkit:mixin writesfollowreads version=<F>
 // directive.
 //
 // # Why the key is part of the state

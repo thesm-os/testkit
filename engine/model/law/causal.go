@@ -93,7 +93,7 @@ func CheckCausalOrder[K comparable](events []ClientEvent[K], happensBefore func(
 
 // CausalOrdering verifies the per-iteration trace respects causal
 // consistency per [CheckCausalOrder]. Auto-emitted for the
-// //testkit:causal directive.
+// //testkit:mixin causal version=<F> directive.
 //
 // Classify maps trace events to read/write observations carrying the
 // store-assigned version stamp (see [ClientClassifier]);

@@ -123,7 +123,7 @@ func (l StreamNoDuplicates[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 // StreamStableOrder verifies a Stream-class method emits elements
 // in an order consistent with the consumer-supplied total order
 // (e.g., insertion order, key-ascending). Auto-emitted for Streams
-// carrying //testkit:stable-order.
+// carrying //testkit:mixin stableorder.
 type StreamStableOrder[T any, V any] struct {
 	Drain func(*rapid.T, T) ([]V, error)
 	Less  func(a, b V) bool
@@ -151,7 +151,7 @@ func (l StreamStableOrder[T, V]) Check(rt *rapid.T, sut, _ T) error {
 
 // StreamPermutation verifies a Stream's drain is a permutation of
 // the consumer-supplied expected multiset. Auto-emitted for Streams
-// carrying //testkit:permutation.
+// carrying //testkit:mixin permutation.
 type StreamPermutation[T any, V any, H comparable] struct {
 	Drain    func(*rapid.T, T) ([]V, error)
 	Expected func(*rapid.T, T) []V
@@ -194,7 +194,7 @@ func (l StreamPermutation[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 
 // StreamOverMatch verifies the SUT's stream drain is a superset of
 // the consumer-supplied required-elements set. Auto-emitted for
-// Streams carrying //testkit:over-match-acceptable.
+// Streams carrying //testkit:mixin overmatch.
 type StreamOverMatch[T any, V any, H comparable] struct {
 	Drain    func(*rapid.T, T) ([]V, error)
 	Required func(*rapid.T, T) []V
@@ -229,7 +229,7 @@ func (l StreamOverMatch[T, V, H]) Check(rt *rapid.T, sut, _ T) error {
 // prior mutations: an item written via Put appears in the next
 // drain, and (when Delete is supplied) a deleted item disappears
 // from it. Auto-emitted for the
-// //testkit:stream-reflects-mutations <Stream> directive.
+// //testkit:mixin streamreflectsmutations mutate=<M> delete=<M> directive.
 //
 // Delete may be nil for interfaces without a deleter; the law then
 // checks only the put direction. A stream serving a stale snapshot

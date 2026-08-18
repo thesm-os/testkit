@@ -18,7 +18,7 @@ import (
 // the per-iteration clock instances (created fresh each iteration by
 // the clock factory).
 //
-// This action is emitted by the generator when //testkit:time-aware
+// This action is emitted by the generator when //testkit:mixin timeaware
 // is present. It exercises time-dependent behavior deterministically:
 // TTL expiry, scheduled fires, deadline compliance.
 //

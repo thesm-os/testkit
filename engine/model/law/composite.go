@@ -15,7 +15,8 @@ import (
 
 // PoolBalancedGetPut verifies that the running Get-vs-Put delta
 // stays non-negative across the test run and returns to zero at
-// quiescence. Auto-emitted for methods carrying //testkit:pool.
+// quiescence. Auto-emitted for methods carrying //testkit:contract pool
+// role=get put=<M>.
 //
 // The law observes via consumer-supplied Stats which returns the
 // (gets, puts, outstanding) triple. Stats may be implemented in
@@ -68,7 +69,8 @@ func (l PoolLeakFree[T]) Check(rt *rapid.T, sut, _ T) error {
 
 // CursorCloseIdempotent verifies a second Close on the cursor is
 // a no-op (returns nil and does not error). Auto-emitted for
-// methods carrying //testkit:cursor <Close>.
+// methods carrying //testkit:contract cursor role=next close=<M>
+// sentinel=<E>.
 type CursorCloseIdempotent[T any] struct {
 	Close func(*rapid.T, T) error
 }
@@ -125,7 +127,7 @@ func (l CursorNextAfterCloseSentinel[T, V]) Check(rt *rapid.T, sut, _ T) error {
 // TwoPhaseNoRollbackAfterCommit verifies that calling Rollback on
 // a transaction that has already been committed returns the
 // configured tx-closed error. Auto-emitted for methods carrying
-// //testkit:two-phase <Commit> <Rollback>.
+// //testkit:contract tx role=begin commit=<M> rollback=<M>.
 type TwoPhaseNoRollbackAfterCommit[T any, Tx any] struct {
 	Begin    func(*rapid.T, T) (Tx, error)
 	Commit   func(*rapid.T, T, Tx) error
@@ -172,7 +174,7 @@ func (l TwoPhaseNoRollbackAfterCommit[T, Tx]) Check(rt *rapid.T, sut, ref T) err
 // once a transaction reaches a terminal state via Commit or
 // Rollback, the other terminal operation must fail with the closed
 // sentinel. Auto-emitted for methods carrying
-// //testkit:two-phase <Commit> <Rollback>.
+// //testkit:contract tx role=begin commit=<M> rollback=<M>.
 //
 // rapid draws which terminal operation runs first, so both
 // orderings — commit-then-rollback and rollback-then-commit — are
@@ -230,7 +232,7 @@ func (l TwoPhaseCommitOrRollback[T, Tx]) Check(rt *rapid.T, sut, ref T) error {
 // SagaFullCompensation verifies that when a saga step fails the
 // observable state at the end of Run equals the pre-Run snapshot
 // (compensation undid every prior committed step). Auto-emitted
-// for methods carrying //testkit:saga.
+// for methods carrying //testkit:contract saga role=step compensate=<M>.
 type SagaFullCompensation[T any, Obs comparable] struct {
 	Run     func(*rapid.T, T) error
 	Observe func(*rapid.T, T) Obs

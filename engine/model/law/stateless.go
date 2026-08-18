@@ -15,7 +15,7 @@ import (
 
 // Roundtrip verifies Inverse(F(x)) == x for the consumer-supplied
 // forward and inverse functions. Auto-emitted for Pure/Mutator
-// methods carrying //testkit:roundtrip <Inverse>.
+// methods carrying //testkit:contract codec role=forward inverse=<M> fidelity=exact.
 type Roundtrip[T any, X any] struct {
 	Forward func(*rapid.T, T, X) (X, error)
 	Inverse func(*rapid.T, T, X) (X, error)
@@ -47,7 +47,7 @@ func (l Roundtrip[T, X]) Check(rt *rapid.T, sut, _ T) error {
 
 // LossyRoundtrip verifies F(Inverse(F(x))) == F(x) for the consumer-
 // supplied lossy forward and inverse functions. Auto-emitted for
-// Pure/Mutator methods carrying //testkit:lossy-roundtrip <Inverse>.
+// Pure/Mutator methods carrying //testkit:contract codec role=forward inverse=<M> fidelity=lossy.
 type LossyRoundtrip[T any, X any] struct {
 	Forward func(*rapid.T, T, X) (X, error)
 	Inverse func(*rapid.T, T, X) (X, error)
@@ -84,7 +84,7 @@ func (l LossyRoundtrip[T, X]) Check(rt *rapid.T, sut, _ T) error {
 // TotalOver verifies the SUT returns a non-zero-value result for
 // every input drawn from the consumer-supplied domain generator.
 // Auto-emitted for Pure/Aggregator methods carrying
-// //testkit:total-over <Domain>.
+// //testkit:mixin total domain=<D>.
 type TotalOver[T any, X any, R comparable] struct {
 	Call  func(*rapid.T, T, X) (R, error)
 	Input *rapid.Generator[X]

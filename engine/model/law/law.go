@@ -228,7 +228,7 @@ func (l CountEqualsReference[T, R]) Check(rt *rapid.T, sut, ref T) error {
 // merge: two replicas receiving disjoint slices of the same write
 // stream converge to the same observable state after a bidirectional
 // merge, and re-merging is idempotent. Auto-emitted for the
-// //testkit:crdt-merge <Other> directive; runs under AcrossImpls
+// //testkit:mixin crdtmerge directive; runs under AcrossImpls
 // with two replica factories.
 //
 // The law constructs two fresh replicas via Factory, routes each

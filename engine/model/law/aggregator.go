@@ -15,7 +15,7 @@ import (
 
 // AggregatorBounded verifies that an Aggregator-class method's
 // numeric result stays within [Min, Max]. Auto-emitted for
-// Aggregators carrying //testkit:bounded min..max.
+// Aggregators carrying //testkit:mixin bounded limit=N.
 type AggregatorBounded[T any, R interface{ ~int | ~int64 | ~float64 }] struct {
 	Read func(*rapid.T, T) (R, error)
 	Min  R
@@ -43,7 +43,7 @@ func (l AggregatorBounded[T, R]) Check(rt *rapid.T, sut, _ T) error {
 // Associative verifies that an Aggregator-class binary fold
 // associates: (a;b);c == a;(b;c). The law runs both groupings on
 // fresh impls and compares the observed result via Observe.
-// Auto-emitted for Aggregator methods carrying //testkit:associative.
+// Auto-emitted for Aggregator methods carrying //testkit:mixin associative.
 type Associative[T any, V any, Obs any] struct {
 	Factory func() T
 	Apply   func(*rapid.T, T, V) error
@@ -92,7 +92,7 @@ func (l Associative[T, V, Obs]) Check(rt *rapid.T, _, _ T) error {
 // Conservative verifies a Mutator+Aggregator pair preserves the
 // sum-of-Field invariant: the sum of the named field before and
 // after a mutation are equal. Auto-emitted for Mutator+Aggregator
-// pairs carrying //testkit:conservative <Field>.
+// pairs carrying //testkit:mixin conservative field=<F>.
 type Conservative[T any, V any] struct {
 	Sum    func(*rapid.T, T) int64 // observe the conserved quantity
 	Write  func(*rapid.T, T, V) error
@@ -127,7 +127,7 @@ func (l Conservative[T, V]) Check(rt *rapid.T, sut, ref T) error {
 // Windowed verifies that a rolling-window aggregator only reflects
 // events within its trailing window: an increment counts immediately
 // but decays once the clock advances past the window. Auto-emitted
-// for Aggregator/Mutator methods carrying //testkit:windowed
+// for Aggregator/Mutator methods carrying //testkit:mixin windowed incr=<M> count=<M> window=<D>
 // <Duration>.
 //
 // Advance moves the aggregator's injected clock forward. The law

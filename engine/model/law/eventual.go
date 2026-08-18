@@ -58,7 +58,7 @@ func CheckEventualConvergence[S any](pre, post []S, merge func(a, b S) S, equal 
 // EventualConvergence verifies that N replicas receiving disjoint
 // slices of a write stream converge — after the quiet window and an
 // anti-entropy round — to the join of their pre-sync states.
-// Auto-emitted for the //testkit:eventual <window> directive.
+// Auto-emitted for the //testkit:mixin eventually settle=<M> sync=<M> directive.
 //
 // The law constructs Replicas fresh instances (default 3), routes
 // each drawn value to one of them (rapid picks the split), runs

@@ -20,7 +20,7 @@ import (
 // be implicit (memoized inside the impl) or explicit; either way
 // the second call must agree with the first.
 //
-// AUTO-CACHEABLE fires for Readers carrying //testkit:cacheable.
+// AUTO-CACHEABLE fires for Readers carrying //testkit:mixin cacheable.
 type Cacheable[T any, K comparable, V any] struct {
 	Read func(*rapid.T, T, K) (V, error)
 	Keys *rapid.Generator[K]
@@ -53,7 +53,7 @@ func (l Cacheable[T, K, V]) Check(rt *rapid.T, sut, _ T) error {
 
 // DefaultOnError verifies that whenever the SUT's Read returns an
 // error, the observed value is the configured default expression.
-// Auto-emitted for Readers carrying //testkit:default-on-error.
+// Auto-emitted for Readers carrying //testkit:mixin defaultonerror.
 type DefaultOnError[T any, K comparable, V any] struct {
 	Read    func(*rapid.T, T, K) (V, error)
 	Keys    *rapid.Generator[K]
@@ -142,7 +142,7 @@ func (l PointInTime[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 // Sticky verifies that the first observed value for a key persists
 // across subsequent reads — once a Reader has resolved a key, it
 // keeps returning the same value. Auto-emitted for Readers
-// carrying //testkit:sticky <Key>.
+// carrying //testkit:mixin sticky key=<param>.
 //
 // The law caches the first non-error result per key across Check
 // invocations. Sticky is a [StatefulLaw] in spirit but accepts the
@@ -201,7 +201,7 @@ func (l *Sticky[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 
 // MonotonicNonDecreasing verifies that an Aggregator-class method's
 // result never decreases across calls. Auto-emitted for
-// Aggregator/Appender methods carrying //testkit:monotonic.
+// Aggregator/Appender methods carrying //testkit:mixin monotonic.
 //
 // The law remembers the previous observation in self-state; the
 // first call has nothing to compare against and trivially passes.
