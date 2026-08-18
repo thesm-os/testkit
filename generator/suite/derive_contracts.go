@@ -5,6 +5,7 @@ package suite
 
 import (
 	"go.thesmos.sh/eidos/node"
+
 	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )

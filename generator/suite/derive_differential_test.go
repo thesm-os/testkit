@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/eventually"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
 )
@@ -104,7 +105,9 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 			return
 		}
 		testkit.Len(t, plans, 1, "one reference, one row")
-		testkit.Equal(t, plans[0].ID.Render(), vocab.FamilyID(vocab.FamilyModel, tc.iface.Token, vocab.SegDifferential),
+		id, err := plans[0].ID.Render()
+		testkit.NoError(t, err, "the derived ID is well formed")
+		testkit.Equal(t, id, vocab.FamilyID(vocab.FamilyModel, tc.iface.Token, vocab.SegDifferential),
 			"the family-scoped differential ID")
 		testkit.Equal(t, plans[0].Class, vocab.ClassDifferential, "under the differential class")
 		testkit.Equal(t, plans[0].Claim, tc.want, "the claim speaks the derived reference's kind")

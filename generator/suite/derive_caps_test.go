@@ -29,8 +29,12 @@ func TestCapabilityDoorsFollowTheClass(t *testing.T) {
 	t.Run("the poison class demands induction at its sentinel", func(t *testing.T) {
 		t.Parallel()
 		needs := capsFor(store, vocab.ClassPoison)
-		testkit.Equal(t, needs, []projection.NeedPlan{{Capability: vocab.CapInduce, Value: projection.Expr("kv.ErrClosed")}},
-			"the door's value is the declaration that licensed the law")
+		testkit.Equal(
+			t,
+			needs,
+			[]projection.NeedPlan{{Capability: vocab.CapInduce, Value: projection.Expr("kv.ErrClosed")}},
+			"the door's value is the declaration that licensed the law",
+		)
 	})
 
 	t.Run("an ungated class walks in unaided", func(t *testing.T) {

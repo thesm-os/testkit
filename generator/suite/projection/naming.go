@@ -4,7 +4,7 @@
 package projection
 
 import (
-	golang "go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/lang/golang"
 )
 
 // Expr is a rendered Go expression destined for a template hole. The

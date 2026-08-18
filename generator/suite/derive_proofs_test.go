@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
 	vocab "go.thesmos.sh/testkit/engine/suite"
@@ -23,11 +24,15 @@ func TestLawDefectRulesPlantFromTheStamps(t *testing.T) {
 
 	t.Run("W1: the discarded write proves every agreement row", func(t *testing.T) {
 		t.Parallel()
-		store := Iface{Name: "Store", Token: "store", Methods: []Method{stampMethod("Put", writer.Name)}}
-		defect, proven := observationDefect(store)
+		writerStore := Iface{Name: "Store", Token: "store", Methods: []Method{stampMethod("Put", writer.Name)}}
+		defect, proven := observationDefect(writerStore)
 		testkit.True(t, proven, "a writer exists to acknowledge and drop")
-		testkit.Equal(t, defect, projection.Defect(projection.DiscardWrite{Option: projection.OptionName("Store", "Put")}),
-			"the defect rides the writer's own stub option")
+		testkit.Equal(
+			t,
+			defect,
+			projection.Defect(projection.DiscardWrite{Option: projection.OptionName("Store", "Put")}),
+			"the defect rides the writer's own stub option",
+		)
 	})
 
 	t.Run("P1: the poison heals through the stamped sentinel", func(t *testing.T) {
@@ -42,8 +47,12 @@ func TestLawDefectRulesPlantFromTheStamps(t *testing.T) {
 		t.Parallel()
 		defect, proven := lawDefect(store, lawid.LifecycleAfterClose)
 		testkit.True(t, proven, "a stamped carrier supplies the outliving method")
-		testkit.Equal(t, defect, projection.Defect(projection.PartialOutlive{Option: projection.OptionName("Store", "Put")}),
-			"one method kept alive past Close, by its stub option")
+		testkit.Equal(
+			t,
+			defect,
+			projection.Defect(projection.PartialOutlive{Option: projection.OptionName("Store", "Put")}),
+			"one method kept alive past Close, by its stub option",
+		)
 	})
 
 	t.Run("the residue has no rule and says so", func(t *testing.T) {
@@ -68,8 +77,12 @@ func TestProofRulesFlipTheRows(t *testing.T) {
 		t.Parallel()
 		p := byID["model/store/AUTO-LIFECYCLE-AFTER-CLOSE"]
 		testkit.Equal(t, p.Falsifiable.State, vocab.FalsifiableProven, "the mechanical rule proves the row")
-		testkit.Equal(t, p.Defect, projection.Defect(projection.PartialOutlive{Option: projection.OptionName("Store", "Put")}),
-			"and the defect is the rule's")
+		testkit.Equal(
+			t,
+			p.Defect,
+			projection.Defect(projection.PartialOutlive{Option: projection.OptionName("Store", "Put")}),
+			"and the defect is the rule's",
+		)
 	})
 
 	t.Run("an unruled row stays Argued with the pending reason", func(t *testing.T) {

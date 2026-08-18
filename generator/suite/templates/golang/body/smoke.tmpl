@@ -8,21 +8,21 @@
 {{- define "body.smoke-survives" -}}
 suite.Survives(tb, {{.Check}}, func(ctx context.Context) {
 {{- if .Body.Borrow.Method}}
-	{{borrowedIdent}}, err := {{callExpr .Recv .Body.Borrow}}
+	{{suite_borrowedIdent}}, err := {{suite_callExpr .Recv .Body.Borrow}}
 	if err != nil {
 		// Nothing borrowed, nothing to return; the producer's own
 		// smoke judges this path.
 		return
 	}
-	{{.Discard}} {{callExpr .Recv .Body.Call}}
+	{{.Discard}} {{suite_callExpr .Recv .Body.Call}}
 {{- else if .Body.CloseProduced}}
-	{{producedIdent}}, err := {{callExpr .Recv .Body.Call}}
+	{{suite_producedIdent}}, err := {{suite_callExpr .Recv .Body.Call}}
 	if err != nil {
 		return
 	}
-	_ = {{producedIdent}}.{{.Body.CloseProduced}}(ctx)
+	_ = {{suite_producedIdent}}.{{.Body.CloseProduced}}(ctx)
 {{- else}}
-	{{.Discard}} {{callExpr .Recv .Body.Call}}
+	{{.Discard}} {{suite_callExpr .Recv .Body.Call}}
 {{- end}}
 })
 {{- end -}}

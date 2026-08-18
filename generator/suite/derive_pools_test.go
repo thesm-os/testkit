@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/defaults"
 	"go.thesmos.sh/testkit/generator/roles"
@@ -51,7 +52,6 @@ func poolFixture(t *testing.T, fields ...poolField) (golang.Resolver, []Method) 
 		Struct("PutRequest", func(b *storefixture.StructBuilder) {
 			b.Pos(sdk.At(poolFixtureFile, 1, 1))
 			for i, fld := range fields {
-				fld := fld
 				b.Field(fld.name, storefixture.Named("string"), func(f *storefixture.FieldBuilder) {
 					f.Pos(sdk.At(poolFixtureFile, i+2, 1))
 					if fld.role != "" {

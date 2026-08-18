@@ -22,6 +22,13 @@ type claimCase struct {
 
 func (c claimCase) Name() string { return c.name }
 
+// The claim wordings are the corpus's spelling, filled end to end.
+//
+// The case body declines a helper mark: TableTest calls it from inside
+// its own t.Run, so t.Helper() would report each failure at the
+// runner's call site rather than at the assertion line that failed.
+//
+//nolint:thelper // the case body is the test, not a helper; see above
 func TestClaimFillingsMatchTheCorpus(t *testing.T) {
 	t.Parallel()
 
@@ -33,12 +40,14 @@ func TestClaimFillingsMatchTheCorpus(t *testing.T) {
 		},
 		{
 			"the after-close claim speaks the declared teardown",
-			lawid.LifecycleAfterClose, []string{lawid.PlaceClose, "Close"},
+			lawid.LifecycleAfterClose,
+			[]string{lawid.PlaceClose, "Close"},
 			"once Close has run, every method reports the closed sentinel",
 		},
 		{
 			"the poison claim speaks the subject's token",
-			lawid.PoisonConsistent, []string{lawid.PlaceSubject, "store"},
+			lawid.PoisonConsistent,
+			[]string{lawid.PlaceSubject, "store"},
 			"once the store reports it is closed, it keeps reporting it",
 		},
 		{

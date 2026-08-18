@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
+
 	"go.thesmos.sh/testkit/core/lawid"
 	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"

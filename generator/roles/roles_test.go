@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/eidos/eidostest/plugintest"
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/roles"
 )

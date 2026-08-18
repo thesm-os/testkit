@@ -28,7 +28,10 @@ type Inventory struct {
 func (inv *Inventory) Verify() error {
 	seen := map[suite.ID]bool{}
 	for _, c := range inv.Checks {
-		id := c.ID.Render()
+		id, err := c.ID.Render()
+		if err != nil {
+			return err
+		}
 		if seen[id] {
 			return fmt.Errorf("projection: %s derived twice", id)
 		}
@@ -49,7 +52,10 @@ func (inv *Inventory) Verify() error {
 			}
 		case suite.FalsifiableArgued:
 			if c.Defect != nil {
-				return fmt.Errorf("projection: %s is Argued yet plants a defect — the evidence exists, so the claim is owed", id)
+				return fmt.Errorf(
+					"projection: %s is Argued yet plants a defect — the evidence exists, so the claim is owed",
+					id,
+				)
 			}
 			if c.Falsifiable.Why == "" {
 				return fmt.Errorf("projection: %s is Argued with no argument", id)
@@ -68,8 +74,12 @@ func (inv *Inventory) Verify() error {
 func (inv *Inventory) LockLines() ([]string, error) {
 	s := suite.Suite[struct{}]{Name: inv.Iface}
 	for _, c := range inv.Checks {
+		id, err := c.ID.Render()
+		if err != nil {
+			return nil, err
+		}
 		s.Checks = append(s.Checks, suite.Check[struct{}]{
-			ID:    c.ID.Render(),
+			ID:    id,
 			Class: c.Class,
 			Claim: c.Claim,
 			Binds: RenderBinds(c.Binds),

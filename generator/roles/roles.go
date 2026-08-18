@@ -71,10 +71,10 @@ func directives() []sdk.DirectiveSchema {
 	return []sdk.DirectiveSchema{
 		sdk.NewDirective(DirectiveName).
 			Describe(
-				"Names the domain role the annotated field fills in drawn " +
-					"inputs — key, payload — which is what the suite tier " +
-					"derives its input pools from. Takes one positional " +
-					"argument, the role word; the reading tier validates the " +
+				"Names the domain role the annotated field fills in drawn "+
+					"inputs — key, payload — which is what the suite tier "+
+					"derives its input pools from. Takes one positional "+
+					"argument, the role word; the reading tier validates the "+
 					"vocabulary and refuses an unknown role by name.",
 			).
 			Positional("role", sdk.Required()).

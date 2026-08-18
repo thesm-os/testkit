@@ -66,9 +66,9 @@ func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.
 
 {{ template "suite.entry" $c }}
 
-{{ range $m := .Methods }}{{ range $ck := $m.Checks }}
-{{ render $ck }}
-{{ end }}{{ end }}
+{{/* The check sections render from the deriver inventory once the
+     rewrite's emission templates land; the harness shell above them
+     is what this transitional template still owes the pipeline. */}}
 {{- template "suite.options" $c }}
 {{- end -}}
 

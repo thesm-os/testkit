@@ -10,13 +10,7 @@ per implementation, which is where the statements drift.
 {{ $c := . }}
 // {{ .EntryName }} runs every generated check against every declared subject.
 //
-//	Checks:   {{ .CheckCount }} across {{ len .Methods }} method{{ if ne (len .Methods) 1 }}s{{ end }}, per subject
 //	Subjects: declare each with {{ .IfaceName }}Subject
-{{- if .Double }}
-//	Double:   every subject runs a second time wrapped in {{ .Double.TypeName }}, so
-//	          anything the wrapper fails that the subject passes is the double
-//	          lying. {{ .IfaceName }}WithoutDouble declines it.
-{{- end }}
 //	Extend:   {{ range $i, $m := .Methods }}{{ if $i }}, {{ end }}{{ $.IfaceName }}On{{ $m.Name }}{{ end }}
 //	Drop:     {{ .IfaceName }}Without, by the path each check reports under
 {{- if .Unseeded }}
@@ -24,40 +18,6 @@ per implementation, which is where the statements drift.
 //	          {{ .Unseeded }}.
 //	          A read over an empty subject cannot tell a miss from a bug;
 //	          {{ .IfaceName }}Seed is what closes it.
-{{- end }}
-{{- with .Unwritten }}
-//
-// # What this file does not check
-//
-// The interface declares these and nothing here asserts them. Each is statable
-// against a subject you can build, so the check is yours to write:
-//
-{{- range . }}
-//   - {{ .Name }}, on {{ .UncheckedList }} — write it with {{ $.IfaceName }}On{{ index .Unchecked 0 }}
-{{- end }}
-{{- end }}
-{{- with .Elsewhere }}
-//
-// # What is checked somewhere else
-//
-// These need a reference implementation to compare against, which a suite run
-// has no way to build. Nothing here asserts them and nothing here should:
-//
-{{- range . }}
-//   - {{ .Name }}, on {{ .UncheckedList }}
-{{- end }}
-//
-// //testkit:model on the interface derives that reference, and the
-// {{ $.IfaceName }}Model option it generates runs them here. Its own file
-// names the path it reports under and the {{ $.IfaceName }}Without call that
-// declines it — this header said "model" for every fixture, and a twinned
-// reference registers under "model/twin", so it was wrong wherever the
-// oracle could not be derived.
-{{- end }}
-{{- if .Unfalsifiable }}
-//
-// Nothing proves these checks are able to fail —
-// {{ .Unfalsifiable }}.
 {{- end }}
 func {{ .EntryName }}{{ renderTypeParams .TypeParams }}(t *{{ renderExpr (external "testing" "T") }}, opts ...{{ .IfaceName }}Option{{ .TypeArgs }}) {
 	t.Helper()
@@ -73,14 +33,6 @@ func {{ .EntryName }}{{ renderTypeParams .TypeParams }}(t *{{ renderExpr (extern
 	}
 	for _, s := range cfg.subjects {
 		run{{ .IfaceName }}Checks{{ .TypeArgs }}(t, cfg, s.name, s.factory, nil)
-{{- if .Double }}
-		if !cfg.withoutDouble {
-			run{{ .IfaceName }}Checks{{ .TypeArgs }}(t, cfg, s.name+" through the double", s.factory,
-				func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) {{ renderType .IfaceRef }}{{ .TypeArgs }} {
-					return {{ .Double.CtorName }}{{ .TypeArgs }}(tb, {{ .Double.DelegateToName }}{{ .TypeArgs }}(subject))
-				})
-		}
-{{- end }}
 	}
 }
 
@@ -109,11 +61,9 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 			// earn.
 			{{ renderExpr (external $.Runtime "RequireEnv") }}(t, {{ printf "%q" $.IntegrationEnv }})
 {{- end }}
-{{- range $ck := $m.Checks }}
-			cfg.run(t, {{ printf "%q" $ck.Path }}, {{ printf "%q" $ck.Subtest }}, func(tb {{ renderExpr (external "testing" "TB") }}) {
-				{{ $ck.Func }}{{ $.TypeArgs }}(tb, {{ if $ck.NeedsClock }}cfg.clock, {{ end }}cfg.subject(tb, factory, wrap){{ range $ck.Args }}, cfg.Fixture.{{ . }}{{ end }}{{ range $ck.Extra }}, cfg.Fixture.{{ .Field }}{{ end }})
-			})
-{{- end }}
+{{/* The generated check invocations render from the deriver
+     inventory once the rewrite's emission lands; the consumer
+     extension seam below is what this transitional shell keeps. */}}
 			for _, c := range cfg.on{{ $m.Name }} {
 				cfg.run(t, {{ printf "%q" $m.Name }}+"/"+c.name, c.name, func(tb {{ renderExpr (external "testing" "TB") }}) {
 					c.fn(tb, cfg.subject(tb, factory, wrap){{ range $m.ArgFields }}, cfg.Fixture.{{ . }}{{ end }})

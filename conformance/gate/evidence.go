@@ -8,11 +8,6 @@ import (
 	"context"
 	"maps"
 	"slices"
-
-	"go.thesmos.sh/eidos/pipeline"
-	"go.thesmos.sh/eidos/sdk"
-
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // Evidence is one classification and what, if anything, asserts it.
@@ -64,40 +59,33 @@ func (e Evidence) Evidenced() bool { return e.Checked || e.Modeled }
 // Registered-but-unstamped classifications appear with neither flag set, which
 // is correct: [Compare] is what reports them as a corpus gap, and a
 // classification nothing stamps is also a classification nothing asserts.
+//
+// The run is kept while [evidenceFrom] has nothing to read off it, because a
+// census pointed at a pattern matching nothing must fail rather than measure an
+// empty corpus as fully evidenced — see that function's TRANSITION paragraph.
 func Evidenced(ctx context.Context, root string, patterns ...string) ([]Evidence, error) {
-	pipe, err := runCorpus(ctx, root, patterns, corpusGenerators())
-	if err != nil {
+	if _, err := runCorpus(ctx, root, patterns, corpusGenerators()); err != nil {
 		return nil, err
 	}
-	return evidenceFrom(pipe), nil
+	return evidenceFrom(), nil
 }
 
-// evidenceFrom reads the per-classification verdicts off a store the corpus
-// already ran against. Split from [Evidenced] for [Measure]'s sake.
-func evidenceFrom(pipe *pipeline.Pipeline) []Evidence {
+// evidenceFrom reads the per-classification verdicts the corpus run produced.
+//
+// Split from [Evidenced] for [Measure]'s sake: both answer the same question
+// and only one of them should decide how many times the corpus is loaded. It
+// takes no store while the transition below holds, and takes one again when the
+// walk is restored.
+func evidenceFrom() []Evidence {
 	checked, modeled := map[string]string{}, map[string]string{}
-	for origin, c := range sdk.PendingByOrigin[*suite.Contract](pipe.Store().Emit()) {
-		where := c.IfaceName
-		if iface, ok := origin.(*sdk.Interface); ok {
-			where = iface.Package + "." + iface.Name
-		}
-		for _, cov := range c.Coverage {
-			// Asserted rather than Checked, because they answer different
-			// questions and only one of them is this census's. Checked is per
-			// carrier — a stamp on both halves of a pair reads as unchecked
-			// wherever the check states the claim from one of them, which is
-			// right for the header and wrong here. Elsewhere is the model
-			// tier's answer and is gated on the tier actually running: a law
-			// in the catalogue for a fixture the model generator refuses is
-			// evidence nowhere.
-			if cov.Asserted() && checked[cov.Name] == "" {
-				checked[cov.Name] = where
-			}
-			if cov.Elsewhere() && modeled[cov.Name] == "" {
-				modeled[cov.Name] = where
-			}
-		}
-	}
+	// TRANSITION: the incumbent suite emission — and the per-Contract
+	// Coverage census this walk read — is deleted; the rewrite's
+	// deriver inventory replaces it when its emission lands, and this
+	// measurement is rebuilt from that inventory then (the suite
+	// design doc's transition section owns the gap). Until that
+	// lands, the honest answer is that the suite tier evidences
+	// nothing, and the tests reading these maps skip citing this
+	// paragraph rather than passing against a fake.
 
 	var out []Evidence
 	for axis, names := range Registered() {
@@ -185,5 +173,5 @@ func Measure(ctx context.Context, root string, patterns ...string) (Census, erro
 	if err != nil {
 		return Census{}, err
 	}
-	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom(pipe)}, nil
+	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom()}, nil
 }

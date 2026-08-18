@@ -8,6 +8,7 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit/generator/defaults"
 	"go.thesmos.sh/testkit/generator/roles"
 	"go.thesmos.sh/testkit/generator/suite/projection"

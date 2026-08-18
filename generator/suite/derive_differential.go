@@ -132,8 +132,11 @@ func storeContract(f Iface) (roles []string, outcomes bool, refusal *Refusal, he
 		return nil, false, &Refusal{
 			Deriver: DeriverDifferential,
 			What:    "the differential leg for " + f.Name,
-			Why:     "two contract oracles derive (" + strings.Join(found, ", ") + ") and choosing one would invent semantics",
-			Remedy:  "override with ref= naming the oracle the interface means",
+			Why: "two contract oracles derive (" + strings.Join(
+				found,
+				", ",
+			) + ") and choosing one would invent semantics",
+			Remedy: "override with ref= naming the oracle the interface means",
 		}, true
 	}
 }

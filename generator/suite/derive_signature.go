@@ -54,13 +54,30 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		if !f.CtxDeclared || !m.TakesContext() {
 			continue
 		}
-		plans = append(plans,
+		plans = append(
+			plans,
 			ctxPlan(f, m, vocab.SegCancel, vocab.ClassCancel, CancelClaim(m), projection.CancelCall{Call: call}),
-			ctxPlan(f, m, vocab.SegNilContext, vocab.ClassNilContext, NilCtxClaim(m), projection.NilCtxCall{Call: call}),
+			ctxPlan(
+				f,
+				m,
+				vocab.SegNilContext,
+				vocab.ClassNilContext,
+				NilCtxClaim(m),
+				projection.NilCtxCall{Call: call},
+			),
 		)
 		if !teardownShaped(m) {
-			plans = append(plans,
-				ctxPlan(f, m, vocab.SegDeadline, vocab.ClassDeadline, DeadlineClaim(m), projection.DeadlineCall{Call: call}))
+			plans = append(
+				plans,
+				ctxPlan(
+					f,
+					m,
+					vocab.SegDeadline,
+					vocab.ClassDeadline,
+					DeadlineClaim(m),
+					projection.DeadlineCall{Call: call},
+				),
+			)
 		}
 		if m.ReturnsError() && len(m.ValueReturns()) > 0 && !m.HasMixin(MixinTotal) {
 			plans = append(plans, projection.CheckPlan{
@@ -98,7 +115,14 @@ func smokePlan(f Iface, m Method, call projection.CallPlan, seeded bool) project
 // family-specific body and wording, proven by the context-ignoring
 // double — except nilcontext, whose claim's stronger arm (returns an
 // error) is proven by the accepting double.
-func ctxPlan(f Iface, m Method, seg string, class vocab.Class, claim string, body projection.Body) projection.CheckPlan {
+func ctxPlan(
+	f Iface,
+	m Method,
+	seg string,
+	class vocab.Class,
+	claim string,
+	body projection.Body,
+) projection.CheckPlan {
 	var defect projection.Defect = projection.CtxSwap{Option: projection.OptionName(f.Name, m.Name)}
 	if seg == vocab.SegNilContext {
 		defect = projection.AcceptsNil{Option: projection.OptionName(f.Name, m.Name)}

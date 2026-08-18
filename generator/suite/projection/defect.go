@@ -78,19 +78,44 @@ type InventsHit struct{ Option Option }
 // hit claim's defect.
 type SwapsValues struct{ Option Option }
 
-func (StubPanic) DefectKind() DefectKind       { return KindStubPanic }
-func (CtxSwap) DefectKind() DefectKind         { return KindCtxSwap }
-func (AcceptsNil) DefectKind() DefectKind      { return KindAcceptsNil }
-func (DiscardWrite) DefectKind() DefectKind    { return KindDiscardWrite }
-func (FreezeReturn) DefectKind() DefectKind    { return KindFreezeReturn }
-func (FreshMedium) DefectKind() DefectKind     { return KindFreshMedium }
-func (SentinelOnce) DefectKind() DefectKind    { return KindSentinelOnce }
-func (PartialOutlive) DefectKind() DefectKind  { return KindPartialOutlive }
-func (ExceedBound) DefectKind() DefectKind     { return KindExceedBound }
+// DefectKind names the template that plants a panicking stub.
+func (StubPanic) DefectKind() DefectKind { return KindStubPanic }
+
+// DefectKind names the template that plants a swapped context.
+func (CtxSwap) DefectKind() DefectKind { return KindCtxSwap }
+
+// DefectKind names the template that plants a subject that accepts nil.
+func (AcceptsNil) DefectKind() DefectKind { return KindAcceptsNil }
+
+// DefectKind names the template that plants a discarded write.
+func (DiscardWrite) DefectKind() DefectKind { return KindDiscardWrite }
+
+// DefectKind names the template that plants a frozen return.
+func (FreezeReturn) DefectKind() DefectKind { return KindFreezeReturn }
+
+// DefectKind names the template that plants a fresh medium.
+func (FreshMedium) DefectKind() DefectKind { return KindFreshMedium }
+
+// DefectKind names the template that plants a sentinel reported once.
+func (SentinelOnce) DefectKind() DefectKind { return KindSentinelOnce }
+
+// DefectKind names the template that plants a partial that outlives its close.
+func (PartialOutlive) DefectKind() DefectKind { return KindPartialOutlive }
+
+// DefectKind names the template that plants an exceeded bound.
+func (ExceedBound) DefectKind() DefectKind { return KindExceedBound }
+
+// DefectKind names the template that plants an echo beside the error.
 func (EchoBesideError) DefectKind() DefectKind { return KindEchoBesideError }
-func (SecondCallErrs) DefectKind() DefectKind  { return KindSecondCallErrs }
-func (InventsHit) DefectKind() DefectKind      { return KindInventsHit }
-func (SwapsValues) DefectKind() DefectKind     { return KindSwapsValues }
+
+// DefectKind names the template that plants a second call that errors.
+func (SecondCallErrs) DefectKind() DefectKind { return KindSecondCallErrs }
+
+// DefectKind names the template that plants an invented hit.
+func (InventsHit) DefectKind() DefectKind { return KindInventsHit }
+
+// DefectKind names the template that plants swapped values.
+func (SwapsValues) DefectKind() DefectKind { return KindSwapsValues }
 
 // DefectKinds enumerates every registered defect variant, for the
 // template census.

@@ -6,17 +6,9 @@ package suite
 import (
 	"fmt"
 	"slices"
-	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/answeringwriter"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/reader"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/concurrent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/hooks"
@@ -35,8 +27,6 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/wrappedvia"
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
-
-	"go.thesmos.sh/testkit/generator/stub"
 )
 
 // Name is the plugin's stable identifier.
@@ -61,80 +51,6 @@ const SlotName = "top"
 // resolves a template by the kind's string value, so the constant doubles as
 // the template's name.
 const KindContract sdk.Kind = "suite.contract"
-
-// The emit kinds for the signature-derived checks.
-//
-// One kind per check, because the backend's `render` builtin dispatches on
-// Kind() and a template reference cannot be composed from an expression. That
-// is what lets each check live in its own template file, which is the only way
-// seventy-two of them stay readable.
-const (
-	KindSmoke       sdk.Kind = "suite.check.smoke"
-	KindCancel      sdk.Kind = "suite.check.cancel"
-	KindDeadline    sdk.Kind = "suite.check.deadline"
-	KindNilContext  sdk.Kind = "suite.check.nilcontext"
-	KindZeroOnError sdk.Kind = "suite.check.zeroonerror"
-
-	// KindCloseIdempotent asserts a declared-idempotent teardown answers the
-	// same on the second call; KindUseAfterClose that operations report the
-	// declared sentinel once teardown ran; KindConcurrentSmoke that a
-	// declared-concurrent method survives parallel callers under -race.
-	KindCloseIdempotent sdk.Kind = "suite.check.closeidempotent"
-	KindUseAfterClose   sdk.Kind = "suite.check.useafterclose"
-	KindConcurrentSmoke sdk.Kind = "suite.check.concurrentsmoke"
-
-	// KindCleanTeardown asserts the first teardown of a fresh subject
-	// returns nil.
-	//
-	// The claim KindCloseIdempotent skips on, and it had nowhere to defer to.
-	// That check's skip said a refused first close was "another check's
-	// finding", and there was no other check: smoke discards the error by
-	// design and the rest assert only adverse-context behaviour, so a subject
-	// whose Close always failed skipped the idempotence claim and passed the
-	// tier. Emitted beside it so the deferral is true, and separate from it
-	// because the two claims fail for different reasons — teardown broken, or
-	// teardown not repeatable.
-	KindCleanTeardown sdk.Kind = "suite.check.cleanteardown"
-)
-
-// The emit kinds for the detector-derived checks.
-//
-// One family, split by how a shape signals absence. [KindZeroOnError] is the
-// third member and belongs to the signature rather than to a classification,
-// because an error return says on its own that a call can fail; a bool or a bare
-// zero says nothing without knowing the method is a lookup, which is what the
-// shape stamp supplies (docs/adr/0018).
-const (
-	KindMissZero sdk.Kind = "suite.check.misszero"
-	KindMissFlag sdk.Kind = "suite.check.missflag"
-)
-
-// KindAnswerRoundTrip is the emit kind for the answering writer's check: the
-// write's answer, read back through the keyed reader, is the state it
-// stored. The one detector claim that lives in a success value rather than
-// in an absence, and the one nothing else states — the seed discards the
-// answer by design.
-const KindAnswerRoundTrip sdk.Kind = "suite.check.answerroundtrip"
-
-// The emit kinds for the mixin-derived checks.
-const (
-	KindNilSafe    sdk.Kind = "suite.check.nilsafe"
-	KindTimeout    sdk.Kind = "suite.check.timeout"
-	KindOrderAfter sdk.Kind = "suite.check.orderafter"
-	KindSideEffect sdk.Kind = "suite.check.sideeffect"
-	KindPartition  sdk.Kind = "suite.check.partition"
-	KindHooks      sdk.Kind = "suite.check.hooks"
-	KindSample     sdk.Kind = "suite.check.sample"
-	KindValidates  sdk.Kind = "suite.check.validates"
-	KindWrappedVia sdk.Kind = "suite.check.wrappedvia"
-)
-
-// KindBatchSize The emit kind for the remaining detector-derived check.
-//
-// Separate from the miss family because it is about arity rather than about
-// absence: a batch read answers per key, and a subject answering once for many
-// is wrong in a way no zero comparison reaches.
-const KindBatchSize sdk.Kind = "suite.check.batchsize"
 
 // Plugin is the conformance-suite generator.
 //
@@ -161,6 +77,9 @@ type Plugin struct{ *sdkgolang.Base }
 // in any test instead of rendering a short file and failing nowhere.
 func New() *Plugin {
 	return &Plugin{Base: sdkgolang.NewGenerator(Name, goTemplatesFS, GoOutputs()...).
+		// The rewrite's body templates share this FS, so their
+		// functions join the merged map the backend parses it with.
+		Funcs(renderFuncs()).
 		Version(Version).
 		Priority(sdk.GeneratorComposition).
 		Provides(Capability).
@@ -253,157 +172,6 @@ type Subject struct {
 	TypeArgs string
 }
 
-// Check is one generated assertion.
-//
-// One type rather than one per kind, with the kind carried as a field: the data
-// a check needs is uniform — which method, what it reports as, which exported
-// assertion it calls, which derived input it is handed — and what differs
-// between seventy-two of them is the template, which is exactly what keying the
-// dispatch on [Check.Kind] selects.
-type Check struct {
-	sdk.BaseEmit
-	Subject
-
-	// KindName is the emit kind, and therefore the name of the template that
-	// renders this check. Composed once, in Go, from the classification the
-	// projection read.
-	KindName sdk.Kind
-
-	// Subtest is what the check reports under, nested inside its method's
-	// group. Descriptive for a structural property, the classification's own
-	// name for a classification (docs/adr/0015).
-	Subtest string
-
-	// Func is the exported assertion's identifier — `AssertMixedStoreCancels`.
-	// Exported so a consumer can run one standalone, and so the companion file
-	// can drive it against a stand-in and prove it fails.
-	Func string
-
-	// Path is the drop key a consumer names in `<Iface>Without` —
-	// `Store/reports a cancelled context`. Composed from the method and the
-	// subtest so it reads as what the failure output shows.
-	Path string
-
-	// NeedsDerivedInput reports whether the check's meaning depends on the
-	// values it is handed rather than merely on their existing.
-	//
-	// Most do not. Cancellation, an expired deadline and a nil context are
-	// claims about the context, and a smoke call asks only that the method
-	// survive one — every one of them holds with the zero value, which every
-	// type has. Only a check whose semantics are "this input must miss" needs a
-	// value derivation could reach.
-	//
-	// The distinction is what keeps a method taking a callback, a channel or a
-	// slice from losing its whole family: eidos derives no literal for those,
-	// and dropping every check that mentions one costs four checks that never
-	// looked at it.
-	NeedsDerivedInput bool
-
-	// NeedsClock reports whether the check reads time, and so is handed the
-	// run's [clock.Clock] rather than reaching for the wall clock.
-	//
-	// Generated code that calls time.Now is generated code whose subject is
-	// partly the machine it runs on. A consumer builds their implementation in
-	// the factory they supply, so one that takes a clock can be built with the
-	// same [clock.TestClock] the harness measures on — and then "within a
-	// budget" is a claim about the time the implementation means to spend,
-	// settled deterministically, rather than about how loaded the machine was.
-	//
-	// The default is the real clock, so an implementation that does not take
-	// one behaves as it would have.
-	NeedsClock bool
-
-	// Args names the fixture fields this check is handed, one per parameter the
-	// method takes after its context.
-	//
-	// Field names rather than values, because the fixture is one struct a
-	// consumer may replace whole: a check holding a literal would keep running
-	// against the derived value after an override replaced it.
-	Args []string
-
-	// Method is the signature under check.
-	Method Method
-
-	// Extra names fixture fields the check needs beyond the method's own
-	// parameters, each with the identifier it binds to in the signature.
-	//
-	// A check is ordinarily handed one value per parameter, which is enough
-	// when the claim is about a single call. Isolation is not: two partitions
-	// that never interfere is a statement about two writes, and the second one
-	// needs a value the method's own parameter list cannot carry.
-	Extra []ExtraArg
-
-	// SecondCall names the identifiers a two-write check passes to its second
-	// call, in declaration order and without the context.
-	//
-	// Separate from Extra because the two answer different questions: Extra is
-	// what the signature gains, SecondCall is what the call spells. Deriving
-	// one from the other in a template meant asking which identifiers carried a
-	// suffix, which is a rule reconstructed from spelling rather than read.
-	SecondCall []string
-
-	// CompareAgainst is the identifier a two-write check holds its read up to:
-	// the payload written where the read should not reach.
-	//
-	// Named here rather than indexed out of Extra in a template, because
-	// arithmetic in a template is a rule a reader has to reconstruct and the
-	// backend's function set has nothing to do it with.
-	CompareAgainst string
-
-	// Callback is the func-typed parameter a registration partner takes, in
-	// the form a generated literal has to spell.
-	//
-	// Present because a hook check has to *construct* the thing it registers,
-	// not merely name it: the callback's own signature is what a func literal
-	// declares, and nothing else in the projection carries it.
-	Callback *CallbackSig
-
-	// Partner is the second callable a relational classification names, with
-	// PartnerArgs the identifiers a call to it is handed.
-	//
-	// A signature rather than a name, because the check calls it: `sideeffect`
-	// observes before and after, `hooks` registers through it. The name alone
-	// was enough for `orderafter`, which asserts that calling early fails and
-	// never calls the partner at all.
-	Partner     *Method
-	PartnerArgs []string
-
-	// Sentinel is the resolver-qualified error a declaration names — what a
-	// use-after-close operation must report once teardown ran, the conflict=
-	// a duplicate write answers, the unready= an early call answers. Nil
-	// where the declaration stamps none, which keeps the presence-only
-	// check.
-	Sentinel *sdk.Expr
-}
-
-// Kind returns [Check.KindName].
-func (c *Check) Kind() sdk.Kind { return c.KindName }
-
-// CallbackSig is a func-typed parameter's own signature.
-//
-// Types without names, which is all a func literal needs: `func(string) {}` is
-// legal Go, and inventing identifiers for parameters the body ignores would put
-// names in generated source that answer to nothing in the source it came from.
-type CallbackSig struct {
-	// Name is the identifier the registration partner declares the parameter
-	// under, used only in the diagnostic.
-	Name string
-
-	// Params and Returns are the callback's own signature.
-	Params, Returns []sdk.Ref
-}
-
-// ExtraArg is one fixture field a check takes beyond the method's parameters.
-type ExtraArg struct {
-	// Name is the identifier the generated signature binds it to, and Field
-	// the fixture field the entry point reads it from.
-	Name, Field string
-
-	// Type is the parameter's type, rendered through the backend so the file
-	// registers whatever import it needs.
-	Type sdk.Ref
-}
-
 // Method is one method of the subject interface, with the naming this generator
 // adds to the shared signature projection.
 type Method struct {
@@ -429,10 +197,6 @@ type Method struct {
 	// one answer: they did not, and a consumer's check was handed the other
 	// method's value.
 	ArgFields []string
-
-	// Checks are the generated assertions for this method, in the order the
-	// entry point runs them.
-	Checks []*Check
 
 	// IntegrationOnly reports that this method reaches something outside the
 	// process, so its checks run only where that something exists.
@@ -487,18 +251,6 @@ func (m Method) MixinParam(name, param string) (string, bool) {
 	return v, ok
 }
 
-// MixinPartner returns the local identifier a mixin's sibling param names.
-//
-// The shape resolver rewrites a sibling param into a qualified name so it is
-// unambiguous across packages. Generated code calls the partner on the subject
-// it already holds, so the qualified form is exactly what it cannot spell —
-// [golang.LocalName] takes the trailing identifier back off, which is what
-// [generator/stub] already does for `orderafter`.
-func (m Method) MixinPartner(name, param string) string {
-	v, _ := m.MixinParam(name, param)
-	return golang.LocalName(v)
-}
-
 // TakesContext reports whether the method's first parameter is a context.
 //
 // The gate on three of the five signature-derived checks: cancellation, an
@@ -506,6 +258,30 @@ func (m Method) MixinPartner(name, param string) string {
 // may not take, and emitting them for one that does not would not compile.
 func (m Method) TakesContext() bool {
 	return len(m.Params) > 0 && golang.IsContext(m.Params[0].Source)
+}
+
+// Shape returns the detector the annotator stamped on this method, empty when
+// it stamped none.
+func (m Method) Shape() string {
+	if m.Source == nil {
+		return ""
+	}
+	return shape.Get(m.Source.Meta())
+}
+
+// VariadicParam returns the method's variadic parameter, or nil.
+//
+// Go allows at most one and only in final position, so one answer covers the
+// signature. Present so the generated file can state a narrowing a reader would
+// otherwise have to infer: the fixture derives one value per parameter, so a
+// generated check calls a variadic method with exactly one element.
+func (m Method) VariadicParam() *golang.Param {
+	for i := range m.Params {
+		if m.Params[i].Variadic {
+			return &m.Params[i]
+		}
+	}
+	return nil
 }
 
 // CallArgs returns the parameters a generated call passes after the context,
@@ -525,21 +301,6 @@ func (m Method) CallArgs() []golang.Param {
 // failure it is about and would demand one from a correct implementation.
 func (m Method) HasInput() bool { return len(m.CallArgs()) > 0 }
 
-// VariadicParam returns the method's variadic parameter, or nil.
-//
-// Go allows at most one and only in final position, so one answer covers the
-// signature. Present so the generated file can state a narrowing a reader would
-// otherwise have to infer: the fixture derives one value per parameter, so a
-// generated check calls a variadic method with exactly one element.
-func (m Method) VariadicParam() *golang.Param {
-	for i := range m.Params {
-		if m.Params[i].Variadic {
-			return &m.Params[i]
-		}
-	}
-	return nil
-}
-
 // ValueReturns returns the result slots that are not the error, which is what
 // a zero-value check compares.
 func (m Method) ValueReturns() []golang.Return {
@@ -550,60 +311,6 @@ func (m Method) ValueReturns() []golang.Return {
 		}
 	}
 	return out
-}
-
-// FlagReturn returns the trailing bool a comma-ok shape signals absence with,
-// or nil.
-//
-// Trailing rather than anywhere, because that is what the idiom is: a bool in
-// any other position is a value the method computed, not a report on whether it
-// found anything. Nil for every other signature, which is what the templates
-// branch on.
-func (m Method) FlagReturn() *golang.Return {
-	values := m.ValueReturns()
-	if len(values) == 0 {
-		return nil
-	}
-	last := &values[len(values)-1]
-	if golang.QName(last.Source) != "bool" {
-		return nil
-	}
-	return last
-}
-
-// MissReturns returns the slots a miss check holds to their zero: every value
-// return except the flag that reported the miss.
-//
-// The flag is excluded because it is the signal rather than a result — asserting
-// it is zero is asserting `false == false`, and a check that cannot fail is
-// worse than no check.
-func (m Method) MissReturns() []golang.Return {
-	values := m.ValueReturns()
-	if m.FlagReturn() != nil {
-		return values[:len(values)-1]
-	}
-	return values
-}
-
-// Double names the generated stand-in a harness runs itself through.
-//
-// Read off the double's own queued emit value rather than composed here. The
-// identifiers are the stub generator's convention, and a second derivation
-// would be free to name a symbol it never emitted.
-type Double struct {
-	// TypeName is the double's identifier.
-	TypeName string
-
-	// CtorName constructs one, and DelegateToName is the option that makes it
-	// forward to a real implementation.
-	CtorName, DelegateToName string
-
-	// Witnesses are the concrete types the double's own companion instantiates
-	// at — pinned by the stub directive's witness key or derived from an open
-	// constraint — and empty for a non-generic interface. The falsification
-	// guards run at the same types: a Test function cannot carry type
-	// parameters, so these are what make a generic harness provable.
-	Witnesses []sdk.Ref
 }
 
 // Contract is the emit value rendered into the primary output.
@@ -621,18 +328,6 @@ type Contract struct {
 	// interface declaring no writer.
 	Seed *Seed
 
-	// Coverage is every classification the interface carries, with the tier
-	// that covers it — which the header states before the checks.
-	Coverage []Coverage
-
-	// Unfalsifiable says why no companion output was generated, empty where one
-	// was.
-	//
-	// Stated in the harness a reader meets rather than left to the absence of a
-	// file, for the reason an uncovered classification is stated: a missing
-	// companion is indistinguishable from a generator that failed to write one.
-	Unfalsifiable string
-
 	// Unseeded says why no seed was derived, empty where one was.
 	//
 	// A harness that seeds nothing runs every read check against a fresh
@@ -641,80 +336,15 @@ type Contract struct {
 	// taken and therefore what would close it.
 	Unseeded string
 
-	// Double is the generated stand-in for this interface, nil where the source
-	// declared no `//testkit:stub`.
-	//
-	// Its presence makes the harness run twice: once against the subject and
-	// once against the same subject wrapped in the double. Anything the wrapper
-	// fails that the subject passes is the double lying — which is what makes a
-	// generated double trustworthy, and it is a run a consumer should not have
-	// to write out.
-	Double *Double
-
 	Methods []Method
 }
 
 // Kind returns [KindContract].
 func (*Contract) Kind() sdk.Kind { return KindContract }
 
-// Unchecked is every classification the interface declares that this file does
-// not assert.
-//
-// What a consumer needs from the header is not which half of testkit covers
-// what — they have no reason to know testkit has halves — but whether the file
-// forgot something and what to do about it. So the list names the extension
-// point rather than the reason, and the reason lives in testkit's own docs.
-func (c *Contract) Unchecked() []Coverage {
-	out := make([]Coverage, 0, len(c.Coverage))
-	for _, cov := range c.Coverage {
-		if !cov.Checked {
-			out = append(out, cov)
-		}
-	}
-	return out
-}
-
-// Unwritten is what this file does not check and a consumer could.
-func (c *Contract) Unwritten() []Coverage {
-	out := make([]Coverage, 0, len(c.Coverage))
-	for _, cov := range c.Unchecked() {
-		if !cov.Elsewhere() {
-			out = append(out, cov)
-		}
-	}
-	return out
-}
-
-// Elsewhere is what this file does not check and a consumer should not.
-//
-// Split from [Contract.Unwritten] because the advice differs and getting it
-// wrong is worse than saying nothing: a header telling somebody to hand-write
-// `deleteremoves` is telling them to state a property that needs a reference
-// implementation, against a run that has none.
-func (c *Contract) Elsewhere() []Coverage {
-	out := make([]Coverage, 0, len(c.Coverage))
-	for _, cov := range c.Unchecked() {
-		if cov.Elsewhere() {
-			out = append(out, cov)
-		}
-	}
-	return out
-}
-
-// CheckCount reports how many checks the harness runs, for the header a reader
-// meets before them.
-func (c *Contract) CheckCount() int {
-	var n int
-	for _, m := range c.Methods {
-		n += len(m.Checks)
-	}
-	return n
-}
-
 // Generate queues one harness per interface carrying the directive.
 func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	c := sdk.NewProvenance(Name)
-	doubles := sdk.PendingByOrigin[*stub.Stub](ctx.Store.Emit())
 	for _, iface := range ctx.Reader.Interfaces().Slice() {
 		if !iface.HasPositiveDirective(DirectiveName) {
 			continue
@@ -730,46 +360,38 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Name, iface.Name, DirectiveName)
 			continue
 		}
-		// Only the emptiness of the *method set* is checked. An interface whose
-		// every check was dropped for want of an input used to be the other
-		// half of this, and is no longer reachable: a check is dropped only
-		// when its meaning is the value it is handed, and smoke never is.
+		// The rewrite's transition state: the projection carrier still
+		// queues — the model tier reads Methods, Fixture and Subject
+		// from it — and the check emission is the deriver inventory's,
+		// rendered once the body and structural templates land. The
+		// incumbent's check assembly is deleted, not dormant.
 		methods := methodsOf(iface, set)
 		fixture := fixtureOf(ctx, iface, methods)
-		methods = withChecks(c, ctx, iface, fixture, methods)
+		for i := range methods {
+			// The fixture-field correspondence the derivers draw
+			// through — populated here since the incumbent's check
+			// assembly, its previous home, is gone.
+			methods[i].ArgFields = fixtureArgs(fixture, methods[i], false)
+		}
 		seed, unseeded := seedOf(fixture, methods)
 		contract := &Contract{
-			BaseEmit:      sdk.EmitBase(c, iface),
-			Subject:       subjectOf(iface),
-			EntryName:     "Assert" + iface.Name + "Contract",
-			Fixture:       fixture,
-			Seed:          seed,
-			Unseeded:      unseeded,
-			Double:        doubleOf(doubles, iface),
-			Methods:       methods,
-			Coverage:      coverageOf(methods, modelWillRun(iface)),
-			Unfalsifiable: unfalsifiableReason(iface, doubles),
+			BaseEmit:  sdk.EmitBase(c, iface),
+			Subject:   subjectOf(iface),
+			EntryName: "Assert" + iface.Name + "Contract",
+			Fixture:   fixture,
+			Seed:      seed,
+			Unseeded:  unseeded,
+			Methods:   methods,
 		}
 		if unseeded != "" {
 			// A harness that seeds nothing runs every read check against a
-			// fresh subject, where a miss and a bug look identical. The
-			// header says so, and so does the run that produced it — the
-			// header is read once and this is the moment the reader is
-			// looking. A warning, because the consumer's own seed closes it.
+			// fresh subject, where a miss and a bug look identical. A
+			// warning, because the consumer's own seed closes it.
 			ctx.Diag.Warnf(iface.Pos(),
 				"%s: %s derives no seed — %s; supply one with %sSeed",
 				Name, iface.Name, unseeded, iface.Name)
 		}
-		reportUnchecked(ctx, iface, contract)
-		queued := []sdk.EmitNode{contract}
-		if f, provable := falsificationOf(ctx, c, iface, contract); provable {
-			// The companion output, which drives every check against a stand-in
-			// that violates it. Queued beside the harness rather than instead of
-			// it: the two are routed apart by tag, and a run that produced a
-			// harness it could not prove still owes the harness.
-			queued = append(queued, f)
-		}
-		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, queued...); err != nil {
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, contract); err != nil {
 			// Wrapped even though the queue names the plugin and the slot: what
 			// it cannot name is which declaration the run was on when it failed,
 			// and that is the only part a reader needs to find the source line.
@@ -893,106 +515,6 @@ func mixinParamsOf(bag *sdk.Bag) map[string]string {
 	return out
 }
 
-// signatureChecks selects the family a method owes for its signature alone.
-//
-// None of these needs a directive, and together they are most of the volume: the
-// three-method validates fixture owes ten before a single classification is
-// read, and its one directive adds the eleventh.
-// They are also the half no [engine/model/law] property covers, which is what
-// makes them unambiguously this tier's (docs/adr/0018).
-func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method) []*Check {
-	// The sample values for the ordinary checks, and the second set for the one
-	// that has to miss. A zero-value check called with the value the subject was
-	// seeded with succeeds, and then asserts nothing.
-	args := fixtureArgs(f, m, false)
-	other := fixtureArgs(f, m, true)
-
-	base := func(kind sdk.Kind, subtest, suffix string, with []string, derived bool) *Check {
-		return &Check{
-			BaseEmit:          sdk.EmitBase(c, iface),
-			Subject:           subjectOf(iface),
-			KindName:          kind,
-			Subtest:           subtest,
-			Func:              "Assert" + iface.Name + m.Name + suffix,
-			Path:              m.Name + "/" + subtest,
-			Args:              with,
-			NeedsDerivedInput: derived,
-			Method:            m,
-		}
-	}
-
-	out := []*Check{base(KindSmoke, "smoke", "Smoke", args, false)}
-	if m.TakesContext() && m.ReturnsError() {
-		out = append(out,
-			base(KindCancel, "reports a cancelled context", "Cancels", args, false),
-			base(KindDeadline, "reports an expired deadline", "HonoursDeadline", args, false),
-		)
-	}
-	if m.TakesContext() {
-		out = append(out, base(KindNilContext, "tolerates a nil context", "ToleratesNilContext", args, false))
-	}
-	if m.ReturnsError() && len(m.ValueReturns()) > 0 && m.HasInput() &&
-		!m.HasMixin(MixinTotal) {
-		// The only one whose meaning is in the value: a miss check called with
-		// the value the subject was seeded with succeeds, and asserts nothing.
-		//
-		// HasInput because the check reaches the failure it is about through the
-		// alternate value, and a method taking nothing after its context leaves
-		// nowhere to put one; the check skips visibly where even the alternate
-		// succeeds. The total mixin is the declared form of that totality — a
-		// claim that no input fails — so nothing is emitted against it rather
-		// than a check that skips by construction.
-		out = append(out, base(KindZeroOnError, "an error carries the zero value", "ZeroOnError", other, true))
-	}
-	return out
-}
-
-// batchSizeCheck builds "a batch read answers once per key requested".
-//
-// The one detector claim that is about arity rather than absence, and the one
-// the miss family cannot state: a batch reader answering once for many keys
-// returns a plausible non-empty slice, so every zero comparison passes.
-//
-// Two keys, which is what makes it able to fail at all — the derived pair is
-// exactly the second element a variadic call otherwise never gets. A method
-// whose variadic parameter has no alternate is one the check cannot vary, so
-// nothing is generated rather than a call with one element and an assertion
-// that one came back.
-func batchSizeCheck(
-	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method,
-) (*Check, bool) {
-	if shape.Get(m.Source.Meta()) != batchreader.Name {
-		return nil, false
-	}
-	v := m.VariadicParam()
-	if v == nil || len(m.CallArgs()) != 1 || len(m.ValueReturns()) != 1 {
-		return nil, false
-	}
-	field, found := f.Field(f.FieldFor(*v))
-	if !found || !field.OK() {
-		return nil, false
-	}
-
-	ck := &Check{
-		BaseEmit:          sdk.EmitBase(c, iface),
-		Subject:           subjectOf(iface),
-		KindName:          KindBatchSize,
-		Subtest:           "answers once per key",
-		Func:              "Assert" + iface.Name + m.Name + "AnswersPerKey",
-		Path:              m.Name + "/answers once per key",
-		Args:              fixtureArgs(f, m, false),
-		NeedsDerivedInput: true,
-		Method:            m,
-	}
-	ck.Extra = []ExtraArg{{
-		Name:  OtherIdent(v.Name),
-		Field: field.OtherName(),
-		Type:  v.Type,
-	}}
-	ck.SecondCall = []string{v.Name, OtherIdent(v.Name)}
-	return ck, true
-}
-
 // The mixins this generator generates a check for, and the parameters it reads.
 //
 // Named here rather than taken from eidos's own constants at each use so the
@@ -1042,338 +564,6 @@ const (
 	MixinTotal = total.Name
 )
 
-// missShapes are the classifications whose absence signal is a value rather
-// than an error, and which no [engine/model/law] property covers.
-//
-// A stamp rather than the signature, which is the one judgement here. `(T,
-// bool)` and a bare `T` are common shapes that are not always lookups — a
-// `Validate(v) (Report, bool)` returns a verdict, and holding its report to the
-// zero when the flag is false would be a check about nothing. The stamp is what
-// says the method answers a question about presence (docs/adr/0018).
-//
-// The cost is that an identically shaped method eidos classifies otherwise gets
-// no check. Reversing this to a signature gate is a one-line change if that
-// trade turns out wrong.
-var missShapes = map[string]struct{}{
-	readernoerror.Name:  {},
-	readerwithbool.Name: {},
-	lookup.Name:         {},
-	pointerreader.Name:  {},
-}
-
-// detectorChecks selects the family a method owes for its classification.
-//
-// Only the miss family so far, and only where the shape says absence is
-// reported in a value. The error-signalled member of the same family is
-// [KindZeroOnError], which the signature earns on its own.
-//
-// HasInput for the same reason zero-on-error needs it: the miss is reached by
-// choosing an input that is not there, and a method taking nothing after its
-// context offers nowhere to put one.
-func detectorChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method) []*Check {
-	if ck, ok := batchSizeCheck(c, iface, f, m); ok {
-		return []*Check{ck}
-	}
-	if ck, ok := answerRoundTripCheck(c, iface, f, m, methods); ok {
-		return []*Check{ck}
-	}
-	if _, owned := missShapes[shape.Get(m.Source.Meta())]; !owned || !m.HasInput() {
-		return nil
-	}
-	if len(m.MissReturns()) == 0 {
-		// Nothing to hold to a zero. A lookup whose only result is the flag
-		// reports absence and returns nothing else, so the check would assert
-		// that `false` is `false`.
-		return nil
-	}
-
-	kind, suffix := KindMissZero, "ReportsAMiss"
-	if m.FlagReturn() != nil {
-		kind = KindMissFlag
-	}
-	return []*Check{{
-		BaseEmit:          sdk.EmitBase(c, iface),
-		Subject:           subjectOf(iface),
-		KindName:          kind,
-		Subtest:           "reports a miss",
-		Func:              "Assert" + iface.Name + m.Name + suffix,
-		Path:              m.Name + "/reports a miss",
-		Args:              fixtureArgs(f, m, true),
-		NeedsDerivedInput: true,
-		Method:            m,
-	}}
-}
-
-// answerRoundTripCheck builds "answers the state it stored" for the
-// answeringwriter shape beside a keyed reader of the same state: the write's
-// answer, read back under the fixture's own key, must be what the read then
-// observes. The claim is the detector's whole content, and nothing else can
-// state it — the derived seed discards the answer, and the twin-floored
-// model tier compares two subjects wearing the same lie — so without this
-// check a subject answering a state it never stored is green everywhere.
-// The fixture's key and value cohere by derivation, which is what lets the
-// read use the fixture's key argument rather than a projection this
-// generator would have to invent. A lone answering writer derives nothing:
-// with no reader there is nothing to compare the answer through, which is
-// the twin ceiling's own clause for the detector fixture.
-func answerRoundTripCheck(
-	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
-) (*Check, bool) {
-	if shape.Get(m.Source.Meta()) != answeringwriter.Name || len(m.ValueReturns()) != 1 {
-		return nil, false
-	}
-	value := m.CallArgs()
-	if len(value) != 1 {
-		return nil, false
-	}
-	for i := range methods {
-		p := &methods[i]
-		if shape.Get(p.Source.Meta()) != reader.Name ||
-			len(p.CallArgs()) != 1 || len(p.ValueReturns()) != 1 {
-
-			continue
-		}
-		if shape.QName(p.ValueReturns()[0].Source) != shape.QName(m.ValueReturns()[0].Source) {
-			continue // a reader of some other state observes nothing about the answer
-		}
-		key := p.CallArgs()[0]
-		if key.Name == value[0].Name {
-			continue // one identifier cannot serve both parameters
-		}
-		field, held := f.Field(f.FieldFor(key))
-		if !held || !field.OK() {
-			continue
-		}
-		ck := &Check{
-			BaseEmit: sdk.EmitBase(c, iface),
-			Subject:  subjectOf(iface),
-			KindName: KindAnswerRoundTrip,
-			Subtest:  "answers the state it stored",
-			Func:     "Assert" + iface.Name + m.Name + "AnswersWhatItStored",
-			Path:     m.Name + "/answers the state it stored",
-			Args:     fixtureArgs(f, m, false),
-			Method:   m,
-		}
-		ck.Partner = p
-		ck.Extra = []ExtraArg{{Name: key.Name, Field: field.Name, Type: key.Type}}
-		ck.PartnerArgs = []string{key.Name}
-		ck.CompareAgainst = value[0].Name
-		return ck, true
-	}
-	return nil, false
-}
-
-// agreementCheck builds "the method refuses what the validator refuses".
-//
-// Agreement rather than rejection, for the reason if-match's is: "what the
-// validator rejects, the method rejects" needs a value the validator rejects,
-// and nothing in the directive says which one that is. What both halves can
-// always be asked is whether they agree on the value the run has.
-//
-// The validator has to answer about the very value the method takes, and to
-// report its verdict as an error — a validator returning something else is a
-// method the directive happened to name.
-func agreementCheck(f Fixture, m, fn Method, base checkBuilder) (*Check, string) {
-	if !m.ReturnsError() || !fn.ReturnsError() || len(fn.ValueReturns()) > 0 {
-		return nil, ""
-	}
-	if !sameArgs(m, fn) {
-		return nil, ""
-	}
-	args, why := partnerArgs(f, m, fn)
-	if why != "" {
-		return nil, why
-	}
-
-	ck := base(KindValidates, MixinValidates, "AgreesWith"+fn.Name, fixtureArgs(f, m, false))
-	ck.Partner, ck.PartnerArgs = &fn, args
-	return ck, ""
-}
-
-// wrappingCheck builds "the failure carries the cause the mixin names".
-//
-// Conditional on the cause being one: a subject with nothing wrong has no
-// wrapped error to show, and demanding one would fail an implementation that is
-// simply healthy. So the check asks the cause first and asserts only when there
-// is something to wrap — which is what makes it able to fail without being able
-// to fail wrongly.
-func wrappingCheck(f Fixture, m, cause Method, base checkBuilder) (*Check, string) {
-	if !m.ReturnsError() || !cause.ReturnsError() || len(cause.ValueReturns()) > 0 {
-		return nil, ""
-	}
-	args, why := partnerArgs(f, m, cause)
-	if why != "" {
-		return nil, why
-	}
-
-	ck := base(KindWrappedVia, MixinWrappedVia, "Wraps"+cause.Name, fixtureArgs(f, m, false))
-	ck.Partner, ck.PartnerArgs = &cause, args
-	return ck, ""
-}
-
-// sameArgs reports whether two methods take the same parameter types, in
-// order, after their contexts.
-//
-// Types and arity only. The docblock here used to claim it compared fixture
-// fields as well, which it never did — [partnerArgs] is what answers whether
-// the identifiers can be spelled, and it runs immediately after every caller of
-// this. Two statements of one rule, and only one of them was true.
-//
-// The split is worth keeping. This is a question about the pair's shape and has
-// one answer: a validator over another type is a method the directive was
-// pointed at, and no naming makes it the right one. Whether the call can be
-// written is a question about scope, has three answers, and one of them is a
-// reason a consumer can act on.
-func sameArgs(m, other Method) bool {
-	a, b := m.CallArgs(), other.CallArgs()
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if !a[i].Source.Equal(b[i].Source) {
-			return false
-		}
-	}
-	return true
-}
-
-// builds reports whether the partner produces a value the method accepts.
-//
-// Checked rather than assumed, because the check's whole content is passing one
-// to the other: a builder returning something the method does not take gives a
-// call that will not compile, and a render error is a file that came out short.
-//
-// One parameter and one produced value. With several of either, which feeds
-// which is a guess — the mixin names the builder and says nothing about the
-// slot, and that is exactly the ambiguity `partition` needed an axis to settle.
-func builds(m, builder Method) bool {
-	args, produced := m.CallArgs(), builder.ValueReturns()
-	if len(args) != 1 || len(produced) != 1 {
-		return false
-	}
-	return args[0].Source.Equal(produced[0].Source)
-}
-
-// callbackParam returns the func-typed parameter a registration partner takes.
-//
-// Exactly one, and it must be a func: `OnEvent(fn func(string))` is a
-// registration, `OnEvent(name string)` is something else the annotator happened
-// to be pointed at. A partner that is not a registration generates no check
-// rather than a literal the toolchain refuses.
-func callbackParam(partner Method) (*CallbackSig, bool) {
-	args := partner.CallArgs()
-	if len(args) != 1 {
-		return nil, false
-	}
-	src := args[0].Source
-	if src == nil || src.TypeKind != sdk.TypeRefFunc {
-		return nil, false
-	}
-
-	sig := &CallbackSig{Name: args[0].Name}
-	for _, p := range src.FuncParams {
-		sig.Params = append(sig.Params, golang.FromNode(p))
-	}
-	for _, r := range src.FuncReturns {
-		sig.Returns = append(sig.Returns, golang.FromNode(r))
-	}
-	return sig, true
-}
-
-// partitionCheck builds the isolation check, or reports that this method cannot
-// state it.
-//
-// Isolation is a claim about two writes not reaching each other, so the check
-// writes the same everything under two values of one parameter and reads one
-// back. Which parameter that is has to be said: `Put(ctx, partition, key, v)`
-// and `Read(ctx, partition, key)` share both, the types are identical, and
-// nothing else distinguishes the axis from the key.
-//
-// An earlier version varied every parameter instead, which is why the axis is
-// worth insisting on — the two writes then never collided on a key, and the
-// check passed against an implementation ignoring partitions entirely. A check
-// that cannot fail is worse than no check, so a method naming no axis generates
-// nothing rather than something that looks like coverage.
-func partitionCheck(f Fixture, m, read Method, base checkBuilder) (*Check, string) {
-	axis, named := m.MixinParam(MixinPartition, MixinPartitionAxis)
-	if !named {
-		return nil, ""
-	}
-	args, why := partnerArgs(f, m, read)
-	if why != "" {
-		return nil, why
-	}
-
-	// One extra per parameter, but only the axis takes its alternate: holding
-	// the key fixed is what makes the two writes collide, which is the whole
-	// premise. eidos validates that the axis names a parameter, so a miss here
-	// is a method the annotator never saw.
-	var (
-		extra   []ExtraArg
-		second  = make([]string, 0, len(m.CallArgs()))
-		payload string
-		isAxis  bool
-	)
-	// Which parameters the reader shares is what separates an identifier from a
-	// payload: Read takes the partition and the key, so `value` is what Put
-	// carries rather than what it addresses.
-	shared := map[string]bool{}
-	for _, p := range read.CallArgs() {
-		shared[f.FieldFor(p)] = true
-	}
-
-	for _, p := range m.CallArgs() {
-		isTheAxis := p.Name == axis
-		// Hold every identifier so the two writes land on the same slot, and
-		// vary every payload so an overwrite is visible. Holding the payload
-		// too was the second near-miss: a subject ignoring partitions clobbers
-		// the first write with an identical value, and the read still returns
-		// what the check expects.
-		if !isTheAxis && shared[f.FieldFor(p)] {
-			second = append(second, p.Name)
-			continue
-		}
-		field, found := f.Field(f.FieldFor(p))
-		if !found || !field.OK() {
-			// No second value is no second write worth making.
-			return nil, ""
-		}
-		ident := OtherIdent(p.Name)
-		extra = append(extra, ExtraArg{Name: ident, Field: field.OtherName(), Type: p.Type})
-		second = append(second, ident)
-		if isTheAxis {
-			isAxis = true
-			continue
-		}
-		// A parameter that is neither the axis nor an identifier is the
-		// payload, and the read is held up to the first write's copy of it:
-		// what Read must return, rather than what it must not. Both are the
-		// same claim, and this one also fails a subject returning nothing.
-		payload = p.Name
-	}
-	if !isAxis {
-		return nil, ""
-	}
-
-	if payload == "" {
-		// Every parameter identifies the slot, so the two writes differ in
-		// where they land and in nothing else — there is no value for the read
-		// to be wrong about.
-		return nil, ""
-	}
-
-	ck := base(KindPartition, MixinPartition, "IsolatesPartitions", fixtureArgs(f, m, false))
-	ck.Extra, ck.SecondCall, ck.CompareAgainst = extra, second, payload
-	ck.Partner, ck.PartnerArgs = &read, args
-	return ck, ""
-}
-
-// OtherIdent names the identifier a check binds a field's alternate to.
-//
-// Derived from the parameter so a reader meets `partitionOther` beside
-// `partition` and does not have to look up which of two values is which.
-func OtherIdent(name string) string { return name + OtherSuffix }
-
 // partnerArgs names the identifiers a call to the partner is handed, and says
 // why it could not be spelled where it could not.
 //
@@ -1410,374 +600,6 @@ func OtherIdent(name string) string { return name + OtherSuffix }
 func teardownShaped(m Method) bool {
 	return m.TakesContext() && m.ReturnsError() &&
 		len(m.ValueReturns()) == 0 && !m.HasInput()
-}
-
-// qualifiedExpr lifts a resolver-qualified symbol into an expression, false
-// for a bare name with no package to import it from.
-func qualifiedExpr(v string) (*sdk.Expr, bool) {
-	i := strings.LastIndexByte(v, '.')
-	if i <= 0 || i == len(v)-1 {
-		return nil, false
-	}
-	return sdk.NewExternal(v[:i], v[i+1:]), true
-}
-
-// spellableBuilder reports whether every argument the builder takes has a
-// fixture field to draw from.
-func spellableBuilder(f Fixture, p Method) bool {
-	for _, arg := range p.CallArgs() {
-		field, held := f.Field(f.FieldFor(arg))
-		if !held || !field.OK() {
-			return false
-		}
-	}
-	return true
-}
-
-func partnerArgs(f Fixture, m, partner Method) ([]string, string) {
-	args := m.CallArgs()
-	taken := make([]bool, len(args))
-	at := make([]int, len(partner.CallArgs()))
-	for i := range at {
-		at[i] = -1
-	}
-
-	// Pass one: the same fixture field on both sides. A bijection over distinct
-	// fields, so it does not matter what order it runs in.
-	for i, p := range partner.CallArgs() {
-		for j, a := range args {
-			if !taken[j] && f.FieldFor(a) == f.FieldFor(p) {
-				at[i], taken[j] = j, true
-				break
-			}
-		}
-	}
-
-	// Pass two: the sole remaining parameter of that type. Candidates are
-	// collected for every unmatched slot before any is consumed, and a
-	// candidate two slots both want settles nothing — so the answer does not
-	// depend on the order the slots are visited, and "unambiguous" means it in
-	// the strong sense.
-	claims := map[int]int{}
-	sole := make([]int, len(at))
-	for i, p := range partner.CallArgs() {
-		sole[i] = -1
-		if at[i] >= 0 {
-			continue
-		}
-		for j, a := range args {
-			if taken[j] || !a.Source.Equal(p.Source) {
-				continue
-			}
-			if sole[i] >= 0 {
-				sole[i] = -2 // several, and the source has not said which
-				break
-			}
-			sole[i] = j
-		}
-		if sole[i] >= 0 {
-			claims[sole[i]]++
-		}
-	}
-
-	out := make([]string, 0, len(at))
-	for i, p := range partner.CallArgs() {
-		switch {
-		case at[i] >= 0:
-		case sole[i] >= 0 && claims[sole[i]] == 1:
-			at[i] = sole[i]
-		default:
-			return nil, whyUnspellable(partner, p, sole[i] == -2 || claims[sole[i]] > 1)
-		}
-		out = append(out, args[at[i]].Name)
-	}
-	return out, ""
-}
-
-// whyUnspellable says what stopped a partner's parameter being matched, in the
-// terms the author can act on.
-//
-// Two failures, and the advice differs. Nothing of that type means the check
-// would have to invent a value, and the fixture is where a consumer supplies
-// one. Several means the correspondence exists and the source has not said
-// which it is — the same ambiguity `partition` settles with `axis=`, and
-// spelling the two parameters alike is what settles it here.
-func whyUnspellable(partner Method, p golang.Param, ambiguous bool) string {
-	if ambiguous {
-		return partner.Name + " takes " + p.Name + ", and more than one of the " +
-			"annotated method's parameters could be it — spell the two alike, the way " +
-			"`partition` requires of its axis, so the correspondence is stated rather " +
-			"than guessed"
-	}
-	return partner.Name + " takes " + p.Name + ", which the annotated method has " +
-		"nothing to fill: a check is handed the annotated method's arguments and " +
-		"nothing else"
-}
-
-// partnerOf resolves a relational mixin's sibling param to the method it names.
-//
-// Against the interface's own resolved method set, so an inherited partner is
-// found: the resolver guarantees the name refers to something in scope, and a
-// conformance check can only call what the subject declares.
-//
-// Nil when the mixin names none. The param is optional by design — a bare
-// `//testkit:mixin sideeffect` is still a classification — so its absence is a
-// check not generated rather than a fault to report.
-func partnerOf(methods []Method, m Method, mixin, param string) *Method {
-	return methodNamed(methods, m.MixinPartner(mixin, param))
-}
-
-// checkBuilder composes the fields every classification-derived check shares,
-// leaving each selector to set only what its own claim needs.
-//
-// A named type rather than a closure literal at each call site: two families
-// select checks the same way and a third would have been a third copy of the
-// same seven fields, which is where two of them drift apart.
-type checkBuilder func(kind sdk.Kind, subtest, suffix string, args []string) *Check
-
-// checkFor binds a builder to one method of one interface.
-func checkFor(c *sdk.Provenance, iface *sdk.Interface, m Method) checkBuilder {
-	return func(kind sdk.Kind, subtest, suffix string, args []string) *Check {
-		return &Check{
-			BaseEmit: sdk.EmitBase(c, iface),
-			Subject:  subjectOf(iface),
-			KindName: kind,
-			Subtest:  subtest,
-			Func:     "Assert" + iface.Name + m.Name + suffix,
-			Path:     m.Name + "/" + subtest,
-			Args:     args,
-			Method:   m,
-		}
-	}
-}
-
-// mixinChecks selects the family a method owes for the classifications attached
-// to it.
-//
-// Far fewer kinds than eidos registers mixins, and the gap is not unwritten
-// work: some mixins need a value no run can invent, some need a failure the
-// harness cannot induce, some are markers whose checkable quantities belong to
-// the classifications layered on them.
-//
-// The reasons live in `conformance/gate.UnevidencedClassifications`, one row
-// per classification, held true by a census. They used to live in a docblock
-// here — which had detached from this function entirely, sat above
-// [agreementCheck] naming a count from an RFC, and went unread through two
-// upstream growths of the mixin axis. That is the case for a register: a
-// comment goes stale in silence and a row reddens.
-func mixinChecks(
-	c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Method, methods []Method,
-) ([]*Check, []decline) {
-	base := checkFor(c, iface, m)
-
-	var (
-		out      []*Check
-		declined []decline
-	)
-	if m.HasMixin(MixinNilSafe) && m.HasInput() {
-		// The check supplies its own zeros, so it takes no argument — but it
-		// needs a parameter to zero, and a method taking none has nothing to
-		// be unsafe about.
-		out = append(out, base(KindNilSafe, MixinNilSafe, "IsNilSafe", nil))
-	}
-	if _, declared := m.MixinParam(MixinTimeout, MixinTimeoutParam); declared {
-		// Gated on the parameter rather than the mixin: "within a budget" is
-		// not a statement until a duration is named, and a bare
-		// `//testkit:mixin timeout` names none.
-		ck := base(KindTimeout, MixinTimeout, "CompletesInBudget", fixtureArgs(f, m, false))
-		ck.NeedsClock = true
-		out = append(out, ck)
-	}
-	if p := partnerOf(methods, m, MixinSample, MixinSampleParam); p != nil && builds(m, *p) {
-		// The sampled value stays the builder's answer — handing the method a
-		// fixture value instead would test the derivation rather than the
-		// pair. The builder's own arguments are the fixture's to supply,
-		// though: a builder taking anything after its context used to render
-		// a call with those arguments missing, latent until a source declared
-		// one. A builder whose arguments nothing can spell drops the check,
-		// with the header saying so.
-		if spellableBuilder(f, *p) {
-			ck := base(KindSample, MixinSample, "AcceptsASampledInput", fixtureArgs(f, *p, false))
-			ck.Partner = p
-			for _, arg := range p.CallArgs() {
-				ck.PartnerArgs = append(ck.PartnerArgs, arg.Name)
-			}
-			out = append(out, ck)
-		}
-	}
-	if p := partnerOf(methods, m, MixinHooks, MixinHooksParam); p != nil {
-		if cb, ok := callbackParam(*p); ok {
-			ck := base(KindHooks, MixinHooks, "FiresRegisteredHooks", fixtureArgs(f, m, false))
-			ck.Partner, ck.Callback = p, cb
-			out = append(out, ck)
-		}
-	}
-	if slices.Contains(m.Mixins, MixinIdempotent) && teardownShaped(m) {
-		// The declared claim, on the one shape where "again" needs no value:
-		// a second teardown answers what the first did. Gated on the mixin —
-		// a bare lifecycle shape makes no such promise, and os.File-style
-		// subjects legitimately refuse the second call.
-		// The clean teardown first, so the skip below has somewhere to defer.
-		//
-		// Nested under the classification rather than beside it: the two are
-		// one family, and a consumer who declines the idempotence claim by
-		// its own path should still be told their teardown is broken.
-		out = append(out,
-			base(KindCleanTeardown, MixinIdempotent+"/clean teardown", "CloseCleanly", nil),
-			base(KindCloseIdempotent, MixinIdempotent, "CloseTwice", nil))
-	}
-	if slices.Contains(m.Mixins, MixinConcurrent) {
-		// Four callers under the race detector: the mixin's whole claim is
-		// that parallel use is safe, and no other generated file so much as
-		// starts a goroutine.
-		out = append(out, base(KindConcurrentSmoke, MixinConcurrent, "SurvivesConcurrentCallers",
-			fixtureArgs(f, m, false)))
-	}
-	if p := partnerOf(methods, m, MixinAfterClose, MixinAfterCloseClose); p != nil {
-		// The op is the carrier and the close its partner; the sentinel is
-		// the declaration's own, because "refused" without an identity lets
-		// any unrelated failure pass as closure discipline.
-		if sym, stamped := m.MixinParam(MixinAfterClose, MixinAfterCloseSentinel); stamped {
-			if ref, qualified := qualifiedExpr(sym); qualified {
-				ck := base(KindUseAfterClose, MixinAfterClose, "RefusesAfterClose",
-					fixtureArgs(f, m, false))
-				ck.Partner, ck.Sentinel = p, ref
-				out = append(out, ck)
-			}
-		}
-	}
-	if p := partnerOf(methods, m, MixinPartition, MixinPartitionRead); p != nil {
-		ck, why := partitionCheck(f, m, *p, base)
-		out, declined = keep(out, declined, ck, MixinPartition, why)
-	}
-	if p := partnerOf(methods, m, MixinSideEffect, MixinSideEffectParam); p != nil && p.ReturnsError() {
-		// The observation is the check, so a partner that cannot report its own
-		// failure leaves the comparison unable to tell "unchanged" from "the
-		// observer broke".
-		args, why := partnerArgs(f, m, *p)
-		var ck *Check
-		if why == "" {
-			ck = base(KindSideEffect, MixinSideEffect, "HasAnObservableEffect", fixtureArgs(f, m, false))
-			ck.Partner, ck.PartnerArgs = p, args
-		}
-		out, declined = keep(out, declined, ck, MixinSideEffect, why)
-	}
-	if p := partnerOf(methods, m, MixinValidates, MixinValidatesParam); p != nil {
-		ck, why := agreementCheck(f, m, *p, base)
-		out, declined = keep(out, declined, ck, MixinValidates, why)
-	}
-	if p := partnerOf(methods, m, MixinWrappedVia, MixinWrappedViaParam); p != nil {
-		ck, why := wrappingCheck(f, m, *p, base)
-		out, declined = keep(out, declined, ck, MixinWrappedVia, why)
-	}
-	if p := m.MixinPartner(MixinOrderAfter, MixinOrderAfterParam); p != "" && m.ReturnsError() {
-		// ReturnsError because the claim is that calling early *fails*, and a
-		// method with nowhere to report failure cannot make it.
-		ck := base(KindOrderAfter, MixinOrderAfter, "RequiresItsPrerequisite",
-			fixtureArgs(f, m, false))
-		ck.Sentinel = stampedSentinel(m, shape.MixinParamKey(MixinOrderAfter, "unready"))
-		out = append(out, ck)
-	}
-	return out, declined
-}
-
-// decline is one check a classification earned and the derivation could not
-// write, with the reason in terms its author can act on.
-//
-// Unexported and never rendered. The generated header already names every
-// classification nothing checks — what it cannot say is why, because the
-// header is read long after the run that could have explained it. The reason
-// belongs where [reportUnchecked] puts its own: in the run's diagnostics,
-// beside the source position that caused it.
-type decline struct{ classification, why string }
-
-// keep files a selector's answer under its classification: the check where one
-// was derived, the reason where one was not, and neither where the shape
-// simply does not carry the claim.
-//
-// Both slices in and both out, so a call site reads as one statement. Six
-// selectors return this pair and an `if ck != nil { … } else if why != "" { … }`
-// at each of them is six chances to write the second half wrong — which is how
-// the reasons went missing in the first place.
-func keep(out []*Check, declined []decline, ck *Check, classification, why string) ([]*Check, []decline) {
-	switch {
-	case ck != nil:
-		out = append(out, ck)
-	case why != "":
-		declined = append(declined, decline{classification: classification, why: why})
-	}
-	return out, declined
-}
-
-// stampedSentinel lifts a classification's declared refusal sentinel into a
-// renderable reference, nil where the declaration stamps none. The stamp
-// arrives qualified from the sibling-var resolver, so a spelling that does
-// not lift is a resolver defect surfacing here rather than a consumer typo.
-func stampedSentinel(m Method, key sdk.Key[string]) *sdk.Expr {
-	q, stamped := key.Get(m.Source.Meta())
-	if !stamped || q == "" {
-		return nil
-	}
-	ref, err := golang.RefForQualified(q, "")
-	if err != nil {
-		return nil
-	}
-	ext, qualified := ref.(*sdk.ExternalRef)
-	if !qualified {
-		return nil
-	}
-	return sdk.NewExternal(ext.Package, ext.Name)
-}
-
-// doubleOf names the stand-in queued for this interface, or nil.
-//
-// Read from the emit queue rather than from the source directive: a directive
-// says what was asked for, and the queue says what was produced. A double the
-// stub generator declined to emit — an interface whose method set it could not
-// complete — leaves nothing to run through, and a harness composing the call
-// anyway would not compile.
-func doubleOf(queued map[sdk.Node]*stub.Stub, iface *sdk.Interface) *Double {
-	d, hosted := queued[sdk.Node(iface)]
-	if !hosted {
-		return nil
-	}
-	return &Double{
-		TypeName:       d.TypeName,
-		CtorName:       d.CtorName,
-		DelegateToName: d.DelegateToName,
-		Witnesses:      d.Witnesses,
-	}
-}
-
-// ModelDirective is the model generator's directive name, respelled here
-// because that generator imports this one and Go permits no import back.
-// Exported so the conformance gate can hold the two spellings equal.
-const ModelDirective = "model"
-
-// ModelWitnessKey is the model directive's witness key, respelled here for
-// the same reason [ModelDirective] is: the suite cannot import the generator
-// that imports it, and the header's "will the model tier run" predicate has
-// to ask the same question the model generator answers.
-const ModelWitnessKey = "witness"
-
-// modelWillRun reports whether the model tier will actually emit for this
-// interface: armed by its directive, and — where the interface is generic —
-// carrying the witness list that names the types the property runs at. The
-// model generator refuses a generic interface without one, and a header
-// pointing at output that will not exist is the lie this predicate stops.
-func modelWillRun(iface *sdk.Interface) bool {
-	if !iface.HasPositiveDirective(ModelDirective) {
-		return false
-	}
-	if len(iface.TypeParams) == 0 {
-		return true
-	}
-	dir := iface.Directive(ModelDirective)
-	if dir == nil {
-		return false
-	}
-	_, witnessed := dir.KV[ModelWitnessKey]
-	return witnessed
 }
 
 // subjectOf names the interface every emit value for it is about.

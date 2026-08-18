@@ -7,9 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-
 	"go.thesmos.sh/testkit/core/lawid"
-
 	"go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )

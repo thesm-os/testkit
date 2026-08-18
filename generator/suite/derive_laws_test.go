@@ -16,6 +16,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/atomic"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
 	vocab "go.thesmos.sh/testkit/engine/suite"
@@ -67,7 +68,9 @@ func lawPlansByID(t *testing.T, f Iface) (map[vocab.ID]projection.CheckPlan, []R
 	plans, refusals := Laws{}.Derive(f)
 	byID := map[vocab.ID]projection.CheckPlan{}
 	for _, p := range plans {
-		byID[p.ID.Render()] = p
+		id, err := p.ID.Render()
+		testkit.NoError(t, err, "the derived ID is well formed")
+		byID[id] = p
 	}
 	return byID, refusals
 }

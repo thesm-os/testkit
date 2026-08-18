@@ -13,6 +13,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
@@ -53,7 +54,9 @@ func TestOpenerSmokeClosesWhatItOpens(t *testing.T) {
 	testkit.Len(t, plans, 1, "no ctx directive: the smoke is the whole signature family")
 
 	p := plans[0]
-	testkit.Equal(t, p.ID.Render(), vocab.ID("Scan/smoke"), "the override keeps the smoke's own ID")
+	scanID, err := p.ID.Render()
+	testkit.NoError(t, err, "the derived ID is well formed")
+	testkit.Equal(t, scanID, vocab.ID("Scan/smoke"), "the override keeps the smoke's own ID")
 	testkit.Equal(t, p.Claim, "Scan survives a call and the cursor it opens closes",
 		"the claim is the corpus manifests' spelling")
 	testkit.Equal(t, p.Body, projection.Body(projection.SmokeSurvives{
@@ -118,11 +121,16 @@ func TestBorrowSmokeReturnsWhatItBorrows(t *testing.T) {
 	testkit.Equal(t, plans[0].Claim, "Get survives a call", "the producer keeps its plain smoke")
 
 	put := plans[1]
-	testkit.Equal(t, put.ID.Render(), vocab.ID("Put/smoke"), "the override keeps the smoke's own ID")
+	putID, err := put.ID.Render()
+	testkit.NoError(t, err, "the derived ID is well formed")
+	testkit.Equal(t, putID, vocab.ID("Put/smoke"), "the override keeps the smoke's own ID")
 	testkit.Equal(t, put.Claim, "Put survives returning a borrowed resource",
 		"the claim is the corpus manifests' spelling")
 	testkit.Equal(t, put.Body, projection.Body(projection.SmokeSurvives{
-		Call:   projection.CallPlan{Method: "Put", Args: []projection.Expr{projection.ExprCtx, projection.ExprBorrowed}},
+		Call: projection.CallPlan{
+			Method: "Put",
+			Args:   []projection.Expr{projection.ExprCtx, projection.ExprBorrowed},
+		},
 		Borrow: projection.CallPlan{Method: "Get", Args: []projection.Expr{projection.ExprCtx}},
 	}), "the body borrows from the get sibling and feeds the borrowed local")
 }

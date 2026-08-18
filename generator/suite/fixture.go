@@ -338,68 +338,6 @@ func findGroup(groups []paramGroup, p golang.Param) bool {
 	return false
 }
 
-// withChecks selects each method's family and drops what the fixture cannot
-// supply.
-//
-// One pass rather than two, and after the fixture exists: a check names the
-// field it is handed, and which field that is depends on whether another method
-// contests the parameter's name.
-//
-// A check handed a value that cannot be written down is a check that does not
-// compile, and one handed a zero where a real value was meant passes against a
-// subject that does nothing. Dropping is the honest answer, and the generated
-// file names each absence with the parameter that caused it.
-func withChecks(
-	c *sdk.Provenance, ctx *sdk.GeneratorContext, iface *sdk.Interface, f Fixture, methods []Method,
-) []Method {
-	out := make([]Method, 0, len(methods))
-	for _, m := range methods {
-		kept := make([]*Check, 0, 6)
-		family := signatureChecks(c, iface, f, m)
-		family = append(family, detectorChecks(c, iface, f, m, methods)...)
-		mixed, declined := mixinChecks(c, iface, f, m, methods)
-		contracted, contractDeclines := contractChecks(c, iface, f, m, methods)
-		family = append(family, mixed...)
-		family = append(family, contracted...)
-		reportDeclined(ctx, iface, m, append(declined, contractDeclines...))
-		for _, ck := range family {
-			if missing, field, ok := undeliverable(f, ck); ok {
-				ctx.Diag.Warnf(iface.Pos(),
-					"%s: %s.%s takes %s, %s, so its "+
-						"%q check is not generated; supply one through %sWithFixture "+
-						"and write the check as %sOn%s",
-					Name, iface.Name, m.Name, missing, field.Reason(), ck.Subtest,
-					iface.Name, iface.Name, m.Name)
-				continue
-			}
-			kept = append(kept, ck)
-		}
-		// No emptiness guard: smoke is emitted for every method and needs no
-		// derived input, so a method always keeps at least one check.
-		m.Checks = kept
-		m.ArgFields = fixtureArgs(f, m, false)
-		out = append(out, m)
-	}
-	return out
-}
-
-// undeliverable names the first argument the fixture cannot supply, for a check
-// that needs one derived.
-//
-// A check that does not is never dropped: every type has a zero value, the
-// fixture declares a field for every parameter, and a field nothing could be
-// derived for is left at that zero rather than omitted. So a method taking a
-// callback still gets its context family, and only the check whose semantics
-// depend on the value goes.
-func undeliverable(f Fixture, c *Check) (string, FixtureField, bool) {
-	if !c.NeedsDerivedInput {
-		return "", FixtureField{}, false
-	}
-	// The alternate is a companion of its sample, so both are derivable or
-	// neither is; looking the base name up answers for the pair.
-	return undeliverableArgs(f, c.Args)
-}
-
 // sampleFor derives one parameter's pair of values.
 //
 // For a struct it sets *every* exported field it can, which is where this

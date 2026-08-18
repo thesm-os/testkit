@@ -124,17 +124,37 @@ type ProducedSecondarySmoke struct {
 	Close string
 }
 
-// The BodyKind implementations, one per variant.
-func (SmokeSurvives) BodyKind() BodyKind          { return KindSmokeSurvives }
-func (CancelCall) BodyKind() BodyKind             { return KindCancelCall }
-func (DeadlineCall) BodyKind() BodyKind           { return KindDeadlineCall }
-func (NilCtxCall) BodyKind() BodyKind             { return KindNilCtxCall }
-func (ZeroOnError) BodyKind() BodyKind            { return KindZeroOnError }
-func (MixinProbe) BodyKind() BodyKind             { return KindMixinProbe }
-func (LawLeg) BodyKind() BodyKind                 { return KindLawLeg }
-func (DifferentialLeg) BodyKind() BodyKind        { return KindDifferentialLeg }
-func (SimLeg) BodyKind() BodyKind                 { return KindSimLeg }
-func (RowSugar) BodyKind() BodyKind               { return KindRowSugar }
+// BodyKind names the template that renders the plain survives-smoke.
+func (SmokeSurvives) BodyKind() BodyKind { return KindSmokeSurvives }
+
+// BodyKind names the template that renders the cancelled-context call.
+func (CancelCall) BodyKind() BodyKind { return KindCancelCall }
+
+// BodyKind names the template that renders the expired-deadline call.
+func (DeadlineCall) BodyKind() BodyKind { return KindDeadlineCall }
+
+// BodyKind names the template that renders the nil-context call.
+func (NilCtxCall) BodyKind() BodyKind { return KindNilCtxCall }
+
+// BodyKind names the template that renders the zero-on-error check.
+func (ZeroOnError) BodyKind() BodyKind { return KindZeroOnError }
+
+// BodyKind names the template that renders the mixin probe.
+func (MixinProbe) BodyKind() BodyKind { return KindMixinProbe }
+
+// BodyKind names the template that renders the law leg.
+func (LawLeg) BodyKind() BodyKind { return KindLawLeg }
+
+// BodyKind names the template that renders the differential leg.
+func (DifferentialLeg) BodyKind() BodyKind { return KindDifferentialLeg }
+
+// BodyKind names the template that renders the sim leg.
+func (SimLeg) BodyKind() BodyKind { return KindSimLeg }
+
+// BodyKind names the template that renders the row-sugar body.
+func (RowSugar) BodyKind() BodyKind { return KindRowSugar }
+
+// BodyKind names the template that renders the produced-secondary smoke.
 func (ProducedSecondarySmoke) BodyKind() BodyKind { return KindProducedSecondarySmoke }
 
 // BodyKinds enumerates every registered body variant. The template

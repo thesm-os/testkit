@@ -13,10 +13,10 @@ import (
 // memberCase is one stamp and the member a transform derives from it;
 // ok=false pins a refusal.
 type memberCase struct {
-	name  string
-	got   projection.Expr
-	ok    bool
-	want  projection.Expr
+	name   string
+	got    projection.Expr
+	ok     bool
+	want   projection.Expr
 	refuse bool
 }
 

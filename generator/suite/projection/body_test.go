@@ -26,7 +26,12 @@ func TestBodyKinds(t *testing.T) {
 	t.Run("dispatch-prefixed", func(t *testing.T) {
 		t.Parallel()
 		for _, k := range projection.BodyKinds() {
-			testkit.HasPrefix(t, string(k), projection.BodyKindPrefix, "kinds are template names in the dispatch namespace")
+			testkit.HasPrefix(
+				t,
+				string(k),
+				projection.BodyKindPrefix,
+				"kinds are template names in the dispatch namespace",
+			)
 		}
 	})
 

@@ -12,7 +12,6 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/core/lawid"
@@ -2749,17 +2748,6 @@ func splitQualified(v string) (pkg, name string, ok bool) {
 // projection ([suite.Method.Classifications], [suite.LawParams]) — the one
 // home both tiers select from, so they cannot disagree about what the run
 // classified.
-
-// mixinParamNames returns the named mixin's declared parameters — the
-// registry's fact, like the sibling scan in model.go.
-func mixinParamNames(name string) []string {
-	for _, mx := range mixins.All() {
-		if mx.Name == name {
-			return paramKeys(mx.Params)
-		}
-	}
-	return nil
-}
 
 // contractParamNames returns the named contract's declared parameters.
 func contractParamNames(name string) []string {

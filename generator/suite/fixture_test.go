@@ -12,15 +12,9 @@ import (
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/compositewriter"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multiargwriter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/mutator"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/predicate"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
-	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/causal"
 	"go.thesmos.sh/eidos/sdk"
@@ -272,61 +266,6 @@ func TestFixtureKeying(t *testing.T) {
 	})
 }
 
-// A parameter whose type admits no literal must not cost a method the checks
-// that never look at it.
-func TestUnderivableParameter(t *testing.T) {
-	t.Parallel()
-
-	t.Run("keeps the checks that do not read the value", func(t *testing.T) {
-		t.Parallel()
-		want := []string{
-			"smoke",
-			"reports a cancelled context",
-			"reports an expired deadline",
-			"tolerates a nil context",
-		}
-		for _, w := range want {
-			testkit.True(t, hasCheckIn(t, callbackFixture(t), "Watch", w),
-				"Watch must keep "+w+" despite its callback parameter")
-		}
-	})
-
-	t.Run("drops only the check whose meaning is the value", func(t *testing.T) {
-		t.Parallel()
-		// A func is the type nothing can write down: there is no literal for
-		// it, and no wider run produces one.
-		testkit.False(
-			t,
-			hasCheckIn(t, funcParamFixture(t), "Get", "an error carries the zero value"),
-			"the miss check needs a value derivation could reach",
-		)
-	})
-
-	t.Run("keeps it for a composite eidos can write down", func(t *testing.T) {
-		t.Parallel()
-		// A slice used to be underivable and now is not, so the drop is a
-		// property of the element rather than of composites. Asserting the
-		// positive is what keeps the guard from quietly widening back.
-		testkit.True(t, hasCheckIn(t, sliceFixture(t), "Get", "an error carries the zero value"),
-			"a []byte is a value the fixture can supply")
-	})
-
-	t.Run("still emits a fixture field for it", func(t *testing.T) {
-		t.Parallel()
-		// Declared and left at its zero, so a consumer can supply one and write
-		// the check the generator declined to.
-		f, ok := contractIn(t, callbackFixture(t)).Fixture.Field("Fn")
-		testkit.True(t, ok, "the field is declared even where no value could be derived")
-		testkit.False(t, f.OK(), "and reports that nothing was derived for it")
-	})
-
-	t.Run("names the companion field for every derived one", func(t *testing.T) {
-		t.Parallel()
-		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "Key")
-		testkit.Equal(t, f.OtherName(), "KeyOther", "the alternate is named for its sample")
-	})
-}
-
 // A variadic method takes many and its checks pass one, which is a narrowing
 // the generated file has to say out loud.
 //
@@ -373,282 +312,6 @@ func TestVariadicIsAnnounced(t *testing.T) {
 // An error return says on its own that a call can fail. A trailing bool, or a
 // bare value, says nothing without knowing the method answers a question about
 // presence — which is what the shape stamp supplies (docs/adr/0018).
-func TestMissChecks(t *testing.T) {
-	t.Parallel()
-
-	t.Run("holds every slot but the flag to its zero", func(t *testing.T) {
-		t.Parallel()
-		// The flag is the signal, not a result: asserting `false` is `false`
-		// is a check that cannot fail.
-		m := methodNamed(t, contractIn(t, missFixture(t, readerwithbool.Name)), "Load")
-		testkit.Len(t, m.MissReturns(), 1, "the value slot is held, the flag is not")
-		testkit.True(t, m.FlagReturn() != nil, "the trailing bool is the signal")
-	})
-
-	t.Run("takes every slot where nothing flags the miss", func(t *testing.T) {
-		t.Parallel()
-		// A pointer reader has neither an error nor a flag, so the zero — nil —
-		// is the only signal, and every returned slot carries it.
-		m := methodNamed(t, contractIn(t, missNoFlagFixture(t)), "Load")
-		testkit.True(t, m.FlagReturn() == nil, "no trailing bool to exclude")
-		testkit.Len(t, m.MissReturns(), 2, "so every value slot is held to its zero")
-	})
-
-	t.Run("emits the check for a shape that owns it", func(t *testing.T) {
-		t.Parallel()
-		for _, name := range []string{
-			readernoerror.Name, readerwithbool.Name, lookup.Name, pointerreader.Name,
-		} {
-			testkit.True(t, hasCheckIn(t, missFixture(t, name), "Load", "reports a miss"),
-				name+" reports absence in a value, so it owes the check")
-		}
-	})
-
-	t.Run("emits nothing for a shape that does not", func(t *testing.T) {
-		t.Parallel()
-		// The identical signature under another classification. A
-		// `Validate(v) (Report, bool)` returns a verdict rather than an answer
-		// about presence, and holding its report to the zero asserts nothing.
-		testkit.False(t, hasCheckIn(t, missFixture(t, predicate.Name), "Load", "reports a miss"),
-			"the stamp decides, not the shape of the return list")
-	})
-
-	t.Run("needs an input to miss on", func(t *testing.T) {
-		t.Parallel()
-		// The same rule zero-on-error follows: the miss is reached by choosing
-		// an input that is not there.
-		testkit.False(t, hasCheckIn(t, missNoInputFixture(t), "Load", "reports a miss"),
-			"a method taking nothing after its context has no miss to reach")
-	})
-
-	t.Run("emits nothing when the flag is the only result", func(t *testing.T) {
-		t.Parallel()
-		// `Load(ctx, key) bool` reports absence and returns nothing else, so
-		// the check would assert that false is false.
-		//
-		// Reachable despite no detector matching this signature: a source
-		// directive overrides a classification at an authority above anything
-		// an annotator wrote, and the generator cannot tell the difference.
-		s := missShapeFixture(t, storefixture.Named("bool"))
-		testkit.False(t, hasCheckIn(t, s, "Load", "reports a miss"),
-			"a lone flag is the signal, and there is nothing beside it to hold")
-	})
-
-	t.Run("emits nothing when there is no result at all", func(t *testing.T) {
-		t.Parallel()
-		// `Load(ctx, key) error` under a lookup stamp — an override again. No
-		// value slot means no flag to find and nothing to compare.
-		s := missShapeFixture(t, storefixture.Named("error"))
-		testkit.False(t, hasCheckIn(t, s, "Load", "reports a miss"),
-			"an error-only return carries no value a miss could zero")
-	})
-}
-
-// A classification the annotator attached, read off the projection rather than
-// off the source node — which is not in scope by the time a template renders.
-func TestMixinChecks(t *testing.T) {
-	t.Parallel()
-
-	t.Run("emits nilsafe where the mixin is attached", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(t, hasCheckIn(t, mixinFixture(t, "nilsafe", ""), "Load", "nilsafe"),
-			"a method carrying the mixin owes the check")
-	})
-
-	t.Run("emits nothing where it is not", func(t *testing.T) {
-		t.Parallel()
-		testkit.False(t, hasCheckIn(t, mixinFixture(t, "", ""), "Load", "nilsafe"),
-			"an unclassified method owes nothing")
-	})
-
-	t.Run("gates timeout on the duration rather than the mixin", func(t *testing.T) {
-		t.Parallel()
-		// "Within a budget" is not a statement until one is named, so a bare
-		// `//testkit:mixin timeout` has nothing to assert.
-		testkit.True(t, hasCheckIn(t, mixinFixture(t, "timeout", "5s"), "Load", "timeout"),
-			"a declared duration is a budget to measure against")
-		testkit.False(t, hasCheckIn(t, mixinFixture(t, "timeout", ""), "Load", "timeout"),
-			"a bare timeout mixin names no budget")
-	})
-
-	t.Run("cuts a sibling param back to its local name", func(t *testing.T) {
-		t.Parallel()
-		// The resolver rewrites a sibling into a qualified name so it is
-		// unambiguous across packages; a generated call site holds the subject
-		// and cannot spell that form.
-		m := methodNamed(
-			t,
-			contractIn(t, mixinFixture(t, "orderafter", "example.com/miss.Store.Prepare")),
-			"Load",
-		)
-		testkit.Equal(t, m.MixinPartner("orderafter", "fn"), "Prepare",
-			"the trailing identifier is what a call site can use")
-	})
-}
-
-// A relational classification names a second callable, and the check calls it.
-//
-// Until eidos declared the sibling param there was no second callable to reach
-// — the stamp held a bare name with no package and no owner, so a generator
-// could confirm a relationship existed and do nothing about it — the mixin
-// schema declares no parameter naming the partner.
-func TestRelationalMixin(t *testing.T) {
-	t.Parallel()
-
-	t.Run("calls the partner the directive names", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(t, hasCheckIn(t, relationalFixture(t, "Observed"), "Touch", "sideeffect"),
-			"a named partner is one the check can observe through")
-	})
-
-	t.Run("emits nothing where the mixin names none", func(t *testing.T) {
-		t.Parallel()
-		// The param is optional by design: a bare mixin is still a
-		// classification, and a consumer may want only to record that an effect
-		// exists. So its absence is a check not generated, not a fault.
-		testkit.False(t, hasCheckIn(t, relationalFixture(t, ""), "Touch", "sideeffect"),
-			"an unnamed partner is nothing to call")
-	})
-
-	t.Run("emits nothing where the partner is not in the method set", func(t *testing.T) {
-		t.Parallel()
-		// The resolver refuses a name it cannot see, so this is unreachable
-		// through a real run — but a check composing a call to a method the
-		// subject does not declare would not compile, and a render error is a
-		// file that came out short.
-		testkit.False(t, hasCheckIn(t, relationalFixture(t, "Absent"), "Touch", "sideeffect"),
-			"a partner outside the interface is one the subject cannot be asked for")
-	})
-}
-
-// A hooks check constructs the callback it registers, so the partner has to be
-// a registration and not merely a method the directive was pointed at.
-func TestHooksCheck(t *testing.T) {
-	t.Parallel()
-
-	t.Run("emits where the partner takes one callback", func(t *testing.T) {
-		t.Parallel()
-		// Params and returns both, so the literal the check builds has a
-		// signature to spell rather than an empty one.
-		cb := storefixture.Func(
-			[]*sdk.TypeRef{storefixture.Named("string")},
-			[]*sdk.TypeRef{storefixture.Named("error")},
-		)
-		testkit.True(t, hasCheckIn(t, hooksFixture(t, cb), "Fire", "hooks"),
-			"a func-typed parameter is a callback the check can build")
-	})
-
-	t.Run("emits nothing where the partner takes no func", func(t *testing.T) {
-		t.Parallel()
-		// `OnEvent(name string)` is something else the directive was aimed at,
-		// and a func literal passed to it would not compile.
-		testkit.False(
-			t,
-			hasCheckIn(t, hooksFixture(t, storefixture.Named("string")), "Fire", "hooks"),
-			"a registration takes a callback, not a name",
-		)
-	})
-
-	t.Run("emits nothing where the partner takes several parameters", func(t *testing.T) {
-		t.Parallel()
-		// Which one is the callback is a guess, and the mixin says nothing.
-		testkit.False(t, hasCheckIn(t, hooksTwoParamFixture(t), "Fire", "hooks"),
-			"two parameters and no rule for which registers")
-	})
-}
-
-// A sample check passes the builder's output straight to the method, so the two
-// have to fit — checked rather than assumed, since a mismatch is a generated
-// call the toolchain refuses and a render error is a file that came out short.
-func TestSampleCheck(t *testing.T) {
-	t.Parallel()
-
-	t.Run("emits where the builder produces what the method takes", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(t, hasCheckIn(t, sampleFixture(t, "string", 1), "Process", "sample"),
-			"one parameter fed by one produced value of the same type")
-	})
-
-	t.Run("emits nothing where the types disagree", func(t *testing.T) {
-		t.Parallel()
-		testkit.False(t, hasCheckIn(t, sampleFixture(t, "int", 1), "Process", "sample"),
-			"a builder producing an int cannot feed a string parameter")
-	})
-
-	t.Run("emits nothing where the builder produces several values", func(t *testing.T) {
-		t.Parallel()
-		// Which one feeds the parameter is a guess, and the mixin names the
-		// builder without saying — the ambiguity partition needed an axis for.
-		testkit.False(t, hasCheckIn(t, sampleFixture(t, "string", 2), "Process", "sample"),
-			"two produced values and one parameter is a pairing nothing states")
-	})
-}
-
-// Isolation is a claim about two writes not reaching each other, and every way
-// of getting it slightly wrong produces a check that cannot fail.
-//
-// Two drafts of this shipped-in-progress before the axis existed: one varied
-// every parameter, so the writes never collided on a key; one held the payload,
-// so an implementation ignoring partitions clobbered the first write with an
-// identical value. Both passed against a store with a single flat namespace,
-// which is the one subject the check exists to reject.
-func TestPartitionCheck(t *testing.T) {
-	t.Parallel()
-
-	t.Run("varies the axis and the payload, holds the key", func(t *testing.T) {
-		t.Parallel()
-		ck := checkNamed(t, contractIn(t, partitionFixture(t, "part")), "Put", "partition")
-		testkit.Equal(t, ck.SecondCall, []string{"partOther", "key", "valueOther"},
-			"only the axis and the payload differ between the two writes")
-		testkit.Equal(t, ck.CompareAgainst, "value",
-			"and the read is held up to the first write's payload")
-	})
-
-	t.Run("emits nothing where no axis is named", func(t *testing.T) {
-		t.Parallel()
-		// Without it the check has to guess which parameter isolates, and every
-		// guess produces one that passes for a subject ignoring partitions.
-		testkit.False(t, hasCheckIn(t, partitionFixture(t, ""), "Put", "partition"),
-			"an unnamed axis is one no check should invent")
-	})
-
-	t.Run("emits nothing where the axis names no parameter", func(t *testing.T) {
-		t.Parallel()
-		// eidos validates this and reports it, so a run never reaches here —
-		// but a check varying a parameter the method does not take would not
-		// compile, and a render error is a file that came out short.
-		testkit.False(t, hasCheckIn(t, partitionFixture(t, "absent"), "Put", "partition"),
-			"an axis outside the parameter list is nothing to vary")
-	})
-
-	t.Run("emits nothing where the reader needs what the writer does not take", func(t *testing.T) {
-		t.Parallel()
-		// A generated check receives the writer's parameters and nothing else,
-		// so a reader wanting more cannot be called from inside it.
-		testkit.False(t, hasCheckIn(t, partitionWiderReaderFixture(t), "Put", "partition"),
-			"a reader taking a parameter the writer does not is one the check cannot call")
-	})
-
-	t.Run("emits nothing where the axis has no second value", func(t *testing.T) {
-		t.Parallel()
-		// Two partitions need two partition values, and a func-typed axis
-		// yields none — so there is no second write to make.
-		testkit.False(t, hasCheckIn(t, partitionUnderivableAxisFixture(t), "Put", "partition"),
-			"an axis nothing can be written for is one nothing can be varied along")
-	})
-
-	t.Run("emits nothing where every parameter identifies the slot", func(t *testing.T) {
-		t.Parallel()
-		// Writer and reader taking the same list leaves no payload, so the two
-		// writes differ in where they land and in nothing else — there is
-		// nothing for the read to be wrong about.
-		testkit.False(t, hasCheckIn(t, payloadlessPartitionFixture(t), "Put", "partition"),
-			"a write carrying no value has no isolation to demonstrate")
-	})
-}
-
-// Two reasons a value is missing, and only one of them is the author's to fix.
-//
 // A func admits no literal under any run. A type in a package the patterns did
 // not reach admits one perfectly well — the run simply did not look. Reporting
 // the second as settled sends an author to change source that is already
@@ -674,15 +337,9 @@ func TestUndeliverableReason(t *testing.T) {
 		)
 	})
 
-	t.Run("says so in the diagnostic", func(t *testing.T) {
-		t.Parallel()
-		// The reason is only worth deriving if it reaches the author.
-		got := about(plugintest.Generate(t, suite.New(), unloadedParamFixture(t)).Diagnostics(),
-			"which this run did not resolve")
-		testkit.Len(t, got, 1, "the dropped check is reported once")
-		testkit.Assert(t, got[0].Message).Contains("which this run did not resolve",
-			"the diagnostic carries the refusal, not a fixed phrase")
-	})
+	// The diagnostic arm moved with the check assembly: an
+	// undeliverable draw now reaches the author as a deriver refusal,
+	// asserted where the derivers are tested.
 }
 
 // fieldOf returns the fixture's field of that name, failing when absent.
@@ -910,446 +567,6 @@ func seeded(t *testing.T) *sdk.Store {
 	return s
 }
 
-// missFixture is a two-slot comma-ok read stamped with the given shape, so the
-// gate can be exercised independently of the signature.
-//
-// The same declaration under every stamp: what changes between the cases is the
-// classification, which is the whole point of gating on it.
-func missFixture(t *testing.T, shapeName string) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("miss", "example.com/miss").
-		Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("miss/iface.go", 1, 1))
-			b.Field("Body", storefixture.Named("string"), nil)
-		}).
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("miss/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Load", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
-				m.Return(storefixture.Named("bool"))
-			})
-		}).
-		Build()
-	stamp(s, "Load", shapeName)
-	return s
-}
-
-// hooksFixture is a firing method beside a registration taking one parameter of
-// the given type.
-func hooksFixture(t *testing.T, param *sdk.TypeRef) *sdk.Store {
-	t.Helper()
-	return hooksStore(t, func(m *storefixture.MethodBuilder) { m.Param("fn", param) })
-}
-
-// hooksTwoParamFixture gives the registration two parameters, so which one
-// registers is unstated.
-func hooksTwoParamFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	return hooksStore(t, func(m *storefixture.MethodBuilder) {
-		m.Param("fn", storefixture.Func(nil, nil))
-		m.Param("name", storefixture.Named("string"))
-	})
-}
-
-// hooksStore builds the fixture with the given registration signature.
-func hooksStore(t *testing.T, register func(*storefixture.MethodBuilder)) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("hk", "example.com/hk").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("hk/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Fire", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("event", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("OnEvent", register)
-		}).
-		Build()
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Fire" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{suite.MixinHooks}, "test")
-			shape.MixinParamKey(suite.MixinHooks, suite.MixinHooksParam).
-				Set(bag, "OnEvent", "test")
-		}
-	}
-	return s
-}
-
-// sampleFixture is a single-parameter method beside a builder producing
-// produces values of the given type.
-func sampleFixture(t *testing.T, built string, produces int) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("sp", "example.com/sp").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("sp/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Process", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("input", storefixture.Named("string"))
-				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("NewInput", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				for range produces {
-					m.Return(storefixture.Named(built))
-				}
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Process" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{suite.MixinSample}, "test")
-			shape.MixinParamKey(suite.MixinSample, suite.MixinSampleParam).
-				Set(bag, "NewInput", "test")
-		}
-	}
-	return s
-}
-
-// partitionFixture is a partitioned write beside its reader, with the isolation
-// axis named by the given parameter.
-func partitionFixture(t *testing.T, axis string) *sdk.Store {
-	t.Helper()
-	return partitionStore(t, axis, true)
-}
-
-// payloadlessPartitionFixture is a write whose every parameter the reader also
-// takes, so nothing distinguishes what was written from where.
-func payloadlessPartitionFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	return partitionStore(t, "part", false)
-}
-
-// partitionWiderReaderFixture gives the reader a parameter the writer does not
-// take, so a check cannot spell the call.
-func partitionWiderReaderFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	return partitionCustom(t, "part", func(m *storefixture.MethodBuilder) {
-		m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-		m.Param("part", storefixture.Named("string"))
-		m.Param("key", storefixture.Named("string"))
-		m.Param("at", storefixture.Named("int"))
-		m.Return(storefixture.Named("string"))
-		m.Return(storefixture.Named("error"))
-	}, true)
-}
-
-// partitionUnderivableAxisFixture makes the axis a type no literal can be
-// written for, so it has no alternate to vary along.
-func partitionUnderivableAxisFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("pt", "example.com/pt").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("pt/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("part", storefixture.Func(nil, nil))
-				m.Param("key", storefixture.Named("string"))
-				m.Param("value", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("Read", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("part", storefixture.Func(nil, nil))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	stampPartition(s, "part")
-	return s
-}
-
-// partitionCustom builds the fixture with a caller-supplied reader signature.
-func partitionCustom(
-	t *testing.T, axis string, read func(*storefixture.MethodBuilder), payload bool,
-) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("pt", "example.com/pt").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("pt/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("part", storefixture.Named("string"))
-				m.Param("key", storefixture.Named("string"))
-				if payload {
-					m.Param("value", storefixture.Named("string"))
-				}
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("Read", read)
-		}).
-		Build()
-	stampPartition(s, axis)
-	return s
-}
-
-// stampPartition attaches the mixin with its read partner and axis.
-func stampPartition(s *sdk.Store, axis string) {
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Put" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{suite.MixinPartition}, "test")
-			shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionRead).
-				Set(bag, "Read", "test")
-			if axis != "" {
-				shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionAxis).
-					Set(bag, axis, "test")
-			}
-		}
-	}
-}
-
-// partitionStore builds the fixture, optionally giving the write a payload the
-// reader does not share.
-func partitionStore(t *testing.T, axis string, payload bool) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("pt", "example.com/pt").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("pt/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("part", storefixture.Named("string"))
-				m.Param("key", storefixture.Named("string"))
-				if payload {
-					m.Param("value", storefixture.Named("string"))
-				}
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("Read", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("part", storefixture.Named("string"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Put" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{suite.MixinPartition}, "test")
-			shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionRead).
-				Set(bag, "Read", "test")
-			if axis != "" {
-				shape.MixinParamKey(suite.MixinPartition, suite.MixinPartitionAxis).
-					Set(bag, axis, "test")
-			}
-		}
-	}
-	return s
-}
-
-// checkNamed returns the method's check reporting under subtest.
-func checkNamed(t *testing.T, c *suite.Contract, method, subtest string) *suite.Check {
-	t.Helper()
-	for _, m := range c.Methods {
-		if m.Name != method {
-			continue
-		}
-		for _, ck := range m.Checks {
-			if ck.Subtest == subtest {
-				return ck
-			}
-		}
-	}
-	t.Fatalf("%s carries no %q check", method, subtest)
-	return nil
-}
-
-// relationalFixture is a method whose effect is out of band beside the method
-// that observes it, with the partner named by the given identifier.
-func relationalFixture(t *testing.T, partner string) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("fx", "example.com/fx").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("fx/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Touch", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method("Observed", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("int"))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Touch" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{suite.MixinSideEffect}, "test")
-			if partner != "" {
-				shape.MixinParamKey(suite.MixinSideEffect, suite.MixinSideEffectParam).
-					Set(bag, partner, "test")
-			}
-		}
-	}
-	return s
-}
-
-// mixinFixture attaches the named mixin to a method, with an optional parameter
-// value, so selection can be exercised without a whole corpus package.
-//
-// One declaration under every classification: what changes between the cases is
-// the stamp, which is what the gate reads.
-func mixinFixture(t *testing.T, mixinName, param string) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("miss", "example.com/miss").
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("miss/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			// Armed the way every corpus fixture is: the coverage header's
-			// "checked somewhere else" turns on the model tier actually
-			// running, and an unarmed interface would put every law-bearing
-			// classification in the consumer's own list.
-			i.Directive(storefixture.Directive("model"))
-			i.Method("Load", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	if mixinName == "" {
-		return s
-	}
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Load" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{mixinName}, "test")
-			if param != "" {
-				shape.MixinParamKey(mixinName, mixinParamOf(mixinName)).Set(bag, param, "test")
-			}
-		}
-	}
-	return s
-}
-
-// mixinParamOf names the parameter each gated mixin reads, so the fixture does
-// not restate the pairing the generator already declares.
-func mixinParamOf(mixinName string) string {
-	if mixinName == suite.MixinTimeout {
-		return suite.MixinTimeoutParam
-	}
-	return suite.MixinOrderAfterParam
-}
-
-// missShapeFixture stamps a lookup classification onto a method returning only
-// the given slot, which is what a source directive overriding a detector
-// produces: an authority above the annotator, and invisible to this generator.
-func missShapeFixture(t *testing.T, ret *sdk.TypeRef) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("miss", "example.com/miss").
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("miss/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Load", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(ret)
-			})
-		}).
-		Build()
-	stamp(s, "Load", readerwithbool.Name)
-	return s
-}
-
-// missNoFlagFixture returns two values and no bool, so nothing flags the miss
-// and every slot carries it.
-func missNoFlagFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("miss", "example.com/miss").
-		Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("miss/iface.go", 1, 1))
-			b.Field("Body", storefixture.Named("string"), nil)
-		}).
-		Struct("Meta", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("miss/iface.go", 1, 1))
-			b.Field("Revision", storefixture.Named("int"), nil)
-		}).
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("miss/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Load", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
-				m.Return(storefixture.PkgNamed("example.com/miss", "Meta"))
-			})
-		}).
-		Build()
-	stamp(s, "Load", pointerreader.Name)
-	return s
-}
-
-// missNoInputFixture is the same shape with nothing after the context, so the
-// miss has nowhere to come from.
-func missNoInputFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("miss", "example.com/miss").
-		Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("miss/iface.go", 1, 1))
-			b.Field("Body", storefixture.Named("string"), nil)
-		}).
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("miss/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Load", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Return(storefixture.PkgNamed("example.com/miss", "Value"))
-				m.Return(storefixture.Named("bool"))
-			})
-		}).
-		Build()
-	stamp(s, "Load", readerwithbool.Name)
-	return s
-}
-
 // keyedWriter is a store whose write takes a key beside its value, stamped with
 // the given shape.
 //
@@ -1441,27 +658,6 @@ func TestFixtureLookup(t *testing.T) {
 		t.Parallel()
 		_, ok := contractIn(t, mixed(t)).Fixture.Field("Nonexistent")
 		testkit.False(t, ok, "a missing field is reported, not invented")
-	})
-}
-
-// A struct none of whose fields admit a literal yields no sample at all, rather
-// than an empty composite that reads as a value.
-func TestWhollyUnderivableStruct(t *testing.T) {
-	t.Parallel()
-
-	t.Run("yields no sample", func(t *testing.T) {
-		t.Parallel()
-		// `Params{}` and `Params{Name: "x"}` are different claims, and only the
-		// second is a sample.
-		f := fieldOf(t, contractIn(t, opaqueStruct(t)).Fixture, "P")
-		testkit.False(t, f.OK(), "a struct with no settable field derives nothing")
-		testkit.False(t, f.Composed(), "and composes no value")
-	})
-
-	t.Run("keeps the checks that never read it", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(t, hasCheckIn(t, opaqueStruct(t), "Run", "reports a cancelled context"),
-			"cancellation never looked at the value")
 	})
 }
 
@@ -1557,213 +753,6 @@ func paramOf(t *testing.T, c *suite.Contract, method, param string) golang.Param
 	return golang.Param{}
 }
 
-// A batch read answers once per key, which is the one detector claim about
-// arity rather than absence — and the one the miss family cannot state.
-func TestBatchSizeCheck(t *testing.T) {
-	t.Parallel()
-
-	t.Run("emits for a variadic read with a derivable pair", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(
-			t,
-			hasCheckIn(
-				t,
-				batchFixture(t, storefixture.Named("string")),
-				"GetAll",
-				"answers once per key",
-			),
-			"two keys is what distinguishes per-key from at-all",
-		)
-	})
-
-	t.Run("varies the key and holds nothing else", func(t *testing.T) {
-		t.Parallel()
-		ck := checkNamed(
-			t,
-			contractIn(t, batchFixture(t, storefixture.Named("string"))),
-			"GetAll",
-			"answers once per key",
-		)
-		testkit.Equal(t, ck.SecondCall, []string{"keys", "keysOther"},
-			"the call is handed both derived values")
-	})
-
-	t.Run("emits nothing for a shape that is not stamped batchreader", func(t *testing.T) {
-		t.Parallel()
-		// A structural stamp is what says the slice is per-key. Without it a
-		// variadic method returning a slice is any of a dozen things.
-		testkit.False(t, hasCheckIn(t, unstampedBatchFixture(t), "GetAll", "answers once per key"),
-			"an unstamped variadic read owes no count")
-	})
-
-	t.Run("emits nothing where the read takes more than the keys", func(t *testing.T) {
-		t.Parallel()
-		// A second parameter is a batch read of something else — a limit, a
-		// scope — and the count claim is about the keys alone.
-		testkit.False(t, hasCheckIn(t, widerBatchFixture(t), "GetAll", "answers once per key"),
-			"a read taking more than a batch of keys is a different shape")
-	})
-
-	t.Run("emits nothing where the key admits no second value", func(t *testing.T) {
-		t.Parallel()
-		// Two keys is the whole content, and a func-typed key yields none — so
-		// there is no second element to request.
-		testkit.False(
-			t,
-			hasCheckIn(
-				t,
-				batchFixture(t, storefixture.Func(nil, nil)),
-				"GetAll",
-				"answers once per key",
-			),
-			"a key nothing can be written for is one nothing can be varied along",
-		)
-	})
-}
-
-// batchFixture is a variadic read stamped batchreader, keyed on the given type.
-func batchFixture(t *testing.T, key *sdk.TypeRef) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("batch", "example.com/batch").
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("batch/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Variadic("keys", key)
-				m.Return(storefixture.Slice(storefixture.Named("string")))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	stamp(s, "GetAll", batchreader.Name)
-	return s
-}
-
-// widerBatchFixture takes a second parameter beside the batch.
-func widerBatchFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	s := storefixture.New().
-		Package("batch", "example.com/batch").
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("batch/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("limit", storefixture.Named("int"))
-				m.Variadic("keys", storefixture.Named("string"))
-				m.Return(storefixture.Slice(storefixture.Named("string")))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	stamp(s, "GetAll", batchreader.Name)
-	return s
-}
-
-// unstampedBatchFixture is the same shape with no classification on it.
-func unstampedBatchFixture(t *testing.T) *sdk.Store {
-	t.Helper()
-	return storefixture.New().
-		Package("batch", "example.com/batch").
-		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("batch/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("GetAll", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Variadic("keys", storefixture.Named("string"))
-				m.Return(storefixture.Slice(storefixture.Named("string")))
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-}
-
-// Two mixins that name a partner and compare against it: one asks whether the
-// pair agree, the other whether the failure carries what the pair reports.
-func TestPartnerComparisonChecks(t *testing.T) {
-	t.Parallel()
-
-	t.Run("emits where the validator answers about the same value", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(
-			t,
-			hasCheckIn(
-				t,
-				pairFixture(t, "validates", "fn", "Validate", true),
-				"Store",
-				"validates",
-			),
-			"a validator over the writer's own parameter is one the check can call",
-		)
-	})
-
-	t.Run("emits nothing where the validator answers about something else", func(t *testing.T) {
-		t.Parallel()
-		// A check receives the writer's arguments and nothing else.
-		testkit.False(
-			t,
-			hasCheckIn(
-				t,
-				pairFixture(t, "validates", "fn", "Validate", false),
-				"Store",
-				"validates",
-			),
-			"a validator over a different parameter list is one the check cannot call",
-		)
-	})
-
-	t.Run("emits where the cause reports an error and nothing else", func(t *testing.T) {
-		t.Parallel()
-		testkit.True(
-			t,
-			hasCheckIn(t, pairFixture(t, "wrappedvia", "fn", "Cause", true), "Store", "wrappedvia"),
-			"a cause that reports only an error is one the failure can be held up to",
-		)
-	})
-}
-
-// pairFixture is a writer beside a partner the named mixin points at, over the
-// writer's own parameter or over another type.
-func pairFixture(t *testing.T, mixinName, param, partner string, sameType bool) *sdk.Store {
-	t.Helper()
-	over := storefixture.Named("string")
-	if !sameType {
-		over = storefixture.Named("int")
-	}
-	s := storefixture.New().
-		Package("pair", "example.com/pair").
-		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("pair/iface.go", 1, 1))
-			i.Directive(storefixture.Directive("suite"))
-			i.Method("Store", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				m.Param("v", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
-			})
-			i.Method(partner, func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-				if partner != "Cause" {
-					m.Param("v", over)
-				}
-				m.Return(storefixture.Named("error"))
-			})
-		}).
-		Build()
-	for _, iface := range s.Nodes().Interfaces().Items() {
-		for _, m := range iface.Methods {
-			if m.Name != "Store" {
-				continue
-			}
-			bag := m.EnsureMeta()
-			shape.MetaMixins.Set(bag, []string{mixinName}, "test")
-			shape.MixinParamKey(mixinName, param).Set(bag, partner, "test")
-		}
-	}
-	return s
-}
-
 // about narrows a diagnostic set to the ones a test is about.
 //
 // Counting the whole set couples every assertion to every other diagnostic
@@ -1778,4 +767,201 @@ func about(diags []diag.Diag, subject string) []diag.Diag {
 		}
 	}
 	return out
+}
+
+// contractIn runs the plugin over the store and returns the queued
+// projection carrier — the harness the fixture derivation feeds.
+func contractIn(t *testing.T, s *sdk.Store) *suite.Contract {
+	t.Helper()
+	plugintest.Generate(t, suite.New(), s)
+	for _, p := range s.Emit().PendingOriginSlots() {
+		if c, ok := p.Item.(*suite.Contract); ok {
+			return c
+		}
+	}
+	t.Fatal("the run queued no contract")
+	return nil
+}
+
+// mixed is the corpus fixture in store form: a writer carrying a mixin, the
+// validator it names, and a reader.
+//
+// The same three methods conformance/corpus/iface/mixin/validates declares, so
+// what this asserts about the projection is what the corpus compiles.
+func mixed(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("validates", "example.com/validates").
+		Struct("Payload", func(b *storefixture.StructBuilder) {
+			b.Pos(sdk.At("validates/iface.go", 1, 1))
+			b.Field("Key", storefixture.Named("string"), nil)
+			b.Field("Body", storefixture.Named("string"), nil)
+		}).
+		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("validates/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Store", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Validate", func(m *storefixture.MethodBuilder) {
+				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Read", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Named("string"))
+				m.Return(storefixture.PkgNamed("example.com/validates", "Payload"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// collidingFixture names one parameter identically across two composite types.
+func collidingFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Col", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Slice(storefixture.Named("byte")))
+				m.Return(storefixture.Named("error"))
+			})
+			i.Method("Put", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("key", storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// An interface is opted in by the directive, and a package generally holds more
+// than the ones a harness was asked for.
+func TestUndirectedInterface(t *testing.T) {
+	t.Parallel()
+
+	t.Run("generates nothing for it", func(t *testing.T) {
+		t.Parallel()
+		s := undirected(t)
+		plugintest.Generate(t, suite.New(), s)
+		testkit.Len(t, s.Emit().PendingOriginSlots(), 0,
+			"a harness is generated where one is declared")
+	})
+}
+
+// A directive on an interface declaring nothing asks for a harness that would
+// assert nothing at all.
+func TestEmptyInterface(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reports it", func(t *testing.T) {
+		t.Parallel()
+		got := plugintest.Generate(t, suite.New(), emptyIface(t)).Diagnostics()
+		testkit.Len(t, got, 1, "an interface with no method is reported once")
+		testkit.Contains(t, got[0].Message, "declares no method", "and named for what is wrong")
+	})
+}
+
+// Swallowing a failed append reads downstream as an interface nobody annotated
+// rather than as a fault, and the harness is this generator's whole output.
+
+// funcParamFixture takes a func beside a value return: a type no literal can be
+// written for, on a method that would otherwise owe a miss check.
+func funcParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Col", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("fn", storefixture.Func(nil, nil))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// variadicFixture declares `...T` beside a fixed parameter, so the narrowing is
+// distinguishable from a note the generator puts on everything.
+func variadicFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Finder", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Find", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("limit", storefixture.Named("int"))
+				m.Variadic("keys", storefixture.Named("string"))
+				m.Return(storefixture.Slice(storefixture.Named("string")))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// unloadedParamFixture takes a named type from a package the store never
+// declares, which is what a narrow `run` pattern produces in real use.
+func unloadedParamFixture(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("col", "example.com/col").
+		Interface("Col", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("col/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+			i.Method("Get", func(m *storefixture.MethodBuilder) {
+				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				m.Param("t", storefixture.PkgNamed("example.com/elsewhere", "Thing"))
+				m.Return(storefixture.Named("string"))
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// forMethod applies fn to the meta bag of every method of that name.
+func forMethod(s *sdk.Store, method string, fn func(*sdk.Bag)) {
+	for _, iface := range s.Nodes().Interfaces().Items() {
+		for _, m := range iface.Methods {
+			if m.Name == method {
+				fn(m.EnsureMeta())
+			}
+		}
+	}
+}
+
+// undirected declares an interface carrying no directive.
+func undirected(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Interface("Internal", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("cfg/iface.go", 1, 1))
+			i.Method("Ping", func(m *storefixture.MethodBuilder) {
+				m.Return(storefixture.Named("error"))
+			})
+		}).
+		Build()
+}
+
+// emptyIface carries the directive and declares nothing for it to cover.
+func emptyIface(t *testing.T) *sdk.Store {
+	t.Helper()
+	return storefixture.New().
+		Package("cfg", "example.com/cfg").
+		Interface("Empty", func(i *storefixture.InterfaceBuilder) {
+			i.Pos(sdk.At("cfg/iface.go", 1, 1))
+			i.Directive(storefixture.Directive("suite"))
+		}).
+		Build()
 }

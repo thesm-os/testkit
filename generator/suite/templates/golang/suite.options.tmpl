@@ -20,15 +20,6 @@ func {{ .IfaceName }}Subject{{ renderTypeParams .TypeParams }}(name string, fact
 		c.subjects = append(c.subjects, named{{ .IfaceName }}Subject{{ .TypeArgs }}{name, factory})
 	}
 }
-{{ if .Double }}
-// {{ .IfaceName }}WithoutDouble declines the second run through {{ .Double.TypeName }}.
-//
-// The double run proves the stand-in is faithful, and costs a second pass over
-// every check. Decline it where the double is not used.
-func {{ .IfaceName }}WithoutDouble{{ renderTypeParams .TypeParams }}() {{ .IfaceName }}Option{{ .TypeArgs }} {
-	return func(c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) { c.withoutDouble = true }
-}
-{{ end }}
 // {{ .IfaceName }}WithClock supplies the clock every time-reading check measures on.
 //
 // Defaults to the real one, so an implementation that does not take a clock
@@ -123,9 +114,6 @@ type {{ lower .IfaceName }}ContractExtension{{ renderTypeParams .TypeParams }} s
 type {{ lower .IfaceName }}Config{{ renderTypeParams .TypeParams }} struct {
 	Fixture  {{ .Fixture.TypeName }}{{ .TypeArgs }}
 	subjects []named{{ .IfaceName }}Subject{{ .TypeArgs }}
-{{- if .Double }}
-	withoutDouble bool
-{{- end }}
 	clock {{ renderType .ClockRef }}
 	seed  func(ctx {{ renderExpr (external "context" "Context") }}, subject {{ renderType .IfaceRef }}{{ .TypeArgs }}) error
 {{- if .Seed }}
@@ -224,11 +212,8 @@ func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) declined(path string) bool
 //
 //nolint:gochecknoglobals // the emitted check paths, read-only after init.
 var {{ lower .IfaceName }}Paths = map[string]struct{}{
-{{- range $m := .Methods }}
-{{- range $ck := $m.Checks }}
-	{{ printf "%q" $ck.Path }}: {},
-{{- end }}
-{{- end }}
+{{/* The emitted check paths register from the deriver inventory
+     once the rewrite's emission lands. */}}
 }
 
 // phantoms names every {{ .IfaceName }}Without path that declines nothing.

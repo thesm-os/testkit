@@ -8,6 +8,7 @@ import (
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
+
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/suite"
 )
@@ -66,11 +67,31 @@ func TestClaimWordingsMatchTheCorpus(t *testing.T) {
 	testkit.TableTest(t, []claimCase{
 		{"smoke with one draw names its noun", suite.SmokeClaim(get, false), "Get survives a call with a derived key"},
 		{"smoke with no draws is bare", suite.SmokeClaim(length, false), "Len survives a call"},
-		{"smoke with several draws says derived inputs", suite.SmokeClaim(put, false), "Put survives a call with derived inputs"},
-		{"smoke nouns the declared type", suite.SmokeClaim(appendM, false), "Append survives a call with a derived entry"},
-		{"seeded smoke speaks the seed seam", suite.SmokeClaim(lookup, true), "Lookup survives a call with a seeded key"},
-		{"opener smoke closes what it opens", suite.OpenerSmokeClaim(scan, "cursor"), "Scan survives a call and the cursor it opens closes"},
-		{"borrow smoke returns what it borrowed", suite.BorrowSmokeClaim(put), "Put survives returning a borrowed resource"},
+		{
+			"smoke with several draws says derived inputs",
+			suite.SmokeClaim(put, false),
+			"Put survives a call with derived inputs",
+		},
+		{
+			"smoke nouns the declared type",
+			suite.SmokeClaim(appendM, false),
+			"Append survives a call with a derived entry",
+		},
+		{
+			"seeded smoke speaks the seed seam",
+			suite.SmokeClaim(lookup, true),
+			"Lookup survives a call with a seeded key",
+		},
+		{
+			"opener smoke closes what it opens",
+			suite.OpenerSmokeClaim(scan, "cursor"),
+			"Scan survives a call and the cursor it opens closes",
+		},
+		{
+			"borrow smoke returns what it borrowed",
+			suite.BorrowSmokeClaim(put),
+			"Put survives returning a borrowed resource",
+		},
 		{"cancel", suite.CancelClaim(get), "Get reports a cancelled context as cancelled"},
 		{"deadline", suite.DeadlineClaim(get), "Get reports an expired deadline as exceeded"},
 		{"nilcontext", suite.NilCtxClaim(get), "Get returns an error rather than panicking on a nil context"},
@@ -78,16 +99,44 @@ func TestClaimWordingsMatchTheCorpus(t *testing.T) {
 		{"zero of a scalar", suite.ZeroOnErrorClaim(length), "Len returns zero alongside any error"},
 		{"zero of a channel", suite.ZeroOnErrorClaim(subscribe), "Subscribe returns a nil channel alongside any error"},
 		{"idempotent", suite.IdempotentClaim(closeM), "a second Close after a clean one changes nothing"},
-		{"accumulates with its noun", suite.AccumulatesClaim(incr, "increment"), "two increments of one key total two, because Incr is declared not idempotent"},
-		{"sentinel miss speaks the bare name", suite.MissClaim(get, "kv.ErrNotFound", "wrote"), "Get reports ErrNotFound for a key nothing wrote"},
+		{
+			"accumulates with its noun",
+			suite.AccumulatesClaim(incr, "increment"),
+			"two increments of one key total two, because Incr is declared not idempotent",
+		},
+		{
+			"sentinel miss speaks the bare name",
+			suite.MissClaim(get, "kv.ErrNotFound", "wrote"),
+			"Get reports ErrNotFound for a key nothing wrote",
+		},
 		{"zero miss", suite.MissClaim(total, "", "counted"), "Total reports zero for a key nothing has counted"},
-		{"seeded miss", suite.MissClaim(lookup, "ErrNotFound", "seeded"), "Lookup reports ErrNotFound for a key nothing seeded"},
+		{
+			"seeded miss",
+			suite.MissClaim(lookup, "ErrNotFound", "seeded"),
+			"Lookup reports ErrNotFound for a key nothing seeded",
+		},
 		{"seeded hit", suite.HitClaim(lookup), "Lookup returns the seeded value for every seeded key"},
 		{"seeded count", suite.CountClaim(size), "Size equals the number of seeded entries"},
-		{"differential agree", suite.DifferentialAgreeClaim("operation", "store", false, false), "every operation sequence leaves the store agreeing with the reference"},
-		{"differential seeded", suite.DifferentialAgreeClaim("read", "catalog", true, false), "every read sequence leaves the catalog agreeing with a reference seeded identically"},
-		{"differential outcomes", suite.DifferentialAgreeClaim("acquire-release", "lease", false, true), "every acquire-release sequence leaves the lease agreeing with the reference on every outcome"},
-		{"differential drain", suite.DifferentialDrainClaim("append-scan"), "every append-scan sequence drains the same entries as the reference, in order"},
+		{
+			"differential agree",
+			suite.DifferentialAgreeClaim("operation", "store", false, false),
+			"every operation sequence leaves the store agreeing with the reference",
+		},
+		{
+			"differential seeded",
+			suite.DifferentialAgreeClaim("read", "catalog", true, false),
+			"every read sequence leaves the catalog agreeing with a reference seeded identically",
+		},
+		{
+			"differential outcomes",
+			suite.DifferentialAgreeClaim("acquire-release", "lease", false, true),
+			"every acquire-release sequence leaves the lease agreeing with the reference on every outcome",
+		},
+		{
+			"differential drain",
+			suite.DifferentialDrainClaim("append-scan"),
+			"every append-scan sequence drains the same entries as the reference, in order",
+		},
 	}, func(t *testing.T, tc claimCase) {
 		testkit.Equal(t, tc.got, tc.want, "the claim wording is the corpus manifests' spelling")
 	})

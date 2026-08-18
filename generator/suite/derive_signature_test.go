@@ -8,6 +8,7 @@ import (
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/lang/golang"
+
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite"
@@ -119,7 +120,9 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 		testkit.Len(t, refusals, 0, "derivable shapes refuse nothing")
 		got := make([]vocab.ID, len(plans))
 		for i, p := range plans {
-			got[i] = p.ID.Render()
+			id, err := p.ID.Render()
+			testkit.NoError(t, err, "the derived ID is well formed")
+			got[i] = id
 		}
 		testkit.Equal(t, got, tc.want, "the rules license exactly these checks, in family order")
 	})
@@ -131,7 +134,9 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 	plans, _ := suite.Signature{}.Derive(storeIface(true, storeGet()))
 	byID := map[vocab.ID]projection.CheckPlan{}
 	for _, p := range plans {
-		byID[p.ID.Render()] = p
+		id, err := p.ID.Render()
+		testkit.NoError(t, err, "the derived ID is well formed")
+		byID[id] = p
 	}
 	wantCall := projection.CallPlan{
 		Method: "Get",
@@ -143,24 +148,36 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 		p := byID["Get/smoke"]
 		testkit.Equal(t, p.Body, projection.Body(projection.SmokeSurvives{Call: wantCall}),
 			"the smoke body carries the derived call")
-		testkit.Equal(t, p.Defect, projection.Defect(projection.StubPanic{Option: projection.OptionName("Store", "Get")}),
-			"the smoke is proven by the panicking double")
+		testkit.Equal(
+			t,
+			p.Defect,
+			projection.Defect(projection.StubPanic{Option: projection.OptionName("Store", "Get")}),
+			"the smoke is proven by the panicking double",
+		)
 		testkit.Equal(t, p.Class, vocab.ClassSmoke, "class buckets the report")
 	})
 
 	t.Run("nilcontext is proven by the accepting double", func(t *testing.T) {
 		t.Parallel()
 		p := byID["Get/nilcontext"]
-		testkit.Equal(t, p.Defect, projection.Defect(projection.AcceptsNil{Option: projection.OptionName("Store", "Get")}),
-			"the claim's stronger arm — returns an error — needs the accepting defect")
+		testkit.Equal(
+			t,
+			p.Defect,
+			projection.Defect(projection.AcceptsNil{Option: projection.OptionName("Store", "Get")}),
+			"the claim's stronger arm — returns an error — needs the accepting defect",
+		)
 	})
 
 	t.Run("the context families share the call and the swap defect", func(t *testing.T) {
 		t.Parallel()
 		for _, id := range []vocab.ID{"Get/cancel", "Get/deadline"} {
 			p := byID[id]
-			testkit.Equal(t, p.Defect, projection.Defect(projection.CtxSwap{Option: projection.OptionName("Store", "Get")}),
-				"a context family is proven by the context-ignoring double")
+			testkit.Equal(
+				t,
+				p.Defect,
+				projection.Defect(projection.CtxSwap{Option: projection.OptionName("Store", "Get")}),
+				"a context family is proven by the context-ignoring double",
+			)
 		}
 	})
 

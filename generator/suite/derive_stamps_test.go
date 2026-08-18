@@ -23,6 +23,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
+
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
 )
@@ -120,7 +121,9 @@ func TestStampsDeriveTheStampFamilies(t *testing.T) {
 		testkit.Len(t, refusals, 0, "tabled stamps refuse nothing")
 		got := make([]vocab.ID, 0, len(plans))
 		for _, p := range plans {
-			got = append(got, p.ID.Render())
+			id, err := p.ID.Render()
+			testkit.NoError(t, err, "the derived ID is well formed")
+			got = append(got, id)
 		}
 		if len(tc.want) == 0 {
 			testkit.Len(t, got, 0, "the rule licenses nothing here")

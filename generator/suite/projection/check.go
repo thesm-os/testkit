@@ -15,6 +15,7 @@
 package projection
 
 import (
+	"errors"
 	"fmt"
 
 	"go.thesmos.sh/testkit/engine/suite"
@@ -34,21 +35,31 @@ type IDPlan struct {
 }
 
 // Render produces the runtime ID through the engine vocabulary — the
-// one home of the grammar. It panics on a malformed plan: a plan is
-// emitter-authored, so a bad one is a bug in a deriver, not input.
-func (p IDPlan) Render() suite.ID {
+// one home of the grammar.
+//
+// A malformed plan is a deriver bug rather than consumer input, and it
+// is still reported rather than panicked: [Inventory.Verify] is the
+// seam that holds a run to its own invariants, and a panic here would
+// jump straight over it — taking every other interface's output down
+// for one deriver's mistake instead of failing the interface being
+// derived, with the plan named.
+func (p IDPlan) Render() (suite.ID, error) {
 	switch {
 	case p.Method != "" && p.Family != "":
-		panic(fmt.Sprintf("projection: ID plan sets both Method %q and Family %q", p.Method, p.Family))
+		return "", fmt.Errorf("projection: ID plan sets both Method %q and Family %q", p.Method, p.Family)
 	case p.Method != "":
-		return suite.MethodID(p.Method, p.Seg)
+		return suite.MethodID(p.Method, p.Seg), nil
 	case p.Family != "":
 		if p.Qualifier == "" {
-			panic(fmt.Sprintf("projection: family ID %s/%s lacks its interface qualifier; qualification is unconditional", p.Family, p.Seg))
+			return "", fmt.Errorf(
+				"projection: family ID %s/%s lacks its interface qualifier; qualification is unconditional",
+				p.Family,
+				p.Seg,
+			)
 		}
-		return suite.FamilyID(p.Family, p.Qualifier, p.Seg)
+		return suite.FamilyID(p.Family, p.Qualifier, p.Seg), nil
 	default:
-		panic("projection: empty ID plan")
+		return "", errors.New("projection: empty ID plan")
 	}
 }
 

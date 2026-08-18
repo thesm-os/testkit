@@ -6,12 +6,45 @@
 package suite
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"text/template"
+
+	langgo "go.thesmos.sh/eidos/lang/golang"
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
+
+// bodyTemplates parses the body subtree exactly as the backend will:
+// the prefixed function map read back from the plugin itself, so this
+// parse and the run's cannot diverge. Test scaffolding on purpose —
+// production rendering is the backend's, and a parse path with no
+// production consumer does not belong in production code.
+func bodyTemplates() (*template.Template, error) {
+	t, err := template.New("body").Funcs(New().TemplateFuncs(langgo.Language)).
+		ParseFS(goTemplatesFS, "templates/golang/body/*.tmpl")
+	if err != nil {
+		return nil, fmt.Errorf("suite: parse the body templates: %w", err)
+	}
+	return t, nil
+}
+
+// renderBody executes one body variant's template — the dispatch is
+// the variant's own kind, which IS the template's name, so an
+// unregistered variant fails by name rather than rendering nothing.
+func renderBody(v bodyView) (string, error) {
+	t, err := bodyTemplates()
+	if err != nil {
+		return "", err
+	}
+	var b strings.Builder
+	if err := t.ExecuteTemplate(&b, string(v.Body.BodyKind()), v); err != nil {
+		return "", fmt.Errorf("suite: render %s: %w", v.Body.BodyKind(), err)
+	}
+	return b.String(), nil
+}
 
 // renderCase is one body variant and the text its template emits.
 type renderCase struct {

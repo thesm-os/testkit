@@ -10,8 +10,6 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/gate"
-	"go.thesmos.sh/testkit/generator/model"
-	"go.thesmos.sh/testkit/generator/suite"
 	"go.thesmos.sh/testkit/generator/tiers"
 )
 
@@ -136,16 +134,6 @@ func TestEmissionSeesTheTwinFloor(t *testing.T) {
 		"validates derives the map oracle")
 	testkit.True(t, kinds["go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded.Mixed"],
 		"bounded rides the twin floor — the audit's break experiment, kept measurable")
-}
-
-// TestModelDirectiveSpelling holds the suite generator's respelling of the
-// model directive to the model generator's own: the suite cannot import the
-// generator that imports it, so the header's "will the model tier run"
-// predicate carries a copy — and a drifted copy is seven lying headers.
-func TestModelDirectiveSpelling(t *testing.T) {
-	t.Parallel()
-	testkit.Equal(t, suite.ModelDirective, string(model.DirectiveName),
-		"one directive, two modules, one spelling")
 }
 
 // twinCeiling is the corpus's twin count, ratcheted: 92 of 114 references
