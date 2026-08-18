@@ -91,6 +91,20 @@ linters:
             - $gostd
             - go.thesmos.sh/testkit
             - github.com/google/go-cmp
+        # The suite package is the consumer-facing vocabulary inside the
+        # engine module: its MODULE home is here (prove's rapid canary is a
+        # module-level test dependency), but the PACKAGE stays composable
+        # without the property machinery — it may not import the engine's
+        # own packages. legs is the one sanctioned bridge, and it lives
+        # outside suite/.
+        suite-vocabulary:
+          list-mode: strict
+          files:
+            - "**/engine/suite/*.go"
+          allow:
+            - $gostd
+            - go.thesmos.sh/testkit
+            - go.thesmos.sh/testkit/engine/suite
         # The engine tier owns the heavy verification dependencies. Nothing
         # else in the workspace may import them.
         engine:
