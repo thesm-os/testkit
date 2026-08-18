@@ -32,9 +32,9 @@ import (
 //	           so a second instance driven identically stands in: twins must
 //	           agree, which catches nondeterminism and hidden shared state but
 //	           not a subject wrong the same way twice; ref= raises the floor
-//	Sequences: Get (aggregator), Put (writer)
+//	Sequences: Get (aggregator), Put (writer), Stats (aggregator)
 //	Values:    the fixture pair blended with arbitrary draws; ContractModelValues replaces the pool
-//	Laws:      AUTO-COUNT-EQUALS-REFERENCE, AUTO-POOL-BALANCED (supplied: stats), AUTO-POOL-LEAK-FREE (supplied: balanced)
+//	Laws:      AUTO-COUNT-EQUALS-REFERENCE, AUTO-POOL-BALANCED (supplied: stats), AUTO-POOL-LEAK-FREE (supplied: balanced), AUTO-COUNT-EQUALS-REFERENCE
 //	Not bound:
 //	           AUTO-WRITE-OBSERVABLE — instantiates at a key type no method here draws
 func ContractModel(opts ...ContractModelOption) ContractOption {
@@ -94,6 +94,11 @@ func ContractModelProperty(factory func() pool.Contract, opts ...ContractModelOp
 		laws.Declined("AUTO-POOL-LEAK-FREE",
 			"ContractModelBalanced")
 	}
+	laws.Add(law.CountEqualsReference[pool.Contract, pool.Stats]{
+		Count: func(rt *model.T, s pool.Contract) (pool.Stats, error) {
+			return s.Stats(rt.Context())
+		},
+	})
 	// The saturation prover's isolation: with siblings registered, the first
 	// law to catch a defect ends the iteration and every other law bound on
 	// the same methods reads as unsaturatable.
@@ -122,6 +127,10 @@ func ContractModelProperty(factory func() pool.Contract, opts ...ContractModelOp
 			action.Writer("Put", values,
 				func(ctx context.Context, s pool.Contract, v pool.Value) error {
 					return s.Put(ctx, v)
+				}),
+			action.Aggregator("Stats",
+				func(ctx context.Context, s pool.Contract) (pool.Stats, error) {
+					return s.Stats(ctx)
 				}),
 		),
 	)
@@ -195,6 +204,18 @@ func init() { //nolint:staticcheck // an empty wardrobe leaves dress unused by d
 	})
 	dress("Get", "flap", func(fx ContractFixture, s pool.Contract) pool.Contract {
 		return &contractSatFlapGet{Contract: s, a: fx.V, b: fx.VOther}
+	})
+	dress("Stats", "inert", func(_ ContractFixture, s pool.Contract) pool.Contract {
+		return contractSatInertStats{s}
+	})
+	dress("Stats", "flicker", func(_ ContractFixture, s pool.Contract) pool.Contract {
+		return &contractSatFlickerStats{Contract: s}
+	})
+	dress("Stats", "sputter", func(_ ContractFixture, s pool.Contract) pool.Contract {
+		return &contractSatSputterStats{Contract: s}
+	})
+	dress("Stats", "spill", func(_ ContractFixture, s pool.Contract) pool.Contract {
+		return contractSatSpillStats{s}
 	})
 }
 
@@ -284,6 +305,73 @@ func ContractModelSaturation(t *testing.T, factory func() pool.Contract, opts ..
 	t.Run("AUTO-POOL-LEAK-FREE", func(t *testing.T) {
 		t.Skip("the law closes over no method a defect can wear — its closures are doors and traces")
 	})
+	t.Run("AUTO-COUNT-EQUALS-REFERENCE", func(t *testing.T) {
+		proving := map[string]bool{"dupdrain": true, "dupseq": true, "fadeseq": true, "flicker": true, "flood": true, "greedy": true, "inert": true, "latch": true, "wane": true, "wax": true}
+		killed := func() bool {
+			for _, method := range []string{"Stats"} {
+				for _, wear := range contractSatWears[method] {
+					if !proving[wear.kind] {
+						continue
+					}
+					// Two references per defect. Silencing the differential leaves
+					// the law as the only witness, but not every action reports
+					// through it: a shape whose action fails structurally still
+					// ends the iteration, and a reference wearing the same defect
+					// behaves the same way the subject does, so nothing diverges
+					// and the law is reached. A law that *is* the comparison needs
+					// the opposite — with both sides worn it has nothing to
+					// disagree with — so the clean reference runs too and either
+					// kill counts. The corpus measured both: dropping either one
+					// loses laws that only the other can saturate.
+					for _, blind := range []bool{true, false} {
+						surrogate := "ContractSat_AUTO-COUNT-EQUALS-REFERENCE_" + method + "_" + wear.kind
+						if blind {
+							surrogate += "_blind"
+						}
+						t.Cleanup(func() {
+							_ = os.RemoveAll(filepath.Join("testdata", "rapid", surrogate))
+							_ = os.Remove(filepath.Join(
+								model.ResolveArtifactDir(""), "failure-"+surrogate+".json"))
+						})
+						reference := factory
+						if blind {
+							reference = func() pool.Contract { return wear.wrap(fx, factory()) }
+						}
+						f := testkit.NewFailableTB().WithName(surrogate)
+						worn := append(slices.Clone(opts),
+							ContractModelReference(reference),
+							contractModelOnlyLaw("AUTO-COUNT-EQUALS-REFERENCE"))
+						model.Check(f, ContractModelProperty(func() pool.Contract {
+							return wear.wrap(fx, factory())
+						}, worn...))
+						// The reporter's own rendering, not the bare identifier.
+						// rapid echoes the TB's name into its final message and the
+						// surrogate above is named for this law, so matching the
+						// identifier alone matched the name — the criterion reduced
+						// to f.Failed() and every defect "killed" every law. The
+						// verdict's format carries the identifier where no name can:
+						// after the kind, which is the one place only the reporter
+						// writes. The suffix rather than the whole prefix because a
+						// REQ-tagged law renders "[REQ-1 invariant]".
+						if f.Failed() && (strings.Contains(f.Msg(), "semantic]") || strings.Contains(f.Msg(), "invariant] AUTO-COUNT-EQUALS-REFERENCE")) {
+							return true
+						}
+					}
+				}
+			}
+			return false
+		}()
+		if !killed {
+			t.Errorf("AUTO-COUNT-EQUALS-REFERENCE survived every defect worn on its own methods — bound but unsaturatable")
+		}
+		// Not yet narrowed to this law's own defect class. The wears whose
+		// class its name claims are
+		// dupdrain, dupseq, fadeseq, flicker, flood, greedy, inert, latch, wane, wax — requiring the kill to come from one
+		// of those reddens 23 laws across the corpus, and the measurement says
+		// roughly a third are weak laws and the rest are wrong classes. That
+		// triage is 1.10b. What ships here is the skip above, which is the
+		// half the measurement settled.
+	})
 }
 
 // contractSatInertGet answers zeros where Get should act.
@@ -360,6 +448,65 @@ func (m *contractSatFlapGet) Get(_ context.Context) (pool.Value, error) {
 	return m.b, nil
 }
 
+// contractSatInertStats answers zeros where Stats should act.
+type contractSatInertStats struct{ pool.Contract }
+
+func (contractSatInertStats) Stats(_ context.Context) (z0 pool.Stats, z1 error) {
+	return
+}
+
+// contractSatFlickerStats answers zeros every second
+// call, where Stats should answer the same thing twice.
+//
+// The defect every stability claim names: cacheable, deterministic,
+// consistent, non-decreasing are all about two calls agreeing, and a subject
+// that answers zeros *forever* agrees with itself perfectly. Only an answer
+// that changes breaks them, and alternating with the zero is the smallest
+// change available at any return type.
+type contractSatFlickerStats struct {
+	pool.Contract
+	flip atomic.Int64
+}
+
+func (m *contractSatFlickerStats) Stats(p0 context.Context) (z0 pool.Stats, z1 error) {
+	if m.flip.Add(1)%2 == 0 {
+		return
+	}
+	return m.Contract.Stats(p0)
+}
+
+// contractSatSputterStats alternates a minted refusal
+// with the real answer where Stats should be steady.
+type contractSatSputterStats struct {
+	pool.Contract
+	flip atomic.Int64
+}
+
+func (m *contractSatSputterStats) Stats(p0 context.Context) (z0 pool.Stats, z1 error) {
+	if m.flip.Add(1)%2 == 1 {
+		z1 = errors.New("pooltest: saturation sputtered a refusal")
+		return
+	}
+	return m.Contract.Stats(p0)
+}
+
+// contractSatSpillStats refuses while answering what
+// Stats actually found — whatever the failed lookup left behind.
+//
+// Every refusal the wardrobe mints elsewhere arrives with the zero value
+// beside it, and the value a failed read is supposed to answer is usually the
+// zero. So the defect and the claim agree, and a law about what an error must
+// coincide with has nothing that can disagree with it.
+type contractSatSpillStats struct{ pool.Contract }
+
+func (m contractSatSpillStats) Stats(p0 context.Context) (pool.Stats, error) {
+	out, err := m.Contract.Stats(p0)
+	if err != nil {
+		return out, err
+	}
+	return out, errors.New("pooltest: saturation spilled a found value into a refusal")
+}
+
 // ContractModelValues replaces the values pool — for a subject whose
 // accepted values a raw draw cannot spell. The pool feeds every value slot,
 // the sequences and the laws alike; keep its draws colliding, because values
@@ -402,4 +549,4 @@ func newContractModelConfig(opts ...ContractModelOption) *contractModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance bdbd8be5cd0b141758110526e0b2635ada503cc03d565d16ed342fc18b96058f
+// testkit:provenance 45b751dff0be27b1f973ff23841e62dc8ca97b7125c90f193cd40215b999ade7

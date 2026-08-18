@@ -16,6 +16,11 @@ import (
 // Value is the payload the contract's roles carry.
 type Value struct{ Key, Body string }
 
+// Stats is the accounting the pool laws balance — on the interface per
+// the database/sql.DBStats precedent, and named by the contract
+// directive so the generator knows where the numbers live.
+type Stats struct{ Gets, Puts, Outstanding int }
+
 // Contract is the fixture interface.
 //
 //testkit:out pooltest/ pkg=pooltest
@@ -24,10 +29,15 @@ type Value struct{ Key, Body string }
 //testkit:model
 type Contract interface {
 	// Get is the pool contract's get role, and hosts the directive
-	// that names its partners.
-	//testkit:contract pool role=get put=Put
+	// that names its partners — the put beside it, and the optional
+	// accounting observation the balanced laws read.
+	//testkit:contract pool role=get put=Put stats=Stats
 	Get(ctx context.Context) (Value, error)
 
 	// Put is the pool contract's put role.
 	Put(ctx context.Context, v Value) error
+
+	// Stats is the pool contract's stats role: the accounting the
+	// balanced and leak-free laws verify against the cycle count.
+	Stats(ctx context.Context) (Stats, error)
 }

@@ -26,12 +26,18 @@ func TestContractContract(t *testing.T) {
 
 	pooltest.AssertContractContract(t,
 		pooltest.ContractModel(
-			// The accounting identity, read off the subject's own counters.
-			// The leak-free door stays unarmed: its claim holds at
-			// quiescence, and the shared walk checks between steps, where a
-			// taken value is legitimately still out.
-			pooltest.ContractModelStats(func(_ *model.T, subject pool.Contract) (int, int, int) {
-				return subject.(*pooltest.InMemory).Stats()
+			// The accounting identity, read through the stats ROLE the
+			// directive names — no concrete-type downcast, because the
+			// numbers' home is the interface now. The leak-free door stays
+			// unarmed: its claim holds at quiescence, and the shared walk
+			// checks between steps, where a taken value is legitimately
+			// still out.
+			pooltest.ContractModelStats(func(rt *model.T, subject pool.Contract) (int, int, int) {
+				st, err := subject.Stats(rt.Context())
+				if err != nil {
+					return 0, 0, 0 // a refused read is trivially balanced; the smoke owns Stats errors
+				}
+				return st.Gets, st.Puts, st.Outstanding
 			}),
 		),
 		pooltest.ContractSubject("in-memory", func() pool.Contract {
@@ -70,6 +76,10 @@ type unboundedPool struct{}
 func (unboundedPool) Get(context.Context) (pool.Value, error) { return pool.Value{}, nil }
 func (unboundedPool) Put(context.Context, pool.Value) error   { return nil }
 
+// Stats lies the way the rest of the stand-in does: permanently
+// balanced numbers from a pool that bounds nothing.
+func (unboundedPool) Stats(context.Context) (pool.Stats, error) { return pool.Stats{}, nil }
+
 // The check rejects a pool that does not bound anything.
 //
 // The message is asserted as well as the rejection: a stand-in failing for some
@@ -105,7 +115,11 @@ func TestContractSaturation(t *testing.T) {
 	t.Parallel()
 	pooltest.ContractModelSaturation(t, func() pool.Contract {
 		return pooltest.NewInMemory()
-	}, pooltest.ContractModelStats(func(_ *model.T, subject pool.Contract) (int, int, int) {
-		return subject.(*pooltest.InMemory).Stats()
+	}, pooltest.ContractModelStats(func(rt *model.T, subject pool.Contract) (int, int, int) {
+		st, err := subject.Stats(rt.Context())
+		if err != nil {
+			return 0, 0, 0
+		}
+		return st.Gets, st.Puts, st.Outstanding
 	}))
 }

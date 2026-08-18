@@ -542,7 +542,10 @@ var VacuityDebt = map[string]VacuityRow{
 			"defect this rule is for, and here the discard is the subject",
 	},
 	"zero-expectation conformance/corpus": {
-		Ceiling: 312,
+		// 312 -> 314: the cursor producer arm's Open and the pool stats
+		// role's Stats each take only a context, which lands at its zero
+		// exactly as this row's reason describes.
+		Ceiling: 314,
 		Why: "what is left of the generated stub's zero arguments after pinning every one a " +
 			"literal can be written for: a context, an interface, a variadic tail, a type " +
 			"from a package the run never read. Those are handed in at their zero and the " +

@@ -37,6 +37,16 @@ type InMemory struct {
 
 var _ pool.Contract = (*InMemory)(nil)
 
+// Stats answers the lifetime accounting the balanced laws read.
+func (s *InMemory) Stats(ctx context.Context) (pool.Stats, error) {
+	if err := contextErr(ctx); err != nil {
+		return pool.Stats{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return pool.Stats{Gets: s.gets, Puts: s.puts, Outstanding: s.inUse}, nil
+}
+
 // NewInMemory returns a pool holding the given values.
 func NewInMemory(values ...pool.Value) *InMemory { return &InMemory{free: values} }
 
@@ -58,16 +68,6 @@ func (s *InMemory) Get(ctx context.Context) (pool.Value, error) {
 	s.inUse++
 	s.gets++
 	return v, nil
-}
-
-// Stats reports the accounting the balance law reads: takes, returns, and
-// what is still out. On the concrete type rather than the interface — the
-// counters are the subject's own bookkeeping, and the consumer that arms
-// the law knows which subject it built.
-func (s *InMemory) Stats() (gets, puts, outstanding int) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.gets, s.puts, s.inUse
 }
 
 // Put returns a value to the pool.

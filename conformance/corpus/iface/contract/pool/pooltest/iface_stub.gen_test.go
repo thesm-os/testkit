@@ -254,6 +254,121 @@ func TestContractStubPut(t *testing.T) {
 	})
 }
 
+// contractStubStatsSubject binds Stats into the shape
+// [stub.Behaviour] drives: how to call it, what it answers with, and how to
+// override it.
+//
+// Each call builds a fresh double, because several of the checks assert on
+// failure and need one bound to a failable TB rather than to the running
+// test.
+func contractStubStatsSubject(tb testing.TB) stub.Subject[pooltest.ContractStatsCall, pooltest.ContractStatsReturn] {
+	tb.Helper()
+	s := pooltest.NewContractStub(tb)
+	return stub.Subject[pooltest.ContractStatsCall, pooltest.ContractStatsReturn]{
+		Stub: s.OnStats.MethodStub,
+		Call: func() {
+			var a0 context.Context
+			_, _ = s.Stats(a0)
+		},
+		Result: func() pooltest.ContractStatsReturn {
+			var a0 context.Context
+			got0, got1 := s.Stats(a0)
+			return pooltest.ContractStatsReturn{Result: got0, Err: got1}
+		},
+		Override: func(mark func()) {
+			s.OnStats.Func(func(_ context.Context) (pool.Stats, error) {
+				mark()
+				var z0 pool.Stats
+				var z1 error
+				return z0, z1
+			})
+		},
+		Fails: func() error {
+			var a0 context.Context
+			_, r1 := s.Stats(a0)
+			return r1
+		},
+	}
+}
+
+// TestContractStubStats pins how Stats answers.
+//
+// Recording, resetting, call-count expectations, strict mode, fault injection
+// and zero-value dispatch are the same contract for every method, so they are
+// asserted once in [stub.Behaviour] rather than restated here. What remains
+// below needs a value this method's signature can tell apart from a zero one.
+func TestContractStubStats(t *testing.T) {
+	t.Parallel()
+
+	stub.Behaviour(t, "Stats", contractStubStatsSubject)
+
+	// No check that Stats answers what Returns pinned: no result of
+	// its signature admits a literal this generator can write, so the only
+	// value available to pin is the zero — which an unconfigured double
+	// answers anyway. stub.Behaviour asserts that half honestly.
+	t.Run("records what it was called with", func(t *testing.T) {
+		t.Parallel()
+		// Asserting only that a call happened would pass against a double
+		// that recorded the wrong arguments, which is the failure a reader
+		// most needs the log to surface.
+		s := pooltest.NewContractStub(t)
+		var a0 context.Context
+		_, _ = s.Stats(a0)
+		got := s.OnStats.AssertCalledOnce(t, "Stats must record the call")
+		testkit.Equal(t, got.Ctx, a0, "the recorded call carries Ctx")
+	})
+
+	t.Run("fires the OnRecord hook for every call", func(t *testing.T) {
+		t.Parallel()
+		// The hook fires synchronously as each call lands, which is what a
+		// concurrency test observes progress with — polling the log instead
+		// races the thing under test.
+		s := pooltest.NewContractStub(t)
+		var seen []pooltest.ContractStatsCall
+		s.OnStats.OnRecord(func(c pooltest.ContractStatsCall) { seen = append(seen, c) })
+		var a0 context.Context
+		_, _ = s.Stats(a0)
+		_, _ = s.Stats(a0)
+		testkit.Len(t, seen, 2, "OnRecord must fire once per Stats call")
+	})
+
+	t.Run("wires WithContractStats at construction", func(t *testing.T) {
+		t.Parallel()
+		called := false
+		s := pooltest.NewContractStub(t, pooltest.WithContractStats(func(_ context.Context) (pool.Stats, error) {
+			called = true
+			var z0 pool.Stats
+			var z1 error
+			return z0, z1
+		}))
+		var a0 context.Context
+		_, _ = s.Stats(a0)
+		testkit.True(t, called, "WithContractStats must install the override")
+	})
+
+	t.Run("keeps recording across a reset", func(t *testing.T) {
+		t.Parallel()
+		// The weaker claim, and the honest one for this signature. No result
+		// of Stats admits a literal, so what Returns pinned cannot be
+		// told from the zero and comparing them would pass either way.
+		//
+		// What a reset can still be held to is that it clears the log without
+		// taking the double with it: configure, call, reset, call again, and
+		// exactly one call is recorded. A reset that dropped the whole
+		// configuration fails that, which is the failure the value comparison
+		// was reaching for and could not state.
+		s := pooltest.NewContractStub(t)
+		var want0 pool.Stats
+		var want1 error
+		s.OnStats.Returns(want0, want1)
+		var a0 context.Context
+		_, _ = s.Stats(a0)
+		s.ResetCalls()
+		_, _ = s.Stats(a0)
+		s.OnStats.AssertCalledOnce(t, "Stats must record the call that followed the reset")
+	})
+}
+
 // contractStubDouble describes how to build a ContractStub under each
 // option whose effect is the same whatever a method's signature.
 //
@@ -345,7 +460,24 @@ func TestContractStubDelegateTo(t *testing.T) {
 		r0 := s.Put(a0, a1)
 		testkit.ErrorIs(t, r0, want, "Put must surface the wrapped answer")
 	})
+
+	t.Run("forwards Stats to the wrapped implementation", func(t *testing.T) {
+		var a0 context.Context
+		_, _ = s.Stats(a0)
+		inner.OnStats.AssertCalledOnce(t, "Stats must reach the wrapped implementation")
+	})
+
+	t.Run("surfaces what Stats answered", func(t *testing.T) {
+		// Reaching the wrapped implementation is not enough: a double that
+		// called through and then discarded the answer would pass the check
+		// above while telling its caller nothing true.
+		want := testkit.TestError("Stats-delegate")
+		inner.OnStats.FaultsFor(time.Hour, want)
+		var a0 context.Context
+		_, r1 := s.Stats(a0)
+		testkit.ErrorIs(t, r1, want, "Stats must surface the wrapped answer")
+	})
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5280f135b45ce5bd5888d8a0a760273dc2b289a4ed4ddc26bc309ecd4a85f855
+// testkit:provenance 68ada45715436ec7e0c3edb3bf57d54bd195b25f8569d9e851bd3f2abb9aceb9
