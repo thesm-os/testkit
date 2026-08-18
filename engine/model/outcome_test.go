@@ -19,9 +19,9 @@ import (
 // precondition the run never supplies does.
 type alwaysVacuous struct{ id string }
 
-func (l alwaysVacuous) ID() string    { return l.id }
-func (l alwaysVacuous) REQID() string { return "" }
-func (l alwaysVacuous) Check(*rapid.T, storeIface, storeIface) error {
+func (l alwaysVacuous) ID() string  { return l.id }
+func (alwaysVacuous) REQID() string { return "" }
+func (alwaysVacuous) Check(*rapid.T, storeIface, storeIface) error {
 	return law.Vacuous
 }
 
