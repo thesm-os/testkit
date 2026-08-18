@@ -57,13 +57,18 @@ func (Differential) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 	if !derived {
 		return nil, refusals
 	}
-	return []projection.CheckPlan{{
+	plan := projection.CheckPlan{
 		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegDifferential},
 		Class:       vocab.ClassDifferential,
 		Claim:       claim,
 		Body:        projection.DifferentialLeg{},
 		Falsifiable: vocab.Argued(argueProofsPending),
-	}}, refusals
+	}
+	if defect, proven := observationDefect(f); proven {
+		plan.Falsifiable = vocab.Proven()
+		plan.Defect = defect
+	}
+	return []projection.CheckPlan{plan}, refusals
 }
 
 // differentialClaim words the row by the derived reference's kind,
@@ -158,18 +163,27 @@ func firstWriter(methods []Method) *Method {
 // oracleReadable reports whether any non-writing method's shape is
 // one the shipped oracles model — the read half a comparison needs.
 func oracleReadable(f Iface) bool {
-	return slices.ContainsFunc(f.Methods, func(m Method) bool {
+	return firstOracleReader(f) != nil
+}
+
+// firstOracleReader is the first non-writing method whose shape the
+// shipped oracles model. Nil where none reads.
+func firstOracleReader(f Iface) *Method {
+	for i := range f.Methods {
+		m := &f.Methods[i]
 		s := m.Shape()
-		if s == "" || writesSomething(m) {
-			return false
+		if s == "" || writesSomething(*m) {
+			continue
 		}
 		if _, ok := tiers.MapStoreOp(s); ok {
-			return true
+			return m
 		}
 		if _, ok := tiers.KeyedStoreOp(s); ok {
-			return true
+			return m
 		}
-		_, ok := tiers.CollectionOp(s)
-		return ok
-	})
+		if _, ok := tiers.CollectionOp(s); ok {
+			return m
+		}
+	}
+	return nil
 }

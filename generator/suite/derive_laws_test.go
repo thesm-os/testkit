@@ -13,6 +13,7 @@ import (
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lifecycle"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/atomic"
 	"go.thesmos.sh/eidos/sdk"
 	"go.thesmos.sh/testkit"
@@ -49,7 +50,10 @@ func afterClose(bag *sdk.Bag) {
 // and after-close on the writer, after-close across the readers, a
 // concurrency claim, and a suite-owned idempotent teardown.
 func lawStore() Iface {
-	put := lawMethod("Put", []string{MixinTTL, MixinAfterClose, MixinConcurrent}, afterClose)
+	put := lawMethod("Put", []string{MixinTTL, MixinAfterClose, MixinConcurrent}, func(bag *sdk.Bag) {
+		afterClose(bag)
+		shape.MetaShape.Set(bag, writer.Name, "test")
+	})
 	get := lawMethod("Get", []string{MixinAfterClose}, afterClose)
 	length := lawMethod("Len", []string{MixinAfterClose}, afterClose)
 	closeM := lawMethod("Close", []string{MixinIdempotent}, func(bag *sdk.Bag) {

@@ -207,6 +207,25 @@ ctx directive would need its cancel/deadline/nilcontext calls to
 borrow too, and no corpus contract declares both. The rule waits for
 an instance rather than guessing one.
 
+## Amendment: the proof rules — BUILT; F1 needs a variant (PROPOSED)
+
+The planted-defect rules are tables the row constructors consult, per
+the corpus's own defect-emitter audit: W1 discard-write (the writer's
+stub option) proves every agreement row — differential, linearizable,
+bundle; P1 sentinel-once (the stamped sentinel, the same declaration
+that licensed the law) proves poison; the after-close outliving
+method (PartialOutlive on a stamped carrier's option) proves the
+lifecycle law; R1 freeze-return proves the appender. The residue —
+cursor hand types, lease accounting — has no rule and stays Argued
+with the pending reason, never an underived Proven.
+
+PROPOSED contract delta: F1 strip-role-field (zero the field the
+mixin names — the ttl proof's immortal store) has no defect variant
+in the closed set. Proposal: `StripRoleField{Field string}` joins the
+defect variants (14th), its template zeroing the named field on the
+double's write path. Until ratified, ttl rows ship Argued and the
+flip-parity test pins that.
+
 ## Amendment: the differential row — BUILT; the sim family — BLOCKED ON A LICENSE
 
 The differential deriver plans the reference-comparison row from the

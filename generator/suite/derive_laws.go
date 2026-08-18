@@ -78,24 +78,34 @@ func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		// The one non-law leg row: linearizability runs the linearize
 		// engine, not a law binding, so it has a segment instead of a
 		// lawid and the suite's own wording policy speaks it.
-		plans = append(plans, projection.CheckPlan{
+		plan := projection.CheckPlan{
 			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLinearizable},
 			Class:       vocab.ClassConcurrent,
 			Claim:       LinearizableClaim(),
 			Body:        projection.LawLeg{},
 			Falsifiable: vocab.Argued(argueProofsPending),
-		})
+		}
+		if defect, proven := observationDefect(f); proven {
+			plan.Falsifiable = vocab.Proven()
+			plan.Defect = defect
+		}
+		plans = append(plans, plan)
 	}
 
 	if len(bundle) > 0 {
-		plans = append(plans, projection.CheckPlan{
+		plan := projection.CheckPlan{
 			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLaws},
 			Class:       vocab.ClassLaws,
 			Claim:       BundleClaim(chainShaped(f)),
 			Body:        projection.LawLeg{Laws: bundle},
 			Falsifiable: vocab.Argued(argueProofsPending),
 			Binds:       bundle,
-		})
+		}
+		if defect, proven := observationDefect(f); proven {
+			plan.Falsifiable = vocab.Proven()
+			plan.Defect = defect
+		}
+		plans = append(plans, plan)
 	}
 	return plans, refusals
 }
@@ -107,10 +117,11 @@ func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 const argueProofsPending = "the planted-defect rule for this law family lands with the proofs deriver"
 
 // lawRow builds one own-leg plan; the bind is spelled once and feeds
-// both the body and the lock's binds column.
+// both the body and the lock's binds column. The proof rules flip the
+// row to Proven where one plants a defect; the residue stays Argued.
 func lawRow(f Iface, class vocab.Class, claim string, bind projection.Bind) projection.CheckPlan {
 	binds := []projection.Bind{bind}
-	return projection.CheckPlan{
+	plan := projection.CheckPlan{
 		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: bind.Law},
 		Class:       class,
 		Claim:       claim,
@@ -118,6 +129,11 @@ func lawRow(f Iface, class vocab.Class, claim string, bind projection.Bind) proj
 		Falsifiable: vocab.Argued(argueProofsPending),
 		Binds:       binds,
 	}
+	if defect, proven := lawDefect(f, bind.Law); proven {
+		plan.Falsifiable = vocab.Proven()
+		plan.Defect = defect
+	}
+	return plan
 }
 
 // lawSelection is one law the interface earns: the carriers that
