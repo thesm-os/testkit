@@ -148,6 +148,8 @@ generator/suite/
 ├── derive_contracts.go       # contract arm: opener + borrow smokes
 │                             #   [BUILT]; direct contract checks
 │                             #   (if-absent, if-match, outbox) pending
+├── derive_pools.go           # roled defaults → PoolPlans; refusals  [BUILT]
+│                             #   (type-level roles land with bus/cache)
 ├── derive_caps.go            # capability doors per class            [BUILT]
 │                             #   (recover joins with the sim license)
 ├── derive_proofs.go          # mechanical defect rules; residue      [BUILT]
