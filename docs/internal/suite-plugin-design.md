@@ -207,6 +207,35 @@ ctx directive would need its cancel/deadline/nilcontext calls to
 borrow too, and no corpus contract declares both. The rule waits for
 an instance rather than guessing one.
 
+## Amendment: the differential row — BUILT; the sim family — BLOCKED ON A LICENSE
+
+The differential deriver plans the reference-comparison row from the
+oracle facts tiers already owns: `DefeatsOracles` refuses (the twin
+floor's wording has no corpus pin), the cursor contract drains
+(writer-opener named sequence), a contract with a store row agrees —
+on every outcome where the oracle speaks error semantics, which is
+also what selects the role-pair sequence noun (lease) over
+"operation" (chain) — a writer beside a modelled read agrees plainly,
+and a seeded read-only surface agrees with a reference seeded
+identically. Pool rides an interim store row (outcome semantics) the
+tiers catalogue gains with the model plugin's migration, beside the
+poison extra-rule. Reconciliation recorded: the store row's "the
+subject" wavering resolves to the token, which every other row
+already speaks. Frontier: pool's "borrow-return" sequence noun is
+domain wording the roles cannot derive; the counter differential's
+suppression (an accumulating writer defeats the put-modelled oracle)
+rides the `idempotent=false` upstream ruling — until it stamps, a
+counter-shaped fixture derives a row the corpus lacks.
+
+**The sim family cannot derive today.** kv's three sim rows are the
+only ones in the packs; bus carries a full teardown and has none, so
+no classification, contract, or signature fact licenses the family —
+the corpus authored it against a durable subject (FileStore) the
+generator cannot see. A licensing directive is owed upstream in the
+grammar (proposal: `//testkit:sim` on the interface, beside model;
+the runtime Excuse seam stays the memory-only escape). The deriver
+lands with that ruling.
+
 ## Amendment: law claims in lawid, legs in tiers — RATIFIED, BUILT
 
 A law's claim sentence is published surface both modules speak — the

@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/cursor"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifabsent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifmatch"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/lease"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/outbox"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/pool"
 	"go.thesmos.sh/eidos/sdk"
@@ -65,8 +66,11 @@ const (
 	ContractCursorNext  = cursor.ParamNext
 
 	// ContractChain marks the append-and-replay protocol, whose bundle
-	// claim speaks "chain law" — the one wording the bundle varies by.
+	// claim speaks "chain law" — the one wording the bundle varies by;
+	// ContractLease the keyed-exclusion protocol whose oracle tiers
+	// ships. Both are read by membership alone, so no role consts.
 	ContractChain = chain.Name
+	ContractLease = lease.Name
 
 	// The pool contract's put arm: the returning method's smoke
 	// borrows from the get sibling first, because its input is

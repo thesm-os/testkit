@@ -59,6 +59,10 @@ const (
 	// DeriverLaws plans the model tier's law rows — which laws tiers
 	// selects, on which legs, under which claims.
 	DeriverLaws DeriverName = "laws"
+
+	// DeriverDifferential plans the model tier's reference-comparison
+	// row, worded by the derived reference's kind.
+	DeriverDifferential DeriverName = "differential"
 )
 
 // Deriver is one rule family: the interface's projections in, plans
@@ -91,6 +95,7 @@ func Registry() []Deriver {
 		Signature{},
 		Stamps{},
 		Laws{},
+		Differential{},
 	}
 }
 

@@ -172,6 +172,35 @@ func BundleClaim(chain bool) string {
 	return "every bound law holds over random operation sequences"
 }
 
+// The sequence nouns the differential wordings speak where no
+// protocol names its own pair.
+const (
+	seqOperation = "operation"
+	seqRead      = "read"
+)
+
+// DifferentialAgreeClaim words the reference-comparison row: the
+// sequence noun, the subject's token, and the reference's arms — a
+// reference seeded identically for read-only surfaces, agreement on
+// every outcome where the oracle speaks error semantics.
+func DifferentialAgreeClaim(sequence, token string, seeded, outcomes bool) string {
+	reference := "the reference"
+	if seeded {
+		reference = "a reference seeded identically"
+	}
+	claim := "every " + sequence + " sequence leaves the " + token + " agreeing with " + reference
+	if outcomes {
+		claim += " on every outcome"
+	}
+	return claim
+}
+
+// DifferentialDrainClaim words the produced-handle comparison: the
+// drain answers the same entries, in order.
+func DifferentialDrainClaim(sequence string) string {
+	return "every " + sequence + " sequence drains the same entries as the reference, in order"
+}
+
 // missNoun is the word the reader claims call their probed input.
 func missNoun(m Method) string {
 	if draws := m.CallArgs(); len(draws) > 0 {
