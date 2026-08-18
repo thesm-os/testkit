@@ -305,6 +305,28 @@ linters:
       - path: "testutil/"
         linters: [paralleltest]
 
+      # The gen/ suite renders its report and lock-file text into a
+      # strings.Builder — rendering, not console output, and staticcheck's
+      # QF1012 requires fmt.Fprintf there. Paths are module-relative, so
+      # from gen/ these are suite/report.go and suite/lock.go.
+      - path: 'suite/(report|lock)\.go'
+        linters: [forbidigo]
+
+      # The gen/ vocabulary's callback signatures — check bodies, harness
+      # constructors, planted-defect closures — take testing.TB as the
+      # CHECK'S parameter, not a helper's: a check body's failure must
+      # point at its own assertion line, not the runner's call site. And
+      # the runner owns leg parallelism (Serial, excused legs), which a
+      # static subtest heuristic cannot see.
+      - path: "(example/|suite/)"
+        linters: [thelper, tparallel, paralleltest]
+
+      # PropT = model.T = rapid.T is a type ALIAS: rapid is part of the
+      # property surface by construction, so test files may import it.
+      - path: '_test\.go'
+        linters: [depguard]
+        text: "pgregory.net/rapid"
+
 formatters:
   enable:
     - gci
