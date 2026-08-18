@@ -58,7 +58,7 @@ const (
 // template edit, and a golden diff would stop isolating what actually changed
 // in the output. Stability in the header is worth the discipline; during
 // development `--no-cache` covers the gap.
-const Version = "1.3.0"
+const Version = "1.4.0"
 
 // WitnessKey is the directive key naming the concrete types a generic
 // double's companion is instantiated at, in type-parameter order —

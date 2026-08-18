@@ -96,6 +96,11 @@ func (s *{{ $m.StubType }}{{ $.TypeArgs }}) YieldsError(items []{{ renderType $m
 {{ end }}
 // --- {{ $stub }} ---
 
+// The double-runtime witness for the surface this double rides. A
+// breaking change to the runtime renames it, and this file stops
+// compiling with the skew named.
+var _ = {{ renderExpr (external $.RuntimeStub "CompatV1") }}
+
 // {{ $stub }}Option configures a [{{ $stub }}] at construction time.
 type {{ $stub }}Option{{ renderTypeParams .TypeParams }} func(*{{ $stub }}{{ .TypeArgs }})
 
@@ -123,32 +128,20 @@ func {{ .DelegateToName }}{{ renderTypeParams .TypeParams }}(impl {{ renderExpr 
 // rather than from wall time, so a test asserting on a five-second timeout
 // does not take five seconds.
 func {{ $stub }}WithClock{{ renderTypeParams .TypeParams }}(clk {{ renderExpr (external $.RuntimeClock "Clock") }}) {{ $stub }}Option{{ .TypeArgs }} {
-	return func(s *{{ $stub }}{{ .TypeArgs }}) {
-		for _, m := range s.all {
-			m.SetClock(clk)
-		}
-	}
+	return func(s *{{ $stub }}{{ .TypeArgs }}) { s.group.SetClock(clk) }
 }
 
 // {{ $stub }}WithRandSource makes probabilistic fault injection reproducible.
 // A failure nobody can replay is not a finding.
 func {{ $stub }}WithRandSource{{ renderTypeParams .TypeParams }}(src {{ renderExpr (external $.RuntimeRand "Source") }}) {{ $stub }}Option{{ .TypeArgs }} {
-	return func(s *{{ $stub }}{{ .TypeArgs }}) {
-		for _, m := range s.all {
-			m.SetRandSource(src)
-		}
-	}
+	return func(s *{{ $stub }}{{ .TypeArgs }}) { s.group.SetRandSource(src) }
 }
 
 // {{ $stub }}BenchMode disables call recording. Dispatch still works; only
 // the accumulating call log is dropped, because its allocations are what a
 // benchmark would otherwise be measuring.
 func {{ $stub }}BenchMode{{ renderTypeParams .TypeParams }}() {{ $stub }}Option{{ .TypeArgs }} {
-	return func(s *{{ $stub }}{{ .TypeArgs }}) {
-		for _, m := range s.all {
-			m.BenchMode()
-		}
-	}
+	return func(s *{{ $stub }}{{ .TypeArgs }}) { s.group.BenchMode() }
 }
 {{ range $m := .Methods }}
 // With{{ $iface }}{{ $m.Name }} sets {{ $m.Name }}'s body at construction
@@ -170,10 +163,10 @@ type {{ $stub }}{{ renderTypeParams .TypeParams }} struct {
 	{{ .OnField }} *{{ .StubType }}{{ $.TypeArgs }}
 {{- end }}
 
-	// all is every method stub above, viewed through the surface that does
-	// not depend on a signature. It is what lets a setting apply to the whole
-	// double in a loop rather than in one line per method.
-	all []{{ renderExpr (external $.RuntimeStub "Configurable") }}
+	// group is every method stub above, viewed through the surface that
+	// does not depend on a signature — one home for the settings and the
+	// lifecycle that apply to the whole double.
+	group *{{ renderExpr (external $.RuntimeStub "Group") }}
 {{- if .Ordered }}
 
 	order *{{ renderExpr (external $.RuntimeStub "OrderTracker") }}
@@ -208,36 +201,23 @@ func {{ .CtorName }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (externa
 		{{ .OnField }}: &{{ .StubType }}{{ $.TypeArgs }}{MethodStub: {{ renderExpr (external $.RuntimeStub "NewMethodStub") }}[{{ .CallType }}{{ $.TypeArgs }}](tb, "{{ $iface }}.{{ .Name }}")},
 {{- end }}
 	}
-	s.all = []{{ renderExpr (external $.RuntimeStub "Configurable") }}{
+	s.group = {{ renderExpr (external $.RuntimeStub "NewGroup") }}(
 {{- range .Methods }}
 		s.{{ .OnField }}.MethodStub,
 {{- end }}
-	}
+	)
 	for _, opt := range opts {
 		opt(s)
 	}
 	if s.strict {
-		for _, m := range s.all {
-			m.Strict()
-		}
+		s.group.StrictAll()
 	}
 {{- if .Ordered }}
 	// Allocated after the options run: the tracker only fails the test in
 	// strict mode, so it has to be told which mode it is in.
 	s.order = {{ renderExpr (external $.RuntimeStub "NewOrderTracker") }}(tb, s.strict)
 {{- end }}
-	if tb != nil {
-		// A fuzz target reruns its body many times over and registers a
-		// cleanup per run, so verifying there would report against the wrong
-		// iteration.
-		if _, isFuzz := tb.(*{{ renderExpr (external "testing" "F") }}); !isFuzz {
-			tb.Cleanup(func() {
-				for _, m := range s.all {
-					m.Verify()
-				}
-			})
-		}
-	}
+	s.group.Bind(tb)
 	return s
 }
 
@@ -245,9 +225,7 @@ func {{ .CtorName }}{{ renderTypeParams .TypeParams }}(tb {{ renderExpr (externa
 // expectations. Func and Returns configuration is deliberately preserved, so
 // a test can reuse one double across phases without rebuilding it.
 func (s *{{ $stub }}{{ .TypeArgs }}) ResetCalls() {
-	for _, m := range s.all {
-		m.Reset()
-	}
+	s.group.Reset()
 {{- if .Ordered }}
 	s.order.Reset()
 {{- end }}
