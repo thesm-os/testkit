@@ -3,10 +3,10 @@ module go.thesmos.sh/testkit/conformance
 go 1.26.6
 
 require (
-	go.thesmos.sh/eidos v1.14.2-0.20260814083943-86be23f3bb12
+	go.thesmos.sh/eidos v1.14.2-0.20260818092817-a360d8ab19e7
 	go.thesmos.sh/eidos/backend/golang v1.13.3
 	go.thesmos.sh/eidos/frontend/golang v1.14.0
-	go.thesmos.sh/eidos/plugins v1.14.1-0.20260814083943-86be23f3bb12
+	go.thesmos.sh/eidos/plugins v1.14.1-0.20260818092817-a360d8ab19e7
 	go.thesmos.sh/testkit v0.10.0
 	go.thesmos.sh/testkit/engine v0.0.0-00010101000000-000000000000
 	go.thesmos.sh/testkit/generator v0.0.0-00010101000000-000000000000

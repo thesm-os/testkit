@@ -302,7 +302,7 @@ func MixedModelSaturation(t *testing.T, factory func() monotonicwrites.Mixed, op
 		// A wear of this law's own class exists and never reaches it. The
 		// reason is a fact about the mechanism rather than about the class, so
 		// it is registered beside the wardrobe rather than inferred here.
-		t.Skip("no wear reaches AUTO-MONOTONIC-WRITES: the same, over each client's own write versions")
+		t.Skip("no wear reaches AUTO-MONOTONIC-WRITES: the same trace, read for each client's own write versions rather than for the happens-before edges")
 	})
 }
 
@@ -545,4 +545,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f2dfa8f8a47aaaa02c3657e2df6b67a4a2bfccbbcae4238f0c24ca0e77cbe4fd
+// testkit:provenance fed2dcde3e11be995c86c61819fa6a47a23fcff8a3d88ef99ee62d178bfb698c

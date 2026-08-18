@@ -23,6 +23,7 @@ works.
 |---|---|
 | What the platform is and how it is shaped | [RFCs](rfc/README.md) |
 | Why a specific thing is the way it is | [Architecture decisions](adr/README.md) |
+| Where the platform is going and what would prove it wrong | [Vision](vision/README.md) |
 | How the restructure maps old to new | [Port notes](internal/) |
 
 `internal/` holds working notes for the restructure — audits, mapping tables,

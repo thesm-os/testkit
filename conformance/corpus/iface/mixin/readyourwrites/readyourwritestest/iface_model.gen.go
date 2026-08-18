@@ -302,7 +302,7 @@ func MixedModelSaturation(t *testing.T, factory func() readyourwrites.Mixed, opt
 		// A wear of this law's own class exists and never reaches it. The
 		// reason is a fact about the mechanism rather than about the class, so
 		// it is registered beside the wardrobe rather than inferred here.
-		t.Skip("no wear reaches AUTO-READ-YOUR-WRITES: the same, over each client's own reads")
+		t.Skip("no wear reaches AUTO-READ-YOUR-WRITES: the same trace, read for whether a client saw a version older than one it wrote itself")
 	})
 }
 
@@ -545,4 +545,4 @@ func newMixedModelConfig(opts ...MixedModelOption) *mixedModelConfig {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4bb3c2667f8183261694890e0f1d3eb321c9675f5a393b92858d2dc97833db8c
+// testkit:provenance b0a5734e88b67bb41074e3ea8da176b46ce81bfe4eefdf3ccbec1659a471e939
