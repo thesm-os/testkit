@@ -148,8 +148,10 @@ generator/suite/
 ├── derive_contracts.go       # contract arm: opener + borrow smokes
 │                             #   [BUILT]; direct contract checks
 │                             #   (if-absent, if-match, outbox) pending
-├── derive_caps.go            # Needs derivation: clock, induce, recover, provides
-├── derive_proofs.go          # defect plans per family; argued() fallbacks
+├── derive_caps.go            # capability doors per class            [BUILT]
+│                             #   (recover joins with the sim license)
+├── derive_proofs.go          # mechanical defect rules; residue      [BUILT]
+│                             #   Argued; F1 gated on StripRoleField
 ├── claims.go                 # the claim wording policy, corpus-pinned [BUILT]
 ├── projection/
 │   ├── check.go              # CheckPlan node + body/defect variant types + census

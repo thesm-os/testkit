@@ -22,6 +22,26 @@ const ExprCtx Expr = "ctx"
 // the parameter takes the produced type.
 const ExprBorrowed Expr = "borrowed"
 
+// The emitted-surface suffixes, composed only through the policy
+// functions below so each generated identifier's spelling has one
+// home.
+const (
+	harnessSuffix = "Harness"
+	veneerSuffix  = "Suite"
+	configSuffix  = "Config"
+)
+
+// HarnessName is the generated harness type's identifier — the config
+// literal a consumer writes per implementation.
+func HarnessName(iface string) string { return iface + harnessSuffix }
+
+// VeneerName is the generated veneer's identifier — the exported
+// entry value a consumer's test file reads checks and runs through.
+func VeneerName(iface string) string { return iface + veneerSuffix }
+
+// ConfigName is the generated run-config type's identifier.
+func ConfigName(iface string) string { return iface + configSuffix }
+
 // Option is a generated stub option's name ("WithLogAppend"),
 // constructed only through [OptionName] so the naming policy has one
 // home.

@@ -9,6 +9,7 @@ package suite
 
 import (
 	"slices"
+	"strings"
 	"testing"
 
 	"go.thesmos.sh/eidos/eidostest/storefixture"
@@ -239,7 +240,7 @@ func assertCensus(t *testing.T, registry []string, tabled map[string]stampRule, 
 	}
 	slices.Sort(uncovered)
 	testkit.Len(t, uncovered, 0, "every classification is tabled, law-backed, or recorded with a reason — uncovered: "+
-		joinNames(uncovered))
+		strings.Join(uncovered, ", "))
 
 	var stale, orphaned []string
 	for name := range recorded {
@@ -252,20 +253,10 @@ func assertCensus(t *testing.T, registry []string, tabled map[string]stampRule, 
 	}
 	slices.Sort(stale)
 	slices.Sort(orphaned)
-	testkit.Len(t, stale, 0, "a recorded entry a row or law now covers must be deleted: "+joinNames(stale))
+	testkit.Len(t, stale, 0, "a recorded entry a row or law now covers must be deleted: "+
+		strings.Join(stale, ", "))
 	testkit.Len(t, orphaned, 0, "a recorded entry the registry no longer carries is a typo or a removal: "+
-		joinNames(orphaned))
-}
-
-func joinNames(names []string) string {
-	out := ""
-	for i, n := range names {
-		if i > 0 {
-			out += ", "
-		}
-		out += n
-	}
-	return out
+		strings.Join(orphaned, ", "))
 }
 
 func TestStampCensusCoversTheMixinRegistry(t *testing.T) {

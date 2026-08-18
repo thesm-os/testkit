@@ -27,6 +27,17 @@ type fixtureCase struct {
 
 func (c fixtureCase) Name() string { return c.name }
 
+func TestEmittedSurfaceNames(t *testing.T) {
+	t.Parallel()
+
+	testkit.Equal(t, projection.HarnessName("Store"), "StoreHarness",
+		"the per-implementation config literal's type")
+	testkit.Equal(t, projection.VeneerName("Store"), "StoreSuite",
+		"the exported entry value a consumer reads through")
+	testkit.Equal(t, projection.ConfigName("Store"), "StoreConfig",
+		"the run-config type")
+}
+
 func TestFixtureCallPolicy(t *testing.T) {
 	t.Parallel()
 
