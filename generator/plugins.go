@@ -16,6 +16,7 @@ import (
 	"go.thesmos.sh/testkit/generator/fault"
 	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/prescreen"
+	"go.thesmos.sh/testkit/generator/roles"
 	"go.thesmos.sh/testkit/generator/sentinel"
 	"go.thesmos.sh/testkit/generator/stub"
 	"go.thesmos.sh/testkit/generator/suite"
@@ -77,7 +78,7 @@ func Annotators() []sdk.Annotator {
 // its own result. The split is what makes that impossible rather than merely
 // unwritten.
 func baseAnnotators() []sdk.Annotator {
-	return append(Annotator().Annotators(), defaults.New(), fault.New())
+	return append(Annotator().Annotators(), defaults.New(), roles.New(), fault.New())
 }
 
 // DirectiveSchemas returns every directive schema this build's plugins
