@@ -42,6 +42,16 @@ func VeneerName(iface string) string { return iface + veneerSuffix }
 // ConfigName is the generated run-config type's identifier.
 func ConfigName(iface string) string { return iface + configSuffix }
 
+// poolSuffix trails every drawn-pool config field; the config doc
+// promises "fields ending in Pool are drawn from", and this is where
+// that promise is spelled.
+const poolSuffix = "Pool"
+
+// PoolFieldName is a role's config field, derived from the stamped
+// field's own exported name — kv's Key and Value fields open KeyPool
+// and ValuePool.
+func PoolFieldName(field string) string { return golang.ExportedName(field) + poolSuffix }
+
 // Option is a generated stub option's name ("WithLogAppend"),
 // constructed only through [OptionName] so the naming policy has one
 // home.

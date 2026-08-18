@@ -156,8 +156,10 @@ generator/suite/
 ├── projection/
 │   ├── check.go              # CheckPlan node + body/defect variant types + census
 │   ├── inventory.go          # per-interface inventory; index tree, censuses
-│   ├── harness.go            # harness fields from capabilities; veneer; Subject()
-│   └── fixture.go            # pools, roles, defaults, provenance
+│   ├── harness.go            # A10 structurally: doors → fields      [BUILT]
+│   └── fixture.go            # PoolPlan + the member transforms      [BUILT]
+│                             #   (pool[1] test→other, pool[2] hostile;
+│                             #   refusal where a splice would lie)
 └── templates/golang/
     ├── file/                 # structural: banner-spacing rule lives here
     ├── body/                 # one .tmpl per body variant
