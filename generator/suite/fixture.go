@@ -634,7 +634,7 @@ func whyUnseeded(mute, undelivered []string) string {
 // exclusion is [Seed]'s error return restated, and [seedOf]'s ReturnsError guard
 // would refuse it anyway.
 func writesSomething(m Method) bool {
-	switch shape.Get(m.Source.Meta()) {
+	switch m.Shape() {
 	case writer.Name, compositewriter.Name, multiargwriter.Name, answeringwriter.Name:
 		return true
 	default:

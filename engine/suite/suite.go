@@ -57,6 +57,15 @@ const (
 	SegReader     = "reader"
 	SegIdempotent = "idempotent"
 
+	// The deterministic reader family's check segments: the miss and
+	// the seeded hit/count, plus the negated-idempotent accumulation.
+	// In the vocabulary because the emitter and the runtime must spell
+	// one grammar — a slug with two homes drifts.
+	SegMiss        = "miss"
+	SegHit         = "hit"
+	SegCount       = "count"
+	SegAccumulates = "accumulates"
+
 	SegDifferential = "differential"
 	SegLaws         = "laws"
 	SegConcurrent   = "concurrent"

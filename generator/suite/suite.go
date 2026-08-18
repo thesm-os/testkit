@@ -29,6 +29,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/ttl"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/validates"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/wrappedvia"
 	"go.thesmos.sh/eidos/sdk"
@@ -875,6 +876,7 @@ func mixinParamsOf(bag *sdk.Bag) map[string]string {
 		{MixinAfterClose, MixinAfterCloseSentinel},
 		{MixinValidates, MixinValidatesParam},
 		{MixinWrappedVia, MixinWrappedViaParam},
+		{MixinTTL, MixinTTLNotFound},
 	}
 	var out map[string]string
 	for _, w := range wanted {
@@ -999,6 +1001,10 @@ func batchSizeCheck(
 // `validates` and `scope` need a value no run can invent, and `sideeffect`,
 // `partition`, `hooks` and `sample` name a partner the mixin schema declares
 // no parameter for.
+//
+// The one exception is `ttl`, whose law is the model tier's: its row exists
+// because the reader-miss claim speaks the sentinel the ttl declaration
+// names, and wording reads the declared home rather than respelling it.
 const (
 	MixinNilSafe         = nilsafe.Name
 	MixinDeprecated      = deprecated.Name
@@ -1026,6 +1032,8 @@ const (
 	MixinAfterClose         = lifecycleafterclose.Name
 	MixinAfterCloseClose    = lifecycleafterclose.ParamClose
 	MixinAfterCloseSentinel = lifecycleafterclose.ParamSentinel
+	MixinTTL                = ttl.Name
+	MixinTTLNotFound        = ttl.ParamNotFound
 )
 
 // missShapes are the classifications whose absence signal is a value rather

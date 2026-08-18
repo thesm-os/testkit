@@ -8,7 +8,8 @@ require (
 	go.thesmos.sh/eidos/eidostest v1.14.0
 	go.thesmos.sh/eidos/frontend/golang v1.14.0
 	go.thesmos.sh/eidos/plugins v1.14.1-0.20260818092817-a360d8ab19e7
-	go.thesmos.sh/testkit v0.0.0-00010101000000-000000000000
+	go.thesmos.sh/testkit v0.10.0
+	go.thesmos.sh/testkit/engine v0.0.0-00010101000000-000000000000
 )
 
 require (
@@ -21,4 +22,7 @@ require (
 // The runtime module is developed in lockstep with this one and its current
 // tree is not published. go.work covers the workspace build; this replace is
 // what lets `go mod tidy` resolve per-module.
-replace go.thesmos.sh/testkit => ../
+replace (
+	go.thesmos.sh/testkit => ../
+	go.thesmos.sh/testkit/engine => ../engine
+)

@@ -128,6 +128,11 @@ linters:
           allow:
             - $gostd
             - go.thesmos.sh/testkit
+            # The suite vocabulary — ID grammar, classes, lock rendering —
+            # has one home, and the emitter spells it from that home rather
+            # than keeping a duplicate grammar in sync by review. Vocabulary
+            # only: engine/model and the property dependencies stay denied.
+            - go.thesmos.sh/testkit/engine/suite
             - go.thesmos.sh/eidos
             - github.com/google/go-cmp
         # The conformance tier is the corpus and the gate that checks it. It
