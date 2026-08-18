@@ -8,7 +8,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"runtime"
+	"slices"
+	"strings"
 
 	"pgregory.net/rapid"
 
@@ -17,7 +20,7 @@ import (
 
 // IdempotentLifecycle verifies that calling the lifecycle method
 // twice in succession is observably equivalent to calling it once.
-// Auto-emitted for Lifecycle methods carrying //testkit:idempotent.
+// Auto-emitted for Lifecycle methods carrying //testkit:mixin idempotent.
 type IdempotentLifecycle[T any, Obs any] struct {
 	Call    func(*rapid.T, T) error
 	Observe func(*rapid.T, T) Obs
@@ -52,7 +55,7 @@ func (l IdempotentLifecycle[T, Obs]) Check(rt *rapid.T, sut, _ T) error {
 
 // LeakFree verifies a Lifecycle pair (e.g., Open/Close, Acquire/
 // Release) does not leak goroutines across N cycles. Auto-emitted
-// for Lifecycle methods carrying //testkit:leak-free.
+// for Lifecycle methods carrying //testkit:mixin leakfree open=<M> close=<M>.
 //
 // The cycle count and tolerance are runtime-tuned; the law samples
 // runtime.NumGoroutine before and after the cycle and flags a
@@ -270,14 +273,22 @@ func (l PoisonConsistent[T]) Check(rt *rapid.T, sut, _ T) error {
 }
 
 // LifecycleAfterCloseSentinel verifies that once the lifecycle's
-// Close has run, the paired method rejects further use with the
+// Close has run, every stamped method rejects further use with the
 // configured sentinel error. Auto-emitted for the
-// //testkit:lifecycle-after-close <Reader> directive. (The cursor
+// //testkit:mixin lifecycleafterclose close=<M> sentinel=<E> directive. (The cursor
 // composite has its own narrower variant,
 // [CursorNextAfterCloseSentinel].)
+//
+// Ops carries one probe per stamped method, keyed by method name so a
+// red names the method that outlived Close. Op is the single-probe
+// shorthand; setting both probes both. The claim this law reports is
+// only as wide as its probe set — a recorded claim about "every
+// method" backed by one probe is the silent-green class this law's
+// consumers exist to kill, which is why the probe set is plural.
 type LifecycleAfterCloseSentinel[T any] struct {
 	Close    func(*rapid.T, T) error
 	Op       func(*rapid.T, T) error
+	Ops      map[string]func(*rapid.T, T) error
 	Sentinel error
 }
 
@@ -291,15 +302,31 @@ func (LifecycleAfterCloseSentinel[T]) ID() string { return lawid.LifecycleAfterC
 // REQID returns an empty string (auto-derived laws have no REQ tag).
 func (LifecycleAfterCloseSentinel[T]) REQID() string { return "" }
 
-// Check closes the SUT and verifies the paired method returns the
-// sentinel afterwards.
+// Check closes the SUT and verifies every probe reports the sentinel
+// afterwards. Probes run in sorted name order so a multi-method red is
+// deterministic, and every outliving method is named in one error
+// rather than one per rerun.
 func (l LifecycleAfterCloseSentinel[T]) Check(rt *rapid.T, sut, _ T) error {
+	if l.Op == nil && len(l.Ops) == 0 {
+		return errors.New("LifecycleAfterCloseSentinel: no probe configured; set Op or Ops")
+	}
 	if err := l.Close(rt, sut); err != nil {
 		return Vacuous // a precondition this run supplies was refused
 	}
-	err := l.Op(rt, sut)
-	if !errors.Is(err, l.Sentinel) {
-		return fmt.Errorf("LifecycleAfterCloseSentinel: op after close returned %v (want %v)", err, l.Sentinel)
+	var outlived []string
+	if l.Op != nil {
+		if err := l.Op(rt, sut); !errors.Is(err, l.Sentinel) {
+			outlived = append(outlived, fmt.Sprintf("op returned %v", err))
+		}
+	}
+	for _, name := range slices.Sorted(maps.Keys(l.Ops)) {
+		if err := l.Ops[name](rt, sut); !errors.Is(err, l.Sentinel) {
+			outlived = append(outlived, fmt.Sprintf("%s returned %v", name, err))
+		}
+	}
+	if len(outlived) > 0 {
+		return fmt.Errorf("LifecycleAfterCloseSentinel: after Close (want %v): %s",
+			l.Sentinel, strings.Join(outlived, "; "))
 	}
 	return nil
 }

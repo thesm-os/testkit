@@ -38,6 +38,15 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 	}
 	if cc.Timeout == 0 {
 		cc.Timeout = 10 * time.Second
+		// TESTKIT_LINEARIZE_TIMEOUT widens the default decision budget
+		// on contended runners without touching code — an operator's
+		// statement about the hardware, consulted only where the config
+		// left the choice to the run. An explicit Timeout wins.
+		if v := os.Getenv("TESTKIT_LINEARIZE_TIMEOUT"); v != "" {
+			if d, err := time.ParseDuration(v); err == nil && d > 0 {
+				cc.Timeout = d
+			}
+		}
 	}
 	if len(cc.Actions) == 0 && len(cc.StressActions) == 0 {
 		t.Fatal("model.runConcurrent: at least one Action or StressAction required")
@@ -231,8 +240,9 @@ func runConcurrent[T any](t rapid.TB, cfg Config[T]) {
 			// bigger budget or a smaller history, and either is the
 			// caller's choice to make, not this run's to make silently.
 			rt.Fatalf("linearizability undecided after %v — raise "+
-				"ConcurrentConfig.Timeout or reduce the concurrent load; an "+
-				"undecided run asserts nothing", cc.Timeout)
+				"ConcurrentConfig.Timeout (or set TESTKIT_LINEARIZE_TIMEOUT) "+
+				"or reduce the concurrent load; an undecided run asserts "+
+				"nothing", cc.Timeout)
 		}
 
 		checkTraceLaws(rt, cfg, iterTrace, sut, ref)

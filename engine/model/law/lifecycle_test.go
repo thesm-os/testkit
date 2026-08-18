@@ -357,6 +357,49 @@ func TestLifecycleAfterCloseSentinel(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("a partially outliving method is caught and named", func(t *testing.T) {
+		t.Parallel()
+		// The B1 shape: one probe reports the sentinel, the other
+		// outlives Close. A single-probe law aimed at the compliant
+		// method stamps green over the claim; the probe set catches it
+		// and names the method.
+		l := law.LifecycleAfterCloseSentinel[*closableStore]{
+			Close: func(_ *rapid.T, s *closableStore) error { return s.close() },
+			Ops: map[string]func(*rapid.T, *closableStore) error{
+				"Get": func(_ *rapid.T, s *closableStore) error { return s.get() },
+				"Put": func(*rapid.T, *closableStore) error { return nil }, // outlives
+			},
+			Sentinel: errStoreClosed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &closableStore{}
+			err := l.Check(rt, s, s)
+			if err == nil {
+				rt.Fatal("a method outliving Close must red the law")
+			}
+			if !strings.Contains(err.Error(), "Put returned") {
+				rt.Fatalf("the red must name the outliving method, got: %v", err)
+			}
+			if strings.Contains(err.Error(), "Get returned") {
+				rt.Fatalf("a compliant method must not be named, got: %v", err)
+			}
+		})
+	})
+
+	t.Run("a law with no probe is a loud misuse, not a pass", func(t *testing.T) {
+		t.Parallel()
+		l := law.LifecycleAfterCloseSentinel[*closableStore]{
+			Close:    func(_ *rapid.T, s *closableStore) error { return s.close() },
+			Sentinel: errStoreClosed,
+		}
+		rapid.Check(t, func(rt *rapid.T) {
+			s := &closableStore{}
+			if err := l.Check(rt, s, s); err == nil {
+				rt.Fatal("no probes means nothing was asserted; that must not pass")
+			}
+		})
+	})
 }
 
 // The lifecycle laws share one shape: a setup call that may be refused (a

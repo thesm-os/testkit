@@ -20,7 +20,7 @@ import (
 // PersisterRetrievable verifies that the value returned by a
 // Persister's Save can be looked up via the paired Reader. The
 // returned ID is the lookup key. Auto-emitted for methods carrying
-// //testkit:persister <Reader>.
+// //testkit:contract persister role=writer reader=<M>.
 type PersisterRetrievable[T any, V any, ID comparable] struct {
 	Save   func(*rapid.T, T, V) (ID, error)
 	Read   func(*rapid.T, T, ID) (V, error)
@@ -158,7 +158,7 @@ func (l UpserterIdempotent[T, V, K]) Check(rt *rapid.T, sut, ref T) error {
 // CASAtomicOneWinner verifies that two concurrent CAS writes with
 // the same starting version produce exactly one success and one
 // version-mismatch error. Auto-emitted for methods carrying
-// //testkit:cas <VersionField>.
+// //testkit:contract cas role=writer version=<F> mismatch=<E>.
 type CASAtomicOneWinner[T any, V any] struct {
 	CAS      func(*rapid.T, T, V) error
 	Read     func(*rapid.T, T) (V, error)
@@ -239,7 +239,7 @@ func (l CASAtomicOneWinner[T, V]) Check(rt *rapid.T, sut, ref T) error {
 
 // AppenderMonotonicOffsets verifies the offsets returned by
 // successive Appends are strictly increasing. Auto-emitted for
-// methods carrying //testkit:appender.
+// methods carrying //testkit:contract appender role=fn.
 type AppenderMonotonicOffsets[T any, V any, Off interface{ ~int | ~int64 }] struct {
 	Append func(*rapid.T, T, V) (Off, error)
 	Values *rapid.Generator[V]
@@ -289,7 +289,7 @@ func (l *AppenderMonotonicOffsets[T, V, Off]) Check(rt *rapid.T, sut, ref T) err
 
 // SingleflightCoalesces verifies that N concurrent calls with the
 // same key invoke the compute function at most once. Auto-emitted
-// for methods carrying //testkit:singleflight.
+// for methods carrying //testkit:contract singleflight role=fn.
 //
 // The consumer threads a shared call counter through Compute; the
 // law inspects the counter after running M concurrent calls.
@@ -342,7 +342,7 @@ func (l SingleflightCoalesces[T, K, V]) Check(rt *rapid.T, sut, ref T) error {
 // TransactionRollbackOnError verifies that when the body of a
 // TransactionFunc returns an error, no buffered writes are visible
 // after the call returns. Auto-emitted for methods carrying
-// //testkit:transaction.
+// //testkit:contract transaction role=fn notfound=<E>.
 //
 // # Why Write is a field and not an optional convenience
 //
@@ -420,7 +420,8 @@ func (l TransactionRollbackOnError[T, K, V]) Check(rt *rapid.T, sut, _ T) error 
 
 // LeaseDoubleAcquireBlocks verifies a second Acquire of an
 // already-held lease returns the configured held error. Auto-
-// emitted for methods carrying //testkit:acquire <Release>.
+// emitted for methods carrying //testkit:contract lease role=acquire
+// release=<M>.
 type LeaseDoubleAcquireBlocks[T any, K comparable] struct {
 	Acquire func(*rapid.T, T, K) error
 	Release func(*rapid.T, T, K) error
@@ -453,7 +454,7 @@ func (l LeaseDoubleAcquireBlocks[T, K]) Check(rt *rapid.T, sut, _ T) error {
 // PaginatorNoDuplicates verifies that a full walk of a paginated
 // reader emits every element at most once — no element key appears
 // in two pages. Auto-emitted for methods carrying
-// //testkit:paginator <Cursor>.
+// //testkit:contract pagination role=reader cursor=<M>.
 //
 // Page returns one page of items, the cursor to fetch the next page,
 // and whether more pages remain. The walk starts at Start and
@@ -507,7 +508,7 @@ func (l PaginatorNoDuplicates[T, V, K, C]) Check(rt *rapid.T, sut, _ T) error {
 // PaginatorResumable verifies that resuming a walk from any cursor
 // observed mid-stream yields exactly the suffix the full walk would
 // have produced from that point. Auto-emitted for Paginator methods
-// carrying the //testkit:pagination-resumable mixin.
+// carrying the //testkit:contract pagination role=reader cursor=<M> directive.
 //
 // Page has the same shape as in [PaginatorNoDuplicates]. The law
 // walks once from Start recording the cursor that began each page,
@@ -569,7 +570,8 @@ func (l PaginatorResumable[T, V, C]) Check(rt *rapid.T, sut, _ T) error {
 
 // PublisherDelivers verifies that a message published after N
 // subscribers have registered reaches every one of them. Auto-
-// emitted for methods carrying //testkit:publisher <Subscribe>.
+// emitted for methods carrying //testkit:contract publisher role=publish
+// subscribe=<M>.
 //
 // Subscribe registers a subscriber and returns its handle; Publish
 // broadcasts a message; Drain returns the messages a subscriber has
@@ -870,7 +872,8 @@ func (l TransactionNoMidTxVisibility[T, Tx, K, V]) Check(rt *rapid.T, sut, ref T
 // LeaseReleasedOnCancel verifies that a lease acquired under a
 // context is released once that context is cancelled — modelling the
 // "release on cancel/panic" half of the AcquireLease contract. Auto-
-// emitted for methods carrying //testkit:acquire <Release>.
+// emitted for methods carrying //testkit:contract lease role=acquire
+// release=<M>.
 //
 // Acquire takes the governing context directly (not [rapid.T]): the
 // law creates a cancellable context, acquires the key under it,
@@ -902,6 +905,10 @@ func (l LeaseReleasedOnCancel[T, K]) Check(rt *rapid.T, sut, _ T) error {
 		cancel()
 		return Vacuous // a precondition this run supplies was refused
 	}
+	// Zero tolerance is deliberate: an acquire that returns before the
+	// grant is observable is the defect under test, not scheduling
+	// noise — the grant happened-before Acquire returned, or Acquire
+	// answered a question it had not settled.
 	if l.Free(rt, sut, k) {
 		cancel()
 		return fmt.Errorf("LeaseReleasedOnCancel: key %v reported free immediately after acquire", k)
@@ -911,6 +918,11 @@ func (l LeaseReleasedOnCancel[T, K]) Check(rt *rapid.T, sut, _ T) error {
 	if timeout <= 0 {
 		timeout = time.Second
 	}
+	// The declared budget is the contract; the scale is CI headroom. A
+	// shared runner under -race can stretch goroutine scheduling past a
+	// budget the interface author measured on quiet hardware, and the
+	// honest response is a wider budget everywhere, not a flaky red.
+	timeout = scaleTimeout(timeout)
 	deadline := time.Now().Add(timeout)
 	for {
 		if l.Free(rt, sut, k) {
@@ -929,7 +941,7 @@ func (l LeaseReleasedOnCancel[T, K]) Check(rt *rapid.T, sut, _ T) error {
 
 // WatcherReturnsOnChange verifies that a watch established before a
 // mutation observes that mutation. Auto-emitted for methods carrying
-// //testkit:watcher <Trigger>.
+// //testkit:contract watcher role=watch trigger=<M> next=<M> stop=<M>.
 //
 // Watch establishes a watch on a key and returns a handle; Mutate
 // changes the key; Next blocks for the watch's next event up to the
