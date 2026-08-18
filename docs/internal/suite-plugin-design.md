@@ -75,7 +75,11 @@ reused. The census is the answer to a registry of any size: every
 upstream classification is either tabled here, law-backed in tiers, or
 a NAMED refusal — three-way partition, held equal to the registry by
 the gate, so an uncovered shape is a build failure with a name and
-never silence. No hand enumeration of the vocabulary exists in the
+never silence. ARMED: the gate iterates `mixins.All()`,
+`detectors.All()` and `contracts.All()` and holds every name to a
+placement, both directions (an eidos addition fails by name; a
+recorded entry a row or law now covers fails as stale). PENDING
+entries name their owning batch and must be empty by the flip. No hand enumeration of the vocabulary exists in the
 derive layer. Templates
 depend only on projection structs (dependency inversion); the model
 plugin and `testkit check` read a small exported façade of the
@@ -141,7 +145,10 @@ generator/suite/
 ├── derive.go                 # Iface input, deriver registry, Refusal   [BUILT]
 ├── derive_signature.go       # smoke/cancel/deadline/nilctx/zero       [BUILT]
 ├── derive_stamps.go          # mixin + detector rules tables, census   [BUILT]
-├── derive_contracts.go       # contract roles incl. produced-secondary arms
+├── derive_contracts.go       # contract arm: opener smoke [BUILT];
+│                             #   borrowed-input smoke gated on the
+│                             #   SmokeSurvives.Borrow amendment; direct
+│                             #   contract checks pending
 ├── derive_caps.go            # Needs derivation: clock, induce, recover, provides
 ├── derive_proofs.go          # defect plans per family; argued() fallbacks
 ├── claims.go                 # the claim wording policy, corpus-pinned [BUILT]
@@ -194,6 +201,37 @@ corpus-amendment decision owed before the flip can reproduce the locks:
   fact; the claim policy gains that input when the emitter wires real
   projections. The type-noun rule is already corpus-true for the
   scalar draws (`Lookup(ctx, id Key)` words "a seeded key").
+
+## PROPOSED amendment: the borrowed-input smoke (SmokeSurvives.Borrow)
+
+The pool corpus's `Put survives returning a borrowed resource` needs a
+prologue no approved variant carries: borrow from the producing
+sibling, guard the failed borrow, feed the borrowed value to the
+smoked call. Proposal: `SmokeSurvives` grows one field —
+
+    type SmokeSurvives struct {
+        Call CallPlan
+        // Borrow is the producing sibling called first when the
+        // smoked method's input is pool-produced: its result feeds
+        // the smoked call, and a failed borrow returns without
+        // judgment — the producer's own smoke owns that path.
+        Borrow CallPlan
+        CloseProduced string
+    }
+
+plus `ExprBorrowed` beside `ExprCtx` in the naming policy: the local
+the template binds the borrow's result to, referenced by the smoked
+call's args. Derivation: a method filling the pool contract's `put`
+role is borrow-smoked, the borrow being the `get`-role sibling; the
+claim is the corpus spelling, worded in claims.go.
+
+Against my own proposal: one variant now carries three smoke shapes
+(plain, opener, borrower), where a variant purist would mint three.
+Taken anyway because all three state one claim family — the method
+survives an honest call — differing only in prologue/epilogue; three
+variants would spend the ≤15 budget on spelling, and a method that
+one day both opens and borrows composes for free in the single
+variant where split variants would collide on the smoke's one ID.
 
 What is deliberately absent: a `falsify.go` — the incumbent's
 falsification companion is superseded by the proofs projection (same
