@@ -410,6 +410,48 @@ func Unknown[T any](
 	}
 }
 
+// EvictingReader creates an action for a bounded reader whose misses are
+// LEGAL: `func(ctx, K) (V, bool)` on a subject that may evict. The
+// comparison is ASYMMETRIC — a subject hit must agree with the
+// reference's value, and a hit the reference cannot explain is
+// invention; a subject miss is never a divergence, because eviction is
+// the contract. Pair it with an UNBOUNDED reference, and keep any count
+// observation out of the differential: the unbounded reference legally
+// disagrees there, and the bounded law owns the count.
+//
+// The symmetric [ReaderWithBool] is for readers whose presence IS the
+// claim; this one is for readers whose absence is the policy's business.
+func EvictingReader[T any, K, V comparable](
+	name string,
+	keys *rapid.Generator[K],
+	read func(context.Context, T, K) (V, bool),
+) model.Action[T] {
+	return model.Action[T]{
+		Name: name,
+		Kind: model.FailureSemantic,
+		Run: func(rt *rapid.T, sut, ref T) model.ActionResult {
+			k := keys.Draw(rt, name+"_key")
+			sv, sok := read(rt.Context(), sut, k)
+			rv, rok := read(rt.Context(), ref, k)
+			switch {
+			case sok && !rok:
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s(%v): subject invented a hit (%v) the reference cannot explain", name, k, sv),
+					Input: k,
+				}
+			case sok && sv != rv:
+				return model.ActionResult{
+					Err:   fmt.Errorf("%s(%v): hit disagrees: subject %v, reference %v", name, k, sv, rv),
+					Input: k,
+				}
+			default:
+				// A subject miss is legal whatever the reference holds.
+				return model.ActionResult{Input: k}
+			}
+		},
+	}
+}
+
 // sortByString sorts a slice by the Sprint representation of each element.
 func sortByString[V any](s []V) {
 	sort.Slice(s, func(i, j int) bool {

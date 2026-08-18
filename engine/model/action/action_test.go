@@ -776,3 +776,57 @@ func TestAnsweringWriter(t *testing.T) {
 		})
 	})
 }
+
+// TestEvictingReader pins the asymmetric comparison: hits must agree,
+// invented hits are red, and a miss is legal whatever the reference
+// holds — eviction is the contract, not a divergence.
+func TestEvictingReader(t *testing.T) {
+	t.Parallel()
+
+	read := func(_ context.Context, s map[string]string, k string) (string, bool) {
+		v, ok := s[k]
+		return v, ok
+	}
+
+	t.Run("agreeing hit passes", func(t *testing.T) {
+		t.Parallel()
+		a := action.EvictingReader("Get", rapid.Just("k"), read)
+		rapid.Check(t, func(rt *rapid.T) {
+			if res := a.Run(rt, map[string]string{"k": "v"}, map[string]string{"k": "v"}); res.Err != nil {
+				rt.Fatalf("unexpected: %v", res.Err)
+			}
+		})
+	})
+
+	t.Run("a subject miss is legal", func(t *testing.T) {
+		t.Parallel()
+		a := action.EvictingReader("Get", rapid.Just("k"), read)
+		rapid.Check(t, func(rt *rapid.T) {
+			if res := a.Run(rt, map[string]string{}, map[string]string{"k": "v"}); res.Err != nil {
+				rt.Fatalf("an evicted entry is not a divergence: %v", res.Err)
+			}
+		})
+	})
+
+	t.Run("an invented hit is red", func(t *testing.T) {
+		t.Parallel()
+		a := action.EvictingReader("Get", rapid.Just("k"), read)
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, map[string]string{"k": "ghost"}, map[string]string{})
+			if res.Err == nil {
+				rt.Fatal("a hit the reference cannot explain must be red")
+			}
+		})
+	})
+
+	t.Run("a disagreeing hit is red", func(t *testing.T) {
+		t.Parallel()
+		a := action.EvictingReader("Get", rapid.Just("k"), read)
+		rapid.Check(t, func(rt *rapid.T) {
+			res := a.Run(rt, map[string]string{"k": "stale"}, map[string]string{"k": "fresh"})
+			if res.Err == nil {
+				rt.Fatal("a hit that disagrees with the reference must be red")
+			}
+		})
+	})
+}
