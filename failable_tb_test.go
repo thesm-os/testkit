@@ -4,6 +4,7 @@
 package testkit_test
 
 import (
+	"strings"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -453,4 +454,32 @@ func TestFailableTBBench(t *testing.T) {
 			t.Fatalf("Metric() = %v, want the later value 2", got)
 		}
 	})
+}
+
+func TestGoCatchesChildGoroutinePanics(t *testing.T) {
+	t.Parallel()
+
+	f := testkit.NewFailableTB()
+	f.Go(func() { panic("planted: worker dies") })
+	f.Go(func() {}) // a healthy sibling must not be blamed
+	f.RunCleanups()
+	if !f.Failed() {
+		t.Fatal("a panic in a spawned goroutine must fail the TB, not the process")
+	}
+	if msg := f.Msg(); !strings.Contains(msg, "planted: worker dies") {
+		t.Fatalf("the panic value must reach the failure message, got %q", msg)
+	}
+}
+
+func TestRunCleanupsJoinsSpawnedGoroutines(t *testing.T) {
+	t.Parallel()
+
+	f := testkit.NewFailableTB()
+	done := make(chan struct{})
+	f.Go(func() { <-done })
+	go func() { close(done) }()
+	f.RunCleanups() // must not race the worker; joining is the contract
+	if f.Failed() {
+		t.Fatalf("a clean worker must not fail the TB: %s", f.Msg())
+	}
 }

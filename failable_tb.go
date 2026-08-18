@@ -52,6 +52,10 @@ type FailableTB struct {
 	failed         bool
 	goexit         bool // when true, Fatal/FailNow call runtime.Goexit()
 	allocsReported bool
+
+	// spawned tracks the goroutines Go launched, so RunCleanups can
+	// join them before the cleanup phase reads the verdict.
+	spawned sync.WaitGroup
 }
 
 // NewFailableTB returns a new [FailableTB] ready for use. The returned
@@ -271,11 +275,14 @@ func (f *FailableTB) Cleanup(fn func()) {
 	f.cleanups = append(f.cleanups, fn)
 }
 
-// RunCleanups executes all registered cleanup functions in LIFO order.
-// This simulates the cleanup phase that [testing.T] runs after a test
-// completes. Use this to trigger [MethodStub.Verify] in tests that use
-// [FailableTB] instead of a real [testing.T].
+// RunCleanups executes all registered cleanup functions in LIFO order,
+// after joining every goroutine [FailableTB.Go] spawned. This simulates
+// the cleanup phase that [testing.T] runs after a test completes. Use
+// this to trigger [MethodStub.Verify] in tests that use [FailableTB]
+// instead of a real [testing.T].
 func (f *FailableTB) RunCleanups() {
+	f.spawned.Wait()
+
 	f.mu.Lock()
 	fns := make([]func(), len(f.cleanups))
 	copy(fns, f.cleanups)
@@ -285,6 +292,28 @@ func (f *FailableTB) RunCleanups() {
 	for _, fn := range slices.Backward(fns) {
 		fn()
 	}
+}
+
+// Go runs fn in a goroutine whose panic fails this TB instead of
+// crashing the process. In Go, a panic in a child goroutine bypasses
+// every recover on the parent's stack and exits the process with the
+// logs of the run half-written — so a planted defect or check body
+// that spawns workers directly turns a red into a crash. Spawning
+// through Go keeps the verdict: the panic is recorded as a failure,
+// and [FailableTB.RunCleanups] joins every spawned goroutine before
+// the cleanup phase reads it.
+//
+// The panic value is preserved in the failure message; the stack is
+// not — a caller that needs the trace re-panics from its own recover.
+func (f *FailableTB) Go(fn func()) {
+	f.spawned.Go(func() {
+		defer func() {
+			if r := recover(); r != nil {
+				f.Errorf("goroutine panicked: %v", r)
+			}
+		}()
+		fn()
+	})
 }
 
 // TempDir is not supported on [FailableTB]. It always returns the empty
