@@ -6,6 +6,7 @@ package suite
 import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/chain"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/cursor"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifabsent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/ifmatch"
@@ -55,12 +56,17 @@ const (
 	ContractOutboxPartner = "subscribe"
 
 	// The cursor contract's open arm: the producing method's smoke
-	// closes the handle it answers, so the close partner is read here;
-	// the next partner and the sentinel are the laws deriver's inputs
-	// and are not read until it lands.
+	// closes the handle it answers, and the laws deriver words the
+	// cursor laws from the next and close partners. The sentinel is
+	// read through the contract-param keys when the bindings land.
 	ContractCursor      = cursor.Name
 	ContractCursorOpen  = cursor.RoleOpen
 	ContractCursorClose = cursor.ParamClose
+	ContractCursorNext  = cursor.ParamNext
+
+	// ContractChain marks the append-and-replay protocol, whose bundle
+	// claim speaks "chain law" — the one wording the bundle varies by.
+	ContractChain = chain.Name
 
 	// The pool contract's put arm: the returning method's smoke
 	// borrows from the get sibling first, because its input is
@@ -103,6 +109,7 @@ func contractDataOf(bag *sdk.Bag) (roles, partners map[string]string) {
 		{ContractOutbox, ContractOutboxPartner},
 		{ContractIfMatch, ContractIfMatchMatch},
 		{ContractCursor, ContractCursorClose},
+		{ContractCursor, ContractCursorNext},
 	}
 	for _, w := range wantedPartners {
 		v, found := shape.ContractPartnerKey(w.contract, w.role).Get(bag)

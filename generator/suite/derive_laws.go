@@ -1,0 +1,325 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+package suite
+
+import (
+	"slices"
+
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
+	"go.thesmos.sh/testkit/core/lawid"
+	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/suite/projection"
+	"go.thesmos.sh/testkit/generator/tiers"
+)
+
+// Laws plans the model tier's law rows for the inventory: which laws
+// the interface earns, on which legs, under which claims — the lock
+// and index rows, not the bindings. The field manifests, options and
+// unbound refusal texts stay the model plugin's; the corpus locks
+// hold the two derivations equal until the model plugin reads these
+// plans.
+//
+// Registry-general by construction, and nothing law-specific lives
+// here: selection is [tiers.Select] over the live catalogue plus the
+// extra-rules table, leg and class come from [tiers.LegOf], wording
+// from [lawid.ClaimOf] filled generically from the carriers' own
+// stamps. An own-leg law without a wording, or a wording naming
+// something no stamp supplies, refuses by name — the conformance
+// corpus surfaces every such gap the day a fixture stamps the
+// classification.
+type Laws struct{}
+
+// Name implements [Deriver].
+func (Laws) Name() DeriverName { return DeriverLaws }
+
+// Derive implements [Deriver].
+func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
+	var plans []projection.CheckPlan
+	var refusals []Refusal
+	var bundle []projection.Bind
+
+	for _, s := range selectLaws(f) {
+		bind := projection.Bind{Law: s.Law, Probes: s.Probes}
+		class, own := tiers.LegOf(s.Law)
+		if !own {
+			// A bundled law renders under the bundle's one claim; its
+			// identity is the binds column's, so it needs no wording
+			// of its own.
+			bundle = append(bundle, bind)
+			continue
+		}
+		template, worded := lawid.ClaimOf(s.Law)
+		if !worded {
+			refusals = append(refusals, Refusal{
+				Deriver: DeriverLaws,
+				What:    s.Law + " for " + f.Name,
+				Why:     "the law rides its own leg but its claim is unworded",
+				Remedy:  "word it in lawid's claim table",
+			})
+			continue
+		}
+		claim, err := template.Fill(fillsFor(f, s.carriers)...)
+		if err != nil {
+			refusals = append(refusals, Refusal{
+				Deriver: DeriverLaws,
+				What:    s.Law + " for " + f.Name,
+				Why:     err.Error(),
+				Remedy:  "declare the name the claim speaks on the selecting stamp",
+			})
+			continue
+		}
+		plans = append(plans, lawRow(f, class, claim, bind))
+	}
+
+	if slices.ContainsFunc(f.Methods, func(m Method) bool { return m.HasMixin(MixinConcurrent) }) {
+		// The one non-law leg row: linearizability runs the linearize
+		// engine, not a law binding, so it has a segment instead of a
+		// lawid and the suite's own wording policy speaks it.
+		plans = append(plans, projection.CheckPlan{
+			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLinearizable},
+			Class:       vocab.ClassConcurrent,
+			Claim:       LinearizableClaim(),
+			Body:        projection.LawLeg{},
+			Falsifiable: vocab.Argued(argueProofsPending),
+		})
+	}
+
+	if len(bundle) > 0 {
+		plans = append(plans, projection.CheckPlan{
+			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLaws},
+			Class:       vocab.ClassLaws,
+			Claim:       BundleClaim(chainShaped(f)),
+			Body:        projection.LawLeg{Laws: bundle},
+			Falsifiable: vocab.Argued(argueProofsPending),
+			Binds:       bundle,
+		})
+	}
+	return plans, refusals
+}
+
+// argueProofsPending is the interim falsifiability every law row
+// carries: the per-family planted-defect rules are the proofs
+// deriver's, and an underived Proven is the one thing worse than an
+// argued row.
+const argueProofsPending = "the planted-defect rule for this law family lands with the proofs deriver"
+
+// lawRow builds one own-leg plan; the bind is spelled once and feeds
+// both the body and the lock's binds column.
+func lawRow(f Iface, class vocab.Class, claim string, bind projection.Bind) projection.CheckPlan {
+	binds := []projection.Bind{bind}
+	return projection.CheckPlan{
+		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: bind.Law},
+		Class:       class,
+		Claim:       claim,
+		Body:        projection.LawLeg{Laws: binds},
+		Falsifiable: vocab.Argued(argueProofsPending),
+		Binds:       binds,
+	}
+}
+
+// lawSelection is one law the interface earns: the carriers that
+// selected it, and — for the mixin axis's multi-carrier stamps — the
+// probe set those carriers arm.
+type lawSelection struct {
+	Law      string
+	Probes   []string
+	carriers []Method
+}
+
+// selectLaws runs the tiers catalogue over every method's whole
+// classification set — the same [tiers.Select] the model tier binds
+// from, so the lock and the model file cannot disagree about what was
+// earned — plus the extra-rules table for facts the classification
+// axes cannot see. One row per law: a contract stamp riding every
+// role method re-selects the same rule rather than duplicating rows.
+//
+// One exclusion, doctrine: a rule whose selecting mixin this
+// package's own tables voice is the suite's claim, not a law row
+// (kv's Close/idempotent has no model twin).
+func selectLaws(f Iface) []lawSelection {
+	var out []lawSelection
+	index := map[string]int{}
+	record := func(law string, m Method, probe bool) {
+		i, held := index[law]
+		if !held {
+			index[law] = len(out)
+			out = append(out, lawSelection{Law: law})
+			i = len(out) - 1
+		}
+		out[i].carriers = append(out[i].carriers, m)
+		if probe {
+			out[i].Probes = append(out[i].Probes, m.Name)
+		}
+	}
+
+	for _, m := range f.Methods {
+		classifications := m.Classifications()
+		if len(classifications) == 0 {
+			continue
+		}
+		params := LawParams(f.Methods, m)
+		for _, r := range tiers.Select(classifications, params) {
+			if suiteTabled(r) {
+				continue
+			}
+			record(r.Law, m, mixinSelected(r, m))
+		}
+		for _, rule := range extraRules() {
+			if law, licensed := rule(m); licensed {
+				record(law, m, false)
+			}
+		}
+	}
+	for i := range out {
+		// A single carrier probes implicitly; contract-selected laws
+		// probe their roles, never their carriers, and record none.
+		if len(out[i].Probes) < 2 {
+			out[i].Probes = nil
+		}
+	}
+	return out
+}
+
+// mixinSelected reports whether the rule reaches this carrier through
+// a mixin — the axis whose multi-carrier stamps become probe sets.
+func mixinSelected(r tiers.Rule, m Method) bool {
+	return slices.ContainsFunc(r.Needs, func(need string) bool {
+		return slices.Contains(m.Mixins, need)
+	})
+}
+
+// extraRule licenses one law from a fact tiers' classification axes
+// cannot see. A row here is the corpus's own derivation formalized;
+// its tiers home waits on the model plugin's migration, because a
+// catalogue row would change the incumbent's emission today.
+type extraRule func(m Method) (law string, licensed bool)
+
+func extraRules() []extraRule {
+	return []extraRule{poisonFromSentinel}
+}
+
+// poisonFromSentinel: a stamped after-close sentinel licenses the
+// poison law — the poisoned state is the closed state, which is the
+// corpus's own derivation ("from the sentinel kv.ErrClosed").
+func poisonFromSentinel(m Method) (string, bool) {
+	_, stamped := m.MixinParam(MixinAfterClose, MixinAfterCloseSentinel)
+	return lawid.PoisonConsistent, stamped
+}
+
+// suiteTabled reports a rule whose selecting mixin this package's own
+// stamp tables already voice — one tier owns each claim, and the
+// census's tabled bucket is the authority.
+func suiteTabled(r tiers.Rule) bool {
+	rules := mixinRules()
+	return slices.ContainsFunc(r.Needs, func(need string) bool {
+		_, tabled := rules[need]
+		return tabled
+	})
+}
+
+// fillsFor resolves the claim placeholder vocabulary from the law's
+// own carriers, first-stamped wins. Over-supplying is free — an
+// absent placeholder ignores its pair — which is what keeps this
+// generic: no law names its fills, the stamps do.
+func fillsFor(f Iface, carriers []Method) []string {
+	pairs := []string{lawid.PlaceSubject, f.Token}
+	seen := map[string]bool{lawid.PlaceSubject: true}
+	set := func(place, v string) {
+		if v != "" && !seen[place] {
+			seen[place] = true
+			pairs = append(pairs, place, v)
+		}
+	}
+	for _, m := range carriers {
+		if v, ok := m.MixinParam(MixinAfterClose, MixinAfterCloseClose); ok {
+			set(lawid.PlaceClose, v)
+		}
+		if slices.Contains(m.Contracts, ContractCursor) {
+			set(lawid.PlaceClose, m.ContractPartner(ContractCursor, ContractCursorClose))
+			set(lawid.PlaceNext, m.ContractPartner(ContractCursor, ContractCursorNext))
+			set(lawid.PlaceProduced, ContractCursor)
+		}
+	}
+	return pairs
+}
+
+// chainShaped reports the append-and-replay protocol, whose bundle
+// claim speaks "chain law".
+func chainShaped(f Iface) bool {
+	return slices.ContainsFunc(f.Methods, func(m Method) bool {
+		return slices.Contains(m.Contracts, ContractChain)
+	})
+}
+
+// Classifications is the method's whole stamp set in tiers' one
+// namespace — detector shape, mixins, contract memberships. The one
+// home of the composition: the model generator selects from exactly
+// this, so the two tiers cannot disagree about what the run
+// classified.
+func (m Method) Classifications() []string {
+	var out []string
+	if s := m.Shape(); s != "" {
+		out = append(out, s)
+	}
+	out = append(out, m.Mixins...)
+	return append(out, m.Contracts...)
+}
+
+// LawParams collects the stamp parameters tiers' When clauses read,
+// keyed as [tiers.Condition.Param] spells them — through the eidos
+// keys' own Name method, so the spelling has one home. Mixin params
+// come off the method; contract params off every carrier of the
+// contract, because a protocol's parameter lives on the directive
+// host and a rule selected from another role conditions on it all
+// the same. Shared with the model generator for the same reason
+// [Method.Classifications] is.
+func LawParams(methods []Method, m Method) map[string]string {
+	if m.Source == nil {
+		return nil
+	}
+	out := map[string]string{}
+	for _, name := range m.Mixins {
+		for _, p := range mixinParamKeys(name) {
+			if v, ok := shape.MixinParamKey(name, p).Get(m.Source.Meta()); ok {
+				out[shape.MixinParamKey(name, p).Name()] = v
+			}
+		}
+	}
+	for _, name := range m.Contracts {
+		for _, p := range contractParamKeys(name) {
+			for _, carrier := range methods {
+				if carrier.Source == nil || !slices.Contains(carrier.Contracts, name) {
+					continue
+				}
+				if v, ok := shape.ContractParamKey(name, p).Get(carrier.Source.Meta()); ok && v != "" {
+					out[shape.ContractParamKey(name, p).Name()] = v
+				}
+			}
+		}
+	}
+	return out
+}
+
+// mixinParamKeys names one mixin's declared parameter keys, from the
+// live registry.
+func mixinParamKeys(name string) []string {
+	for _, m := range mixins.All() {
+		if m.Name == name {
+			return shape.ParamKeys(m.Params)
+		}
+	}
+	return nil
+}
+
+// contractParamKeys is [mixinParamKeys] on the contract axis.
+func contractParamKeys(name string) []string {
+	for _, c := range contracts.All() {
+		if c.Name == name {
+			return shape.ParamKeys(c.Params)
+		}
+	}
+	return nil
+}

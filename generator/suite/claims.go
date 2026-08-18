@@ -150,6 +150,28 @@ func CountClaim(m Method) string {
 	return m.Name + " equals the number of seeded entries"
 }
 
+// The leg-level wording policy. Per-law claims live beside their
+// identifiers in [lawid]; the two sentences here describe LEGS — the
+// linearize run and the observational bundle — which have segments
+// rather than law identifiers, so their wording is the suite's.
+
+// LinearizableClaim words the concurrent leg's row.
+func LinearizableClaim() string {
+	return "concurrent operation histories are linearizable"
+}
+
+// BundleClaim words the observational bundle: the chain-shaped
+// protocol speaks "chain law", everything else the plain form. The
+// corpus's one domain-specific bundle wording (pool's accounting
+// sentence) is a spelling this derivation cannot reach — recorded in
+// the design doc's frontier.
+func BundleClaim(chain bool) string {
+	if chain {
+		return "every bound chain law holds over random operation sequences"
+	}
+	return "every bound law holds over random operation sequences"
+}
+
 // missNoun is the word the reader claims call their probed input.
 func missNoun(m Method) string {
 	if draws := m.CallArgs(); len(draws) > 0 {

@@ -438,11 +438,11 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 			// and excluding it from the sequences must not silence its law.
 			continue
 		}
-		selectable := classificationsOf(m)
+		selectable := m.Classifications()
 		if _, partner := partners[m.Name]; partner {
 			selectable = m.Mixins
 		}
-		for _, r := range tiers.Select(selectable, paramsOf(harness, m)) {
+		for _, r := range tiers.Select(selectable, suite.LawParams(harness.Methods, *m)) {
 			if reason, negated := negatedBy(claims, r.Law); negated {
 				if !seen[r.Law+"\x00"+reason] {
 					seen[r.Law+"\x00"+reason] = true
@@ -2745,48 +2745,10 @@ func splitQualified(v string) (pkg, name string, ok bool) {
 	return v[:i], v[i+1:], true
 }
 
-// classificationsOf is the method's whole set, in one namespace: its detector
-// shape, its mixins, and the contracts it fills a role in.
-func classificationsOf(m *suite.Method) []string {
-	out := []string{}
-	if s := shape.Get(m.Source.Meta()); s != "" {
-		out = append(out, s)
-	}
-	out = append(out, m.Mixins...)
-	return append(out, m.Contracts...)
-}
-
-// paramsOf collects the classification parameters the When clauses condition
-// on, keyed the way [tiers.Condition.Param] spells them — the mixin params off
-// the method, the contract params off every carrier of the same contract,
-// because a contract's parameter speaks for the protocol and lives on the
-// directive host: the codec's fidelity is stamped on the forward role, and a
-// rule selected from the inverse conditions on it all the same.
-func paramsOf(harness *suite.Contract, m *suite.Method) map[string]string {
-	out := map[string]string{}
-	for _, name := range m.Mixins {
-		for _, p := range mixinParamNames(name) {
-			if v, ok := shape.MixinParamKey(name, p).Get(m.Source.Meta()); ok {
-				out[shape.MixinParamKey(name, p).Name()] = v
-			}
-		}
-	}
-	for _, name := range m.Contracts {
-		for _, p := range contractParamNames(name) {
-			for i := range harness.Methods {
-				carrier := &harness.Methods[i]
-				if !slices.Contains(carrier.Contracts, name) {
-					continue
-				}
-				v, held := shape.ContractParamKey(name, p).Get(carrier.Source.Meta())
-				if held && v != "" {
-					out[shape.ContractParamKey(name, p).Name()] = v
-				}
-			}
-		}
-	}
-	return out
-}
+// The classification and When-parameter composition lives on the suite
+// projection ([suite.Method.Classifications], [suite.LawParams]) — the one
+// home both tiers select from, so they cannot disagree about what the run
+// classified.
 
 // mixinParamNames returns the named mixin's declared parameters — the
 // registry's fact, like the sibling scan in model.go.

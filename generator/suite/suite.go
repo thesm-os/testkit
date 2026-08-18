@@ -29,6 +29,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/total"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/ttl"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/validates"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/wrappedvia"
@@ -931,7 +932,7 @@ func signatureChecks(c *sdk.Provenance, iface *sdk.Interface, f Fixture, m Metho
 		out = append(out, base(KindNilContext, "tolerates a nil context", "ToleratesNilContext", args, false))
 	}
 	if m.ReturnsError() && len(m.ValueReturns()) > 0 && m.HasInput() &&
-		!slices.Contains(m.Mixins, "total") {
+		!m.HasMixin(MixinTotal) {
 		// The only one whose meaning is in the value: a miss check called with
 		// the value the subject was seeded with succeeds, and asserts nothing.
 		//
@@ -1034,6 +1035,11 @@ const (
 	MixinAfterCloseSentinel = lifecycleafterclose.ParamSentinel
 	MixinTTL                = ttl.Name
 	MixinTTLNotFound        = ttl.ParamNotFound
+
+	// MixinTotal is read as an exclusion, not a check: totality is the
+	// declared claim that no input fails, so the zero-on-error family
+	// is not emitted against it. The law half is the model tier's.
+	MixinTotal = total.Name
 )
 
 // missShapes are the classifications whose absence signal is a value rather

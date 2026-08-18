@@ -55,6 +55,10 @@ const (
 	// mixin axis (idempotent) and the detector axis (the reader
 	// miss/hit/count set).
 	DeriverStamps DeriverName = "stamps"
+
+	// DeriverLaws plans the model tier's law rows — which laws tiers
+	// selects, on which legs, under which claims.
+	DeriverLaws DeriverName = "laws"
 )
 
 // Deriver is one rule family: the interface's projections in, plans
@@ -86,6 +90,7 @@ func Registry() []Deriver {
 	return []Deriver{
 		Signature{},
 		Stamps{},
+		Laws{},
 	}
 }
 

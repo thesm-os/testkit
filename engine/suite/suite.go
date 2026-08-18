@@ -69,6 +69,11 @@ const (
 	SegDifferential = "differential"
 	SegLaws         = "laws"
 	SegConcurrent   = "concurrent"
+	// SegLinearizable is the concurrent leg's own row: histories under
+	// concurrent load linearize. Not a law identifier — the leg runs
+	// the linearize engine, not a law binding — so its slug lives here
+	// beside the family segments rather than in core/lawid.
+	SegLinearizable = "AUTO-LINEARIZABLE"
 	SegClocked      = "clocked"
 	SegPoison       = "poison"
 	SegLifecycle    = "lifecycle"

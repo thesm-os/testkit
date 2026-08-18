@@ -207,6 +207,32 @@ ctx directive would need its cancel/deadline/nilcontext calls to
 borrow too, and no corpus contract declares both. The rule waits for
 an instance rather than guessing one.
 
+## Amendment: law claims in lawid, legs in tiers — RATIFIED, BUILT
+
+A law's claim sentence is published surface both modules speak — the
+engine reports outcomes, the generator writes locks — so it lives
+beside the identifier: `lawid.Claim` is a parametric template over a
+closed, censused placeholder vocabulary ({close}, {next}, {produced},
+{subject}), `ClaimOf` answers false for the unworded (the deriver's
+refusal signal), and `Fill` refuses a half-filled sentence. Leg shape
+and class are tier facts: `tiers.LegOf` derives the clocked family
+from the bindings' own Timeaware fact and tables the remaining
+own-leg laws, bundle by default — total over any registry. The suite
+package keeps only leg-level wording (bundle, linearizable) and the
+generic fill resolution: no law names its fills, the stamps do. The
+selection composition (`Method.Classifications`, `LawParams`) has one
+exported home the model generator now reads too — its private copies
+are deleted.
+
+The laws deriver's extra-rules table carries the one derivation the
+classification axes cannot see (a stamped after-close sentinel
+licenses the poison law); its tiers home waits on the model plugin's
+migration, because a catalogue row would change the incumbent's
+emission today. Law rows ship Argued until the proofs deriver lands
+their planted-defect rules. The pool bundle's domain wording ("the
+accounting stays internally consistent...") joins the wording
+frontier beside "counted".
+
 ## Amendment: the borrowed-input smoke (SmokeSurvives.Borrow) — RATIFIED, BUILT
 
 The pool corpus's `Put survives returning a borrowed resource` needs a
