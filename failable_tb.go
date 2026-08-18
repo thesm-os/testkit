@@ -121,7 +121,13 @@ func (f *FailableTB) Msg() string {
 	return f.msg
 }
 
-// Logs returns a defensive copy of all messages passed to [FailableTB.Logf].
+// Logs returns a defensive copy of the transcript: every message passed
+// to [FailableTB.Logf], plus every Errorf and Fatalf message in arrival
+// order. The transcript is what an asserting consumer reads — a real
+// *testing.T accumulates all failure output, and a double that kept
+// only the last Errorf would hide every prior mistake from the
+// assertion (the accumulate-then-FailNow reporting pattern produces
+// exactly that shape).
 func (f *FailableTB) Logs() []string {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -157,6 +163,7 @@ func (f *FailableTB) HelperCalls() int {
 // Subsequent calls are ignored — the first failure wins.
 func (f *FailableTB) Fatalf(format string, args ...any) {
 	f.mu.Lock()
+	f.logs = append(f.logs, fmt.Sprintf(format, args...))
 	if !f.failed {
 		f.failed = true
 		f.msg = fmt.Sprintf(format, args...)
@@ -211,6 +218,7 @@ func (f *FailableTB) Errorf(format string, args ...any) {
 	defer f.mu.Unlock()
 	f.failed = true
 	f.msg = fmt.Sprintf(format, args...)
+	f.logs = append(f.logs, f.msg)
 }
 
 // Error records a non-fatal error.

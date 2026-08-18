@@ -227,8 +227,12 @@ func TestFailableTB(t *testing.T) {
 		if got := f.Msg(); got != "boom 7" {
 			t.Fatalf("the formatted message must be recorded, got: %q", got)
 		}
-		if len(f.Logs()) != 0 {
+		logs := strings.Join(f.Logs(), "\n")
+		if strings.Contains(logs, "unreachable") {
 			t.Fatal("unreachable code ran after Fatalf with Goexit")
+		}
+		if !strings.Contains(logs, "boom 7") {
+			t.Fatal("the transcript must carry the Fatalf message itself")
 		}
 	})
 
@@ -481,5 +485,21 @@ func TestRunCleanupsJoinsSpawnedGoroutines(t *testing.T) {
 	f.RunCleanups() // must not race the worker; joining is the contract
 	if f.Failed() {
 		t.Fatalf("a clean worker must not fail the TB: %s", f.Msg())
+	}
+}
+
+func TestTranscriptKeepsEveryFailureMessage(t *testing.T) {
+	t.Parallel()
+
+	f := testkit.NewFailableTB()
+	f.Errorf("first: %d", 1)
+	f.Errorf("second: %d", 2)
+	logs := strings.Join(f.Logs(), "\n")
+	if !strings.Contains(logs, "first: 1") || !strings.Contains(logs, "second: 2") {
+		t.Errorf("accumulate-then-FailNow reporters emit several Errorf messages;\n"+
+			"the transcript must keep them all, got %q", logs)
+	}
+	if f.Msg() != "second: 2" {
+		t.Errorf("Msg stays the latest Errorf, got %q", f.Msg())
 	}
 }
