@@ -1,0 +1,63 @@
+{{- /*
+suite.index — the method-name constants and the typed check index.
+
+The index is what a Without call is written against, so it is spelled as
+types rather than as strings: a check that is renamed or retired breaks
+the consumer who named it, which is the whole point of dropping by
+identity. Every ID is composed through the runtime's own constructors
+from the runtime's own segment constants, so the grammar has one home
+and this file only assembles it.
+*/ -}}
+{{- define "suite.index" -}}
+{{- $c := . }}
+// The method names: one home per name.
+const (
+{{- range $g := .Index.Groups }}
+{{- if $g.Method }}
+	{{ suite_methodConst $c.Token $g.Method }} = {{ printf "%q" $g.Method }}
+{{- end }}
+{{- end }}
+)
+
+// {{ suite_indexVar .Token }} indexes every check this package emits, by
+// method and then by check.
+var {{ suite_indexVar .Token }} = {{ suite_indexType .Token }}{
+{{- range $g := .Index.Groups }}
+	{{ $g.Field }}: {{ suite_groupType $c.Token $g.Field }}{},
+{{- end }}
+}
+
+type {{ suite_indexType .Token }} struct {
+{{- range $g := .Index.Groups }}
+	{{ $g.Field }} {{ suite_groupType $c.Token $g.Field }}
+{{- end }}
+}
+
+// All returns every ID this package emits.
+func ({{ suite_indexType .Token }}) All() []{{ renderExpr (external $.Vocab "ID") }} {
+	var out []{{ renderExpr (external $.Vocab "ID") }}
+{{- range $g := .Index.Groups }}
+	out = append(out, {{ suite_groupType $c.Token $g.Field }}{}.All()...)
+{{- end }}
+	return out
+}
+{{ range $g := .Index.Groups }}
+type {{ suite_groupType $c.Token $g.Field }} struct{}
+{{ range $a := $g.Accessors }}
+func ({{ suite_groupType $c.Token $g.Field }}) {{ $a.Name }}() {{ renderExpr (external $.Vocab "ID") }} {
+{{- if $g.Method }}
+	return {{ renderExpr (external $.Vocab "MethodID") }}({{ suite_methodConst $c.Token $g.Method }}, {{ renderExpr (external $.Vocab $a.SegConst) }})
+{{- else }}
+	return {{ renderExpr (external $.Vocab "FamilyID") }}({{ renderExpr (external $.Vocab $g.FamilyConst) }}, {{ printf "%q" $c.Qualifier }}, {{ if $a.LawConst }}{{ renderExpr (external $.LawIDs $a.LawConst) }}{{ else }}{{ renderExpr (external $.Vocab $a.SegConst) }}{{ end }})
+{{- end }}
+}
+{{ end }}
+func ({{ suite_groupType $c.Token $g.Field }}) All() []{{ renderExpr (external $.Vocab "ID") }} {
+	return []{{ renderExpr (external $.Vocab "ID") }}{
+{{- range $a := $g.Accessors }}
+		{{ suite_groupType $c.Token $g.Field }}{}.{{ $a.Name }}(),
+{{- end }}
+	}
+}
+{{ end }}
+{{- end -}}

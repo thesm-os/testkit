@@ -342,8 +342,17 @@ type Contract struct {
 
 	// Token qualifies every identifier the file emits, so the templates
 	// compose names from one word rather than each lower-casing the
-	// interface for itself.
-	Token string
+	// interface for itself. Qualifier is the same interface as an ID
+	// slug, which is a different grammar — see [Iface].
+	Token     string
+	Qualifier string
+
+	// Vocab and LawIDs are the packages the emitted identities are
+	// composed from. Carried rather than spelled in the templates
+	// because an import path built inside a template is one the
+	// backend cannot register.
+	Vocab  string
+	LawIDs string
 
 	// Inventory is every check the derivers licensed, and Index the
 	// typed surface a consumer drops one through. Both are projections
@@ -394,11 +403,11 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		}
 		seed, unseeded := seedOf(fixture, methods)
 
-		token := projection.Token(iface.Name)
+		token, qualifier := projection.Token(iface.Name), projection.IDQualifier(iface.Name)
 		inventory, refusals := InventoryOf(Iface{
 			Name:      iface.Name,
 			Token:     token,
-			Qualifier: projection.IDQualifier(iface.Name),
+			Qualifier: qualifier,
 			Methods:   methods,
 			Fixture:   fixture,
 		})
@@ -425,6 +434,9 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Unseeded:  unseeded,
 			Methods:   methods,
 			Token:     token,
+			Qualifier: qualifier,
+			Vocab:     Vocab,
+			LawIDs:    LawIDs,
 			Inventory: inventory,
 			Index:     index,
 			Refusals:  refusals,

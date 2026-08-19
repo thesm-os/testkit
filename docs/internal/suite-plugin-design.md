@@ -173,7 +173,8 @@ generator/suite/
     │                         #   would only have bought separation from an
     │                         #   incumbent parse that no longer exists.
     ├── suite.contract.tmpl   # structural: the file and its banner
-    ├── suite.entry.tmpl      #   [TRANSITIONAL until the root node lands]
+    ├── suite.index.tmpl      # method-name consts + the typed index [BUILT]
+    ├── suite.entry.tmpl      #   [TRANSITIONAL until the rows land]
     ├── suite.options.tmpl    #   see the transition section below
     ├── body/                 # one .tmpl per body variant, each {{define}}
     │                         #   named for the kind that dispatches to it
@@ -449,7 +450,9 @@ emission exists, so the tree spends the interval with three named
 holes. They are written down here because the alternative — a gate
 relaxed until it passes — is a hole nobody finds again.
 
-**1. Three structural templates are transitional.**
+**1. Three structural templates are transitional.** The index emits
+(`suite.index.tmpl`), and the rows and their assertion bodies are what
+remains.
 `suite.contract.tmpl`, `suite.entry.tmpl` and `suite.options.tmpl`
 still render, and render clean: every reference to a deleted field
 (`CheckCount`, `Checks`, `Double`, `Unwritten`, `Elsewhere`,

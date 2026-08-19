@@ -48,6 +48,12 @@ type IndexGroup struct {
 	// mirrors [IDPlan]'s own scoping rule.
 	Family string
 
+	// FamilyConst is the engine identifier the family is declared
+	// under, empty on a method group. Composed rather than tabulated
+	// because the vocabulary declares each family as Family<Word> and
+	// the field above is already that word.
+	FamilyConst string
+
 	Accessors []IndexAccessor
 }
 
@@ -111,9 +117,11 @@ func IndexOf(inv Inventory) (IndexPlan, error) {
 			if !ok {
 				i = len(out.Groups)
 				byFamily[c.ID.Family] = i
+				field := golang.ExportedName(c.ID.Family)
 				out.Groups = append(out.Groups, IndexGroup{
-					Field:  golang.ExportedName(c.ID.Family),
-					Family: c.ID.Family,
+					Field:       field,
+					Family:      c.ID.Family,
+					FamilyConst: familyConstPrefix + field,
 				})
 			}
 			out.Groups[i].Accessors = append(out.Groups[i].Accessors, acc)
@@ -195,6 +203,9 @@ func segAccessor(seg string) (string, bool) {
 // rather than a word. Every other segment reaches its accessor
 // mechanically, and a fifth entry here should have to argue for
 // itself.
+// familyConstPrefix is how the engine vocabulary declares a family.
+const familyConstPrefix = "Family"
+
 func segAccessors() map[string]string {
 	return map[string]string{
 		suite.SegCancel:       "Cancels",

@@ -20,6 +20,10 @@ import (
 func renderFuncs() template.FuncMap {
 	return template.FuncMap{
 		"callExpr":      callExpr,
+		"methodConst":   projection.MethodConst,
+		"indexVar":      projection.IndexVar,
+		"indexType":     projection.IndexType,
+		"groupType":     projection.GroupType,
 		"borrowedIdent": func() string { return string(projection.ExprBorrowed) },
 		"producedIdent": func() string { return string(projection.ExprProduced) },
 	}

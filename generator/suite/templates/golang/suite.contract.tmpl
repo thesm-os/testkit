@@ -64,10 +64,12 @@ func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.
 	}
 }
 
+{{ template "suite.index" $c }}
+
 {{ template "suite.entry" $c }}
 
-{{/* The check sections render from the deriver inventory once the
-     rewrite's emission templates land; the harness shell above them
+{{/* The check rows and their assertion bodies render from the same
+     inventory the index above is projected from; the harness shell
      is what this transitional template still owes the pipeline. */}}
 {{- template "suite.options" $c }}
 {{- end -}}
