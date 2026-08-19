@@ -10,7 +10,13 @@ import "go.thesmos.sh/testkit/engine/suite"
 type BodyKind string
 
 // BodyKindPrefix namespaces body templates in the dispatch table.
-const BodyKindPrefix = "body."
+//
+// The plugin's own name leads it because the backend parses every
+// plugin's templates into one map: a kind is a {{define}} name in a
+// shared namespace, so an unprefixed "body.smoke-survives" would
+// collide with any other plugin that reached for the obvious word.
+// Same rule the emitted node kinds follow.
+const BodyKindPrefix = "suite.body."
 
 // The body kinds, one per variant below.
 const (

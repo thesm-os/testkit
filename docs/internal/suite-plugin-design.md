@@ -157,17 +157,26 @@ generator/suite/
 ├── claims.go                 # the claim wording policy, corpus-pinned [BUILT]
 ├── projection/
 │   ├── check.go              # CheckPlan node + body/defect variant types + census
-│   ├── inventory.go          # per-interface inventory; index tree, censuses
+│   ├── inventory.go          # per-interface inventory; censuses
+│   ├── index.go              # the typed check index a Without names [BUILT]
+│                             #   groups by ID scope, not by deriver; method
+│                             #   accessors from the segment, family ones
+│                             #   from lawid (accessor + const, one home)
 │   ├── harness.go            # A10 structurally: doors → fields      [BUILT]
 │   └── fixture.go            # PoolPlan + the member transforms      [BUILT]
 │                             #   (pool[1] test→other, pool[2] hostile;
 │                             #   refusal where a splice would lie)
-└── templates/gen/            # the rewrite's tree, embedded APART from
-    │                         #   the incumbent's templates/golang — two
-    │                         #   parsers with two function maps must
-    │                         #   never see each other's files
-    ├── file/                 # structural: banner-spacing rule lives here
-    ├── body/                 # one .tmpl per body variant
+└── templates/golang/         # one tree, because there is one emitter
+    │                         #   now. The eidos backend recursively parses
+    │                         #   every .tmpl in the plugin's FS with one
+    │                         #   merged function map, so a second tree
+    │                         #   would only have bought separation from an
+    │                         #   incumbent parse that no longer exists.
+    ├── suite.contract.tmpl   # structural: the file and its banner
+    ├── suite.entry.tmpl      #   [TRANSITIONAL until the root node lands]
+    ├── suite.options.tmpl    #   see the transition section below
+    ├── body/                 # one .tmpl per body variant, each {{define}}
+    │                         #   named for the kind that dispatches to it
     │                         #   smoke.tmpl [BUILT: three arms, one claim]
     └── defect/               # one .tmpl per defect variant
 ```
@@ -306,15 +315,17 @@ prologue no approved variant carries: borrow from the producing
 sibling, guard the failed borrow, feed the borrowed value to the
 smoked call. Proposal: `SmokeSurvives` grows one field —
 
-    type SmokeSurvives struct {
-        Call CallPlan
-        // Borrow is the producing sibling called first when the
-        // smoked method's input is pool-produced: its result feeds
-        // the smoked call, and a failed borrow returns without
-        // judgment — the producer's own smoke owns that path.
-        Borrow CallPlan
-        CloseProduced string
-    }
+```go
+type SmokeSurvives struct {
+    Call CallPlan
+    // Borrow is the producing sibling called first when the
+    // smoked method's input is pool-produced: its result feeds
+    // the smoked call, and a failed borrow returns without
+    // judgment — the producer's own smoke owns that path.
+    Borrow CallPlan
+    CloseProduced string
+}
+```
 
 plus `ExprBorrowed` beside `ExprCtx` in the naming policy: the local
 the template binds the borrow's result to, referenced by the smoked
@@ -394,6 +405,51 @@ five times over there. Sequence inside Phase 2:
 
 Model and stub plugins are out of scope here: stub already emits its
 target; model follows this plan's shape with `tiers` unchanged.
+
+## The transition: what the sweep unowned, and what buys it back
+
+The clean sweep deleted the incumbent emission before the rewrite's
+emission exists, so the tree spends the interval with three named
+holes. They are written down here because the alternative — a gate
+relaxed until it passes — is a hole nobody finds again.
+
+**1. Three structural templates are transitional.**
+`suite.contract.tmpl`, `suite.entry.tmpl` and `suite.options.tmpl`
+still render, and render clean: every reference to a deleted field
+(`CheckCount`, `Checks`, `Double`, `Unwritten`, `Elsewhere`,
+`Unfalsifiable`) is cut, with `{{/* transition */}}` marking where the
+generated invocations go. What they emit today is the shell — options,
+subjects, the per-method `t.Run` tree, the consumer extension seam —
+with no generated checks inside it. Closed by: the emission arc's root
+node and body templates.
+
+**2. The evidence census measures nothing on the suite axis.**
+`evidenceFrom` read `Contract.Coverage`, and both halves came from
+there: `Checked` from `Asserted()`, `Modeled` from `Elsewhere()`.
+Nothing was substituted for either. Rebuilding one half from elsewhere
+— the model tier's live `Bindings`, say — would be a second derivation
+of a question the generator itself answers, which is the disagreement
+`Evidenced`'s own docblock exists to prevent. So the maps stay empty
+and three tests skip rather than pass vacuously:
+`TestEveryClassificationHasEvidenceOrARow`,
+`TestNoUnevidencedRowIsStale`, `TestEvidencedRowsNameTheirFixture`.
+The two that still run are the two that still mean something — the
+registry-total row count, and the failed-run arm that keeps an empty
+census from reading as full coverage. Closed by: rebuilding the census
+off the deriver inventory, which is a better source than the walk it
+replaces, because it knows per interface which classification each
+plan came from *and* reports its refusals by name.
+
+**3. The generated corpus is stale against the new plugin.** Nothing
+regenerates until the emission lands; step 3 of the migration
+mechanics above is unchanged.
+
+The skips are deferred work with an owner, not a resting state. The
+owner is the emission arc, and the day it lands each of the three is
+restored here or argued here — not left quietly green. They carry
+`expires 2026-09-18` so the deferral is held by the skip-expiry gate
+rather than by anyone's memory: past that date the build reddens on
+them until the census is rebuilt or the date is argued forward here.
 
 ## Risks, argued against myself
 

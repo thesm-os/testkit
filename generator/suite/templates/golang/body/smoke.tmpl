@@ -1,11 +1,11 @@
 {{/*
-  body.smoke-survives — the smoke family's one template, three arms
+  suite.body.smoke-survives — the smoke family's one template, three arms
   sharing one claim shape: the method survives an honest call. The
   borrow arm borrows from the producing sibling first; the opener arm
   closes the handle it answers; the plain arm just calls. The local
   idents come through the naming policy, never spelled here.
 */}}
-{{- define "body.smoke-survives" -}}
+{{- define "suite.body.smoke-survives" -}}
 suite.Survives(tb, {{.Check}}, func(ctx context.Context) {
 {{- if .Body.Borrow.Method}}
 	{{suite_borrowedIdent}}, err := {{suite_callExpr .Recv .Body.Borrow}}

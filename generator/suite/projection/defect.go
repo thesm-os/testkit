@@ -7,8 +7,9 @@ package projection
 // template name, composed from the one dispatch prefix.
 type DefectKind string
 
-// DefectKindPrefix namespaces defect templates in the dispatch table.
-const DefectKindPrefix = "defect."
+// DefectKindPrefix namespaces defect templates in the dispatch table,
+// under the plugin's own name for the reason [BodyKindPrefix] gives.
+const DefectKindPrefix = "suite.defect."
 
 // The defect kinds, one per variant below.
 const (

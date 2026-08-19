@@ -5,6 +5,7 @@ package lawid
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -70,21 +71,96 @@ func (c Claim) Fill(pairs ...string) (string, error) {
 // the full registry under the conformance corpus, which surfaces
 // every unworded law the day a fixture stamps its classification.
 func ClaimOf(id string) (Claim, bool) {
-	c, ok := claims()[id]
-	return c, ok
+	w, ok := worded()[id]
+	return w.claim, ok
 }
 
-// claims words the laws the proof-of-concept corpus pinned; the
-// spellings are its manifests', verbatim.
-func claims() map[string]Claim {
-	return map[string]Claim{
-		TTLExpiry:                "an entry stops being readable once its lifetime has run out",
-		LifecycleAfterClose:      "once {close} has run, every method reports the closed sentinel",
-		PoisonConsistent:         "once the {subject} reports it is closed, it keeps reporting it",
-		CursorCloseIdempotent:    "a second {close} on a {produced} changes nothing",
-		CursorNextAfterClose:     "once a {produced} is closed, {next} reports the closed sentinel",
-		AppenderMonotonicOffsets: "offsets of successive appends strictly increase",
-		LeaseDoubleAcquireBlocks: "a second acquire of a held key reports the held sentinel",
-		LeaseReleasedOnCancel:    "a held lease frees once its acquiring context is cancelled",
+// AccessorOf returns the law's spelling in a generated check index —
+// the method a consumer calls to name the check, as in
+// `ix.Model.CloseIdempotent()`.
+//
+// Here rather than in the emitter because it is a fact about the law,
+// and the law's facts have one home. The identifier cannot be derived
+// from the constant's name either: the contract word that qualifies a
+// law globally (Cursor, Lease) is redundant inside an index already
+// scoped to one interface, and which part is redundant is a judgment
+// per law rather than a prefix rule.
+func AccessorOf(id string) (string, bool) {
+	w, ok := worded()[id]
+	return w.accessor, ok
+}
+
+// IsLaw reports whether the identifier is one this package registers.
+//
+// The question a caller holding a bare identity segment has to ask
+// before deciding what an unworded one means: a registered law with no
+// wording is a gap to refuse by name, while a segment that was never a
+// law is somebody else's vocabulary and none of this package's
+// business. Prefix-sniffing for AUTO- cannot tell them apart — the
+// runtime spells segments that way too.
+func IsLaw(id string) bool { return slices.Contains(All(), id) }
+
+// ConstOf returns the Go identifier this package declares the law
+// under, for emitted code that must name the law rather than repeat
+// its text — `lawid.CursorCloseIdempotent`, not the AUTO- string.
+//
+// Carried as data because Go cannot ask a constant for its own name,
+// and a generated file spelling the literal would be the one place
+// the identifier is not the single home.
+func ConstOf(id string) (string, bool) {
+	w, ok := worded()[id]
+	return w.constant, ok
+}
+
+// law is what this package knows about one identifier.
+//
+// One row per law rather than a map per fact: a claim and an accessor
+// added in separate places is a law worded in one and unspellable in
+// the other, which no census catches until a fixture stamps it.
+type law struct {
+	claim Claim
+
+	// accessor is the law's spelling in a generated index; constant
+	// is the identifier this package declares it under.
+	accessor, constant string
+}
+
+// worded is the laws the proof-of-concept corpus pinned. The claim
+// spellings are its manifests', verbatim; the accessors are its
+// generated indexes'.
+func worded() map[string]law {
+	return map[string]law{
+		TTLExpiry: {
+			"an entry stops being readable once its lifetime has run out",
+			"Expiry", "TTLExpiry",
+		},
+		LifecycleAfterClose: {
+			"once {close} has run, every method reports the closed sentinel",
+			"AfterClose", "LifecycleAfterClose",
+		},
+		PoisonConsistent: {
+			"once the {subject} reports it is closed, it keeps reporting it",
+			"PoisonConsistent", "PoisonConsistent",
+		},
+		CursorCloseIdempotent: {
+			"a second {close} on a {produced} changes nothing",
+			"CloseIdempotent", "CursorCloseIdempotent",
+		},
+		CursorNextAfterClose: {
+			"once a {produced} is closed, {next} reports the closed sentinel",
+			"NextAfterClose", "CursorNextAfterClose",
+		},
+		AppenderMonotonicOffsets: {
+			"offsets of successive appends strictly increase",
+			"MonotonicOffsets", "AppenderMonotonicOffsets",
+		},
+		LeaseDoubleAcquireBlocks: {
+			"a second acquire of a held key reports the held sentinel",
+			"DoubleAcquire", "LeaseDoubleAcquireBlocks",
+		},
+		LeaseReleasedOnCancel: {
+			"a held lease frees once its acquiring context is cancelled",
+			"ReleasedOnCancel", "LeaseReleasedOnCancel",
+		},
 	}
 }
