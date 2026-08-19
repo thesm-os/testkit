@@ -167,3 +167,52 @@ func FuzzValidateID(f *testing.F) {
 		}
 	})
 }
+
+// Every segment the contract fixes can be named by emitted code.
+//
+// The census that keeps [SegConst] honest. A segment added to the
+// vocabulary and not to the map is one a generated index cannot spell,
+// which surfaces as a refusal at generation time — correct, but far
+// from the line that caused it. This fails beside the declaration
+// instead.
+//
+// Driven from the declared values rather than from the map's own keys,
+// which would be the map agreeing with itself.
+func TestEverySegmentNamesItsConstant(t *testing.T) {
+	t.Parallel()
+
+	segs := map[string]string{
+		suite.SegSmoke: "SegSmoke", suite.SegCancel: "SegCancel",
+		suite.SegDeadline: "SegDeadline", suite.SegNilContext: "SegNilContext",
+		suite.SegZeroValue: "SegZeroValue", suite.SegReader: "SegReader",
+		suite.SegIdempotent: "SegIdempotent", suite.SegMiss: "SegMiss",
+		suite.SegHit: "SegHit", suite.SegCount: "SegCount",
+		suite.SegAccumulates: "SegAccumulates", suite.SegDifferential: "SegDifferential",
+		suite.SegLaws: "SegLaws", suite.SegConcurrent: "SegConcurrent",
+		suite.SegLinearizable: "SegLinearizable", suite.SegClocked: "SegClocked",
+		suite.SegPoison: "SegPoison", suite.SegLifecycle: "SegLifecycle",
+		suite.SegAppender: "SegAppender", suite.SegRecovery: "SegRecovery",
+		suite.SegCrash: "SegCrash", suite.SegFault: "SegFault",
+		suite.SegHandWritten: "SegHandWritten",
+	}
+
+	for seg, want := range segs {
+		got, ok := suite.SegConst(seg)
+		if !ok {
+			t.Errorf("SegConst(%q) is not spellable by emitted code", seg)
+			continue
+		}
+		if got != want {
+			t.Errorf("SegConst(%q) = %q, want %q", seg, got, want)
+		}
+	}
+}
+
+// A slug nothing declares is refused rather than spelled.
+func TestSegConstRefusesAnUnknownSlug(t *testing.T) {
+	t.Parallel()
+
+	if _, ok := suite.SegConst("not-a-segment"); ok {
+		t.Error("SegConst named a constant for an undeclared slug")
+	}
+}

@@ -64,6 +64,12 @@ type IndexAccessor struct {
 	// empty where the segment is the runtime's own. The emitted body
 	// names the law through it rather than repeating the AUTO- text.
 	LawConst string
+
+	// SegConst is the engine identifier the segment is declared under,
+	// empty on a law. Exactly one of the two is set, and together they
+	// are what lets the emitted accessor compose its ID out of the
+	// grammar's own words rather than out of a string.
+	SegConst string
 }
 
 // IndexOf projects the index from an inventory.
@@ -135,28 +141,28 @@ func IndexOf(inv Inventory) (IndexPlan, error) {
 // which law is bound. The two vocabularies live in [suite] and
 // [lawid] respectively, and neither is restated here.
 func accessorOf(id IDPlan) (IndexAccessor, error) {
-	if id.Method != "" {
-		name, ok := segAccessor(id.Seg)
-		if !ok {
-			return IndexAccessor{}, fmt.Errorf(
-				"projection: segment %q has no index accessor; word it in segAccessors", id.Seg)
+	if id.Method == "" {
+		if name, ok := lawid.AccessorOf(id.Seg); ok {
+			constant, _ := lawid.ConstOf(id.Seg)
+			return IndexAccessor{Name: name, Seg: id.Seg, LawConst: constant}, nil
 		}
-		return IndexAccessor{Name: name, Seg: id.Seg}, nil
-	}
-	if name, ok := lawid.AccessorOf(id.Seg); ok {
-		constant, _ := lawid.ConstOf(id.Seg)
-		return IndexAccessor{Name: name, Seg: id.Seg, LawConst: constant}, nil
-	}
-	if lawid.IsLaw(id.Seg) {
-		return IndexAccessor{}, fmt.Errorf(
-			"projection: law %s has no index accessor; word it in lawid", id.Seg)
+		if lawid.IsLaw(id.Seg) {
+			return IndexAccessor{}, fmt.Errorf(
+				"projection: law %s has no index accessor; word it in lawid", id.Seg)
+		}
 	}
 	name, ok := segAccessor(id.Seg)
 	if !ok {
 		return IndexAccessor{}, fmt.Errorf(
-			"projection: family segment %q is worded by neither lawid nor segAccessors", id.Seg)
+			"projection: segment %q has no index accessor; word it in segAccessors", id.Seg)
 	}
-	return IndexAccessor{Name: name, Seg: id.Seg}, nil
+	constant, ok := suite.SegConst(id.Seg)
+	if !ok {
+		return IndexAccessor{}, fmt.Errorf(
+			"projection: segment %q is not declared in the engine vocabulary, "+
+				"so an emitted accessor could only spell it as a literal", id.Seg)
+	}
+	return IndexAccessor{Name: name, Seg: id.Seg, SegConst: constant}, nil
 }
 
 // segAccessor spells a segment as an index accessor.

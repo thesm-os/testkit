@@ -406,6 +406,30 @@ five times over there. Sequence inside Phase 2:
 Model and stub plugins are out of scope here: stub already emits its
 target; model follows this plan's shape with `tiers` unchanged.
 
+## Amendment: the ctx directive — BLOCKING the Generate wiring
+
+Derivation runs from `InventoryOf`, and everything it needs is a
+projection the plugin already computes except one: `CtxDeclared`. The
+signature rules make context semantics a *declared* claim rather than a
+signature inference — cancel, deadline and nilcontext derive only under
+the declaration — and nothing declares it today. No corpus fixture
+carries `//testkit:ctx`, no plugin registers the name, and the
+prescreen refuses a directive nothing declares, so the shell cannot
+read the fact by guessing at a spelling.
+
+That makes the wiring contract-gated rather than mechanical: the
+directive is a new consumer-facing surface, and its schema decides
+what an interface author writes. Until it is ruled on, `InventoryOf`
+is reachable and tested but `Generate` does not call it — wiring it
+with `CtxDeclared: false` would derive three families fewer for every
+context-taking method in the corpus and call the result a clean run,
+which is the silent under-derivation the census layer exists to
+prevent.
+
+Owed: the directive's name, whether it takes arguments, and whether it
+sits on the interface or the method. Everything downstream of it — the
+constants, the index sections, the rows — is built or specified.
+
 ## The transition: what the sweep unowned, and what buys it back
 
 The clean sweep deleted the incumbent emission before the rewrite's

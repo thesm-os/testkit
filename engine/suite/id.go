@@ -190,3 +190,51 @@ func validateSegment(id ID, seg string) error {
 func isLower(r rune) bool { return r >= 'a' && r <= 'z' }
 func isUpper(r rune) bool { return r >= 'A' && r <= 'Z' }
 func isDigit(r rune) bool { return r >= '0' && r <= '9' }
+
+// SegConst returns the identifier this package declares the segment
+// under, for emitted code that must name a segment rather than repeat
+// its slug — `suite.SegSmoke`, not "smoke".
+//
+// Carried as data because Go cannot ask a constant for its own name,
+// and a generated index spelling the slug would be the one place the
+// grammar is not single-homed. The segments a generated index can
+// reach are the ones listed here; a segment the emitter reaches and
+// this map does not is a refusal at generation time rather than a
+// literal in somebody's output.
+func SegConst(seg string) (string, bool) {
+	name, ok := segConsts()[seg]
+	return name, ok
+}
+
+// segConsts pairs each segment with its declaration.
+//
+// Hand-written beside the constants rather than reflected: this module
+// may not import the `go` toolchain packages, and the census in the
+// test file is what holds the two lists equal.
+func segConsts() map[string]string {
+	return map[string]string{
+		SegSmoke:        "SegSmoke",
+		SegCancel:       "SegCancel",
+		SegDeadline:     "SegDeadline",
+		SegNilContext:   "SegNilContext",
+		SegZeroValue:    "SegZeroValue",
+		SegReader:       "SegReader",
+		SegIdempotent:   "SegIdempotent",
+		SegMiss:         "SegMiss",
+		SegHit:          "SegHit",
+		SegCount:        "SegCount",
+		SegAccumulates:  "SegAccumulates",
+		SegDifferential: "SegDifferential",
+		SegLaws:         "SegLaws",
+		SegConcurrent:   "SegConcurrent",
+		SegLinearizable: "SegLinearizable",
+		SegClocked:      "SegClocked",
+		SegPoison:       "SegPoison",
+		SegLifecycle:    "SegLifecycle",
+		SegAppender:     "SegAppender",
+		SegRecovery:     "SegRecovery",
+		SegCrash:        "SegCrash",
+		SegFault:        "SegFault",
+		SegHandWritten:  "SegHandWritten",
+	}
+}

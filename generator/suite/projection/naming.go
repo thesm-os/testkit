@@ -4,6 +4,7 @@
 package projection
 
 import (
+	"go.thesmos.sh/eidos/core/naming"
 	"go.thesmos.sh/eidos/lang/golang"
 )
 
@@ -80,3 +81,53 @@ func FixtureCall(token, field string) Expr {
 	}
 	return Expr(token + golang.ExportedName(field) + "()")
 }
+
+// Token is the interface's qualifier in every generated identifier —
+// "log" for Log, "kvStore" for KVStore.
+//
+// Lower camel rather than a plain lower-casing, because the token
+// prefixes identifiers a human reads (logAppend, kvStoreCheckIndex)
+// and "kvstorecheckindex" is not a name anybody wants in a stack
+// trace. The casing engine is the platform's own, initialisms
+// included, so the token agrees with what every other plugin emits.
+func Token(iface string) string { return naming.Camel(iface) }
+
+// MethodConst is the generated constant holding a method's name —
+// `logAppend = "Append"`.
+//
+// One home per name: the index accessors, the check bodies and the
+// failure messages all spell the method, and a literal repeated across
+// three emitted sections is three chances to rename two of them.
+func MethodConst(token, method string) string {
+	return token + golang.ExportedName(method)
+}
+
+// IndexVar is the generated index value a consumer reaches through —
+// `logCheckIndex`.
+func IndexVar(token string) string { return token + indexSuffix }
+
+// IndexType is the index value's type — `logCheckIndexT`.
+//
+// The suffix exists because the value carries the readable name: a
+// consumer writes `logCheckIndex.Append.Smoke()` and never writes the
+// type, so the type takes the awkward one.
+func IndexType(token string) string { return IndexVar(token) + indexTypeSuffix }
+
+// GroupType is one index member's type — `logAppendChecks` for a
+// method group, `logModelChecks` for a family's.
+//
+// Uniform across both scopes, which is a decision the hand-written
+// packs did not have to make: they spell the family group's type
+// `<token>ModelIndex` and the method groups' `<token><Method>Checks`.
+// A generator emits one rule, and the group is a group of checks
+// whichever scope named it.
+func GroupType(token, field string) string {
+	return token + golang.ExportedName(field) + checksSuffix
+}
+
+// The emitted index's fixed words.
+const (
+	indexSuffix     = "CheckIndex"
+	indexTypeSuffix = "T"
+	checksSuffix    = "Checks"
+)

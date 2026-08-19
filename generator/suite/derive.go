@@ -128,3 +128,26 @@ func callOf(f Iface, m Method) projection.CallPlan {
 	}
 	return projection.CallPlan{Method: m.Name, Args: args}
 }
+
+// InventoryOf runs every deriver over the interface and folds their
+// answers into the one inventory every artifact projects from.
+//
+// The registry's order is the emission order, and it is preserved: the
+// generated file's sections read in the order the rules are written
+// down, so a reader following derivation-rules.md top to bottom is
+// following the output too.
+//
+// Refusals accumulate beside the plans rather than short-circuiting.
+// A deriver refusing one method's family says nothing about the next
+// deriver's answer, and a run that stopped at the first refusal would
+// report one gap where the header owes the reader all of them.
+func InventoryOf(f Iface) (projection.Inventory, []Refusal) {
+	inv := projection.Inventory{Iface: f.Name, Token: f.Token}
+	var refusals []Refusal
+	for _, d := range Registry() {
+		plans, refused := d.Derive(f)
+		inv.Checks = append(inv.Checks, plans...)
+		refusals = append(refusals, refused...)
+	}
+	return inv, refusals
+}

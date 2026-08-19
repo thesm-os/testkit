@@ -153,3 +153,21 @@ func TestIndexRefusesAnUnwordedLaw(t *testing.T) {
 	})
 	testkit.Error(t, err, "an unworded law names itself in the refusal")
 }
+
+// An accessor carries the identifier its ID composes from, never the
+// slug.
+//
+// The emitted body reads `suite.MethodID(logAppend, suite.SegSmoke)`,
+// so the segment reaches the template as its constant. A literal there
+// would be the one place the ID grammar has two homes.
+func TestAccessorsCarryTheirSegmentConstant(t *testing.T) {
+	t.Parallel()
+
+	got, err := projection.IndexOf(projection.Inventory{
+		Iface: "Log", Token: "log",
+		Checks: []projection.CheckPlan{methodPlan("Append", suite.SegSmoke)},
+	})
+	testkit.NoError(t, err, "a declared segment indexes")
+	testkit.Equal(t, got.Groups[0].Accessors[0].SegConst, "SegSmoke",
+		"the accessor names the engine's constant, not the slug")
+}
