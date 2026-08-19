@@ -6,6 +6,7 @@
 package suite
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -23,7 +24,9 @@ import (
 // production rendering is the backend's, and a parse path with no
 // production consumer does not belong in production code.
 func bodyTemplates() (*template.Template, error) {
-	t, err := template.New("body").Funcs(New().TemplateFuncs(langgo.Language)).
+	t, err := template.New("body").
+		Funcs(New().TemplateFuncs(langgo.Language)).
+		Funcs(backendPlaceholders()).
 		ParseFS(goTemplatesFS, "templates/golang/body/*.tmpl")
 	if err != nil {
 		return nil, fmt.Errorf("suite: parse the body templates: %w", err)
@@ -142,4 +145,21 @@ func TestBodyTemplateCensus(t *testing.T) {
 	// variant owns a template — arms when the last body lands, and
 	// the count below is what will flip it.
 	testkit.True(t, defined >= 1, "the smoke family is defined")
+}
+
+// backendPlaceholders stands in for the helpers the backend owns, so
+// this harness can PARSE every body template.
+//
+// It cannot execute the ones that use them, and deliberately does not
+// try: renderExpr and external are how an emitted reference registers
+// its import, and a harness that reimplemented them would be pinning
+// bytes against a second import machinery rather than against the one
+// that runs. The bodies that reach for them are pinned by the pipeline
+// golden instead; what this harness still answers is the census —
+// every defined template names a registered variant.
+func backendPlaceholders() template.FuncMap {
+	invoked := func(...any) (string, error) {
+		return "", errors.New("suite: a backend helper cannot run in the parse-only harness")
+	}
+	return template.FuncMap{"renderExpr": invoked, "external": invoked}
 }

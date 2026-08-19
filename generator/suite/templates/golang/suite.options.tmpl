@@ -235,7 +235,7 @@ func (c *{{ lower .IfaceName }}Config{{ .TypeArgs }}) phantoms() []string {
 		}
 {{- range $m := .Methods }}
 		for _, on := range c.on{{ $m.Name }} {
-			if {{ printf "%q" $m.Name }}+"/"+on.name == p {
+			if string({{ renderExpr (external $.Vocab "MethodID") }}({{ suite_methodConst $.Token $m.Name }}, on.name)) == p {
 				return true
 			}
 		}

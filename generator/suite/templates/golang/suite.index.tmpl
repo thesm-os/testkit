@@ -10,12 +10,15 @@ and this file only assembles it.
 */ -}}
 {{- define "suite.index" -}}
 {{- $c := . }}
-// The method names: one home per name.
+// The names this file spells more than once: one home each.
 const (
-{{- range $g := .Index.Groups }}
-{{- if $g.Method }}
-	{{ suite_methodConst $c.Token $g.Method }} = {{ printf "%q" $g.Method }}
+{{- range $m := .Methods }}
+	{{ suite_methodConst $c.Token $m.Name }} = {{ printf "%q" $m.Name }}
 {{- end }}
+{{- if .Index.HasFamily }}
+
+	// The interface's word inside a family-scoped identity.
+	{{ suite_qualifierConst $c.Token }} = {{ printf "%q" $c.Qualifier }}
 {{- end }}
 )
 
@@ -48,7 +51,7 @@ func ({{ suite_groupType $c.Token $g.Field }}) {{ $a.Name }}() {{ renderExpr (ex
 {{- if $g.Method }}
 	return {{ renderExpr (external $.Vocab "MethodID") }}({{ suite_methodConst $c.Token $g.Method }}, {{ renderExpr (external $.Vocab $a.SegConst) }})
 {{- else }}
-	return {{ renderExpr (external $.Vocab "FamilyID") }}({{ renderExpr (external $.Vocab $g.FamilyConst) }}, {{ printf "%q" $c.Qualifier }}, {{ if $a.LawConst }}{{ renderExpr (external $.LawIDs $a.LawConst) }}{{ else }}{{ renderExpr (external $.Vocab $a.SegConst) }}{{ end }})
+	return {{ renderExpr (external $.Vocab "FamilyID") }}({{ renderExpr (external $.Vocab $g.FamilyConst) }}, {{ suite_qualifierConst $c.Token }}, {{ if $a.LawConst }}{{ renderExpr (external $.LawIDs $a.LawConst) }}{{ else }}{{ renderExpr (external $.Vocab $a.SegConst) }}{{ end }})
 {{- end }}
 }
 {{ end }}

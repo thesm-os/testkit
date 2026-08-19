@@ -1,0 +1,26 @@
+{{/*
+The context family's three arms. Each is one line of method wiring over
+the engine primitive that owns the semantics — what "reports a cancelled
+context" means, and what the failure says, lives in engine/suite and is
+not restated here. The three differ only in which primitive they call,
+which is exactly what makes them three variants rather than one with a
+mode field.
+*/}}
+{{- define "suite.body.cancel-call" -}}
+{{ template "suite.frag.ctx-call" (suite_ctxArm . "ReportsCancelled") }}
+{{- end -}}
+
+{{- define "suite.body.deadline-call" -}}
+{{ template "suite.frag.ctx-call" (suite_ctxArm . "ReportsDeadlineExceeded") }}
+{{- end -}}
+
+{{- define "suite.body.nilctx-call" -}}
+{{ template "suite.frag.ctx-call" (suite_ctxArm . "ToleratesNilContext") }}
+{{- end -}}
+
+{{- define "suite.frag.ctx-call" -}}
+{{ renderExpr (external .Vocab .Primitive) }}(tb, {{ .View.Check }}, func(ctx {{ renderExpr (external "context" "Context") }}) error {
+	{{ .View.ErrBind }} {{ suite_callExpr .View.Recv .View.Body.Call }}
+	return err
+})
+{{- end -}}

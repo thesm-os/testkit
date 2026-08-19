@@ -31,6 +31,19 @@ type IndexPlan struct {
 	Groups []IndexGroup
 }
 
+// HasFamily reports whether any group is family-scoped, which is what
+// decides whether the qualifier constant is spelled at all. An unused
+// constant does not compile, so the question has to be answered before
+// the constant block renders rather than inside it.
+func (p IndexPlan) HasFamily() bool {
+	for _, g := range p.Groups {
+		if g.Family != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // IndexGroup is one member of the index — a method's checks, or a
 // family's.
 type IndexGroup struct {

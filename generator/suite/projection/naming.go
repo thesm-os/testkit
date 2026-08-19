@@ -114,6 +114,16 @@ func MethodConst(token, method string) string {
 	return token + golang.ExportedName(method)
 }
 
+// QualifierConst is the generated constant holding the interface's word
+// inside a family-scoped ID — `logQualifier = "log"`.
+//
+// A constant for the same reason the method names are: the qualifier is
+// spelled once per family accessor, and a literal repeated per accessor
+// is a rename that compiles after changing some of them. The hand
+// written packs spell it inline; this is the rule they were written
+// before.
+func QualifierConst(token string) string { return token + qualifierSuffix }
+
 // IndexVar is the generated index value a consumer reaches through —
 // `logCheckIndex`.
 func IndexVar(token string) string { return token + indexSuffix }
@@ -139,6 +149,7 @@ func GroupType(token, field string) string {
 
 // The emitted index's fixed words.
 const (
+	qualifierSuffix = "Qualifier"
 	indexSuffix     = "CheckIndex"
 	indexTypeSuffix = "T"
 	checksSuffix    = "Checks"

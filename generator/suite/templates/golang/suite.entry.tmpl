@@ -51,7 +51,7 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
 	t.Run(label, func(t *{{ renderExpr (external "testing" "T") }}) {
 		t.Parallel()
 {{ range $m := .Methods }}
-		t.Run({{ printf "%q" $m.Name }}, func(t *{{ renderExpr (external "testing" "T") }}) {
+		t.Run({{ suite_methodConst $.Token $m.Name }}, func(t *{{ renderExpr (external "testing" "T") }}) {
 			t.Parallel()
 {{- if $m.IntegrationOnly }}
 			// {{ $m.Name }} reaches something outside this process, so its
@@ -65,7 +65,7 @@ func run{{ .IfaceName }}Checks{{ renderTypeParams .TypeParams }}(
      inventory once the rewrite's emission lands; the consumer
      extension seam below is what this transitional shell keeps. */}}
 			for _, c := range cfg.on{{ $m.Name }} {
-				cfg.run(t, {{ printf "%q" $m.Name }}+"/"+c.name, c.name, func(tb {{ renderExpr (external "testing" "TB") }}) {
+				cfg.run(t, string({{ renderExpr (external $.Vocab "MethodID") }}({{ suite_methodConst $.Token $m.Name }}, c.name)), c.name, func(tb {{ renderExpr (external "testing" "TB") }}) {
 					c.fn(tb, cfg.subject(tb, factory, wrap){{ range $m.ArgFields }}, cfg.Fixture.{{ . }}{{ end }})
 				})
 			}
