@@ -216,3 +216,35 @@ func TestSegConstRefusesAnUnknownSlug(t *testing.T) {
 		t.Error("SegConst named a constant for an undeclared slug")
 	}
 }
+
+// Every class the contract fixes can be named by emitted code.
+//
+// The census [TestEverySegmentNamesItsConstant] is, on the other axis.
+// A class added to the vocabulary and not to the map is one a generated
+// row cannot spell, which surfaces far from the line that caused it.
+func TestEveryClassNamesItsConstant(t *testing.T) {
+	t.Parallel()
+
+	classes := map[suite.Class]string{
+		suite.ClassSmoke: "ClassSmoke", suite.ClassCancel: "ClassCancel",
+		suite.ClassDeadline: "ClassDeadline", suite.ClassNilContext: "ClassNilContext",
+		suite.ClassZeroValue: "ClassZeroValue", suite.ClassReader: "ClassReader",
+		suite.ClassIdempotent: "ClassIdempotent", suite.ClassDifferential: "ClassDifferential",
+		suite.ClassLaws: "ClassLaws", suite.ClassConcurrent: "ClassConcurrent",
+		suite.ClassClocked: "ClassClocked", suite.ClassPoison: "ClassPoison",
+		suite.ClassLifecycle: "ClassLifecycle", suite.ClassAppender: "ClassAppender",
+		suite.ClassSimRecovery: "ClassSimRecovery", suite.ClassSimCrash: "ClassSimCrash",
+		suite.ClassSimFault: "ClassSimFault", suite.ClassHandWritten: "ClassHandWritten",
+	}
+
+	for c, want := range classes {
+		got, ok := suite.ClassConst(c)
+		if !ok {
+			t.Errorf("ClassConst(%q) is not spellable by emitted code", c)
+			continue
+		}
+		if got != want {
+			t.Errorf("ClassConst(%q) = %q, want %q", c, got, want)
+		}
+	}
+}

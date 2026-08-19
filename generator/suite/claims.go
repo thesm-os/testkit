@@ -7,6 +7,9 @@ import (
 	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/node"
+
+	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
 // The claim wording policy for the derived families, spelled from the
@@ -90,14 +93,68 @@ func ZeroOnErrorClaim(m Method) string {
 	src := values[0].Source
 	switch {
 	case src != nil && golang.IsChannel(src):
+		// The prose names the channel where the comparison only knows
+		// it is nil-compared: a claim is read by someone deciding
+		// whether it holds, and "nothing" would not tell them what.
 		return m.Name + " returns a nil channel alongside any error"
+	case ZeroShapeOf(m) == ZeroNil:
+		return m.Name + " returns nothing alongside any error"
 	case src != nil && src.Name != "" && !golang.IsPredeclared(src.Name):
 		// Predeclared rather than IsBuiltin: the frontend records an
 		// in-package named type with no package, exactly like "int",
-		// and the claim's "the zero Value" needs the two told apart.
+		// and "the zero Value" needs the two told apart.
 		return m.Name + " returns the zero " + src.Name + " alongside any error"
 	default:
 		return m.Name + " returns zero alongside any error"
+	}
+}
+
+// ZeroShape is how a body compares a result against its zero.
+type ZeroShape int
+
+// Two shapes, and the split is comparability rather than spelling: a
+// slice, map or func may only be compared against nil — `got != zero`
+// does not compile for one — while every other type has a zero that can
+// be declared and compared, predeclared types included.
+const (
+	// ZeroDeclared declares a zero of the result's own type and
+	// compares against it: `var zero kv.Value`, then `got != zero`.
+	// Right for named types, strings, bools and numbers alike.
+	ZeroDeclared ZeroShape = iota
+
+	// ZeroNil compares against nil, for the kinds that admit nothing
+	// else.
+	ZeroNil
+)
+
+// ZeroShapeOf classifies a method's first result.
+//
+// One home because the claim and the body it words are the same
+// judgment about the same type: a claim promising "the zero Value"
+// beside a body comparing against nil is the drift a single inventory
+// exists to prevent.
+func ZeroShapeOf(m Method) ZeroShape {
+	values := m.ValueReturns()
+	if len(values) == 0 {
+		return ZeroDeclared
+	}
+	src := values[0].Source
+	if src == nil {
+		return ZeroDeclared
+	}
+	switch src.TypeKind {
+	case node.TypeRefSlice, node.TypeRefMap, node.TypeRefFunc, node.TypeRefPointer:
+		// A pointer is comparable, so a declared zero would work — but
+		// it has no name to declare one of, and nil is what the
+		// language calls its zero anyway.
+		return ZeroNil
+	default:
+		if golang.IsChannel(src) {
+			// A channel arrives as a named ref with the frontend's own
+			// stamp on it, never as a kind of its own.
+			return ZeroNil
+		}
+		return ZeroDeclared
 	}
 }
 
@@ -209,15 +266,15 @@ func missNoun(m Method) string {
 	return "input"
 }
 
-// drawNoun is the word a claim calls one drawn parameter: the named
-// type's own word where the source declares one — `Lookup(ctx, id
-// Key)` draws "a seeded key", per the corpus — and the parameter's
-// identifier otherwise. The composite-request form ("derived inputs"
-// for a one-struct draw) needs the fixture's composed-field fact and
-// arrives with the emitter wiring.
+// drawNoun is the word a claim calls one drawn parameter, lower-cased —
+// `Lookup(ctx, id Key)` draws "a seeded key", per the corpus.
+//
+// The word itself is [projection.DrawWord], which the fixture field is
+// also spelled from: a claim naming one thing and a field holding
+// another is the drift a single inventory exists to prevent. The
+// composite-request form ("derived inputs" for a one-struct draw)
+// needs the fixture's composed-field fact and arrives with the emitter
+// wiring.
 func drawNoun(p golang.Param) string {
-	if p.Source != nil && p.Source.Name != "" && !golang.IsPredeclared(p.Source.Name) {
-		return strings.ToLower(p.Source.Name)
-	}
-	return p.Name
+	return strings.ToLower(projection.DrawWord(p))
 }

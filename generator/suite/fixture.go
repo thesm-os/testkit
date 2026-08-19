@@ -17,6 +17,7 @@ import (
 
 	"go.thesmos.sh/testkit/generator/builder"
 	"go.thesmos.sh/testkit/generator/source"
+	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
 // OtherSuffix names the companion field holding a second, different value for
@@ -179,8 +180,9 @@ type Fixture struct {
 // loop would — and a `""` would compose `cfg.Fixture.` into generated source
 // rather than failing where a reader could see it.
 func (f Fixture) FieldFor(p golang.Param) string {
+	want := projection.DrawField(p)
 	for _, g := range f.groups {
-		if g.param.Field == p.Field && g.param.Source.Equal(p.Source) {
+		if projection.DrawField(g.param) == want && g.param.Source.Equal(p.Source) {
 			return g.name
 		}
 	}
@@ -321,15 +323,17 @@ func groupParams(methods []Method) []paramGroup {
 			if findGroup(groups, p) {
 				continue
 			}
-			groups = append(groups, paramGroup{name: p.Field, method: m.Name, param: p})
-			byField[p.Field]++
+			groups = append(groups, paramGroup{
+				name: projection.DrawField(p), method: m.Name, param: p,
+			})
+			byField[projection.DrawField(p)]++
 		}
 	}
 	// Qualify every group whose parameter name another type also claims, so
 	// neither spelling is privileged by the order the walk happened to take.
 	for i := range groups {
-		if byField[groups[i].param.Field] > 1 {
-			groups[i].name = groups[i].method + groups[i].param.Field
+		if byField[projection.DrawField(groups[i].param)] > 1 {
+			groups[i].name = groups[i].method + projection.DrawField(groups[i].param)
 		}
 	}
 	return groups
@@ -338,8 +342,9 @@ func groupParams(methods []Method) []paramGroup {
 // findGroup reports whether a group already holds this parameter's name and
 // type.
 func findGroup(groups []paramGroup, p golang.Param) bool {
+	want := projection.DrawField(p)
 	for _, g := range groups {
-		if g.param.Field == p.Field && g.param.Source.Equal(p.Source) {
+		if projection.DrawField(g.param) == want && g.param.Source.Equal(p.Source) {
 			return true
 		}
 	}

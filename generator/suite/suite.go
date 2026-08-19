@@ -362,6 +362,28 @@ type Contract struct {
 	Inventory projection.Inventory
 	Index     projection.IndexPlan
 
+	// Pools are the drawn config fields a consumer overrides: one per
+	// roled field, three members each. The fixture draws through them
+	// and the seeded corpus is zipped from them.
+	Pools []projection.PoolPlan
+
+	// Harness is the run surface this interface's checks can demand —
+	// a capability field with no check behind it is a promise the run
+	// never collects on.
+	Harness projection.HarnessPlan
+
+	// Checks are the derived checks this file can render today; Withheld
+	// names the body variants it cannot, so the header says what is
+	// missing rather than leaving a reader to infer coverage from a
+	// short list.
+	Checks   []*CheckEmit
+	Withheld []string
+
+	// DrawsFixture says the checks builder takes the run's fixture,
+	// which it does wherever any of its rows draws — the closures
+	// capture it, so a row cannot reach one the builder was not given.
+	DrawsFixture bool
+
 	// Refusals are the checks the rules reached and could not derive.
 	// They render into the header: a claim the reader cannot see
 	// refused reads as a claim this file checks.
@@ -405,13 +427,17 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		seed, unseeded := seedOf(fixture, methods)
 
 		token, qualifier := projection.Token(iface.Name), projection.IDQualifier(iface.Name)
-		inventory, refusals := InventoryOf(Iface{
+		derived := Iface{
 			Name:      iface.Name,
+			Package:   iface.Package,
 			Token:     token,
 			Qualifier: qualifier,
 			Methods:   methods,
 			Fixture:   fixture,
-		})
+		}
+		inventory, refusals := InventoryOf(derived)
+		pools, poolRefusals := poolsOf(ctx.Reader, methods)
+		refusals = append(refusals, poolRefusals...)
 		if err := inventory.Verify(); err != nil {
 			// The run's own invariants, held before anything renders. A
 			// deriver bug caught here names the check it is about; the
@@ -426,21 +452,27 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 
+		checks := checkEmitsOf(sdk.EmitBase(c, iface), derived, inventory)
 		contract := &Contract{
-			BaseEmit:  sdk.EmitBase(c, iface),
-			Subject:   subjectOf(iface),
-			EntryName: "Assert" + iface.Name + "Contract",
-			Fixture:   fixture,
-			Seed:      seed,
-			Unseeded:  unseeded,
-			Methods:   methods,
-			Token:     token,
-			Qualifier: qualifier,
-			Vocab:     Vocab,
-			LawIDs:    LawIDs,
-			Inventory: inventory,
-			Index:     index,
-			Refusals:  refusals,
+			BaseEmit:     sdk.EmitBase(c, iface),
+			Subject:      subjectOf(iface),
+			EntryName:    "Assert" + iface.Name + "Contract",
+			Fixture:      fixture,
+			Seed:         seed,
+			Unseeded:     unseeded,
+			Methods:      methods,
+			Token:        token,
+			Qualifier:    qualifier,
+			Vocab:        Vocab,
+			LawIDs:       LawIDs,
+			Inventory:    inventory,
+			Index:        index,
+			Pools:        pools,
+			Harness:      projection.HarnessOf(iface.Name, inventory.Checks),
+			Checks:       checks,
+			Withheld:     withheldBodies(inventory),
+			DrawsFixture: drawsFixture(checks),
+			Refusals:     refusals,
 		}
 		if unseeded != "" {
 			// A harness that seeds nothing runs every read check against a

@@ -1,0 +1,52 @@
+{{- /*
+suite.checks — the rows and the assertions they name.
+
+The row states only what differs between checks: identity, class, claim,
+and which assertion carries it. Everything a row shares with every other
+row is `sig`, bound once above them — which is what lets the table be
+read down a column. Each assertion is one line of wiring over the engine
+primitive that owns the semantics, rendered by the body variant's own
+template through the backend's dispatch.
+*/ -}}
+{{- define "suite.checks" -}}
+{{- $c := . }}
+// {{ suite_checksName .Token }} builds every check this run derived.
+//
+// sig is the one shape they share; the literals below state only what
+// differs. Falsifiable is Proven wherever a defect rule reached the
+// claim, which the parity gate refuses to stamp without one.
+func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}({{ if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}) []{{ renderExpr (external $.Vocab "Check") }}[{{ .IfaceName }}{{ .TypeArgs }}] {
+{{- if not .Checks }}
+	// Every check this interface derived is waiting on a body template;
+	// the header names which. An empty set rather than no builder, so
+	// the run surface stays the same shape whatever is spelled yet.
+	return nil
+}
+{{- else }}
+	sig := {{ renderExpr (external $.Vocab "ProvenCheck") }}[{{ .IfaceName }}{{ .TypeArgs }}]
+	ix := {{ suite_indexVar .Token }}
+	return []{{ renderExpr (external $.Vocab "Check") }}[{{ .IfaceName }}{{ .TypeArgs }}]{
+{{- range $ck := .Checks }}
+		sig(ix.{{ $ck.Group }}.{{ $ck.Accessor }}(), {{ renderExpr (external $.Vocab $ck.ClassConst) }},
+			{{ printf "%q" $ck.Plan.Claim }},
+			func(tb {{ renderExpr (external "testing" "TB") }}, {{ $ck.Recv }} {{ $c.IfaceName }}{{ $c.TypeArgs }}) {
+				{{ $ck.AssertName }}{{ $c.TypeArgs }}(tb, {{ $ck.Recv }}{{ if $ck.Draws }}, {{ suite_fixtureIdent }}{{ end }})
+			}),
+{{- end }}
+	}
+}
+{{- end }}
+{{ range $ck := .Checks }}
+// {{ $ck.AssertName }} asserts {{ $ck.Plan.Claim }}.
+func {{ $ck.AssertName }}{{ renderTypeParams $c.TypeParams }}(
+	tb {{ renderExpr (external "testing" "TB") }},
+	{{ $ck.Recv }} {{ $c.IfaceName }}{{ $c.TypeArgs }},
+{{- if $ck.Draws }}
+	{{ suite_fixtureIdent }} {{ $c.Fixture.TypeName }}{{ $c.TypeArgs }},
+{{- end }}
+) {
+	tb.Helper()
+	{{ render $ck }}
+}
+{{ end }}
+{{- end -}}

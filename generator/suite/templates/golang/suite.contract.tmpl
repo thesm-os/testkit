@@ -64,7 +64,15 @@ func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.
 	}
 }
 
+{{- if .Pools }}
+{{ template "suite.config" $c }}
+{{- end }}
+
+{{ template "suite.harness" $c }}
+
 {{ template "suite.index" $c }}
+
+{{ template "suite.checks" $c }}
 
 {{ template "suite.entry" $c }}
 

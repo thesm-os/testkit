@@ -97,9 +97,12 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 			[]vocab.ID{"Len/smoke"},
 		},
 		{
-			"no error result, no zero family",
+			"no error result, no context families and no zero",
 			storeIface(noErr),
-			[]vocab.ID{"Peek/smoke", "Peek/cancel", "Peek/nilcontext", "Peek/deadline"},
+			// The engine primitives judge a `func(ctx) error`; a method
+			// with no error channel has nothing to report a cancelled
+			// context through, so the smoke is the whole family.
+			[]vocab.ID{"Peek/smoke"},
 		},
 		{
 			"declared totality excludes the zero family alone",
@@ -135,7 +138,7 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 	}
 	wantCall := projection.CallPlan{
 		Method: "Get",
-		Args:   []projection.Expr{projection.ExprCtx, projection.FixtureCall("store", "Key")},
+		Args:   []projection.Expr{projection.ExprCtx, projection.FixtureCall(projection.ExprFixture, "Key")},
 	}
 
 	t.Run("the smoke survives with the fixture draw", func(t *testing.T) {

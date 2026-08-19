@@ -67,7 +67,7 @@ func TestBindings(t *testing.T) {
 		t.Parallel()
 		testkit.Equal(t, b.Keys.Field, "Key", "keys are the reader's fixture pair")
 		testkit.Equal(t, b.Keys.OtherField, "KeyOther", "with the companion beside it")
-		testkit.Equal(t, b.Values.Field, "V", "values are the writer's")
+		testkit.Equal(t, b.Values.Field, "Payload", "values are the writer's")
 	})
 
 	t.Run("the validates claim narrows the values", func(t *testing.T) {

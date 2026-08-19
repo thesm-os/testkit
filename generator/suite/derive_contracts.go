@@ -61,7 +61,7 @@ func borrowSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
 	if producer == nil {
 		return projection.CheckPlan{}, false
 	}
-	call, matched := borrowedCall(f, m, producedType(*producer))
+	call, matched := borrowedCall(m, producedType(*producer))
 	if !matched {
 		return projection.CheckPlan{}, false
 	}
@@ -69,7 +69,7 @@ func borrowSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegSmoke},
 		Class:       vocab.ClassSmoke,
 		Claim:       BorrowSmokeClaim(m),
-		Body:        projection.SmokeSurvives{Call: call, Borrow: callOf(f, *producer)},
+		Body:        projection.SmokeSurvives{Call: call, Borrow: callOf(*producer)},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.StubPanic{Option: projection.OptionName(f.Name, m.Name)},
 	}, true
@@ -100,7 +100,7 @@ func producedType(producer Method) *node.TypeRef {
 // borrowedCall renders the returning method's invocation: the context
 // first, the borrowed local where a parameter takes the produced
 // type, the fixture draw otherwise. False when no parameter takes it.
-func borrowedCall(f Iface, m Method, produced *node.TypeRef) (projection.CallPlan, bool) {
+func borrowedCall(m Method, produced *node.TypeRef) (projection.CallPlan, bool) {
 	var args []projection.Expr
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)
@@ -121,7 +121,7 @@ func borrowedCall(f Iface, m Method, produced *node.TypeRef) (projection.CallPla
 			// rather than in this run.
 			return projection.CallPlan{}, false
 		}
-		args = append(args, projection.FixtureCall(f.Token, m.ArgFields[i]))
+		args = append(args, projection.FixtureCall(projection.ExprFixture, m.ArgFields[i]))
 	}
 	return projection.CallPlan{Method: m.Name, Args: args}, matched
 }

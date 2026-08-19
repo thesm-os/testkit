@@ -98,5 +98,6 @@ func poolOf(structName string, f *sdk.Field) (projection.PoolPlan, *Refusal, boo
 		Role:    role,
 		Field:   projection.PoolFieldName(f.Name),
 		Members: [3]projection.Expr{projection.Expr(stamp), distinct, hostile},
+		Type:    golang.RefFor(f.Type.Name, f.Type.Package),
 	}, nil, true
 }

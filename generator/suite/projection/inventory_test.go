@@ -20,7 +20,7 @@ func scanAppendSmoke() projection.CheckPlan {
 		Claim: "Append survives a call with a derived entry",
 		Body: projection.SmokeSurvives{Call: projection.CallPlan{
 			Method: "Append",
-			Args:   []projection.Expr{projection.ExprCtx, projection.FixtureCall("log", "entry")},
+			Args:   []projection.Expr{projection.ExprCtx, projection.FixtureCall(projection.ExprFixture, "entry")},
 		}},
 		Falsifiable: suite.Proven(),
 		Defect:      projection.StubPanic{Option: projection.OptionName("Log", "Append")},

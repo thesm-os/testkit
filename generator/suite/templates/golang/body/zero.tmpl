@@ -1,0 +1,63 @@
+{{/*
+The zero-on-error family: a method answering a value beside an error
+returns that value's zero when the error is non-nil.
+
+Two variants because the error is induced two ways and each is a
+different statement sequence — one draws an input nothing wrote, the
+other cancels a context before calling. What they share is the
+judgement, which is the fragment below.
+
+The skip is not a pass. A subject that answered where this check needed
+a failure has told us nothing about the claim, and saying so is the
+difference between a check that ran and a check that could not.
+*/}}
+{{- define "suite.body.zero-on-miss" -}}
+ctx := tb.Context()
+{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+if err == nil {
+	tb.Skipf("{{ .Method }} answered for an input nothing wrote, so this check has no error to "+
+		"inspect; seed a miss through {{ .Pool }}")
+}
+{{ template "suite.frag.zero-judge" . }}
+{{- end -}}
+
+{{- define "suite.body.zero-on-cancel" -}}
+ctx, cancel := {{ renderExpr (external "context" "WithCancel") }}(tb.Context())
+cancel()
+{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+if err == nil {
+	tb.Skip("{{ .Method }} answered for a cancelled context, so this check has no error to inspect")
+}
+{{ template "suite.frag.zero-judge" . }}
+{{- end -}}
+
+{{- /*
+The judgement. How the zero is compared comes from the result's own
+type, and the split is comparability rather than spelling: a slice, map
+or func may only be compared against nil, while every other type has a
+zero that can be declared and compared — a named one through the
+backend, since that is an import to register, and a predeclared one by
+its own word.
+*/ -}}
+{{- define "suite.frag.zero-judge" -}}
+{{- if .ZeroIsNil }}
+if got != nil {
+{{- if .HasErr }}
+	tb.Errorf("{{ .Method }} must return nothing alongside an error (err %v)", err)
+{{- else }}
+	tb.Errorf("{{ .Method }} must return nothing for an input nothing supplied")
+{{- end }}
+}
+{{- else }}
+var zero {{ if .ZeroType }}{{ renderExpr .ZeroType }}{{ else }}{{ .ZeroWord }}{{ end }}
+if got != zero {
+{{- if .HasErr }}
+	tb.Errorf("{{ .Method }} must return the zero value alongside an error: got %+v, want %+v (err %v)",
+		got, zero, err)
+{{- else }}
+	tb.Errorf("{{ .Method }} must return the zero value for an input nothing supplied: got %+v, want %+v",
+		got, zero)
+{{- end }}
+}
+{{- end }}
+{{- end -}}

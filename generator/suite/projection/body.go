@@ -20,17 +20,20 @@ const BodyKindPrefix = "suite.body."
 
 // The body kinds, one per variant below.
 const (
-	KindSmokeSurvives          BodyKind = BodyKindPrefix + "smoke-survives"
-	KindCancelCall             BodyKind = BodyKindPrefix + "cancel-call"
-	KindDeadlineCall           BodyKind = BodyKindPrefix + "deadline-call"
-	KindNilCtxCall             BodyKind = BodyKindPrefix + "nilctx-call"
-	KindZeroOnError            BodyKind = BodyKindPrefix + "zero-on-error"
-	KindMixinProbe             BodyKind = BodyKindPrefix + "mixin-probe"
-	KindLawLeg                 BodyKind = BodyKindPrefix + "law-leg"
-	KindDifferentialLeg        BodyKind = BodyKindPrefix + "differential-leg"
-	KindSimLeg                 BodyKind = BodyKindPrefix + "sim-leg"
-	KindRowSugar               BodyKind = BodyKindPrefix + "row-sugar"
-	KindProducedSecondarySmoke BodyKind = BodyKindPrefix + "produced-secondary-smoke"
+	KindSmokeSurvives   BodyKind = BodyKindPrefix + "smoke-survives"
+	KindCancelCall      BodyKind = BodyKindPrefix + "cancel-call"
+	KindDeadlineCall    BodyKind = BodyKindPrefix + "deadline-call"
+	KindNilCtxCall      BodyKind = BodyKindPrefix + "nilctx-call"
+	KindZeroOnMiss      BodyKind = BodyKindPrefix + "zero-on-miss"
+	KindZeroOnCancel    BodyKind = BodyKindPrefix + "zero-on-cancel"
+	KindRepeatProbe     BodyKind = BodyKindPrefix + "repeat-probe"
+	KindMissProbe       BodyKind = BodyKindPrefix + "miss-probe"
+	KindHitProbe        BodyKind = BodyKindPrefix + "hit-probe"
+	KindCountProbe      BodyKind = BodyKindPrefix + "count-probe"
+	KindLawLeg          BodyKind = BodyKindPrefix + "law-leg"
+	KindDifferentialLeg BodyKind = BodyKindPrefix + "differential-leg"
+	KindSimLeg          BodyKind = BodyKindPrefix + "sim-leg"
+	KindRowSugar        BodyKind = BodyKindPrefix + "row-sugar"
 )
 
 // CallPlan spells one method invocation a body makes: the method name
@@ -72,16 +75,65 @@ type DeadlineCall struct{ Call CallPlan }
 // panicking or answering.
 type NilCtxCall struct{ Call CallPlan }
 
-// ZeroOnError asserts the non-error results are zero when the error is
-// non-nil.
-type ZeroOnError struct{ Call CallPlan }
+// ZeroOnMiss asserts the non-error results are zero when a draw that
+// nothing seeded produces the declared miss sentinel.
+//
+// Split from [ZeroOnCancel] because the two induce their error
+// differently and so are different statement sequences, not one body
+// with a mode: this one draws the alternate member and skips when the
+// subject answers anyway, that one cancels a context first. A single
+// variant covering both was one variant covering three shapes, which is
+// how the closed set stops meaning anything.
+type ZeroOnMiss struct {
+	// Call draws the ALTERNATE member — the error this check inspects
+	// only happens for an input nothing wrote.
+	Call CallPlan
 
-// MixinProbe is a deterministic mixin claim probed through one or two
-// calls (idempotent, reader-miss, and kin).
-type MixinProbe struct {
-	Mixin string
-	Calls []CallPlan
+	// Pool is the config field a consumer seeds to make the miss a
+	// miss, named in the skip so a run that proves nothing says what
+	// would make it prove something.
+	Pool string
 }
+
+// ZeroOnCancel asserts the non-error results are zero when a cancelled
+// context produces the error.
+//
+// The form for a method whose inputs cannot miss — one that takes none,
+// or one no sentinel declares a miss for. A cancelled context is the
+// only error every context-taking method can be made to report.
+type ZeroOnCancel struct{ Call CallPlan }
+
+// RepeatProbe calls a method twice and judges the second: the first
+// call is a precondition and fails the check outright, the second is
+// the claim.
+//
+// The asymmetry is the whole shape and is why this is not a list of
+// calls: a body that treated both the same would report a subject
+// whose first Close failed as a subject that is not idempotent, which
+// is a different fault with a different fix.
+type RepeatProbe struct{ Call CallPlan }
+
+// MissProbe reads an input nothing supplied and judges the answer.
+//
+// Sentinel is the error a miss is declared to report, empty where the
+// declaration names none — and the two are different bodies rather
+// than one with an optional field: with a sentinel the claim is
+// errors.Is against it, without one the claim is that the answer is
+// the zero, and the second needs the call to have succeeded first.
+type MissProbe struct {
+	Call     CallPlan
+	Sentinel Expr
+}
+
+// HitProbe reads back what the run seeded and judges the answer
+// against it.
+//
+// Only derivable where the interface seeds, which is what supplies
+// something to read back.
+type HitProbe struct{ Call CallPlan }
+
+// CountProbe judges an aggregate against the size of what was seeded.
+type CountProbe struct{ Call CallPlan }
 
 // LawLeg delegates to legs.Law with the named engine laws; Laws also
 // feeds the plan's Binds. Probes maps a law's probe name to its call,
@@ -122,14 +174,6 @@ type SimLeg struct {
 // bind, not a derived assertion of its own.
 type RowSugar struct{}
 
-// ProducedSecondarySmoke asserts an opened secondary closes cleanly —
-// the produced type's only signature-tier coverage, per the ownership
-// rules.
-type ProducedSecondarySmoke struct {
-	Open  CallPlan
-	Close string
-}
-
 // BodyKind names the template that renders the plain survives-smoke.
 func (SmokeSurvives) BodyKind() BodyKind { return KindSmokeSurvives }
 
@@ -142,11 +186,23 @@ func (DeadlineCall) BodyKind() BodyKind { return KindDeadlineCall }
 // BodyKind names the template that renders the nil-context call.
 func (NilCtxCall) BodyKind() BodyKind { return KindNilCtxCall }
 
-// BodyKind names the template that renders the zero-on-error check.
-func (ZeroOnError) BodyKind() BodyKind { return KindZeroOnError }
+// BodyKind names the template that renders the miss-induced zero check.
+func (ZeroOnMiss) BodyKind() BodyKind { return KindZeroOnMiss }
 
-// BodyKind names the template that renders the mixin probe.
-func (MixinProbe) BodyKind() BodyKind { return KindMixinProbe }
+// BodyKind names the template that renders the cancel-induced zero check.
+func (ZeroOnCancel) BodyKind() BodyKind { return KindZeroOnCancel }
+
+// BodyKind names the template that renders the repeat probe.
+func (RepeatProbe) BodyKind() BodyKind { return KindRepeatProbe }
+
+// BodyKind names the template that renders the miss probe.
+func (MissProbe) BodyKind() BodyKind { return KindMissProbe }
+
+// BodyKind names the template that renders the seeded-hit probe.
+func (HitProbe) BodyKind() BodyKind { return KindHitProbe }
+
+// BodyKind names the template that renders the seeded-count probe.
+func (CountProbe) BodyKind() BodyKind { return KindCountProbe }
 
 // BodyKind names the template that renders the law leg.
 func (LawLeg) BodyKind() BodyKind { return KindLawLeg }
@@ -160,9 +216,6 @@ func (SimLeg) BodyKind() BodyKind { return KindSimLeg }
 // BodyKind names the template that renders the row-sugar body.
 func (RowSugar) BodyKind() BodyKind { return KindRowSugar }
 
-// BodyKind names the template that renders the produced-secondary smoke.
-func (ProducedSecondarySmoke) BodyKind() BodyKind { return KindProducedSecondarySmoke }
-
 // BodyKinds enumerates every registered body variant. The template
 // census holds this list and the embedded template set equal, so an
 // unregistered variant or an orphaned template is a build failure, not
@@ -173,12 +226,15 @@ func BodyKinds() []BodyKind {
 		CancelCall{}.BodyKind(),
 		DeadlineCall{}.BodyKind(),
 		NilCtxCall{}.BodyKind(),
-		ZeroOnError{}.BodyKind(),
-		MixinProbe{}.BodyKind(),
+		ZeroOnMiss{}.BodyKind(),
+		ZeroOnCancel{}.BodyKind(),
+		RepeatProbe{}.BodyKind(),
+		MissProbe{}.BodyKind(),
+		HitProbe{}.BodyKind(),
+		CountProbe{}.BodyKind(),
 		LawLeg{}.BodyKind(),
 		DifferentialLeg{}.BodyKind(),
 		SimLeg{}.BodyKind(),
 		RowSugar{}.BodyKind(),
-		ProducedSecondarySmoke{}.BodyKind(),
 	}
 }

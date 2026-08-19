@@ -238,3 +238,40 @@ func segConsts() map[string]string {
 		SegHandWritten:  "SegHandWritten",
 	}
 }
+
+// ClassConst returns the identifier this package declares the class
+// under, for emitted code that must name a class rather than repeat its
+// slug — `suite.ClassSmoke`, not "signature/smoke".
+//
+// Carried as data for the reason [SegConst] is, and held to the same
+// census: a class the emitter reaches and this map does not is a
+// refusal at generation time rather than a literal in somebody's
+// output.
+func ClassConst(c Class) (string, bool) {
+	name, ok := classConsts()[c]
+	return name, ok
+}
+
+// classConsts pairs each class with its declaration.
+func classConsts() map[Class]string {
+	return map[Class]string{
+		ClassSmoke:        "ClassSmoke",
+		ClassCancel:       "ClassCancel",
+		ClassDeadline:     "ClassDeadline",
+		ClassNilContext:   "ClassNilContext",
+		ClassZeroValue:    "ClassZeroValue",
+		ClassReader:       "ClassReader",
+		ClassIdempotent:   "ClassIdempotent",
+		ClassDifferential: "ClassDifferential",
+		ClassLaws:         "ClassLaws",
+		ClassConcurrent:   "ClassConcurrent",
+		ClassClocked:      "ClassClocked",
+		ClassPoison:       "ClassPoison",
+		ClassLifecycle:    "ClassLifecycle",
+		ClassAppender:     "ClassAppender",
+		ClassSimRecovery:  "ClassSimRecovery",
+		ClassSimCrash:     "ClassSimCrash",
+		ClassSimFault:     "ClassSimFault",
+		ClassHandWritten:  "ClassHandWritten",
+	}
+}

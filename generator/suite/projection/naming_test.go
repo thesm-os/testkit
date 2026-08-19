@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -42,12 +43,12 @@ func TestFixtureCallPolicy(t *testing.T) {
 	t.Parallel()
 
 	testkit.TableTest(t, []fixtureCase{
-		{"token plus exported field plus parens", "log", "entry", "logEntry()"},
-		{"initialisms case the platform's way", "kv", "id", "kvID()"},
-		{"an empty field degrades to the bare token call", "kv", "", "kv()"},
+		{"the run's fixture, then the exported field", "fx", "entry", "fx.Entry"},
+		{"initialisms case the platform's way", "fx", "id", "fx.ID"},
+		{"an empty field degrades to the fixture itself", "fx", "", "fx"},
 	}, func(t *testing.T, tc fixtureCase) {
-		testkit.Equal(t, projection.FixtureCall(tc.token, tc.field), tc.want,
-			"the fixture accessor spelling has this one home")
+		testkit.Equal(t, projection.FixtureCall(projection.Expr(tc.token), tc.field), tc.want,
+			"the fixture draw's spelling has this one home")
 	})
 }
 
@@ -104,5 +105,39 @@ func TestEmittedIdentifiersCompose(t *testing.T) {
 			"a method group")
 		testkit.Equal(t, projection.GroupType(tok, "Model"), "logModelChecks",
 			"and a family group, by the same rule rather than the packs' second one")
+	})
+}
+
+// The assertion's name is the packs', segment word included.
+//
+// The index and the assertion spell the same segment differently on
+// purpose — `ix.Put.Deadline()` is a noun a consumer names, and
+// `storeAssertPutHonoursDeadline` is the sentence it checks — so this
+// pins the three that diverge alongside one that does not.
+func TestAssertNameSpellsThePacksWords(t *testing.T) {
+	t.Parallel()
+
+	tok := projection.Token("Store")
+
+	t.Run("a segment whose assertion reads as the index does", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, projection.AssertName(tok, "Get", suite.SegSmoke),
+			"storeAssertGetSmoke", "the packs' own spelling")
+	})
+
+	t.Run("the three that read as sentences", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, projection.AssertName(tok, "Put", suite.SegDeadline),
+			"storeAssertPutHonoursDeadline", "deadline is honoured, not merely had")
+		testkit.Equal(t, projection.AssertName(tok, "Put", suite.SegNilContext),
+			"storeAssertPutToleratesNilContext", "a nil context is tolerated")
+		testkit.Equal(t, projection.AssertName(tok, "Get", suite.SegZeroValue),
+			"storeAssertGetZeroOnError", "the zero rides the error")
+	})
+
+	t.Run("a segment no pack asserts falls back to the index's word", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, projection.AssertName(tok, "Get", suite.SegCancel),
+			"storeAssertGetCancels", "which the packs also spell")
 	})
 }

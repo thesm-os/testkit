@@ -6,6 +6,8 @@ package projection
 import (
 	"go.thesmos.sh/eidos/core/naming"
 	"go.thesmos.sh/eidos/lang/golang"
+
+	"go.thesmos.sh/testkit/engine/suite"
 )
 
 // Expr is a rendered Go expression destined for a template hole. The
@@ -69,17 +71,87 @@ func OptionName(iface, method string) Option {
 	return Option("With" + iface + method)
 }
 
-// FixtureCall spells the fixture accessor call for a drawn field:
-// token + exported field name + call parens ("logEntry()" for
-// ("log", "entry")). The casing is the platform's own Go convention —
-// initialisms included, so ("kv", "id") is "kvID()" — because a
-// second casing implementation would drift from what every other
-// plugin emits.
-func FixtureCall(token, field string) Expr {
-	if field == "" {
-		return Expr(token + "()")
+// AssertName is the generated assertion's identifier —
+// `storeAssertGetHonoursDeadline`.
+//
+// The word for the segment is the assertion's, not the index's, and the
+// two genuinely differ: the index reads as a noun a consumer names
+// (`ix.Put.Deadline()`) while the assertion reads as the sentence it
+// checks (`…HonoursDeadline`). Transcribed from the packs, which spell
+// every one of them.
+func AssertName(token, method, seg string) string {
+	return token + assertInfix + golang.ExportedName(method) + assertWord(seg)
+}
+
+// assertWord is the segment as an assertion reads it, falling back to
+// the index's word where the packs never spelled one — a segment with
+// no assertion in any pack has no validated sentence, and the index's
+// noun is the honest stand-in until one exists.
+func assertWord(seg string) string {
+	if w, ok := assertWords()[seg]; ok {
+		return w
 	}
-	return Expr(token + golang.ExportedName(field) + "()")
+	name, _ := segAccessor(seg)
+	return name
+}
+
+// assertWords are the segments whose assertion reads differently from
+// their index entry.
+func assertWords() map[string]string {
+	return map[string]string{
+		suite.SegDeadline:   "HonoursDeadline",
+		suite.SegNilContext: "ToleratesNilContext",
+		suite.SegZeroValue:  "ZeroOnError",
+	}
+}
+
+// assertInfix separates the subject from what is asserted about it.
+const assertInfix = "Assert"
+
+// DrawWord is the word a drawn parameter is known by: the named type's
+// own word where the source declares one, and the parameter's
+// identifier otherwise.
+//
+// The type rather than the parameter, because a fixture holds one value
+// per thing drawn and the thing is the type: `Put(ctx, v Value)` and
+// `Get(ctx, key Key)` draw a Value and a Key, whichever letters the
+// author happened to name the parameters. A predeclared type says
+// nothing — every `string` would collide with every other — so there
+// the parameter's own identifier is the only word available.
+//
+// One home because the claim text and the fixture field are the same
+// word cased differently: "a seeded key" and Key. They were derived
+// separately, and only the claim side had the rule.
+func DrawWord(p golang.Param) string {
+	if p.Source != nil && p.Source.Name != "" && !golang.IsPredeclared(p.Source.Name) {
+		return p.Source.Name
+	}
+	return p.Name
+}
+
+// DrawField is [DrawWord] as the fixture's exported field.
+func DrawField(p golang.Param) string { return golang.ExportedName(DrawWord(p)) }
+
+// ExprFixture is the local a body reads its draws through. The
+// generated assert function takes the fixture by this name wherever any
+// of its calls draws, and never where none does.
+const ExprFixture Expr = "fx"
+
+// FixtureCall spells one drawn field as the body reads it — `fx.Value`
+// for ("fx", "value").
+//
+// Through the fixture rather than a package-level accessor, because the
+// value has to be the RUN's: a consumer replacing the fixture through
+// WithFixture must reach every check that draws, and a package function
+// returning a literal reaches none of them. The packs spell this
+// `fx.Key()` with parens because their accessors compute from the
+// config's pools; ours are fields until those pools are emitted, and
+// the parens arrive with them.
+func FixtureCall(recv Expr, field string) Expr {
+	if field == "" {
+		return recv
+	}
+	return recv + "." + Expr(golang.ExportedName(field))
 }
 
 // Token is the interface's qualifier in every generated identifier —
@@ -113,6 +185,70 @@ func IDQualifier(iface string) string { return naming.Kebab(iface) }
 func MethodConst(token, method string) string {
 	return token + golang.ExportedName(method)
 }
+
+// The run surface's identifiers, composed here rather than in the
+// template so the half-dozen names that have to agree with each other
+// agree by construction: a veneer naming an index its own file does not
+// declare is a compile error a consumer meets, not one a run does.
+// [HarnessName] and [VeneerName] are the two a consumer writes; these
+// are the machinery those hang off.
+
+// DefaultConfigName is the constructor for what this run derived.
+func DefaultConfigName(token string) string { return token + defaultConfigSuffix }
+
+// defaultConfigSuffix names the derived config apart from the type a
+// consumer declares one of.
+const defaultConfigSuffix = "DefaultConfig"
+
+// ChecksName is the builder holding every check this run derived.
+func ChecksName(token string) string { return token + checksBuilderSuffix }
+
+// checksBuilderSuffix follows the packs' majority spelling, which names
+// the tier the checks come from rather than the family — one builder
+// per tier, paired with the model tier's own.
+const checksBuilderSuffix = "SignatureChecks"
+
+// RunName is the entry point a consumer calls to run the suite.
+func RunName(iface string) string { return runPrefix + iface }
+
+// ProveName is the entry point that runs a check set against a
+// deliberately broken subject.
+func ProveName(iface string) string { return provePrefix + iface }
+
+// RunOptName is the interface every run option satisfies.
+func RunOptName(iface string) string { return iface + runOptSuffix }
+
+// RunConfigName is what the run options accumulate into.
+func RunConfigName(token string) string { return token + runConfigSuffix }
+
+// DropOptName is the option that declines checks by identity.
+func DropOptName(token string) string { return token + dropOptSuffix }
+
+// WithoutName is the constructor a consumer calls to decline them.
+func WithoutName(token string) string { return token + withoutSuffix }
+
+// VeneerTypeName is the veneer's type; [VeneerName] is the value a
+// consumer reads it through.
+func VeneerTypeName(token string) string { return token + veneerTypeSuffix }
+
+// IndexPathName maps every emitted ID to the path that drops it.
+func IndexPathName(token string) string { return token + indexPathSuffix }
+
+// DropHintName is the reporter that turns a dropped ID into that path.
+func DropHintName(token string) string { return token + dropHintSuffix }
+
+// The run surface's fixed words.
+const (
+	runPrefix        = "Run"
+	provePrefix      = "Prove"
+	runOptSuffix     = "RunOpt"
+	runConfigSuffix  = "RunConfig"
+	dropOptSuffix    = "DropOpt"
+	withoutSuffix    = "Without"
+	veneerTypeSuffix = "Veneer"
+	indexPathSuffix  = "IndexPath"
+	dropHintSuffix   = "DropHint"
+)
 
 // QualifierConst is the generated constant holding the interface's word
 // inside a family-scoped ID — `logQualifier = "log"`.

@@ -83,7 +83,7 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			refusals = append(refusals, r)
 			continue
 		}
-		call := callOf(f, m)
+		call := callOf(m)
 		for _, name := range m.Mixins {
 			switch rule, tabled := mixins[name]; {
 			case tabled:
@@ -114,7 +114,7 @@ func idempotentRule(f Iface, m Method, call projection.CallPlan) []projection.Ch
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegIdempotent},
 		Class:       vocab.ClassIdempotent,
 		Claim:       IdempotentClaim(m),
-		Body:        projection.MixinProbe{Mixin: MixinIdempotent, Calls: []projection.CallPlan{call, call}},
+		Body:        projection.RepeatProbe{Call: call},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.SecondCallErrs{Option: projection.OptionName(f.Name, m.Name)},
 	}}
@@ -160,7 +160,7 @@ func missRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPla
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegMiss},
 		Class:       vocab.ClassReader,
 		Claim:       MissClaim(m, sentinel, verb),
-		Body:        projection.MixinProbe{Mixin: m.Shape(), Calls: []projection.CallPlan{call}},
+		Body:        projection.MissProbe{Call: missCall(f, m), Sentinel: projection.Expr(sentinel)},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.InventsHit{Option: projection.OptionName(f.Name, m.Name)},
 	}}
@@ -169,7 +169,7 @@ func missRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPla
 			ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegHit},
 			Class:       vocab.ClassReader,
 			Claim:       HitClaim(m),
-			Body:        projection.MixinProbe{Mixin: m.Shape(), Calls: []projection.CallPlan{call}},
+			Body:        projection.HitProbe{Call: call},
 			Falsifiable: vocab.Proven(),
 			Defect:      projection.SwapsValues{Option: projection.OptionName(f.Name, m.Name)},
 		})
@@ -189,7 +189,7 @@ func countRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPl
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegCount},
 		Class:       vocab.ClassReader,
 		Claim:       CountClaim(m),
-		Body:        projection.MixinProbe{Mixin: m.Shape(), Calls: []projection.CallPlan{call}},
+		Body:        projection.CountProbe{Call: call},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.FreezeReturn{Option: projection.OptionName(f.Name, m.Name)},
 	}}

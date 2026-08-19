@@ -128,13 +128,21 @@ linters:
           allow:
             - $gostd
             - go.thesmos.sh/testkit
-            # The suite vocabulary — ID grammar, classes, lock rendering —
-            # has one home, and the emitter spells it from that home rather
-            # than keeping a duplicate grammar in sync by review. Vocabulary
-            # only: engine/model and the property dependencies stay denied.
-            - go.thesmos.sh/testkit/engine/suite
             - go.thesmos.sh/eidos
             - github.com/google/go-cmp
+          # The suite vocabulary — ID grammar, classes, lock rendering — has
+          # one home, and the emitter spells it from that home rather than
+          # keeping a duplicate grammar in sync by review. What must NOT come
+          # with it is the property machinery, and that is a denial rather
+          # than a narrower allow: in strict mode a deeper allow entry
+          # shadows the broader one, so listing engine/suite beside
+          # `go.thesmos.sh/testkit` refused every other intra-testkit import
+          # in this module — 89 of them — while still admitting engine/model,
+          # which the comment claimed was denied. The rule enforced the
+          # opposite of what it said.
+          deny:
+            - pkg: go.thesmos.sh/testkit/engine/model
+              desc: the property machinery is the engine tier's; the generator spells the vocabulary only
         # The conformance tier is the corpus and the gate that checks it. It
         # reads eidos's classification registries directly, because coverage is
         # measured against them rather than declared in a manifest — and the

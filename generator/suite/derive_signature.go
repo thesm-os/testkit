@@ -48,10 +48,16 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			continue
 		}
 
-		call := callOf(f, m)
+		call := callOf(m)
 		plans = append(plans, smokePlan(f, m, call, seeded))
 
-		if !m.TakesContext() {
+		if !m.TakesContext() || !m.ReturnsError() {
+			// The engine primitives judge a `func(ctx) error`, so a
+			// method with no error channel has nothing to report a
+			// cancellation through. The directive used to imply this —
+			// an author claiming context semantics was claiming an
+			// error to carry them — and deriving from the shape has to
+			// say it outright.
 			continue
 		}
 		plans = append(
@@ -84,13 +90,58 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegZeroValue},
 				Class:       vocab.ClassZeroValue,
 				Claim:       ZeroOnErrorClaim(m),
-				Body:        projection.ZeroOnError{Call: call},
+				Body:        zeroBody(f, m, call),
 				Falsifiable: vocab.Proven(),
 				Defect:      projection.EchoBesideError{Option: projection.OptionName(f.Name, m.Name)},
 			})
 		}
 	}
 	return plans, refusals
+}
+
+// zeroBody picks how the check induces the error it inspects.
+//
+// A draw that misses, where the declaration says a miss is an error:
+// the corpus spells that with a `notfound=` sentinel, and only then
+// does handing the method an unwritten input produce anything to
+// inspect. Otherwise a cancelled context, which is the one error every
+// context-taking method can be made to report.
+//
+// Not keyed on whether the method takes an input, which is the reading
+// that looks right and is not: the bus's Subscribe takes a topic and
+// declares no miss, so an unsubscribed topic answers normally and a
+// check drawing one would skip every run.
+func zeroBody(f Iface, m Method, call projection.CallPlan) projection.Body {
+	if _, declared := m.MixinParam(MixinTTL, MixinTTLNotFound); declared && m.HasInput() {
+		return projection.ZeroOnMiss{
+			Call: missCall(f, m),
+			Pool: missPool(f, m),
+		}
+	}
+	return projection.ZeroOnCancel{Call: call}
+}
+
+// missCall is [callOf] against the alternate members: the draw nothing
+// wrote, which is what makes the miss a miss.
+func missCall(f Iface, m Method) projection.CallPlan {
+	var args []projection.Expr
+	if m.TakesContext() {
+		args = append(args, projection.ExprCtx)
+	}
+	for _, field := range fixtureArgs(f.Fixture, m, true) {
+		args = append(args, projection.FixtureCall(projection.ExprFixture, field))
+	}
+	return projection.CallPlan{Method: m.Name, Args: args}
+}
+
+// missPool is the config field a consumer seeds to make the drawn miss
+// answer — the remedy the skip names.
+func missPool(f Iface, m Method) string {
+	fields := m.ArgFields
+	if len(fields) == 0 {
+		return ""
+	}
+	return projection.ConfigName(f.Name) + "." + projection.PoolFieldName(fields[0])
 }
 
 // smokePlan is the always-derived family: proven by the panicking

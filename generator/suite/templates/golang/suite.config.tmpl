@@ -1,0 +1,40 @@
+{{- /*
+suite.config — the drawn pools a consumer overrides.
+
+One field per roled declaration, three members each: the default stamp
+verbatim, a distinct member so a miss has an input nothing wrote, and a
+hostile one. Three because two of them fund the claims a reader makes
+about presence and absence, and the third is what a subject that only
+handles well-formed input fails on.
+
+The pool is the config rather than the fixture because a run overrides
+it once and every draw follows — the fixture is what a check reads, and
+this is what a consumer sets.
+*/ -}}
+{{- define "suite.config" -}}
+{{- $c := . }}
+// {{ suite_configName .IfaceName }} is what a run draws from. Every field
+// ending in Pool is cycled through by the checks that draw that role.
+type {{ suite_configName .IfaceName }}{{ renderTypeParams .TypeParams }} struct {
+{{- range $p := .Pools }}
+	// {{ $p.Field }} serves the {{ $p.Role }} role.
+	{{ $p.Field }} []{{ renderType $p.Type }}
+{{- end }}
+}
+
+// {{ suite_defaultConfigName .Token }} is what this run derived.
+//
+// Replace any pool through {{ suite_configName .IfaceName }}; the rest keep
+// these members.
+func {{ suite_defaultConfigName .Token }}{{ renderTypeParams .TypeParams }}() {{ suite_configName .IfaceName }}{{ .TypeArgs }} {
+	return {{ suite_configName .IfaceName }}{{ .TypeArgs }}{
+{{- range $p := .Pools }}
+		{{ $p.Field }}: []{{ renderType $p.Type }}{
+{{- range $m := $p.Members }}
+			{{ $m }},
+{{- end }}
+		},
+{{- end }}
+	}
+}
+{{- end -}}

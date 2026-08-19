@@ -1,0 +1,147 @@
+{{- /*
+suite.harness — the run surface a consumer declares against.
+
+The harness is the one place a consumer says what their implementation
+is, so it carries only what this interface's checks can actually demand:
+a capability field with no check behind it is a promise the run never
+collects on, and one a check needs and the harness cannot express is a
+check that skips for a reason nobody can see. HarnessOf projects it from
+the plans for exactly that reason.
+*/ -}}
+{{- define "suite.harness" -}}
+{{- $c := . }}
+// {{ .IfaceName }} is the witnessed instantiation.
+//
+// A generic interface aliases with its own parameters, which Go admits
+// since 1.24 — so every declaration below names {{ .IfaceName }} and
+// the arguments follow, exactly as they do for a concrete one.
+type {{ .IfaceName }}{{ renderTypeParams .TypeParams }} = {{ renderType .IfaceRef }}{{ .TypeArgs }}
+
+{{/* The <Iface>Subject alias the packs carry waits on the options
+     shell it collides with: that shell spells <Iface>Subject as the
+     function a consumer declares a subject through, and both cannot
+     stand. It returns with the entry points that replace it. */}}
+// {{ suite_runOptName .IfaceName }} is one thing you can pass to {{ suite_runName .IfaceName }}.
+type {{ suite_runOptName .IfaceName }}{{ renderTypeParams .TypeParams }} interface {
+	applyTo(*{{ suite_runConfigName .Token }}{{ .TypeArgs }})
+}
+
+type {{ suite_runConfigName .Token }}{{ renderTypeParams .TypeParams }} struct {
+	{{ renderExpr (external $.Vocab "Bundle") }}[{{ suite_subjectType $c }}]
+
+	{{/* rows <Iface>Checks joins this the day the consumer seam is
+	     emitted; the bundle above is what the generated checks and the
+	     drops already ride. */}}
+}
+
+// {{ suite_harnessName .IfaceName }} declares one {{ .IfaceName }} implementation under test.
+type {{ suite_harnessName .IfaceName }}{{ suite_withParam (renderTypeParams .TypeParams) (printf "T %s%s" .IfaceName .TypeArgs) }} struct {
+	Name string
+
+	// Exactly one constructor.
+	New   func() T
+	Start func(tb {{ renderExpr (external "testing" "TB") }}) T
+
+	// Excuse lists checks this subject structurally cannot take.
+	Excuse []{{ renderExpr (external $.Vocab "ID") }}
+
+	// Oracle marks this subject as the run's reference. At most one.
+	Oracle bool
+
+	// Serial keeps this subject out of the parallel group.
+	Serial bool
+{{- if .Harness.Clock }}
+
+	// Clock is the time source a clocked check moves. Required: a
+	// check that advances the wall clock asserts nothing.
+	Clock {{ renderType $.ClockRef }}
+{{- end }}
+{{- if .Harness.Induce }}
+
+	// Induce puts the subject into the failure a check judges it by.
+	Induce func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ suite_subjectType $c }}) error
+{{- end }}
+{{- if .Harness.Recover }}
+
+	// Recover rebuilds the subject over the state it left behind.
+	Recover func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ suite_subjectType $c }}) {{ .IfaceName }}
+{{- end }}
+
+	// Provide answers open capabilities beyond the named fields — the
+	// doors only this interface's checks know. The runner's gate reads
+	// it for any capability without a dedicated field.
+	Provide map[{{ renderExpr (external $.Vocab "Capability") }}]any
+}
+
+// Subject lowers the declaration into what the runner consumes.
+func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) Subject() ({{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}], error) {
+	build, err := {{ renderExpr (external $.Vocab "OneCtor") }}(h.Name, h.New, h.Start)
+	if err != nil {
+		return {{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}]{}, err
+	}
+	return {{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}]{
+		Name:     h.Name,
+		Provides: h.Provide,
+		New:      func(tb {{ renderExpr (external "testing" "TB") }}) {{ suite_subjectType $c }} { return build(tb) },
+		Oracle:   h.Oracle,
+		Serial:   h.Serial,
+		Excused:  {{ renderExpr (external $.Vocab "ExcuseSet") }}(h.Excuse),
+	}, nil
+}
+
+func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
+	rc.AddSubject(h.Subject())
+}
+
+type {{ suite_dropOptName .Token }}{{ renderTypeParams .TypeParams }} []{{ renderExpr (external $.Vocab "ID") }}
+
+func (d {{ suite_dropOptName .Token }}{{ .TypeArgs }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
+	rc.AddDrops(d...)
+}
+
+// {{ suite_withoutName .Token }} drops checks by identity.
+func {{ suite_withoutName .Token }}{{ renderTypeParams .TypeParams }}(ids ...{{ renderExpr (external $.Vocab "ID") }}) {{ suite_runOptName .IfaceName }}{{ .TypeArgs }} {
+	return {{ suite_dropOptName .Token }}{{ .TypeArgs }}(ids)
+}
+
+// --- The veneer -------------------------------------------------------------
+
+// {{ .IfaceName }}Suite is the entry a consumer names checks through.
+var {{ .IfaceName }}Suite = {{ suite_veneerName .Token }}{Checks: {{ suite_indexVar .Token }}}
+
+type {{ suite_veneerName .Token }} struct {
+	// Checks is the check index — the constants a Without call is
+	// written against.
+	Checks {{ suite_indexType .Token }}
+}
+
+{{- if .TypeParams }}
+{{/* A method cannot introduce type parameters, and a generic interface
+     has no one instantiation to fix them at — so Without is the
+     package-level {{ suite_withoutName .Token }} for a generic subject.
+     The index above it is not generic (an ID is a string), so naming a
+     check reads the same either way. */}}
+{{- else }}
+// Without drops a check by ID.
+func ({{ suite_veneerName .Token }}) Without(ids ...{{ renderExpr (external $.Vocab "ID") }}) {{ suite_runOptName .IfaceName }} {
+	return {{ suite_withoutName .Token }}(ids...)
+}
+{{- end }}
+
+// --- Drop hints -------------------------------------------------------------
+
+// {{ suite_indexPathName .Token }} spells every emitted ID as the path a
+// consumer would write to drop it, so a run that declines something can
+// say what to type rather than what failed.
+var {{ suite_indexPathName .Token }} = map[{{ renderExpr (external $.Vocab "ID") }}]string{
+{{- range $g := .Index.Groups }}
+{{- range $a := $g.Accessors }}
+	{{ suite_indexVar $c.Token }}.{{ $g.Field }}.{{ $a.Name }}(): "{{ $c.IfaceName }}Suite.Checks.{{ $g.Field }}.{{ $a.Name }}()",
+{{- end }}
+{{- end }}
+}
+
+var {{ suite_dropHintName .Token }} = {{ renderExpr (external $.Vocab "DropHinter") }}(
+	"{{ .IfaceName }}Suite", {{ suite_indexPathName .Token }},
+)
+{{- end -}}

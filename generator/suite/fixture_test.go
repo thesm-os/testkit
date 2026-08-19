@@ -49,7 +49,7 @@ func TestIntegerSample(t *testing.T) {
 		t.Parallel()
 		// One policy across both derivations: a field and the parameter
 		// carrying it must not disagree about what an int is.
-		f := fieldOf(t, contractIn(t, indexed(t)).Fixture, "P")
+		f := fieldOf(t, contractIn(t, indexed(t)).Fixture, "Page")
 		testkit.Equal(t, partNamed(t, f, "Offset").Sample.Text, "1",
 			"the composed part draws the same pair")
 	})
@@ -67,7 +67,7 @@ func TestStructSample(t *testing.T) {
 		// where the value is handed to a setter and read straight back. An
 		// implementation that silently drops a field passes every check built
 		// from a sample that never set it.
-		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "V")
+		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "Payload")
 		testkit.Equal(t, partNames(f), []string{"Key", "Body"},
 			"every exported field is set, not only the first eidos would take")
 	})
@@ -76,7 +76,7 @@ func TestStructSample(t *testing.T) {
 		t.Parallel()
 		// Two values differing in one field are indistinguishable to a subject
 		// keyed on another.
-		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "V")
+		f := fieldOf(t, contractIn(t, mixed(t)).Fixture, "Payload")
 		for _, p := range f.Parts {
 			testkit.False(t, p.Sample.Text == p.Other.Text,
 				"the two values differ in "+p.Name)
@@ -87,7 +87,7 @@ func TestStructSample(t *testing.T) {
 		t.Parallel()
 		// The fields around it still discriminate, and refusing here would drop
 		// every check the parameter feeds.
-		f := fieldOf(t, contractIn(t, partlyDerivable(t)).Fixture, "P")
+		f := fieldOf(t, contractIn(t, partlyDerivable(t)).Fixture, "Params")
 		testkit.True(t, f.OK(), "a struct with one underivable field still yields a value")
 		testkit.Equal(t, partNames(f), []string{"Name"},
 			"the settable field is set and the func field is left at its zero")
@@ -100,7 +100,7 @@ func TestStructSample(t *testing.T) {
 		// backend knows how to spell `Inner` for the file being written and to
 		// register the import it needs, which is why a part carries a
 		// [golang.Sample] rather than the text of one.
-		f := fieldOf(t, contractIn(t, nestedStruct(t)).Fixture, "O")
+		f := fieldOf(t, contractIn(t, nestedStruct(t)).Fixture, "Outer")
 		inner := partNamed(t, f, "Inner")
 		testkit.True(
 			t,
@@ -125,7 +125,7 @@ func TestCompanion(t *testing.T) {
 		f := fieldOf(
 			t,
 			contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture,
-			"V",
+			"Payload",
 		)
 		testkit.True(t, f.Companion != nil, "the companion is used where the source declares one")
 	})
@@ -138,20 +138,20 @@ func TestCompanion(t *testing.T) {
 		f := fieldOf(
 			t,
 			contractIn(t, withCompanion(t, "PayloadDefaults", 1, "Payload")).Fixture,
-			"V",
+			"Payload",
 		)
 		testkit.True(t, f.Companion == nil, "the signature is checked, not only the name")
 	})
 
 	t.Run("is refused when it returns something else", func(t *testing.T) {
 		t.Parallel()
-		f := fieldOf(t, contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Other")).Fixture, "V")
+		f := fieldOf(t, contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Other")).Fixture, "Payload")
 		testkit.True(t, f.Companion == nil, "a companion must return the type it defaults")
 	})
 
 	t.Run("is not found under another name", func(t *testing.T) {
 		t.Parallel()
-		f := fieldOf(t, contractIn(t, withCompanion(t, "NewPayload", 0, "Payload")).Fixture, "V")
+		f := fieldOf(t, contractIn(t, withCompanion(t, "NewPayload", 0, "Payload")).Fixture, "Payload")
 		testkit.True(t, f.Companion == nil, "the convention is the name, not the shape alone")
 	})
 
@@ -163,7 +163,7 @@ func TestCompanion(t *testing.T) {
 		f := fieldOf(
 			t,
 			contractIn(t, withCompanion(t, "PayloadDefaults", 0, "Payload")).Fixture,
-			"V",
+			"Payload",
 		)
 		testkit.True(t, f.Other.OK(), "the alternate is still derived")
 	})
@@ -183,7 +183,7 @@ func TestSeed(t *testing.T) {
 
 	t.Run("hands it the derived value", func(t *testing.T) {
 		t.Parallel()
-		testkit.Equal(t, contractIn(t, seeded(t)).Seed.Args, []string{"V"},
+		testkit.Equal(t, contractIn(t, seeded(t)).Seed.Args, []string{"Payload"},
 			"the seed writes the fixture's own sample")
 	})
 
@@ -197,7 +197,7 @@ func TestSeed(t *testing.T) {
 		for _, name := range []string{compositewriter.Name, multiargwriter.Name} {
 			got := contractIn(t, keyedWriter(t, name)).Seed
 			testkit.True(t, got != nil, name+" seeds the subject")
-			testkit.Equal(t, got.Args, []string{"Key", "V"},
+			testkit.Equal(t, got.Args, []string{"Key", "Payload"},
 				"and is handed every argument it declares")
 		}
 	})
@@ -328,7 +328,7 @@ func TestUndeliverableReason(t *testing.T) {
 
 	t.Run("calls an unloaded type a gap in this run", func(t *testing.T) {
 		t.Parallel()
-		f := fieldOf(t, contractIn(t, unloadedParamFixture(t)).Fixture, "T")
+		f := fieldOf(t, contractIn(t, unloadedParamFixture(t)).Fixture, "Thing")
 		testkit.Equal(
 			t,
 			f.Reason(),
@@ -453,7 +453,7 @@ func TestAdmissionConstrainedFields(t *testing.T) {
 		// The whole seed is refused otherwise — the harness's first act fails,
 		// and every check after it reports against a subject that was never
 		// populated. The subject is right and the fixture is wrong.
-		f := fieldOf(t, contractIn(t, causalEntry(t, true)).Fixture, "E")
+		f := fieldOf(t, contractIn(t, causalEntry(t, true)).Fixture, "Entry")
 		testkit.Equal(t, partNames(f), []string{"ID", "Body"},
 			"the scalar fields still discriminate; the cause list is dropped")
 	})
@@ -462,7 +462,7 @@ func TestAdmissionConstrainedFields(t *testing.T) {
 		t.Parallel()
 		// The same struct without the claim is an ordinary value, and dropping
 		// a field there would lose discrimination for nothing.
-		f := fieldOf(t, contractIn(t, causalEntry(t, false)).Fixture, "E")
+		f := fieldOf(t, contractIn(t, causalEntry(t, false)).Fixture, "Entry")
 		testkit.Equal(t, partNames(f), []string{"ID", "DependsOn", "Body"},
 			"every exported field is set when the value is self-contained")
 	})

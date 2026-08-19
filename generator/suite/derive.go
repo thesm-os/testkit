@@ -22,6 +22,11 @@ type Iface struct {
 	Name  string
 	Token string
 
+	// Package is the interface's own import path, which a body naming
+	// something declared beside it — a miss sentinel — resolves
+	// against.
+	Package string
+
 	// Qualifier is the interface's word inside a family-scoped ID
 	// ("log", "paginated-reader"). Slug rather than identifier: the
 	// grammar admits a-z, 0-9 and '-' only, so the two qualifiers
@@ -119,13 +124,13 @@ func argsRefusal(d DeriverName, f Iface, m Method, what string) (Refusal, bool) 
 
 // callOf renders the method's invocation: the context first when the
 // method takes one, then every draw through the fixture policy.
-func callOf(f Iface, m Method) projection.CallPlan {
+func callOf(m Method) projection.CallPlan {
 	var args []projection.Expr
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)
 	}
 	for _, field := range m.ArgFields {
-		args = append(args, projection.FixtureCall(f.Token, field))
+		args = append(args, projection.FixtureCall(projection.ExprFixture, field))
 	}
 	return projection.CallPlan{Method: m.Name, Args: args}
 }

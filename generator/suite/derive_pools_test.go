@@ -96,13 +96,15 @@ func TestPoolsDeriveFromRoledDefaults(t *testing.T) {
 		Members: [3]projection.Expr{
 			`"test-key"`, `"other-key"`, `"\x00hostile\xffkey"`,
 		},
-	}, "the key pool, member for member the corpus spelling")
+		Type: golang.RefFor("string", ""),
+	}, "the key pool, member for member the corpus spelling, with the type its config declares")
 	testkit.Equal(t, pools[1], projection.PoolPlan{
 		Role:  "payload",
 		Field: "ValuePool",
 		Members: [3]projection.Expr{
 			`Value{Body: "test-body"}`, `Value{Body: "other-body"}`, `Value{Body: ""}`,
 		},
+		Type: golang.RefFor("string", ""),
 	}, "the payload pool reaches inside the composite")
 }
 

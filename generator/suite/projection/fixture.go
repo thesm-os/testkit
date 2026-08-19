@@ -3,7 +3,11 @@
 
 package projection
 
-import "strings"
+import (
+	"strings"
+
+	"go.thesmos.sh/eidos/sdk"
+)
 
 // PoolPlan is one role's derived pool: the three members every drawn
 // position of that role cycles through, each with a named origin —
@@ -25,6 +29,12 @@ type PoolPlan struct {
 	// Members are the three rendered member expressions, in origin
 	// order.
 	Members [3]Expr
+
+	// Type is the member's own type, which the emitted config declares
+	// a slice of. Through the backend rather than spelled here: a type
+	// from the subject's package is an import the config has to
+	// register, and only the backend registers one.
+	Type sdk.Ref
 }
 
 // The pool member transforms — the textual policies pool[1] and

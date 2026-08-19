@@ -153,6 +153,14 @@ func IndexOf(inv Inventory) (IndexPlan, error) {
 	return out, nil
 }
 
+// AccessorOf spells one check's index accessor, for the row that names
+// it through the index tree.
+//
+// Exported so the row and the index cannot disagree: a row calling
+// `ix.Get.Miss()` where the index declares `ReportsAMiss` compiles
+// nowhere, and two derivations of one accessor is how that happens.
+func AccessorOf(id IDPlan) (IndexAccessor, error) { return accessorOf(id) }
+
 // accessorOf spells one check's index accessor.
 //
 // Method-scoped checks are named for their segment and family-scoped
