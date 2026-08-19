@@ -54,7 +54,7 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 			// subject" (store) and the token (journal, catalog); the
 			// token says more and every other row already speaks it.
 			"a writer beside a modelled read agrees plainly",
-			Iface{Name: "Store", Token: "store", Methods: []Method{
+			Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
 				stampMethod("Put", writer.Name),
 				stampMethod("Get", reader.Name),
 			}},
@@ -62,14 +62,14 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"a seeded read-only surface agrees with a seeded reference",
-			Iface{Name: "Catalog", Token: "catalog", Methods: []Method{
+			Iface{Name: "Catalog", Token: "catalog", Qualifier: "catalog", Methods: []Method{
 				stampMethod("Lookup", reader.Name),
 			}},
 			"every read sequence leaves the catalog agreeing with a reference seeded identically",
 		},
 		{
 			"an outcome-speaking contract oracle names its role pair",
-			Iface{Name: "Lease", Token: "lease", Methods: []Method{
+			Iface{Name: "Lease", Token: "lease", Qualifier: "lease", Methods: []Method{
 				contractMember("Acquire", ContractLease, ""),
 				contractMember("Release", ContractLease, ""),
 			}},
@@ -77,14 +77,14 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"a plain contract oracle speaks operation",
-			Iface{Name: "Journal", Token: "journal", Methods: []Method{
+			Iface{Name: "Journal", Token: "journal", Qualifier: "journal", Methods: []Method{
 				contractMember("Append", ContractChain, ""),
 			}},
 			"every operation sequence leaves the journal agreeing with the reference",
 		},
 		{
 			"a produced cursor drains, writer-opener named",
-			Iface{Name: "Log", Token: "log", Methods: []Method{
+			Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{
 				stampMethod("Append", writer.Name),
 				contractMember("Scan", ContractCursor, ContractCursorOpen),
 			}},
@@ -92,7 +92,7 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"no oracle-shaped surface, no row",
-			Iface{Name: "Notifier", Token: "notifier", Methods: []Method{
+			Iface{Name: "Notifier", Token: "notifier", Qualifier: "notifier", Methods: []Method{
 				stampMethod("Ping", ""),
 			}},
 			"",
@@ -119,7 +119,7 @@ func TestDifferentialRefusesTheUnmodellable(t *testing.T) {
 
 	t.Run("an oracle-defeating mixin refuses with its reason", func(t *testing.T) {
 		t.Parallel()
-		iface := Iface{Name: "Feed", Token: "feed", Methods: []Method{
+		iface := Iface{Name: "Feed", Token: "feed", Qualifier: "feed", Methods: []Method{
 			stampMethod("Put", writer.Name, eventually.Name),
 			stampMethod("Get", reader.Name),
 		}}
@@ -131,7 +131,7 @@ func TestDifferentialRefusesTheUnmodellable(t *testing.T) {
 
 	t.Run("two contract oracles refuse rather than choose", func(t *testing.T) {
 		t.Parallel()
-		iface := Iface{Name: "Mixed", Token: "mixed", Methods: []Method{
+		iface := Iface{Name: "Mixed", Token: "mixed", Qualifier: "mixed", Methods: []Method{
 			contractMember("Acquire", ContractLease, ""),
 			contractMember("Get", ContractPool, ""),
 		}}

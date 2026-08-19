@@ -92,6 +92,18 @@ func FixtureCall(token, field string) Expr {
 // included, so the token agrees with what every other plugin emits.
 func Token(iface string) string { return naming.Camel(iface) }
 
+// IDQualifier is the interface's word inside a family-scoped check ID —
+// "log", "paginated-reader".
+//
+// A slug rather than [Token], because the two qualify different things
+// and the ID grammar admits only a-z, 0-9 and '-'. Token names Go
+// declarations and reads as lower camel; an ID is what a lock file row
+// and a Without() call are written against, and "paginatedReader"
+// there is refused by the grammar rather than merely ugly. Every
+// validated pack has a single-word interface, which is why one word
+// served both jobs until the corpus asked.
+func IDQualifier(iface string) string { return naming.Kebab(iface) }
+
 // MethodConst is the generated constant holding a method's name —
 // `logAppend = "Append"`.
 //

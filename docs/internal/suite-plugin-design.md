@@ -406,29 +406,41 @@ five times over there. Sequence inside Phase 2:
 Model and stub plugins are out of scope here: stub already emits its
 target; model follows this plan's shape with `tiers` unchanged.
 
-## Amendment: the ctx directive — BLOCKING the Generate wiring
+## Amendment: the context families derive from the shape — RATIFIED
 
-Derivation runs from `InventoryOf`, and everything it needs is a
-projection the plugin already computes except one: `CtxDeclared`. The
-signature rules make context semantics a *declared* claim rather than a
-signature inference — cancel, deadline and nilcontext derive only under
-the declaration — and nothing declares it today. No corpus fixture
-carries `//testkit:ctx`, no plugin registers the name, and the
-prescreen refuses a directive nothing declares, so the shell cannot
-read the fact by guessing at a spelling.
+RFC-0004 A13 made context semantics a declared claim behind
+`//testkit:ctx`, on the argument that a `(ctx, ...)` parameter claims
+nothing about propagation and unconditional checks red correct code on
+first contact. That gate is REVERSED: a context-taking method carries
+cancel, nilcontext and — where it is not teardown-shaped — deadline,
+derived from the parameter, and zero-on-error rides the same shape.
 
-That makes the wiring contract-gated rather than mechanical: the
-directive is a new consumer-facing surface, and its schema decides
-what an interface author writes. Until it is ruled on, `InventoryOf`
-is reachable and tested but `Generate` does not call it — wiring it
-with `CtxDeclared: false` would derive three families fewer for every
-context-taking method in the corpus and call the result a clean run,
-which is the silent under-derivation the census layer exists to
-prevent.
+The reversal is a judgment about where the opt-out belongs, not a
+denial of A13's failure mode. A subject that legitimately never
+observes cancellation still exists; it now declines the check by ID
+through `Without`, which is a decision recorded in the consumer's own
+code and visible in the lock diff, rather than by withholding a
+directive, which is a decision recorded nowhere and indistinguishable
+from never having considered it. The directive also cost a second
+thing to keep in sync: the claim was declared on the interface while
+the shape it gated was per method.
 
-Owed: the directive's name, whether it takes arguments, and whether it
-sits on the interface or the method. Everything downstream of it — the
-constants, the index sections, the rows — is built or specified.
+`Iface.CtxDeclared` is deleted rather than defaulted, so nothing reads
+a fact that no longer exists.
+
+## Amendment: two qualifiers, because an ID is not an identifier
+
+The corpus found this the hour derivation went live. `Iface.Token`
+served as both the Go identifier qualifier and the family-scoped ID's
+qualifier, which holds only while interface names are one word — every
+validated pack's are. `PaginatedReader` produces the identifier
+`paginatedReader` and the ID `model/paginatedReader/laws`, and the ID
+grammar admits `a-z`, `0-9` and `-` only, so seven corpus interfaces
+refused at `Verify` with the emission never reaching the model tier.
+
+So `Token` stays the Go qualifier and `Qualifier` joins it as the slug
+one, projected through `IDQualifier`. Both are computed once in the
+shell and carried, rather than recomputed per deriver.
 
 ## The transition: what the sweep unowned, and what buys it back
 

@@ -69,7 +69,7 @@ func sentinelReader() Method {
 // key draw.
 func stampIface(methods ...Method) Iface {
 	return Iface{
-		Name: "Store", Token: "store", Methods: methods,
+		Name: "Store", Token: "store", Qualifier: "store", Methods: methods,
 		Fixture: Fixture{Fields: []FixtureField{{
 			Name:   "Key",
 			Sample: golang.Sample{Text: `"k"`},
@@ -154,7 +154,12 @@ func TestStampsHoldTheCensusPosture(t *testing.T) {
 
 	t.Run("an undeliverable draw refuses the stamp checks", func(t *testing.T) {
 		t.Parallel()
-		iface := Iface{Name: "Store", Token: "store", Methods: []Method{stampMethod("Get", reader.Name)}}
+		iface := Iface{
+			Name:      "Store",
+			Token:     "store",
+			Qualifier: "store",
+			Methods:   []Method{stampMethod("Get", reader.Name)},
+		}
 		plans, refusals := Stamps{}.Derive(iface)
 		testkit.Len(t, plans, 0, "no check derives over a draw nothing supplies")
 		testkit.Len(t, refusals, 1, "the whole stamp set folds into one refusal")

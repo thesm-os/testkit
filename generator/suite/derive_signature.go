@@ -51,7 +51,7 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		call := callOf(f, m)
 		plans = append(plans, smokePlan(f, m, call, seeded))
 
-		if !f.CtxDeclared || !m.TakesContext() {
+		if !m.TakesContext() {
 			continue
 		}
 		plans = append(

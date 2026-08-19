@@ -26,7 +26,7 @@ THE AMENDMENT WINS. The rows most affected carry their pointers inline.
 
 | Input | Rule | Output |
 |---|---|---|
-| `//testkit:ctx` (interface or method; `none` opts out) | context semantics are a declared claim, never a signature inference (A13). Close carries cancel and nilcontext but never deadline (A5); absent the directive, zero-on-error has no derivable error source and is not emitted (B4) | signature/cancel, /deadline, /nilcontext families |
+| a `context.Context` first parameter | the context families derive from the shape — SUPERSEDES A13's directive gate and B4's opt-out row. Close carries cancel and nilcontext but never deadline (A5); zero-on-error rides the same shape, its error source being the context the method already takes | signature/cancel, /deadline, /nilcontext, /zero-on-error families |
 | method shape | one smoke per method, always | signature/smoke |
 | `//testkit:role key\|payload` + `//testkit:default` | pool[0] = the stamp verbatim; pool[1] = the distinctness transform; pool[2] = the hostile member (A14, A16) | derived config pools |
 | pool provenance | derived pools blend `AdversarialStrings`; a supplied pool reaches every tier verbatim (panel 1.2) | model draw generators |
@@ -160,7 +160,7 @@ above stay as written; a future consolidation folds these in.
 | roled bare parameters (A2) | `role`/`default` stamps live on the named TYPE declaration when no request-struct field exists to carry them | derived config pools |
 | Publisher+Subscriber over one key type (A3) | derived reference = never-dropping fan-out (key → open subscriptions), written against the shape | model/differential |
 | a domain whose laws all write (A4) | no observational bundle: each law rides its own leg, and no `model/laws` bundle leg exists | per-law legs |
-| `//testkit:ctx` on a teardown (A5) | Close carries cancel and nilcontext, never deadline — the corpus ruling the original ctx row left unstated | signature families |
+| a context-taking teardown (A5) | Close carries cancel and nilcontext, never deadline — unchanged by the directive's removal, since it was always a fact about the shape | signature families |
 | "safe for concurrent use" on async fan-out (A6) | the Porcupine rule DOES NOT APPLY: no per-key register models async delivery; the claim lowers to delivery laws under concurrent load (engine work, deferred) | no AUTO-LINEARIZABLE leg |
 | delivery defect rules (A7) | D1 partial-fanout (one subscriber fed, the bound reds alone); the differential's defect is a REFUSAL, which every delivery law reads as Vacuous — single-claim by construction | proofs |
 | channel-returning method (A8) | lowers to Subscriber/Watcher: the differential compares the open path only; deliveries are the delivery laws' observation — never compare channels | model/differential scope |
@@ -184,7 +184,7 @@ bare are drift, and their fix is owed upstream.
 | `//testkit:mixin bounded limit=N` (B1) | `AggregatorBounded[0..N]` in the observational bundle; the literal is the bound, the suite owns the number, and every harness constructor RECEIVES it — the seed seam generalized to a scalar. N must sit within the drawn-sequence budget's reach, or the eviction path ships untested behind a law that reads as coverage | model/laws + the harness ctor shape |
 | `//testkit:mixin cacheable` on an errorless reader (B2) | `Cacheable` over the packed (value, ok) observation | model/laws |
 | bounded/evicting reader (B3) | the stock differential DOES NOT APPLY: a subject hit must agree with the unbounded reference, an unexplained hit is invention, a miss is always legal; Len is excluded from the differential — the bounded law owns it. DELIVERED: `action.EvictingReader` carries the asymmetry, and the binding is one constructor call | model/differential |
-| no `//testkit:ctx` (B4) | smokes only, and zero-on-error is NOT emitted: its error source is the cancelled context only a ctx claim licenses | signature tier |
+| ~~no `//testkit:ctx`~~ (B4) | SUPERSEDED: the families derive from the parameter, so a context-taking method carries them whether or not anything is declared. A subject that legitimately never observes cancellation drops the check by ID rather than by withholding a directive | signature tier |
 | law-leg tiers (B5) | a laws leg notes a reference tier only when a bundled law actually reads the reference; a bundle of subject-only observations notes none | tier honesty |
 | errorless method on a stub (B6) | an injected fault answers the zero return — the signature has no error slot; the hazard is documented at the stub | stub emission |
 | bounded defect rules (B7) | I1 invent-hit (fabricated presence; differential-only by construction), G1 exceed-bound (a count past the limit — deterministic under the proof budget, where a never-evicting twin is hostage to sequence length and slipped a first-draft proof) | proofs |

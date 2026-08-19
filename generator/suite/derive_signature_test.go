@@ -39,9 +39,9 @@ func storeGet() suite.Method {
 
 // storeIface pairs the methods with a fixture that can deliver every
 // draw the fixtures above declare.
-func storeIface(ctxDeclared bool, methods ...suite.Method) suite.Iface {
+func storeIface(methods ...suite.Method) suite.Iface {
 	return suite.Iface{
-		Name: "Store", Token: "store", CtxDeclared: ctxDeclared, Methods: methods,
+		Name: "Store", Token: "store", Qualifier: "store", Methods: methods,
 		Fixture: suite.Fixture{Fields: []suite.FixtureField{{
 			Name:   "Key",
 			Sample: golang.Sample{Text: `"k"`},
@@ -83,32 +83,27 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 	testkit.TableTest(t, []familyCase{
 		{
 			"a fully-armed method reaches every family",
-			storeIface(true, storeGet()),
+			storeIface(storeGet()),
 			[]vocab.ID{"Get/smoke", "Get/cancel", "Get/nilcontext", "Get/deadline", "Get/zero-on-error"},
 		},
 		{
 			"a teardown-shaped method never carries deadline",
-			storeIface(true, closeM),
+			storeIface(closeM),
 			[]vocab.ID{"Close/smoke", "Close/cancel", "Close/nilcontext"},
 		},
 		{
-			"without the ctx directive only the smoke derives",
-			storeIface(false, storeGet()),
-			[]vocab.ID{"Get/smoke"},
-		},
-		{
 			"a context-less method carries no context families",
-			storeIface(true, noCtx),
+			storeIface(noCtx),
 			[]vocab.ID{"Len/smoke"},
 		},
 		{
 			"no error result, no zero family",
-			storeIface(true, noErr),
+			storeIface(noErr),
 			[]vocab.ID{"Peek/smoke", "Peek/cancel", "Peek/nilcontext", "Peek/deadline"},
 		},
 		{
 			"declared totality excludes the zero family alone",
-			storeIface(true, func() suite.Method {
+			storeIface(func() suite.Method {
 				m := storeGet()
 				m.Mixins = []string{suite.MixinTotal}
 				return m
@@ -131,7 +126,7 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 func TestSignatureShapesTheChecks(t *testing.T) {
 	t.Parallel()
 
-	plans, _ := suite.Signature{}.Derive(storeIface(true, storeGet()))
+	plans, _ := suite.Signature{}.Derive(storeIface(storeGet()))
 	byID := map[vocab.ID]projection.CheckPlan{}
 	for _, p := range plans {
 		id, err := p.ID.Render()
@@ -201,7 +196,7 @@ func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 		},
 		ArgFields: []string{"Entry"},
 	}
-	iface := suite.Iface{Name: "Log", Token: "log", CtxDeclared: true, Methods: []suite.Method{entry}}
+	iface := suite.Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []suite.Method{entry}}
 
 	plans, refusals := suite.Signature{}.Derive(iface)
 	testkit.Len(t, plans, 0, "an underivable draw silences no single family — it refuses them all")
@@ -214,7 +209,7 @@ func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 func TestSignaturePlansSatisfyTheInventory(t *testing.T) {
 	t.Parallel()
 
-	plans, _ := suite.Signature{}.Derive(storeIface(true, storeGet()))
+	plans, _ := suite.Signature{}.Derive(storeIface(storeGet()))
 	inv := projection.Inventory{Iface: "Store", Token: "store", Checks: plans}
 	testkit.NoError(t, inv.Verify(), "derived plans hold the inventory's parity rules by construction")
 }

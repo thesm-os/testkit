@@ -27,6 +27,8 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/wrappedvia"
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
+
+	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
 // Name is the plugin's stable identifier.
@@ -337,6 +339,23 @@ type Contract struct {
 	Unseeded string
 
 	Methods []Method
+
+	// Token qualifies every identifier the file emits, so the templates
+	// compose names from one word rather than each lower-casing the
+	// interface for itself.
+	Token string
+
+	// Inventory is every check the derivers licensed, and Index the
+	// typed surface a consumer drops one through. Both are projections
+	// of the same nodes, which is what keeps the index from naming a
+	// check the run does not emit.
+	Inventory projection.Inventory
+	Index     projection.IndexPlan
+
+	// Refusals are the checks the rules reached and could not derive.
+	// They render into the header: a claim the reader cannot see
+	// refused reads as a claim this file checks.
+	Refusals []Refusal
 }
 
 // Kind returns [KindContract].
@@ -374,6 +393,29 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			methods[i].ArgFields = fixtureArgs(fixture, methods[i], false)
 		}
 		seed, unseeded := seedOf(fixture, methods)
+
+		token := projection.Token(iface.Name)
+		inventory, refusals := InventoryOf(Iface{
+			Name:      iface.Name,
+			Token:     token,
+			Qualifier: projection.IDQualifier(iface.Name),
+			Methods:   methods,
+			Fixture:   fixture,
+		})
+		if err := inventory.Verify(); err != nil {
+			// The run's own invariants, held before anything renders. A
+			// deriver bug caught here names the check it is about; the
+			// same bug reaching a consumer is a compile error in a file
+			// they did not write.
+			ctx.Diag.Errorf(iface.Pos(), "%s: %s: %v", Name, iface.Name, err)
+			continue
+		}
+		index, err := projection.IndexOf(inventory)
+		if err != nil {
+			ctx.Diag.Errorf(iface.Pos(), "%s: %s: %v", Name, iface.Name, err)
+			continue
+		}
+
 		contract := &Contract{
 			BaseEmit:  sdk.EmitBase(c, iface),
 			Subject:   subjectOf(iface),
@@ -382,6 +424,10 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Seed:      seed,
 			Unseeded:  unseeded,
 			Methods:   methods,
+			Token:     token,
+			Inventory: inventory,
+			Index:     index,
+			Refusals:  refusals,
 		}
 		if unseeded != "" {
 			// A harness that seeds nothing runs every read check against a

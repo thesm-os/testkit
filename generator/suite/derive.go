@@ -16,16 +16,17 @@ import (
 // every field is either an incumbent projection or a directive the
 // plugin shell reads once.
 type Iface struct {
-	// Name is the interface's exported name ("Log"); Token its ID and
-	// fixture-accessor qualifier ("log").
+	// Name is the interface's exported name ("Log"); Token its Go
+	// identifier qualifier ("log", "paginatedReader"), which every
+	// emitted declaration is named from.
 	Name  string
 	Token string
 
-	// CtxDeclared is the //testkit:ctx directive: context semantics
-	// are a declared claim, never a signature inference. The directive
-	// schema ships with the emitter wiring; until then the shell
-	// supplies the fact here.
-	CtxDeclared bool
+	// Qualifier is the interface's word inside a family-scoped ID
+	// ("log", "paginated-reader"). Slug rather than identifier: the
+	// grammar admits a-z, 0-9 and '-' only, so the two qualifiers
+	// diverge the moment an interface name has two words.
+	Qualifier string
 
 	Methods []Method
 

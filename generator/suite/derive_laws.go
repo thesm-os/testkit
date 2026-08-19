@@ -80,7 +80,11 @@ func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		// engine, not a law binding, so it has a segment instead of a
 		// lawid and the suite's own wording policy speaks it.
 		plan := projection.CheckPlan{
-			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLinearizable},
+			ID: projection.IDPlan{
+				Family:    vocab.FamilyModel,
+				Qualifier: f.Qualifier,
+				Seg:       vocab.SegLinearizable,
+			},
 			Class:       vocab.ClassConcurrent,
 			Claim:       LinearizableClaim(),
 			Body:        projection.LawLeg{},
@@ -95,7 +99,7 @@ func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 
 	if len(bundle) > 0 {
 		plan := projection.CheckPlan{
-			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegLaws},
+			ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Qualifier, Seg: vocab.SegLaws},
 			Class:       vocab.ClassLaws,
 			Claim:       BundleClaim(chainShaped(f)),
 			Body:        projection.LawLeg{Laws: bundle},
@@ -123,7 +127,7 @@ const argueProofsPending = "the planted-defect rule for this law family lands wi
 func lawRow(f Iface, class vocab.Class, claim string, bind projection.Bind) projection.CheckPlan {
 	binds := []projection.Bind{bind}
 	plan := projection.CheckPlan{
-		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: bind.Law},
+		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Qualifier, Seg: bind.Law},
 		Class:       class,
 		Claim:       claim,
 		Needs:       capsFor(f, class),

@@ -43,7 +43,7 @@ func TestInventoryOfFoldsEveryDeriver(t *testing.T) {
 	t.Parallel()
 
 	iface := suite.Iface{
-		Name: "Log", Token: "log", CtxDeclared: true,
+		Name: "Log", Token: "log", Qualifier: "log",
 		Methods: []suite.Method{{Sig: &golang.Sig{Name: "Append"}}},
 	}
 

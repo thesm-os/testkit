@@ -48,12 +48,11 @@ func openerMethod(withClose bool) Method {
 func TestOpenerSmokeClosesWhatItOpens(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Log", Token: "log", Methods: []Method{openerMethod(true)}}
+	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{openerMethod(true)}}
 	plans, refusals := Signature{}.Derive(iface)
 	testkit.Len(t, refusals, 0, "the opener shape refuses nothing")
-	testkit.Len(t, plans, 1, "no ctx directive: the smoke is the whole signature family")
 
-	p := plans[0]
+	p := smokeOf(t, plans)
 	scanID, err := p.ID.Render()
 	testkit.NoError(t, err, "the derived ID is well formed")
 	testkit.Equal(t, scanID, vocab.ID("Scan/smoke"), "the override keeps the smoke's own ID")
@@ -69,12 +68,12 @@ func TestOpenerSmokeClosesWhatItOpens(t *testing.T) {
 func TestOpenerWithoutClosePartnerKeepsThePlainSmoke(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Log", Token: "log", Methods: []Method{openerMethod(false)}}
+	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{openerMethod(false)}}
 	plans, _ := Signature{}.Derive(iface)
-	testkit.Len(t, plans, 1, "one smoke either way")
-	testkit.Equal(t, plans[0].Claim, "Scan survives a call",
+	plain := smokeOf(t, plans)
+	testkit.Equal(t, plain.Claim, "Scan survives a call",
 		"partner completeness is the contract schema's to report, not this rule's to guess")
-	testkit.Equal(t, plans[0].Body, projection.Body(projection.SmokeSurvives{
+	testkit.Equal(t, plain.Body, projection.Body(projection.SmokeSurvives{
 		Call: projection.CallPlan{Method: "Scan", Args: []projection.Expr{projection.ExprCtx}},
 	}), "no close partner, no close call")
 }
@@ -114,13 +113,15 @@ func poolPair() []Method {
 func TestBorrowSmokeReturnsWhatItBorrows(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Pool", Token: "pool", Methods: poolPair()}
+	iface := Iface{Name: "Pool", Token: "pool", Qualifier: "pool", Methods: poolPair()}
 	plans, refusals := Signature{}.Derive(iface)
 	testkit.Len(t, refusals, 0, "the produced draw is the borrow's to supply, not a fixture gap")
-	testkit.Len(t, plans, 2, "one smoke per method, nothing else without the ctx directive")
-	testkit.Equal(t, plans[0].Claim, "Get survives a call", "the producer keeps its plain smoke")
 
-	put := plans[1]
+	smokes := smokesOf(plans)
+	testkit.Len(t, smokes, 2, "one smoke per method")
+	testkit.Equal(t, smokes[0].Claim, "Get survives a call", "the producer keeps its plain smoke")
+
+	put := smokes[1]
 	putID, err := put.ID.Render()
 	testkit.NoError(t, err, "the derived ID is well formed")
 	testkit.Equal(t, putID, vocab.ID("Put/smoke"), "the override keeps the smoke's own ID")
@@ -138,9 +139,33 @@ func TestBorrowSmokeReturnsWhatItBorrows(t *testing.T) {
 func TestPutWithoutAProducerRefusesHonestly(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Pool", Token: "pool", Methods: poolPair()[1:]}
+	iface := Iface{Name: "Pool", Token: "pool", Qualifier: "pool", Methods: poolPair()[1:]}
 	plans, refusals := Signature{}.Derive(iface)
 	testkit.Len(t, plans, 0, "nothing to borrow from, nothing the fixture can derive")
 	testkit.Len(t, refusals, 1, "the gap is the ordinary undeliverable refusal, named")
 	testkit.Equal(t, refusals[0].What, "Put's signature checks", "attributed to the whole family set")
+}
+
+// smokesOf selects the smoke family from a derived set.
+//
+// The contract rules are about what a smoke says, and the context
+// families derive from the signature beside them — so a positional
+// index into the whole set would make these tests fail the day an
+// unrelated family lands, which is noise rather than a finding.
+func smokesOf(plans []projection.CheckPlan) []projection.CheckPlan {
+	var out []projection.CheckPlan
+	for _, p := range plans {
+		if p.ID.Seg == vocab.SegSmoke {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// smokeOf is [smokesOf] for the single-method fixtures.
+func smokeOf(t *testing.T, plans []projection.CheckPlan) projection.CheckPlan {
+	t.Helper()
+	smokes := smokesOf(plans)
+	testkit.Len(t, smokes, 1, "one method, one smoke")
+	return smokes[0]
 }

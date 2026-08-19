@@ -24,7 +24,12 @@ func TestLawDefectRulesPlantFromTheStamps(t *testing.T) {
 
 	t.Run("W1: the discarded write proves every agreement row", func(t *testing.T) {
 		t.Parallel()
-		writerStore := Iface{Name: "Store", Token: "store", Methods: []Method{stampMethod("Put", writer.Name)}}
+		writerStore := Iface{
+			Name:      "Store",
+			Token:     "store",
+			Qualifier: "store",
+			Methods:   []Method{stampMethod("Put", writer.Name)},
+		}
 		defect, proven := observationDefect(writerStore)
 		testkit.True(t, proven, "a writer exists to acknowledge and drop")
 		testkit.Equal(
@@ -63,7 +68,7 @@ func TestLawDefectRulesPlantFromTheStamps(t *testing.T) {
 
 	t.Run("no writer, no observation defect", func(t *testing.T) {
 		t.Parallel()
-		_, proven := observationDefect(Iface{Name: "Catalog", Token: "catalog"})
+		_, proven := observationDefect(Iface{Name: "Catalog", Token: "catalog", Qualifier: "catalog"})
 		testkit.False(t, proven, "nothing writes, nothing can be discarded")
 	})
 }

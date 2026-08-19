@@ -60,7 +60,7 @@ func lawStore() Iface {
 	closeM := lawMethod("Close", []string{MixinIdempotent}, func(bag *sdk.Bag) {
 		shape.MetaShape.Set(bag, lifecycle.Name, "test")
 	})
-	return Iface{Name: "Store", Token: "store", Methods: []Method{put, get, length, closeM}}
+	return Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{put, get, length, closeM}}
 }
 
 func lawPlansByID(t *testing.T, f Iface) (map[vocab.ID]projection.CheckPlan, []Refusal) {
@@ -129,7 +129,7 @@ func TestLawsDeriveTheStoreRows(t *testing.T) {
 func TestLawsBundleTheObservational(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Store", Token: "store", Methods: []Method{
+	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
 		lawMethod("Set", []string{atomic.Name}, nil),
 	}}
 	byID, refusals := lawPlansByID(t, iface)
@@ -161,7 +161,7 @@ func TestLawsDeriveTheCursorRows(t *testing.T) {
 		contractPartners: partners,
 	}
 
-	byID, refusals := lawPlansByID(t, Iface{Name: "Log", Token: "log", Methods: []Method{opener}})
+	byID, refusals := lawPlansByID(t, Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{opener}})
 	testkit.Len(t, refusals, 0, "the cursor partners word both laws")
 
 	t.Run("a second close changes nothing", func(t *testing.T) {
@@ -187,7 +187,7 @@ func TestLawsRefuseWhatTheyCannotWord(t *testing.T) {
 
 	// After-close with no close name: the claim template needs {close}
 	// and no stamp supplies it.
-	iface := Iface{Name: "Store", Token: "store", Methods: []Method{
+	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
 		lawMethod("Put", []string{MixinAfterClose}, func(bag *sdk.Bag) {
 			shape.MixinParamKey(MixinAfterClose, MixinAfterCloseSentinel).Set(bag, "kv.ErrClosed", "test")
 		}),

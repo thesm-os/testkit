@@ -58,7 +58,7 @@ func (Differential) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		return nil, refusals
 	}
 	plan := projection.CheckPlan{
-		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Token, Seg: vocab.SegDifferential},
+		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Qualifier, Seg: vocab.SegDifferential},
 		Class:       vocab.ClassDifferential,
 		Claim:       claim,
 		Body:        projection.DifferentialLeg{},
