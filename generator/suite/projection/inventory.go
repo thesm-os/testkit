@@ -13,8 +13,14 @@ import (
 // the artifacts share. Every emitted artifact is a projection of this
 // value; nothing renders from anywhere else.
 type Inventory struct {
-	// Iface is the interface's exported name ("Log"); Token is its
-	// lower-case ID qualifier ("log"), unconditional on family scopes.
+	// Iface is the interface's exported name ("Log"); Token is the Go
+	// identifier qualifier every emitted declaration is named from
+	// ("log", "paginatedReader").
+	//
+	// Not the ID qualifier, which is a slug and diverges the moment an
+	// interface name has two words — a family-scoped identity composes
+	// from [Iface.Qualifier], and this field named that once, which is
+	// how "model/paginatedReader/laws" reached the grammar.
 	Iface string
 	Token string
 

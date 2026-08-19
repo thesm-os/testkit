@@ -16,6 +16,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/builder"
+	"go.thesmos.sh/testkit/generator/source"
 )
 
 // OtherSuffix names the companion field holding a second, different value for
@@ -209,6 +210,13 @@ func fixtureOf(ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method
 	}
 	f.groups = groupParams(methods)
 	for _, g := range f.groups {
+		// Both derivations run for every field, including a composed one
+		// whose whole-value Sample the template never reaches. Skipping
+		// it there looks free and is not: sampleFor answers the pair, and
+		// a composed field still renders Other — the miss value a reader
+		// check needs. Splitting the pair to save one resolve at build
+		// time would buy a few microseconds for a seam where the two
+		// values stop being derived together.
 		sample, other := sampleFor(g.param, ctx.Reader)
 		f.Fields = append(f.Fields, FixtureField{
 			Name:      g.name,
@@ -476,17 +484,7 @@ func companionFor(ctx *sdk.GeneratorContext, t *sdk.TypeRef) *sdk.Expr {
 	if t == nil || t.Name == "" {
 		return nil
 	}
-	name := t.Name + builder.CompanionSuffix
-	fn, found := ctx.Reader.Functions().Where(func(fn *sdk.Function) bool {
-		return fn.Name == name && fn.Package == t.Package
-	}).First()
-	if !found || len(fn.Params) != 0 || len(fn.Returns) != 1 {
-		return nil
-	}
-	if r := fn.Returns[0].Type; r == nil || r.Name != t.Name {
-		return nil
-	}
-	return sdk.NewExternal(t.Package, name)
+	return source.Companion(ctx, t.Package, t.Name, builder.CompanionSuffix)
 }
 
 // seedOf names the writer a harness populates its subject through, or nil when
@@ -521,7 +519,11 @@ func seedOf(f Fixture, methods []Method) (*Seed, string) {
 			mute = append(mute, m.Name)
 			continue
 		}
-		args := fixtureArgs(f, m, false)
+		// The method already carries this: Generate derives ArgFields
+		// per method before anything reads them, and deriving them a
+		// second time here is a second chance to disagree about which
+		// field a parameter draws from.
+		args := m.ArgFields
 		if _, _, undeliverable := undeliverableArgs(f, args); undeliverable {
 			undelivered = append(undelivered, m.Name)
 			continue

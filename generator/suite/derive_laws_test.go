@@ -37,7 +37,7 @@ func lawMethod(name string, mixinNames []string, stamp func(*sdk.Bag)) Method {
 	return Method{
 		Sig:         &golang.Sig{Name: name, Source: src},
 		Mixins:      mixinNames,
-		mixinParams: mixinParamsOf(bag),
+		mixinParams: mixinParamsOf(bag, mixinNames),
 	}
 }
 

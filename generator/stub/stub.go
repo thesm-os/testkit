@@ -15,6 +15,8 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
+
+	"go.thesmos.sh/testkit/generator/source"
 )
 
 // Name is the plugin's stable identifier.
@@ -607,7 +609,7 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 		typeName := iface.Name + p.suffix()
-		set, complete := resolveMethods(ctx, iface)
+		set, complete := source.MethodSet(ctx, iface, Name, doubleConsequence)
 		if !complete {
 			// Nothing is emitted for an interface whose method set could not be
 			// completed. A double missing a method does not satisfy the
@@ -675,52 +677,11 @@ func (p *Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	return nil
 }
 
-// resolveMethods returns iface's full method set and whether it is complete.
-//
-// Resolution itself is [sdk.StoreReader.MethodSet]: the embed walk, the
-// duplicate rule, the cycle guard and the attribution of a method to the embed
-// it arrived through are all facts about a Go method set. What is decided here
-// is what testkit does with an incomplete one — refuse to emit, because a
-// double missing a method cannot be passed anywhere the interface is expected.
-//
-// Severity splits on whether a wider run would fix it. An embed this run did
-// not load is a warning: a narrow invocation is legitimate, and one unreachable
-// dependency should not cost a project the rest of its doubles. A
-// non-interface or parameterised embed is a source defect no wider run repairs.
-func resolveMethods(ctx *sdk.GeneratorContext, iface *sdk.Interface) (sdk.MethodSetResult, bool) {
-	set := ctx.Reader.MethodSet(iface)
-	complete := true
-	for _, issue := range set.Issues {
-		// Spelled the way the source wrote it — `io.Closer`, not the bare
-		// `Closer` the reference carries — so a diagnostic names something the
-		// author can search for.
-		written := golang.Display(issue.Embed.Type)
-		switch issue.Reason {
-		case sdk.ReasonCyclic:
-			// Illegal in Go and unreachable from a real frontend. The walk
-			// broke the cycle only after the interface it points back at had
-			// already contributed, so the set is short of nothing and the
-			// double is still worth emitting.
-			ctx.Diag.Warnf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q through a cycle; the walk broke out of it, "+
-					"so the double carries whatever the source had already contributed",
-				Name, iface.QName(), written)
-		case sdk.ReasonUnresolved:
-			complete = false
-			ctx.Diag.Warnf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q, which this run did not load, so its "+
-					"method set cannot be completed; nothing is generated, because a "+
-					"double missing a method cannot stand in for the interface it doubles",
-				Name, iface.QName(), written)
-		default:
-			complete = false
-			ctx.Diag.Errorf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q, which %s; nothing is generated, because a "+
-					"double missing a method cannot stand in for the interface it doubles",
-				Name, iface.QName(), written, issue.Reason)
-		}
-	}
-	return set, complete
+// doubleConsequence is what this generator loses to an unresolvable
+// embed, for the diagnostics [methodset.Resolve] writes.
+var doubleConsequence = source.Consequence{
+	Partial:    "the double carries whatever the source had already contributed",
+	Incomplete: "a double missing a method cannot stand in for the interface it doubles",
 }
 
 // witnessesOf resolves the concrete types the companion's entry points

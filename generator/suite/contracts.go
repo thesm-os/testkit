@@ -136,7 +136,7 @@ func (m Method) HasContractRole(contract, role string) bool {
 // ContractPartner returns the local identifier a contract's role-keyed partner
 // names, empty where the directive named none.
 //
-// Local, for the reason [Method.MixinPartner] gives: the resolver rewrites a
+// Local, for the reason [Method.MixinParam] gives: the resolver rewrites a
 // partner into a qualified name so it is unambiguous across packages, and a
 // generated call is on a subject the check already holds.
 func (m Method) ContractPartner(contract, role string) string {

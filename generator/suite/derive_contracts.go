@@ -112,9 +112,16 @@ func borrowedCall(f Iface, m Method, produced *node.TypeRef) (projection.CallPla
 			matched = true
 			continue
 		}
-		if i < len(m.ArgFields) {
-			args = append(args, projection.FixtureCall(f.Token, m.ArgFields[i]))
+		if i >= len(m.ArgFields) {
+			// ArgFields is derived per call argument, so the two agree
+			// by construction. Where they somehow do not, the borrow
+			// arm declines and the plain smoke stands: skipping the
+			// argument instead emits a call with fewer arguments than
+			// the method takes, which fails in the consumer's build
+			// rather than in this run.
+			return projection.CallPlan{}, false
 		}
+		args = append(args, projection.FixtureCall(f.Token, m.ArgFields[i]))
 	}
 	return projection.CallPlan{Method: m.Name, Args: args}, matched
 }

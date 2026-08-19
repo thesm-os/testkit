@@ -12,6 +12,7 @@ import (
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
 	"go.thesmos.sh/testkit/generator/defaults"
+	"go.thesmos.sh/testkit/generator/source"
 )
 
 // Name is the plugin's stable identifier.
@@ -550,17 +551,7 @@ func companionOf(ctx *sdk.GeneratorContext, s *sdk.Struct) *sdk.Expr {
 		}
 		return sdk.NewExternal(pkg, symbol)
 	}
-	name := s.Name + CompanionSuffix
-	fn, found := ctx.Reader.Functions().Where(func(fn *sdk.Function) bool {
-		return fn.Name == name && fn.Package == s.Package
-	}).First()
-	if !found || len(fn.Params) != 0 || len(fn.Returns) != 1 {
-		return nil
-	}
-	if r := fn.Returns[0].Type; r == nil || r.Name != s.Name {
-		return nil
-	}
-	return sdk.NewExternal(s.Package, name)
+	return source.Companion(ctx, s.Package, s.Name, CompanionSuffix)
 }
 
 // fieldsOf lifts every field a builder can set.

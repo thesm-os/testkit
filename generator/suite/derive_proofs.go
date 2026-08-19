@@ -5,6 +5,7 @@ package suite
 
 import (
 	"go.thesmos.sh/testkit/core/lawid"
+	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -92,4 +93,26 @@ func appenderFreezes(f Iface) (projection.Defect, bool) {
 		return nil, false
 	}
 	return projection.FreezeReturn{Option: projection.OptionName(f.Name, writer.Name)}, true
+}
+
+// proveOrArgue settles one plan's falsifiability from a defect rule's
+// verdict: a plan the rule reached is Proven and carries the defect,
+// and one it declined stays Argued with the interim reason.
+//
+// The parity gate refuses a Proven row with no defect and an Argued row
+// that plants one, so the two fields move together or not at all —
+// which is why they are settled here rather than at each call site.
+// Four sites set them by hand, and a fifth would have been the one
+// that forgot the second line.
+//
+// The verdict is passed rather than computed because the rows draw
+// from two rules: the model families from the interface's observation
+// defect, a law row from the rule for that law.
+func proveOrArgue(plan projection.CheckPlan, defect projection.Defect, proven bool) projection.CheckPlan {
+	plan.Falsifiable = vocab.Argued(argueProofsPending)
+	if proven {
+		plan.Falsifiable = vocab.Proven()
+		plan.Defect = defect
+	}
+	return plan
 }

@@ -28,6 +28,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
+	"go.thesmos.sh/testkit/generator/source"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -247,7 +248,7 @@ func (m Method) HasMixin(name string) bool { return slices.Contains(m.Mixins, na
 //
 // The value verbatim. A param the mixin declares as a sibling arrives as a
 // qualified name, which is right for identity and wrong for a call site — see
-// [Method.MixinPartner] for that.
+// [Method.ContractPartner] for the axis that resolves one.
 func (m Method) MixinParam(name, param string) (string, bool) {
 	v, ok := m.mixinParams[name+"."+param]
 	return v, ok
@@ -377,7 +378,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		if !iface.HasPositiveDirective(DirectiveName) {
 			continue
 		}
-		set, complete := resolveMethods(ctx, iface)
+		set, complete := source.MethodSet(ctx, iface, Name, harnessConsequence)
 		if !complete {
 			continue
 		}
@@ -459,54 +460,11 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	return nil
 }
 
-// resolveMethods returns the interface's full method set and whether it is
-// complete.
-//
-// Resolution is [sdk.StoreReader.MethodSet]: the embed walk, the duplicate
-// rule, the cycle guard and the attribution of a method to the embed it arrived
-// through are facts about a Go method set. What is decided here is what a
-// conformance harness does with an incomplete one — refuse, because a harness
-// covering part of a contract reports success for an implementation that does
-// not satisfy the rest.
-//
-// Severity splits on whether a wider run would fix it, matching the double's
-// rule for the same question: an unloaded embed is a warning, because a narrow
-// invocation is legitimate; a non-interface or parameterised embed is a source
-// defect no wider run repairs.
-func resolveMethods(ctx *sdk.GeneratorContext, iface *sdk.Interface) (sdk.MethodSetResult, bool) {
-	set := ctx.Reader.MethodSet(iface)
-	complete := true
-	for _, issue := range set.Issues {
-		// Spelled the way the source wrote it — `io.Closer`, not the bare
-		// `Closer` the reference carries — so a diagnostic names something the
-		// author can search for.
-		written := golang.Display(issue.Embed.Type)
-		switch issue.Reason {
-		case sdk.ReasonCyclic:
-			// Illegal in Go and unreachable from a real frontend. The walk broke
-			// the cycle only after the interface it points back at had already
-			// contributed, so the set is short of nothing.
-			ctx.Diag.Warnf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q through a cycle; the walk broke out of it, "+
-					"so the harness covers whatever the source had already contributed",
-				Name, iface.QName(), written)
-		case sdk.ReasonUnresolved:
-			complete = false
-			ctx.Diag.Warnf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q, which this run did not load, so its method "+
-					"set cannot be completed; nothing is generated, because a harness "+
-					"over part of a contract passes an implementation that fails the rest",
-				Name, iface.QName(), written)
-		default:
-			complete = false
-			ctx.Diag.Errorf(issue.Embed.Pos(),
-				"%s: interface %q embeds %q, which %s; nothing is generated, because a "+
-					"harness over part of a contract passes an implementation that fails "+
-					"the rest",
-				Name, iface.QName(), written, issue.Reason)
-		}
-	}
-	return set, complete
+// harnessConsequence is what this generator loses to an unresolvable
+// embed, for the diagnostics [methodset.Resolve] writes.
+var harnessConsequence = source.Consequence{
+	Partial:    "the harness covers whatever the source had already contributed",
+	Incomplete: "a harness over part of a contract passes an implementation that fails the rest",
 }
 
 // methodsOf projects every method of the resolved set, with its checks
@@ -520,13 +478,14 @@ func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	for _, src := range set.Methods {
 		bag := src.Meta()
 		roles, partners := contractDataOf(bag)
+		stamped := shape.Mixins(bag)
 		out = append(out, Method{
 			Sig:              golang.SigOf(src),
 			CheckType:        iface.Name + src.Name + "Check",
-			Mixins:           shape.Mixins(bag),
-			IntegrationOnly:  slices.Contains(shape.Mixins(bag), MixinIntegrationOnly),
+			Mixins:           stamped,
+			IntegrationOnly:  slices.Contains(stamped, MixinIntegrationOnly),
 			Contracts:        shape.Contracts(bag),
-			mixinParams:      mixinParamsOf(bag),
+			mixinParams:      mixinParamsOf(bag, stamped),
 			contractRoles:    roles,
 			contractPartners: partners,
 		})
@@ -534,41 +493,36 @@ func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	return out
 }
 
-// mixinParamsOf reads the KV arguments of every mixin this generator acts on.
+// mixinParamsOf reads the KV arguments of every mixin stamped on a method.
 //
-// Pulled once, into a map, rather than reached through [shape.MixinParamKey] at
-// each use. The projection is what a check is selected from and what a template
-// renders, and neither holds the source node by then.
+// Pulled once, into a map, rather than reached through [shape.MixinParamKey]
+// at each use. The projection is what a check is selected from and what a
+// template renders, and neither holds the source node by then.
 //
-// Enumerated rather than discovered because eidos exposes no "every param
-// stamped under this mixin" accessor — [shape.MixinParamKey] composes one key
-// from a pair. A classification this generator does not act on has nothing to
-// read, so the list is the set of checks rather than an inventory of eidos.
-func mixinParamsOf(bag *sdk.Bag) map[string]string {
-	wanted := [...]struct{ mixin, param string }{
-		{MixinOrderAfter, MixinOrderAfterParam},
-		{MixinTimeout, MixinTimeoutParam},
-		{MixinSideEffect, MixinSideEffectParam},
-		{MixinPartition, MixinPartitionRead},
-		{MixinPartition, MixinPartitionAxis},
-		{MixinHooks, MixinHooksParam},
-		{MixinSample, MixinSampleParam},
-		{MixinAfterClose, MixinAfterCloseClose},
-		{MixinAfterClose, MixinAfterCloseSentinel},
-		{MixinValidates, MixinValidatesParam},
-		{MixinWrappedVia, MixinWrappedViaParam},
-		{MixinTTL, MixinTTLNotFound},
-	}
+// The pairs come from the live registry rather than a list here: a mixin
+// declares its own parameters, [mixinParamKeys] reads them, and a hand-kept
+// enumeration of twelve was a second answer to a question eidos already
+// answers — one that went stale silently the day a mixin grew a parameter.
+// Reading every stamped mixin rather than only the ones this generator acts
+// on costs a map entry nothing looks up, and buys never having to remember
+// this file when a check starts reading a param it did not before.
+//
+// The stamped set is passed rather than read back off the bag, because the
+// caller has already resolved it and a param is only meaningful under a mixin
+// the method actually carries.
+func mixinParamsOf(bag *sdk.Bag, stamped []string) map[string]string {
 	var out map[string]string
-	for _, w := range wanted {
-		v, found := shape.MixinParamKey(w.mixin, w.param).Get(bag)
-		if !found {
-			continue
+	for _, name := range stamped {
+		for _, param := range mixinParamKeys(name) {
+			v, found := shape.MixinParamKey(name, param).Get(bag)
+			if !found {
+				continue
+			}
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[name+"."+param] = v
 		}
-		if out == nil {
-			out = make(map[string]string, len(wanted))
-		}
-		out[w.mixin+"."+w.param] = v
 	}
 	return out
 }
@@ -622,37 +576,6 @@ const (
 	MixinTotal = total.Name
 )
 
-// partnerArgs names the identifiers a call to the partner is handed, and says
-// why it could not be spelled where it could not.
-//
-// A generated check receives the *annotated* method's parameters and nothing
-// else, so the partner can only be called with values already in scope. Both
-// resolve their parameters to fixture fields, and a field they share is one
-// identifier serving both — which is the ordinary case, since a partner
-// observing an effect keyed on something observes it by the same key.
-//
-// # The correspondence has to be derivable, not guessed
-//
-// The rule the `partition` mixin states with `axis=`, generalised. That mixin
-// makes eidos reject an axis the partner does not spell identically, because
-// `Put(ctx, partition, key, v)` and `Read(ctx, partition, key)` have two
-// parameters of one type and nothing else distinguishes them — a generator
-// matching by position would silently write a check about the wrong one.
-//
-// Identical spelling is one way to be unambiguous. Being the only parameter of
-// that type is another, and it is the shape the corpus kept losing: a partner
-// declaring `k` where the method declares `key`, at one `string` each, is not
-// ambiguous by any reading, and matching by identifier alone declined it.
-//
-// So the correspondence is derived in two passes — same fixture field first,
-// then sole remaining parameter of the type — and anything the two passes
-// leave undecided is reported rather than dropped. A check that does not exist
-// and a classification that says nothing about why look identical from the
-// output, and the whole tier this sits in is about that resemblance.
-//
-// The widening never reaches across types: a parameter is spelled from one of
-// the method's own, never invented, so a shape the passes decline is one where
-// a check would have had a signature no other check has.
 // teardownShaped reports the one signature "a second call answers the same"
 // can be stated against without a value: context in, error out, nothing else.
 func teardownShaped(m Method) bool {

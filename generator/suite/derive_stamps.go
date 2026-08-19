@@ -73,7 +73,6 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 	var refusals []Refusal
 	mixins := mixinRules()
 	detectors := detectorRules()
-	lawBacked := lawBackedStamps()
 
 	for _, m := range f.Methods {
 		detected := m.Shape()
@@ -89,7 +88,7 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			switch rule, tabled := mixins[name]; {
 			case tabled:
 				plans = append(plans, rule(f, m, call)...)
-			case lawBacked[name]:
+			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
 				// the tiers catalogue.
 			default:
@@ -106,18 +105,6 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		}
 	}
 	return plans, refusals
-}
-
-// lawBackedStamps collects every classification the tiers catalogue
-// binds a law for — the single home of "the model tier owns this".
-func lawBackedStamps() map[string]bool {
-	out := map[string]bool{}
-	for _, r := range tiers.Rules() {
-		for _, need := range r.Needs {
-			out[need] = true
-		}
-	}
-	return out
 }
 
 // idempotentRule probes the repeat: two clean calls, the second

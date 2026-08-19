@@ -26,6 +26,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // stampMethod builds one key-drawing method with a detected shape and
@@ -61,7 +62,7 @@ func sentinelReader() Method {
 	bag := sdk.NewBag()
 	shape.MixinParamKey(MixinTTL, MixinTTLNotFound).Set(bag, "kv.ErrNotFound", "test")
 	m := stampMethod("Get", reader.Name, MixinTTL)
-	m.mixinParams = mixinParamsOf(bag)
+	m.mixinParams = mixinParamsOf(bag, m.Mixins)
 	return m
 }
 
@@ -231,14 +232,13 @@ var recordedContracts = map[string]string{
 // assertCensus holds one axis's registry to the three-way partition.
 func assertCensus(t *testing.T, registry []string, tabled map[string]stampRule, recorded map[string]string) {
 	t.Helper()
-	lawBacked := lawBackedStamps()
 
 	var uncovered []string
 	for _, name := range registry {
 		if _, ok := tabled[name]; ok {
 			continue
 		}
-		if lawBacked[name] {
+		if len(tiers.LawsFor(name)) > 0 {
 			continue
 		}
 		if _, ok := recorded[name]; ok {
@@ -252,7 +252,7 @@ func assertCensus(t *testing.T, registry []string, tabled map[string]stampRule, 
 
 	var stale, orphaned []string
 	for name := range recorded {
-		if _, ok := tabled[name]; ok || lawBacked[name] {
+		if _, ok := tabled[name]; ok || len(tiers.LawsFor(name)) > 0 {
 			stale = append(stale, name)
 		}
 		if !slices.Contains(registry, name) {

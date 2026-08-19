@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 
+	"go.thesmos.sh/eidos/core/naming"
+
 	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 	"go.thesmos.sh/testkit/generator/tiers"
@@ -58,16 +60,13 @@ func (Differential) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		return nil, refusals
 	}
 	plan := projection.CheckPlan{
-		ID:          projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Qualifier, Seg: vocab.SegDifferential},
-		Class:       vocab.ClassDifferential,
-		Claim:       claim,
-		Body:        projection.DifferentialLeg{},
-		Falsifiable: vocab.Argued(argueProofsPending),
+		ID:    projection.IDPlan{Family: vocab.FamilyModel, Qualifier: f.Qualifier, Seg: vocab.SegDifferential},
+		Class: vocab.ClassDifferential,
+		Claim: claim,
+		Body:  projection.DifferentialLeg{},
 	}
-	if defect, proven := observationDefect(f); proven {
-		plan.Falsifiable = vocab.Proven()
-		plan.Defect = defect
-	}
+	defect, proven := observationDefect(f)
+	plan = proveOrArgue(plan, defect, proven)
 	return []projection.CheckPlan{plan}, refusals
 }
 
@@ -76,7 +75,7 @@ func (Differential) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 func differentialClaim(f Iface) (string, []Refusal, bool) {
 	if opener := roleMethod(f.Methods, ContractCursor, ContractCursorOpen); opener != nil {
 		if writer := firstWriter(f.Methods); writer != nil {
-			sequence := strings.ToLower(writer.Name) + "-" + strings.ToLower(opener.Name)
+			sequence := naming.Kebab(writer.Name) + "-" + naming.Kebab(opener.Name)
 			return DifferentialDrainClaim(sequence), nil, true
 		}
 	}

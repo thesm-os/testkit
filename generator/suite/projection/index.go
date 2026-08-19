@@ -6,7 +6,6 @@ package projection
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
 
@@ -188,11 +187,12 @@ func accessorOf(id IDPlan) (IndexAccessor, error) {
 
 // segAccessor spells a segment as an index accessor.
 //
-// Pascal-casing the segment is the rule, and the exceptions below are
-// the whole of what it does not reach. Deriving rather than tabulating
-// every segment is deliberate: the segment vocabulary grows upstream,
-// and a table would send a new segment to a refusal here instead of
-// to the obvious identifier.
+// The platform's exported name is the rule — its word splitter already
+// treats "-" as a separator, so "zero-on-error" reaches ZeroOnError
+// without this file knowing that segments are kebab. Deriving rather
+// than tabulating is deliberate: the segment vocabulary grows
+// upstream, and a table would send a new segment to a refusal here
+// instead of to the obvious identifier.
 func segAccessor(seg string) (string, bool) {
 	if seg == "" {
 		return "", false
@@ -200,11 +200,7 @@ func segAccessor(seg string) (string, bool) {
 	if name, ok := segAccessors()[seg]; ok {
 		return name, true
 	}
-	var b strings.Builder
-	for part := range strings.SplitSeq(seg, "-") {
-		b.WriteString(golang.ExportedName(part))
-	}
-	return b.String(), true
+	return golang.ExportedName(seg), true
 }
 
 // segAccessors are the segments whose accessor is not their name.
