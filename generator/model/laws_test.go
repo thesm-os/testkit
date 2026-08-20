@@ -13,6 +13,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/model"
 )
 
@@ -50,9 +51,9 @@ func TestIteratorStreamLawsBind(t *testing.T) {
 
 	s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
 		i.Method("List", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Return(storefixture.PkgNamed("example.com/validates", "Payload"))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	})
 	stampShape(s, "List", "streamreader", "", "example.com/validates.Payload")
@@ -80,14 +81,14 @@ func poisonProbe(t *testing.T, declared bool) *sdk.Store {
 	s := storefixture.New().
 		Package("poison", "example.com/poison").
 		Interface("Probe", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("poison/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("poison/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Err", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Trip", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 			})
 		}).
 		Build()
@@ -150,13 +151,13 @@ func TestNoReaderWriterPairAtAll(t *testing.T) {
 	s := storefixture.New().
 		Package("wo", "example.com/wo").
 		Interface("Sink", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("wo/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("wo/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Push", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()

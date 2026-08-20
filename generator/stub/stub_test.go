@@ -19,6 +19,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/stub"
 )
 
@@ -443,14 +444,14 @@ func storeFixture(t *testing.T) *sdk.Store {
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("id", storefixture.Named("string"))
 				m.NamedReturn("item", storefixture.Named("string"))
 				m.NamedReturn("err", storefixture.Named("error"))
 			})
 			i.Method("List", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Slice(storefixture.Named("string")))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Close", nil)
 		}).
@@ -467,10 +468,10 @@ func mixedFixture(t *testing.T) *sdk.Store {
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Param("id", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Connect", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 				stampMixin(m, "integrationonly")
 			})
 		}).
@@ -494,10 +495,10 @@ func orderedFixture() *sdk.Store {
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Prepare", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Commit", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 				stampMixin(m, stub.MixinOrderAfter)
 				shape.MixinParamKey(stub.MixinOrderAfter, stub.MixinOrderAfterParam).
 					Set(m.Node().EnsureMeta(), "Prepare", "test")
@@ -707,7 +708,7 @@ func genericFixture(t *testing.T, kBound, vBound string, kv map[string]string) *
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Param("key", storefixture.Named("K"))
 				m.Return(storefixture.Named("V"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -823,7 +824,7 @@ func foreignEmbedFixture(t *testing.T) *sdk.Store {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed("io", "Closer"))
 			i.Method("Read", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -839,7 +840,7 @@ func unionTermFixture(t *testing.T) *sdk.Store {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.Slice(storefixture.Named("byte")))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -910,7 +911,7 @@ func cyclicFixture(t *testing.T) *sdk.Store {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed(fixturePkg, "B"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Interface("B", func(i *storefixture.InterfaceBuilder) {
@@ -930,7 +931,7 @@ func structEmbedFixture(t *testing.T) *sdk.Store {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed(fixturePkg, "Config"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -945,14 +946,14 @@ func nestedMissingFixture(t *testing.T) *sdk.Store {
 		Interface("Middle", func(i *storefixture.InterfaceBuilder) {
 			i.Embed(storefixture.PkgNamed(fixturePkg, "Missing"))
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Interface("Outer", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed(fixturePkg, "Middle"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -964,7 +965,7 @@ func overlappingFixture(t *testing.T) *sdk.Store {
 	t.Helper()
 	shared := func(i *storefixture.InterfaceBuilder) {
 		i.Method("Close", func(m *storefixture.MethodBuilder) {
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	}
 	return storefixture.New().
@@ -1039,14 +1040,14 @@ func genericEmbedFixture(t *testing.T) *sdk.Store {
 		Interface("Base", func(i *storefixture.InterfaceBuilder) {
 			i.TypeParam("K", bound("any"))
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(instantiated(fixturePkg, "Base", "string"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1071,7 +1072,7 @@ func wideGenericFixture(t *testing.T) *sdk.Store {
 				i.TypeParam(n, bound("any"))
 			}
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1086,14 +1087,14 @@ func embeddedFixture(t *testing.T, embedName string) *sdk.Store {
 		Package("storepkg", fixturePkg).
 		Interface("Base", func(i *storefixture.InterfaceBuilder) {
 			i.Method("Ping", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Interface("Composed", func(i *storefixture.InterfaceBuilder) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.PkgNamed(fixturePkg, embedName))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1272,17 +1273,17 @@ func fixtureBuilder() *storefixture.Builder {
 			// Layout composes the output filename from the source basename,
 			// so the fixture needs a position for the rendered names to be
 			// anything other than a bare suffix.
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("id", storefixture.Named("string"))
 				m.NamedReturn("item", storefixture.Named("string"))
 				m.NamedReturn("err", storefixture.Named("error"))
 			})
 			i.Method("List", func(m *storefixture.MethodBuilder) {
 				m.Return(storefixture.Slice(storefixture.Named("string")))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Close", nil)
 		})
@@ -1382,7 +1383,7 @@ func constraintFixture(t *testing.T) *sdk.Store {
 	b := storefixture.New().
 		Package("storepkg", fixturePkg).
 		Interface("Numeric", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			i.Directive(storefixture.Directive("stub"))
 			i.Embed(storefixture.Named("int"))
 			i.Embed(storefixture.Named("float64"))

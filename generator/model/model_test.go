@@ -16,6 +16,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/suite"
 )
@@ -106,15 +107,15 @@ func TestSuppliedReference(t *testing.T) {
 		s := storefixture.New().
 			Package("ro", "example.com/ro").
 			Interface("Fetcher", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("ro/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("ro/iface.go"))
 				i.Directive(storefixture.Directive("suite"))
 				i.Directive(storefixture.Directive("model",
 					storefixture.KV(model.RefKey, "NewFake")))
 				i.Method("Fetch", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					m.Param("key", storefixture.Named("string"))
 					m.Return(storefixture.Named("string"))
-					m.Return(storefixture.Named("error"))
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -129,14 +130,14 @@ func TestSuppliedReference(t *testing.T) {
 		s := storefixture.New().
 			Package("wo", "example.com/wo").
 			Interface("Sink", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("wo/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("wo/iface.go"))
 				i.Directive(storefixture.Directive("suite"))
 				i.Directive(storefixture.Directive("model",
 					storefixture.KV(model.RefKey, "NewFake")))
 				i.Method("Push", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					m.Param("v", storefixture.Named("string"))
-					m.Return(storefixture.Named("error"))
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -186,19 +187,19 @@ func TestUnmappableMethods(t *testing.T) {
 	s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
 		// Unstamped: the annotator classified nothing.
 		i.Method("Ping", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-			m.Return(storefixture.Named("error"))
+			gentest.Ctx(m)
+			gentest.Err(m)
 		})
 		// Stamped with vocabulary this build's table has never heard of — the
 		// state a detector landing upstream is in until the row lands.
 		i.Method("Weird", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-			m.Return(storefixture.Named("error"))
+			gentest.Ctx(m)
+			gentest.Err(m)
 		})
 		// Stamped and driven, but with no context to forward to the oracle.
 		i.Method("Len", func(m *storefixture.MethodBuilder) {
 			m.Return(storefixture.Named("int"))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	})
 	stampShape(s, "Weird", "not-a-shape", "", "")
@@ -244,13 +245,13 @@ func TestDiagnostics(t *testing.T) {
 		s := storefixture.New().
 			Package("bare", "example.com/bare").
 			Interface("Bare", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("bare/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("bare/iface.go"))
 				i.Directive(storefixture.Directive("model"))
 				i.Method("Get", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					m.Param("key", storefixture.Named("string"))
 					m.Return(storefixture.Named("string"))
-					m.Return(storefixture.Named("error"))
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -265,14 +266,14 @@ func TestDiagnostics(t *testing.T) {
 		s := storefixture.New().
 			Package("gen", "example.com/gen").
 			Interface("Store", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("gen/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("gen/iface.go"))
 				i.Directive(storefixture.Directive("suite"))
 				i.Directive(storefixture.Directive("model"))
 				i.TypeParam("V", nil)
 				i.Method("Put", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					m.Param("v", storefixture.TypeParamRef("V"))
-					m.Return(storefixture.Named("error"))
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -317,12 +318,12 @@ func TestDiagnostics(t *testing.T) {
 		s := storefixture.New().
 			Package("un", "example.com/un").
 			Interface("Opaque", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("un/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("un/iface.go"))
 				i.Directive(storefixture.Directive("suite"))
 				i.Directive(storefixture.Directive("model"))
 				i.Method("Do", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-					m.Return(storefixture.Named("error"))
+					gentest.Ctx(m)
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -386,7 +387,7 @@ func sessionStore(t *testing.T, member string) *sdk.Store {
 	s := storefixture.New().
 		Package("sess", "example.com/sess").
 		Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("sess/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("sess/iface.go"))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Rev", storefixture.Named("int64"), nil)
 			b.Method("Stamp", func(m *storefixture.MethodBuilder) {
@@ -394,19 +395,19 @@ func sessionStore(t *testing.T, member string) *sdk.Store {
 			})
 		}).
 		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("sess/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("sess/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Store", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", valueRef())
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(valueRef())
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -500,7 +501,7 @@ func casStore(t *testing.T, member string) *sdk.Store {
 	s := storefixture.New().
 		Package("cc", "example.com/cc").
 		Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("cc/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("cc/iface.go"))
 			b.Field("Body", storefixture.Named("string"), nil)
 			b.Field("Version", storefixture.Named("int64"), nil)
 			b.Method("Next", func(m *storefixture.MethodBuilder) {
@@ -508,18 +509,18 @@ func casStore(t *testing.T, member string) *sdk.Store {
 			})
 		}).
 		Interface("Cell", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("cc/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("cc/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", valueRef())
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Return(valueRef())
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -599,9 +600,9 @@ func TestTwinFloor(t *testing.T) {
 		t.Parallel()
 		s := mixedWith(t, func(i *storefixture.InterfaceBuilder) {
 			i.Method("StoreRaw", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		})
 		stampShape(s, "StoreRaw", "writer", "", "string")
@@ -661,9 +662,9 @@ func TestKeyedReference(t *testing.T) {
 		// once, not report one failure twice.
 		s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
 			i.Method("Del2", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		})
 		stampShape(s, "Del2", "writer", "string", "")
@@ -737,10 +738,10 @@ func TestKeyedReference(t *testing.T) {
 		// falls to the twin while the law refuses on the types.
 		s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
 			i.Method("GetOther", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.Named("int"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		})
 		stampShape(s, "GetOther", "reader", "string", "int")
@@ -825,25 +826,25 @@ func keyedStoreWith(t *testing.T, sentinel string, extra func(i *storefixture.In
 	s := storefixture.New().
 		Package("kv", "example.com/kv").
 		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("kv/iface.go", 1, 1))
+			i.Pos(gentest.At())
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Param("value", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Del", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			if extra != nil {
 				extra(i)
@@ -994,26 +995,26 @@ func kvStoreWith(
 	f := storefixture.New().Package("kv", "example.com/kv")
 	if len(fields) > 0 {
 		f = f.Struct("Doc", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("kv/iface.go", 1, 1))
+			b.Pos(gentest.At())
 			for _, fl := range fields {
 				b.Field(fl.name, typeOf(fl.typ), nil)
 			}
 		})
 	}
 	s := f.Interface("Store", func(i *storefixture.InterfaceBuilder) {
-		i.Pos(sdk.At("kv/iface.go", 1, 1))
+		i.Pos(gentest.At())
 		i.Directive(storefixture.Directive("suite"))
 		i.Directive(storefixture.Directive("model", opts...))
 		i.Method("Get", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Param("key", storefixture.Named("string"))
 			m.Return(typeOf(readV))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 		i.Method("Put", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Param("v", typeOf(writeV))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	}).Build()
 	stampShape(s, "Get", "reader", "string", readV)
@@ -1061,21 +1062,21 @@ func genericFixture(t *testing.T, opts ...storefixture.DirectiveOption) *sdk.Sto
 	s := storefixture.New().
 		Package("gen", "example.com/gen").
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("gen/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("gen/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model", opts...))
 			i.TypeParam("V", nil)
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.TypeParamRef("V"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Param("v", storefixture.TypeParamRef("V"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1104,28 +1105,28 @@ func mixedWith(
 	s := storefixture.New().
 		Package("validates", "example.com/validates").
 		Struct("Payload", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("validates/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("validates/iface.go"))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Body", storefixture.Named("string"), nil)
 		}).
 		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("validates/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("validates/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model", opts...))
 			i.Method("Store", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Validate", func(m *storefixture.MethodBuilder) {
 				m.Param("v", storefixture.PkgNamed("example.com/validates", "Payload"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Read", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.PkgNamed("example.com/validates", "Payload"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			if extra != nil {
 				extra(i)
@@ -1155,14 +1156,14 @@ func readerOnly(t *testing.T) *sdk.Store {
 	s := storefixture.New().
 		Package("ro", "example.com/ro").
 		Interface("Fetcher", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("ro/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("ro/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Fetch", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1291,7 +1292,7 @@ func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
 	// store with exactly one struct never exercises the mismatch arm.
 	f := storefixture.New().Package("bag", "example.com/bag").
 		Struct("Decoy", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("bag/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("bag/iface.go"))
 			b.Field("N", storefixture.Named("int"), nil)
 		})
 	valueRef := storefixture.Named("string")
@@ -1300,7 +1301,7 @@ func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
 		// The two Decoy fields make the wide-draw walk recurse into a nested
 		// struct and revisit it — the diamond that exercises the seen set.
 		f = f.Struct("Value", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("bag/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("bag/iface.go"))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Body", storefixture.Named("string"), nil)
 			b.Field("Meta", storefixture.PkgNamed("example.com/bag", "Decoy"), nil)
@@ -1310,18 +1311,18 @@ func drainStore(t *testing.T, keyedValue bool) *sdk.Store {
 		valueQ = "example.com/bag.Value"
 	}
 	s := f.Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-		i.Pos(sdk.At("bag/iface.go", 1, 1))
+		i.Pos(gentest.AtFile("bag/iface.go"))
 		i.Directive(storefixture.Directive("suite"))
 		i.Directive(storefixture.Directive("model"))
 		i.Method("Add", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Param("v", valueRef)
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 		i.Method("Items", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Return(storefixture.Slice(valueRef))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	}).Build()
 	stampShape(s, "Add", "writer", "", valueQ)
@@ -1354,12 +1355,12 @@ func TestActionShapes(t *testing.T) {
 	s := storefixture.New().
 		Package("zoo", "example.com/zoo").
 		Interface("Zoo", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("zoo/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("zoo/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			method := func(name string, params, returns []*sdk.TypeRef) {
 				i.Method(name, func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					for n, p := range params {
 						m.Param(string(rune('a'+n)), p)
 					}
@@ -1391,7 +1392,7 @@ func TestActionShapes(t *testing.T) {
 				m.Return(storefixture.Named("bool"))
 			})
 			i.Method("Err", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1505,9 +1506,9 @@ func TestInertActionsAreSkipped(t *testing.T) {
 
 	s := keyedStoreWith(t, "example.com/kv.ErrGone", func(i *storefixture.InterfaceBuilder) {
 		i.Method("List", func(m *storefixture.MethodBuilder) {
-			m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+			gentest.Ctx(m)
 			m.Return(storefixture.Slice(storefixture.Named("string")))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	})
 	stampShape(s, "List", "aggregator", "", "")
@@ -1638,27 +1639,27 @@ func drawersOnly(t *testing.T) *sdk.Store {
 	s := storefixture.New().
 		Package("drawers", "example.com/drawers").
 		Struct("Payload", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("drawers/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("drawers/iface.go"))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Body", storefixture.Named("string"), nil)
 		}).
 		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("drawers/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("drawers/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Store", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.PkgNamed("example.com/drawers", "Payload"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Note", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("n", storefixture.Named("string"))
 				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Bump", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("n", storefixture.Named("int"))
 			})
 		}).
@@ -1683,34 +1684,34 @@ func compositePoolWith(t *testing.T) *sdk.Store {
 	s := storefixture.New().
 		Package("two", "example.com/two").
 		Struct("Body", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("two/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("two/iface.go"))
 			b.Field("Key", storefixture.Named("string"), nil)
 			b.Field("Text", storefixture.Named("string"), nil)
 		}).
 		Struct("Tag", func(b *storefixture.StructBuilder) {
-			b.Pos(sdk.At("two/iface.go", 1, 1))
+			b.Pos(gentest.AtFile("two/iface.go"))
 			b.Field("Name", storefixture.Named("string"), nil)
 		}).
 		Interface("Mixed", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("two/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("two/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			// Declared first, so feederOf's fallback lands on it.
 			i.Method("Stash", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("t", storefixture.PkgNamed("example.com/two", "Tag"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("key", storefixture.Named("string"))
 				m.Param("v", storefixture.PkgNamed("example.com/two", "Body"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Save", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.PkgNamed("example.com/two", "Body"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -1798,7 +1799,7 @@ func TestParameterisedPureDrawsItsArguments(t *testing.T) {
 	s := storefixture.New().
 		Package("fn", "example.com/fn").
 		Interface("Deriver", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("fn/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("fn/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			i.Method("Derive", func(m *storefixture.MethodBuilder) {
@@ -1867,9 +1868,9 @@ func TestContractOracle(t *testing.T) {
 		t.Parallel()
 		s := leasedWith(t, false, func(i *storefixture.InterfaceBuilder) {
 			i.Method("Count", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Return(storefixture.Named("int"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		})
 		stampShape(s, "Count", "aggregator", "", "int")
@@ -1944,18 +1945,18 @@ func TestContractOracle(t *testing.T) {
 		s := storefixture.New().
 			Package("ls", "example.com/ls").
 			Interface("Locker", func(i *storefixture.InterfaceBuilder) {
-				i.Pos(sdk.At("ls/iface.go", 1, 1))
+				i.Pos(gentest.AtFile("ls/iface.go"))
 				i.Directive(storefixture.Directive("suite"))
 				i.Directive(storefixture.Directive("model"))
 				// The acquire role takes nothing, so the tracker's type
 				// argument has nowhere to come from.
 				i.Method("Acquire", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-					m.Return(storefixture.Named("error"))
+					gentest.Ctx(m)
+					gentest.Err(m)
 				})
 				i.Method("Release", func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
-					m.Return(storefixture.Named("error"))
+					gentest.Ctx(m)
+					gentest.Err(m)
 				})
 			}).
 			Build()
@@ -2005,14 +2006,14 @@ func leasedWith(
 	s := storefixture.New().
 		Package("ls", "example.com/ls").
 		Interface("Locker", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("ls/iface.go", 1, 1))
+			i.Pos(gentest.AtFile("ls/iface.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("model"))
 			for _, name := range []string{"Acquire", "Release"} {
 				i.Method(name, func(m *storefixture.MethodBuilder) {
-					m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+					gentest.Ctx(m)
 					m.Param("key", storefixture.Named("string"))
-					m.Return(storefixture.Named("error"))
+					gentest.Err(m)
 				})
 			}
 			if extra != nil {

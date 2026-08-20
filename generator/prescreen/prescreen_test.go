@@ -14,6 +14,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/prescreen"
 )
 
@@ -131,7 +132,7 @@ func TestAnnotateReportsEachDirectiveOnce(t *testing.T) {
 			b.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive("mixn"))
 				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -178,7 +179,7 @@ func onMethod(name string) *sdk.Store {
 			b.Pos(sdk.At(fixtureFile, 1, 1))
 			b.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive(directive.Name(name)))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()

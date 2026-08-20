@@ -17,6 +17,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/sentinel"
 )
 
@@ -651,7 +652,7 @@ const foreignPath = "example.com/audit"
 func foreignErrorType() *sdk.Package {
 	b := storefixture.New().Package("audit", foreignPath)
 	b.Struct("AuditError", func(s *storefixture.StructBuilder) {
-		s.Pos(sdk.At("audit/errors.go", 1, 1))
+		s.Pos(gentest.AtFile("audit/errors.go"))
 		s.Method(golang.MethodError, errorSig)
 	})
 	return b.PackageNode()
@@ -715,7 +716,7 @@ const neighbourPath = "example.com/other"
 func neighbour() *sdk.Package {
 	b := storefixture.New().Package("other", neighbourPath)
 	b.Variable("ErrGone", func(v *storefixture.VariableBuilder) {
-		v.Pos(sdk.At("other/errors.go", 1, 1))
+		v.Pos(gentest.AtFile("other/errors.go"))
 	})
 	return b.PackageNode()
 }
@@ -728,7 +729,7 @@ func neighbour() *sdk.Package {
 // them out is what keeps the fixture a model of the thing under test rather
 // than of the assertion.
 func errorSig(m *storefixture.MethodBuilder)  { m.Return(storefixture.Named("string")) }
-func unwrapSig(m *storefixture.MethodBuilder) { m.Return(storefixture.Named("error")) }
+func unwrapSig(m *storefixture.MethodBuilder) { gentest.Err(m) }
 func isSig(m *storefixture.MethodBuilder) {
 	m.Param("target", storefixture.Named("error"))
 	m.Return(storefixture.Named("bool"))

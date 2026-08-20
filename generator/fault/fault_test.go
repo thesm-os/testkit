@@ -17,6 +17,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/fault"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/stub"
 )
 
@@ -438,7 +439,7 @@ func TestGenerateReportsAFailedAppend(t *testing.T) {
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrNotFound")))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Build()
@@ -499,7 +500,7 @@ func fixture(dirs ...*sdk.Directive) *sdk.Store {
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Param("key", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 				for _, d := range dirs {
 					m.Directive(d)
 				}
@@ -561,18 +562,18 @@ func mixedHosting(t *testing.T) *sdk.Package {
 	return storefixture.New().
 		Package("storepkg", "example.com/storepkg").
 		Interface("Unhosted", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			i.Method("Drop", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrGone")))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive("fault", storefixture.Arg("ErrNotFound")))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		PackageNode()
@@ -593,7 +594,7 @@ func faulted(t *testing.T, doubled bool) *sdk.Package {
 			// Layout composes the output filename from the source basename, so
 			// the fixture needs a position for the rendered names to be
 			// anything other than a bare suffix.
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			// Routed into its own package, as every corpus fixture is: it is
 			// the only arrangement under which a sentinel reference has to
 			// carry a qualifier, and the unrouted case would silently elide it.
@@ -613,10 +614,10 @@ func faulted(t *testing.T, doubled bool) *sdk.Package {
 				))
 				m.Param("tenant", storefixture.Named("string"))
 				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Close", func(m *storefixture.MethodBuilder) {
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		PackageNode()
@@ -629,14 +630,14 @@ func badPartition(t *testing.T) *sdk.Package {
 	return storefixture.New().
 		Package("storepkg", "example.com/storepkg").
 		Interface("Store", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
 				m.Directive(storefixture.Directive("fault",
 					storefixture.KV(fault.PartitionKey, "Nonexistent"),
 				))
 				m.Param("tenant", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		}).
 		PackageNode()
@@ -684,12 +685,12 @@ func toolchainFixture() *storefixture.Builder {
 	b := storefixture.New().Package("storepkg", "example.com/storepkg")
 	for _, name := range []string{"ErrNotFound", "ErrGone"} {
 		b.Variable(name, func(v *storefixture.VariableBuilder) {
-			v.Pos(sdk.At("storepkg/store.go", 1, 1))
+			v.Pos(gentest.AtFile("storepkg/store.go"))
 			v.Type(storefixture.Named("error"))
 		})
 	}
 	b.Interface("Store", func(i *storefixture.InterfaceBuilder) {
-		i.Pos(sdk.At("storepkg/store.go", 1, 1))
+		i.Pos(gentest.AtFile("storepkg/store.go"))
 		i.Directive(storefixture.Directive("stub"))
 		i.Method("Get", func(m *storefixture.MethodBuilder) {
 			m.Directive(storefixture.Directive("fault",
@@ -700,10 +701,10 @@ func toolchainFixture() *storefixture.Builder {
 			))
 			m.Param("tenant", storefixture.Named("string"))
 			m.Return(storefixture.Named("string"))
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 		i.Method("Close", func(m *storefixture.MethodBuilder) {
-			m.Return(storefixture.Named("error"))
+			gentest.Err(m)
 		})
 	})
 	return b
