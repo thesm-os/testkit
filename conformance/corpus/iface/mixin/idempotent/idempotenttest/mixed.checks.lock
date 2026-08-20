@@ -1,7 +1,7 @@
 testkit-checks v2
 Put/cancel	signature/cancel	Put reports a cancelled context as cancelled	
 Put/deadline	signature/deadline	Put reports an expired deadline as exceeded	
-Put/idempotent	mixin/idempotent	a second Put after a clean one changes nothing	
+Put/idempotent	mixin/idempotent	a second Put after a clean one is accepted	
 Put/nilcontext	signature/nilcontext	Put returns an error rather than panicking on a nil context	
 Put/smoke	signature/smoke	Put survives a call with derived inputs	
 Read/cancel	signature/cancel	Read reports a cancelled context as cancelled	

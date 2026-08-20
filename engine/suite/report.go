@@ -134,6 +134,16 @@ type Leg struct {
 	// nothing has falsified is a different statement from a green leg whose
 	// check was driven against a defect and caught it.
 	Falsifiable string `json:"falsifiable"`
+
+	// Strength is how far this check looked before passing: the error
+	// channel alone, state read back, or a reference outside the subject.
+	//
+	// Carried beside Falsifiable because the two answer different
+	// questions and a green leg needs both. Proven says something showed
+	// this check able to fail; strength says what it examines — and a
+	// check can be proven against a defect built to break exactly the
+	// narrow thing it looks at.
+	Strength string `json:"strength"`
 	// Why carries the argument when a check cannot be shown able to
 	// fail — the Argued state's recorded reason.
 	Why string `json:"falsifiableWhy,omitempty"`
@@ -154,6 +164,7 @@ type legOf struct {
 	outcome     Disposition
 	reason      string
 	falsifiable Falsifiability
+	strength    Strength
 	tier        string
 	unengaged   []string
 }
@@ -170,6 +181,14 @@ func (r *Report) add(subject, check, class string, l legOf) {
 	if state == "" {
 		state = FalsifiableUnproven
 	}
+	// Same normalization, same reason: the zero Strength is the weakest
+	// of the three, and a versioned format with two spellings of it — ""
+	// and "error-only" — would make a consumer's rule depend on which
+	// generator wrote the check.
+	strength := l.strength
+	if strength == "" {
+		strength = StrengthErrorOnly
+	}
 	r.Legs = append(r.Legs, Leg{
 		Subject:     subject,
 		Check:       check,
@@ -178,6 +197,7 @@ func (r *Report) add(subject, check, class string, l legOf) {
 		Reason:      l.reason,
 		Falsifiable: string(state),
 		Why:         l.falsifiable.Why,
+		Strength:    string(strength),
 		Tier:        tier,
 		Unengaged:   l.unengaged,
 	})
@@ -242,6 +262,9 @@ func (r *Report) Text() string {
 	}
 	proven, argued, unproven := r.falsifiableTally()
 	fmt.Fprintf(&b, "  %s\n", falsifiableLine(proven, argued, unproven))
+	if line := r.strengthLine(); line != "" {
+		fmt.Fprintf(&b, "  %s\n", line)
+	}
 
 	// Naming them rather than only counting them. "2 unproven" tells a
 	// reader there is work and not where it is, and the rows in question
@@ -349,6 +372,36 @@ func (r *Report) falsifiableTally() (proven, argued int, unproven []string) {
 		}
 	}
 	return proven, argued, unproven
+}
+
+// strengthLine reports how far the checks that ran actually looked,
+// empty when every one of them compared against something.
+//
+// The sentence beside [falsifiableLine], and the one it cannot make.
+// "25 proven able to fail" is true of a suite whose checks all read state
+// back and of one whose checks all stop at the error channel, and the
+// difference is most of what a conformance claim is worth. Counted once
+// per check rather than once per leg, for the reason the tally beside it
+// is: a check is one claim however many subjects it ran against.
+func (r *Report) strengthLine() string {
+	by := map[string]int{}
+	seen := map[string]bool{}
+	for _, l := range r.Legs {
+		if l.Outcome == DidNotRun || seen[l.Check] {
+			continue
+		}
+		seen[l.Check] = true
+		strength := l.Strength
+		if strength == "" {
+			strength = string(StrengthErrorOnly)
+		}
+		by[strength]++
+	}
+	n := by[string(StrengthErrorOnly)]
+	if n == 0 {
+		return ""
+	}
+	return fmt.Sprintf("of those, %d judge only whether the call succeeded: %s", n, countList(by))
 }
 
 // falsifiableLine is the sentence a conformance statement is written from.

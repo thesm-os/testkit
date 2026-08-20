@@ -75,6 +75,28 @@ func TestEveryClassificationHasEvidenceOrARow(t *testing.T) {
 			"UnevidencedClassifications — unregistered: "+strings.Join(unevidenced, ", "))
 }
 
+// The suite tier's half of the union, which the model tier's absence does not
+// excuse.
+//
+// [TestEveryClassificationHasEvidenceOrARow] is parked because it asks about
+// both tiers and one of them is dark. This asks only about the
+// classifications no law in the catalogue reaches — the suite tier's account
+// outright — and that question has the same answer whether or not the model
+// generator is registered. Parking it too would be handing four weeks of
+// unwatched drift to the tier that is still running.
+func TestEverySuiteOwnedClassificationHasEvidenceOrARow(t *testing.T) {
+	t.Parallel()
+
+	all, err := evidenceOnce()
+	testkit.NoError(t, err, "the evidence census runs")
+
+	unevidenced := gate.UnevidencedBySuite(all)
+	testkit.True(t, len(unevidenced) == 0,
+		"every classification no law reaches is asserted by the suite tier or "+
+			"argued in UnevidencedClassifications — unregistered: "+
+			strings.Join(unevidenced, ", "))
+}
+
 // The register only shrinks.
 //
 // The other direction, and the one that keeps a register from becoming a place

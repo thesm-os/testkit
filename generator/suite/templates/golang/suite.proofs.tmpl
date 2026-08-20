@@ -24,10 +24,11 @@ one the proofs cannot use either.
 // concrete types and a Go test function cannot name them, so the proofs for
 // {{ .IfaceName }} belong in the package that instantiates it.
 {{- else if not .Defects }}
-// No check this run emitted carries a defect this generator can spell,
-// so there is nothing to prove here yet. The harness beside this file
-// stamps those checks Argued rather than Proven, which is what keeps the
-// parity gate quiet and the claim honest.
+// None of the checks in the file beside this one could be given a
+// deliberately broken implementation to test against, so there is
+// nothing to prove here yet. Those checks record why instead of
+// claiming to be proven — which is the honest answer, and a different
+// one from proven.
 {{- else }}
 // {{ .TestFunc }} drives every planted defect through the check it is
 // evidence for.

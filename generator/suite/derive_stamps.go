@@ -114,10 +114,21 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				}
 				ruled, refused := rule(f, m, call)
 				plans = append(plans, licensed(ruled, projection.AxisMixin, name)...)
-				refusals = append(refusals, refused...)
+				refusals = append(refusals,
+					licensedRefusals(refused, projection.AxisMixin, name)...)
 			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
-				// the tiers catalogue.
+				// the tiers catalogue. Named rather than passed over in
+				// silence — the consumer wrote the directive, and a file
+				// that never mentions it again reads as one that checked it.
+				refusals = append(refusals, Refusal{
+					Deriver:   DeriverStamps,
+					What:      name + " on " + m.Name,
+					Why:       "stating it needs sequences of calls judged against a reference, which this file does not build",
+					Remedy:    "nothing to fix — it is checked by the model tier, not here",
+					Licensed:  projection.Licence{Axis: projection.AxisMixin, Name: name},
+					Elsewhere: true,
+				})
 			case legStamps()[name]:
 				// Claimed by the laws deriver, which covers it with a
 				// leg rather than a law binding — so tiers.LawsFor is
@@ -138,15 +149,20 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				refusals = append(refusals, Refusal{
 					Deriver: DeriverStamps,
 					What:    name + " on " + m.Name,
-					Why:     "no suite-side derivation rule and no law binds it",
-					Remedy:  "add a rule row, a tiers binding, or record the gap in the census",
+					Why: "testkit has no rule for deriving a check from this " +
+						"declaration yet, so nothing here states it",
+					Remedy: "write the check yourself, or report the gap — this " +
+						"one is testkit's to close, not yours",
+					Licensed:    projection.Licence{Axis: projection.AxisMixin, Name: name},
+					Unaccounted: true,
 				})
 			}
 		}
 		if rule, tabled := detectors[detected]; tabled && drawn {
 			ruled, refused := rule(f, m, call)
 			plans = append(plans, licensed(ruled, projection.AxisDetector, detected)...)
-			refusals = append(refusals, refused...)
+			refusals = append(refusals,
+				licensedRefusals(refused, projection.AxisDetector, detected)...)
 		}
 	}
 	return plans, refusals
@@ -169,6 +185,50 @@ func licensed(
 		plans[i].Licensed = projection.Licence{Axis: axis, Name: name}
 	}
 	return plans
+}
+
+// Accounting reports how this deriver accounts for a classification it
+// emits no check from, and whether it accounts for it at all.
+//
+// The three tables below are the deriver's answer to "why is there no
+// check for this", and until now that answer only existed as a `case`
+// arm with a comment. The conformance census asks the same question
+// from outside and could not read them, so every classification these
+// tables settle had to be settled a second time by hand in
+// [gate.UnevidencedClassifications] — two registers for one fact, with
+// nothing holding them level.
+//
+// Exported so the census reads the deriver's own accounting instead of
+// a copy of it. A classification that moves between tables changes its
+// reason here and the census follows on the next build.
+func Accounting(name string) (string, bool) {
+	switch {
+	case legStamps()[name]:
+		return "covered by a leg the laws deriver emits, which has a segment " +
+			"rather than a lawid and so names nothing in the tiers catalogue", true
+	case documentedStamps()[name]:
+		return "licenses no falsifiable claim by upstream ruling — it declares " +
+			"what something MEANS, which a reader needs and no check can drive", true
+	case consumedStamps()[name]:
+		return "an input another derivation reads rather than a claim of its " +
+			"own; the check it feeds is derived under the rule that reads it", true
+	default:
+		return "", false
+	}
+}
+
+// licensedRefusals stamps every refusal a rule answered with the
+// classification that dispatched to it, as [licensed] does for plans.
+//
+// At the dispatch for the reason given there, and the shared rules are
+// what make it necessary rather than tidy: missRule refuses for seven
+// detector shapes and its refusal text names none of them, so a census
+// reading the refusal alone could not say which shape went uncovered.
+func licensedRefusals(rs []Refusal, axis, name string) []Refusal {
+	for i := range rs {
+		rs[i].Licensed = projection.Licence{Axis: axis, Name: name}
+	}
+	return rs
 }
 
 // spellsOwnArgs is the rules that write at least one argument

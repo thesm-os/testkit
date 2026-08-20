@@ -10,37 +10,41 @@ the plans for exactly that reason.
 */ -}}
 {{- define "suite.harness" -}}
 {{- $c := . }}
-// {{ .IfaceName }} is the witnessed instantiation.
+// {{ .IfaceName }} is your interface, under a local name.
 //
-// A generic interface aliases with its own parameters, which Go admits
-// since 1.24 — so every declaration below names {{ .IfaceName }} and
-// the arguments follow, exactly as they do for a concrete one.
+// An alias, so it is the same type — this is here only so the rest of
+// this file can refer to it without repeating its import path, and so a
+// check you write can name it too.
 type {{ .IfaceName }}{{ renderTypeParams .TypeParams }} = {{ renderType .IfaceRef }}{{ .TypeArgs }}
 {{- if .Limit }}
 
-// {{ suite_limitConst .Token }} is the bound //testkit:mixin bounded limit={{ .Limit }}
-// declares: the ceiling the bounded law enforces, and the capacity every
-// harness constructor is handed.
+// {{ suite_limitConst .Token }} is the capacity your declaration gave as
+// limit={{ .Limit }}, and the capacity your constructor is called with.
 //
-// Passed to the constructors rather than left for a consumer to repeat,
-// because a subject built at some other capacity is one the law measures
-// against a limit it was never given — and that reads as a passing check.
+// It is passed in rather than left for you to repeat, because an
+// implementation built at some other capacity would be measured against a
+// limit it was never given — and that check would pass without meaning
+// anything.
 const {{ suite_limitConst .Token }} = {{ .Limit }}
 {{- end }}
 {{- if .Seeded }}
 
-// {{ suite_corpusTypeName .IfaceName }} is what a seeded harness is handed: the run's keys
-// mapped to the values it drew for them.
+// {{ suite_corpusTypeName .IfaceName }} is the starting data your constructor is handed:
+// the keys the checks will ask for, mapped to the values they expect back.
 type {{ suite_corpusTypeName .IfaceName }} = map[{{ renderType .Corpus.Key.Type }}]{{ renderType .Corpus.Value.Type }}
 {{- end }}
 
-// {{ .IfaceName }}Subject is the runtime subject a RunWith body receives.
+// {{ .IfaceName }}Subject is what a RunWith check receives instead of a single
+// instance: a handle that can build more of them.
 //
-// Aliased rather than named through the engine, so a consumer writing a
-// row against the subject stays inside this package's vocabulary.
+// Use it for a claim one instance cannot state on its own — that two
+// instances do not share state, that a value survives being closed and
+// reopened.
 type {{ .IfaceName }}Subject{{ renderTypeParams .TypeParams }} = {{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}]
 
-// {{ suite_runOptName .IfaceName }} is one thing you can pass to {{ suite_runName .IfaceName }}.
+// {{ suite_runOptName .IfaceName }} is anything you can pass to {{ suite_runName .IfaceName }}: an
+// implementation to test, a table of your own checks, a config, or a
+// check to drop. Order does not matter.
 type {{ suite_runOptName .IfaceName }}{{ renderTypeParams .TypeParams }} interface {
 	applyTo(*{{ suite_runConfigName .Token }}{{ .TypeArgs }})
 }
@@ -48,10 +52,9 @@ type {{ suite_runOptName .IfaceName }}{{ renderTypeParams .TypeParams }} interfa
 type {{ suite_runConfigName .Token }}{{ renderTypeParams .TypeParams }} struct {
 	{{ renderExpr (external $.Vocab "Bundle") }}[{{ suite_subjectType $c }}]
 
-	// rows are the consumer's own checks, bound against the run's
-	// fixture once the options are folded — which is why they are held
-	// here rather than lowered on arrival: a row bound before the
-	// fixture is known would draw from a fixture no run uses.
+	// rows are the checks you wrote, held until every argument has been
+	// read and then tied to this run's inputs. Tying them on arrival
+	// would bind them to inputs a later argument replaces.
 	rows {{ suite_rowsName $c.IfaceName }}{{ $c.TypeArgs }}
 {{- if .Pools }}
 
@@ -64,72 +67,108 @@ type {{ suite_runConfigName .Token }}{{ renderTypeParams .TypeParams }} struct {
 }
 
 {{- if .Harness.Induce }}
-// Inductions maps sentinels to triggers. The type has one home in the
-// engine, aliased here so a consumer stays inside this package's
-// vocabulary rather than importing the runtime to name a field.
+// Inductions says how to put your implementation into a failure state.
+//
+// A check that asks what happens after a particular error has to be able
+// to cause that error first. Map the error to a function that provokes
+// it, and the checks that need it can run.
 type Inductions[T any] = {{ renderExpr (external $.Vocab "Inductions") }}[T]
 
 {{ end }}
-// {{ suite_harnessName .IfaceName }} declares one {{ .IfaceName }} implementation under test.
+// {{ suite_harnessName .IfaceName }} describes one {{ .IfaceName }} implementation to test.
+//
+// Name and one constructor are all that is required. Every other field
+// unlocks the checks that need it, and you do not have to work out which
+// in advance: run it, and any check that needs more fails saying which
+// field to add.
 type {{ suite_harnessName .IfaceName }}{{ suite_withParam (renderTypeParams .TypeParams) (printf "T %s%s" .IfaceName .TypeArgs) }} struct {
 	Name string
 {{- if .Seeded }}
 
-	// Exactly one constructor, and both receive the corpus. The suite
-	// decides WHAT is seeded — it is zipped from the run's own pools —
-	// and the harness decides HOW loading happens.
+	// Set exactly one. Both are handed the starting data to load.
 	//
-	// Nothing on {{ .IfaceName }} writes, so a run cannot populate a subject
-	// through the surface under test. A read against an empty one cannot
-	// tell a miss from a bug, which is the whole reason this seam exists
-	// rather than an ordinary constructor.
+	// {{ .IfaceName }} has no method that writes, so the checks cannot fill an
+	// instance through the interface itself — they need you to hand back
+	// one already holding the data. Without that, a read returning
+	// nothing could equally mean "correctly empty" or "broken", and no
+	// check could tell the difference.
+	//
+	// Use Seed if construction cannot fail; use StartSeed if it needs the
+	// test's lifetime — a temp directory, a connection to close.
 	Seed      func(docs {{ suite_corpusTypeName $c.IfaceName }}) T
 	StartSeed func(tb {{ renderExpr (external "testing" "TB") }}, docs {{ suite_corpusTypeName $c.IfaceName }}) T
 {{- else }}
 
-	// Exactly one constructor{{ if .Limit }}, and both receive the derived bound{{ end }}.
+	// Set exactly one{{ if .Limit }}. Both are called with the declared capacity{{ end }}.
+	//
+	// Use New if construction cannot fail; use Start if it needs the
+	// test's lifetime — a temp directory to clean up, a connection to
+	// close. Start is handed the testing.TB to register that on.
 	New   func({{ if .Limit }}capacity int{{ end }}) T
 	Start func(tb {{ renderExpr (external "testing" "TB") }}{{ if .Limit }}, capacity int{{ end }}) T
 {{- end }}
 
-	// Excuse lists checks this subject structurally cannot take.
+	// Excuse lists checks this implementation cannot meaningfully take —
+	// not ones it fails, ones it has no way to answer. An in-memory
+	// implementation has no storage to survive a restart, so a check
+	// about restarting it is asking the impossible.
+	//
+	// Excused checks are reported as excused, never as passed.
 	Excuse []{{ renderExpr (external $.Vocab "ID") }}
 
-	// Oracle marks this subject as the run's reference. At most one.
+	// Oracle marks this implementation as the one others are compared
+	// against, when you are testing more than one. At most one may set it.
+	// Pick the implementation you trust most.
 	Oracle bool
 
-	// Serial keeps this subject out of the parallel group.
+	// Serial runs this implementation's checks one at a time, and never
+	// alongside another implementation's. Set it for something that
+	// cannot take being constructed many times at once — a real database,
+	// a fixed port.
 	Serial bool
 {{- if .Harness.Clock }}
 
-	// Clock is the time source a clocked check moves. Required: a
-	// check that advances the wall clock asserts nothing.
+	// Clock is the time source your implementation reads. Checks about
+	// expiry move it forward instead of waiting.
+	//
+	// Required, because those checks cannot state anything otherwise: an
+	// implementation reading the real clock would have to be waited on in
+	// real time, so the check would either take minutes or assert nothing.
 	Clock {{ renderType $.ClockRef }}
 {{- end }}
 {{- if .Harness.Induce }}
 
-	// Induce maps a sentinel to the trigger that puts the subject into
-	// the state that sentinel names.
+	// Induce maps each error to a function that puts your implementation
+	// into the state that error describes.
 	//
-	// A map rather than one function, because a check judging a poisoned
-	// subject and one judging a closed subject need different states and
-	// both name the state by its error. One trigger would make the
-	// harness guess which check was asking.
+	// A map rather than a single function because the states are
+	// different: a check about a closed instance and one about a failed
+	// instance both need to get there first, and each names the state it
+	// wants by its error. With one function the harness could not tell
+	// which was being asked for.
 	Induce Inductions[T]
 {{- end }}
 {{- if .Harness.Recover }}
 
-	// Recover rebuilds the subject over the state it left behind.
+	// Recover reopens whatever the previous instance left behind, without
+	// letting it shut down cleanly first — what a crash and restart
+	// would do.
+	//
+	// It takes the previous instance because the storage belongs to that
+	// instance: its directory, its file. A constructor with no handle on
+	// it could only reopen something shared, and then every check would be
+	// looking at the same state.
 	Recover func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ suite_subjectType $c }}) {{ .IfaceName }}
 {{- end }}
 
-	// Provide answers open capabilities beyond the named fields — the
-	// doors only this interface's checks know. The runner's gate reads
-	// it for any capability without a dedicated field.
+	// Provide supplies anything a check needs that has no field of its
+	// own above. You will not need it unless a check fails asking for a
+	// named capability, and that failure tells you the name to use here.
 	Provide map[{{ renderExpr (external $.Vocab "Capability") }}]any
 }
 
-// Subject lowers the declaration into what the runner consumes.
+// Subject converts this description into the form the runner uses, and
+// reports anything wrong with it — no constructor, or two.
 func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) Subject(
 	{{- if .Seeded }}docs {{ suite_corpusTypeName $c.IfaceName }}{{ end -}}
 ) ({{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}], error) {
@@ -144,8 +183,8 @@ func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) S
 	}
 	build, err := {{ renderExpr (external $.Vocab "OneCtor") }}(h.Name, plain, start)
 {{- else if .Limit }}
-	// The declared bound closed over before the one-ctor rule judges the
-	// pair, so a harness sees the same capacity the law does.
+	// The capacity is bound in before the constructors are checked, so
+	// your constructor and the checks agree about what it is.
 	var plain func() T
 	if h.New != nil {
 		plain = func() T { return h.New({{ suite_limitConst .Token }}) }
@@ -184,19 +223,21 @@ func (d {{ suite_dropOptName .Token }}{{ .TypeArgs }}) applyTo(rc *{{ suite_runC
 	rc.AddDrops(d...)
 }
 
-// {{ suite_withoutName .Token }} drops checks by identity.
+// {{ suite_withoutName .Token }} drops the named checks from the run.
 func {{ suite_withoutName .Token }}{{ renderTypeParams .TypeParams }}(ids ...{{ renderExpr (external $.Vocab "ID") }}) {{ suite_runOptName .IfaceName }}{{ .TypeArgs }} {
 	return {{ suite_dropOptName .Token }}{{ .TypeArgs }}(ids)
 }
 
 {{- if .Seeded }}
 
-// {{ suite_corpusName .Token }} is what every subject is seeded with: one entry per key
-// the run draws, values cycled where the pools differ in length.
+// {{ suite_corpusName .Token }} builds the starting data every implementation is
+// loaded with: one entry per key, values reused in order if there are
+// fewer of them.
 //
-// Derived rather than asked for, so two harnesses of the same run are
-// populated identically — a differential comparison between subjects
-// seeded differently measures the seeding.
+// Worked out rather than asked for, so that two implementations in the
+// same run start from identical data. If you supplied them separately
+// and they differed, a comparison between the two would be measuring
+// your setup rather than their behaviour.
 func {{ suite_corpusName .Token }}({{ if .Pools }}cfg {{ suite_configName .IfaceName }}{{ end }}) {{ suite_corpusTypeName $c.IfaceName }} {
 {{- if .Pools }}
 	cfg = cfg.orDefault()
@@ -208,43 +249,51 @@ func {{ suite_corpusName .Token }}({{ if .Pools }}cfg {{ suite_configName .Iface
 	return docs
 }
 
-// {{ suite_missKeyName .Token }} is the key deliberately outside that corpus.
+// {{ suite_missKeyName .Token }} is a key deliberately left out of that data.
 //
-// A miss check draws this rather than the fixture's alternate: the
-// corpus zips EVERY member of the key pool, so the alternate is a second
-// seeded key and a body drawing it would hit while claiming to miss.
+// Checks that expect to find nothing use this one. They cannot use the
+// fixture's second key, because every key in the pool gets loaded — so
+// that one is present too, and a check using it would find something
+// while claiming to find nothing.
 func {{ suite_missKeyName .Token }}() {{ renderType .Corpus.Key.Type }} {
 	return {{ .Corpus.MissKey }}
 }
 {{- end }}
 
-// --- The veneer -------------------------------------------------------------
+// --- Naming checks ----------------------------------------------------------
 
-// {{ suite_veneerVar .IfaceName }} is the entry a consumer names checks through.
+// {{ suite_veneerVar .IfaceName }} is how you name a check — to drop it, or to
+// point at it from a tool.
 var {{ suite_veneerVar .IfaceName }} = {{ suite_veneerName .Token }}{Checks: {{ suite_indexVar .Token }}}
 
 type {{ suite_veneerName .Token }} struct {
-	// Checks is the check index — the constants a Without call is
-	// written against.
+	// Checks names every check this file runs, by method:
+	//
+	//	{{ suite_veneerVar $.IfaceName }}.Checks.<Method>.<Check>()
+	//
+	// Prefer this over writing the check's name as a string. If a later
+	// regeneration stops emitting that check, this stops compiling —
+	// where the string would silently drop nothing.
 	Checks {{ suite_indexType .Token }}
 }
 
 {{- if .TypeParams }}
-// {{ suite_exportedWithout .IfaceName }} drops a check by ID.
+// {{ suite_exportedWithout .IfaceName }} drops the named checks from the run.
 //
-// A function rather than a method on the veneer: a method introduces no
-// type parameters, and a generic interface has no one instantiation to
-// fix them at. The index above is not generic — an ID is a string — so
-// naming a check reads the same either way.
+// A function rather than a method, because {{ .IfaceName }} is generic and a
+// method could not carry its type arguments. Naming the checks reads the
+// same either way.
 func {{ suite_exportedWithout .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	ids ...{{ renderExpr (external $.Vocab "ID") }},
 ) {{ suite_runOptName .IfaceName }}{{ .TypeArgs }} {
 	return {{ suite_withoutName .Token }}{{ .TypeArgs }}(ids...)
 }
 
-// {{ suite_exportedSuiteOf .IfaceName }} returns the checks as data, for tooling or a runner
-// of your own — the generic subject's form of the veneer's Suite method,
-// and there for the same reason {{ suite_exportedWithout .IfaceName }} is.
+// {{ suite_exportedSuiteOf .IfaceName }} returns the checks as plain data, if you are
+// building a tool over them or running them yourself.
+//
+// A function rather than a method for the same reason
+// {{ suite_exportedWithout .IfaceName }} is: {{ .IfaceName }} is generic.
 func {{ suite_exportedSuiteOf .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
 	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
@@ -257,16 +306,22 @@ func {{ suite_exportedSuiteOf .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	)
 }
 {{- else }}
-// Without drops a check by ID.
+// Without drops the named checks from the run.
+//
+//	{{ suite_runName $.IfaceName }}(t, mine, {{ suite_veneerVar $.IfaceName }}.Without(
+//		{{ suite_veneerVar $.IfaceName }}.Checks{{ with index $.Methods 0 }}.{{ .Name }}.Smoke(){{ end }}))
+//
+// Dropping is recorded in the run's report, so a check you removed is
+// visible rather than simply absent.
 func ({{ suite_veneerName .Token }}) Without(ids ...{{ renderExpr (external $.Vocab "ID") }}) {{ suite_runOptName .IfaceName }} {
 	return {{ suite_withoutName .Token }}(ids...)
 }
 
-// Suite returns the checks as data, for tooling or a runner of your own.
+// Suite returns the checks as plain data, if you are building a tool over
+// them or running them yourself.
 //
-// The way in from outside this package: the assembler and the table it
-// builds are unexported, because a caller reaching them is doing tooling
-// and tooling wants one name rather than one per interface.
+// {{ suite_runName $.IfaceName }} is the normal way in; this is for when you need the
+// checks as values rather than as a run.
 func ({{ suite_veneerName .Token }}) Suite(
 	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ end }}
 	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
@@ -280,25 +335,29 @@ func ({{ suite_veneerName .Token }}) Suite(
 }
 {{- if .Pools }}
 
-// DefaultConfig is the pools this run derived, for a consumer composing
-// one from them rather than from nothing.
+// DefaultConfig is the sample inputs this file worked out for itself.
+//
+// Start from it when you want to change one thing and keep the rest —
+// take it, set the field you care about, and pass it to {{ suite_runName $.IfaceName }}.
 func ({{ suite_veneerName .Token }}) DefaultConfig() {{ suite_configName .IfaceName }} {
 	return {{ suite_defaultConfigName .Token }}()
 }
 
 {{- if .Limit }}
 
-// DeclaredLimit is the bound //testkit:mixin bounded declares — exported
-// so a consumer artifact needing the number reads it from the
-// declaration's one home instead of restating it to drift.
+// DeclaredLimit is the capacity your declaration gave.
+//
+// Read it from here rather than writing the number again: two copies of
+// a limit drift apart, and the checks use this one.
 func ({{ suite_veneerName .Token }}) DeclaredLimit() int { return {{ suite_limitConst .Token }} }
 {{- end }}
 
-// TrySuite is Suite with the config validated instead of trusted.
+// TrySuite is Suite for a config you built yourself, returning an error
+// instead of panicking if it is unusable.
 //
-// The suite-as-data path has no testing.TB to report through, so a bad
-// config there panics; a caller composing suites outside a run — a
-// negative control with its own pools — wants the error.
+// Suite panics on a bad config because it has no test to report through.
+// If you are assembling a config in code rather than passing it straight
+// to {{ suite_runName $.IfaceName }}, use this and handle the error.
 func ({{ suite_veneerName .Token }}) TrySuite(cfg {{ suite_configName .IfaceName }}) ({{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}], error) {
 	if _, err := cfg.normalize(); err != nil {
 		return {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}]{}, err
@@ -314,18 +373,20 @@ func ({{ suite_veneerName .Token }}) TrySuite(cfg {{ suite_configName .IfaceName
 
 {{- if .Seeded }}
 
-// Corpus is what a default run seeds every subject with — the way in
-// from outside this package, for tooling and for the proofs beside it.
+// Corpus is the starting data a default run loads every implementation
+// with — the same map your constructor is handed.
+//
+// Useful when a check you write needs to know what was loaded.
 func ({{ suite_veneerName .Token }}) Corpus() {{ suite_corpusTypeName .IfaceName }} {
 	return {{ suite_corpusName .Token }}({{ if .Pools }}{{ suite_defaultConfigName .Token }}(){{ end }})
 }
 {{- end }}
 
-// --- Drop hints -------------------------------------------------------------
+// --- Failure messages -------------------------------------------------------
 
-// {{ suite_indexPathName .Token }} spells every emitted ID as the path a
-// consumer would write to drop it, so a run that declines something can
-// say what to type rather than what failed.
+// {{ suite_indexPathName .Token }} maps each check to the expression you would
+// write to drop it, so that a check which cannot run tells you what to
+// type rather than only what went wrong.
 var {{ suite_indexPathName .Token }} = map[{{ renderExpr (external $.Vocab "ID") }}]string{
 {{- range $g := .Index.Groups }}
 {{- range $a := $g.Accessors }}

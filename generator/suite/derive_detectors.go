@@ -39,8 +39,11 @@ func missRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPl
 			{
 				Deriver: DeriverStamps,
 				What:    m.Name + "'s miss check",
-				Why:     "nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied",
-				Remedy:  "declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row",
+				Why: "no method here stores anything and nothing loads it with " +
+					"starting data, so there is no input this check could ask " +
+					"for and be sure was never stored",
+				Remedy: "say what a lookup reports when it finds nothing, with " +
+					"//testkit:mixin notfound sentinel=Err…, or write the check yourself",
 			},
 		}
 	}

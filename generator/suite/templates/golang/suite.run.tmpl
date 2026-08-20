@@ -12,13 +12,27 @@ make a consumer fix four things in four cycles.
 */ -}}
 {{- define "suite.run" -}}
 {{- $c := . }}
-// {{ suite_runName .IfaceName }} runs every check — generated and yours — against every
-// harness.
+// {{ suite_runName .IfaceName }} runs every check — the generated ones and any you
+// wrote — against every implementation you pass it.
+//
+// Each argument describes one thing to do, in any order: an
+// implementation to test, a table of your own checks, sample inputs to
+// use, or checks to leave out.
 //
 //	{{ suite_runName .IfaceName }}(t,
 //		{{ suite_harnessName .IfaceName }}[*InMemory]{Name: "in-memory", New: NewInMemory},
 //		{{ if .TypeParams }}{{ suite_exportedWithout .IfaceName }}{{ .TypeArgs }}{{ else }}{{ suite_veneerVar .IfaceName }}.Without{{ end }}({{ suite_veneerVar .IfaceName }}.Checks{{ with index .Methods 0 }}.{{ .Name }}.Smoke(){{ end }}),
 //	)
+//
+// Pass two implementations to compare them against each other, and mark
+// the one you trust as the Oracle. Every check runs as its own subtest
+// named after the implementation and the check, so `go test -run` can
+// select one.
+//
+// A check that needs something your implementation has not supplied
+// fails rather than skipping, and says which field to fill in. That is
+// deliberate: a skipped check is how a claim goes unchecked while the
+// run stays green.
 func {{ suite_runName .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	t *{{ renderExpr (external "testing" "T") }}, opts ...{{ suite_runOptName .IfaceName }}{{ .TypeArgs }},
 ) {
@@ -31,9 +45,9 @@ func {{ suite_runName .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	for _, row := range rc.rows {
 		rc.AddCheck(row.bind({{ suite_fixtureIdent }}))
 	}
-	// Between folding and running: a misused run reports every fix it
-	// needs and executes nothing, rather than reporting one and leaving
-	// the rest to be found a cycle at a time.
+	// Checked here, after reading every argument and before running
+	// anything: a misconfigured run reports all of its problems at once
+	// rather than one per attempt.
 	rc.Fail(t, "{{ suite_runName .IfaceName }}")
 	{{ renderExpr (external $.Vocab "Run") }}(t,
 		{{ suite_suiteName .Token }}{{ .TypeArgs }}(
@@ -44,12 +58,20 @@ func {{ suite_runName .IfaceName }}{{ renderTypeParams .TypeParams }}(
 		rc.Subjects...)
 }
 
-// {{ suite_proveName .IfaceName }} drives each of your rows against the defect it names.
+// {{ suite_proveName .IfaceName }} runs each of your checks against the deliberately
+// broken implementation it names, and fails if the check does not catch
+// it.
 //
-// A row with no ProvenBy is not skipped — it is held to saying why
-// through Argued. The parity gate refuses a Proven claim with no
-// evidence and evidence for a claim nobody made, in both directions, so
-// this is where "proven able to fail" stops being prose.
+//	func TestMyChecksCanFail(t *testing.T) { {{ suite_proveName .IfaceName }}(t, myChecks) }
+//
+// A check that always passes is indistinguishable from a working one
+// until something breaks in production. This is what tells them apart:
+// give each check a ProvenBy, and this proves the check can fail.
+//
+// A check with no ProvenBy is not ignored — it has to say why, in
+// Argued. The two are held level in both directions: claiming proof
+// without a broken implementation fails here, and supplying one for a
+// check that claims nothing fails too.
 func {{ suite_proveName .IfaceName }}{{ renderTypeParams .TypeParams }}(
 	t *{{ renderExpr (external "testing" "T") }}, checks {{ suite_rowsName .IfaceName }}{{ .TypeArgs }},
 	{{- if .Pools }} cfg ...{{ suite_configName .IfaceName }}{{ .TypeArgs }},{{ end }}

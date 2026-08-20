@@ -10,13 +10,11 @@ template through the backend's dispatch.
 */ -}}
 {{- define "suite.checks" -}}
 {{- $c := . }}
-// {{ suite_suiteName .Token }} returns the checks as data, drawn from f.
+// {{ suite_suiteName .Token }} returns the checks as data, using the given inputs.
 //
-// The seam the proofs companion binds to, and the one a runner of your
-// own would. It takes the fixture rather than a config because the
-// fixture is what a check draws from; a config that derives one is the
-// pool work, and until that lands a caller passes what a default run
-// passes.
+// It takes the built inputs rather than a config, because that is what
+// the checks read. To start from the defaults, pass what a default run
+// passes — {{ suite_veneerVar .IfaceName }}.Suite does exactly that.
 func {{ suite_suiteName .Token }}{{ renderTypeParams .TypeParams }}(
 	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
 	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
@@ -33,13 +31,12 @@ func {{ suite_suiteName .Token }}{{ renderTypeParams .TypeParams }}(
 	}
 }
 
-// {{ suite_checksName .Token }} builds every check this run derived.
+// {{ suite_checksName .Token }} builds every check in this file.
 //
-// sig is the one shape they share; the literals below state only what
-// differs. Falsifiable is Proven wherever a defect rule reached the
-// claim AND the companion beside this file spells that defect — the
-// parity gate refuses the stamp without the evidence, so a claim this
-// run cannot yet plant is argued rather than asserted.
+// A check is marked as proven able to fail only when a deliberately
+// broken implementation for it exists in the file beside this one.
+// Where none could be built, the check says so instead — claiming proof
+// without the evidence is refused, in both directions.
 func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}(
 	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
 	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
@@ -71,7 +68,7 @@ func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}(
 {{- end }}
 			func(tb {{ renderExpr (external "testing" "TB") }}, {{ $ck.Recv }} {{ $c.IfaceName }}{{ $c.TypeArgs }}) {
 				{{ $ck.AssertName }}{{ $c.TypeArgs }}(tb, {{ $ck.Recv }}{{ if $ck.Draws }}, {{ suite_fixtureIdent }}{{ end }}{{ if $ck.Seeds }}, {{ suite_docsIdent }}{{ end }})
-			}),
+			}).At({{ renderExpr (external $.Vocab $ck.StrengthConst) }}),
 {{- end }}
 	}
 }

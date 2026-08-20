@@ -172,20 +172,38 @@ func TestStampsDeriveTheStampFamilies(t *testing.T) {
 func TestStampsHoldTheCensusPosture(t *testing.T) {
 	t.Parallel()
 
-	t.Run("a law-backed stamp is the model tier's, silently", func(t *testing.T) {
+	t.Run("a law-backed stamp is the model tier's, and said so", func(t *testing.T) {
 		t.Parallel()
 		plans, refusals := Stamps{}.Derive(stampIface(stampMethod("Put", "", MixinTTL)))
 		testkit.Len(t, plans, 0, "the laws deriver owns it")
-		testkit.Len(t, refusals, 0, "tiers recognizes it, so it is not a gap")
+
+		// Named rather than silent. It was silent, and the generated
+		// header then listed a method's signature checks and never
+		// mentioned the directive the consumer had written above it —
+		// which reads as a file that checked it.
+		testkit.Len(t, refusals, 1, "the directive is accounted for, not passed over")
+		testkit.True(t, refusals[0].Elsewhere,
+			"owned by another tier, which is not the same as a gap")
+		testkit.False(t, refusals[0].Unaccounted,
+			"and not a classification nobody has decided about")
 	})
 
-	t.Run("an unknown stamp refuses with the census framing", func(t *testing.T) {
+	t.Run("an unknown stamp refuses and marks itself unaccounted", func(t *testing.T) {
 		t.Parallel()
 		plans, refusals := Stamps{}.Derive(stampIface(stampMethod("Put", "", "brand-new-shape")))
 		testkit.Len(t, plans, 0, "nothing derives from an unknown stamp")
 		testkit.Len(t, refusals, 1, "the gap is named, never silent")
 		testkit.Contains(t, refusals[0].What, "brand-new-shape", "the refusal names the stamp")
-		testkit.Contains(t, refusals[0].Remedy, "census", "the remedy points at the coverage mechanism")
+
+		// The flag rather than a phrase in the prose. The remedy is
+		// consumer-facing and its wording is free to improve; what the
+		// census reads is this field, and pinning the sentence instead
+		// would fail the day someone reworded it without changing what
+		// it means.
+		testkit.True(t, refusals[0].Unaccounted,
+			"an unknown stamp is the gap itself, not an argument for one")
+		testkit.Equal(t, refusals[0].Licensed.Name, "brand-new-shape",
+			"and the census can attribute it")
 	})
 
 	t.Run("an undeliverable draw refuses the stamp checks", func(t *testing.T) {

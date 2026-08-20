@@ -1,7 +1,7 @@
 testkit-checks v2
 Acquire/cancel	signature/cancel	Acquire reports a cancelled context as cancelled	
 Acquire/deadline	signature/deadline	Acquire reports an expired deadline as exceeded	
-Acquire/idempotent	mixin/idempotent	a second Acquire after a clean one changes nothing	
+Acquire/idempotent	mixin/idempotent	a second Acquire after a clean one is accepted	
 Acquire/nilcontext	signature/nilcontext	Acquire returns an error rather than panicking on a nil context	
 Acquire/smoke	signature/smoke	Acquire survives a call with a derived key	
 Release/cancel	signature/cancel	Release reports a cancelled context as cancelled	

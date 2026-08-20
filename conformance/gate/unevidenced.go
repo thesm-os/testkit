@@ -50,9 +50,12 @@ var UnevidencedClassifications = map[string]string{
 	// closer would close this, and would delete this row.
 	"closer": "DEFECT, not a debt: the sole carrier is a Close flattened in from io.Closer, and the shape stamp does not survive the flattening — the suite projection reads no shape, so nothing generates and no header says so",
 
-	// Mixins. Three shapes of absence: a marker with no claim of its own, a
-	// claim another classification already checks under its own name, and a
-	// claim needing a condition the harness cannot produce.
+	// Mixins. Four shapes of absence: a marker with no claim of its own, a
+	// claim another classification already checks under its own name, a claim
+	// needing a condition the harness cannot produce, and a claim about an
+	// error that only exists once something has failed.
+	"wrappedvia": "the claim compares one method's error against the cause a named sibling returns, and both are nil on a healthy subject — so a suite run gets nil wrapping nil and reports agreement, which is true of an implementation that wraps nothing at all; stating it needs the cause induced, and the suite tier has no seam that makes a correct subject fail",
+
 	"deprecated":      "a fact about a method's lifecycle rather than about its behaviour; there is nothing to assert and the generated documentation states it, which is where a caller needs it",
 	"integrationonly": "a run modifier, not a claim: it gates every other check behind an environment, so a check about it would be a check about the harness rather than the subject",
 	"timeaware":       "a marker that a callable depends on a clock, deliberately without saying which quantity — the quantities are `ttl`, `timeout` and `windowed`, and those carry the checkable claims",

@@ -14,21 +14,24 @@ structural, not a flag.
 */ -}}
 {{- define "suite.rows" -}}
 {{- $c := . }}
-// {{ suite_defectTypeName .IfaceName }} is anything that can stand as a planted defect for a
-// row — in practice a {{ suite_harnessName .IfaceName }} over the generated double.
+// {{ suite_defectTypeName .IfaceName }} is a deliberately broken implementation, used as
+// evidence that a check can fail. In practice you build one with
+// {{ suite_brokenName .IfaceName }} over the generated test double.
 type {{ suite_defectTypeName .IfaceName }}{{ renderTypeParams .TypeParams }} interface {
 	Subject({{ if .Seeded }}docs {{ suite_corpusTypeName .IfaceName }}{{ end }}) ({{ .IfaceName }}Subject{{ .TypeArgs }}, error)
 }
 
-// {{ suite_brokenName .IfaceName }} names a planted defect.
+// {{ suite_brokenName .IfaceName }} describes an implementation built to break one
+// specific claim, so that a check can be shown to catch it.
 //
-// Sugar over the harness, because a defect IS a subject — one built to
-// fail exactly one claim. Its own constructor is what keeps a proofs
-// table readable beside a run's.
+// Give it a name saying what is wrong, and a constructor. The best
+// broken implementation is the generated double wrapping a correct one,
+// with a single method overridden — correct everywhere except the one
+// place the check is about.
 {{- if .Seeded }}
 //
-// It takes the corpus, because {{ .IfaceName }}'s constructor seam does: a
-// planted defect here is a loader that betrays what it was given.
+// It receives the same starting data a real implementation would, since
+// what you are breaking here is what it does with what it was given.
 {{- end }}
 func {{ suite_brokenName .IfaceName }}{{ suite_withParam (renderTypeParams .TypeParams) (printf "T %s%s" .IfaceName .TypeArgs) }}(
 	name string, build func({{ if .Seeded }}docs {{ suite_corpusTypeName .IfaceName }}{{ else if .Limit }}capacity int{{ end }}) T,
@@ -38,75 +41,105 @@ func {{ suite_brokenName .IfaceName }}{{ suite_withParam (renderTypeParams .Type
 	}
 }
 
-// {{ suite_rowsName .IfaceName }} is the table of this package's own checks.
+// {{ suite_rowsName .IfaceName }} is a table of checks you write yourself, for the
+// claims that cannot be worked out from the declaration — the ones that
+// carry your domain.
+//
+// They are the same kind of value as the generated checks: they appear
+// in the report, they can be dropped by name, and they can say what they
+// need from an implementation. There is no second mechanism for them.
+//
+//	var myChecks = {{ suite_rowsName .IfaceName }}{
+//		{{ with index .Methods 0 }}{Method: "{{ .Name }}", Name: "my-claim",{{ end }}
+//			Claim:    "a sentence stating exactly what this check proves",
+//			Run:      myClaimBody,
+//			ProvenBy: {{ suite_brokenName .IfaceName }}("an implementation that breaks it", newBroken)},
+//	}
 type {{ suite_rowsName .IfaceName }}{{ renderTypeParams .TypeParams }} []{{ suite_rowName .IfaceName }}{{ .TypeArgs }}
 
 func (c {{ suite_rowsName .IfaceName }}{{ .TypeArgs }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
 	rc.rows = append(rc.rows, c...)
 }
 
-// {{ suite_rowName .IfaceName }} is one row. The body is a plain named function; which
-// field it goes in decides what it receives.
+// {{ suite_rowName .IfaceName }} is one check you wrote. The body is a plain named
+// function; which field you put it in decides what it is handed.
 type {{ suite_rowName .IfaceName }}{{ renderTypeParams .TypeParams }} struct {
-	// Method scopes Run's ID: {{ with index .Methods 0 }}"{{ .Name }}" makes it {{ .Name }}/<name>{{ end }}.
-	// A body that fixes its own scope leaves this empty.
+	// Method groups this check under one of your methods, so it is named
+	// {{ with index .Methods 0 }}{{ .Name }}/<Name> in output{{ end }} and reruns with the rest of that
+	// method's checks. Leave it empty for a check that is not about one
+	// method in particular.
 	Method string
 
-	// Name is the ID's slug — the stable handle a drop and a rerun use.
+	// Name identifies this check, in output and when dropping it. Keep it
+	// stable: it is what a colleague's Without call refers to.
 	Name string
 
-	// Claim is the sentence the manifest records and the report reads
-	// out. A claim wider than its assertion is the one failure this
-	// surface cannot catch for you.
+	// Claim is one sentence saying exactly what this check proves. It is
+	// recorded in the manifest and read out in the report.
+	//
+	// Write only what the body actually establishes. "a second write
+	// leaves the value unchanged" is a promise that something reads the
+	// value back; if the body only checks the write returned no error,
+	// say that instead. Nothing here can catch a claim that is wider
+	// than its check, and a claim nobody verifies is worse than none.
 	Claim string
 
-	// Exactly one body.
+	// Set exactly one.
 	//
-	// Run gets one fresh instance, which is nearly every check. RunWith
-	// gets the subject itself, for a claim one instance cannot state:
-	// build two, move the clock, induce a failure.
+	// Run is handed one fresh instance, which suits nearly every check.
+	// RunWith is handed something that can build instances, for a claim
+	// one instance cannot state on its own: build two and compare them,
+	// move the clock forward, put one into a failure state.
 	//
-	// Both take the fixture whether or not any DERIVED check draws one,
-	// so the row seam has one shape across every package and a fixture
-	// that later grows a field does not change a signature consumers
-	// have already written against.
+	// Both are also handed the sample inputs, so a check you write draws
+	// from the same values the generated ones do — override an input and
+	// your check sees the override too.
 	Run     func(tb {{ renderExpr (external "testing" "TB") }}, s {{ suite_subjectType $c }}, {{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }})
 	RunWith func(tb {{ renderExpr (external "testing" "TB") }}, sub {{ .IfaceName }}Subject{{ .TypeArgs }}, {{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }})
 
-	// Class buckets the report. Empty means hand-written.
+	// Class groups this check in the report's summary. Optional; checks
+	// you write are grouped as hand-written by default.
 	Class {{ renderExpr (external $.Vocab "Class") }}
 
-	// Needs declares capabilities. A harness that cannot meet one fails
-	// this check by name with the fix in the message, never skips — a
-	// check that skipped for want of wiring reads as coverage.
+	// Needs says what this check requires from an implementation beyond
+	// being constructed — a clock it can move, a failure it can induce.
+	//
+	// An implementation that cannot supply it fails this check by name,
+	// with the field to fill in named in the message. It never skips: a
+	// check that quietly skipped for want of wiring would look exactly
+	// like one that passed.
 	Needs {{ renderExpr (external $.Vocab "Caps") }}
 
-	// ProvenBy is the planted defect that fails this check and nothing
-	// else. Setting it is the claim AND the evidence: the row reports
-	// Proven, and {{ suite_proveName .IfaceName }} fails unless the defect turns the check
-	// red. ProvenReason, when set, is a substring that red must contain,
-	// so a defect dying on an incidental guard stops counting as one.
+	// ProvenBy is an implementation built to break this check and nothing
+	// else. Setting it makes two statements at once — that the check can
+	// fail, and here is the proof — and {{ suite_proveName .IfaceName }} fails unless the
+	// broken implementation really does turn this check red.
 	//
-	// Argued records why no defect can be constructed — the honest third
-	// answer. At most one of ProvenBy and Argued; neither means unproven,
-	// which is what the report says about a check nobody has driven
-	// against anything.
+	// ProvenReason, if set, is text the failure must contain. Use it so
+	// that a broken implementation which fails for some unrelated reason
+	// stops counting as evidence.
+	//
+	// Argued is for when no such implementation can be built: record why,
+	// in a sentence. Set at most one of the two. Setting neither is
+	// allowed and the report says so — the check is unproven, which is
+	// honest, and different from proven.
 	ProvenBy     {{ suite_defectTypeName .IfaceName }}{{ .TypeArgs }}
 	ProvenReason string
 	Argued       string
 }
 
-// {{ suite_methodsVar .Token }} is the interface's method set, for naming a Method typo
-// at run start.
+// {{ suite_methodsVar .Token }} is the interface's method names, used to catch a typo in
+// a check's Method field before the run starts.
 //
-// A misspelled method starts with a capital too, so the ID grammar alone
-// would file a check under a method that does not exist and report it
-// under a path no drop can name.
+// Without it a misspelled name would be accepted — it looks like any
+// other method name — and the check would be filed under a method that
+// does not exist, where nobody could find or drop it.
 var {{ suite_methodsVar .Token }} = {{ renderExpr (external $.Vocab "NewNameSet") }}("{{ .IfaceName }}"
 	{{- range .Methods }}, {{ suite_methodConst $c.Token .Name }}{{ end }})
 
-// bind lowers one row onto the runtime check type, against the run's own
-// fixture — which is what lets a row's body draw what the run draws.
+// bind converts one of your checks into the form the runner uses, tying
+// it to this run's sample inputs — which is what lets a check you wrote
+// see the same values, and the same overrides, as the generated ones.
 func (c {{ suite_rowName .IfaceName }}{{ .TypeArgs }}) bind(
 	{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }},
 ) ({{ renderExpr (external $.Vocab "Check") }}[{{ suite_subjectType $c }}], error) {

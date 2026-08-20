@@ -10,7 +10,8 @@ and this file only assembles it.
 */ -}}
 {{- define "suite.index" -}}
 {{- $c := . }}
-// The names this file spells more than once: one home each.
+// The names this file uses in more than one place, declared once each so
+// they cannot drift apart.
 const (
 {{- range $m := .Methods }}
 	{{ suite_methodConst $c.Token $m.Name }} = {{ printf "%q" $m.Name }}
@@ -22,8 +23,8 @@ const (
 {{- end }}
 )
 
-// {{ suite_indexVar .Token }} indexes every check this package emits, by
-// method and then by check.
+// {{ suite_indexVar .Token }} names every check in this file, grouped by method.
+// Reach it through {{ suite_veneerVar .IfaceName }}.Checks.
 var {{ suite_indexVar .Token }} = {{ suite_indexType .Token }}{
 {{- range $g := .Index.Groups }}
 	{{ $g.Field }}: {{ suite_groupType $c.Token $g.Field }}{},

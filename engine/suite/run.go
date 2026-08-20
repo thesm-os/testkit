@@ -141,7 +141,10 @@ func runSubject[S any](
 			// reason, so a subject's exemptions are always visible.
 			mu.Lock()
 			rep.add(sub.Name, string(c.ID), string(c.Class),
-				legOf{outcome: DidNotRun, reason: ReasonExcused, falsifiable: c.Falsifiable})
+				legOf{
+					outcome: DidNotRun, reason: ReasonExcused,
+					falsifiable: c.Falsifiable, strength: c.Strength,
+				})
 			mu.Unlock()
 			continue
 		}
@@ -178,7 +181,10 @@ func runSubject[S any](
 			//	noted reason   -> DidNotRun
 			//	otherwise      -> Passed
 			defer func() {
-				leg := legOf{falsifiable: c.Falsifiable, tier: tierOf(sub), unengaged: sub.note.unengaged}
+				leg := legOf{
+					falsifiable: c.Falsifiable, strength: c.Strength,
+					tier: tierOf(sub), unengaged: sub.note.unengaged,
+				}
 				leg.outcome, leg.reason = legVerdict(unmet, t.Failed(), t.Skipped(), sub.note.reason)
 				mu.Lock()
 				rep.add(sub.Name, string(c.ID), string(c.Class), leg)

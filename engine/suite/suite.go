@@ -234,6 +234,14 @@ type Check[S any] struct {
 	Claim string // one sentence; shown in the report and written to checks.lock
 	Needs Caps
 
+	// Strength is what this check examines before passing — the error
+	// channel alone, state read back, or a reference outside the subject.
+	//
+	// The zero value is [StrengthErrorOnly], which is the weakest of the
+	// three and therefore the safe default: a check that never says what
+	// it looks at is reported as looking at the least.
+	Strength Strength
+
 	// Binds names the assertion bodies this check delegates to — law IDs
 	// with their probe sets — so the manifest carries them. The claim and
 	// the ID survive a body change unchanged; this column is what makes
@@ -597,6 +605,46 @@ const (
 	// FalsifiableArgued means the check cannot be shown able to fail and the
 	// reason is recorded rather than assumed.
 	FalsifiableArgued FalsifiableState = "argued"
+)
+
+// Strength is what class of evidence a check gathers — how far it looks
+// before deciding the subject is correct.
+//
+// The sibling of [Falsifiability], and the question it does not ask.
+// Falsifiability says whether anything has shown this check able to fail;
+// strength says what the check examines when it runs. A check can be
+// proven able to fail and still judge far less than its claim states,
+// because the defect that proved it was built to break exactly the part
+// the check looks at.
+//
+// That is not hypothetical and it is why this exists. A repeat probe
+// calls a method twice and requires the second call to succeed; the
+// defect written for it fails the second call, so the pair agrees and the
+// proof passes. Neither notices that the claim beside them promises the
+// second call CHANGED NOTHING — a promise nothing reads state back to
+// check. Reporting the strength is what makes that visible without an
+// audit.
+type Strength string
+
+const (
+	// StrengthErrorOnly means the check judges only whether calls
+	// succeeded or failed. It never looks at a value or at state.
+	//
+	// Correct and sufficient for a whole family of claims — that a method
+	// survives a call, that it reports a cancelled context. It is a
+	// finding only when the claim beside it promises more than success.
+	StrengthErrorOnly Strength = "error-only"
+
+	// StrengthObserved means the check reads a value or state back and
+	// judges it: a lookup compared against what was stored, a count
+	// against what was seeded, a reading taken either side of a call.
+	StrengthObserved Strength = "observed"
+
+	// StrengthDifferential means the check judges against something
+	// outside the subject — a reference implementation, or a law driven
+	// over generated sequences. The strongest of the three, because what
+	// it compares against was not written from this implementation.
+	StrengthDifferential Strength = "differential"
 )
 
 // Proven marks a check as shown able to fail.

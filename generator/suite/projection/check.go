@@ -141,7 +141,15 @@ type NeedPlan struct {
 // Body is the closed set of check-body shapes. One template per kind;
 // the kind IS the template's name, and the census holds the two
 // registries equal.
-type Body interface{ BodyKind() BodyKind }
+type Body interface {
+	BodyKind() BodyKind
+
+	// Strength is how far this body looks before passing. On the
+	// interface rather than in a table beside it, so a variant added
+	// without deciding does not compile — the same guard [BodyKind]
+	// gets, for a property with the same failure mode if guessed.
+	Strength() suite.Strength
+}
 
 // Defect is the closed set of planted-defect shapes, mirroring the
 // proofs rules in derivation-rules.md.

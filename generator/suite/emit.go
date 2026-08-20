@@ -105,6 +105,20 @@ func (c *CheckEmit) AssertName() string { return c.assertName }
 // under, so the row names the class rather than repeating its slug.
 func (c *CheckEmit) ClassConst() string { return c.classConst }
 
+// StrengthConst is the engine identifier for how far this check looks
+// before passing, so the generated file names the constant rather than
+// repeating the string it stands for.
+func (c *CheckEmit) StrengthConst() string {
+	switch c.Plan.Body.Strength() {
+	case vocab.StrengthDifferential:
+		return "StrengthDifferential"
+	case vocab.StrengthObserved:
+		return "StrengthObserved"
+	default:
+		return "StrengthErrorOnly"
+	}
+}
+
 // Kind returns the plan's body variant, which is its template's name.
 func (c *CheckEmit) Kind() sdk.Kind { return sdk.Kind(c.Plan.Body.BodyKind()) }
 

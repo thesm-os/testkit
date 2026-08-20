@@ -473,9 +473,28 @@ func BoundClaim(m Method, sizer string) string {
 	return m.Name + " reports no element at the size " + sizer + " reports"
 }
 
-// IdempotentClaim words the second-call claim.
+// IdempotentClaim words what the suite tier can state about the
+// idempotent mixin: that a repeat is ACCEPTED.
+//
+// Narrower than the classification, deliberately, and for the reason
+// [AccumulatesClaim] is narrower than its own. The mixin claims a repeat
+// leaves the observable state unchanged, and "unchanged" needs something
+// to read the state through — a reader the directive names no parameter
+// for. The body behind this claim is a repeat probe: it calls twice and
+// requires the second call to succeed, and it reads nothing back.
+//
+// It said "changes nothing" until the strength census put the two side by
+// side. The claim promised state was compared; the body compared nothing;
+// and the planted defect written for it fails the second call, so the
+// proof agreed with the check and neither noticed. A claim wider than its
+// body is the one defect this surface cannot catch for a consumer, and
+// emitting one from the generator is worse than emitting none — the
+// consumer has no way to know it was ever a promise nobody kept.
+//
+// Stating that the state is unchanged needs a reader, and that is the
+// model tier's to make.
 func IdempotentClaim(m Method) string {
-	return "a second " + m.Name + " after a clean one changes nothing"
+	return "a second " + m.Name + " after a clean one is accepted"
 }
 
 // AccumulatesClaim words what the suite tier can state about the

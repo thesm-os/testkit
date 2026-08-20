@@ -1,7 +1,0 @@
-# 2026/08/13 23:41:56.438057 [TestMixedContract/in-memory/model/twin] [invariant] AUTO-DEADLINE-RESPECTING at step 0: deadline-respecting law: Op returned nil after its deadline passed, so it never saw one
-#   invariant: AUTO-DEADLINE-RESPECTING
-#     sut: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x33a8a04ff300 delay:0}
-#     ref: &{mu:{_:{} mu:{state:0 sema:0}} clk:0x33a8a04ff300 delay:0}
-#   json: /var/home/rklopper/Projects/thesmos/testkit/.testkit/artifacts/failure-TestMixedContract_in-memory_model_twin.json
-#
-v0.4.8#4846378168167769216

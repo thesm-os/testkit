@@ -121,6 +121,40 @@ type Refusal struct {
 	What    string
 	Why     string
 	Remedy  string
+
+	// Elsewhere marks a classification this file does not check because
+	// another part of testkit owns it, rather than because deriving it
+	// failed.
+	//
+	// Not a gap in the sense the others are, and it is listed for the
+	// opposite reason: the consumer stamped the directive and would
+	// otherwise read a file that never mentions it again. Whether the tier
+	// that owns it ran is not this generator's to know — what it can say,
+	// and what stays true either way, is that the claim is not made here.
+	Elsewhere bool
+
+	// Unaccounted marks the one refusal that is not an argument: the
+	// deriver reached a classification with no rule, no law binding and
+	// no entry in [Accounting], and said so.
+	//
+	// The distinction the census turns on. A derivation refusal states a
+	// fact about THIS interface — nothing here writes, no sentinel is
+	// declared — and naming it closes the question honestly. This one
+	// states that nobody has decided what the classification owes, which
+	// is the gap the census exists to report; counting it as an argument
+	// would let a vocabulary grow uncovered as long as it grew loudly.
+	Unaccounted bool
+
+	// Licensed names the classification whose check was refused, empty
+	// for a refusal the shape alone reached.
+	//
+	// The field [projection.CheckPlan.Licensed] is, and it exists for
+	// the same census. A classification whose rule always refuses emits
+	// no check, so a census reading emitted checks alone cannot tell it
+	// from one no rule ever reached — and those are opposite findings.
+	// The first is a gap the generator already argued in the header; the
+	// second is a gap nobody has looked at.
+	Licensed projection.Licence
 }
 
 // Registry returns the derivers in derivation order. Closed like the
@@ -150,8 +184,8 @@ func argsRefusal(d DeriverName, f Iface, m Method, what string) (Refusal, bool) 
 		What:    m.Name + what,
 		Why:     "its " + arg + " argument needs a value " + field.Reason(),
 		Remedy: "stamp the type with //testkit:role and //testkit:default so " +
-			projection.ConfigName(f.Name) + " carries a pool, or write the claim as a " +
-			projection.RowsName(f.Name) + " row",
+			projection.ConfigName(f.Name) + " can supply one, or write the check " +
+			"yourself as a " + projection.RowsName(f.Name) + " entry",
 	}, true
 }
 

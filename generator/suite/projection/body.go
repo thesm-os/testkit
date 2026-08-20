@@ -406,6 +406,78 @@ type WriteWriteRead struct {
 	Must string
 }
 
+// The strength of each body: what it examines before it passes.
+//
+// Written beside the variants rather than derived from their fields,
+// because the answer is a reading of what the template emits and no
+// field carries it. Each one is argued at the variant it belongs to,
+// above.
+//
+// The three error-only answers are the ones worth stating plainly. A
+// smoke calls and checks nothing came back wrong; a guarded call hands
+// the error channel to a primitive; a repeat probe calls twice and
+// judges the second call's error. None of them reads state, and a claim
+// beside any of them that promises something about state is promising
+// what its body does not check.
+
+// Strength reports that the smoke judges the error channel alone.
+func (SmokeSurvives) Strength() suite.Strength { return suite.StrengthErrorOnly }
+
+// Strength reports that the guard judges the error channel alone.
+func (GuardedCall) Strength() suite.Strength { return suite.StrengthErrorOnly }
+
+// Strength reports that the repeat probe judges the second call's error
+// and reads nothing back.
+func (RepeatProbe) Strength() suite.Strength { return suite.StrengthErrorOnly }
+
+// Strength reports that the sentinel check judges the error alone.
+func (ReportsSentinel) Strength() suite.Strength { return suite.StrengthErrorOnly }
+
+// Strength reports that the miss-induced zero check reads the returned
+// values.
+func (ZeroOnMiss) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the cancel-induced zero check reads the returned
+// values.
+func (ZeroOnCancel) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the zero-answer check reads every value slot.
+func (AnswersZero) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the hit probe reads back what was seeded.
+func (HitProbe) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the count probe judges the aggregate against
+// what was seeded.
+func (CountProbe) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the hook check reads the local its callback set.
+func (HookFires) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the non-zero check reads the first result.
+func (NonZeroAnswer) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the partner check compares two verdicts on one
+// drawn value.
+func (PartnerAgrees) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the read-act-read sequence compares two readings
+// taken either side of the call.
+func (ReadActRead) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that the write-write-read triple reads the first
+// write back.
+func (WriteWriteRead) Strength() suite.Strength { return suite.StrengthObserved }
+
+// Strength reports that a law leg judges against the engine's laws.
+func (LawLeg) Strength() suite.Strength { return suite.StrengthDifferential }
+
+// Strength reports that the differential leg judges against a reference.
+func (DifferentialLeg) Strength() suite.Strength { return suite.StrengthDifferential }
+
+// Strength reports that a sim leg judges a crash against an oracle.
+func (SimLeg) Strength() suite.Strength { return suite.StrengthDifferential }
+
 // BodyKind names the template that renders the plain survives-smoke.
 func (SmokeSurvives) BodyKind() BodyKind { return KindSmokeSurvives }
 

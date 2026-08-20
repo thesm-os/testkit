@@ -108,6 +108,21 @@ func ArguedCheck[S any](
 	return Check[S]{ID: id, Class: class, Claim: claim, Falsifiable: Argued(why), Run: run}
 }
 
+// At records how far this check looks before it passes, and returns the
+// check so a constructor call can carry it.
+//
+// A method rather than a parameter on [ProvenCheck] and [ArguedCheck].
+// Those two are called from generated files that already exist, and a
+// new parameter would break every one of them at once — including files
+// this repository does not own. What it costs is that a caller CAN omit
+// it; what limits that cost is the zero value, which is the weakest of
+// the three, so a check that never says how far it looks is reported as
+// looking at the least.
+func (c Check[S]) At(strength Strength) Check[S] {
+	c.Strength = strength
+	return c
+}
+
 // Falsify lowers a row's falsifiability claim: a planted defect is the
 // claim and the evidence in one field, an argument is the honest record
 // that no defect can be constructed, and holding both is refused — a

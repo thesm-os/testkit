@@ -36,6 +36,19 @@ type Evidence struct {
 	// Axis is `detector`, `mixin` or `contract`, and Name the classification.
 	Axis, Name string
 
+	// Refused reports that a derivation rule reached this classification
+	// somewhere in the corpus and could not complete — the state between
+	// asserted and unlooked-at.
+	//
+	// A refusal is an argument the generator computed rather than one a
+	// reader wrote into [UnevidencedClassifications], and it is a better
+	// argument: it names the interface, the reason and the directive that
+	// would close it, and it goes stale the moment the rule starts
+	// deriving. Counting it as evidence would be wrong — nothing is
+	// asserted — but counting it as an unexamined gap is wrong too, and
+	// that is what the census did before it could see refusals.
+	Refused bool
+
 	// Checked reports that some fixture's suite tier asserts it, and Modeled
 	// that some fixture's model tier binds a law for it against a reference
 	// the run can actually build.
@@ -88,6 +101,7 @@ func Evidenced(ctx context.Context, root string, patterns ...string) ([]Evidence
 // what holds it to that.
 func evidenceFrom(pipe *pipeline.Pipeline) []Evidence {
 	checked, modeled := suiteEvidence(pipe), modelEvidence(pipe)
+	refused := suiteRefused(pipe)
 
 	var out []Evidence
 	for axis, names := range Registered() {
@@ -97,9 +111,15 @@ func evidenceFrom(pipe *pipeline.Pipeline) []Evidence {
 				Name:    name,
 				Checked: checked[name] != "",
 				Modeled: modeled[name] != "",
+				Refused: refused[name] != "",
 			}
-			if e.Where = checked[name]; e.Where == "" {
+			switch {
+			case checked[name] != "":
+				e.Where = checked[name]
+			case modeled[name] != "":
 				e.Where = modeled[name]
+			default:
+				e.Where = refused[name]
 			}
 			out = append(out, e)
 		}
@@ -137,6 +157,46 @@ func suiteEvidence(pipe *pipeline.Pipeline) map[string]string {
 			}
 			if _, seen := out[check.Licensed.Name]; !seen {
 				out[check.Licensed.Name] = where
+			}
+		}
+	}
+	return out
+}
+
+// suiteRefused reads which classifications a derivation rule reached and
+// declined FOR A STATED REASON, mapping each to a fixture that carries the
+// refusal.
+//
+// The same store and the same attribution as [suiteEvidence], off the field
+// the deriver stamps at its dispatch. A refusal with no classification is
+// skipped rather than guessed at: those are the shape-reached ones — an
+// undeliverable argument, a missing seed — and they belong to no vocabulary
+// row.
+//
+// [suite.Refusal.Unaccounted] is skipped for the opposite reason: it is the
+// deriver reporting that nothing decided what the classification owes, which
+// is the gap itself. Reading it as an argument was this census's own
+// silent-green bug — moving a stamp out of the accounting tables turned it
+// from covered into refused, and both counted, so the gate could not fail.
+func suiteRefused(pipe *pipeline.Pipeline) map[string]string {
+	out := map[string]string{}
+	for origin, c := range sdk.PendingByOrigin[*suite.Contract](pipe.Store().Emit()) {
+		where := c.Inventory.Iface
+		if iface, ok := origin.(*sdk.Interface); ok {
+			where = iface.Package + "." + iface.Name
+		}
+		for _, r := range c.Refusals {
+			// Elsewhere is skipped with Unaccounted, for the opposite
+			// reason: it says another tier owns the claim, which is an
+			// argument about ownership rather than about evidence. Whether
+			// that tier asserts anything is what [Evidence.Modeled]
+			// answers, and reading this as evidence would let a dark tier
+			// vouch for itself.
+			if r.Licensed.Name == "" || r.Unaccounted || r.Elsewhere {
+				continue
+			}
+			if _, seen := out[r.Licensed.Name]; !seen {
+				out[r.Licensed.Name] = where
 			}
 		}
 	}
@@ -183,6 +243,56 @@ func Unevidenced(all []Evidence) []string {
 	var out []string
 	for _, e := range all {
 		if e.Evidenced() {
+			continue
+		}
+		if _, argued := UnevidencedClassifications[e.Name]; argued {
+			continue
+		}
+		out = append(out, e.Axis+"/"+e.Name)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// modelOwned is every classification some law in the catalogue reaches.
+//
+// Read off [tiers.Rules] rather than listed here, for the reason [Registered]
+// reads the live registries: a rule added upstream moves a classification out
+// of the suite tier's account on the next build, and a table copied into this
+// file would keep gating it here long after the law arrived.
+func modelOwned() map[string]bool {
+	out := map[string]bool{}
+	for _, r := range tiers.Rules() {
+		for _, name := range r.Needs {
+			out[name] = true
+		}
+	}
+	return out
+}
+
+// UnevidencedBySuite returns the classifications the suite tier owns outright
+// and does not assert — each as `<axis>/<name>`.
+//
+// The half of [Unevidenced] that is answerable while the model tier is
+// unregistered, and the reason that skip does not have to take the whole
+// question with it. A classification no rule in the catalogue reaches can
+// never be the model tier's evidence, however the tier is wired: if the suite
+// tier does not assert it and no row argues it, the gap is real today and will
+// still be real on the morning the tier comes back.
+//
+// What this deliberately does not report is a classification some law reaches.
+// That one's evidence is dark rather than absent, and reporting it here would
+// be the relaxed-threshold mistake [skipUntilModelRelinked] argues against,
+// pointed the other way: a gate that reddens on work that is deferred teaches
+// the reader to switch it off.
+func UnevidencedBySuite(all []Evidence) []string {
+	owned := modelOwned()
+	var out []string
+	for _, e := range all {
+		if e.Checked || e.Refused || owned[e.Name] {
+			continue
+		}
+		if _, accounted := suite.Accounting(e.Name); accounted {
 			continue
 		}
 		if _, argued := UnevidencedClassifications[e.Name]; argued {

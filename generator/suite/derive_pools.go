@@ -128,16 +128,19 @@ func poolOf(
 
 	stamp, stamped := defaults.MetaDefault.Get(bag)
 	if !stamped || stamp == "" {
-		return refuse("the roled field declares no default, and pool[0] is the default verbatim",
-			"declare a //testkit:default beside the role")
+		return refuse("the field has a role but no default value, and the first "+
+			"value the checks use is that default",
+			"add a //testkit:default beside the role")
 	}
 	if pkg, _ := defaults.MetaDefaultPkg.Get(bag); pkg != "" {
-		return refuse("a qualified default names a symbol, not a literal the member transforms can splice",
-			"spell the default as a literal, or supply the pool through the config")
+		return refuse("the default names a symbol from another package rather than "+
+			"a value written out, so a second value cannot be derived from it",
+			"write the default as a literal, or supply the values through the config")
 	}
 	distinct, ok := projection.DistinctMember(projection.Expr(stamp))
 	if !ok {
-		return refuse("the default carries no distinctness swap point, and two equal members fund no miss",
+		return refuse("no second value can be derived from this default that differs "+
+			"from it, and two equal values would leave every not-found check finding something",
 			"spell the default's textual payload test-*, or supply the pool through the config")
 	}
 	hostile, ok := projection.HostileMember(projection.Expr(stamp), role)

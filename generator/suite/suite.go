@@ -450,10 +450,34 @@ type Contract struct {
 func (c *Contract) Gaps() []string {
 	out := make([]string, 0, len(c.Refusals))
 	for _, r := range c.Refusals {
+		if r.Elsewhere {
+			continue
+		}
 		out = append(out, r.What+" — "+r.Why+". To close it: "+r.Remedy+".")
 	}
 	slices.Sort(out)
 	return out
+}
+
+// Elsewhere words the claims another part of testkit owns, which this
+// file therefore does not make.
+//
+// Separate from [Contract.Gaps] because the two ask different things of
+// the reader. A gap is something they can close, and every line of it
+// ends in an instruction. These end in nothing to do — they are here so
+// that a directive the consumer wrote is accounted for rather than
+// silently absent, which is the difference between a file that does not
+// check something and a file that looks like it does.
+func (c *Contract) Elsewhere() []string {
+	var out []string
+	for _, r := range c.Refusals {
+		if !r.Elsewhere {
+			continue
+		}
+		out = append(out, r.What+" — "+r.Why+".")
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // Kind returns [KindContract].

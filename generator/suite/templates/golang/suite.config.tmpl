@@ -13,8 +13,13 @@ this is what a consumer sets.
 */ -}}
 {{- define "suite.config" -}}
 {{- $c := . }}
-// {{ suite_configName .IfaceName }} is what a run draws from. Every field
-// ending in Pool is cycled through by the checks that draw that role.
+// {{ suite_configName .IfaceName }} is the sample inputs the checks use.
+//
+// Leave it out and sensible values are worked out from your types. Supply
+// it to make the checks exercise values that mean something in your
+// domain — real key formats, payloads your implementation actually sees.
+//
+// Every field ending in Pool is a list the checks work through in turn.
 type {{ suite_configName .IfaceName }}{{ renderTypeParams .TypeParams }} struct {
 {{- range $p := .Pools }}
 	// {{ $p.Field }} serves the {{ $p.Role }} role.
@@ -38,12 +43,14 @@ func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) applyTo(rc *{{ suite_r
 	rc.cfg = c
 }
 
-// normalize fills the derived defaults and applies the pool policy.
+// normalize fills in anything left unset and rejects a pool that cannot
+// support the checks.
 //
-// Every pool needs three distinct members: the canonical one, a second
-// that funds a miss, and a hostile one. A consumer replacing a pool with
-// two equal members would leave every miss check hitting, which is a
-// check that runs and asserts nothing.
+// A pool needs three values that differ from each other: one to use, one
+// that was never stored so a lookup can genuinely miss, and one awkward
+// enough to be worth trying. Supplying a pool whose values are all equal
+// would leave every "not found" check finding something — running, and
+// asserting nothing.
 func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) normalize() ({{ suite_configName .IfaceName }}{{ .TypeArgs }}, error) {
 	d := {{ suite_defaultConfigName .Token }}{{ .TypeArgs }}()
 	var err error
@@ -57,19 +64,19 @@ func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) normalize() ({{ suite_
 	return c, nil
 }
 
-// orDefault is normalize where there is no error path to report through
-// — the suite-as-data seam, which has no testing.TB.
+// orDefault is normalize for the paths that have no test to report an
+// error through, so an unusable config panics rather than being ignored.
 func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) orDefault() {{ suite_configName .IfaceName }}{{ .TypeArgs }} {
 	return {{ renderExpr (external $.Vocab "Must") }}(c.normalize())
 }
 
-// {{ suite_defaultConfigName .Token }} is what this run derived, and every value in it
-// has a named origin — a default with two homes drifts:
+// {{ suite_defaultConfigName .Token }} is the sample inputs worked out from your
+// declaration. Each position in a pool is there for a reason:
 //
-//	pool[0]  the declaration's //testkit:default stamp, verbatim
-//	pool[1]  the distinctness rule, so a miss has an input nothing wrote
-//	pool[2]  the hostile member, because a derived default that never
-//	         draws one is coverage the suite claims and does not have
+//	pool[0]  the value your declaration gave as a default, unchanged
+//	pool[1]  a different value, so a lookup can genuinely find nothing
+//	pool[2]  an awkward value, because inputs that are always tidy
+//	         exercise only the paths that expect tidy inputs
 func {{ suite_defaultConfigName .Token }}{{ renderTypeParams .TypeParams }}() {{ suite_configName .IfaceName }}{{ .TypeArgs }} {
 	return {{ suite_configName .IfaceName }}{{ .TypeArgs }}{
 {{- range $p := .Pools }}

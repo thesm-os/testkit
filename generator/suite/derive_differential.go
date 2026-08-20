@@ -50,7 +50,9 @@ func (Differential) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 					Deriver: DeriverDifferential,
 					What:    "the differential leg for " + f.Name,
 					Why:     reason,
-					Remedy:  "override with ref=, or the twin-floor wording earns a corpus pin first",
+					Remedy: "name the implementation to compare against with ref=, " +
+						"since comparing this one against a copy of itself would " +
+						"agree about any bug the two share",
 				}}
 			}
 		}

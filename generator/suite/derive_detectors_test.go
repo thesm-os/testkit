@@ -64,7 +64,7 @@ func TestDetectorRulesDeclineTheUnstateable(t *testing.T) {
 			// A transform is reader-shaped and stores nothing, so no
 			// draw is one nothing supplied.
 			refusals: 1,
-			why:      "nothing on this interface writes and no corpus seeds it",
+			why:      "no method here stores anything",
 		},
 		{
 			name: "a reader taking no input is silent rather than refused",

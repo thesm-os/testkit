@@ -98,7 +98,7 @@ func TestClaimWordingsMatchTheCorpus(t *testing.T) {
 		{"zero of a named type", suite.ZeroOnErrorClaim(get), "Get returns the zero Value alongside any error"},
 		{"zero of a scalar", suite.ZeroOnErrorClaim(length), "Len returns zero alongside any error"},
 		{"zero of a channel", suite.ZeroOnErrorClaim(subscribe), "Subscribe returns a nil channel alongside any error"},
-		{"idempotent", suite.IdempotentClaim(closeM), "a second Close after a clean one changes nothing"},
+		{"idempotent", suite.IdempotentClaim(closeM), "a second Close after a clean one is accepted"},
 		{
 			"accumulates is idempotent's mirror over the same two calls",
 			suite.AccumulatesClaim(incr),
