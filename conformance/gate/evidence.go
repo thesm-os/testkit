@@ -7,11 +7,14 @@ import (
 	"cmp"
 	"context"
 	"maps"
+	"regexp"
 	"slices"
+	"strings"
 
 	"go.thesmos.sh/eidos/pipeline"
 	"go.thesmos.sh/eidos/sdk"
 
+	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/suite"
 	"go.thesmos.sh/testkit/generator/tiers"
@@ -326,6 +329,153 @@ type Census struct {
 	// registered classification is asserted by.
 	Emitted  []Emitted
 	Evidence []Evidence
+
+	// SuccessOnly is every distinct claim the corpus puts on a check that
+	// judges nothing but whether the call succeeded, with the method name
+	// normalized. Both directions of the wording register read it.
+	SuccessOnly []string
+}
+
+// The two reasons that cover most of [SuccessOnlyClaims], named because
+// they are the argument rather than a label: a sentence qualifies there
+// when what it promises is exactly what the error channel can answer.
+const (
+	reasonSurvives = "says only that the call returned, which is what the body checks; " +
+		"the suffix names where the input came from and promises nothing about it"
+	reasonErrChannel = "a claim about the error channel, judged on the error channel"
+)
+
+// SuccessOnlyClaims is every sentence the suite tier is allowed to put on
+// a check that judges nothing but whether the call succeeded, and why
+// that sentence is honest about it.
+//
+// An allowlist rather than a list of forbidden words, and the direction
+// is the whole point. A blocklist reddens on the phrasings somebody
+// thought of; this reddens on every sentence nobody has vouched for,
+// which includes the one a future rule invents. Adding a row is the
+// decision — read the body, and if it reads state back the check is not
+// success-only and this is the wrong list.
+//
+// The class it exists to stop has been through here twice. `idempotent`
+// promised a second call "changes nothing" over a body that reads
+// nothing back, and `validates` promised a method refuses EXACTLY what
+// its validator refuses over a body that draws one value and compares
+// two verdicts — which catches refusing too much and cannot catch
+// refusing too little. Both passed their own planted defects, because a
+// defect derived from the check agrees with the check.
+//
+// Keys have the method name replaced by <method>, so one row covers the
+// sentence wherever it is emitted.
+//
+//nolint:gochecknoglobals // a wording register, read-only, test-facing.
+var SuccessOnlyClaims = map[string]string{
+	"<method> survives a call":                              reasonSurvives,
+	"<method> survives a call with derived inputs":          reasonSurvives,
+	"<method> survives a call with seeded inputs":           reasonSurvives,
+	"<method> survives a call with a derived <input>":       reasonSurvives,
+	"<method> survives a call with a seeded <input>":        reasonSurvives,
+	"<method> survives a call with an input <builder> made": reasonSurvives,
+	"<method> survives returning a borrowed resource":       "the resource came back; what it is worth is not claimed",
+
+	"<method> reports a cancelled context as cancelled":                reasonErrChannel,
+	"<method> reports an expired deadline as exceeded":                 reasonErrChannel,
+	"<method> returns an error rather than panicking on a nil context": reasonErrChannel,
+	"<method> reports a nil <input> rather than panicking":             reasonErrChannel,
+	"<method> reports <sentinel> for a key nothing wrote":              reasonErrChannel,
+	"<method> reports <sentinel> until <partner> has run":              reasonErrChannel,
+
+	"a second <method> after a clean one is accepted":               "accepted, not unchanged — the body calls twice and reads nothing back",
+	"a second <method> is accepted rather than refused as a repeat": "the same narrowing, worded for the accumulates mixin",
+	"a second <method> of what is already there reports <sentinel>": reasonErrChannel,
+
+	"<method> agrees with <partner> about the values this run draws": "agrees, not refuses-exactly: the body compares two error " +
+		"channels on one drawn value, and on a value the partner accepts " +
+		"it cannot see the subject accepting too much",
+}
+
+// wordingFrom returns every distinct claim the corpus puts on a
+// success-only check, method name normalized.
+//
+// Read off the same run as the rest of the census, and off the plan
+// rather than the emitted text: [projection.Body] carries the strength,
+// so this compares what a check SAYS against what its body was written
+// to do rather than against a reading of the generated file.
+func wordingFrom(pipe *pipeline.Pipeline) []string {
+	var out []string
+	for _, c := range sdk.PendingByOrigin[*suite.Contract](pipe.Store().Emit()) {
+		for _, check := range c.Inventory.Checks {
+			if check.Body == nil || check.Body.Strength() != vocab.StrengthErrorOnly {
+				continue
+			}
+			out = append(out, normalizeClaim(check.Claim, check.ID.Method))
+		}
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
+}
+
+// UnvouchedClaims returns the success-only claims no row vouches for.
+func UnvouchedClaims(successOnly []string) []string {
+	var out []string
+	for _, claim := range successOnly {
+		if _, vouched := SuccessOnlyClaims[claim]; !vouched {
+			out = append(out, claim)
+		}
+	}
+	return out
+}
+
+// StaleClaimRows returns the register rows the corpus no longer emits.
+func StaleClaimRows(successOnly []string) []string {
+	emitted := make(map[string]bool, len(successOnly))
+	for _, claim := range successOnly {
+		emitted[claim] = true
+	}
+	var out []string
+	for row := range maps.Keys(SuccessOnlyClaims) {
+		if !emitted[row] {
+			out = append(out, row)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// The names a claim carries that vary per interface without changing what
+// the sentence promises: the parameter it drew, the sentinel it names, the
+// partner it waits on.
+//
+// Collapsed so the register holds sentence SHAPES. Left alone, "Get
+// survives a call with a derived key" and "Put survives a call with a
+// derived value" are two rows saying one thing, and a register with a row
+// per parameter name in the corpus is a register nobody reads — which is
+// how the row that matters gets waved through.
+//
+//nolint:gochecknoglobals // compiled once, read-only.
+var claimNouns = []struct {
+	pat  *regexp.Regexp
+	with string
+}{
+	{regexp.MustCompile(`\bErr[A-Z]\w*`), "<sentinel>"},
+	{regexp.MustCompile(`\ba (derived|seeded) \w+`), "a $1 <input>"},
+	{regexp.MustCompile(`\ban (derived|seeded) \w+`), "an $1 <input>"},
+	{regexp.MustCompile(`\ban input \w+ made`), "an input <builder> made"},
+	{regexp.MustCompile(`\ba nil \w+ rather than panicking`), "a nil <input> rather than panicking"},
+	{regexp.MustCompile(`\buntil \w+ has run`), "until <partner> has run"},
+	{regexp.MustCompile(`\bagrees with \w+ about`), "agrees with <partner> about"},
+}
+
+// normalizeClaim reduces a claim to its shape: the method's own name, the
+// parameters it drew and the sentinels it names all become placeholders,
+// so one row covers the sentence wherever it is emitted.
+func normalizeClaim(claim, method string) string {
+	if method != "" {
+		claim = strings.ReplaceAll(claim, method, "<method>")
+	}
+	for _, n := range claimNouns {
+		claim = n.pat.ReplaceAllString(claim, n.with)
+	}
+	return claim
 }
 
 // Measure runs the corpus once and reads every census off the same store.
@@ -345,5 +495,9 @@ func Measure(ctx context.Context, root string, patterns ...string) (Census, erro
 	if err != nil {
 		return Census{}, err
 	}
-	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom(pipe)}, nil
+	return Census{
+		Emitted:     emittedFrom(pipe),
+		Evidence:    evidenceFrom(pipe),
+		SuccessOnly: wordingFrom(pipe),
+	}, nil
 }

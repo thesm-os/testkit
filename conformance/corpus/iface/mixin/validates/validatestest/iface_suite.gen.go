@@ -470,10 +470,10 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 				mixedAssertReadZeroOnError(tb, m, fx)
 			}).At(suite.StrengthObserved),
 		sig(ix.Store.Validates(), suite.ClassValidates,
-			"Store refuses exactly what Validate refuses",
+			"Store agrees with Validate about the values this run draws",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertStoreValidates(tb, m, fx)
-			}).At(suite.StrengthObserved),
+			}).At(suite.StrengthErrorOnly),
 		sig(ix.Read.Miss(), suite.ClassReader,
 			"Read reports zero for a key nothing has written",
 			func(tb testing.TB, m Mixed) {
@@ -614,7 +614,7 @@ func mixedAssertReadZeroOnError(
 	}
 }
 
-// mixedAssertStoreValidates asserts Store refuses exactly what Validate refuses.
+// mixedAssertStoreValidates asserts Store agrees with Validate about the values this run draws.
 func mixedAssertStoreValidates(
 	tb testing.TB,
 	m Mixed,
@@ -898,4 +898,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance a7cdc1c28db35846d69fa722733e74d53625d834f8214b669dcdf0ab155b3317
+// testkit:provenance 212a01584b98b8c513952dc46d15f3b416a76a7081bf9f1d53a1e78d9fea613f

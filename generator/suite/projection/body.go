@@ -457,9 +457,16 @@ func (HookFires) Strength() suite.Strength { return suite.StrengthObserved }
 // Strength reports that the non-zero check reads the first result.
 func (NonZeroAnswer) Strength() suite.Strength { return suite.StrengthObserved }
 
-// Strength reports that the partner check compares two verdicts on one
-// drawn value.
-func (PartnerAgrees) Strength() suite.Strength { return suite.StrengthObserved }
+// Strength reports that the partner check compares two error channels
+// and reads no state.
+//
+// It compares two calls, which looks like more than the single-call
+// bodies above, and is not: what it compares is whether each call
+// errored. Nothing is read back. It is also one-sided on any value the
+// partner accepts — both agreeing proves the subject did not refuse too
+// much, and cannot show it refused too little — which is exactly the
+// kind of shortfall a claim is liable to paper over.
+func (PartnerAgrees) Strength() suite.Strength { return suite.StrengthErrorOnly }
 
 // Strength reports that the read-act-read sequence compares two readings
 // taken either side of the call.

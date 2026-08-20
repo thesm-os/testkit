@@ -97,6 +97,53 @@ func TestEverySuiteOwnedClassificationHasEvidenceOrARow(t *testing.T) {
 			strings.Join(unevidenced, ", "))
 }
 
+// No claim outruns the check beneath it.
+//
+// The defect nothing else here can catch. A generated check carries a
+// sentence and a body, and the falsification companion proves the body
+// can fail — against a defect derived from that same body, so the two
+// agree and the sentence is never consulted. Both tiers of evidence can
+// be green while the sentence promises something no code checks, and the
+// sentence is what the consumer reads.
+//
+// Held on the success-only checks alone, because that is where the gap
+// can open: a body that reads state back can be described in the words
+// of what it read, and one that never looks has only the call to talk
+// about. A sentence no row vouches for is not assumed wrong — it is
+// unread, which is the state this register set exists to abolish.
+func TestNoClaimOutrunsItsCheck(t *testing.T) {
+	t.Parallel()
+
+	census, err := censusOnce()
+	testkit.NoError(t, err, "the corpus census runs")
+
+	unvouched := gate.UnvouchedClaims(census.SuccessOnly)
+	testkit.True(t, len(unvouched) == 0,
+		"every claim on a check that judges only success is vouched for in "+
+			"SuccessOnlyClaims — unvouched: "+strings.Join(unvouched, "; "))
+}
+
+// The wording register only shrinks.
+//
+// The same rule the debt registers follow: a row for a sentence nothing
+// emits is a judgement about code that has moved, and the next reader
+// takes it for a considered one.
+func TestNoSuccessOnlyClaimRowIsStale(t *testing.T) {
+	t.Parallel()
+
+	census, err := censusOnce()
+	testkit.NoError(t, err, "the corpus census runs")
+
+	stale := gate.StaleClaimRows(census.SuccessOnly)
+	testkit.True(t, len(stale) == 0,
+		"delete the rows for sentences the corpus no longer emits: "+strings.Join(stale, "; "))
+
+	for row, reason := range gate.SuccessOnlyClaims {
+		testkit.True(t, len(reason) > 40,
+			row+" says why the sentence is honest, not that somebody approved it")
+	}
+}
+
 // The register only shrinks.
 //
 // The other direction, and the one that keeps a register from becoming a place

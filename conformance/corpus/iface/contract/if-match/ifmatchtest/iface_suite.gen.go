@@ -443,10 +443,10 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 				contractAssertMatchMiss(tb, c, fx)
 			}).At(suite.StrengthObserved),
 		sig(ix.Put.Match(), suite.ClassMatch,
-			"Put lands exactly when Match says it may",
+			"Put agrees with Match about the values this run draws",
 			func(tb testing.TB, c Contract) {
 				contractAssertPutMatch(tb, c, fx)
-			}).At(suite.StrengthObserved),
+			}).At(suite.StrengthErrorOnly),
 	}
 }
 
@@ -588,7 +588,7 @@ func contractAssertMatchMiss(
 	}
 }
 
-// contractAssertPutMatch asserts Put lands exactly when Match says it may.
+// contractAssertPutMatch asserts Put agrees with Match about the values this run draws.
 func contractAssertPutMatch(
 	tb testing.TB,
 	c Contract,
@@ -863,4 +863,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 80fa0ca9a5fde616cce3c237dc59ee12418fd39eed8b82183748136493d039fc
+// testkit:provenance b0d6ecf40ed3fcdfeffc98eea4797aa15b6234936c2775ed4f4b593d6048c09d

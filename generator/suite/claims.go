@@ -376,7 +376,7 @@ func OrderAfterClaim(m Method, predecessor, sentinel string) string {
 // under test. The screening's other half — that a refused value left
 // nothing behind — needs a reader the directive names no parameter for.
 func ValidatesClaim(m Method, validator string) string {
-	return m.Name + " refuses exactly what " + validator + " refuses"
+	return m.Name + " agrees with " + validator + " about the values this run draws"
 }
 
 // ValidatesRequirement words what the failure says the method must do —
@@ -430,7 +430,7 @@ func ConflictClaim(m Method, conflict string) string {
 // suite has no value it knows the predicate rejects, so what it can
 // state is that the two answers line up.
 func MatchClaim(m Method, match string) string {
-	return m.Name + " lands exactly when " + match + " says it may"
+	return m.Name + " agrees with " + match + " about the values this run draws"
 }
 
 // MatchRequirement words what the failure says the method must do — the
