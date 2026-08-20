@@ -41,6 +41,67 @@ func TestReportTextNudgesTowardAnOracle(t *testing.T) {
 	}
 }
 
+// TestReportNamesTheUnprovenChecks pins the report line a consumer works
+// from: a count alone says there is work without saying where, and the
+// rows behind it are always hand-written ones, because a generated check
+// takes its stamp from the constructor that builds it.
+//
+// A report line rather than a failure. A claim can be genuinely hard to
+// plant a defect for, and Argued exists for that — which is the author's
+// decision, not something a run should force by going red.
+func TestReportNamesTheUnprovenChecks(t *testing.T) {
+	t.Parallel()
+
+	leg := func(subject, check string, state suite.FalsifiableState, out suite.Disposition) suite.Leg {
+		return suite.Leg{
+			Subject: subject, Check: check,
+			Outcome: out, Falsifiable: string(state),
+		}
+	}
+	r := &suite.Report{Format: suite.ReportFormat, Suite: "s", Subjects: 2, Checks: 4, Legs: []suite.Leg{
+		leg("a", "Put/smoke", suite.FalsifiableProven, suite.Passed),
+		leg("a", "Put/deadline", suite.FalsifiableArgued, suite.Passed),
+		leg("a", "own/newer-value-wins", suite.FalsifiableUnproven, suite.Passed),
+		// The same check on a second subject: named once, not once per leg.
+		leg("b", "own/newer-value-wins", suite.FalsifiableUnproven, suite.Passed),
+		// Unproven and never reached a verdict, so it is not this line's
+		// business: the did-not-run breakdown already carries it.
+		leg("b", "own/needs-a-clock", suite.FalsifiableUnproven, suite.DidNotRun),
+	}}
+
+	text := r.Text()
+	if !strings.Contains(text, "of 3 checks that ran: 1 proven able to fail, 1 argued, 1 unproven") {
+		t.Errorf("the summary must tally the checks that ran; got:\n%s", text)
+	}
+	if !strings.Contains(text, "unproven: own/newer-value-wins — set ProvenBy") {
+		t.Errorf("the unproven row must be named, with what closes it; got:\n%s", text)
+	}
+	if strings.Count(text, "own/newer-value-wins") != 1 {
+		t.Errorf("a check is named once, not once per subject; got:\n%s", text)
+	}
+	if strings.Contains(text, "own/needs-a-clock") {
+		t.Errorf("a check that never ran is the did-not-run line's, not this one's; got:\n%s", text)
+	}
+}
+
+// TestReportSaysNothingWhenEveryCheckHasItsEvidence keeps the line from
+// becoming noise every green run prints.
+func TestReportSaysNothingWhenEveryCheckHasItsEvidence(t *testing.T) {
+	t.Parallel()
+
+	r := &suite.Report{Format: suite.ReportFormat, Suite: "s", Subjects: 1, Checks: 1, Legs: []suite.Leg{
+		{
+			Subject: "a", Check: "Put/smoke", Outcome: suite.Passed,
+			Falsifiable: string(suite.FalsifiableProven),
+		},
+	}}
+
+	text := r.Text()
+	if strings.Contains(text, "unproven") {
+		t.Errorf("a run with nothing unproven must not mention it; got:\n%s", text)
+	}
+}
+
 // TestReportArtifact pins the CI egress contract: with TESTKIT_REPORT_DIR
 // set, a run writes its versioned JSON beside the log text, named after
 // the test and the suite, and the encoding round-trips.

@@ -92,7 +92,44 @@ type CheckPlan struct {
 	// renders into the lock's fourth column, which is what makes
 	// narrowing a probe set diff.
 	Binds []Bind
+
+	// Licensed names the classification that bought this check, empty
+	// for one the shape alone earned.
+	//
+	// Recorded here rather than read back off [Class], because the two
+	// do not line up: a seeded reader's hit check is class `mixin/reader`
+	// and `reader` is a DETECTOR, so a census taking the axis off the
+	// class prefix files every detector's evidence under the wrong one.
+	// The deriver knows which stamp it read; anything downstream would
+	// be guessing from the answer.
+	Licensed Licence
 }
+
+// The three classification axes, which are the three registries eidos
+// ships and the three a census reads back.
+//
+// Spelled here rather than imported from the conformance gate: the gate
+// is a different module and reads these, so taking its constants would
+// point the arrow the wrong way — what a check was derived from is the
+// generator's answer, and the census is a consumer of it.
+const (
+	AxisDetector = "detector"
+	AxisMixin    = "mixin"
+	AxisContract = "contract"
+)
+
+// Licence is the classification a check was derived from: which axis
+// registers it, and its name on that axis.
+//
+// The pair rather than the name alone, because the three registries
+// are separate namespaces and a bare name cannot be looked up in the
+// right one — `pure` is both a detector shape and a mixin.
+type Licence struct {
+	Axis, Name string
+}
+
+// Licensed reports whether a classification bought this check.
+func (l Licence) Licensed() bool { return l.Axis != "" && l.Name != "" }
 
 // NeedPlan is one capability door: the runtime capability constant
 // plus the rendered value literal, empty for presence-only doors.

@@ -240,7 +240,19 @@ func (r *Report) Text() string {
 	if notrun > 0 {
 		fmt.Fprintf(&b, "  did not run: %s\n", countList(byReason))
 	}
-	fmt.Fprintf(&b, "  %s\n", r.falsifiableLine())
+	proven, argued, unproven := r.falsifiableTally()
+	fmt.Fprintf(&b, "  %s\n", falsifiableLine(proven, argued, unproven))
+
+	// Naming them rather than only counting them. "2 unproven" tells a
+	// reader there is work and not where it is, and the rows in question
+	// are always ones somebody hand-wrote — a generated check takes its
+	// stamp from the constructor that builds it. Reported, never failed:
+	// a claim can be genuinely hard to plant a defect for, and Argued is
+	// the answer to that, which is the author's call and not the run's.
+	if len(unproven) > 0 {
+		fmt.Fprintf(&b, "  unproven: %s — set ProvenBy on each, or Argued with the reason\n",
+			strings.Join(unproven, " | "))
+	}
 
 	// A green leg that bound five laws and engaged one is not the same
 	// green as its neighbors; naming them here is what keeps a passing
@@ -307,14 +319,13 @@ func (r *Report) fallbackTier() string {
 	}
 }
 
-// falsifiableLine is the sentence a conformance statement is written from.
+// falsifiableTally counts the checks that reached a verdict by what is
+// known about their ability to fail, and names the unproven ones.
 //
-// The one a run could not previously make. "44 legs, 44 passed" is true of a
-// suite that works and of one that asserts nothing; this says which, and
-// where a check cannot be shown able to fail it says so rather than counting
-// it among the proven.
-func (r *Report) falsifiableLine() string {
-	proven, argued, unproven := 0, 0, 0
+// One walk rather than two, so the count and the list cannot disagree.
+// A summary saying "3 unproven" above a list of two would be a defect in
+// the report, which is the one artifact a reader has no way to check.
+func (r *Report) falsifiableTally() (proven, argued int, unproven []string) {
 	seen := map[string]bool{}
 	for _, l := range r.Legs {
 		// Only legs that reached a verdict count. A check whose every leg
@@ -334,15 +345,26 @@ func (r *Report) falsifiableLine() string {
 		case FalsifiableArgued:
 			argued++
 		default:
-			unproven++
+			unproven = append(unproven, l.Check)
 		}
 	}
-	line := fmt.Sprintf("of %d checks that ran: %d proven able to fail", len(seen), proven)
+	return proven, argued, unproven
+}
+
+// falsifiableLine is the sentence a conformance statement is written from.
+//
+// The one a run could not previously make. "44 legs, 44 passed" is true of a
+// suite that works and of one that asserts nothing; this says which, and
+// where a check cannot be shown able to fail it says so rather than counting
+// it among the proven.
+func falsifiableLine(proven, argued int, unproven []string) string {
+	ran := proven + argued + len(unproven)
+	line := fmt.Sprintf("of %d checks that ran: %d proven able to fail", ran, proven)
 	if argued > 0 {
 		line += fmt.Sprintf(", %d argued", argued)
 	}
-	if unproven > 0 {
-		line += fmt.Sprintf(", %d unproven", unproven)
+	if len(unproven) > 0 {
+		line += fmt.Sprintf(", %d unproven", len(unproven))
 	}
 	return line
 }

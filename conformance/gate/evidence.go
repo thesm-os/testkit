@@ -8,6 +8,13 @@ import (
 	"context"
 	"maps"
 	"slices"
+
+	"go.thesmos.sh/eidos/pipeline"
+	"go.thesmos.sh/eidos/sdk"
+
+	"go.thesmos.sh/testkit/generator/model"
+	"go.thesmos.sh/testkit/generator/suite"
+	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Evidence is one classification and what, if anything, asserts it.
@@ -64,28 +71,23 @@ func (e Evidence) Evidenced() bool { return e.Checked || e.Modeled }
 // census pointed at a pattern matching nothing must fail rather than measure an
 // empty corpus as fully evidenced — see that function's TRANSITION paragraph.
 func Evidenced(ctx context.Context, root string, patterns ...string) ([]Evidence, error) {
-	if _, err := runCorpus(ctx, root, patterns, corpusGenerators()); err != nil {
+	pipe, err := runCorpus(ctx, root, patterns, corpusGenerators())
+	if err != nil {
 		return nil, err
 	}
-	return evidenceFrom(), nil
+	return evidenceFrom(pipe), nil
 }
 
 // evidenceFrom reads the per-classification verdicts the corpus run produced.
 //
 // Split from [Evidenced] for [Measure]'s sake: both answer the same question
-// and only one of them should decide how many times the corpus is loaded. It
-// takes no store while the transition below holds, and takes one again when the
-// walk is restored.
-func evidenceFrom() []Evidence {
-	checked, modeled := map[string]string{}, map[string]string{}
-	// TRANSITION: the incumbent suite emission — and the per-Contract
-	// Coverage census this walk read — is deleted; the rewrite's
-	// deriver inventory replaces it when its emission lands, and this
-	// measurement is rebuilt from that inventory then (the suite
-	// design doc's transition section owns the gap). Until that
-	// lands, the honest answer is that the suite tier evidences
-	// nothing, and the tests reading these maps skip citing this
-	// paragraph rather than passing against a fake.
+// and only one of them should decide how many times the corpus is loaded.
+//
+// Both tiers are read off the same store, and each names a fixture rather than
+// a bool, so a green row is answerable — [TestEvidencedRowsNameTheirFixture] is
+// what holds it to that.
+func evidenceFrom(pipe *pipeline.Pipeline) []Evidence {
+	checked, modeled := suiteEvidence(pipe), modelEvidence(pipe)
 
 	var out []Evidence
 	for axis, names := range Registered() {
@@ -108,6 +110,66 @@ func evidenceFrom() []Evidence {
 		}
 		return cmp.Compare(a.Name, b.Name)
 	})
+	return out
+}
+
+// suiteEvidence reads which classification each derived check was licensed by,
+// mapping it to a fixture that carries one.
+//
+// The generator's own answer rather than a re-derivation: [projection.Licence]
+// is stamped where the rules table dispatched, so this reads the classification
+// the deriver actually read. Deriving it here from the check's class would be a
+// second opinion, and the wrong one — the class families and the registry axes
+// do not line up.
+func suiteEvidence(pipe *pipeline.Pipeline) map[string]string {
+	out := map[string]string{}
+	for origin, c := range sdk.PendingByOrigin[*suite.Contract](pipe.Store().Emit()) {
+		where := c.Inventory.Iface
+		if iface, ok := origin.(*sdk.Interface); ok {
+			where = iface.Package + "." + iface.Name
+		}
+		for _, check := range c.Inventory.Checks {
+			if !check.Licensed.Licensed() {
+				// The shape earned it, not a classification: every
+				// signature-family check is here, and none of them is
+				// evidence that any vocabulary bought anything.
+				continue
+			}
+			if _, seen := out[check.Licensed.Name]; !seen {
+				out[check.Licensed.Name] = where
+			}
+		}
+	}
+	return out
+}
+
+// modelEvidence reads which classifications the bound laws were earned by.
+//
+// A law is bound per fixture and reaches its classifications through the rules
+// catalogue, which is where "this stamp earns this law" is written down. A rule
+// needing two classifications evidences both, for the reason [tiers.LawsFor]
+// reports under both: from either one's point of view the law was reachable,
+// and the binding is what makes it more than reachable.
+func modelEvidence(pipe *pipeline.Pipeline) map[string]string {
+	earnedBy := map[string][]string{}
+	for _, r := range tiers.Rules() {
+		earnedBy[r.Law] = append(earnedBy[r.Law], r.Needs...)
+	}
+
+	out := map[string]string{}
+	for origin, b := range sdk.PendingByOrigin[*model.Bindings](pipe.Store().Emit()) {
+		where := b.IfaceName
+		if iface, ok := origin.(*sdk.Interface); ok {
+			where = iface.Package + "." + iface.Name
+		}
+		for _, l := range b.Laws {
+			for _, name := range earnedBy[l.ID] {
+				if _, seen := out[name]; !seen {
+					out[name] = where
+				}
+			}
+		}
+	}
 	return out
 }
 
@@ -173,5 +235,5 @@ func Measure(ctx context.Context, root string, patterns ...string) (Census, erro
 	if err != nil {
 		return Census{}, err
 	}
-	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom()}, nil
+	return Census{Emitted: emittedFrom(pipe), Evidence: evidenceFrom(pipe)}, nil
 }

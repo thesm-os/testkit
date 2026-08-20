@@ -1,9 +1,13 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
+// `sample by=NewInput` names the builder that produces a legal input, and the
+// constraint is what makes the mixin worth having: a method taking any string
+// needs no builder at all.
 package sampletest_test
 
 import (
+	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -11,42 +15,88 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sample/sampletest"
 )
 
-// A sampled suite is exactly as good as its sampler, and a builder that drifts
-// from what the method accepts turns every run into a wall of failures about
-// the fixture rather than the subject.
-//
-// The mixin has no suite-side rule yet — the header says so — so the pairing
-// is written here: reach Process through NewInput, and separately show that
-// Process refuses what the builder did not produce. Without the second half a
-// Process accepting everything would pair with any builder at all.
+// TestMixedContract runs the generated checks and this package's own.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
+	sampletest.RunMixed(t, inMemory("in-memory"), mixedChecks)
+}
+
+// TestMixedContractWithoutSmoke drops a check through the typed index rather
+// than a string, so a check that is renamed or stops being emitted breaks this
+// compile instead of silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
+	t.Parallel()
+
 	sampletest.RunMixed(t,
-		sampletest.MixedHarness[*sampletest.InMemory]{Name: "in-memory", New: sampletest.NewInMemory},
-		// Process rejects the derived input, which is the fixture working
-		// rather than failing: a value the generator invents is precisely what
-		// a sampled method does not accept, and is why the mixin names a
-		// builder.
+		inMemory("in-memory"),
 		sampletest.MixedSuite.Without(sampletest.MixedSuite.Checks.Process.Smoke()),
-		sampletest.MixedChecks{
-			{
-				Method: "Process",
-				Name:   "accepts-only-what-the-builder-made",
-				Claim:  "Process refuses an input the builder did not produce",
-				Run: func(tb testing.TB, s sample.Mixed, fx sampletest.MixedFixture) {
-					tb.Helper()
-					built, err := s.NewInput(tb.Context())
-					testkit.NoError(tb, err, "the builder produces an input")
-
-					_, err = s.Process(tb.Context(), built)
-					testkit.NoError(tb, err, "which the method accepts")
-
-					// The constraint is what makes the mixin worth having.
-					_, err = s.Process(tb.Context(), "unshaped-"+fx.Input())
-					testkit.Error(tb, err, "an input outside the shape is refused")
-				},
-			},
-		},
 	)
+}
+
+// TestMixedChecksCanFail drives the row against its planted defect.
+func TestMixedChecksCanFail(t *testing.T) {
+	t.Parallel()
+
+	sampletest.ProveMixed(t, mixedChecks)
+}
+
+// --- Harnesses ---------------------------------------------------------------
+
+func inMemory(name string) sampletest.MixedHarness[*sampletest.InMemory] {
+	return sampletest.MixedHarness[*sampletest.InMemory]{
+		Name: name, New: sampletest.NewInMemory,
+	}
+}
+
+// --- The checks: claims, bodies and defects, by name --------------------------
+
+var mixedChecks = sampletest.MixedChecks{
+	{
+		Method: "Process", Name: "accepts-only-what-the-builder-made",
+		Claim: "Process refuses an input the builder did not produce",
+		Run:   acceptsOnlyWhatTheBuilderMade,
+		ProvenBy: sampletest.BrokenMixed(
+			"a subject that processes any string it is handed", newProcessesAnything,
+		),
+		ProvenReason: "an input outside the shape is refused",
+	},
+}
+
+// --- Bodies -------------------------------------------------------------------
+
+func acceptsOnlyWhatTheBuilderMade(
+	tb testing.TB, s sample.Mixed, fx sampletest.MixedFixture,
+) {
+	tb.Helper()
+	built, err := s.NewInput(tb.Context())
+	testkit.NoError(tb, err, "the builder produces an input")
+
+	_, err = s.Process(tb.Context(), built)
+	testkit.NoError(tb, err, "which the method accepts")
+
+	_, err = s.Process(tb.Context(), unshapedPrefix+fx.Input())
+	testkit.Error(tb, err, "an input outside the shape is refused")
+}
+
+// --- Planted defects ----------------------------------------------------------
+
+// unshapedPrefix makes an input the builder could not have produced. A prefix
+// rather than a literal, so the value still varies with the fixture and only
+// its shape is wrong.
+const unshapedPrefix = "unshaped-"
+
+// processesAnything takes whatever it is given, which is the constraint absent
+// rather than wrong — and which the builder's own output satisfies, so every
+// check that only round-trips a built input calls it correct.
+type processesAnything struct{}
+
+func newProcessesAnything() processesAnything { return processesAnything{} }
+
+func (processesAnything) NewInput(context.Context) (string, error) {
+	return "shaped-input", nil
+}
+
+func (processesAnything) Process(_ context.Context, input string) (string, error) {
+	return input, nil
 }

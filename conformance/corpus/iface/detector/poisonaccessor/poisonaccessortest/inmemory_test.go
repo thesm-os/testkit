@@ -4,6 +4,7 @@
 package poisonaccessortest_test
 
 import (
+	"errors"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -23,17 +24,47 @@ var latches = poisonaccessortest.PoisonAccessorChecks{
 		Method: "Err",
 		Name:   "latches-what-it-reports",
 		Claim:  "Err latches whatever it reports",
-		Run: func(tb testing.TB, s poisonaccessor.PoisonAccessor, fx poisonaccessortest.PoisonAccessorFixture) {
-			tb.Helper()
-			// Stated across two births because Err is the only method:
-			// nothing a caller does moves a healthy subject into failure, so
-			// the failed state is a constructor's to build. What both share is
-			// that the answer does not change on being read.
-			first := s.Err()
-			testkit.Equal(tb, s.Err(), first,
-				"a second read reports what the first did")
-		},
+		Run:    latchesWhatItReports,
+		ProvenBy: poisonaccessortest.BrokenPoisonAccessor(
+			"an accessor whose verdict changes on being read", newUnlatched,
+		),
+		ProvenReason: "a second read reports what the first did",
 	},
+}
+
+// latchesWhatItReports is stated across two births because Err is the only
+// method: nothing a caller does moves a healthy subject into failure, so the
+// failed state is a constructor's to build. What both share is that the answer
+// does not change on being read.
+func latchesWhatItReports(
+	tb testing.TB, s poisonaccessor.PoisonAccessor,
+	_ poisonaccessortest.PoisonAccessorFixture,
+) {
+	tb.Helper()
+	first := s.Err()
+	testkit.Equal(tb, s.Err(), first, "a second read reports what the first did")
+}
+
+// unlatched answers a different verdict every time it is asked, which is the
+// one thing a single call cannot observe — and the whole of what this shape's
+// law forbids.
+type unlatched struct{ reads int }
+
+func newUnlatched() *unlatched { return &unlatched{} }
+
+func (u *unlatched) Err() error {
+	u.reads++
+	if u.reads%2 == 0 {
+		return nil
+	}
+	return errors.New("poisonaccessortest_test: unwell, for now")
+}
+
+// TestPoisonAccessorChecksCanFail drives the row against its planted defect.
+func TestPoisonAccessorChecksCanFail(t *testing.T) {
+	t.Parallel()
+
+	poisonaccessortest.ProvePoisonAccessor(t, latches)
 }
 
 func TestPoisonAccessorContract(t *testing.T) {

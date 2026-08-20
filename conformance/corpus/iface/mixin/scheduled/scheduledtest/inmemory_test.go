@@ -1,9 +1,13 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
+// `scheduled` is the model tier's: what fires when is a claim about a clock the
+// run advances. What one subject settles is the comparison itself, which the
+// row below walks from both sides.
 package scheduledtest_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -12,52 +16,92 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/scheduled/scheduledtest"
 )
 
-// The generated contract, run against the in-memory subject.
+// TestMixedContract runs the generated checks and this package's own.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	scheduledtest.RunMixed(t,
-		scheduledtest.MixedHarness[*scheduledtest.InMemory]{Name: "in-memory", New: scheduledtest.NewInMemory},
-		scheduledtest.MixedChecks{
-			{
-				Method: "Fired",
-				Name:   "counts-nothing-before-its-instant",
-				Claim:  "Fired counts nothing before its instant arrives",
-				Run: func(tb testing.TB, s scheduled.Mixed, fx scheduledtest.MixedFixture) {
-					tb.Helper()
-					// A task registered for the future has not run on a clock
-					// nobody advanced. Asserting the zero is what stops this
-					// fixture from passing against a scheduler that fires
-					// everything immediately.
-					testkit.NoError(tb, s.At(tb.Context(), time.Hour), "the task registers")
-
-					got, err := s.Fired(tb.Context())
-					testkit.NoError(tb, err, "the count is readable")
-					testkit.Equal(tb, got, 0, "an hour has not passed on this clock")
-
-					// A task due now is already due: its instant is not after
-					// the clock's reading. That is the other side of the same
-					// comparison, and without it a scheduler that never fires
-					// would pass.
-					testkit.NoError(tb, s.At(tb.Context(), 0), "a task due now registers")
-
-					got, err = s.Fired(tb.Context())
-					testkit.NoError(tb, err, "the count is readable")
-					testkit.Equal(tb, got, 1, "and counts the one whose instant has arrived")
-				},
-			},
-		},
-	)
+	scheduledtest.RunMixed(t, inMemory("in-memory"), mixedChecks)
 }
 
-// Dropping a check is written against the typed index rather than a string, so
-// a check that is renamed or stops being emitted breaks this compile instead of
-// silently declining nothing.
+// TestMixedContractWithoutSmoke drops a check through the typed index rather
+// than a string, so a check that is renamed or stops being emitted breaks this
+// compile instead of silently declining nothing.
 func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
 	scheduledtest.RunMixed(t,
-		scheduledtest.MixedHarness[*scheduledtest.InMemory]{Name: "in-memory", New: scheduledtest.NewInMemory},
-		scheduledtest.MixedSuite.Without(scheduledtest.MixedSuite.Checks.Fired.Smoke()),
+		inMemory("in-memory"),
+		scheduledtest.MixedSuite.Without(scheduledtest.MixedSuite.Checks.At.Smoke()),
 	)
 }
+
+// TestMixedChecksCanFail drives the row against its planted defect.
+func TestMixedChecksCanFail(t *testing.T) {
+	t.Parallel()
+
+	scheduledtest.ProveMixed(t, mixedChecks)
+}
+
+// --- Harnesses ---------------------------------------------------------------
+
+func inMemory(name string) scheduledtest.MixedHarness[*scheduledtest.InMemory] {
+	return scheduledtest.MixedHarness[*scheduledtest.InMemory]{
+		Name: name, New: scheduledtest.NewInMemory,
+	}
+}
+
+// --- The checks: claims, bodies and defects, by name --------------------------
+
+var mixedChecks = scheduledtest.MixedChecks{
+	{
+		Method: "Fired", Name: "counts-nothing-before-its-instant",
+		Claim: "Fired counts nothing before its instant arrives",
+		Run:   countsNothingBeforeItsInstant,
+		ProvenBy: scheduledtest.BrokenMixed(
+			"a scheduler that fires everything it is handed", newFiresImmediately,
+		),
+		ProvenReason: "an hour has not passed on this clock",
+	},
+}
+
+// --- Bodies -------------------------------------------------------------------
+
+// countsNothingBeforeItsInstant walks the comparison from both sides.
+//
+// A task registered for the future has not run on a clock nobody advanced, and
+// asserting the zero is what stops this fixture from passing against a
+// scheduler that fires everything immediately. A task due now is already due —
+// its instant is not AFTER the clock's reading — and without that half a
+// scheduler that never fires would pass.
+func countsNothingBeforeItsInstant(
+	tb testing.TB, s scheduled.Mixed, _ scheduledtest.MixedFixture,
+) {
+	tb.Helper()
+	testkit.NoError(tb, s.At(tb.Context(), time.Hour), "the task registers")
+
+	got, err := s.Fired(tb.Context())
+	testkit.NoError(tb, err, "the count is readable")
+	testkit.Equal(tb, got, 0, "an hour has not passed on this clock")
+
+	testkit.NoError(tb, s.At(tb.Context(), 0), "a task due now registers")
+
+	got, err = s.Fired(tb.Context())
+	testkit.NoError(tb, err, "the count is readable")
+	testkit.Equal(tb, got, 1, "and counts the one whose instant has arrived")
+}
+
+// --- Planted defects ----------------------------------------------------------
+
+// firesImmediately runs every task as it is registered, which is the scheduler
+// with no clock at all — and the one every check that only registers a task and
+// asks whether the call succeeded calls correct.
+type firesImmediately struct{ fired int }
+
+func newFiresImmediately() *firesImmediately { return &firesImmediately{} }
+
+func (f *firesImmediately) At(context.Context, time.Duration) error {
+	f.fired++
+	return nil
+}
+
+func (f *firesImmediately) Fired(context.Context) (int, error) { return f.fired, nil }

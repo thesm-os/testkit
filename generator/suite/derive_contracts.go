@@ -73,7 +73,7 @@ func (Contracts) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				continue
 			}
 			ruled, refused := e.rule(f, m, call)
-			plans = append(plans, ruled...)
+			plans = append(plans, licensed(ruled, projection.AxisContract, e.contract)...)
 			refusals = append(refusals, refused...)
 		}
 	}

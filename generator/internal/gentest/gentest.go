@@ -32,7 +32,6 @@ import (
 	"go.thesmos.sh/eidos/eidostest/storefixture"
 	"go.thesmos.sh/eidos/plugin"
 	"go.thesmos.sh/eidos/sdk"
-	"go.thesmos.sh/eidos/store"
 )
 
 // SourceFile is where a fixture's declarations claim to live.
@@ -72,21 +71,6 @@ func Err(m *storefixture.MethodBuilder) { m.Return(storefixture.Named("error")) 
 func Diagnostics(tb testing.TB, g plugin.Generator, s *sdk.Store) []diag.Diag {
 	tb.Helper()
 	return plugintest.Generate(tb, g, s).Diagnostics()
-}
-
-// DiagnosticsWithReader is [Diagnostics] for a generator whose
-// derivation resolves declarations — samples, struct composition,
-// anything reaching past the method it is looking at.
-//
-// A reader the pipeline built rather than one a test assembled: a
-// hand-built resolver answers what its author remembered to put in it,
-// which is how a derivation passes its unit test and refuses the same
-// input in a run.
-func DiagnosticsWithReader(
-	tb testing.TB, g plugin.Generator, s *sdk.Store, r *store.Reader,
-) []diag.Diag {
-	tb.Helper()
-	return plugintest.GenerateWithReader(tb, g, s, r).Diagnostics()
 }
 
 // About narrows diagnostics to those naming the subject, so an

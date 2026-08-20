@@ -25,37 +25,29 @@ func evidenceOnce() ([]gate.Evidence, error) {
 	return census.Evidence, err
 }
 
-// skipUntilSuiteEmission parks the census questions the suite rewrite unowns.
+// skipUntilModelRegistered parks the union question the model tier owns half
+// of.
 //
-// evidenceFrom's TRANSITION paragraph is the owner, and what it names has
-// moved. The suite emission has landed: every classification the registry ships
-// is now tabled, law-backed or recorded with its reason, and the generator-side
-// census in generator/suite/derive_stamps_test.go holds that both ways with no
-// entry left pending. What has NOT landed is this file's side of it — the
-// per-classification evidence registry these questions read is populated by
-// nothing, so the census reports the whole vocabulary unevidenced whatever the
-// corpus emits.
+// The suite half is measured: every derived check carries the classification
+// its rules table dispatched on, and reading it back is what caught the stale
+// `indexed` row this register no longer has. What is NOT measured is the model
+// half — generator.Generators() registers builder, enum, sentinel, stub and
+// suite, and no model generator, so modelEvidence reads an empty binding set by
+// construction rather than by measurement.
 //
-// So the remaining work is a mapping rather than an emission: from a generated
-// check's class back to the classification that licensed it, walked over the
-// locks. Until that exists one of these tests is red for a reason about this
-// gate rather than about the corpus, and the two that iterate evidenced rows
-// iterate none.
+// So a classification only the model tier would ever assert reports as
+// unevidenced here, and there are seventy-odd of them: every law-backed mixin
+// and every contract. Reporting those as a corpus gap would be reporting the
+// relink as one, which is a different thing and already has an owner.
 //
-// A skip rather than a relaxed assertion, because a bar the tree clears
-// vacuously today is a bar it still clears on the day the new emission lands
-// and evidences nothing — which is the one morning this register exists to be
-// red on. The skip is the deferred work with a named owner; the relaxation
-// would be the work forgotten.
-//
-// The message carries an expiry so the deferral is held by the skip-expiry
-// gate rather than by anyone's memory: past that date the build reddens here
-// until the census is rebuilt or the date is argued forward. The full account
-// is the transition section of docs/internal/suite-plugin-design.md.
-func skipUntilSuiteEmission(tb testing.TB) {
+// A skip rather than a relaxed assertion, for the reason the old one gave: a
+// bar the tree clears vacuously today is a bar it still clears on the day the
+// model tier lands and evidences nothing. The expiry holds the deferral rather
+// than anyone's memory.
+func skipUntilModelRegistered(tb testing.TB) {
 	tb.Helper()
-	tb.Skip("the union census reads a per-classification evidence registry nothing " +
-		"populates; expires 2026-09-18")
+	tb.Skip("the union needs the model tier's half and no model generator is " +
+		"registered; expires 2026-09-18")
 }
 
 // Every classification eidos ships is asserted by a tier or argued by a row.
@@ -71,7 +63,7 @@ func skipUntilSuiteEmission(tb testing.TB) {
 // asserted by neither tier, with the reason for four of them confessed in a
 // fixture comment and for the rest not written down at all.
 func TestEveryClassificationHasEvidenceOrARow(t *testing.T) {
-	skipUntilSuiteEmission(t)
+	skipUntilModelRegistered(t)
 	t.Parallel()
 
 	all, err := evidenceOnce()
@@ -90,7 +82,6 @@ func TestEveryClassificationHasEvidenceOrARow(t *testing.T) {
 // a stale excuse, and leaving it costs more than the gap did: the next reader
 // takes it for a considered judgment about the current tree.
 func TestNoUnevidencedRowIsStale(t *testing.T) {
-	skipUntilSuiteEmission(t)
 	t.Parallel()
 
 	all, err := evidenceOnce()
@@ -151,7 +142,6 @@ func TestEvidenceCoversTheWholeRegistry(t *testing.T) {
 // say by what, which is the shape of a measurement that has drifted from what
 // it measures.
 func TestEvidencedRowsNameTheirFixture(t *testing.T) {
-	skipUntilSuiteEmission(t)
 	t.Parallel()
 
 	all, err := evidenceOnce()

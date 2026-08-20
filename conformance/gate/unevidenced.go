@@ -56,7 +56,6 @@ var UnevidencedClassifications = map[string]string{
 	"deprecated":      "a fact about a method's lifecycle rather than about its behaviour; there is nothing to assert and the generated documentation states it, which is where a caller needs it",
 	"integrationonly": "a run modifier, not a claim: it gates every other check behind an environment, so a check about it would be a check about the harness rather than the subject",
 	"timeaware":       "a marker that a callable depends on a clock, deliberately without saying which quantity — the quantities are `ttl`, `timeout` and `windowed`, and those carry the checkable claims",
-	"indexed":         "the stamp bounds a derived value rather than stating a claim: it says an integer parameter addresses a position the sizing method bounds, which is what stops the fixture inventing an index out of range for every collection",
 
 	"concurrentreaders": "the claim needs readers overlapping a writer; the suite tier's concurrency check is the signature-derived smoke under load, which any method earns, and the model tier's linearizability leg is selected from shape rather than from this stamp",
 	"retrysucceeds":     "the claim is that a transient failure succeeds on a later attempt, which needs a failure the harness can induce and then withdraw; neither tier injects one, so a subject that never fails satisfies it vacuously",

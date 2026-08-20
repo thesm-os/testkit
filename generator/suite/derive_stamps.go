@@ -113,7 +113,7 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 					continue
 				}
 				ruled, refused := rule(f, m, call)
-				plans = append(plans, ruled...)
+				plans = append(plans, licensed(ruled, projection.AxisMixin, name)...)
 				refusals = append(refusals, refused...)
 			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
@@ -145,11 +145,30 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		}
 		if rule, tabled := detectors[detected]; tabled && drawn {
 			ruled, refused := rule(f, m, call)
-			plans = append(plans, ruled...)
+			plans = append(plans, licensed(ruled, projection.AxisDetector, detected)...)
 			refusals = append(refusals, refused...)
 		}
 	}
 	return plans, refusals
+}
+
+// licensed stamps every plan a rule answered with the classification
+// that dispatched to it.
+//
+// At the dispatch rather than in the rule bodies, and that is the whole
+// reason it can be trusted: the rules tables are KEYED by the
+// classification, so the stamp and the dispatch read the same value and
+// a rule reachable under two names is stamped correctly under each.
+// Thirty-five plan literals stamping themselves would be thirty-five
+// chances to name the wrong one — and missRule, which seven detector
+// shapes share, could not have named any single one.
+func licensed(
+	plans []projection.CheckPlan, axis, name string,
+) []projection.CheckPlan {
+	for i := range plans {
+		plans[i].Licensed = projection.Licence{Axis: axis, Name: name}
+	}
+	return plans
 }
 
 // spellsOwnArgs is the rules that write at least one argument

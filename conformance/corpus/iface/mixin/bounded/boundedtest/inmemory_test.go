@@ -1,9 +1,14 @@
 // Copyright Thesmos 2026
 // SPDX-License-Identifier: MIT
 
+// `bounded limit=` declares a ceiling, and the harness hands it to every
+// constructor — the real subject's and each planted defect's — so the number
+// under test is the declared one rather than a literal repeated here.
 package boundedtest_test
 
 import (
+	"context"
+	"slices"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -11,49 +16,100 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/bounded/boundedtest"
 )
 
-// bounded is the model tier's — AUTO-AGGREGATOR-BOUNDED states it — so the
-// suite generates the signature family alone.
-//
-// The declared ceiling reaches the subject rather than being restated by it:
-// `//testkit:mixin bounded limit=5` is what the harness hands every
-// constructor, so a subject built at some other capacity is one the law would
-// measure against a limit it was never given.
+// TestMixedContract runs the generated checks and this package's own.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	boundedtest.RunMixed(t,
-		boundedtest.MixedHarness[*boundedtest.InMemory]{Name: "in-memory", New: boundedtest.NewInMemory},
-		boundedtest.MixedChecks{
-			{
-				Method: "List",
-				Name:   "clamped-to-the-declared-bound",
-				Claim:  "List is bounded by the capacity the declaration gave it",
-				Run: func(tb testing.TB, s bounded.Mixed, fx boundedtest.MixedFixture) {
-					tb.Helper()
-					// One more than the bound, so the clamp has something to
-					// clamp. A collection that grew without answering more is
-					// exactly what the mixin claims.
-					for range 7 {
-						testkit.NoError(tb, s.Add(tb.Context(), fx.Item()), "an item is added")
-					}
-
-					got, err := s.List(tb.Context())
-					testkit.NoError(tb, err, "the collection is readable")
-					testkit.Len(tb, got, 5, "and answers no more than the declared bound")
-				},
-			},
-		},
-	)
+	boundedtest.RunMixed(t, inMemory("in-memory"), mixedChecks)
 }
 
-// Dropping a check is written against the typed index rather than a string, so
-// a check that is renamed or stops being emitted breaks this compile instead of
-// silently declining nothing.
+// TestMixedContractWithoutSmoke drops a check through the typed index rather
+// than a string, so a check that is renamed or stops being emitted breaks this
+// compile instead of silently declining nothing.
 func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
 	boundedtest.RunMixed(t,
-		boundedtest.MixedHarness[*boundedtest.InMemory]{Name: "in-memory", New: boundedtest.NewInMemory},
-		boundedtest.MixedSuite.Without(boundedtest.MixedSuite.Checks.List.Smoke()),
+		inMemory("in-memory"),
+		boundedtest.MixedSuite.Without(boundedtest.MixedSuite.Checks.Add.Smoke()),
 	)
+}
+
+// TestMixedChecksCanFail drives the row against its planted defect.
+func TestMixedChecksCanFail(t *testing.T) {
+	t.Parallel()
+
+	boundedtest.ProveMixed(t, mixedChecks)
+}
+
+// --- Harnesses ---------------------------------------------------------------
+
+// The bound is 5 and the row adds one more than that, so the clamp has
+// something to clamp. Both numbers are here rather than in the body because
+// they are one decision: added must exceed the ceiling or the row is vacuous.
+const (
+	bound = 5
+	added = bound + 2
+)
+
+func inMemory(name string) boundedtest.MixedHarness[*boundedtest.InMemory] {
+	return boundedtest.MixedHarness[*boundedtest.InMemory]{
+		Name: name, New: boundedtest.NewInMemory,
+	}
+}
+
+// --- The checks: claims, bodies and defects, by name --------------------------
+
+var mixedChecks = boundedtest.MixedChecks{
+	{
+		Method: "List", Name: "clamped-to-the-declared-bound",
+		Claim: "List is bounded by the capacity the declaration gave it",
+		Run:   clampedToTheDeclaredBound,
+		ProvenBy: boundedtest.BrokenMixed(
+			"a collection that answers everything it took", plantedUnbounded,
+		),
+		ProvenReason: "no more than the declared bound",
+	},
+}
+
+// --- Bodies -------------------------------------------------------------------
+
+// clampedToTheDeclaredBound adds more than the bound, so a collection that grew
+// without answering more is what the mixin claims and this row observes.
+func clampedToTheDeclaredBound(
+	tb testing.TB, s bounded.Mixed, fx boundedtest.MixedFixture,
+) {
+	tb.Helper()
+	for range added {
+		testkit.NoError(tb, s.Add(tb.Context(), fx.Item()), "an item is added")
+	}
+
+	got, err := s.List(tb.Context())
+	testkit.NoError(tb, err, "the collection is readable")
+	testkit.Len(tb, got, bound, "and answers no more than the declared bound")
+}
+
+// --- Planted defects ----------------------------------------------------------
+
+// plantedUnbounded builds a collection that takes the declared capacity and
+// ignores it, which is what a bound enforced at the write and forgotten at the
+// read looks like.
+func plantedUnbounded(capacity int) *unboundedList {
+	return &unboundedList{capacity: capacity}
+}
+
+type unboundedList struct {
+	capacity int
+	items    []string
+}
+
+func (u *unboundedList) Add(_ context.Context, item string) error {
+	u.items = append(u.items, item)
+	return nil
+}
+
+// List answers everything, which is the defect. The capacity it was handed is
+// kept and unread, so a run at a different declared bound plants the same one.
+func (u *unboundedList) List(context.Context) ([]string, error) {
+	return slices.Clone(u.items), nil
 }

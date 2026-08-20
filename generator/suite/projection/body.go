@@ -37,7 +37,6 @@ const (
 	KindPartnerAgrees   BodyKind = BodyKindPrefix + "partner-agrees"
 	KindReadActRead     BodyKind = BodyKindPrefix + "read-act-read"
 	KindWriteWriteRead  BodyKind = BodyKindPrefix + "write-write-read"
-	KindRowSugar        BodyKind = BodyKindPrefix + "row-sugar"
 )
 
 // CallPlan spells one method invocation a body makes: the method name
@@ -407,10 +406,6 @@ type WriteWriteRead struct {
 	Must string
 }
 
-// RowSugar is the consumer extension seam: the typed row table and its
-// bind, not a derived assertion of its own.
-type RowSugar struct{}
-
 // BodyKind names the template that renders the plain survives-smoke.
 func (SmokeSurvives) BodyKind() BodyKind { return KindSmokeSurvives }
 
@@ -462,9 +457,6 @@ func (ReadActRead) BodyKind() BodyKind { return KindReadActRead }
 // BodyKind names the template that renders the write-write-read triple.
 func (WriteWriteRead) BodyKind() BodyKind { return KindWriteWriteRead }
 
-// BodyKind names the template that renders the row-sugar body.
-func (RowSugar) BodyKind() BodyKind { return KindRowSugar }
-
 // BodyKinds enumerates every registered body variant. The template
 // census holds this list and the embedded template set equal, so an
 // unregistered variant or an orphaned template is a build failure, not
@@ -488,6 +480,5 @@ func BodyKinds() []BodyKind {
 		PartnerAgrees{}.BodyKind(),
 		ReadActRead{}.BodyKind(),
 		WriteWriteRead{}.BodyKind(),
-		RowSugar{}.BodyKind(),
 	}
 }
