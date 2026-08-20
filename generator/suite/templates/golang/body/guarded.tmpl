@@ -1,0 +1,21 @@
+{{/*
+The guarded family: one line of method wiring over the engine primitive
+that owns the semantics. What "reports a cancelled context" means, and
+what the failure says, lives in engine/suite and is not restated here.
+
+One define rather than one per guard. The arms differ in the primitive's
+NAME, which is data the body carries, and three defines matching byte
+for byte apart from one literal are three places to fix the day the
+closure changes shape.
+*/}}
+{{- define "suite.body.guarded-call" -}}
+{{- $call := suite_callExpr .Recv .Body.Call -}}
+{{ renderExpr (external .Vocab .Guard) }}(tb, {{ .Check }}, func(ctx {{ renderExpr (external "context" "Context") }}) error {
+{{- if .ErrBind }}
+	{{ .ErrBind }} {{ $call }}
+	return err
+{{- else }}
+	return {{ $call }}
+{{- end }}
+})
+{{- end -}}

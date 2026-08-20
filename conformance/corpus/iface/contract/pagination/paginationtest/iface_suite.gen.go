@@ -35,6 +35,7 @@ import (
 //
 //	Page/cancel
 //	Page/deadline
+//	Page/miss
 //	Page/nilcontext
 //	Page/smoke
 //	Page/zero-on-error
@@ -218,6 +219,7 @@ var contractIndexPath = map[suite.ID]string{
 	contractCheckIndex.Page.NilContext():  "ContractSuite.Checks.Page.NilContext()",
 	contractCheckIndex.Page.Deadline():    "ContractSuite.Checks.Page.Deadline()",
 	contractCheckIndex.Page.ZeroOnError(): "ContractSuite.Checks.Page.ZeroOnError()",
+	contractCheckIndex.Page.Miss():        "ContractSuite.Checks.Page.Miss()",
 	contractCheckIndex.Put.Smoke():        "ContractSuite.Checks.Put.Smoke()",
 	contractCheckIndex.Put.Cancels():      "ContractSuite.Checks.Put.Cancels()",
 	contractCheckIndex.Put.NilContext():   "ContractSuite.Checks.Put.NilContext()",
@@ -276,6 +278,10 @@ func (contractPageChecks) ZeroOnError() suite.ID {
 	return suite.MethodID(contractPage, suite.SegZeroValue)
 }
 
+func (contractPageChecks) Miss() suite.ID {
+	return suite.MethodID(contractPage, suite.SegMiss)
+}
+
 func (contractPageChecks) All() []suite.ID {
 	return []suite.ID{
 		contractPageChecks{}.Smoke(),
@@ -283,6 +289,7 @@ func (contractPageChecks) All() []suite.ID {
 		contractPageChecks{}.NilContext(),
 		contractPageChecks{}.Deadline(),
 		contractPageChecks{}.ZeroOnError(),
+		contractPageChecks{}.Miss(),
 	}
 }
 
@@ -383,6 +390,11 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			"Put reports an expired deadline as exceeded",
 			func(tb testing.TB, c Contract) {
 				contractAssertPutHonoursDeadline(tb, c, fx)
+			}),
+		sig(ix.Page.Miss(), suite.ClassReader,
+			"Page reports zero for a cursor nothing has written",
+			func(tb testing.TB, c Contract) {
+				contractAssertPageMiss(tb, c, fx)
 			}),
 	}
 }
@@ -513,6 +525,32 @@ func contractAssertPutHonoursDeadline(
 	suite.ReportsDeadlineExceeded(tb, contractPut, func(ctx context.Context) error {
 		return c.Put(ctx, fx.Value())
 	})
+}
+
+// contractAssertPageMiss asserts Page reports zero for a cursor nothing has written.
+func contractAssertPageMiss(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	got, got2, got3, err := c.Page(ctx, fx.CursorOther())
+
+	if got != nil {
+		tb.Errorf("Page must return nothing for its result 1 for an input nothing supplied (err %v)", err)
+	}
+	var zero2 pagination.Cursor
+	if got2 != zero2 {
+		tb.Errorf("Page must return the zero Cursor for an input nothing supplied: got %+v, want %+v (err %v)",
+			got2, zero2, err)
+	}
+	var zero3 bool
+	if got3 != zero3 {
+		tb.Errorf("Page must return the zero bool for an input nothing supplied: got %+v, want %+v (err %v)",
+			got3, zero3, err)
+	}
 }
 
 // ContractDefect is anything that can stand as a planted defect for a
@@ -709,4 +747,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance e073cc93cdea218e017b9dc6af8d6477c0eba3485f506c717df9291b4e971918
+// testkit:provenance 7e0cca54b0b1296efd4e637aa0614ec7bf3898832987737ad387ac8ee5b86577

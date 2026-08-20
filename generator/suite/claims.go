@@ -56,6 +56,12 @@ func OpenerSmokeClaim(m Method, produced string) string {
 	return m.Name + " survives a call and the " + produced + " it opens closes"
 }
 
+// BuiltSmokeClaim words the smoke of a method whose input its own
+// sibling mints: the call survives an input that sibling made.
+func BuiltSmokeClaim(m Method, builder string) string {
+	return m.Name + " survives a call with an input " + builder + " made"
+}
+
 // BorrowSmokeClaim words the returning method's smoke: the resource
 // it returns was borrowed from the producing sibling. "resource" is
 // the corpus's word for the borrowed thing; a second borrowing domain
@@ -186,27 +192,308 @@ func zeroNouns(values []golang.Return) string {
 	return "the zero " + strings.Join(names[:last], ", ") + " and " + names[last]
 }
 
+// PartitionClaim words the isolation claim, naming the axis so a
+// reader knows which parameter the boundary is drawn along.
+func PartitionClaim(m Method, axis string) string {
+	return m.Name + " keeps one " + axis + " out of another"
+}
+
+// PartitionRequirement words what the failure says the method must do.
+//
+// Here rather than in the template because a claim and the failure
+// reporting it broken are one sentence in two moods, and a wording
+// policy split across two files is one that drifts: the row would go on
+// saying the subject keeps partitions apart while the failure it emits
+// asked for something else.
+func PartitionRequirement(axis string) string {
+	return "not let one " + axis + " reach another"
+}
+
+// SideEffectClaim words the named-pair claim: the call is observable
+// through the partner the directive named.
+//
+// Names both members, because the claim is about the relationship and a
+// reader deciding whether it holds needs to know where to look.
+func SideEffectClaim(m Method, observer string) string {
+	return m.Name + " changes what " + observer + " observes"
+}
+
+// SideEffectRequirement words what the failure says the method must do
+// — the imperative of [SideEffectClaim], for the reason
+// [PartitionRequirement] is stated beside its claim.
+func SideEffectRequirement(observer string) string {
+	return "change what " + observer + " observes"
+}
+
+// The defect clauses: what a planted double DOES, in the grammar
+// [projection.DefectName] wraps — "a Store whose Get panics".
+//
+// Beside the claims because a proof's subject line is prose about the
+// same method, and a wording policy with two homes is one that drifts.
+// One function per DEFECT rather than per claim: several claims are
+// broken by the same planted statement, and what a report has to say is
+// what the double does, not what the claim wanted.
+
+// PanicsClause words the smoke family's double.
+func PanicsClause(m Method) string { return m.Name + " panics" }
+
+// SwallowsContextClause words the cancel and deadline families' double.
+func SwallowsContextClause(m Method) string {
+	return m.Name + " ignores the context it is handed"
+}
+
+// ForgivesNilContextClause words the nilcontext claim's double, whose
+// stronger arm — returns an error — is broken by answering instead.
+func ForgivesNilContextClause(m Method) string {
+	return m.Name + " forgives a nil context and answers"
+}
+
+// DropsWriteClause words the double that acknowledges a write and keeps
+// none of it.
+func DropsWriteClause(m Method) string {
+	return m.Name + " reports success and keeps nothing"
+}
+
+// AnswersMissClause words the double that answers for an input nothing
+// supplied — the miss claim's, in both its arms.
+func AnswersMissClause(m Method) string {
+	return m.Name + " answers for an input nothing wrote"
+}
+
+// EchoesBesideErrorClause words the zero-on-error family's double.
+func EchoesBesideErrorClause(m Method) string {
+	return m.Name + " answers a believable value beside its error"
+}
+
+// ForgivesNilArgumentClause words the double that takes the nil and
+// carries on.
+func ForgivesNilArgumentClause(m Method) string {
+	return m.Name + " accepts a nil argument and answers"
+}
+
+// AnswersEarlyClause words the double that answers before its
+// predecessor has run.
+func AnswersEarlyClause(m Method) string {
+	return m.Name + " answers before its predecessor has run"
+}
+
+// AnswersTheZeroClause words the double that succeeds and hands back
+// the zero.
+func AnswersTheZeroClause(m Method) string {
+	return m.Name + " reports success and answers the zero"
+}
+
+// LandsRegardlessClause words the double that writes whatever its own
+// predicate answered.
+func LandsRegardlessClause(m Method, match string) string {
+	return m.Name + " lands whatever " + match + " says"
+}
+
+// AnswersNoStreamClause words the double that reports success and hands
+// back nothing to receive on.
+func AnswersNoStreamClause(sub Method) string {
+	return sub.Name + " reports success and answers no stream"
+}
+
+// AnswersPastTheEndClause words the double that answers for a position
+// the collection does not hold.
+func AnswersPastTheEndClause(m Method) string {
+	return m.Name + " answers for a position past the end"
+}
+
+// SkipsHooksClause words the double that does its work without running
+// what was registered.
+func SkipsHooksClause(m Method) string {
+	return m.Name + " reports success and runs no hook"
+}
+
+// AnswersTheZeroForEverySeedClause words the double that answers the
+// zero for every key the run seeded.
+func AnswersTheZeroForEverySeedClause(m Method) string {
+	return m.Name + " answers the zero for every key the run seeded"
+}
+
+// CountsNothingClause words the double that reports an empty aggregate
+// over a seeded subject.
+func CountsNothingClause(m Method) string {
+	return m.Name + " reports no entries however many the run seeded"
+}
+
+// TakesDuplicateClause words the double that accepts a write of what is
+// already there.
+func TakesDuplicateClause(m Method) string {
+	return m.Name + " accepts a duplicate as though it were new"
+}
+
+// RefusesEverythingClause words the double that reports an error for
+// every call.
+func RefusesEverythingClause(m Method) string {
+	return m.Name + " refuses everything it is handed"
+}
+
+// RepeatFailsClause words the idempotent claim's double.
+func RepeatFailsClause(m Method) string {
+	return m.Name + " fails on the second call"
+}
+
+// localName cuts a resolved partner reference back to the identifier a
+// call site spells.
+//
+// The annotator hands a partner back QUALIFIED, which is right for
+// identity and wrong for a call: the generated body calls the method on
+// the subject, where the package qualifier is not in scope.
+func localName(ref string) string {
+	if i := strings.LastIndex(ref, "."); i >= 0 {
+		return ref[i+1:]
+	}
+	return ref
+}
+
+// NilArgumentClaim words the nil-safety claim about a value parameter,
+// naming the argument so a reader knows which slot the nil goes in.
+func NilArgumentClaim(m Method, arg golang.Param) string {
+	return m.Name + " reports a nil " + drawNoun(arg) + " rather than panicking"
+}
+
+// OrderAfterClaim words the ordering claim: the call refuses, with the
+// declared sentinel, until its predecessor has run.
+//
+// Names all three — the call, what it waits for, and what being early
+// reports — because a reader deciding whether the claim holds has to
+// know which error counts as the refusal. A qualified sentinel speaks
+// its bare name, as [MissClaim]'s does.
+func OrderAfterClaim(m Method, predecessor, sentinel string) string {
+	return m.Name + " reports " + localName(sentinel) + " until " + predecessor + " has run"
+}
+
+// ValidatesClaim words the agreement claim: the method takes exactly
+// what the validator takes.
+//
+// Narrower than the classification, deliberately. The mixin says
+// invalid input is screened before any work runs; what a caller with no
+// invalid value in hand can see is whether the two verdicts MATCH, and
+// a suite that invented an invalid value would be guessing at the rule
+// under test. The screening's other half — that a refused value left
+// nothing behind — needs a reader the directive names no parameter for.
+func ValidatesClaim(m Method, validator string) string {
+	return m.Name + " refuses exactly what " + validator + " refuses"
+}
+
+// ValidatesRequirement words what the failure says the method must do —
+// the imperative of [ValidatesClaim].
+func ValidatesRequirement(validator string) string {
+	return "refuse exactly what " + validator + " refuses"
+}
+
+// AnswerClaim words what a write that answers its stored state owes: an
+// answer at all.
+//
+// Narrower than the shape, and deliberately. Whether the answer equals
+// what was handed in or carries a stamp the store assigned is the
+// subject's business — the shape exists BECAUSE stores assign stamps —
+// and a claim picking either would fail the other. The zero is the one
+// answer no such write may give.
+func AnswerClaim(m Method) string {
+	return m.Name + " answers the state it kept rather than the zero"
+}
+
+// AnswerRequirement words what the failure says an answering write must
+// do — the imperative of [AnswerClaim].
+func AnswerRequirement() string { return "answer the state it kept" }
+
+// SubscriberRequirement words what the failure says a subscriber must
+// do — the imperative of [SubscriberClaim].
+func SubscriberRequirement() string { return "answer a stream a caller can receive on" }
+
+// SubscriberClaim words what an outbox subscriber owes a caller: a
+// channel, not a nil one.
+//
+// Narrower than the contract, and the narrowing is the tier boundary.
+// That an append ARRIVES is a claim about a wait, which needs a clock;
+// that a subscriber answered something to wait on needs nothing but the
+// call.
+func SubscriberClaim(sub Method) string {
+	return sub.Name + " answers a stream a caller can receive on"
+}
+
+// ConflictClaim words the conditional write's refusal, naming the
+// sentinel so a reader knows which error counts as the refusal. A
+// qualified one speaks its bare name, as [MissClaim]'s does.
+func ConflictClaim(m Method, conflict string) string {
+	return "a second " + m.Name + " of what is already there reports " + localName(conflict)
+}
+
+// MatchClaim words the conditional write's agreement with its own
+// predicate.
+//
+// Narrower than the contract, for the reason [ValidatesClaim] is: a
+// suite has no value it knows the predicate rejects, so what it can
+// state is that the two answers line up.
+func MatchClaim(m Method, match string) string {
+	return m.Name + " lands exactly when " + match + " says it may"
+}
+
+// MatchRequirement words what the failure says the method must do — the
+// imperative of [MatchClaim].
+func MatchRequirement(match string) string {
+	return "land exactly when " + match + " says it may"
+}
+
+// The reasons a zero-judging failure gives for why the zero was owed,
+// in the grammar the judgement fragment wraps: "Get must return the
+// zero value <reason>".
+
+// BecauseErred is the zero-on-error family's reason.
+func BecauseErred() string { return "alongside an error" }
+
+// BecauseUnsupplied is the reader miss's reason.
+func BecauseUnsupplied() string { return "for an input nothing supplied" }
+
+// BecausePastTheEnd is the positional read's, naming the sizer that
+// said where the end was.
+func BecausePastTheEnd(sizer string) string {
+	return "at the size " + sizer + " reports"
+}
+
+// HooksClaim words the callback claim, naming the registrar so a reader
+// knows where a hook is installed.
+func HooksClaim(m Method, register string) string {
+	return m.Name + " runs what " + register + " registered"
+}
+
+// HooksRequirement words what the failure says the method must do — the
+// imperative of [HooksClaim].
+func HooksRequirement(register string) string {
+	return "run what " + register + " registered"
+}
+
+// BoundClaim words the positional read's edge, naming the sizer so a
+// reader knows where the bound came from.
+func BoundClaim(m Method, sizer string) string {
+	return m.Name + " reports no element at the size " + sizer + " reports"
+}
+
 // IdempotentClaim words the second-call claim.
 func IdempotentClaim(m Method) string {
 	return "a second " + m.Name + " after a clean one changes nothing"
 }
 
-// AccumulatesClaim words the declared-not-idempotent claim; noun is
-// the declaration's repeated-action word, "call" when it names none.
+// AccumulatesClaim words what the suite tier can state about the
+// accumulates mixin: that a repeat is ACCEPTED.
 //
-// The wording is corpus-pinned and ready; no rule derives it yet,
-// because the declaration that would license it (`idempotent=false`)
-// cannot stamp under eidos's mixin grammar — the ruling is owed
-// upstream.
-func AccumulatesClaim(m Method, noun string) string {
-	if noun == "" {
-		noun = "call"
-	}
-	claim := "two " + noun + "s"
-	if draws := m.CallArgs(); len(draws) > 0 {
-		claim += " of one " + drawNoun(draws[0])
-	}
-	return claim + " total two, because " + m.Name + " is declared not idempotent"
+// Narrower than the classification, deliberately. The mixin claims N
+// invocations have N observable effects, and observing them needs
+// something to read the effect through — which the directive names no
+// parameter for, and which no signature identifies. What one subject
+// and a fixed sequence settle is the half a coalescing store gets
+// wrong first: it refuses the second call, or answers it as a
+// duplicate. The compounding half is the model tier's and waits on a
+// law, recorded in the design doc's frontier.
+//
+// The mirror of [IdempotentClaim] over the same two calls: there the
+// second must change nothing, here it must be taken.
+func AccumulatesClaim(m Method) string {
+	return "a second " + m.Name + " is accepted rather than refused as a repeat"
 }
 
 // MissClaim words the reader miss by its answer shape and supply verb:

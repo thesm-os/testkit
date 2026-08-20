@@ -50,9 +50,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractWatch(
 					func(_ context.Context, _ string) (r0 watcher.Subscription, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractWatch(
 					func(_ context.Context, _ string) (r0 watcher.Subscription, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractWatch(
 					func(_ context.Context, _ string) (r0 watcher.Subscription, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractTrigger(
 					func(_ context.Context, _ string, _ watcher.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractTrigger(
 					func(_ context.Context, _ string, _ watcher.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func contractProofs() prove.Defects[watchertest.Contract] {
 			func(tb testing.TB) watchertest.Contract {
 				return watchertest.NewContractStub(tb, watchertest.WithContractTrigger(
 					func(_ context.Context, _ string, _ watcher.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -155,4 +155,4 @@ func TestContractInvariants(t *testing.T) {
 // one nobody has written the falsification for.
 
 // testkit: end of generated content.
-// testkit:provenance 5b7c9325caca73ce0cdee9843983c9ac2cf8e7805098057a8fb00e43c0613683
+// testkit:provenance 11cdc03817333c42404727ae1c63ff9b9347696f7268c39ad9f330026d3cd941

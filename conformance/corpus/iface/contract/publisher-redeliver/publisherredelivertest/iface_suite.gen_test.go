@@ -8,6 +8,7 @@ package publisherredelivertest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	publisherredeliver "go.thesmos.sh/testkit/conformance/corpus/iface/contract/publisher-redeliver"
@@ -50,9 +51,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractPublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractPublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +71,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractPublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +88,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractRepublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +98,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractRepublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +108,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractRepublish(
 					func(_ context.Context, _ publisherredeliver.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -124,9 +125,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherredeliver.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -134,9 +135,9 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherredeliver.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -144,12 +145,25 @@ func contractProofs() prove.Defects[publisherredelivertest.Contract] {
 			func(tb testing.TB) publisherredelivertest.Contract {
 				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherredeliver.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Subscribe.ZeroOnError(): prove.One("a Contract whose Subscribe answers a believable value beside its error",
+			func(tb testing.TB) publisherredelivertest.Contract {
+				return publisherredelivertest.NewContractStub(tb, publisherredelivertest.WithContractSubscribe(
+					func(_ context.Context) (r0 <-chan publisherredeliver.Value, err error) {
+						// A believable answer beside the refusal. A caller
+						// reading the error and one reading the value disagree
+						// about what happened, which is the claim's own
+						// violation rather than a subject that merely failed.
+						r0 = make(chan publisherredeliver.Value)
+						err = errors.New("planted: Subscribe refused with a believable value")
+						return
+					}))
+			}),
 	}
 }
 
@@ -180,14 +194,5 @@ func TestContractInvariants(t *testing.T) {
 	suite.VerifyDistinctIDs(t, s.IDs())
 }
 
-// Argued rather than proven, for want of a defect template here:
-//
-//	Subscribe/zero-on-error
-//
-// Each is a claim a derivation rule reached and this generator cannot yet
-// plant evidence for. The harness stamps them Argued and says so in the
-// report, which is the difference between a claim nothing can falsify and
-// one nobody has written the falsification for.
-
 // testkit: end of generated content.
-// testkit:provenance 0c09dbf003456a4738c31690c8d99554967af1b43abe815579f2b388166f8590
+// testkit:provenance 54c7b5da69f651173f58115d81b05dc25371f0309fc615dc0c308ea994a694f8

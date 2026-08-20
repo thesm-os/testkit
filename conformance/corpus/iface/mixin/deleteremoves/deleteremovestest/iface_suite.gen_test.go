@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedDelete(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedDelete(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedDelete(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -124,9 +124,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -134,9 +134,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -144,9 +144,9 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -167,7 +167,7 @@ func mixedProofs() prove.Defects[deleteremovestest.Mixed] {
 			func(tb testing.TB) deleteremovestest.Mixed {
 				return deleteremovestest.NewMixedStub(tb, deleteremovestest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = "other-"
 						return
 					}))
@@ -203,4 +203,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f5a7ea3d4654fa95fa9a22b74e4fc8ca4d25c9050d88cf20db997280c15b74cb
+// testkit:provenance 33a9b9f499a3c55a26e6e1a6504b95555b680c4f9071c4ff911532856ce44c35

@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/scheduled/scheduledtest"
 	"go.thesmos.sh/testkit/engine/suite"
@@ -26,7 +27,7 @@ import (
 func TestMixedProofs(t *testing.T) {
 	t.Parallel()
 	prove.All(t,
-		scheduledtest.MixedSuite.Suite().Checks,
+		scheduledtest.MixedSuite.Suite(scheduledtest.DefaultMixedFixture()).Checks,
 		mixedProofs())
 }
 
@@ -39,6 +40,43 @@ func TestMixedProofs(t *testing.T) {
 func mixedProofs() prove.Defects[scheduledtest.Mixed] {
 	ix := scheduledtest.MixedSuite.Checks
 	return prove.Defects[scheduledtest.Mixed]{
+		ix.At.Smoke(): prove.One("a Mixed whose At panics",
+			func(tb testing.TB) scheduledtest.Mixed {
+				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedAt(
+					func(_ context.Context, _ time.Duration) error {
+						panic("planted: At panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
+		ix.At.Cancels(): prove.One("a Mixed whose At ignores the context it is handed",
+			func(tb testing.TB) scheduledtest.Mixed {
+				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedAt(
+					func(_ context.Context, _ time.Duration) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedCancelled),
+		ix.At.NilContext(): prove.One("a Mixed whose At forgives a nil context and answers",
+			func(tb testing.TB) scheduledtest.Mixed {
+				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedAt(
+					func(_ context.Context, _ time.Duration) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedNilContext),
+		ix.At.Deadline(): prove.One("a Mixed whose At ignores the context it is handed",
+			func(tb testing.TB) scheduledtest.Mixed {
+				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedAt(
+					func(_ context.Context, _ time.Duration) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedDeadline),
 		ix.Fired.Smoke(): prove.One("a Mixed whose Fired panics",
 			func(tb testing.TB) scheduledtest.Mixed {
 				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedFired(
@@ -50,9 +88,9 @@ func mixedProofs() prove.Defects[scheduledtest.Mixed] {
 			func(tb testing.TB) scheduledtest.Mixed {
 				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedFired(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +98,9 @@ func mixedProofs() prove.Defects[scheduledtest.Mixed] {
 			func(tb testing.TB) scheduledtest.Mixed {
 				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedFired(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +108,9 @@ func mixedProofs() prove.Defects[scheduledtest.Mixed] {
 			func(tb testing.TB) scheduledtest.Mixed {
 				return scheduledtest.NewMixedStub(tb, scheduledtest.WithMixedFired(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,7 +144,7 @@ func mixedProofs() prove.Defects[scheduledtest.Mixed] {
 func TestMixedInvariants(t *testing.T) {
 	t.Parallel()
 
-	s := scheduledtest.MixedSuite.Suite()
+	s := scheduledtest.MixedSuite.Suite(scheduledtest.DefaultMixedFixture())
 
 	rows, err := suite.LockLines(s)
 	if err != nil {
@@ -120,4 +158,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b8467cc542e38a2f714ab8d0b2a038f3affd476857be12b9b117fe65dfa90ae4
+// testkit:provenance 7e884b40aec088a42243446844aafdba3bb6535bd6855d878c00c4d2d55434e0

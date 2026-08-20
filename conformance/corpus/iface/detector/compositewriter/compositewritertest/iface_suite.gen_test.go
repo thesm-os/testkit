@@ -50,9 +50,9 @@ func compositeWriterProofs() prove.Defects[compositewritertest.CompositeWriter] 
 			func(tb testing.TB) compositewritertest.CompositeWriter {
 				return compositewritertest.NewCompositeWriterStub(tb, compositewritertest.WithCompositeWriterSet(
 					func(_ context.Context, _ string, _ compositewriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func compositeWriterProofs() prove.Defects[compositewritertest.CompositeWriter] 
 			func(tb testing.TB) compositewritertest.CompositeWriter {
 				return compositewritertest.NewCompositeWriterStub(tb, compositewritertest.WithCompositeWriterSet(
 					func(_ context.Context, _ string, _ compositewriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func compositeWriterProofs() prove.Defects[compositewritertest.CompositeWriter] 
 			func(tb testing.TB) compositewritertest.CompositeWriter {
 				return compositewritertest.NewCompositeWriterStub(tb, compositewritertest.WithCompositeWriterSet(
 					func(_ context.Context, _ string, _ compositewriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -107,4 +107,4 @@ func TestCompositeWriterInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c937856a724ccb437a1888769903161d3cc7839b9e941919767ed4a6efa6b953
+// testkit:provenance 84d2ef6720059ef645f8e7ca2a9ef978a7210fb05703e5dbf51257c84ec923df

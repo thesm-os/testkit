@@ -41,13 +41,8 @@ import (
 //	Set/cancel
 //	Set/deadline
 //	Set/nilcontext
+//	Set/partition
 //	Set/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	scope on Set — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -234,6 +229,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Set.Cancels():     "MixedSuite.Checks.Set.Cancels()",
 	mixedCheckIndex.Set.NilContext():  "MixedSuite.Checks.Set.NilContext()",
 	mixedCheckIndex.Set.Deadline():    "MixedSuite.Checks.Set.Deadline()",
+	mixedCheckIndex.Set.Partition():   "MixedSuite.Checks.Set.Partition()",
 	mixedCheckIndex.Get.Smoke():       "MixedSuite.Checks.Get.Smoke()",
 	mixedCheckIndex.Get.Cancels():     "MixedSuite.Checks.Get.Cancels()",
 	mixedCheckIndex.Get.NilContext():  "MixedSuite.Checks.Get.NilContext()",
@@ -289,12 +285,17 @@ func (mixedSetChecks) Deadline() suite.ID {
 	return suite.MethodID(mixedSet, suite.SegDeadline)
 }
 
+func (mixedSetChecks) Partition() suite.ID {
+	return suite.MethodID(mixedSet, suite.SegPartition)
+}
+
 func (mixedSetChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedSetChecks{}.Smoke(),
 		mixedSetChecks{}.Cancels(),
 		mixedSetChecks{}.NilContext(),
 		mixedSetChecks{}.Deadline(),
+		mixedSetChecks{}.Partition(),
 	}
 }
 
@@ -400,6 +401,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Get returns zero alongside any error",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertGetZeroOnError(tb, m, fx)
+			}),
+		sig(ix.Set.Partition(), suite.ClassPartition,
+			"Set keeps one scope out of another",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertSetPartition(tb, m, fx)
 			}),
 	}
 }
@@ -521,6 +527,32 @@ func mixedAssertGetZeroOnError(
 	if got != zero {
 		tb.Errorf("Get must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// mixedAssertSetPartition asserts Set keeps one scope out of another.
+func mixedAssertSetPartition(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	if err := m.Set(ctx, fx.Scope(), fx.Key(), fx.Value()); err != nil {
+		tb.Fatalf("Set must accept the first write before the claim can be judged: %v", err)
+	}
+	if err := m.Set(ctx, fx.ScopeOther(), fx.Key(), fx.ValueOther()); err != nil {
+		tb.Fatalf("Set must accept the second write: %v", err)
+	}
+
+	got, err := m.Get(ctx, fx.Scope(), fx.Key())
+	if err != nil {
+		tb.Fatalf("Get must answer for what the first write carried: %v", err)
+	}
+	if got != fx.Value() {
+		tb.Errorf("Set must not let one scope reach another: got %+v, want %+v",
+			got, fx.Value())
 	}
 }
 
@@ -718,4 +750,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 361e33bea2976b5e03ef5d49b7507ebad54817e4402880c923c0704503cc4c7f
+// testkit:provenance cc23143149516e7e4bb032b39e477925588431b243e16fc60463f8f4dbdc3d68

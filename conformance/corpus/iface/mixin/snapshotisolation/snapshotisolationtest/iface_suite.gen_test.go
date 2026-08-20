@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedRecord(
 					func(_ context.Context, _ snapshotisolation.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedRecord(
 					func(_ context.Context, _ snapshotisolation.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedRecord(
 					func(_ context.Context, _ snapshotisolation.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedHistory(
 					func(_ context.Context) (r0 []snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedHistory(
 					func(_ context.Context) (r0 []snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedHistory(
 					func(_ context.Context) (r0 []snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -138,9 +138,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -148,9 +148,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -158,9 +158,9 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 snapshotisolation.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -181,7 +181,7 @@ func mixedProofs() prove.Defects[snapshotisolationtest.Mixed] {
 			func(tb testing.TB) snapshotisolationtest.Mixed {
 				return snapshotisolationtest.NewMixedStub(tb, snapshotisolationtest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 snapshotisolation.Entry, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = snapshotisolation.Entry{Txn: 7}
 						return
 					}))
@@ -217,4 +217,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance de29c02007be456dfd00282e92e9739a01894db807193bb8d320a2121a227bee
+// testkit:provenance a658d27e3c39a2cc840bff121566ebd2d94f8d97975f290f1bfed7b910a78548

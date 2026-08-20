@@ -27,12 +27,20 @@ func evidenceOnce() ([]gate.Evidence, error) {
 
 // skipUntilSuiteEmission parks the census questions the suite rewrite unowns.
 //
-// evidenceFrom's TRANSITION paragraph is the owner: the incumbent suite
-// emission — and the per-Contract Coverage walk every question in this file was
-// answered from — is deleted, and the rewrite's deriver inventory has not
-// replaced it yet. So the census reads the whole registry as unevidenced, which
-// makes one of these tests red for a reason that is about the transition rather
-// than the corpus, and the two that iterate evidenced rows iterate none.
+// evidenceFrom's TRANSITION paragraph is the owner, and what it names has
+// moved. The suite emission has landed: every classification the registry ships
+// is now tabled, law-backed or recorded with its reason, and the generator-side
+// census in generator/suite/derive_stamps_test.go holds that both ways with no
+// entry left pending. What has NOT landed is this file's side of it — the
+// per-classification evidence registry these questions read is populated by
+// nothing, so the census reports the whole vocabulary unevidenced whatever the
+// corpus emits.
+//
+// So the remaining work is a mapping rather than an emission: from a generated
+// check's class back to the classification that licensed it, walked over the
+// locks. Until that exists one of these tests is red for a reason about this
+// gate rather than about the corpus, and the two that iterate evidenced rows
+// iterate none.
 //
 // A skip rather than a relaxed assertion, because a bar the tree clears
 // vacuously today is a bar it still clears on the day the new emission lands
@@ -46,7 +54,8 @@ func evidenceOnce() ([]gate.Evidence, error) {
 // is the transition section of docs/internal/suite-plugin-design.md.
 func skipUntilSuiteEmission(tb testing.TB) {
 	tb.Helper()
-	tb.Skip("the suite tier evidences nothing until the rewrite's emission lands; expires 2026-09-18")
+	tb.Skip("the union census reads a per-classification evidence registry nothing " +
+		"populates; expires 2026-09-18")
 }
 
 // Every classification eidos ships is asserted by a tier or argued by a row.

@@ -557,7 +557,19 @@ var VacuityDebt = map[string]VacuityRow{
 		// exercised by this gate — a harness receiving its corpus because
 		// nothing on the interface writes. Its Lookup and Len each take a
 		// context, attributed the same way.
-		Ceiling: 322,
+		//
+		// 322 -> 324: the accumulates fixture, added because eidos
+		// registered the mixin and this gate asks for a fixture per
+		// classification. Its Add and Total each take a context, which
+		// lands at its zero exactly as this row's reason describes —
+		// attributed by removing the fixture and watching the count
+		// return to 322.
+		//
+		// 324 -> 325: the batch-writer fixture gained the reader role
+		// eidos added for it, so `mode=atomic` has something to be
+		// observed through. Its Get takes a context, which lands at its
+		// zero exactly as this row's reason describes.
+		Ceiling: 325,
 		Why: "what is left of the generated stub's zero arguments after pinning every one a " +
 			"literal can be written for: a context, an interface, a variadic tail, a type " +
 			"from a package the run never read. Those are handed in at their zero and the " +

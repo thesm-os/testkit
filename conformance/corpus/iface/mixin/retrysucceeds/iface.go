@@ -27,7 +27,7 @@ import (
 type Mixed interface {
 	// Call fails transiently before succeeding. The law drives it repeatedly,
 	// so a method that either always works or never does cannot host it.
-	//testkit:mixin retrysucceeds
+	//testkit:mixin retrysucceeds attempts=3
 	//testkit:fault retry=3
 	Call(ctx context.Context, key string) error
 

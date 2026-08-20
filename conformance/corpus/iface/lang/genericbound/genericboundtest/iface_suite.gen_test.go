@@ -12,6 +12,8 @@ package genericboundtest_test
 
 // Argued rather than proven, for want of a defect template here:
 //
+//	Rank/smoke
+//
 //	Reset/cancel
 //
 //	Reset/nilcontext
@@ -24,4 +26,4 @@ package genericboundtest_test
 // one nobody has written the falsification for.
 
 // testkit: end of generated content.
-// testkit:provenance dda783c0cfd25fb2400c4e0ff501b8e8a0a35eb8e9a24088c4a809ceeddb9c1f
+// testkit:provenance 2b480caa1eb5923647e76b774248f81e304ad43df67777111da2abc47ee35187

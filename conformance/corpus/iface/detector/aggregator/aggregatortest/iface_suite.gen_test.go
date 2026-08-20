@@ -50,9 +50,9 @@ func aggregatorProofs() prove.Defects[aggregatortest.Aggregator] {
 			func(tb testing.TB) aggregatortest.Aggregator {
 				return aggregatortest.NewAggregatorStub(tb, aggregatortest.WithAggregatorCount(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func aggregatorProofs() prove.Defects[aggregatortest.Aggregator] {
 			func(tb testing.TB) aggregatortest.Aggregator {
 				return aggregatortest.NewAggregatorStub(tb, aggregatortest.WithAggregatorCount(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func aggregatorProofs() prove.Defects[aggregatortest.Aggregator] {
 			func(tb testing.TB) aggregatortest.Aggregator {
 				return aggregatortest.NewAggregatorStub(tb, aggregatortest.WithAggregatorCount(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -120,4 +120,4 @@ func TestAggregatorInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 30cb5faef17b2707b8dd1e9b3da94c6f5afd4a0cb93aefd60a6aee64f8e9cf88
+// testkit:provenance 30620ffe38bd9a596d47782c42dbec8c77a83daf8baf5e102b2d51ed0a36634d

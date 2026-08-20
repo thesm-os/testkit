@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPage(
 					func(_ context.Context, _ pagination.Cursor) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPage(
 					func(_ context.Context, _ pagination.Cursor) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPage(
 					func(_ context.Context, _ pagination.Cursor) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPut(
 					func(_ context.Context, _ pagination.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPut(
 					func(_ context.Context, _ pagination.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -121,12 +121,21 @@ func contractProofs() prove.Defects[paginationtest.Contract] {
 			func(tb testing.TB) paginationtest.Contract {
 				return paginationtest.NewContractStub(tb, paginationtest.WithContractPut(
 					func(_ context.Context, _ pagination.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Page.Miss(): prove.One("a Contract whose Page answers for an input nothing wrote",
+			func(tb testing.TB) paginationtest.Contract {
+				return paginationtest.NewContractStub(tb, paginationtest.WithContractPage(
+					func(_ context.Context, _ pagination.Cursor) (items []pagination.Value, next pagination.Cursor, more bool, err error) {
+						// A value for a call a correct subject answers nothing for.
+						items = []pagination.Value{{Key: "other-"}}
+						return
+					}))
+			}),
 	}
 }
 
@@ -158,4 +167,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 90a5116b4ea7fa1569b45519361d4f0898642ef3ac27af2364f7e5c42379ac25
+// testkit:provenance fd8855de7020594d3e3f219737a1540108f10875ff4d00ad62110287881ab5c0

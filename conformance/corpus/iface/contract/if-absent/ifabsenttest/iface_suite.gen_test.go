@@ -50,9 +50,9 @@ func contractProofs() prove.Defects[ifabsenttest.Contract] {
 			func(tb testing.TB) ifabsenttest.Contract {
 				return ifabsenttest.NewContractStub(tb, ifabsenttest.WithContractPut(
 					func(_ context.Context, _ ifabsent.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func contractProofs() prove.Defects[ifabsenttest.Contract] {
 			func(tb testing.TB) ifabsenttest.Contract {
 				return ifabsenttest.NewContractStub(tb, ifabsenttest.WithContractPut(
 					func(_ context.Context, _ ifabsent.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,12 +70,22 @@ func contractProofs() prove.Defects[ifabsenttest.Contract] {
 			func(tb testing.TB) ifabsenttest.Contract {
 				return ifabsenttest.NewContractStub(tb, ifabsenttest.WithContractPut(
 					func(_ context.Context, _ ifabsent.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Put.Conflict(): prove.One("a Contract whose Put accepts a duplicate as though it were new",
+			func(tb testing.TB) ifabsenttest.Contract {
+				return ifabsenttest.NewContractStub(tb, ifabsenttest.WithContractPut(
+					func(_ context.Context, _ ifabsent.Value) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 	}
 }
 
@@ -107,4 +117,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ab1b587ad41f3be34672d6a4186af296da803cafa301d9b91b443e540b461fd8
+// testkit:provenance a1c07ad1eb1dbdafae1963a93740a8b0dff07daee37898059c8df933769d5766

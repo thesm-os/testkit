@@ -32,18 +32,21 @@ func LockLines[S any](s Suite[S]) ([]string, error) {
 		if strings.ContainsAny(string(c.Class), "\t\n") {
 			return nil, fmt.Errorf(
 				"check %q has a class containing a tab or newline, which the manifest "+
-					"format refuses: %q", c.ID, c.Class)
+					"format refuses: %q", c.ID, c.Class,
+			)
 		}
 		if strings.ContainsAny(c.Claim, "\t\n") {
 			return nil, fmt.Errorf(
 				"check %q has a claim containing a tab or newline, which the manifest "+
-					"format refuses: %q", c.ID, c.Claim)
+					"format refuses: %q", c.ID, c.Claim,
+			)
 		}
 		for _, bind := range c.Binds {
 			if strings.ContainsAny(bind, "\t\n,") {
 				return nil, fmt.Errorf(
 					"check %q has a binding containing a tab, newline or comma, which "+
-						"the manifest format refuses: %q", c.ID, bind)
+						"the manifest format refuses: %q", c.ID, bind,
+				)
 			}
 		}
 		lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", c.ID, c.Class, c.Claim, strings.Join(c.Binds, ",")))

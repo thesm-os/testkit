@@ -149,7 +149,10 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 		testkit.Equal(
 			t,
 			p.Defect,
-			projection.Defect(projection.StubPanic{Option: projection.OptionName("Store", "Get")}),
+			projection.Defect(projection.StubPanic{
+				Clause: projection.Clause{Text: "Get panics"},
+				Option: projection.OptionName("Store", "Get"),
+			}),
 			"the smoke is proven by the panicking double",
 		)
 		testkit.Equal(t, p.Class, vocab.ClassSmoke, "class buckets the report")
@@ -161,7 +164,10 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 		testkit.Equal(
 			t,
 			p.Defect,
-			projection.Defect(projection.AcceptsNil{Option: projection.OptionName("Store", "Get")}),
+			projection.Defect(projection.AnswersAnyway{
+				Clause: projection.Clause{Text: "Get forgives a nil context and answers"},
+				Option: projection.OptionName("Store", "Get"),
+			}),
 			"the claim's stronger arm — returns an error — needs the accepting defect",
 		)
 	})
@@ -173,7 +179,10 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 			testkit.Equal(
 				t,
 				p.Defect,
-				projection.Defect(projection.CtxSwap{Option: projection.OptionName("Store", "Get")}),
+				projection.Defect(projection.AnswersAnyway{
+					Clause: projection.Clause{Text: "Get ignores the context it is handed"},
+					Option: projection.OptionName("Store", "Get"),
+				}),
 				"a context family is proven by the context-ignoring double",
 			)
 		}
@@ -202,9 +211,13 @@ func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 	iface := suite.Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []suite.Method{entry}}
 
 	plans, refusals := suite.Signature{}.Derive(iface)
-	testkit.Len(t, plans, 0, "an underivable draw silences no single family — it refuses them all")
-	testkit.Len(t, refusals, 1, "the whole family set folds into one refusal")
-	testkit.Equal(t, refusals[0].What, "Append's signature checks", "the refusal names the method's family set")
+	testkit.Len(t, plans, 1, "the smoke survives an underivable draw — it needs a value, not a chosen one")
+	id, err := plans[0].ID.Render()
+	testkit.NoError(t, err, "the surviving plan renders its ID")
+	testkit.Equal(t, id, vocab.ID("Append/smoke"), "and it is the smoke")
+	testkit.Len(t, refusals, 1, "every family that compares an answer to an input folds into one refusal")
+	testkit.Equal(t, refusals[0].What, "Append's judging signature checks",
+		"the refusal names the families it covers, which is no longer all of them")
 	testkit.Contains(t, refusals[0].Why, "Entry", "the refusal names the draw nothing supplies")
 	testkit.Contains(t, refusals[0].Remedy, "LogConfig", "the remedy names where the value comes from")
 	testkit.Contains(t, refusals[0].Remedy, "LogChecks", "and where the claim goes")

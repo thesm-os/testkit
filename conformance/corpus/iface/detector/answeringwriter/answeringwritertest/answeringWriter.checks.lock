@@ -1,4 +1,5 @@
 testkit-checks v2
+Put/answer	mixin/answer	Put answers the state it kept rather than the zero	
 Put/cancel	signature/cancel	Put reports a cancelled context as cancelled	
 Put/deadline	signature/deadline	Put reports an expired deadline as exceeded	
 Put/nilcontext	signature/nilcontext	Put returns an error rather than panicking on a nil context	

@@ -503,7 +503,6 @@ func catalogSuite(fx CatalogFixture, docs CatalogCorpus) suite.Suite[Catalog] {
 // run cannot yet plant is argued rather than asserted.
 func catalogSignatureChecks(fx CatalogFixture, docs CatalogCorpus) []suite.Check[Catalog] {
 	sig := suite.ProvenCheck[Catalog]
-	argued := suite.ArguedCheck[Catalog]
 	ix := catalogCheckIndex
 	return []suite.Check[Catalog]{
 		sig(ix.Lookup.Smoke(), suite.ClassSmoke,
@@ -561,15 +560,13 @@ func catalogSignatureChecks(fx CatalogFixture, docs CatalogCorpus) []suite.Check
 			func(tb testing.TB, c Catalog) {
 				catalogAssertLookupMiss(tb, c, fx)
 			}),
-		argued(ix.Lookup.Hit(), suite.ClassReader,
+		sig(ix.Lookup.Hit(), suite.ClassReader,
 			"Lookup returns the seeded value for every seeded key",
-			"no defect template spells swaps-values yet, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Catalog) {
 				catalogAssertLookupHit(tb, c, fx, docs)
 			}),
-		argued(ix.Len.Count(), suite.ClassReader,
+		sig(ix.Len.Count(), suite.ClassReader,
 			"Len equals the number of seeded entries",
-			"no defect template spells freeze-return yet, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Catalog) {
 				catalogAssertLenCount(tb, c, docs)
 			}),
@@ -976,4 +973,4 @@ func ProveCatalog(
 }
 
 // testkit: end of generated content.
-// testkit:provenance d970f9fa59f2706a576706bfd141ceb40d4df2881cf397fd0da18a81fc87afba
+// testkit:provenance b421a19fab5856f2f8b4792a0ae864fb2c80152b95243aa7cb213dfe36fda686

@@ -49,9 +49,9 @@ func contractProofs() prove.Defects[ratelimittest.Contract] {
 			func(tb testing.TB) ratelimittest.Contract {
 				return ratelimittest.NewContractStub(tb, ratelimittest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func contractProofs() prove.Defects[ratelimittest.Contract] {
 			func(tb testing.TB) ratelimittest.Contract {
 				return ratelimittest.NewContractStub(tb, ratelimittest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func contractProofs() prove.Defects[ratelimittest.Contract] {
 			func(tb testing.TB) ratelimittest.Contract {
 				return ratelimittest.NewContractStub(tb, ratelimittest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,4 +106,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2219d5fc05bf5b7cc0adf203cd0d81ab39121b601790fda5a5d281fb7d1fa78d
+// testkit:provenance df6d41e6a815fc33f62868c927ff34b4dd485bca70b05c2ac0ac07650e38039d

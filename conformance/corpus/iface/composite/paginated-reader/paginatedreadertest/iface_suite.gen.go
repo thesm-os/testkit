@@ -39,6 +39,12 @@ import (
 //	Page/smoke
 //	Page/zero-on-error
 //
+// Reached by a rule and not derivable here. Each is a claim this file
+// does NOT make, so a reader counting coverage from the list above
+// knows what is missing and what would bring it back:
+//
+//	Page's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
+//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -586,4 +592,4 @@ func ProvePaginatedReader(
 }
 
 // testkit: end of generated content.
-// testkit:provenance c4fcff85d3e891423d794ecf0e548b064c3bf7def59aac16333813d8bd78833e
+// testkit:provenance 95e82be8b7ddb7b33a1db043cfd33c3c73736693b52d6d2fd5b491a3e006669a

@@ -48,10 +48,12 @@ import (
 //	Emit/cancel
 //	Emit/deadline
 //	Emit/nilcontext
+//	Emit/sideeffect
 //	Emit/smoke
 //	Move/cancel
 //	Move/deadline
 //	Move/nilcontext
+//	Move/sideeffect
 //	Move/smoke
 //	Seen/cancel
 //	Seen/deadline
@@ -62,15 +64,8 @@ import (
 //	Touch/cancel
 //	Touch/deadline
 //	Touch/nilcontext
+//	Touch/sideeffect
 //	Touch/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	sideeffect on Emit — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//	sideeffect on Move — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//	sideeffect on Touch — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -312,6 +307,7 @@ var storeIndexPath = map[suite.ID]string{
 	storeCheckIndex.Touch.Cancels():     "StoreSuite.Checks.Touch.Cancels()",
 	storeCheckIndex.Touch.NilContext():  "StoreSuite.Checks.Touch.NilContext()",
 	storeCheckIndex.Touch.Deadline():    "StoreSuite.Checks.Touch.Deadline()",
+	storeCheckIndex.Touch.Sideeffect():  "StoreSuite.Checks.Touch.Sideeffect()",
 	storeCheckIndex.Seen.Smoke():        "StoreSuite.Checks.Seen.Smoke()",
 	storeCheckIndex.Seen.Cancels():      "StoreSuite.Checks.Seen.Cancels()",
 	storeCheckIndex.Seen.NilContext():   "StoreSuite.Checks.Seen.NilContext()",
@@ -322,6 +318,7 @@ var storeIndexPath = map[suite.ID]string{
 	storeCheckIndex.Move.Cancels():      "StoreSuite.Checks.Move.Cancels()",
 	storeCheckIndex.Move.NilContext():   "StoreSuite.Checks.Move.NilContext()",
 	storeCheckIndex.Move.Deadline():     "StoreSuite.Checks.Move.Deadline()",
+	storeCheckIndex.Move.Sideeffect():   "StoreSuite.Checks.Move.Sideeffect()",
 	storeCheckIndex.At.Smoke():          "StoreSuite.Checks.At.Smoke()",
 	storeCheckIndex.At.Cancels():        "StoreSuite.Checks.At.Cancels()",
 	storeCheckIndex.At.NilContext():     "StoreSuite.Checks.At.NilContext()",
@@ -332,6 +329,7 @@ var storeIndexPath = map[suite.ID]string{
 	storeCheckIndex.Emit.Cancels():      "StoreSuite.Checks.Emit.Cancels()",
 	storeCheckIndex.Emit.NilContext():   "StoreSuite.Checks.Emit.NilContext()",
 	storeCheckIndex.Emit.Deadline():     "StoreSuite.Checks.Emit.Deadline()",
+	storeCheckIndex.Emit.Sideeffect():   "StoreSuite.Checks.Emit.Sideeffect()",
 	storeCheckIndex.Count.Smoke():       "StoreSuite.Checks.Count.Smoke()",
 	storeCheckIndex.Count.Cancels():     "StoreSuite.Checks.Count.Cancels()",
 	storeCheckIndex.Count.NilContext():  "StoreSuite.Checks.Count.NilContext()",
@@ -404,12 +402,17 @@ func (storeTouchChecks) Deadline() suite.ID {
 	return suite.MethodID(storeTouch, suite.SegDeadline)
 }
 
+func (storeTouchChecks) Sideeffect() suite.ID {
+	return suite.MethodID(storeTouch, suite.SegSideEffect)
+}
+
 func (storeTouchChecks) All() []suite.ID {
 	return []suite.ID{
 		storeTouchChecks{}.Smoke(),
 		storeTouchChecks{}.Cancels(),
 		storeTouchChecks{}.NilContext(),
 		storeTouchChecks{}.Deadline(),
+		storeTouchChecks{}.Sideeffect(),
 	}
 }
 
@@ -468,12 +471,17 @@ func (storeMoveChecks) Deadline() suite.ID {
 	return suite.MethodID(storeMove, suite.SegDeadline)
 }
 
+func (storeMoveChecks) Sideeffect() suite.ID {
+	return suite.MethodID(storeMove, suite.SegSideEffect)
+}
+
 func (storeMoveChecks) All() []suite.ID {
 	return []suite.ID{
 		storeMoveChecks{}.Smoke(),
 		storeMoveChecks{}.Cancels(),
 		storeMoveChecks{}.NilContext(),
 		storeMoveChecks{}.Deadline(),
+		storeMoveChecks{}.Sideeffect(),
 	}
 }
 
@@ -532,12 +540,17 @@ func (storeEmitChecks) Deadline() suite.ID {
 	return suite.MethodID(storeEmit, suite.SegDeadline)
 }
 
+func (storeEmitChecks) Sideeffect() suite.ID {
+	return suite.MethodID(storeEmit, suite.SegSideEffect)
+}
+
 func (storeEmitChecks) All() []suite.ID {
 	return []suite.ID{
 		storeEmitChecks{}.Smoke(),
 		storeEmitChecks{}.Cancels(),
 		storeEmitChecks{}.NilContext(),
 		storeEmitChecks{}.Deadline(),
+		storeEmitChecks{}.Sideeffect(),
 	}
 }
 
@@ -739,15 +752,30 @@ func storeSignatureChecks(fx StoreFixture) []suite.Check[Store] {
 			func(tb testing.TB, s Store) {
 				storeAssertCountZeroOnError(tb, s, fx)
 			}),
+		sig(ix.Touch.Sideeffect(), suite.ClassSideEffect,
+			"Touch changes what Seen observes",
+			func(tb testing.TB, s Store) {
+				storeAssertTouchSideeffect(tb, s, fx)
+			}),
 		sig(ix.Seen.Miss(), suite.ClassReader,
 			"Seen reports zero for a k nothing has written",
 			func(tb testing.TB, s Store) {
 				storeAssertSeenMiss(tb, s, fx)
 			}),
+		sig(ix.Move.Sideeffect(), suite.ClassSideEffect,
+			"Move changes what At observes",
+			func(tb testing.TB, s Store) {
+				storeAssertMoveSideeffect(tb, s, fx)
+			}),
 		sig(ix.At.Miss(), suite.ClassReader,
 			"At reports zero for a where nothing has written",
 			func(tb testing.TB, s Store) {
 				storeAssertAtMiss(tb, s, fx)
+			}),
+		sig(ix.Emit.Sideeffect(), suite.ClassSideEffect,
+			"Emit changes what Count observes",
+			func(tb testing.TB, s Store) {
+				storeAssertEmitSideeffect(tb, s, fx)
 			}),
 		sig(ix.Count.Miss(), suite.ClassReader,
 			"Count reports zero for a bucket nothing has written",
@@ -1117,6 +1145,34 @@ func storeAssertCountZeroOnError(
 	}
 }
 
+// storeAssertTouchSideeffect asserts Touch changes what Seen observes.
+func storeAssertTouchSideeffect(
+	tb testing.TB,
+	s Store,
+	fx StoreFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	before, beforeErr := s.Seen(ctx, fx.K())
+	if beforeErr != nil {
+		tb.Fatalf("Seen must be readable before Touch runs: %v", beforeErr)
+	}
+
+	if err := s.Touch(ctx, fx.Key(), fx.Weight()); err != nil {
+		tb.Fatalf("Touch must succeed before the two readings mean anything: %v", err)
+	}
+
+	after, afterErr := s.Seen(ctx, fx.K())
+	if afterErr != nil {
+		tb.Fatalf("Seen must still be readable after Touch runs: %v", afterErr)
+	}
+
+	if after == before {
+		tb.Errorf("Touch must change what Seen observes: both read %+v", before)
+	}
+}
+
 // storeAssertSeenMiss asserts Seen reports zero for a k nothing has written.
 func storeAssertSeenMiss(
 	tb testing.TB,
@@ -1135,6 +1191,34 @@ func storeAssertSeenMiss(
 	}
 }
 
+// storeAssertMoveSideeffect asserts Move changes what At observes.
+func storeAssertMoveSideeffect(
+	tb testing.TB,
+	s Store,
+	fx StoreFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	before, beforeErr := s.At(ctx, fx.Where())
+	if beforeErr != nil {
+		tb.Fatalf("At must be readable before Move runs: %v", beforeErr)
+	}
+
+	if err := s.Move(ctx, fx.From(), fx.To()); err != nil {
+		tb.Fatalf("Move must succeed before the two readings mean anything: %v", err)
+	}
+
+	after, afterErr := s.At(ctx, fx.Where())
+	if afterErr != nil {
+		tb.Fatalf("At must still be readable after Move runs: %v", afterErr)
+	}
+
+	if after == before {
+		tb.Errorf("Move must change what At observes: both read %+v", before)
+	}
+}
+
 // storeAssertAtMiss asserts At reports zero for a where nothing has written.
 func storeAssertAtMiss(
 	tb testing.TB,
@@ -1150,6 +1234,34 @@ func storeAssertAtMiss(
 	if got != zero {
 		tb.Errorf("At must return the zero value for an input nothing supplied: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// storeAssertEmitSideeffect asserts Emit changes what Count observes.
+func storeAssertEmitSideeffect(
+	tb testing.TB,
+	s Store,
+	fx StoreFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	before, beforeErr := s.Count(ctx, fx.Bucket())
+	if beforeErr != nil {
+		tb.Fatalf("Count must be readable before Emit runs: %v", beforeErr)
+	}
+
+	if err := s.Emit(ctx, fx.ID()); err != nil {
+		tb.Fatalf("Emit must succeed before the two readings mean anything: %v", err)
+	}
+
+	after, afterErr := s.Count(ctx, fx.Bucket())
+	if afterErr != nil {
+		tb.Fatalf("Count must still be readable after Emit runs: %v", afterErr)
+	}
+
+	if after == before {
+		tb.Errorf("Emit must change what Count observes: both read %+v", before)
 	}
 }
 
@@ -1365,4 +1477,4 @@ func ProveStore(
 }
 
 // testkit: end of generated content.
-// testkit:provenance b691ad44d3911a01cfaa0dfb50e22f30439858fdd2790b9df4873a915f59ac89
+// testkit:provenance 07f923e4ebad7667d3baa055c93c16c943745bbb91186af96580268f4e7c7cf6

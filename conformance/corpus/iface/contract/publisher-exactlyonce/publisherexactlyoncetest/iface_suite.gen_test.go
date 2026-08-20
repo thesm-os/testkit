@@ -8,6 +8,7 @@ package publisherexactlyoncetest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	publisherexactlyonce "go.thesmos.sh/testkit/conformance/corpus/iface/contract/publisher-exactlyonce"
@@ -50,9 +51,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractPublish(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractPublish(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +71,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractPublish(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +88,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractReplay(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +98,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractReplay(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +108,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractReplay(
 					func(_ context.Context, _ publisherexactlyonce.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -124,9 +125,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherexactlyonce.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -134,9 +135,9 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherexactlyonce.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -144,12 +145,25 @@ func contractProofs() prove.Defects[publisherexactlyoncetest.Contract] {
 			func(tb testing.TB) publisherexactlyoncetest.Contract {
 				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan publisherexactlyonce.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Subscribe.ZeroOnError(): prove.One("a Contract whose Subscribe answers a believable value beside its error",
+			func(tb testing.TB) publisherexactlyoncetest.Contract {
+				return publisherexactlyoncetest.NewContractStub(tb, publisherexactlyoncetest.WithContractSubscribe(
+					func(_ context.Context) (r0 <-chan publisherexactlyonce.Value, err error) {
+						// A believable answer beside the refusal. A caller
+						// reading the error and one reading the value disagree
+						// about what happened, which is the claim's own
+						// violation rather than a subject that merely failed.
+						r0 = make(chan publisherexactlyonce.Value)
+						err = errors.New("planted: Subscribe refused with a believable value")
+						return
+					}))
+			}),
 	}
 }
 
@@ -180,14 +194,5 @@ func TestContractInvariants(t *testing.T) {
 	suite.VerifyDistinctIDs(t, s.IDs())
 }
 
-// Argued rather than proven, for want of a defect template here:
-//
-//	Subscribe/zero-on-error
-//
-// Each is a claim a derivation rule reached and this generator cannot yet
-// plant evidence for. The harness stamps them Argued and says so in the
-// report, which is the difference between a claim nothing can falsify and
-// one nobody has written the falsification for.
-
 // testkit: end of generated content.
-// testkit:provenance dcf3f04bcdf528a7aeaa10e2c54bc2b51820b7ef23590c8abc4910e6983dba7b
+// testkit:provenance 42a59f996d3ad1e88800bb2cef6ba96eb6377873f520710ead224bcf241a0c6e

@@ -39,6 +39,7 @@ import (
 //	Get/nilcontext
 //	Get/smoke
 //	Get/zero-on-error
+//	Store/answer
 //	Store/cancel
 //	Store/deadline
 //	Store/nilcontext
@@ -220,6 +221,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Store.NilContext():  "MixedSuite.Checks.Store.NilContext()",
 	mixedCheckIndex.Store.Deadline():    "MixedSuite.Checks.Store.Deadline()",
 	mixedCheckIndex.Store.ZeroOnError(): "MixedSuite.Checks.Store.ZeroOnError()",
+	mixedCheckIndex.Store.Answer():      "MixedSuite.Checks.Store.Answer()",
 	mixedCheckIndex.Get.Smoke():         "MixedSuite.Checks.Get.Smoke()",
 	mixedCheckIndex.Get.Cancels():       "MixedSuite.Checks.Get.Cancels()",
 	mixedCheckIndex.Get.NilContext():    "MixedSuite.Checks.Get.NilContext()",
@@ -280,6 +282,10 @@ func (mixedStoreChecks) ZeroOnError() suite.ID {
 	return suite.MethodID(mixedStore, suite.SegZeroValue)
 }
 
+func (mixedStoreChecks) Answer() suite.ID {
+	return suite.MethodID(mixedStore, suite.SegAnswer)
+}
+
 func (mixedStoreChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedStoreChecks{}.Smoke(),
@@ -287,6 +293,7 @@ func (mixedStoreChecks) All() []suite.ID {
 		mixedStoreChecks{}.NilContext(),
 		mixedStoreChecks{}.Deadline(),
 		mixedStoreChecks{}.ZeroOnError(),
+		mixedStoreChecks{}.Answer(),
 	}
 }
 
@@ -402,6 +409,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Get returns the zero Value alongside any error",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertGetZeroOnError(tb, m, fx)
+			}),
+		sig(ix.Store.Answer(), suite.ClassAnswer,
+			"Store answers the state it kept rather than the zero",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertStoreAnswer(tb, m, fx)
 			}),
 		sig(ix.Get.Miss(), suite.ClassReader,
 			"Get reports zero for a key nothing has written",
@@ -552,6 +564,25 @@ func mixedAssertGetZeroOnError(
 	if got != zero {
 		tb.Errorf("Get must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// mixedAssertStoreAnswer asserts Store answers the state it kept rather than the zero.
+func mixedAssertStoreAnswer(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	got, err := m.Store(ctx, fx.Value())
+	if err != nil {
+		tb.Fatalf("Store must succeed before its answer can be judged: %v", err)
+	}
+	var zero monotonicwrites.Value
+	if got == zero {
+		tb.Errorf("Store must answer the state it kept: got the zero %+v", got)
 	}
 }
 
@@ -767,4 +798,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 700fd2e82d702d29275537da2a6f04e914ee5c964212b12d74efc22d6e4297ab
+// testkit:provenance 7256ba6fd928e6d1eac137180430076bef9f54d15f954b9a4d6dae3139e589be

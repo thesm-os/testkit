@@ -38,18 +38,13 @@ import (
 //	NewInput/nilcontext
 //	NewInput/smoke
 //	NewInput/zero-on-error
-//	Process/cancel
-//	Process/deadline
-//	Process/nilcontext
 //	Process/smoke
-//	Process/zero-on-error
 //
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
 //	Process's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
-//	sample on Process — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -211,10 +206,6 @@ func (mixedVeneer) Suite(fx MixedFixture) suite.Suite[Mixed] {
 // say what to type rather than what failed.
 var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Process.Smoke():        "MixedSuite.Checks.Process.Smoke()",
-	mixedCheckIndex.Process.Cancels():      "MixedSuite.Checks.Process.Cancels()",
-	mixedCheckIndex.Process.NilContext():   "MixedSuite.Checks.Process.NilContext()",
-	mixedCheckIndex.Process.Deadline():     "MixedSuite.Checks.Process.Deadline()",
-	mixedCheckIndex.Process.ZeroOnError():  "MixedSuite.Checks.Process.ZeroOnError()",
 	mixedCheckIndex.NewInput.Smoke():       "MixedSuite.Checks.NewInput.Smoke()",
 	mixedCheckIndex.NewInput.Cancels():     "MixedSuite.Checks.NewInput.Cancels()",
 	mixedCheckIndex.NewInput.NilContext():  "MixedSuite.Checks.NewInput.NilContext()",
@@ -258,29 +249,9 @@ func (mixedProcessChecks) Smoke() suite.ID {
 	return suite.MethodID(mixedProcess, suite.SegSmoke)
 }
 
-func (mixedProcessChecks) Cancels() suite.ID {
-	return suite.MethodID(mixedProcess, suite.SegCancel)
-}
-
-func (mixedProcessChecks) NilContext() suite.ID {
-	return suite.MethodID(mixedProcess, suite.SegNilContext)
-}
-
-func (mixedProcessChecks) Deadline() suite.ID {
-	return suite.MethodID(mixedProcess, suite.SegDeadline)
-}
-
-func (mixedProcessChecks) ZeroOnError() suite.ID {
-	return suite.MethodID(mixedProcess, suite.SegZeroValue)
-}
-
 func (mixedProcessChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedProcessChecks{}.Smoke(),
-		mixedProcessChecks{}.Cancels(),
-		mixedProcessChecks{}.NilContext(),
-		mixedProcessChecks{}.Deadline(),
-		mixedProcessChecks{}.ZeroOnError(),
 	}
 }
 
@@ -343,29 +314,9 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 	ix := mixedCheckIndex
 	return []suite.Check[Mixed]{
 		sig(ix.Process.Smoke(), suite.ClassSmoke,
-			"Process survives a call with a seeded input",
+			"Process survives a call with an input NewInput made",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertProcessSmoke(tb, m, fx)
-			}),
-		sig(ix.Process.Cancels(), suite.ClassCancel,
-			"Process reports a cancelled context as cancelled",
-			func(tb testing.TB, m Mixed) {
-				mixedAssertProcessCancels(tb, m, fx)
-			}),
-		sig(ix.Process.NilContext(), suite.ClassNilContext,
-			"Process returns an error rather than panicking on a nil context",
-			func(tb testing.TB, m Mixed) {
-				mixedAssertProcessToleratesNilContext(tb, m, fx)
-			}),
-		sig(ix.Process.Deadline(), suite.ClassDeadline,
-			"Process reports an expired deadline as exceeded",
-			func(tb testing.TB, m Mixed) {
-				mixedAssertProcessHonoursDeadline(tb, m, fx)
-			}),
-		sig(ix.Process.ZeroOnError(), suite.ClassZeroValue,
-			"Process returns zero alongside any error",
-			func(tb testing.TB, m Mixed) {
-				mixedAssertProcessZeroOnError(tb, m, fx)
 			}),
 		sig(ix.NewInput.Smoke(), suite.ClassSmoke,
 			"NewInput survives a call",
@@ -395,7 +346,7 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 	}
 }
 
-// mixedAssertProcessSmoke asserts Process survives a call with a seeded input.
+// mixedAssertProcessSmoke asserts Process survives a call with an input NewInput made.
 func mixedAssertProcessSmoke(
 	tb testing.TB,
 	m Mixed,
@@ -403,68 +354,14 @@ func mixedAssertProcessSmoke(
 ) {
 	tb.Helper()
 	suite.Survives(tb, mixedProcess, func(ctx context.Context) {
-		_, _ = m.Process(ctx, fx.Input())
+		borrowed, err := m.NewInput(ctx)
+		if err != nil {
+			// Nothing borrowed, nothing to return; the producer's own
+			// smoke judges this path.
+			return
+		}
+		_, _ = m.Process(ctx, borrowed)
 	})
-}
-
-// mixedAssertProcessCancels asserts Process reports a cancelled context as cancelled.
-func mixedAssertProcessCancels(
-	tb testing.TB,
-	m Mixed,
-	fx MixedFixture,
-) {
-	tb.Helper()
-	suite.ReportsCancelled(tb, mixedProcess, func(ctx context.Context) error {
-		_, err := m.Process(ctx, fx.Input())
-		return err
-	})
-}
-
-// mixedAssertProcessToleratesNilContext asserts Process returns an error rather than panicking on a nil context.
-func mixedAssertProcessToleratesNilContext(
-	tb testing.TB,
-	m Mixed,
-	fx MixedFixture,
-) {
-	tb.Helper()
-	suite.ToleratesNilContext(tb, mixedProcess, func(ctx context.Context) error {
-		_, err := m.Process(ctx, fx.Input())
-		return err
-	})
-}
-
-// mixedAssertProcessHonoursDeadline asserts Process reports an expired deadline as exceeded.
-func mixedAssertProcessHonoursDeadline(
-	tb testing.TB,
-	m Mixed,
-	fx MixedFixture,
-) {
-	tb.Helper()
-	suite.ReportsDeadlineExceeded(tb, mixedProcess, func(ctx context.Context) error {
-		_, err := m.Process(ctx, fx.Input())
-		return err
-	})
-}
-
-// mixedAssertProcessZeroOnError asserts Process returns zero alongside any error.
-func mixedAssertProcessZeroOnError(
-	tb testing.TB,
-	m Mixed,
-	fx MixedFixture,
-) {
-	tb.Helper()
-	ctx, cancel := context.WithCancel(tb.Context())
-	cancel()
-	got, err := m.Process(ctx, fx.Input())
-	if err == nil {
-		tb.Skip("Process answered for a cancelled context, so this check has no error to inspect")
-	}
-
-	var zero string
-	if got != zero {
-		tb.Errorf("Process must return the zero value alongside an error: got %+v, want %+v (err %v)",
-			got, zero, err)
-	}
 }
 
 // mixedAssertNewInputSmoke asserts NewInput survives a call.
@@ -728,4 +625,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 899006f325c6a83a20a4a05f80b255f129791e1071dad4446cc2281ee4514a99
+// testkit:provenance 772f958aa78bb8deb8472ab36d7af6370419629f1d5f89b1ad42025008b9b4d4

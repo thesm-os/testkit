@@ -46,8 +46,13 @@ type CheckEmit struct {
 	Proven bool
 
 	// provable records whether this run could have planted evidence,
-	// which decides which of the two arguments a downgraded row gives.
+	// which decides which of the arguments a downgraded row gives.
 	provable bool
+
+	// sampleless records that the defect's template exists and this
+	// method's result type defeated it — set by the proofs walk, which
+	// is where the sampler runs.
+	sampleless bool
 
 	// The spellings the row needs, resolved once here rather than
 	// composed in the template: a row naming an accessor its own index
@@ -74,6 +79,11 @@ func (c *CheckEmit) Argument() string {
 		return "a planted defect for a generic subject has to be built at " +
 			"concrete types and a Go test function cannot name them, so nothing " +
 			"has driven this claim"
+	case c.sampleless:
+		return "the " +
+			strings.TrimPrefix(string(c.Plan.Defect.DefectKind()), projection.DefectKindPrefix) +
+			" defect has to answer a live value and no sample of this " +
+			"method's result could be derived, so this run plants no evidence for the claim"
 	default:
 		return "no defect template spells " +
 			strings.TrimPrefix(string(c.Plan.Defect.DefectKind()), projection.DefectKindPrefix) +
@@ -106,16 +116,20 @@ func (c *CheckEmit) Kind() sdk.Kind { return sdk.Kind(c.Plan.Body.BodyKind()) }
 // letting a reader infer coverage from silence.
 func rendered() map[projection.BodyKind]bool {
 	return map[projection.BodyKind]bool{
-		projection.KindSmokeSurvives: true,
-		projection.KindCancelCall:    true,
-		projection.KindDeadlineCall:  true,
-		projection.KindNilCtxCall:    true,
-		projection.KindZeroOnMiss:    true,
-		projection.KindZeroOnCancel:  true,
-		projection.KindRepeatProbe:   true,
-		projection.KindMissProbe:     true,
-		projection.KindHitProbe:      true,
-		projection.KindCountProbe:    true,
+		projection.KindSmokeSurvives:   true,
+		projection.KindGuardedCall:     true,
+		projection.KindZeroOnMiss:      true,
+		projection.KindZeroOnCancel:    true,
+		projection.KindRepeatProbe:     true,
+		projection.KindReportsSentinel: true,
+		projection.KindAnswersZero:     true,
+		projection.KindHitProbe:        true,
+		projection.KindCountProbe:      true,
+		projection.KindHookFires:       true,
+		projection.KindNonZeroAnswer:   true,
+		projection.KindPartnerAgrees:   true,
+		projection.KindReadActRead:     true,
+		projection.KindWriteWriteRead:  true,
 	}
 }
 
@@ -185,7 +199,36 @@ func checkEmitsOf(
 		if miss, ok := plan.Body.(projection.ZeroOnMiss); ok {
 			view.Pool = miss.Pool
 		}
-		if probe, ok := plan.Body.(projection.MissProbe); ok && probe.Sentinel != "" {
+		if hook, ok := plan.Body.(projection.HookFires); ok {
+			// The callback's own signature, which only the registrar's
+			// parameter carries — the projection names the registrar and
+			// this resolves what it takes.
+			if reg, found := byName[hook.Register.Method]; found {
+				view.ObserveMethod = reg.Name
+				view.HookParams, view.HookReturns = hookSignature(reg)
+				view.RegisterDiscard = discardOf(reg)
+			}
+		}
+		if guarded, ok := plan.Body.(projection.GuardedCall); ok {
+			view.Guard = string(guarded.Guard)
+		}
+		if triple, ok := plan.Body.(projection.WriteWriteRead); ok {
+			// The reader's name, for the message that has to say which
+			// method failed to answer.
+			view.ObserveMethod = triple.Read.Method
+		}
+		if agree, ok := plan.Body.(projection.PartnerAgrees); ok {
+			// The validator's own name, for the message that has to
+			// report which verdict disagreed with which.
+			view.ObserveMethod = agree.Partner.Method
+		}
+		if pair, ok := plan.Body.(projection.ReadActRead); ok {
+			// The partner's own name, for the two messages that report
+			// an unreadable observer: "must be readable" without saying
+			// WHICH method sends a reader to the wrong one.
+			view.ObserveMethod = pair.Observe.Method
+		}
+		if probe, ok := plan.Body.(projection.ReportsSentinel); ok {
 			view.Sentinel = sentinelRef(iface, string(probe.Sentinel))
 		}
 		out = append(out, &CheckEmit{
@@ -482,6 +525,33 @@ func zeroBindOf(m Method, withErr bool) string {
 		binds = append(binds, "err")
 	}
 	return strings.Join(binds, ", ") + " :="
+}
+
+// hookSignature spells the callback the registrar takes: its parameters
+// blanked and its results named.
+//
+// Blank parameters because the recording closure reads none of them —
+// what it records is that it ran at all. Named results because a bare
+// return then answers every slot's zero, whatever the callback's
+// signature, without this generator having to name a type it may not be
+// able to spell.
+func hookSignature(register Method) ([]*sdk.EmitParam, []*sdk.EmitReturn) {
+	fn := callbackParam(register)
+	if fn == nil {
+		return nil, nil
+	}
+	params := make([]*sdk.EmitParam, 0, len(fn.FuncParams))
+	for _, p := range fn.FuncParams {
+		params = append(params, &sdk.EmitParam{Name: "_", Type: golang.FromNode(p)})
+	}
+	returns := make([]*sdk.EmitReturn, 0, len(fn.FuncReturns))
+	for i, r := range fn.FuncReturns {
+		returns = append(returns, &sdk.EmitReturn{
+			Name: "r" + strconv.Itoa(i),
+			Type: golang.FromNode(r),
+		})
+	}
+	return params, returns
 }
 
 // firstValueSource is the result a zero-on-error body judges.

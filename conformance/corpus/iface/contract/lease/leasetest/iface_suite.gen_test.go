@@ -49,9 +49,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -86,9 +86,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -96,9 +96,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -106,9 +106,9 @@ func contractProofs() prove.Defects[leasetest.Contract] {
 			func(tb testing.TB) leasetest.Contract {
 				return leasetest.NewContractStub(tb, leasetest.WithContractRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -143,4 +143,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 94c1f09fcb521180284c688b291710f719acd269b4dbfd9c27942101d2f58c33
+// testkit:provenance 7efb03137910a79710312e2dcaab01e9cb7c2723b1c1c64e88be9dab638186c0

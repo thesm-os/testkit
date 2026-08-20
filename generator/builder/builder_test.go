@@ -16,6 +16,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/builder"
 	"go.thesmos.sh/testkit/generator/defaults"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 )
 
 // The framework conformance suites pin the static contract — stable Name,
@@ -210,22 +211,36 @@ func TestUnwritableFields(t *testing.T) {
 			AssertContains(t, "testkit.ErrorIs(")
 	})
 
-	t.Run("declines a type from a package the run never read", func(t *testing.T) {
+	t.Run("writes a curated standard-library value", func(t *testing.T) {
 		t.Parallel()
-		// The floor: nothing about time.Time is in the graph, so no value of it
-		// can be written and the check is dropped rather than faked.
-		testkit.Contains(t, text(t, companion(t, unwritablePackage())),
-			"No check that the setter reaches At", "the absence is explained")
+		// The resolver never loads the standard library, so a named stdlib type
+		// can only be answered by the sampler's curated table. time.Time is in
+		// it, which is what turns a dropped check into a written one.
+		companion(t, unwritablePackage()).
+			InFunc(t, "TestItemBuilderWithAt").
+			AssertContains(t, "time.Unix(")
 	})
 
-	t.Run("declines a directional channel", func(t *testing.T) {
+	t.Run("declines a type from a package the run never read", func(t *testing.T) {
 		t.Parallel()
-		// make is not legal on a receive-only channel, so a check that treated
-		// every channel alike would emit code that does not compile — and the
-		// direction is in the stamp, not in the reference's shape.
+		// The floor: nothing about example.com/other.Handle is in the graph and
+		// nothing curates it, so no value of it can be written and the check is
+		// dropped rather than faked.
+		testkit.Contains(t, text(t, companion(t, unwritablePackage())),
+			"No check that the setter reaches Handle", "the absence is explained")
+	})
+
+	t.Run("checks a directional channel by identity", func(t *testing.T) {
+		t.Parallel()
+		// The direction is in the stamp rather than in the reference's shape, so
+		// a make built from the field's own type renders `make(<-chan T)`, which
+		// is not legal Go. The sampler answers the bidirectional form, which
+		// assigns to either direction — so this is checkable after all, by the
+		// same identity route every other channel takes.
 		companion(t, directionalChanPackage()).
 			InFunc(t, "TestItemBuilderWithEvents").
-			AssertNotContains(t, "make(")
+			AssertContains(t, "ch := make(chan string)").
+			AssertContains(t, "WithEvents(ch).Build().Events == ch")
 	})
 }
 
@@ -392,7 +407,7 @@ func TestExplicitCompanion(t *testing.T) {
 		t.Parallel()
 		// Resolving it to something plausible emits a reference the file never
 		// imports, failing in the consumer's compiler rather than here.
-		diags := diagnostics(t, unresolvableCompanionPackage())
+		diags := gentest.Diagnostics(t, builder.New(), unresolvableCompanionPackage())
 		testkit.Len(t, diags, 1, "an unresolvable companion is reported once")
 	})
 
@@ -401,7 +416,7 @@ func TestExplicitCompanion(t *testing.T) {
 		// A `ConfigDefaults` returning another type is a different function that
 		// happens to collide, and calling it emits a constructor that does not
 		// compile.
-		diags := diagnostics(t, withCompanion(t, "Config", "ConfigDefaults", "Other"))
+		diags := gentest.Diagnostics(t, builder.New(), withCompanion(t, "Config", "ConfigDefaults", "Other"))
 		testkit.Len(t, diags, 0, "a mismatched companion is passed over, not reported")
 	})
 }
@@ -436,7 +451,7 @@ func TestExcludedFields(t *testing.T) {
 		t.Parallel()
 		// A warning rather than silence: the field is in the author's source
 		// and its absence from the builder is otherwise unexplained.
-		diags := diagnostics(t, skipFixture(t))
+		diags := gentest.Diagnostics(t, builder.New(), skipFixture(t))
 		testkit.Len(t, diags, 1, "an untyped field is reported once")
 		testkit.Contains(t, diags[0].Message, "Item.Untyped", "the diagnostic names the field")
 	})
@@ -542,7 +557,7 @@ func TestDiagnostics(t *testing.T) {
 		t.Parallel()
 		// A builder with no setters configures nothing, and emitting the shell
 		// would hide a declaration that cannot do what it says.
-		diags := diagnostics(t, fixture(t, field("secret")))
+		diags := gentest.Diagnostics(t, builder.New(), fixture(t, field("secret")))
 		testkit.Len(t, diags, 1, "a builder with no fields is reported")
 	})
 
@@ -550,7 +565,7 @@ func TestDiagnostics(t *testing.T) {
 		t.Parallel()
 		// Silently keeping the setter would leave the author believing a field
 		// they meant to exclude is excluded.
-		diags := diagnostics(t, fixture(t, tagged("Name", `builder:"skip"`)))
+		diags := gentest.Diagnostics(t, builder.New(), fixture(t, tagged("Name", `builder:"skip"`)))
 		testkit.Len(t, diags, 1, "a mistyped opt-out is reported")
 	})
 }
@@ -804,6 +819,7 @@ func unwritablePackage() *sdk.Package {
 			), nil)
 			b.Field("Err", storefixture.Named("error"), nil)
 			b.Field("At", storefixture.PkgNamed("time", "Time"), nil)
+			b.Field("Handle", storefixture.PkgNamed("example.com/other", "Handle"), nil)
 		}).
 		PackageNode()
 }
@@ -1077,7 +1093,3 @@ func withCompanion(t *testing.T, name, companionName, returns string) *sdk.Store
 // Generate is called directly rather than through a pipeline: every fixture
 // here provokes an error, and a pipeline harness that adopts the output would
 // stop the test before the diagnostic could be read.
-func diagnostics(t *testing.T, s *sdk.Store) []sdk.Diag {
-	t.Helper()
-	return plugintest.Generate(t, builder.New(), s).Diagnostics()
-}

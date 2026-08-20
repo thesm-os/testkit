@@ -33,13 +33,37 @@ func TestContractContract(t *testing.T) {
 				Claim:  "Put refuses a value with nothing to file it under",
 				Run: func(tb testing.TB, s batchwriter.Contract, fx batchwritertest.ContractFixture) {
 					tb.Helper()
-					// The subject's one way to fail, and `mode=atomic` needs one:
-					// "an error leaves observable state unchanged" has no case to
-					// observe against a write that always succeeds.
+					// The subject's one way to fail, and `mode=atomic` needs
+					// one: "an error leaves observable state unchanged" has no
+					// case to observe against a write that always succeeds.
 					testkit.Error(tb, s.Put(tb.Context(), batchwriter.Value{Body: fx.Value().Body}),
 						"an unkeyed value is refused")
 					testkit.NoError(tb, s.Put(tb.Context(), fx.Value()),
 						"and the store still takes a keyed one")
+				},
+			},
+			{
+				Method: "Put",
+				Name:   "a-refused-write-lands-nowhere",
+				Claim:  "Put leaves the reader answering as it did when it refuses",
+				Run: func(tb testing.TB, s batchwriter.Contract, fx batchwritertest.ContractFixture) {
+					tb.Helper()
+					// `mode=atomic` read through the role that now exists to
+					// read it. Before the reader was declared the only statable
+					// claim was that a good write succeeds, which holds for a
+					// store that also keeps half a refused one.
+					held := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), held), "a keyed value lands")
+
+					before, err := s.Get(tb.Context(), held.Key)
+					testkit.NoError(tb, err, "and reads back")
+
+					testkit.Error(tb, s.Put(tb.Context(), batchwriter.Value{Body: "unkeyed"}),
+						"the unkeyed write is refused")
+
+					after, err := s.Get(tb.Context(), held.Key)
+					testkit.NoError(tb, err, "the earlier value is still there")
+					testkit.Equal(tb, after, before, "unchanged by the write that failed")
 				},
 			},
 		},

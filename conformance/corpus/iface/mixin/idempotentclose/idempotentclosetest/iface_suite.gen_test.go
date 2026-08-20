@@ -50,9 +50,9 @@ func closerProofs() prove.Defects[idempotentclosetest.Closer] {
 			func(tb testing.TB) idempotentclosetest.Closer {
 				return idempotentclosetest.NewCloserStub(tb, idempotentclosetest.WithCloserClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func closerProofs() prove.Defects[idempotentclosetest.Closer] {
 			func(tb testing.TB) idempotentclosetest.Closer {
 				return idempotentclosetest.NewCloserStub(tb, idempotentclosetest.WithCloserClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -77,9 +77,9 @@ func closerProofs() prove.Defects[idempotentclosetest.Closer] {
 			func(tb testing.TB) idempotentclosetest.Closer {
 				return idempotentclosetest.NewCloserStub(tb, idempotentclosetest.WithCloserStats(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -87,9 +87,9 @@ func closerProofs() prove.Defects[idempotentclosetest.Closer] {
 			func(tb testing.TB) idempotentclosetest.Closer {
 				return idempotentclosetest.NewCloserStub(tb, idempotentclosetest.WithCloserStats(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -97,9 +97,9 @@ func closerProofs() prove.Defects[idempotentclosetest.Closer] {
 			func(tb testing.TB) idempotentclosetest.Closer {
 				return idempotentclosetest.NewCloserStub(tb, idempotentclosetest.WithCloserStats(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -160,4 +160,4 @@ func TestCloserInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1d0be8a146465c52d3758691b90e2f28eebf534140714f9c4af560947f8bc871
+// testkit:provenance f2b25e56e48e5b788804ce8a4383457109739d9b6da4d0d012c54052f52e0fc6

@@ -51,9 +51,9 @@ func batchReaderProofs() prove.Defects[batchreadertest.BatchReader] {
 			func(tb testing.TB) batchreadertest.BatchReader {
 				return batchreadertest.NewBatchReaderStub(tb, batchreadertest.WithBatchReaderGetAll(
 					func(_ context.Context, _ ...string) (r0 []batchreader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func batchReaderProofs() prove.Defects[batchreadertest.BatchReader] {
 			func(tb testing.TB) batchreadertest.BatchReader {
 				return batchreadertest.NewBatchReaderStub(tb, batchreadertest.WithBatchReaderGetAll(
 					func(_ context.Context, _ ...string) (r0 []batchreader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func batchReaderProofs() prove.Defects[batchreadertest.BatchReader] {
 			func(tb testing.TB) batchreadertest.BatchReader {
 				return batchreadertest.NewBatchReaderStub(tb, batchreadertest.WithBatchReaderGetAll(
 					func(_ context.Context, _ ...string) (r0 []batchreader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -121,4 +121,4 @@ func TestBatchReaderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b694bda236ce0caa3b80dd9cc64054a1becc6f6339be1840e854501f810bfbeb
+// testkit:provenance 17e60ab02f99a3ddbc4d1ebc2f0ac271a8a809634105a92840353ae69716a735

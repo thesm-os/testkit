@@ -128,19 +128,7 @@ how to spell it for this file and register the import it needs.
 */ -}}
 {{- define "suite.value" -}}
 {{- if .Parts }}{{ renderType .Type }}{
-{{- range $i, $p := .Parts }}{{ if $i }}, {{ end }}{{ $p.Name }}: {{ if $p.Pool }}cfg.{{ $p.Pool }}[{{ $.Alternate }}]{{ else }}{{ template "suite.sample" $p.Value }}{{ end }}{{ end -}} }
-{{- else }}{{ template "suite.sample" .Value }}{{ end }}
+{{- range $i, $p := .Parts }}{{ if $i }}, {{ end }}{{ $p.Name }}: {{ if $p.Pool }}cfg.{{ $p.Pool }}[{{ $.Alternate }}]{{ else }}{{ renderSample $p.Value }}{{ end }}{{ end -}} }
+{{- else }}{{ renderSample .Value }}{{ end }}
 {{- end -}}
 
-{{- /*
-suite.sample spells one value the derivation carried whole. A composite literal
-and a conversion are not interchangeable, and which applies is a property of the
-type rather than of the value — so the projection records it and this reads it
-back.
-*/ -}}
-{{- define "suite.sample" -}}
-{{- if not .Ref }}{{ .Text }}
-{{- else if .Composite }}{{ renderType .Ref }}{{ .Text }}
-{{- else }}{{ renderType .Ref }}({{ .Text }})
-{{- end }}
-{{- end -}}

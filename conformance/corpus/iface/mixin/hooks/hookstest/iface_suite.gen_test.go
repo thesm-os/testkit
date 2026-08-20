@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[hookstest.Mixed] {
 			func(tb testing.TB) hookstest.Mixed {
 				return hookstest.NewMixedStub(tb, hookstest.WithMixedFire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[hookstest.Mixed] {
 			func(tb testing.TB) hookstest.Mixed {
 				return hookstest.NewMixedStub(tb, hookstest.WithMixedFire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,12 +69,29 @@ func mixedProofs() prove.Defects[hookstest.Mixed] {
 			func(tb testing.TB) hookstest.Mixed {
 				return hookstest.NewMixedStub(tb, hookstest.WithMixedFire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.OnEvent.Smoke(): prove.One("a Mixed whose OnEvent panics",
+			func(tb testing.TB) hookstest.Mixed {
+				return hookstest.NewMixedStub(tb, hookstest.WithMixedOnEvent(
+					func(_ func(string)) {
+						panic("planted: OnEvent panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
+		ix.Fire.Hooks(): prove.One("a Mixed whose Fire reports success and runs no hook",
+			func(tb testing.TB) hookstest.Mixed {
+				return hookstest.NewMixedStub(tb, hookstest.WithMixedFire(
+					func(_ context.Context, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 	}
 }
 
@@ -106,4 +123,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 12aa807c304ce36bf67de95ea1b83ef962f29357101a51e7f77eb767678b7918
+// testkit:provenance 99c3b57ce0464687d4ee4a2a48dd50a7cc6678624c5f089eb0fb3cfb009b66e7

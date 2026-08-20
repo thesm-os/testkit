@@ -33,6 +33,7 @@ import (
 //
 // Every ID this package emits:
 //
+//	Put/answer
 //	Put/cancel
 //	Put/deadline
 //	Put/nilcontext
@@ -203,6 +204,7 @@ var answeringWriterIndexPath = map[suite.ID]string{
 	answeringWriterCheckIndex.Put.NilContext():  "AnsweringWriterSuite.Checks.Put.NilContext()",
 	answeringWriterCheckIndex.Put.Deadline():    "AnsweringWriterSuite.Checks.Put.Deadline()",
 	answeringWriterCheckIndex.Put.ZeroOnError(): "AnsweringWriterSuite.Checks.Put.ZeroOnError()",
+	answeringWriterCheckIndex.Put.Answer():      "AnsweringWriterSuite.Checks.Put.Answer()",
 }
 
 var answeringWriterDropHint = suite.DropHinter(
@@ -253,6 +255,10 @@ func (answeringWriterPutChecks) ZeroOnError() suite.ID {
 	return suite.MethodID(answeringWriterPut, suite.SegZeroValue)
 }
 
+func (answeringWriterPutChecks) Answer() suite.ID {
+	return suite.MethodID(answeringWriterPut, suite.SegAnswer)
+}
+
 func (answeringWriterPutChecks) All() []suite.ID {
 	return []suite.ID{
 		answeringWriterPutChecks{}.Smoke(),
@@ -260,6 +266,7 @@ func (answeringWriterPutChecks) All() []suite.ID {
 		answeringWriterPutChecks{}.NilContext(),
 		answeringWriterPutChecks{}.Deadline(),
 		answeringWriterPutChecks{}.ZeroOnError(),
+		answeringWriterPutChecks{}.Answer(),
 	}
 }
 
@@ -313,6 +320,11 @@ func answeringWriterSignatureChecks(fx AnsweringWriterFixture) []suite.Check[Ans
 			"Put returns the zero Value alongside any error",
 			func(tb testing.TB, a AnsweringWriter) {
 				answeringWriterAssertPutZeroOnError(tb, a, fx)
+			}),
+		sig(ix.Put.Answer(), suite.ClassAnswer,
+			"Put answers the state it kept rather than the zero",
+			func(tb testing.TB, a AnsweringWriter) {
+				answeringWriterAssertPutAnswer(tb, a, fx)
 			}),
 	}
 }
@@ -386,6 +398,25 @@ func answeringWriterAssertPutZeroOnError(
 	if got != zero {
 		tb.Errorf("Put must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// answeringWriterAssertPutAnswer asserts Put answers the state it kept rather than the zero.
+func answeringWriterAssertPutAnswer(
+	tb testing.TB,
+	a AnsweringWriter,
+	fx AnsweringWriterFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	got, err := a.Put(ctx, fx.Value())
+	if err != nil {
+		tb.Fatalf("Put must succeed before its answer can be judged: %v", err)
+	}
+	var zero answeringwriter.Value
+	if got == zero {
+		tb.Errorf("Put must answer the state it kept: got the zero %+v", got)
 	}
 }
 
@@ -583,4 +614,4 @@ func ProveAnsweringWriter(
 }
 
 // testkit: end of generated content.
-// testkit:provenance cba6c055b8524eba155892cfcd679a3b57224d558aff7e8e6be24832dbea1545
+// testkit:provenance 6390eaea2855b38a841da85f1eb08067d8d8ff24a4c56b2d4bf0a6f66d28c763

@@ -50,9 +50,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFind(
 					func(_ context.Context, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFind(
 					func(_ context.Context, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFind(
 					func(_ context.Context, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -100,9 +100,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFindWithLimit(
 					func(_ context.Context, _ int, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -110,9 +110,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFindWithLimit(
 					func(_ context.Context, _ int, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -120,9 +120,9 @@ func finderProofs() prove.Defects[variadictest.Finder] {
 			func(tb testing.TB) variadictest.Finder {
 				return variadictest.NewFinderStub(tb, variadictest.WithFinderFindWithLimit(
 					func(_ context.Context, _ int, _ ...string) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -170,4 +170,4 @@ func TestFinderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d044ae3723b838e28cc67d643f1608d7593eec8cf5a7a98c0c8b1aaca34b81db
+// testkit:provenance efb2d9137f978b72e338dca6304fff41872cadb97e6899aba9dc32922ede84e1

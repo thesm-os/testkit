@@ -3,6 +3,7 @@ Add/cancel	signature/cancel	Add reports a cancelled context as cancelled
 Add/deadline	signature/deadline	Add reports an expired deadline as exceeded	
 Add/nilcontext	signature/nilcontext	Add returns an error rather than panicking on a nil context	
 Add/smoke	signature/smoke	Add survives a call with a derived value	
+At/bound	mixin/bound	At reports no element at the size Len reports	
 At/cancel	signature/cancel	At reports a cancelled context as cancelled	
 At/deadline	signature/deadline	At reports an expired deadline as exceeded	
 At/miss	mixin/reader	At reports zero for a i nothing has written	

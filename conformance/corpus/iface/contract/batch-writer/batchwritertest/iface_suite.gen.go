@@ -33,6 +33,12 @@ import (
 //
 // Every ID this package emits:
 //
+//	Get/cancel
+//	Get/deadline
+//	Get/miss
+//	Get/nilcontext
+//	Get/smoke
+//	Get/zero-on-error
 //	Put/cancel
 //	Put/deadline
 //	Put/nilcontext
@@ -58,6 +64,8 @@ var _ = suite.CompatV2
 type ContractFixture struct {
 	value      batchwriter.Value
 	valueOther batchwriter.Value
+	key        string
+	keyOther   string
 }
 
 // DefaultContractFixture is what a run with no config draws.
@@ -74,6 +82,8 @@ func contractNewFixture() ContractFixture {
 	return ContractFixture{
 		value:      batchwriter.Value{Key: "test-key", Body: "test-body"},
 		valueOther: batchwriter.Value{Key: "other-key", Body: "other-body"},
+		key:        "test-key",
+		keyOther:   "other-key",
 	}
 }
 
@@ -83,6 +93,13 @@ func (f ContractFixture) Value() batchwriter.Value { return f.value }
 // ValueOther is a second value, different from the first — which is
 // what lets a miss check miss and a comparison mean something.
 func (f ContractFixture) ValueOther() batchwriter.Value { return f.valueOther }
+
+// Key is the canonical key every check draws.
+func (f ContractFixture) Key() string { return f.key }
+
+// KeyOther is a second key, different from the first — which is
+// what lets a miss check miss and a comparison mean something.
+func (f ContractFixture) KeyOther() string { return f.keyOther }
 
 // Contract is the witnessed instantiation.
 //
@@ -197,10 +214,16 @@ func (contractVeneer) Suite(fx ContractFixture) suite.Suite[Contract] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var contractIndexPath = map[suite.ID]string{
-	contractCheckIndex.Put.Smoke():      "ContractSuite.Checks.Put.Smoke()",
-	contractCheckIndex.Put.Cancels():    "ContractSuite.Checks.Put.Cancels()",
-	contractCheckIndex.Put.NilContext(): "ContractSuite.Checks.Put.NilContext()",
-	contractCheckIndex.Put.Deadline():   "ContractSuite.Checks.Put.Deadline()",
+	contractCheckIndex.Put.Smoke():       "ContractSuite.Checks.Put.Smoke()",
+	contractCheckIndex.Put.Cancels():     "ContractSuite.Checks.Put.Cancels()",
+	contractCheckIndex.Put.NilContext():  "ContractSuite.Checks.Put.NilContext()",
+	contractCheckIndex.Put.Deadline():    "ContractSuite.Checks.Put.Deadline()",
+	contractCheckIndex.Get.Smoke():       "ContractSuite.Checks.Get.Smoke()",
+	contractCheckIndex.Get.Cancels():     "ContractSuite.Checks.Get.Cancels()",
+	contractCheckIndex.Get.NilContext():  "ContractSuite.Checks.Get.NilContext()",
+	contractCheckIndex.Get.Deadline():    "ContractSuite.Checks.Get.Deadline()",
+	contractCheckIndex.Get.ZeroOnError(): "ContractSuite.Checks.Get.ZeroOnError()",
+	contractCheckIndex.Get.Miss():        "ContractSuite.Checks.Get.Miss()",
 }
 
 var contractDropHint = suite.DropHinter(
@@ -210,22 +233,26 @@ var contractDropHint = suite.DropHinter(
 // The names this file spells more than once: one home each.
 const (
 	contractPut = "Put"
+	contractGet = "Get"
 )
 
 // contractCheckIndex indexes every check this package emits, by
 // method and then by check.
 var contractCheckIndex = contractCheckIndexT{
 	Put: contractPutChecks{},
+	Get: contractGetChecks{},
 }
 
 type contractCheckIndexT struct {
 	Put contractPutChecks
+	Get contractGetChecks
 }
 
 // All returns every ID this package emits.
 func (contractCheckIndexT) All() []suite.ID {
 	var out []suite.ID
 	out = append(out, contractPutChecks{}.All()...)
+	out = append(out, contractGetChecks{}.All()...)
 	return out
 }
 
@@ -253,6 +280,43 @@ func (contractPutChecks) All() []suite.ID {
 		contractPutChecks{}.Cancels(),
 		contractPutChecks{}.NilContext(),
 		contractPutChecks{}.Deadline(),
+	}
+}
+
+type contractGetChecks struct{}
+
+func (contractGetChecks) Smoke() suite.ID {
+	return suite.MethodID(contractGet, suite.SegSmoke)
+}
+
+func (contractGetChecks) Cancels() suite.ID {
+	return suite.MethodID(contractGet, suite.SegCancel)
+}
+
+func (contractGetChecks) NilContext() suite.ID {
+	return suite.MethodID(contractGet, suite.SegNilContext)
+}
+
+func (contractGetChecks) Deadline() suite.ID {
+	return suite.MethodID(contractGet, suite.SegDeadline)
+}
+
+func (contractGetChecks) ZeroOnError() suite.ID {
+	return suite.MethodID(contractGet, suite.SegZeroValue)
+}
+
+func (contractGetChecks) Miss() suite.ID {
+	return suite.MethodID(contractGet, suite.SegMiss)
+}
+
+func (contractGetChecks) All() []suite.ID {
+	return []suite.ID{
+		contractGetChecks{}.Smoke(),
+		contractGetChecks{}.Cancels(),
+		contractGetChecks{}.NilContext(),
+		contractGetChecks{}.Deadline(),
+		contractGetChecks{}.ZeroOnError(),
+		contractGetChecks{}.Miss(),
 	}
 }
 
@@ -301,6 +365,36 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			"Put reports an expired deadline as exceeded",
 			func(tb testing.TB, c Contract) {
 				contractAssertPutHonoursDeadline(tb, c, fx)
+			}),
+		sig(ix.Get.Smoke(), suite.ClassSmoke,
+			"Get survives a call with a derived key",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetSmoke(tb, c, fx)
+			}),
+		sig(ix.Get.Cancels(), suite.ClassCancel,
+			"Get reports a cancelled context as cancelled",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetCancels(tb, c, fx)
+			}),
+		sig(ix.Get.NilContext(), suite.ClassNilContext,
+			"Get returns an error rather than panicking on a nil context",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetToleratesNilContext(tb, c, fx)
+			}),
+		sig(ix.Get.Deadline(), suite.ClassDeadline,
+			"Get reports an expired deadline as exceeded",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetHonoursDeadline(tb, c, fx)
+			}),
+		sig(ix.Get.ZeroOnError(), suite.ClassZeroValue,
+			"Get returns the zero Value alongside any error",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetZeroOnError(tb, c, fx)
+			}),
+		sig(ix.Get.Miss(), suite.ClassReader,
+			"Get reports zero for a key nothing has written",
+			func(tb testing.TB, c Contract) {
+				contractAssertGetMiss(tb, c, fx)
 			}),
 	}
 }
@@ -351,6 +445,96 @@ func contractAssertPutHonoursDeadline(
 	suite.ReportsDeadlineExceeded(tb, contractPut, func(ctx context.Context) error {
 		return c.Put(ctx, fx.Value())
 	})
+}
+
+// contractAssertGetSmoke asserts Get survives a call with a derived key.
+func contractAssertGetSmoke(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, contractGet, func(ctx context.Context) {
+		_, _ = c.Get(ctx, fx.Key())
+	})
+}
+
+// contractAssertGetCancels asserts Get reports a cancelled context as cancelled.
+func contractAssertGetCancels(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsCancelled(tb, contractGet, func(ctx context.Context) error {
+		_, err := c.Get(ctx, fx.Key())
+		return err
+	})
+}
+
+// contractAssertGetToleratesNilContext asserts Get returns an error rather than panicking on a nil context.
+func contractAssertGetToleratesNilContext(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ToleratesNilContext(tb, contractGet, func(ctx context.Context) error {
+		_, err := c.Get(ctx, fx.Key())
+		return err
+	})
+}
+
+// contractAssertGetHonoursDeadline asserts Get reports an expired deadline as exceeded.
+func contractAssertGetHonoursDeadline(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsDeadlineExceeded(tb, contractGet, func(ctx context.Context) error {
+		_, err := c.Get(ctx, fx.Key())
+		return err
+	})
+}
+
+// contractAssertGetZeroOnError asserts Get returns the zero Value alongside any error.
+func contractAssertGetZeroOnError(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	got, err := c.Get(ctx, fx.Key())
+	if err == nil {
+		tb.Skip("Get answered for a cancelled context, so this check has no error to inspect")
+	}
+
+	var zero batchwriter.Value
+	if got != zero {
+		tb.Errorf("Get must return the zero value alongside an error: got %+v, want %+v (err %v)",
+			got, zero, err)
+	}
+}
+
+// contractAssertGetMiss asserts Get reports zero for a key nothing has written.
+func contractAssertGetMiss(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	got, err := c.Get(ctx, fx.KeyOther())
+
+	var zero batchwriter.Value
+	if got != zero {
+		tb.Errorf("Get must return the zero value for an input nothing supplied: got %+v, want %+v (err %v)",
+			got, zero, err)
+	}
 }
 
 // ContractDefect is anything that can stand as a planted defect for a
@@ -436,7 +620,7 @@ type ContractCheck struct {
 // A misspelled method starts with a capital too, so the ID grammar alone
 // would file a check under a method that does not exist and report it
 // under a path no drop can name.
-var contractMethods = suite.NewNameSet("Contract", contractPut)
+var contractMethods = suite.NewNameSet("Contract", contractPut, contractGet)
 
 // bind lowers one row onto the runtime check type, against the run's own
 // fixture — which is what lets a row's body draw what the run draws.
@@ -547,4 +731,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance bb76817e59a96b3d42e5565b7f654226f00322a102364b37660bbe6b5eca881b
+// testkit:provenance 009a81c27e06c9f2cb26bfc9f5cd3e86edc611cd904395fd61ce650b8e1ffcc9

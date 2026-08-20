@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[totaltest.Mixed] {
 			func(tb testing.TB) totaltest.Mixed {
 				return totaltest.NewMixedStub(tb, totaltest.WithMixedClassify(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[totaltest.Mixed] {
 			func(tb testing.TB) totaltest.Mixed {
 				return totaltest.NewMixedStub(tb, totaltest.WithMixedClassify(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func mixedProofs() prove.Defects[totaltest.Mixed] {
 			func(tb testing.TB) totaltest.Mixed {
 				return totaltest.NewMixedStub(tb, totaltest.WithMixedClassify(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -113,4 +113,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 718b3cd7245b18dbdb0c0ae91475393fd072d21c05460ebba1708191d681361c
+// testkit:provenance 374ab0a72539cf5c686df7adedf214c320622c3a3d62f0fc145d67d836c28b26

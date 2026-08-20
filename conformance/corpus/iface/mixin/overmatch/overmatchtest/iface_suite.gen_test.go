@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedAdd(
 					func(_ context.Context, _ overmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedAdd(
 					func(_ context.Context, _ overmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedAdd(
 					func(_ context.Context, _ overmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedItems(
 					func(_ context.Context) (r0 []overmatch.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedItems(
 					func(_ context.Context) (r0 []overmatch.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[overmatchtest.Mixed] {
 			func(tb testing.TB) overmatchtest.Mixed {
 				return overmatchtest.NewMixedStub(tb, overmatchtest.WithMixedItems(
 					func(_ context.Context) (r0 []overmatch.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 37c115bd79f9111eb967b5c8782d7e3eaf53e47c7b47c8f2e52467a325e417cb
+// testkit:provenance 78be955ef422fbd47c8e800e8fc099bf4a6544f5afc749e53975a9dbdec103e2

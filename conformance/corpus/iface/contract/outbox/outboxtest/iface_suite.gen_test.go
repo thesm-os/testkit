@@ -8,6 +8,7 @@ package outboxtest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/outbox"
@@ -50,9 +51,9 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractAppend(
 					func(_ context.Context, _ outbox.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractAppend(
 					func(_ context.Context, _ outbox.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +71,9 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractAppend(
 					func(_ context.Context, _ outbox.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +88,9 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan outbox.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +98,9 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan outbox.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,12 +108,35 @@ func contractProofs() prove.Defects[outboxtest.Contract] {
 			func(tb testing.TB) outboxtest.Contract {
 				return outboxtest.NewContractStub(tb, outboxtest.WithContractSubscribe(
 					func(_ context.Context) (r0 <-chan outbox.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Subscribe.ZeroOnError(): prove.One("a Contract whose Subscribe answers a believable value beside its error",
+			func(tb testing.TB) outboxtest.Contract {
+				return outboxtest.NewContractStub(tb, outboxtest.WithContractSubscribe(
+					func(_ context.Context) (r0 <-chan outbox.Value, err error) {
+						// A believable answer beside the refusal. A caller
+						// reading the error and one reading the value disagree
+						// about what happened, which is the claim's own
+						// violation rather than a subject that merely failed.
+						r0 = make(chan outbox.Value)
+						err = errors.New("planted: Subscribe refused with a believable value")
+						return
+					}))
+			}),
+		ix.Subscribe.Answer(): prove.One("a Contract whose Subscribe reports success and answers no stream",
+			func(tb testing.TB) outboxtest.Contract {
+				return outboxtest.NewContractStub(tb, outboxtest.WithContractSubscribe(
+					func(_ context.Context) (r0 <-chan outbox.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 	}
 }
 
@@ -143,14 +167,5 @@ func TestContractInvariants(t *testing.T) {
 	suite.VerifyDistinctIDs(t, s.IDs())
 }
 
-// Argued rather than proven, for want of a defect template here:
-//
-//	Subscribe/zero-on-error
-//
-// Each is a claim a derivation rule reached and this generator cannot yet
-// plant evidence for. The harness stamps them Argued and says so in the
-// report, which is the difference between a claim nothing can falsify and
-// one nobody has written the falsification for.
-
 // testkit: end of generated content.
-// testkit:provenance 05e1702ccc5d01f3d309b530fdba173ceb4849a66e6d751d5553ccf1ec2c3382
+// testkit:provenance 09f9e93a190d25263f3f1c120462ff6b8e7be6fc5f1daa768bbc6defb498996b

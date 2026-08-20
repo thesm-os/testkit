@@ -176,19 +176,22 @@ func accessorOf(id IDPlan) (IndexAccessor, error) {
 		}
 		if lawid.IsLaw(id.Seg) {
 			return IndexAccessor{}, fmt.Errorf(
-				"projection: law %s has no index accessor; word it in lawid", id.Seg)
+				"projection: law %s has no index accessor; word it in lawid", id.Seg,
+			)
 		}
 	}
 	name, ok := segAccessor(id.Seg)
 	if !ok {
 		return IndexAccessor{}, fmt.Errorf(
-			"projection: segment %q has no index accessor; word it in segAccessors", id.Seg)
+			"projection: segment %q has no index accessor; word it in segAccessors", id.Seg,
+		)
 	}
 	constant, ok := suite.SegConst(id.Seg)
 	if !ok {
 		return IndexAccessor{}, fmt.Errorf(
 			"projection: segment %q is not declared in the engine vocabulary, "+
-				"so an emitted accessor could only spell it as a literal", id.Seg)
+				"so an emitted accessor could only spell it as a literal", id.Seg,
+		)
 	}
 	return IndexAccessor{Name: name, Seg: id.Seg, SegConst: constant}, nil
 }

@@ -26,7 +26,7 @@ import (
 func TestContractProofs(t *testing.T) {
 	t.Parallel()
 	prove.All(t,
-		singleflighttest.ContractSuite.Suite().Checks,
+		singleflighttest.ContractSuite.Suite(singleflighttest.DefaultContractFixture()).Checks,
 		contractProofs())
 }
 
@@ -39,6 +39,56 @@ func TestContractProofs(t *testing.T) {
 func contractProofs() prove.Defects[singleflighttest.Contract] {
 	ix := singleflighttest.ContractSuite.Checks
 	return prove.Defects[singleflighttest.Contract]{
+		ix.Run.Smoke(): prove.One("a Contract whose Run panics",
+			func(tb testing.TB) singleflighttest.Contract {
+				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractRun(
+					func(_ context.Context, _ string, _ func() string) (string, error) {
+						panic("planted: Run panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
+		ix.Run.Cancels(): prove.One("a Contract whose Run ignores the context it is handed",
+			func(tb testing.TB) singleflighttest.Contract {
+				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractRun(
+					func(_ context.Context, _ string, _ func() string) (r0 string, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedCancelled),
+		ix.Run.NilContext(): prove.One("a Contract whose Run forgives a nil context and answers",
+			func(tb testing.TB) singleflighttest.Contract {
+				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractRun(
+					func(_ context.Context, _ string, _ func() string) (r0 string, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedNilContext),
+		ix.Run.Deadline(): prove.One("a Contract whose Run ignores the context it is handed",
+			func(tb testing.TB) singleflighttest.Contract {
+				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractRun(
+					func(_ context.Context, _ string, _ func() string) (r0 string, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedDeadline),
+		ix.Run.ZeroOnError(): prove.One("a Contract whose Run answers a believable value beside its error",
+			func(tb testing.TB) singleflighttest.Contract {
+				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractRun(
+					func(_ context.Context, _ string, _ func() string) (r0 string, err error) {
+						// A believable answer beside the refusal. A caller
+						// reading the error and one reading the value disagree
+						// about what happened, which is the claim's own
+						// violation rather than a subject that merely failed.
+						r0 = "other-"
+						err = errors.New("planted: Run refused with a believable value")
+						return
+					}))
+			}),
 		ix.Flights.Smoke(): prove.One("a Contract whose Flights panics",
 			func(tb testing.TB) singleflighttest.Contract {
 				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractFlights(
@@ -50,9 +100,9 @@ func contractProofs() prove.Defects[singleflighttest.Contract] {
 			func(tb testing.TB) singleflighttest.Contract {
 				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractFlights(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +110,9 @@ func contractProofs() prove.Defects[singleflighttest.Contract] {
 			func(tb testing.TB) singleflighttest.Contract {
 				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractFlights(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +120,9 @@ func contractProofs() prove.Defects[singleflighttest.Contract] {
 			func(tb testing.TB) singleflighttest.Contract {
 				return singleflighttest.NewContractStub(tb, singleflighttest.WithContractFlights(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,7 +156,7 @@ func contractProofs() prove.Defects[singleflighttest.Contract] {
 func TestContractInvariants(t *testing.T) {
 	t.Parallel()
 
-	s := singleflighttest.ContractSuite.Suite()
+	s := singleflighttest.ContractSuite.Suite(singleflighttest.DefaultContractFixture())
 
 	rows, err := suite.LockLines(s)
 	if err != nil {
@@ -120,4 +170,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 2b82b337b84017438031af3400033ff83abf01599379cff13b38e0be56fe76cd
+// testkit:provenance 206aeccceb125e201db7da1df239929aa864ea92ec638097cd38aa321c304322

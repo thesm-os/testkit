@@ -51,9 +51,9 @@ func sourceProofs() prove.Defects[streamconsumertest.Source] {
 			func(tb testing.TB) streamconsumertest.Source {
 				return streamconsumertest.NewSourceStub(tb, streamconsumertest.WithSourceNext(
 					func(_ context.Context) (r0 streamconsumer.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func sourceProofs() prove.Defects[streamconsumertest.Source] {
 			func(tb testing.TB) streamconsumertest.Source {
 				return streamconsumertest.NewSourceStub(tb, streamconsumertest.WithSourceNext(
 					func(_ context.Context) (r0 streamconsumer.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func sourceProofs() prove.Defects[streamconsumertest.Source] {
 			func(tb testing.TB) streamconsumertest.Source {
 				return streamconsumertest.NewSourceStub(tb, streamconsumertest.WithSourceNext(
 					func(_ context.Context) (r0 streamconsumer.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -120,10 +120,38 @@ func TestSourceInvariants(t *testing.T) {
 	suite.VerifyDistinctIDs(t, s.IDs())
 }
 
-// No check this run emitted carries a defect this generator can spell,
-// so there is nothing to prove here yet. The harness beside this file
-// stamps those checks Argued rather than Proven, which is what keeps the
-// parity gate quiet and the claim honest.
+// TestStreamConsumerProofs drives every planted defect through the check it is
+// evidence for.
+//
+// A red here is the expected outcome for each one; a GREEN is the finding.
+// It means a check tolerated the implementation built to break it, and a
+// check that cannot fail is a line in a report rather than a claim about
+// the subject.
+func TestStreamConsumerProofs(t *testing.T) {
+	t.Parallel()
+	prove.All(t,
+		streamconsumertest.StreamConsumerSuite.Suite(streamconsumertest.DefaultStreamConsumerFixture()).Checks,
+		streamConsumerProofs())
+}
+
+// streamConsumerProofs is every defect this run derived and can spell.
+//
+// Each is the smallest implementation that breaks exactly one claim: the
+// generated double with one method overridden, and nothing else changed.
+// The reason beside it is the substring the red must contain, so a defect
+// that died on an unrelated guard stops counting as evidence.
+func streamConsumerProofs() prove.Defects[streamconsumertest.StreamConsumer] {
+	ix := streamconsumertest.StreamConsumerSuite.Checks
+	return prove.Defects[streamconsumertest.StreamConsumer]{
+		ix.Ingest.Smoke(): prove.One("a StreamConsumer whose Ingest panics",
+			func(tb testing.TB) streamconsumertest.StreamConsumer {
+				return streamconsumertest.NewStreamConsumerStub(tb, streamconsumertest.WithStreamConsumerIngest(
+					func(_ context.Context, _ streamconsumer.Source) (int, error) {
+						panic("planted: Ingest panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
+	}
+}
 
 // TestStreamConsumerInvariants holds this package to what it says about itself.
 //
@@ -139,7 +167,7 @@ func TestSourceInvariants(t *testing.T) {
 func TestStreamConsumerInvariants(t *testing.T) {
 	t.Parallel()
 
-	s := streamconsumertest.StreamConsumerSuite.Suite()
+	s := streamconsumertest.StreamConsumerSuite.Suite(streamconsumertest.DefaultStreamConsumerFixture())
 
 	rows, err := suite.LockLines(s)
 	if err != nil {
@@ -153,4 +181,4 @@ func TestStreamConsumerInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c708a0d3ba8c06ece5fabe5ebf26ab14032d4fcaf6b1540b74c99cee745d9b38
+// testkit:provenance 6a3377d158919db0137aac40fcbc49d02a66b9ce6b975eb707dbdf5bab0a0630

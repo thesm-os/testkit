@@ -210,6 +210,7 @@ func TestLeasedWriterContractWithoutSmoke(t *testing.T) {
 			Name: "in-memory", New: leasedidempotentwritertest.NewInMemory,
 		},
 		leasedidempotentwritertest.LeasedWriterSuite.Without(
-			leasedidempotentwritertest.LeasedWriterSuite.Checks.Acquire.Smoke()),
+			leasedidempotentwritertest.LeasedWriterSuite.Checks.Acquire.Smoke(),
+		),
 	)
 }

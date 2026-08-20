@@ -4,14 +4,17 @@ title: One tier owns each classification
 status: Accepted
 date: 2026-08-10
 supersedes: 0017
-superseded-by: none
+superseded-by: 0028
 ---
 
 # ADR-0018: One tier owns each classification
 
 ## Status
 
-Accepted
+Superseded by [ADR-0028](0028-one-tier-owns-each-obligation.md), which keeps
+every argument below and changes the unit: obligations are owned by tiers, not
+whole classifications. Read this for why the tiers divide as they do; read 0028
+for what the division applies to.
 
 ## Context
 

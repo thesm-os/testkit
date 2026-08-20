@@ -22,6 +22,20 @@ type Expr string
 // place that decision is spelled.
 const ExprCtx Expr = "ctx"
 
+// ExprNil is the literal a nil-argument body spells in the slot it is
+// testing. Here rather than in the rule because it is a spelling, and
+// every spelling the emitted bodies share has one home.
+const ExprNil Expr = "nil"
+
+// ExprBound is the local a bounded probe binds its sizer's answer to,
+// and the argument the judged call then spells. One name, here, for the
+// reason [ExprCtx] is here.
+const ExprBound Expr = "bound"
+
+// ExprHook is the local a hooks body binds its recording callback to,
+// and the argument the registration call then spells.
+const ExprHook Expr = "hook"
+
 // ExprBorrowed is the local a borrow-first smoke binds the producing
 // sibling's answer to; the returning call's args reference it where
 // the parameter takes the produced type.
@@ -186,6 +200,18 @@ func FixtureCall(recv Expr, field string) Expr {
 		return recv
 	}
 	return recv + "." + Expr(golang.ExportedName(field)) + "()"
+}
+
+// otherSuffix names the companion accessor. Spelled here as well as in
+// the fixture projection because this package is the naming policy's
+// home and cannot import back into the deriver.
+const otherSuffix = "Other"
+
+// FixtureCallOther draws the companion member — the second, different
+// value every field carries — for a body that has to tell two draws
+// apart.
+func FixtureCallOther(recv Expr, field string) Expr {
+	return FixtureCall(recv, field+otherSuffix)
 }
 
 // Token is the interface's qualifier in every generated identifier —

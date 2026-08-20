@@ -1,12 +1,3 @@
-{{- /* builder.sample composes one sample value. The type travels as a
-       reference rather than inside the text because a rendered file registers
-       an import only for a reference it was handed. */ -}}
-{{- define "builder.sample" -}}
-{{- if not .Ref }}{{ .Text }}
-{{- else if .Composite }}{{ renderType .Ref }}{{ .Text }}
-{{- else }}{{ renderType .Ref }}({{ .Text }}){{ end -}}
-{{- end -}}
-
 {{- /* Every cross-package symbol is composed with the backend's own
        `external <path> <Symbol>`, which registers the import as it renders.
        The testkit path comes off the emit value ($.Runtime) rather than being
@@ -92,7 +83,7 @@ func TestNew{{ $src }}From(t *{{ renderExpr $T }}) {
 		// for a constructor that drops every field it is handed, which is the
 		// one defect this check exists to catch — so the seed is built
 		// through the setters, each already proven above to reach its field.
-		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ template "builder.sample" .Sample }}){{ end }}.Build()
+		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ renderSample .Sample }}){{ end }}.Build()
 		{{ renderExpr $equal }}(t, {{ renderExpr $.FromRef }}{{ $ta }}(seed).Build(), seed,
 			"New{{ $src }}From must not alter what it was given")
 	})
@@ -178,7 +169,11 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// One value rather than two: a channel is an identity, and a freshly
 		// made one is distinct from anything the constructor could have seeded.
-		ch := make({{ renderType $f.Type }})
+		//
+		// The sampler's expression rather than a make built from the field's
+		// own reference, which renders the directional form for a directional
+		// field and is not legal Go.
+		ch := {{ renderSample $f.Sample }}
 		{{ renderExpr $true }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}(ch).Build().{{ $f.Name }} == ch,
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})
@@ -244,7 +239,7 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 
 	t.Run("replaces {{ $f.Name }} wholesale", func(t *{{ renderExpr $T }}) {
 		t.Parallel()
-		{{ if $f.Sample.OK }}k := {{ template "builder.sample" $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		{{ if $f.Sample.OK }}k := {{ renderSample $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
 		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k).With{{ $f.Name }}(nil).Build()
 		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 0, "the replacing setter discards what was there")
 	})
@@ -259,7 +254,7 @@ func Test{{ $b }}With{{ $f.Name }}Entry(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Assigning into a nil map panics, so a setter that did not allocate
 		// would fail at the caller's first use rather than here.
-		{{ if $f.Sample.OK }}k := {{ template "builder.sample" $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		{{ if $f.Sample.OK }}k := {{ renderSample $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
 		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry(k).Build()
 		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "the key reaches {{ $f.Name }}")
 	})
@@ -274,8 +269,8 @@ func Test{{ $b }}With{{ $f.Name }}Entries(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Adding is the whole difference from the replacing setter; one that
 		// discarded would leave the two indistinguishable.
-		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ template "builder.sample" $f.Sample }}).
-			With{{ $f.Name }}Entries({{ template "builder.sample" $f.Alternate }}).Build()
+		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ renderSample $f.Sample }}).
+			With{{ $f.Name }}Entries({{ renderSample $f.Alternate }}).Build()
 		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 2, "adding keeps what was there")
 	})
 {{- else }}
@@ -289,7 +284,7 @@ func Test{{ $b }}With{{ $f.Name }}Entries(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Adding to a nil map has to allocate like the single-key setter does,
 		// or the first caller to reach for it panics.
-		{{ if $f.Sample.OK }}k := {{ template "builder.sample" $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
+		{{ if $f.Sample.OK }}k := {{ renderSample $f.Sample }}{{ else }}var k {{ renderType $f.Key }}{{ end }}
 		got := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entries(k).Build()
 		{{ renderExpr $equal }}(t, len(got.{{ $f.Name }}), 1, "adding allocates on first use")
 	})
@@ -360,11 +355,11 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 		// nothing leaves nil, and dereferencing that panics instead of saying
 		// which setter failed. Two values because whatever the constructor
 		// seeded can equal at most one of them.
-		want := {{ renderType $f.Elem }}({{ template "builder.sample" $f.Sample }})
-		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ template "builder.sample" $f.Sample }}).Build().{{ $f.Name }}, &want,
+		want := {{ renderType $f.Elem }}({{ renderSample $f.Sample }})
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ renderSample $f.Sample }}).Build().{{ $f.Name }}, &want,
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
-		other := {{ renderType $f.Elem }}({{ template "builder.sample" $f.Alternate }})
-		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ template "builder.sample" $f.Alternate }}).Build().{{ $f.Name }}, &other,
+		other := {{ renderType $f.Elem }}({{ renderSample $f.Alternate }})
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ renderSample $f.Alternate }}).Build().{{ $f.Name }}, &other,
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})
 {{- else }}
@@ -401,9 +396,9 @@ func Test{{ $b }}With{{ $f.Name }}(t *{{ renderExpr $T }}) {
 		// Two distinct values rather than one: whatever the constructor seeded
 		// can equal at most one of them, so a setter assigning nothing fails
 		// here instead of passing against its own seed.
-		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ template "builder.sample" $f.Sample }}).Build().{{ $f.Name }}, {{ template "builder.sample" $f.Sample }},
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ renderSample $f.Sample }}).Build().{{ $f.Name }}, {{ renderSample $f.Sample }},
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
-		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ template "builder.sample" $f.Alternate }}).Build().{{ $f.Name }}, {{ template "builder.sample" $f.Alternate }},
+		{{ renderExpr $equal }}(t, {{ $ctor }}{{ $ta }}().With{{ $f.Name }}({{ renderSample $f.Alternate }}).Build().{{ $f.Name }}, {{ renderSample $f.Alternate }},
 			"With{{ $f.Name }} must reach {{ $f.Name }}")
 	})
 {{- else }}
@@ -478,8 +473,8 @@ func Test{{ $b }}Clone(t *{{ renderExpr $T }}) {
 		t.Parallel()
 		// Two distinct keys: adding the same one twice leaves the original at
 		// one key whether the clone shares its storage or not.
-		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ template "builder.sample" $f.Sample }})
-		b.Clone().With{{ $f.Name }}Entry({{ template "builder.sample" $f.Alternate }})
+		b := {{ $ctor }}{{ $ta }}().With{{ $f.Name }}Entry({{ renderSample $f.Sample }})
+		b.Clone().With{{ $f.Name }}Entry({{ renderSample $f.Alternate }})
 		{{ renderExpr $equal }}(t, len(b.Build().{{ $f.Name }}), 1,
 			"adding to a clone must not reach the original")
 	})
@@ -510,7 +505,7 @@ func Test{{ $b }}Build(t *{{ renderExpr $T }}) {
 		// Configured, which the name always claimed and the body did not do:
 		// this compared a zero value against itself and passed for any Build
 		// that answered the zero, however much had been set on the way.
-		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ template "builder.sample" .Sample }}){{ end }}.Build()
+		seed := {{ $ctor }}{{ $ta }}(){{ range . }}.With{{ .Name }}({{ renderSample .Sample }}){{ end }}.Build()
 		{{ renderExpr $equal }}(t, {{ renderExpr $.FromRef }}{{ $ta }}(seed).Build(), seed,
 			"Build returns the value under construction")
 	})

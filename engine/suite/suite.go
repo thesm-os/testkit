@@ -56,11 +56,51 @@ const (
 
 	SegReader     = "reader"
 	SegIdempotent = "idempotent"
+	SegSideEffect = "sideeffect"
+	SegPartition  = "partition"
+
+	// SegNilArgument is the nil-safety claim about a VALUE parameter,
+	// beside [SegNilContext]'s about the context. Two segments rather
+	// than one because the two are separate claims a subject can honour
+	// singly — a method that checks its context and dereferences its
+	// payload passes one and fails the other — and a single ID could not
+	// say which.
+	SegNilArgument = "nilargument"
+
+	// SegOrderAfter is the claim that a call refuses until its named
+	// predecessor has run.
+	SegOrderAfter = "orderafter"
+
+	// SegValidates is the claim that a call refuses exactly what its
+	// named validator refuses.
+	SegValidates = "validates"
+
+	// SegAnswer is the claim that a write which answers the state it
+	// kept answers something — the whole reason such a write is a
+	// different shape from one that returns an error alone.
+	SegAnswer = "answer"
+
+	// SegConflict is the conditional write's refusal: a second write of
+	// what is already there reports the declared conflict.
+	SegConflict = "conflict"
+
+	// SegMatch is the conditional write's agreement: the write lands
+	// exactly when its own predicate says it may.
+	SegMatch = "match"
+
+	// SegBound is the positional read's edge: at the size the declared
+	// sizer reports, there is no element.
+	SegBound = "bound"
+
+	// SegHooks is the claim that the call runs what was registered
+	// through the declared registrar.
+	SegHooks = "hooks"
 
 	// The deterministic reader family's check segments: the miss and
-	// the seeded hit/count, plus the negated-idempotent accumulation.
-	// In the vocabulary because the emitter and the runtime must spell
-	// one grammar — a slug with two homes drifts.
+	// the seeded hit/count, plus accumulation — the effect axis's
+	// second position beside idempotent, and not its negation. In the
+	// vocabulary because the emitter and the runtime must spell one
+	// grammar — a slug with two homes drifts.
 	SegMiss        = "miss"
 	SegHit         = "hit"
 	SegCount       = "count"
@@ -97,8 +137,19 @@ const (
 	ClassNilContext Class = ClassFamilySignature + "/" + SegNilContext
 	ClassZeroValue  Class = ClassFamilySignature + "/" + SegZeroValue
 
-	ClassReader     Class = ClassFamilyMixin + "/" + SegReader
-	ClassIdempotent Class = ClassFamilyMixin + "/" + SegIdempotent
+	ClassReader      Class = ClassFamilyMixin + "/" + SegReader
+	ClassIdempotent  Class = ClassFamilyMixin + "/" + SegIdempotent
+	ClassSideEffect  Class = ClassFamilyMixin + "/" + SegSideEffect
+	ClassPartition   Class = ClassFamilyMixin + "/" + SegPartition
+	ClassAccumulates Class = ClassFamilyMixin + "/" + SegAccumulates
+	ClassNilArgument Class = ClassFamilyMixin + "/" + SegNilArgument
+	ClassOrderAfter  Class = ClassFamilyMixin + "/" + SegOrderAfter
+	ClassValidates   Class = ClassFamilyMixin + "/" + SegValidates
+	ClassAnswer      Class = ClassFamilyMixin + "/" + SegAnswer
+	ClassConflict    Class = ClassFamilyMixin + "/" + SegConflict
+	ClassMatch       Class = ClassFamilyMixin + "/" + SegMatch
+	ClassBound       Class = ClassFamilyMixin + "/" + SegBound
+	ClassHooks       Class = ClassFamilyMixin + "/" + SegHooks
 
 	ClassDifferential Class = ClassFamilyModel + "/" + SegDifferential
 	ClassLaws         Class = ClassFamilyModel + "/" + SegLaws

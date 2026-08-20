@@ -45,12 +45,13 @@ import (
 //	Settle/cancel
 //	Settle/nilcontext
 //	Settle/smoke
+//	Sync/smoke
 //
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Sync's signature checks — its Mixed argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
+//	Sync's judging signature checks — its Mixed argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //	Sync's stamp checks — its Mixed argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //	the differential leg for Mixed — the eventually claim lets reads lag writes, which no immediate store models. To close it: override with ref=, or the twin-floor wording earns a corpus pin first.
 //
@@ -229,6 +230,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Settle.Smoke():       "MixedSuite.Checks.Settle.Smoke()",
 	mixedCheckIndex.Settle.Cancels():     "MixedSuite.Checks.Settle.Cancels()",
 	mixedCheckIndex.Settle.NilContext():  "MixedSuite.Checks.Settle.NilContext()",
+	mixedCheckIndex.Sync.Smoke():         "MixedSuite.Checks.Sync.Smoke()",
 	mixedCheckIndex.Items.Smoke():        "MixedSuite.Checks.Items.Smoke()",
 	mixedCheckIndex.Items.Cancels():      "MixedSuite.Checks.Items.Cancels()",
 	mixedCheckIndex.Items.NilContext():   "MixedSuite.Checks.Items.NilContext()",
@@ -253,12 +255,14 @@ const (
 var mixedCheckIndex = mixedCheckIndexT{
 	Publish: mixedPublishChecks{},
 	Settle:  mixedSettleChecks{},
+	Sync:    mixedSyncChecks{},
 	Items:   mixedItemsChecks{},
 }
 
 type mixedCheckIndexT struct {
 	Publish mixedPublishChecks
 	Settle  mixedSettleChecks
+	Sync    mixedSyncChecks
 	Items   mixedItemsChecks
 }
 
@@ -267,6 +271,7 @@ func (mixedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
 	out = append(out, mixedPublishChecks{}.All()...)
 	out = append(out, mixedSettleChecks{}.All()...)
+	out = append(out, mixedSyncChecks{}.All()...)
 	out = append(out, mixedItemsChecks{}.All()...)
 	return out
 }
@@ -317,6 +322,18 @@ func (mixedSettleChecks) All() []suite.ID {
 		mixedSettleChecks{}.Smoke(),
 		mixedSettleChecks{}.Cancels(),
 		mixedSettleChecks{}.NilContext(),
+	}
+}
+
+type mixedSyncChecks struct{}
+
+func (mixedSyncChecks) Smoke() suite.ID {
+	return suite.MethodID(mixedSync, suite.SegSmoke)
+}
+
+func (mixedSyncChecks) All() []suite.ID {
+	return []suite.ID{
+		mixedSyncChecks{}.Smoke(),
 	}
 }
 
@@ -412,6 +429,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Settle returns an error rather than panicking on a nil context",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertSettleToleratesNilContext(tb, m)
+			}),
+		sig(ix.Sync.Smoke(), suite.ClassSmoke,
+			"Sync survives a call with a derived mixed",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertSyncSmoke(tb, m, fx)
 			}),
 		sig(ix.Items.Smoke(), suite.ClassSmoke,
 			"Items survives a call",
@@ -519,6 +541,18 @@ func mixedAssertSettleToleratesNilContext(
 	tb.Helper()
 	suite.ToleratesNilContext(tb, mixedSettle, func(ctx context.Context) error {
 		return m.Settle(ctx)
+	})
+}
+
+// mixedAssertSyncSmoke asserts Sync survives a call with a derived mixed.
+func mixedAssertSyncSmoke(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, mixedSync, func(ctx context.Context) {
+		_ = m.Sync(ctx, fx.Mixed())
 	})
 }
 
@@ -781,4 +815,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance b23e990ebd1d38a7b8736596b50c57702287800069bc4b75610eec50e3b56505
+// testkit:provenance a0a579f3aacb1c71c64cc2819fc88dbe8741473d23c9c1b9d2a654c2f587c878

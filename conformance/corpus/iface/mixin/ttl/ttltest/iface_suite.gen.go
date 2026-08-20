@@ -533,10 +533,9 @@ func mixedAssertReadMiss(
 ) {
 	tb.Helper()
 	ctx := tb.Context()
-
 	_, err := m.Read(ctx, fx.KeyOther())
 	if !errors.Is(err, ttl.ErrExpired) {
-		tb.Errorf("Read must report a miss as %v: got %v", ttl.ErrExpired, err)
+		tb.Errorf("Read must report %v: got %v", ttl.ErrExpired, err)
 	}
 }
 
@@ -734,4 +733,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 41e88704618118066920f04fb49e7ba4f5b17d9789e2fa1244d8b4ecc7500d08
+// testkit:provenance e3bdac219b43a992efde16986c474087565f0c57394a589e1e3176875d82703a

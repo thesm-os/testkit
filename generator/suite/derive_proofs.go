@@ -57,7 +57,10 @@ func observationDefect(f Iface) (projection.Defect, bool) {
 	if writer == nil {
 		return nil, false
 	}
-	return projection.DiscardWrite{Option: projection.OptionName(f.Name, writer.Name)}, true
+	return projection.AnswersAnyway{
+		Clause: projection.Clause{Text: DropsWriteClause(*writer)},
+		Option: projection.OptionName(f.Name, writer.Name),
+	}, true
 }
 
 // afterCloseOutlives plants the after-close defect: one stamped

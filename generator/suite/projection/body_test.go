@@ -35,10 +35,17 @@ func TestBodyKinds(t *testing.T) {
 		}
 	})
 
+	// The budget counts EMITTED SHAPES, which is what it has to count to
+	// mean anything. A kind named for the classification that asked for
+	// it grows with the registry and the guard fires on arithmetic; a
+	// kind named for the statements it emits is shared, and the guard
+	// fires only when a rule genuinely wants code nothing else emits.
+	// The set is named on the second footing.
 	t.Run("within the design budget", func(t *testing.T) {
 		t.Parallel()
-		testkit.True(t, len(projection.BodyKinds()) <= 15,
-			"a new body shape is a design event, not a workaround — the budget is the guard")
+		testkit.True(t, len(projection.BodyKinds()) <= 19,
+			"a new body shape is a design event, not a workaround — the budget is the guard; "+
+				"before raising it, check the shape is not one an existing kind already emits")
 	})
 }
 

@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[cursortest.Contract] {
 			func(tb testing.TB) cursortest.Contract {
 				return cursortest.NewContractStub(tb, cursortest.WithContractNext(
 					func(_ context.Context) (r0 cursor.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[cursortest.Contract] {
 			func(tb testing.TB) cursortest.Contract {
 				return cursortest.NewContractStub(tb, cursortest.WithContractNext(
 					func(_ context.Context) (r0 cursor.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[cursortest.Contract] {
 			func(tb testing.TB) cursortest.Contract {
 				return cursortest.NewContractStub(tb, cursortest.WithContractNext(
 					func(_ context.Context) (r0 cursor.Value, r1 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func contractProofs() prove.Defects[cursortest.Contract] {
 			func(tb testing.TB) cursortest.Contract {
 				return cursortest.NewContractStub(tb, cursortest.WithContractClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func contractProofs() prove.Defects[cursortest.Contract] {
 			func(tb testing.TB) cursortest.Contract {
 				return cursortest.NewContractStub(tb, cursortest.WithContractClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -148,4 +148,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b4599e0f88cfd77b5c6f9bfcd6805a1c1377b7d596b542435be197bdecb1bd51
+// testkit:provenance ec434a7c775b4101e0ffe3246aeb72ff81d4debe1ce89cf9c867c1536983d99e

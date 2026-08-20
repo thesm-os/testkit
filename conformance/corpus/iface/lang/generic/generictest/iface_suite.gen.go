@@ -7,6 +7,7 @@
 package generictest
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -32,13 +33,16 @@ import (
 //
 // Every ID this package emits:
 //
+//	Get/smoke
+//	Put/smoke
+//
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Get's signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
+//	Get's judging signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
 //	Get's stamp checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
-//	Put's signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
+//	Put's judging signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
 //	Put's stamp checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StoreConfig carries a pool, or write the claim as a StoreChecks row.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -201,8 +205,8 @@ func StoreWithout[K comparable, V any](
 // StoreSuiteOf returns the checks as data, for tooling or a runner
 // of your own — the generic subject's form of the veneer's Suite method,
 // and there for the same reason StoreWithout is.
-func StoreSuiteOf[K comparable, V any]() suite.Suite[Store[K, V]] {
-	return storeSuite[K, V]()
+func StoreSuiteOf[K comparable, V any](fx StoreFixture[K, V]) suite.Suite[Store[K, V]] {
+	return storeSuite[K, V](fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -210,7 +214,10 @@ func StoreSuiteOf[K comparable, V any]() suite.Suite[Store[K, V]] {
 // storeIndexPath spells every emitted ID as the path a
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
-var storeIndexPath = map[suite.ID]string{}
+var storeIndexPath = map[suite.ID]string{
+	storeCheckIndex.Get.Smoke(): "StoreSuite.Checks.Get.Smoke()",
+	storeCheckIndex.Put.Smoke(): "StoreSuite.Checks.Put.Smoke()",
+}
 
 var storeDropHint = suite.DropHinter(
 	"StoreSuite", storeIndexPath,
@@ -224,15 +231,46 @@ const (
 
 // storeCheckIndex indexes every check this package emits, by
 // method and then by check.
-var storeCheckIndex = storeCheckIndexT{}
+var storeCheckIndex = storeCheckIndexT{
+	Get: storeGetChecks{},
+	Put: storePutChecks{},
+}
 
 type storeCheckIndexT struct {
+	Get storeGetChecks
+	Put storePutChecks
 }
 
 // All returns every ID this package emits.
 func (storeCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, storeGetChecks{}.All()...)
+	out = append(out, storePutChecks{}.All()...)
 	return out
+}
+
+type storeGetChecks struct{}
+
+func (storeGetChecks) Smoke() suite.ID {
+	return suite.MethodID(storeGet, suite.SegSmoke)
+}
+
+func (storeGetChecks) All() []suite.ID {
+	return []suite.ID{
+		storeGetChecks{}.Smoke(),
+	}
+}
+
+type storePutChecks struct{}
+
+func (storePutChecks) Smoke() suite.ID {
+	return suite.MethodID(storePut, suite.SegSmoke)
+}
+
+func (storePutChecks) All() []suite.ID {
+	return []suite.ID{
+		storePutChecks{}.Smoke(),
+	}
 }
 
 // storeSuite returns the checks as data, drawn from f.
@@ -242,11 +280,11 @@ func (storeCheckIndexT) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func storeSuite[K comparable, V any]() suite.Suite[Store[K, V]] {
+func storeSuite[K comparable, V any](fx StoreFixture[K, V]) suite.Suite[Store[K, V]] {
 	return suite.Suite[Store[K, V]]{
 		Name:     "Store",
 		DropHint: storeDropHint,
-		Checks:   storeSignatureChecks[K, V](),
+		Checks:   storeSignatureChecks[K, V](fx),
 	}
 }
 
@@ -257,11 +295,47 @@ func storeSuite[K comparable, V any]() suite.Suite[Store[K, V]] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func storeSignatureChecks[K comparable, V any]() []suite.Check[Store[K, V]] {
-	// Every check this interface derived is waiting on a body template;
-	// the header names which. An empty set rather than no builder, so
-	// the run surface stays the same shape whatever is spelled yet.
-	return nil
+func storeSignatureChecks[K comparable, V any](fx StoreFixture[K, V]) []suite.Check[Store[K, V]] {
+	argued := suite.ArguedCheck[Store[K, V]]
+	ix := storeCheckIndex
+	return []suite.Check[Store[K, V]]{
+		argued(ix.Get.Smoke(), suite.ClassSmoke,
+			"Get survives a call with a derived k",
+			"a planted defect for a generic subject has to be built at concrete types and a Go test function cannot name them, so nothing has driven this claim",
+			func(tb testing.TB, s Store[K, V]) {
+				storeAssertGetSmoke[K, V](tb, s, fx)
+			}),
+		argued(ix.Put.Smoke(), suite.ClassSmoke,
+			"Put survives a call with derived inputs",
+			"a planted defect for a generic subject has to be built at concrete types and a Go test function cannot name them, so nothing has driven this claim",
+			func(tb testing.TB, s Store[K, V]) {
+				storeAssertPutSmoke[K, V](tb, s, fx)
+			}),
+	}
+}
+
+// storeAssertGetSmoke asserts Get survives a call with a derived k.
+func storeAssertGetSmoke[K comparable, V any](
+	tb testing.TB,
+	s Store[K, V],
+	fx StoreFixture[K, V],
+) {
+	tb.Helper()
+	suite.Survives(tb, storeGet, func(ctx context.Context) {
+		_, _ = s.Get(ctx, fx.K())
+	})
+}
+
+// storeAssertPutSmoke asserts Put survives a call with derived inputs.
+func storeAssertPutSmoke[K comparable, V any](
+	tb testing.TB,
+	s Store[K, V],
+	fx StoreFixture[K, V],
+) {
+	tb.Helper()
+	suite.Survives(tb, storePut, func(ctx context.Context) {
+		_ = s.Put(ctx, fx.K(), fx.V())
+	})
 }
 
 // StoreDefect is anything that can stand as a planted defect for a
@@ -418,7 +492,7 @@ func RunStore[K comparable, V any](
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunStore")
 	suite.Run(t,
-		storeSuite[K, V]().With(rc.Extra...).Without(rc.Drops...),
+		storeSuite[K, V](fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -458,4 +532,4 @@ func ProveStore[K comparable, V any](
 }
 
 // testkit: end of generated content.
-// testkit:provenance 569acca109ea7048c0ae79e16fd90194568497d3407ded65274e2948009f1ac1
+// testkit:provenance 5cf991a853b683aaaeabd50afa5c887f01dae81f9810bd5a769629b8847aba7c

@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[lifecycleafterclosetest.Mixed] {
 			func(tb testing.TB) lifecycleafterclosetest.Mixed {
 				return lifecycleafterclosetest.NewMixedStub(tb, lifecycleafterclosetest.WithMixedClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[lifecycleafterclosetest.Mixed] {
 			func(tb testing.TB) lifecycleafterclosetest.Mixed {
 				return lifecycleafterclosetest.NewMixedStub(tb, lifecycleafterclosetest.WithMixedClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -76,9 +76,9 @@ func mixedProofs() prove.Defects[lifecycleafterclosetest.Mixed] {
 			func(tb testing.TB) lifecycleafterclosetest.Mixed {
 				return lifecycleafterclosetest.NewMixedStub(tb, lifecycleafterclosetest.WithMixedWork(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -86,9 +86,9 @@ func mixedProofs() prove.Defects[lifecycleafterclosetest.Mixed] {
 			func(tb testing.TB) lifecycleafterclosetest.Mixed {
 				return lifecycleafterclosetest.NewMixedStub(tb, lifecycleafterclosetest.WithMixedWork(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -123,4 +123,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ba9acfcb0bce84034d49441ae0dc356edf2f94931a016baad65a66c8714eb2ad
+// testkit:provenance a80c49a540a1647b17a874393c0533da1478ac1237c75abb1f70e6b99ed250d6

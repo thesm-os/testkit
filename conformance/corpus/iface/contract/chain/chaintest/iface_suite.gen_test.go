@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractAppend(
 					func(_ context.Context, _ chain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractAppend(
 					func(_ context.Context, _ chain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractAppend(
 					func(_ context.Context, _ chain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractReplay(
 					func(_ context.Context) (r0 []chain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractReplay(
 					func(_ context.Context) (r0 []chain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractReplay(
 					func(_ context.Context) (r0 []chain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -138,9 +138,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractVerify(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -148,9 +148,9 @@ func contractProofs() prove.Defects[chaintest.Contract] {
 			func(tb testing.TB) chaintest.Contract {
 				return chaintest.NewContractStub(tb, chaintest.WithContractVerify(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -185,4 +185,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a7107bb06acf2fa17897c90f5b4eb86f6efdc60a0f11391d8981ce9f948f9b85
+// testkit:provenance 3e6e7fef6cba7985acb40ed558c439568164e256a99d5276bb61d39b7300cb25

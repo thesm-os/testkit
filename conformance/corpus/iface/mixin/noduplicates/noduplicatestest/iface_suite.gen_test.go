@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedAdd(
 					func(_ context.Context, _ noduplicates.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedAdd(
 					func(_ context.Context, _ noduplicates.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedAdd(
 					func(_ context.Context, _ noduplicates.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedItems(
 					func(_ context.Context) (r0 []noduplicates.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedItems(
 					func(_ context.Context) (r0 []noduplicates.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[noduplicatestest.Mixed] {
 			func(tb testing.TB) noduplicatestest.Mixed {
 				return noduplicatestest.NewMixedStub(tb, noduplicatestest.WithMixedItems(
 					func(_ context.Context) (r0 []noduplicates.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 39fe52306593cae89d255ab38dbb314d47d6025420a6d55e3ae684e5098cfde9
+// testkit:provenance 2e77adab90f39eb5a3b750351e53811c45925e488bcac03a5fb56f2dd45b9ea9

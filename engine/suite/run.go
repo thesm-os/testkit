@@ -422,7 +422,8 @@ func validate[S any](s Suite[S], subjects []Subject[S]) error {
 				"subject %q is both Serial and Oracle. The oracle's constructor is "+
 					"called concurrently by every parallel subject's model legs, so a "+
 					"subject that cannot take concurrent construction cannot be the "+
-					"reference; pick one", sub.Name)
+					"reference; pick one", sub.Name,
+			)
 		}
 	}
 	if len(oracles) > 1 {
@@ -577,7 +578,8 @@ func validateClass(id ID, class Class) error {
 	if !classFamilies[family] {
 		return fmt.Errorf(
 			"check %q: class family %q is not one this report buckets (%s)",
-			id, class, classFamilyList())
+			id, class, classFamilyList(),
+		)
 	}
 	for _, r := range leaf {
 		if !isLower(r) && !isDigit(r) && r != '-' {

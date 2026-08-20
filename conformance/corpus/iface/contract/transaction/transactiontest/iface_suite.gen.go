@@ -43,13 +43,10 @@ import (
 //	Put/deadline
 //	Put/nilcontext
 //	Put/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	Run's signature checks — its Body argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so ContractConfig carries a pool, or write the claim as a ContractChecks row.
-//	Run's stamp checks — its Body argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so ContractConfig carries a pool, or write the claim as a ContractChecks row.
+//	Run/cancel
+//	Run/deadline
+//	Run/nilcontext
+//	Run/smoke
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -89,6 +86,14 @@ func DefaultContractFixture() ContractFixture {
 // literal, and no check that draws should be able to tell which.
 func contractNewFixture() ContractFixture {
 	return ContractFixture{
+		body: func(context.Context) error {
+			var r0 error
+			return r0
+		},
+		bodyOther: func(context.Context) error {
+			var r0 error
+			return r0
+		},
 		key:        "test-key",
 		keyOther:   "other-key",
 		value:      transaction.Value{Key: "test-key", Body: "test-body"},
@@ -230,6 +235,10 @@ func (contractVeneer) Suite(fx ContractFixture) suite.Suite[Contract] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var contractIndexPath = map[suite.ID]string{
+	contractCheckIndex.Run.Smoke():       "ContractSuite.Checks.Run.Smoke()",
+	contractCheckIndex.Run.Cancels():     "ContractSuite.Checks.Run.Cancels()",
+	contractCheckIndex.Run.NilContext():  "ContractSuite.Checks.Run.NilContext()",
+	contractCheckIndex.Run.Deadline():    "ContractSuite.Checks.Run.Deadline()",
 	contractCheckIndex.Put.Smoke():       "ContractSuite.Checks.Put.Smoke()",
 	contractCheckIndex.Put.Cancels():     "ContractSuite.Checks.Put.Cancels()",
 	contractCheckIndex.Put.NilContext():  "ContractSuite.Checks.Put.NilContext()",
@@ -256,11 +265,13 @@ const (
 // contractCheckIndex indexes every check this package emits, by
 // method and then by check.
 var contractCheckIndex = contractCheckIndexT{
+	Run: contractRunChecks{},
 	Put: contractPutChecks{},
 	Get: contractGetChecks{},
 }
 
 type contractCheckIndexT struct {
+	Run contractRunChecks
 	Put contractPutChecks
 	Get contractGetChecks
 }
@@ -268,9 +279,37 @@ type contractCheckIndexT struct {
 // All returns every ID this package emits.
 func (contractCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, contractRunChecks{}.All()...)
 	out = append(out, contractPutChecks{}.All()...)
 	out = append(out, contractGetChecks{}.All()...)
 	return out
+}
+
+type contractRunChecks struct{}
+
+func (contractRunChecks) Smoke() suite.ID {
+	return suite.MethodID(contractRun, suite.SegSmoke)
+}
+
+func (contractRunChecks) Cancels() suite.ID {
+	return suite.MethodID(contractRun, suite.SegCancel)
+}
+
+func (contractRunChecks) NilContext() suite.ID {
+	return suite.MethodID(contractRun, suite.SegNilContext)
+}
+
+func (contractRunChecks) Deadline() suite.ID {
+	return suite.MethodID(contractRun, suite.SegDeadline)
+}
+
+func (contractRunChecks) All() []suite.ID {
+	return []suite.ID{
+		contractRunChecks{}.Smoke(),
+		contractRunChecks{}.Cancels(),
+		contractRunChecks{}.NilContext(),
+		contractRunChecks{}.Deadline(),
+	}
 }
 
 type contractPutChecks struct{}
@@ -363,6 +402,26 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 	sig := suite.ProvenCheck[Contract]
 	ix := contractCheckIndex
 	return []suite.Check[Contract]{
+		sig(ix.Run.Smoke(), suite.ClassSmoke,
+			"Run survives a call with a derived body",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunSmoke(tb, c, fx)
+			}),
+		sig(ix.Run.Cancels(), suite.ClassCancel,
+			"Run reports a cancelled context as cancelled",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunCancels(tb, c, fx)
+			}),
+		sig(ix.Run.NilContext(), suite.ClassNilContext,
+			"Run returns an error rather than panicking on a nil context",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunToleratesNilContext(tb, c, fx)
+			}),
+		sig(ix.Run.Deadline(), suite.ClassDeadline,
+			"Run reports an expired deadline as exceeded",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunHonoursDeadline(tb, c, fx)
+			}),
 		sig(ix.Put.Smoke(), suite.ClassSmoke,
 			"Put survives a call with derived inputs",
 			func(tb testing.TB, c Contract) {
@@ -414,6 +473,54 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 				contractAssertGetMiss(tb, c, fx)
 			}),
 	}
+}
+
+// contractAssertRunSmoke asserts Run survives a call with a derived body.
+func contractAssertRunSmoke(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, contractRun, func(ctx context.Context) {
+		_ = c.Run(ctx, fx.Body())
+	})
+}
+
+// contractAssertRunCancels asserts Run reports a cancelled context as cancelled.
+func contractAssertRunCancels(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsCancelled(tb, contractRun, func(ctx context.Context) error {
+		return c.Run(ctx, fx.Body())
+	})
+}
+
+// contractAssertRunToleratesNilContext asserts Run returns an error rather than panicking on a nil context.
+func contractAssertRunToleratesNilContext(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ToleratesNilContext(tb, contractRun, func(ctx context.Context) error {
+		return c.Run(ctx, fx.Body())
+	})
+}
+
+// contractAssertRunHonoursDeadline asserts Run reports an expired deadline as exceeded.
+func contractAssertRunHonoursDeadline(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsDeadlineExceeded(tb, contractRun, func(ctx context.Context) error {
+		return c.Run(ctx, fx.Body())
+	})
 }
 
 // contractAssertPutSmoke asserts Put survives a call with derived inputs.
@@ -748,4 +855,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7d63a308a450807e4649bbe6d79a6b61613e2bbee32b1dd5a15b686ef6108487
+// testkit:provenance ede6264a383990f13b71e8d7c44b7df6b19230583e68d72c687ce8a65959fe88

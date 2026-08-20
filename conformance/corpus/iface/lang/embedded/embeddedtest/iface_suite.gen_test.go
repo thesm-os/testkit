@@ -50,9 +50,9 @@ func baseProofs() prove.Defects[embeddedtest.Base] {
 			func(tb testing.TB) embeddedtest.Base {
 				return embeddedtest.NewBaseStub(tb, embeddedtest.WithBasePing(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func baseProofs() prove.Defects[embeddedtest.Base] {
 			func(tb testing.TB) embeddedtest.Base {
 				return embeddedtest.NewBaseStub(tb, embeddedtest.WithBasePing(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -130,9 +130,9 @@ func closerProofs() prove.Defects[embeddedtest.Closer] {
 			func(tb testing.TB) embeddedtest.Closer {
 				return embeddedtest.NewCloserStub(tb, embeddedtest.WithCloserClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -140,9 +140,9 @@ func closerProofs() prove.Defects[embeddedtest.Closer] {
 			func(tb testing.TB) embeddedtest.Closer {
 				return embeddedtest.NewCloserStub(tb, embeddedtest.WithCloserClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -210,9 +210,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -220,9 +220,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -230,9 +230,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -260,9 +260,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedPing(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -270,9 +270,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedPing(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -287,9 +287,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -297,9 +297,9 @@ func composedProofs() prove.Defects[embeddedtest.Composed] {
 			func(tb testing.TB) embeddedtest.Composed {
 				return embeddedtest.NewComposedStub(tb, embeddedtest.WithComposedClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -334,4 +334,4 @@ func TestComposedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f2d33f3434be5f7dfd70ce08b605aa2c1ab5cd6c649e0b63e5c09adba6595e1f
+// testkit:provenance 3e0cb4f8674e4c34d4aeb3fa8294634058183b28f86962e0894de42e60b53e1c

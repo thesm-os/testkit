@@ -50,9 +50,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -137,9 +137,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -147,9 +147,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -157,9 +157,9 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -193,7 +193,7 @@ func batchedProofs() prove.Defects[batchedmixinstest.Batched] {
 			func(tb testing.TB) batchedmixinstest.Batched {
 				return batchedmixinstest.NewBatchedStub(tb, batchedmixinstest.WithBatchedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = "other-"
 						return
 					}))
@@ -229,4 +229,4 @@ func TestBatchedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 99eeb19fe62984cc660e9c8cbfbb32ade8fc0ba552654ee66740bf3c650f4855
+// testkit:provenance 3187f6f42f1bd5755737c7847532e188d3a3302d0b9ab0bbae25402be416d951

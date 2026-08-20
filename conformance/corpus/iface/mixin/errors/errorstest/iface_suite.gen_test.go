@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[errorstest.Mixed] {
 			func(tb testing.TB) errorstest.Mixed {
 				return errorstest.NewMixedStub(tb, errorstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[errorstest.Mixed] {
 			func(tb testing.TB) errorstest.Mixed {
 				return errorstest.NewMixedStub(tb, errorstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[errorstest.Mixed] {
 			func(tb testing.TB) errorstest.Mixed {
 				return errorstest.NewMixedStub(tb, errorstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -93,8 +93,9 @@ func mixedProofs() prove.Defects[errorstest.Mixed] {
 			func(tb testing.TB) errorstest.Mixed {
 				return errorstest.NewMixedStub(tb, errorstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The sentinel was owed and nothing is reported, so the
-						// absent key reads as present.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -129,4 +130,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d6e1d982f8aa832764d2a078b7531bcadc7a51dc9e1d3d428dd306cc24e1cfd8
+// testkit:provenance 3e8f458884c06c90b37794485572edcda6385f4022dd2f71d29ffac78f61b79c

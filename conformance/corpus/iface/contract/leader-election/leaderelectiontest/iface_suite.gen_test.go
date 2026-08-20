@@ -49,9 +49,9 @@ func contractProofs() prove.Defects[leaderelectiontest.Contract] {
 			func(tb testing.TB) leaderelectiontest.Contract {
 				return leaderelectiontest.NewContractStub(tb, leaderelectiontest.WithContractCampaign(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func contractProofs() prove.Defects[leaderelectiontest.Contract] {
 			func(tb testing.TB) leaderelectiontest.Contract {
 				return leaderelectiontest.NewContractStub(tb, leaderelectiontest.WithContractCampaign(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -76,9 +76,9 @@ func contractProofs() prove.Defects[leaderelectiontest.Contract] {
 			func(tb testing.TB) leaderelectiontest.Contract {
 				return leaderelectiontest.NewContractStub(tb, leaderelectiontest.WithContractResign(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -86,9 +86,9 @@ func contractProofs() prove.Defects[leaderelectiontest.Contract] {
 			func(tb testing.TB) leaderelectiontest.Contract {
 				return leaderelectiontest.NewContractStub(tb, leaderelectiontest.WithContractResign(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -130,4 +130,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9f00148e7099050c111b72b432894ae6bb6844fd4711ec2ccc7b9fbc53acb677
+// testkit:provenance 929c76ed583776f6c2a166376b3e15d65b693bfcd532c9efa1e54f00bece9311

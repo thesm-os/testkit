@@ -29,7 +29,7 @@ func openerMethod(withClose bool) Method {
 	if withClose {
 		shape.ContractPartnerKey(ContractCursor, ContractCursorClose).Set(bag, "Close", "test")
 	}
-	roles, partners := contractDataOf(bag)
+	roles, partners, params := contractDataOf(bag)
 	return Method{
 		Sig: &golang.Sig{
 			Name:   "Scan",
@@ -42,6 +42,7 @@ func openerMethod(withClose bool) Method {
 		Contracts:        shape.Contracts(bag),
 		contractRoles:    roles,
 		contractPartners: partners,
+		contractParams:   params,
 	}
 }
 
@@ -84,13 +85,14 @@ func poolRoleMethod(sig *golang.Sig, role string, argFields ...string) Method {
 	bag := sdk.NewBag()
 	shape.MetaContracts.Set(bag, []string{ContractPool}, "test")
 	shape.ContractRoleKey(ContractPool).Set(bag, role, "test")
-	roles, partners := contractDataOf(bag)
+	roles, partners, params := contractDataOf(bag)
 	return Method{
 		Sig:              sig,
 		ArgFields:        argFields,
 		Contracts:        shape.Contracts(bag),
 		contractRoles:    roles,
 		contractPartners: partners,
+		contractParams:   params,
 	}
 }
 
@@ -141,9 +143,10 @@ func TestPutWithoutAProducerRefusesHonestly(t *testing.T) {
 
 	iface := Iface{Name: "Pool", Token: "pool", Qualifier: "pool", Methods: poolPair()[1:]}
 	plans, refusals := Signature{}.Derive(iface)
-	testkit.Len(t, plans, 0, "nothing to borrow from, nothing the fixture can derive")
+	testkit.Len(t, plans, 1, "nothing to borrow from, so the smoke falls back to the zero-valued draw")
 	testkit.Len(t, refusals, 1, "the gap is the ordinary undeliverable refusal, named")
-	testkit.Equal(t, refusals[0].What, "Put's signature checks", "attributed to the whole family set")
+	testkit.Equal(t, refusals[0].What, "Put's judging signature checks",
+		"attributed to the families a chosen value would have fed")
 }
 
 // smokesOf selects the smoke family from a derived set.

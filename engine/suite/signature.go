@@ -58,6 +58,33 @@ const (
 	// arm — a subject that panics — is a different failure and is not
 	// what any defect here plants.
 	RedNilContext = "returned nil on a nil context"
+
+	// RedNilArgument is what [ToleratesNilArgument] reports for a
+	// subject that answers, the arm a planted defect reaches — the
+	// other, a subject that panics, is a different failure and is not
+	// what any defect here plants.
+	RedNilArgument = "returned nil for a nil argument"
+)
+
+// The names the generator spells when it emits a call to one of the
+// guards below, declared here for the reason the reds above are: a
+// generated body names the function in text, so a rename here that
+// misses the generator produces a consumer file calling something that
+// no longer exists. The generator holds one of these rather than a
+// literal, and TestGuardNamesAreTheFunctions holds each to the function
+// it claims to name.
+const (
+	// GuardCancelled names [ReportsCancelled].
+	GuardCancelled = "ReportsCancelled"
+
+	// GuardDeadline names [ReportsDeadlineExceeded].
+	GuardDeadline = "ReportsDeadlineExceeded"
+
+	// GuardNilContext names [ToleratesNilContext].
+	GuardNilContext = "ToleratesNilContext"
+
+	// GuardNilArgument names [ToleratesNilArgument].
+	GuardNilArgument = "ToleratesNilArgument"
 )
 
 // Survives asserts the call returns rather than panicking — the weakest
@@ -115,5 +142,33 @@ func ToleratesNilContext(tb testing.TB, method string, call func(ctx context.Con
 		// weaker than its claim is a silent green: accepting nil and
 		// working uncancellably is exactly what the claim rules out.
 		tb.Errorf("%s "+RedNilContext+"; return an error instead", method)
+	}
+}
+
+// ToleratesNilArgument asserts the method returns an error rather than
+// panicking when one of its nilable arguments arrives nil.
+//
+// The context is real here and the nil is in the call, which is the
+// whole difference from [ToleratesNilContext]: the caller's context is
+// the harness's to supply, and which argument is nil is the generated
+// body's to spell. So this takes the same closure and only judges what
+// comes back.
+//
+// A nil pointer, slice or map reaching a method is an ordinary caller
+// mistake and a defined refusal is the whole claim. Dereferencing it is
+// an outage in the caller's process, which is the failure this exists to
+// catch.
+func ToleratesNilArgument(tb testing.TB, method string, call func(ctx context.Context) error) {
+	tb.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			tb.Errorf("%s panicked on a nil argument (%v); return an error instead", method, r)
+		}
+	}()
+	if err := call(tb.Context()); err == nil {
+		// The recorded claim is "returns an error", and an assertion
+		// weaker than its claim is a silent green: accepting nil and
+		// carrying on is exactly what the claim rules out.
+		tb.Errorf("%s "+RedNilArgument+"; return an error instead", method)
 	}
 }

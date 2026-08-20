@@ -49,9 +49,9 @@ func multiArgWriterProofs() prove.Defects[multiargwritertest.MultiArgWriter] {
 			func(tb testing.TB) multiargwritertest.MultiArgWriter {
 				return multiargwritertest.NewMultiArgWriterStub(tb, multiargwritertest.WithMultiArgWriterSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func multiArgWriterProofs() prove.Defects[multiargwritertest.MultiArgWriter] {
 			func(tb testing.TB) multiargwritertest.MultiArgWriter {
 				return multiargwritertest.NewMultiArgWriterStub(tb, multiargwritertest.WithMultiArgWriterSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func multiArgWriterProofs() prove.Defects[multiargwritertest.MultiArgWriter] {
 			func(tb testing.TB) multiargwritertest.MultiArgWriter {
 				return multiargwritertest.NewMultiArgWriterStub(tb, multiargwritertest.WithMultiArgWriterSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,4 +106,4 @@ func TestMultiArgWriterInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 14f7de14595820794998f9674e7f374cc5c4d26d3cd13de74a7e4d1af90554df
+// testkit:provenance 5e014570e6d6b527efb4d5c749578ba4c635880da9f8f9c17edd5e2a46a671ca

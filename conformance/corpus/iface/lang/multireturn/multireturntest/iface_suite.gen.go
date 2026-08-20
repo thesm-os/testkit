@@ -45,6 +45,7 @@ import (
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
+//	Quad's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
 //	Triple's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -669,4 +670,4 @@ func ProveWide(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5182ac96bc868af3e27b84471104743c24332c6186ef596379e7de9e802c4cb0
+// testkit:provenance 20edea002c1d351568b027ed442f5ca5025e78265f8477cb8a8c2540439d95b0

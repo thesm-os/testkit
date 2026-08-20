@@ -39,6 +39,12 @@ import (
 //	GetAll/smoke
 //	GetAll/zero-on-error
 //
+// Reached by a rule and not derivable here. Each is a claim this file
+// does NOT make, so a reader counting coverage from the list above
+// knows what is missing and what would bring it back:
+//
+//	GetAll's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
+//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -585,4 +591,4 @@ func ProveBatchReader(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5dd2e6c44a42dc8cfb2ca11a032cd8d43e1261626c9db6f30410cc1673520fe6
+// testkit:provenance 1f7a18774791a50f0aba14ff718386fbe689d2ad08f590a391feec86a25e0963

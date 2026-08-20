@@ -587,11 +587,13 @@ func ProveSource(
 //
 // Every ID this package emits:
 //
+//	Ingest/smoke
+//
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Ingest's signature checks — its Source argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StreamConsumerConfig carries a pool, or write the claim as a StreamConsumerChecks row.
+//	Ingest's judging signature checks — its Source argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StreamConsumerConfig carries a pool, or write the claim as a StreamConsumerChecks row.
 //	Ingest's stamp checks — its Source argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so StreamConsumerConfig carries a pool, or write the claim as a StreamConsumerChecks row.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -740,8 +742,8 @@ func (streamConsumerVeneer) Without(ids ...suite.ID) StreamConsumerRunOpt {
 // The way in from outside this package: the assembler and the table it
 // builds are unexported, because a caller reaching them is doing tooling
 // and tooling wants one name rather than one per interface.
-func (streamConsumerVeneer) Suite() suite.Suite[StreamConsumer] {
-	return streamConsumerSuite()
+func (streamConsumerVeneer) Suite(fx StreamConsumerFixture) suite.Suite[StreamConsumer] {
+	return streamConsumerSuite(fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -749,7 +751,9 @@ func (streamConsumerVeneer) Suite() suite.Suite[StreamConsumer] {
 // streamConsumerIndexPath spells every emitted ID as the path a
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
-var streamConsumerIndexPath = map[suite.ID]string{}
+var streamConsumerIndexPath = map[suite.ID]string{
+	streamConsumerCheckIndex.Ingest.Smoke(): "StreamConsumerSuite.Checks.Ingest.Smoke()",
+}
 
 var streamConsumerDropHint = suite.DropHinter(
 	"StreamConsumerSuite", streamConsumerIndexPath,
@@ -762,15 +766,31 @@ const (
 
 // streamConsumerCheckIndex indexes every check this package emits, by
 // method and then by check.
-var streamConsumerCheckIndex = streamConsumerCheckIndexT{}
+var streamConsumerCheckIndex = streamConsumerCheckIndexT{
+	Ingest: streamConsumerIngestChecks{},
+}
 
 type streamConsumerCheckIndexT struct {
+	Ingest streamConsumerIngestChecks
 }
 
 // All returns every ID this package emits.
 func (streamConsumerCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, streamConsumerIngestChecks{}.All()...)
 	return out
+}
+
+type streamConsumerIngestChecks struct{}
+
+func (streamConsumerIngestChecks) Smoke() suite.ID {
+	return suite.MethodID(streamConsumerIngest, suite.SegSmoke)
+}
+
+func (streamConsumerIngestChecks) All() []suite.ID {
+	return []suite.ID{
+		streamConsumerIngestChecks{}.Smoke(),
+	}
 }
 
 // streamConsumerSuite returns the checks as data, drawn from f.
@@ -780,11 +800,11 @@ func (streamConsumerCheckIndexT) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func streamConsumerSuite() suite.Suite[StreamConsumer] {
+func streamConsumerSuite(fx StreamConsumerFixture) suite.Suite[StreamConsumer] {
 	return suite.Suite[StreamConsumer]{
 		Name:     "StreamConsumer",
 		DropHint: streamConsumerDropHint,
-		Checks:   streamConsumerSignatureChecks(),
+		Checks:   streamConsumerSignatureChecks(fx),
 	}
 }
 
@@ -795,11 +815,28 @@ func streamConsumerSuite() suite.Suite[StreamConsumer] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func streamConsumerSignatureChecks() []suite.Check[StreamConsumer] {
-	// Every check this interface derived is waiting on a body template;
-	// the header names which. An empty set rather than no builder, so
-	// the run surface stays the same shape whatever is spelled yet.
-	return nil
+func streamConsumerSignatureChecks(fx StreamConsumerFixture) []suite.Check[StreamConsumer] {
+	sig := suite.ProvenCheck[StreamConsumer]
+	ix := streamConsumerCheckIndex
+	return []suite.Check[StreamConsumer]{
+		sig(ix.Ingest.Smoke(), suite.ClassSmoke,
+			"Ingest survives a call with a seeded source",
+			func(tb testing.TB, s StreamConsumer) {
+				streamConsumerAssertIngestSmoke(tb, s, fx)
+			}),
+	}
+}
+
+// streamConsumerAssertIngestSmoke asserts Ingest survives a call with a seeded source.
+func streamConsumerAssertIngestSmoke(
+	tb testing.TB,
+	s StreamConsumer,
+	fx StreamConsumerFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, streamConsumerIngest, func(ctx context.Context) {
+		_, _ = s.Ingest(ctx, fx.Source())
+	})
 }
 
 // StreamConsumerDefect is anything that can stand as a planted defect for a
@@ -956,7 +993,7 @@ func RunStreamConsumer(
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunStreamConsumer")
 	suite.Run(t,
-		streamConsumerSuite().With(rc.Extra...).Without(rc.Drops...),
+		streamConsumerSuite(fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -996,4 +1033,4 @@ func ProveStreamConsumer(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 07a602846feb05c68e585cafd3eb263870ac620ca8cb62c5bb2013970451dc4f
+// testkit:provenance 62ae858140cb162d570e28fd252c99bded9184f6d2ab24331ac66a3a1805f828

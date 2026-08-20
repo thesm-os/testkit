@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedSet(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedGet(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedGet(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 			func(tb testing.TB) scopetest.Mixed {
 				return scopetest.NewMixedStub(tb, scopetest.WithMixedGet(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -123,6 +123,16 @@ func mixedProofs() prove.Defects[scopetest.Mixed] {
 						// violation rather than a subject that merely failed.
 						r0 = "other-"
 						err = errors.New("planted: Get refused with a believable value")
+						return
+					}))
+			}),
+		ix.Set.Partition(): prove.One("a Mixed whose Set reports success and keeps nothing",
+			func(tb testing.TB) scopetest.Mixed {
+				return scopetest.NewMixedStub(tb, scopetest.WithMixedSet(
+					func(_ context.Context, _ string, _ string, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -157,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance bf8ba1e87a6f40214388737272fcb91a29c8e2099790a5e948add95324d8b0c9
+// testkit:provenance 50ee931c70be4e27474eef1039db6e9da5386ac1061938b129a4970ea953662b

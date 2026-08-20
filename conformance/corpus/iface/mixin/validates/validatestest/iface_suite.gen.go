@@ -43,13 +43,8 @@ import (
 //	Store/deadline
 //	Store/nilcontext
 //	Store/smoke
+//	Store/validates
 //	Validate/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	validates on Store — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -225,6 +220,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Store.Cancels():    "MixedSuite.Checks.Store.Cancels()",
 	mixedCheckIndex.Store.NilContext(): "MixedSuite.Checks.Store.NilContext()",
 	mixedCheckIndex.Store.Deadline():   "MixedSuite.Checks.Store.Deadline()",
+	mixedCheckIndex.Store.Validates():  "MixedSuite.Checks.Store.Validates()",
 	mixedCheckIndex.Validate.Smoke():   "MixedSuite.Checks.Validate.Smoke()",
 	mixedCheckIndex.Read.Smoke():       "MixedSuite.Checks.Read.Smoke()",
 	mixedCheckIndex.Read.Cancels():     "MixedSuite.Checks.Read.Cancels()",
@@ -286,12 +282,17 @@ func (mixedStoreChecks) Deadline() suite.ID {
 	return suite.MethodID(mixedStore, suite.SegDeadline)
 }
 
+func (mixedStoreChecks) Validates() suite.ID {
+	return suite.MethodID(mixedStore, suite.SegValidates)
+}
+
 func (mixedStoreChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedStoreChecks{}.Smoke(),
 		mixedStoreChecks{}.Cancels(),
 		mixedStoreChecks{}.NilContext(),
 		mixedStoreChecks{}.Deadline(),
+		mixedStoreChecks{}.Validates(),
 	}
 }
 
@@ -419,6 +420,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Read returns the zero Payload alongside any error",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertReadZeroOnError(tb, m, fx)
+			}),
+		sig(ix.Store.Validates(), suite.ClassValidates,
+			"Store refuses exactly what Validate refuses",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertStoreValidates(tb, m, fx)
 			}),
 		sig(ix.Read.Miss(), suite.ClassReader,
 			"Read reports zero for a key nothing has written",
@@ -557,6 +563,23 @@ func mixedAssertReadZeroOnError(
 	if got != zero {
 		tb.Errorf("Read must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// mixedAssertStoreValidates asserts Store refuses exactly what Validate refuses.
+func mixedAssertStoreValidates(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	verdict := m.Validate(fx.Payload())
+	err := m.Store(ctx, fx.Payload())
+	if (verdict != nil) != (err != nil) {
+		tb.Errorf("Store must refuse exactly what Validate refuses: Validate said %v, Store said %v",
+			verdict, err)
 	}
 }
 
@@ -772,4 +795,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance fffb05914522e7ed5ea2e877572d90d69f14842dacaa1c4d94f97f6fec9c9825
+// testkit:provenance 0c87036962988893a4b6d1d4a7b954b24781bd5d0bbcdf1f92354e4ed0944964

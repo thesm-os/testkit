@@ -21,8 +21,11 @@ import (
 //   - zero-on-error only under the directive, for methods answering a
 //     value beside their error — absent the directive the family has
 //     no derivable error source;
-//   - a method whose draws the fixture cannot supply refuses its
-//     whole family set in one refusal, naming the WithFixture remedy.
+//   - a method whose draws the fixture cannot supply keeps its smoke
+//     and refuses the rest in one refusal. The smoke asks only that
+//     the call survive, which a zero-valued draw supports; every
+//     other family compares an answer against an input, and an input
+//     nobody chose makes that comparison meaningless.
 type Signature struct{}
 
 // Name implements [Deriver].
@@ -35,6 +38,13 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 	seeded := f.seeded()
 
 	for _, m := range f.Methods {
+		if plan, built := builtSmoke(f, m); built {
+			// The builder's answer is the draw, so this answers before
+			// the undeliverable refusal for the reason the borrow arm
+			// below does.
+			plans = append(plans, plan)
+			continue
+		}
 		if plan, borrowed := borrowSmoke(f, m); borrowed {
 			// The produced draw is the borrow's to supply, so the
 			// borrow arm answers before the undeliverable refusal.
@@ -43,12 +53,21 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			plans = append(plans, plan)
 			continue
 		}
-		if r, refused := argsRefusal(DeriverSignature, f, m, "'s signature checks"); refused {
+		call := callOf(m)
+		if r, refused := argsRefusal(DeriverSignature, f, m, "'s judging signature checks"); refused {
+			// The smoke survives the refusal, because it is the one
+			// family that needs A value rather than a MEANINGFUL one.
+			// A draw with no literal is declared and left at its zero,
+			// so the call is still written — and a method that panics
+			// on a nil callback, a nil interface or an unset handle is
+			// exactly what a smoke call is for. Everything else here
+			// judges what came back against what went in, which a zero
+			// nobody chose cannot support.
+			plans = append(plans, smokePlan(f, m, call, seeded))
 			refusals = append(refusals, r)
 			continue
 		}
 
-		call := callOf(m)
 		plans = append(plans, smokePlan(f, m, call, seeded))
 
 		if !m.TakesContext() || !m.ReturnsError() {
@@ -62,14 +81,21 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		}
 		plans = append(
 			plans,
-			ctxPlan(f, m, vocab.SegCancel, vocab.ClassCancel, CancelClaim(m), projection.CancelCall{Call: call}),
+			ctxPlan(
+				f,
+				m,
+				vocab.SegCancel,
+				vocab.ClassCancel,
+				CancelClaim(m),
+				projection.GuardedCall{Call: call, Guard: projection.GuardCancelled},
+			),
 			ctxPlan(
 				f,
 				m,
 				vocab.SegNilContext,
 				vocab.ClassNilContext,
 				NilCtxClaim(m),
-				projection.NilCtxCall{Call: call},
+				projection.GuardedCall{Call: call, Guard: projection.GuardNilContext},
 			),
 		)
 		if !teardownShaped(m) {
@@ -81,7 +107,7 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 					vocab.SegDeadline,
 					vocab.ClassDeadline,
 					DeadlineClaim(m),
-					projection.DeadlineCall{Call: call},
+					projection.GuardedCall{Call: call, Guard: projection.GuardDeadline},
 				),
 			)
 		}
@@ -92,7 +118,10 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				Claim:       ZeroOnErrorClaim(m),
 				Body:        zeroBody(f, m, call),
 				Falsifiable: vocab.Proven(),
-				Defect:      projection.EchoBesideError{Option: projection.OptionName(f.Name, m.Name)},
+				Defect: projection.EchoBesideError{
+					Clause: projection.Clause{Text: EchoesBesideErrorClause(m)},
+					Option: projection.OptionName(f.Name, m.Name),
+				},
 			})
 		}
 	}
@@ -114,11 +143,12 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 func zeroBody(f Iface, m Method, call projection.CallPlan) projection.Body {
 	if _, declared := MissSentinel(m); declared && m.HasInput() {
 		return projection.ZeroOnMiss{
-			Call: missCall(f, m),
-			Pool: missPool(f, m),
+			Call:    missCall(f, m),
+			Pool:    missPool(f, m),
+			Because: BecauseErred(),
 		}
 	}
-	return projection.ZeroOnCancel{Call: call}
+	return projection.ZeroOnCancel{Call: call, Because: BecauseErred()}
 }
 
 // missCall is [callOf] against the alternate members: the draw nothing
@@ -166,7 +196,10 @@ func smokePlan(f Iface, m Method, call projection.CallPlan, seeded bool) project
 		Claim:       SmokeClaim(m, seeded),
 		Body:        projection.SmokeSurvives{Call: call},
 		Falsifiable: vocab.Proven(),
-		Defect:      projection.StubPanic{Option: projection.OptionName(f.Name, m.Name)},
+		Defect: projection.StubPanic{
+			Clause: projection.Clause{Text: PanicsClause(m)},
+			Option: projection.OptionName(f.Name, m.Name),
+		},
 	}
 }
 
@@ -182,9 +215,13 @@ func ctxPlan(
 	claim string,
 	body projection.Body,
 ) projection.CheckPlan {
-	var defect projection.Defect = projection.CtxSwap{Option: projection.OptionName(f.Name, m.Name)}
+	clause := SwallowsContextClause(m)
 	if seg == vocab.SegNilContext {
-		defect = projection.AcceptsNil{Option: projection.OptionName(f.Name, m.Name)}
+		clause = ForgivesNilContextClause(m)
+	}
+	var defect projection.Defect = projection.AnswersAnyway{
+		Clause: projection.Clause{Text: clause},
+		Option: projection.OptionName(f.Name, m.Name),
 	}
 	return projection.CheckPlan{
 		ID:          projection.IDPlan{Method: m.Name, Seg: seg},

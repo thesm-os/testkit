@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedTouch(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedTouch(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedTouch(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedObserved(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedObserved(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedObserved(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -126,11 +126,21 @@ func mixedProofs() prove.Defects[sideeffecttest.Mixed] {
 						return
 					}))
 			}),
+		ix.Touch.Sideeffect(): prove.One("a Mixed whose Touch reports success and keeps nothing",
+			func(tb testing.TB) sideeffecttest.Mixed {
+				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedTouch(
+					func(_ context.Context, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 		ix.Observed.Miss(): prove.One("a Mixed whose Observed answers for an input nothing wrote",
 			func(tb testing.TB) sideeffecttest.Mixed {
 				return sideeffecttest.NewMixedStub(tb, sideeffecttest.WithMixedObserved(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = 2
 						return
 					}))
@@ -166,4 +176,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance fe2d610f9282e48e8ac811f777f1ce391df9e879acd23a64fa8f38c2ba2cee41
+// testkit:provenance 8cc6c16880df45b87227624a8bb12a34ad4137bef720c122c3392274f37b4b7a

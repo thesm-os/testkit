@@ -187,6 +187,10 @@ type defectView struct {
 	// its home here and not in a runtime constant.
 	PanicMessage, RepeatMessage, EchoMessage string
 
+	// RefusalMessage is the blanket refusal a [projection.RefusesAlways]
+	// double reports, beside the three above for the same reason.
+	RefusalMessage string
+
 	// Echo is a live value of the method's first result, for the two
 	// defects that must ANSWER something a correct subject would not.
 	//
@@ -227,12 +231,6 @@ type defectView struct {
 	// assigns its live value to.
 	NamedReturns       []*sdk.EmitReturn
 	ErrSlot, ValueSlot string
-
-	// Sentinel is the miss sentinel the check under proof expects,
-	// empty where the read declares none. An invents-hit defect against
-	// a declared sentinel need only answer; against none it has to
-	// answer a live value.
-	Sentinel string
 }
 
 // errLocal is the identifier a defect body assigns its planted error to.
@@ -250,19 +248,19 @@ const errLocal = "err"
 // row claims about itself.
 func defectRendered() map[projection.DefectKind]bool {
 	return map[projection.DefectKind]bool{
-		projection.KindStubPanic:       true,
-		projection.KindCtxSwap:         true,
-		projection.KindAcceptsNil:      true,
-		projection.KindSecondCallErrs:  true,
-		projection.KindEchoBesideError: true,
-		projection.KindInventsHit:      true,
+		projection.KindStubPanic:        true,
+		projection.KindAnswersAnyway:    true,
+		projection.KindAnswersWithValue: true,
+		projection.KindSecondCallErrs:   true,
+		projection.KindRefusesAlways:    true,
+		projection.KindEchoBesideError:  true,
 	}
 }
 
 // spellsDefect reports whether this run can write the defect out.
 //
-// A template is necessary and not sufficient. The last two variants
-// have to ANSWER a live value, and whether one can be derived is a
+// A template is necessary and not sufficient. Two variants have to
+// ANSWER a live value, and whether one can be derived is a
 // property of the METHOD's result type rather than of the variant — so
 // renderability is asked per check rather than read off the census.
 // Answering wrongly in the permissive direction ships a defect that
@@ -273,13 +271,13 @@ func spellsDefect(kind projection.DefectKind, view defectView) bool {
 		return false
 	}
 	switch kind {
-	case projection.KindEchoBesideError:
-		return view.Echo.Text != ""
-	case projection.KindInventsHit:
-		// The sentinel arm needs no value: a subject answering where a
-		// sentinel was owed is already the defect, and a bare return
-		// says it. Only the zero arm has to produce something.
-		return view.Sentinel != "" || view.Echo.Text != ""
+	case projection.KindEchoBesideError, projection.KindAnswersWithValue:
+		// OK() rather than a text test. A sample no Ref-and-Text pair
+		// can spell — a func literal, a make, a constructor call —
+		// carries its expression instead and leaves Text empty, so
+		// asking about the text alone would withhold a defect this run
+		// can perfectly well write.
+		return view.Echo.OK()
 	default:
 		return true
 	}
@@ -320,8 +318,12 @@ func proofsOf(
 			// The template exists and this METHOD defeats it: no live
 			// value of its result type could be derived, so the defect
 			// would answer the very zero it was meant to contradict.
-			// The row loses its stamp here rather than shipping one.
+			// The row loses its stamp here rather than shipping one, and
+			// says which of the two downgrades it met — "nobody wrote the
+			// template" sends a reader to this generator, "your result
+			// type yields no value" sends them to their own signature.
 			c.Proven = false
+			c.sampleless = true
 			unproven = append(unproven, m.Name+"/"+c.Plan.ID.Seg)
 			continue
 		}
@@ -342,11 +344,9 @@ func defectViewOf(
 ) defectView {
 	sig := m.Sig
 	reason, _ := vocab.RedConst(plan.ID.Seg)
-	sentinel, _ := MissSentinel(m)
 	echo, _ := echoSample(m, r)
 	return defectView{
 		Echo:          echo,
-		Sentinel:      sentinel,
 		ValueSlot:     valueSlot(sig),
 		Pkg:           pkg,
 		Prove:         Prove,
@@ -359,11 +359,13 @@ func defectViewOf(
 		PanicMessage:  plantedPrefix + m.Name + " panics",
 		RepeatMessage: plantedPrefix + m.Name + " refuses its repeat",
 		EchoMessage:   plantedPrefix + m.Name + " refused with a believable value",
-		ReasonConst:   reason,
-		AnonParams:    anonParams(sig),
-		AnonReturns:   anonReturns(sig),
-		NamedReturns:  namedReturns(sig),
-		ErrSlot:       errLocal,
+		RefusalMessage: plantedPrefix + m.Name +
+			" refuses everything it is handed",
+		ReasonConst:  reason,
+		AnonParams:   anonParams(sig),
+		AnonReturns:  anonReturns(sig),
+		NamedReturns: namedReturns(sig),
+		ErrSlot:      errLocal,
 	}
 }
 
@@ -385,7 +387,16 @@ func echoSample(m Method, r golang.Resolver) (golang.Sample, bool) {
 		return golang.Sample{}, false
 	}
 	_, alternate := derivedPair(src, projection.DrawWord(golang.Param{Source: src}), r)
-	if alternate.Text == "" || spellsZero(alternate, src) {
+	if !alternate.OK() || spellsZero(alternate, src) {
+		// OK() rather than a text test, for the reason [spellsDefect]
+		// asks the same way: a sample no Ref-and-Text pair can spell
+		// carries its expression instead and leaves Text empty, and a
+		// gate reading the text alone refuses a value this run can
+		// perfectly well write — before the renderability check
+		// downstream ever sees it.
+		//
+		// spellsZero stays a text test on purpose: it only answers for a
+		// predeclared type, and a predeclared type always has a literal.
 		return golang.Sample{}, false
 	}
 	return alternate, true
@@ -446,25 +457,20 @@ const plantedPrefix = "planted: "
 // defectClause words what one planted defect does, in the grammar
 // [projection.DefectName] wraps.
 //
-// A table rather than a method on each variant: the variants live in the
-// projection, which is language-neutral and holds no prose a Go file
-// reads. A variant with no clause falls back to its own kind, which reads
-// as a slug and is the visible sign that this table missed one.
+// Read off the variant, which carries the prose its deriving rule chose.
+// A table keyed on the kind cannot serve: several claims are broken by
+// the same planted statement — a bare return under named results — and
+// what a report has to say about it differs with the claim. The wording
+// itself lives in claims.go beside the claims, which is the one home for
+// derived prose.
+//
+// A variant carrying none falls back to its kind, which reads as a slug
+// and is the visible sign that a rule left its wording out.
 func defectClause(method string, d projection.Defect) string {
-	clauses := map[projection.DefectKind]string{
-		projection.KindStubPanic:      method + " panics",
-		projection.KindCtxSwap:        method + " ignores the context it is handed",
-		projection.KindAcceptsNil:     method + " forgives a nil context and answers",
-		projection.KindSecondCallErrs: method + " fails on the second call",
-		projection.KindEchoBesideError: method +
-			" answers a believable value beside its error",
-		projection.KindInventsHit: method + " answers for an input nothing wrote",
+	if c, carries := d.(projection.Clauser); carries && c.DefectClause() != "" {
+		return c.DefectClause()
 	}
-	kind := d.DefectKind()
-	if c, named := clauses[kind]; named {
-		return c
-	}
-	return method + " " + strings.TrimPrefix(string(kind), projection.DefectKindPrefix)
+	return method + " " + strings.TrimPrefix(string(d.DefectKind()), projection.DefectKindPrefix)
 }
 
 // anonParams is the override's parameters with every name blanked.

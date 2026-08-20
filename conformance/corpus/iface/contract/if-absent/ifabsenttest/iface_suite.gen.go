@@ -8,6 +8,7 @@ package ifabsenttest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -34,6 +35,7 @@ import (
 // Every ID this package emits:
 //
 //	Put/cancel
+//	Put/conflict
 //	Put/deadline
 //	Put/nilcontext
 //	Put/smoke
@@ -201,6 +203,7 @@ var contractIndexPath = map[suite.ID]string{
 	contractCheckIndex.Put.Cancels():    "ContractSuite.Checks.Put.Cancels()",
 	contractCheckIndex.Put.NilContext(): "ContractSuite.Checks.Put.NilContext()",
 	contractCheckIndex.Put.Deadline():   "ContractSuite.Checks.Put.Deadline()",
+	contractCheckIndex.Put.Conflict():   "ContractSuite.Checks.Put.Conflict()",
 }
 
 var contractDropHint = suite.DropHinter(
@@ -247,12 +250,17 @@ func (contractPutChecks) Deadline() suite.ID {
 	return suite.MethodID(contractPut, suite.SegDeadline)
 }
 
+func (contractPutChecks) Conflict() suite.ID {
+	return suite.MethodID(contractPut, suite.SegConflict)
+}
+
 func (contractPutChecks) All() []suite.ID {
 	return []suite.ID{
 		contractPutChecks{}.Smoke(),
 		contractPutChecks{}.Cancels(),
 		contractPutChecks{}.NilContext(),
 		contractPutChecks{}.Deadline(),
+		contractPutChecks{}.Conflict(),
 	}
 }
 
@@ -301,6 +309,11 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			"Put reports an expired deadline as exceeded",
 			func(tb testing.TB, c Contract) {
 				contractAssertPutHonoursDeadline(tb, c, fx)
+			}),
+		sig(ix.Put.Conflict(), suite.ClassConflict,
+			"a second Put of what is already there reports ErrExists",
+			func(tb testing.TB, c Contract) {
+				contractAssertPutConflict(tb, c, fx)
 			}),
 	}
 }
@@ -351,6 +364,24 @@ func contractAssertPutHonoursDeadline(
 	suite.ReportsDeadlineExceeded(tb, contractPut, func(ctx context.Context) error {
 		return c.Put(ctx, fx.Value())
 	})
+}
+
+// contractAssertPutConflict asserts a second Put of what is already there reports ErrExists.
+func contractAssertPutConflict(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	if err := c.Put(ctx, fx.Value()); err != nil {
+		tb.Fatalf("Put must succeed before the claim can be judged: %v", err)
+	}
+	err := c.Put(ctx, fx.Value())
+	if !errors.Is(err, ifabsent.ErrExists) {
+		tb.Errorf("Put must report %v: got %v", ifabsent.ErrExists, err)
+	}
 }
 
 // ContractDefect is anything that can stand as a planted defect for a
@@ -547,4 +578,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4e394188815d9821ab18f19cbdce1065f34116c41b188b7351fc0d9bfaaa878c
+// testkit:provenance 61b4529ad25df6906fda3a32015c5ef947465e360e09323c17e7f75361fc3add

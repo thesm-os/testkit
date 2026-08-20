@@ -44,6 +44,12 @@ import (
 //	FindWithLimit/smoke
 //	FindWithLimit/zero-on-error
 //
+// Reached by a rule and not derivable here. Each is a claim this file
+// does NOT make, so a reader counting coverage from the list above
+// knows what is missing and what would bring it back:
+//
+//	Find's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
+//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -737,4 +743,4 @@ func ProveFinder(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5cae71b3654c93c5e865bd6bf266b489d566ca0793247430d55dbef308c30074
+// testkit:provenance 49bbf80766a9f221538bc424b32f32c77b2f8e7391f9e5d8d1375d0823eb3047

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -74,20 +73,4 @@ func TestInventoryVerifyHoldsTheParityRules(t *testing.T) {
 		testkit.Error(t, err, "duplicate derivation must be refused")
 		testkit.Contains(t, err.Error(), "twice", "the refusal names the duplication")
 	})
-}
-
-func TestLockLinesRenderThroughTheRuntime(t *testing.T) {
-	t.Parallel()
-
-	c := scanAppendSmoke()
-	c.Binds = []projection.Bind{{Law: lawid.LifecycleAfterClose, Probes: []string{"Put", "Get", "Len"}}}
-	inv := projection.Inventory{Iface: "Log", Token: "log", Checks: []projection.CheckPlan{c}}
-	lines, err := inv.LockLines()
-	testkit.NoError(t, err, "the sample renders")
-	testkit.Equal(t, lines, []string{
-		"Append/smoke\tsignature/smoke\tAppend survives a call with a derived entry\t" +
-			lawid.LifecycleAfterClose + "(Put Get Len)",
-	}, "the lock row is the design sample's, byte for byte")
-	testkit.HasPrefix(t, suite.RenderLock(lines), "testkit-checks v2\n",
-		"rendering goes through the runtime's own versioned renderer")
 }

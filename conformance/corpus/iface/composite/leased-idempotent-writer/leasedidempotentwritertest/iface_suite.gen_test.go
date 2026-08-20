@@ -50,9 +50,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterAcquire(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func leasedWriterProofs() prove.Defects[leasedidempotentwritertest.LeasedWriter]
 			func(tb testing.TB) leasedidempotentwritertest.LeasedWriter {
 				return leasedidempotentwritertest.NewLeasedWriterStub(tb, leasedidempotentwritertest.WithLeasedWriterRelease(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -157,4 +157,4 @@ func TestLeasedWriterInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7845b532cebc170751a0996d810c40f4b571ec0c27109bb0f48bd222d4664832
+// testkit:provenance f13ecba1bc382f60c938109abc427b5a09293000247bd995220aef79793beb43

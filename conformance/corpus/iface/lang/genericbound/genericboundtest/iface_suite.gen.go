@@ -33,6 +33,7 @@ import (
 //
 // Every ID this package emits:
 //
+//	Rank/smoke
 //	Reset/cancel
 //	Reset/nilcontext
 //	Reset/smoke
@@ -41,7 +42,7 @@ import (
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Rank's signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so RankedConfig carries a pool, or write the claim as a RankedChecks row.
+//	Rank's judging signature checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so RankedConfig carries a pool, or write the claim as a RankedChecks row.
 //	Rank's stamp checks — its K argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so RankedConfig carries a pool, or write the claim as a RankedChecks row.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -195,8 +196,8 @@ func RankedWithout[K genericbound.Ordered, V any](
 // RankedSuiteOf returns the checks as data, for tooling or a runner
 // of your own — the generic subject's form of the veneer's Suite method,
 // and there for the same reason RankedWithout is.
-func RankedSuiteOf[K genericbound.Ordered, V any]() suite.Suite[Ranked[K, V]] {
-	return rankedSuite[K, V]()
+func RankedSuiteOf[K genericbound.Ordered, V any](fx RankedFixture[K, V]) suite.Suite[Ranked[K, V]] {
+	return rankedSuite[K, V](fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -205,6 +206,7 @@ func RankedSuiteOf[K genericbound.Ordered, V any]() suite.Suite[Ranked[K, V]] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var rankedIndexPath = map[suite.ID]string{
+	rankedCheckIndex.Rank.Smoke():       "RankedSuite.Checks.Rank.Smoke()",
 	rankedCheckIndex.Reset.Smoke():      "RankedSuite.Checks.Reset.Smoke()",
 	rankedCheckIndex.Reset.Cancels():    "RankedSuite.Checks.Reset.Cancels()",
 	rankedCheckIndex.Reset.NilContext(): "RankedSuite.Checks.Reset.NilContext()",
@@ -223,18 +225,33 @@ const (
 // rankedCheckIndex indexes every check this package emits, by
 // method and then by check.
 var rankedCheckIndex = rankedCheckIndexT{
+	Rank:  rankedRankChecks{},
 	Reset: rankedResetChecks{},
 }
 
 type rankedCheckIndexT struct {
+	Rank  rankedRankChecks
 	Reset rankedResetChecks
 }
 
 // All returns every ID this package emits.
 func (rankedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, rankedRankChecks{}.All()...)
 	out = append(out, rankedResetChecks{}.All()...)
 	return out
+}
+
+type rankedRankChecks struct{}
+
+func (rankedRankChecks) Smoke() suite.ID {
+	return suite.MethodID(rankedRank, suite.SegSmoke)
+}
+
+func (rankedRankChecks) All() []suite.ID {
+	return []suite.ID{
+		rankedRankChecks{}.Smoke(),
+	}
 }
 
 type rankedResetChecks struct{}
@@ -266,11 +283,11 @@ func (rankedResetChecks) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func rankedSuite[K genericbound.Ordered, V any]() suite.Suite[Ranked[K, V]] {
+func rankedSuite[K genericbound.Ordered, V any](fx RankedFixture[K, V]) suite.Suite[Ranked[K, V]] {
 	return suite.Suite[Ranked[K, V]]{
 		Name:     "Ranked",
 		DropHint: rankedDropHint,
-		Checks:   rankedSignatureChecks[K, V](),
+		Checks:   rankedSignatureChecks[K, V](fx),
 	}
 }
 
@@ -281,10 +298,16 @@ func rankedSuite[K genericbound.Ordered, V any]() suite.Suite[Ranked[K, V]] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func rankedSignatureChecks[K genericbound.Ordered, V any]() []suite.Check[Ranked[K, V]] {
+func rankedSignatureChecks[K genericbound.Ordered, V any](fx RankedFixture[K, V]) []suite.Check[Ranked[K, V]] {
 	argued := suite.ArguedCheck[Ranked[K, V]]
 	ix := rankedCheckIndex
 	return []suite.Check[Ranked[K, V]]{
+		argued(ix.Rank.Smoke(), suite.ClassSmoke,
+			"Rank survives a call with a seeded k",
+			"a planted defect for a generic subject has to be built at concrete types and a Go test function cannot name them, so nothing has driven this claim",
+			func(tb testing.TB, r Ranked[K, V]) {
+				rankedAssertRankSmoke[K, V](tb, r, fx)
+			}),
 		argued(ix.Reset.Smoke(), suite.ClassSmoke,
 			"Reset survives a call",
 			"a planted defect for a generic subject has to be built at concrete types and a Go test function cannot name them, so nothing has driven this claim",
@@ -304,6 +327,18 @@ func rankedSignatureChecks[K genericbound.Ordered, V any]() []suite.Check[Ranked
 				rankedAssertResetToleratesNilContext[K, V](tb, r)
 			}),
 	}
+}
+
+// rankedAssertRankSmoke asserts Rank survives a call with a seeded k.
+func rankedAssertRankSmoke[K genericbound.Ordered, V any](
+	tb testing.TB,
+	r Ranked[K, V],
+	fx RankedFixture[K, V],
+) {
+	tb.Helper()
+	suite.Survives(tb, rankedRank, func(ctx context.Context) {
+		_, _ = r.Rank(ctx, fx.K())
+	})
 }
 
 // rankedAssertResetSmoke asserts Reset survives a call.
@@ -493,7 +528,7 @@ func RunRanked[K genericbound.Ordered, V any](
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunRanked")
 	suite.Run(t,
-		rankedSuite[K, V]().With(rc.Extra...).Without(rc.Drops...),
+		rankedSuite[K, V](fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -533,4 +568,4 @@ func ProveRanked[K genericbound.Ordered, V any](
 }
 
 // testkit: end of generated content.
-// testkit:provenance 260bb059c3cd323df570738da4ce2495ef16fb67edb7930b87c60b4c8a69ab6c
+// testkit:provenance 9f4ed2280600afbf97e5c936d3ae75a69ecf53909c0a0c1b5950e03acbbe8684

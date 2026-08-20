@@ -2,6 +2,7 @@ testkit-checks v2
 Put/cancel	signature/cancel	Put reports a cancelled context as cancelled	
 Put/deadline	signature/deadline	Put reports an expired deadline as exceeded	
 Put/nilcontext	signature/nilcontext	Put returns an error rather than panicking on a nil context	
+Put/partition	mixin/partition	Put keeps one partition out of another	
 Put/smoke	signature/smoke	Put survives a call with derived inputs	
 Read/cancel	signature/cancel	Read reports a cancelled context as cancelled	
 Read/deadline	signature/deadline	Read reports an expired deadline as exceeded	

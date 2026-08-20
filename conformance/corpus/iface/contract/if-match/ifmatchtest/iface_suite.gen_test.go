@@ -50,9 +50,9 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractPut(
 					func(_ context.Context, _ ifmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractPut(
 					func(_ context.Context, _ ifmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractPut(
 					func(_ context.Context, _ ifmatch.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractMatch(
 					func(_ context.Context, _ ifmatch.Value) (r0 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractMatch(
 					func(_ context.Context, _ ifmatch.Value) (r0 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,12 +107,22 @@ func contractProofs() prove.Defects[ifmatchtest.Contract] {
 			func(tb testing.TB) ifmatchtest.Contract {
 				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractMatch(
 					func(_ context.Context, _ ifmatch.Value) (r0 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Put.Match(): prove.One("a Contract whose Put lands whatever Match says",
+			func(tb testing.TB) ifmatchtest.Contract {
+				return ifmatchtest.NewContractStub(tb, ifmatchtest.WithContractPut(
+					func(_ context.Context, _ ifmatch.Value) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 	}
 }
 
@@ -155,4 +165,4 @@ func TestContractInvariants(t *testing.T) {
 // one nobody has written the falsification for.
 
 // testkit: end of generated content.
-// testkit:provenance 941bb0e159e2cabef3e4d6a8a3d2a8791290c6c3c57f4e794dffcceced81d223
+// testkit:provenance 5e9a8acd442f09ebd5c35d295b4bdfb956e2d2c6278929f214324882356603f0

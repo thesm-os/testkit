@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedApply(
 					func(_ context.Context, _ associative.Delta) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedApply(
 					func(_ context.Context, _ associative.Delta) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedApply(
 					func(_ context.Context, _ associative.Delta) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedTotal(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedTotal(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[associativetest.Mixed] {
 			func(tb testing.TB) associativetest.Mixed {
 				return associativetest.NewMixedStub(tb, associativetest.WithMixedTotal(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c668b20ded6121d5258c9c07615ed149179b6a3ecdfd9116c3523615956f6db3
+// testkit:provenance c389eaa9d0ccf3da57604730deea043b63f83de965139c122a83e787ca5e17a3

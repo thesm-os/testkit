@@ -35,7 +35,10 @@ func TestLawDefectRulesPlantFromTheStamps(t *testing.T) {
 		testkit.Equal(
 			t,
 			defect,
-			projection.Defect(projection.DiscardWrite{Option: projection.OptionName("Store", "Put")}),
+			projection.Defect(projection.AnswersAnyway{
+				Clause: projection.Clause{Text: "Put reports success and keeps nothing"},
+				Option: projection.OptionName("Store", "Put"),
+			}),
 			"the defect rides the writer's own stub option",
 		)
 	})

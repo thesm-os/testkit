@@ -50,9 +50,9 @@ func streamProofs() prove.Defects[embeddedforeigntest.Stream] {
 			func(tb testing.TB) embeddedforeigntest.Stream {
 				return embeddedforeigntest.NewStreamStub(tb, embeddedforeigntest.WithStreamRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func streamProofs() prove.Defects[embeddedforeigntest.Stream] {
 			func(tb testing.TB) embeddedforeigntest.Stream {
 				return embeddedforeigntest.NewStreamStub(tb, embeddedforeigntest.WithStreamRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func streamProofs() prove.Defects[embeddedforeigntest.Stream] {
 			func(tb testing.TB) embeddedforeigntest.Stream {
 				return embeddedforeigntest.NewStreamStub(tb, embeddedforeigntest.WithStreamRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -127,4 +127,4 @@ func TestStreamInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 338683c25dc46093f551b860e7b33c0ade22cabe71d8e75b07c6f79ef64218d2
+// testkit:provenance 9d5d451da89a81fed8960832c980b2a3c6fb3a1858b38c51b130b946f5b8afca

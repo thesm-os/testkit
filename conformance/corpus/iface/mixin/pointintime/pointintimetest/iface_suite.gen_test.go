@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedStore(
 					func(_ context.Context, _ pointintime.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedStore(
 					func(_ context.Context, _ pointintime.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedStore(
 					func(_ context.Context, _ pointintime.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 pointintime.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 pointintime.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 pointintime.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func mixedProofs() prove.Defects[pointintimetest.Mixed] {
 			func(tb testing.TB) pointintimetest.Mixed {
 				return pointintimetest.NewMixedStub(tb, pointintimetest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 pointintime.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = pointintime.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 61ae2187db8b863ce4c31774f877b459eb848ddc6c9395d3f048cfacf83b57e1
+// testkit:provenance 7f5492211dbc2b6e741dfe54010160d2b53d60113de2b76b8e634c2d6f95902e

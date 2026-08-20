@@ -51,9 +51,9 @@ func streamReaderProofs() prove.Defects[streamreadertest.StreamReader] {
 			func(tb testing.TB) streamreadertest.StreamReader {
 				return streamreadertest.NewStreamReaderStub(tb, streamreadertest.WithStreamReaderAdd(
 					func(_ context.Context, _ streamreader.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func streamReaderProofs() prove.Defects[streamreadertest.StreamReader] {
 			func(tb testing.TB) streamreadertest.StreamReader {
 				return streamreadertest.NewStreamReaderStub(tb, streamreadertest.WithStreamReaderAdd(
 					func(_ context.Context, _ streamreader.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func streamReaderProofs() prove.Defects[streamreadertest.StreamReader] {
 			func(tb testing.TB) streamreadertest.StreamReader {
 				return streamreadertest.NewStreamReaderStub(tb, streamreadertest.WithStreamReaderAdd(
 					func(_ context.Context, _ streamreader.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -115,4 +115,4 @@ func TestStreamReaderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b1f2030691cdcf9713c131a17800ed0f96a31fc25e7c00e8a1df832107a2ca39
+// testkit:provenance db34921210ff9d6a09827884db7f1a3af1f629a41cbcee54c268f5362934732b

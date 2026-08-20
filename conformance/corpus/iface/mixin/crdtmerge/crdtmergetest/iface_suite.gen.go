@@ -589,12 +589,13 @@ func ProveReplica(
 //	Items/nilcontext
 //	Items/smoke
 //	Items/zero-on-error
+//	Merge/smoke
 //
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Merge's signature checks — its Replica argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
+//	Merge's judging signature checks — its Replica argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //	Merge's stamp checks — its Replica argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //	the differential leg for Mixed — the merge relation is the claim, and every store oracle holds it inert. To close it: override with ref=, or the twin-floor wording earns a corpus pin first.
 //
@@ -766,6 +767,7 @@ func (mixedVeneer) Suite(fx MixedFixture) suite.Suite[Mixed] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var mixedIndexPath = map[suite.ID]string{
+	mixedCheckIndex.Merge.Smoke():       "MixedSuite.Checks.Merge.Smoke()",
 	mixedCheckIndex.Add.Smoke():         "MixedSuite.Checks.Add.Smoke()",
 	mixedCheckIndex.Add.Cancels():       "MixedSuite.Checks.Add.Cancels()",
 	mixedCheckIndex.Add.NilContext():    "MixedSuite.Checks.Add.NilContext()",
@@ -791,11 +793,13 @@ const (
 // mixedCheckIndex indexes every check this package emits, by
 // method and then by check.
 var mixedCheckIndex = mixedCheckIndexT{
+	Merge: mixedMergeChecks{},
 	Add:   mixedAddChecks{},
 	Items: mixedItemsChecks{},
 }
 
 type mixedCheckIndexT struct {
+	Merge mixedMergeChecks
 	Add   mixedAddChecks
 	Items mixedItemsChecks
 }
@@ -803,9 +807,22 @@ type mixedCheckIndexT struct {
 // All returns every ID this package emits.
 func (mixedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, mixedMergeChecks{}.All()...)
 	out = append(out, mixedAddChecks{}.All()...)
 	out = append(out, mixedItemsChecks{}.All()...)
 	return out
+}
+
+type mixedMergeChecks struct{}
+
+func (mixedMergeChecks) Smoke() suite.ID {
+	return suite.MethodID(mixedMerge, suite.SegSmoke)
+}
+
+func (mixedMergeChecks) All() []suite.ID {
+	return []suite.ID{
+		mixedMergeChecks{}.Smoke(),
+	}
 }
 
 type mixedAddChecks struct{}
@@ -893,6 +910,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 	sig := suite.ProvenCheck[Mixed]
 	ix := mixedCheckIndex
 	return []suite.Check[Mixed]{
+		sig(ix.Merge.Smoke(), suite.ClassSmoke,
+			"Merge survives a call with a derived replica",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertMergeSmoke(tb, m, fx)
+			}),
 		sig(ix.Add.Smoke(), suite.ClassSmoke,
 			"Add survives a call with a derived item",
 			func(tb testing.TB, m Mixed) {
@@ -939,6 +961,18 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 				mixedAssertItemsZeroOnError(tb, m)
 			}),
 	}
+}
+
+// mixedAssertMergeSmoke asserts Merge survives a call with a derived replica.
+func mixedAssertMergeSmoke(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, mixedMerge, func(ctx context.Context) {
+		_ = m.Merge(ctx, fx.Replica())
+	})
 }
 
 // mixedAssertAddSmoke asserts Add survives a call with a derived item.
@@ -1248,4 +1282,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance cf634e482e5deaa95a9d398cbe9f5a4d20523068f3a1b681a6df4d773ed6da1c
+// testkit:provenance 26845f033bee0e6c2b62a54e2c3ac0737f4681c9154db473d9f5f524708194bf

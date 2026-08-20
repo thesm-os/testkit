@@ -51,9 +51,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStorePut(
 					func(_ context.Context, _ validated.Account) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStorePut(
 					func(_ context.Context, _ validated.Account) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStorePut(
 					func(_ context.Context, _ validated.Account) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 validated.Account, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 validated.Account, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 validated.Account, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func storeProofs() prove.Defects[validatedtest.Store] {
 			func(tb testing.TB) validatedtest.Store {
 				return validatedtest.NewStoreStub(tb, validatedtest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 validated.Account, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = validated.Account{ID: "other-account"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestStoreInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 51046b1a98e822a9d9afa3f8fcdade862eba02edecf666035006102269859d93
+// testkit:provenance 8734adea4fcbc9c4946b02c6f6bceb7f07d81366f1a325128f27058e5bd60890

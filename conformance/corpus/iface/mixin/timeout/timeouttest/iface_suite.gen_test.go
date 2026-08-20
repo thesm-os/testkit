@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[timeouttest.Mixed] {
 			func(tb testing.TB) timeouttest.Mixed {
 				return timeouttest.NewMixedStub(tb, timeouttest.WithMixedSlow(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[timeouttest.Mixed] {
 			func(tb testing.TB) timeouttest.Mixed {
 				return timeouttest.NewMixedStub(tb, timeouttest.WithMixedSlow(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func mixedProofs() prove.Defects[timeouttest.Mixed] {
 			func(tb testing.TB) timeouttest.Mixed {
 				return timeouttest.NewMixedStub(tb, timeouttest.WithMixedSlow(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,4 +106,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a7eecc485804ddb706c862c6c437725d2b39b1cd4c15b64b91b0aa2b88e01e14
+// testkit:provenance 7d8269aa0d9407eda3417851e449aa6e5b17bbe4ff17d23f140f5d6a30c6dcbd

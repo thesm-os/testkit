@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/gentest"
 	"go.thesmos.sh/testkit/generator/stub"
 	"go.thesmos.sh/testkit/generator/suite"
 )
@@ -170,7 +171,7 @@ func fixtureBuilder() *storefixture.Builder {
 			// Layout composes the output filename from the source
 			// basename, so the fixture needs a position for the rendered
 			// names to be anything other than a bare suffix.
-			i.Pos(sdk.At("storepkg/store.go", 1, 1))
+			i.Pos(gentest.AtFile("storepkg/store.go"))
 			// Routed into a package of its own, which is where a real run
 			// puts it and which the harness needs to be legal: it declares
 			// `type Store = storepkg.Store`, and a file emitted beside the
@@ -180,15 +181,15 @@ func fixtureBuilder() *storefixture.Builder {
 			i.Directive(storefixture.Directive("suite"))
 			i.Directive(storefixture.Directive("stub"))
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("id", storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Get", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("id", storefixture.Named("string"))
 				m.Return(storefixture.Named("string"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 			i.Method("Close", nil)
 		})
@@ -198,13 +199,13 @@ func genericBuilder() *storefixture.Builder {
 	return storefixture.New().
 		Package("boxpkg", "example.com/boxpkg").
 		Interface("Box", func(i *storefixture.InterfaceBuilder) {
-			i.Pos(sdk.At("boxpkg/box.go", 1, 1))
+			i.Pos(gentest.AtFile("boxpkg/box.go"))
 			i.Directive(storefixture.Directive("suite"))
 			i.TypeParam("V", storefixture.Bound("any", storefixture.Named("any")))
 			i.Method("Put", func(m *storefixture.MethodBuilder) {
-				m.Param("ctx", storefixture.PkgNamed("context", "Context"))
+				gentest.Ctx(m)
 				m.Param("v", storefixture.Named("V"))
-				m.Return(storefixture.Named("error"))
+				gentest.Err(m)
 			})
 		})
 }

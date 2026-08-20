@@ -163,6 +163,7 @@ func TestPaginatedReaderContractWithoutSmoke(t *testing.T) {
 			},
 		},
 		paginatedreadertest.PaginatedReaderSuite.Without(
-			paginatedreadertest.PaginatedReaderSuite.Checks.Page.Smoke()),
+			paginatedreadertest.PaginatedReaderSuite.Checks.Page.Smoke(),
+		),
 	)
 }

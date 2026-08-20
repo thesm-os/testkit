@@ -50,9 +50,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractEncode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractEncode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractEncode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -100,9 +100,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractDecode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -110,9 +110,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractDecode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -120,9 +120,9 @@ func contractProofs() prove.Defects[codectest.Contract] {
 			func(tb testing.TB) codectest.Contract {
 				return codectest.NewContractStub(tb, codectest.WithContractDecode(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -170,4 +170,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a28bd223664822dff5201a22c418b5fec1c8eb434af9194659db717d4eebc971
+// testkit:provenance 6ea4b661a306f9976e2dda4545693fdaaa8fc2c9e6ea2c99ec82133c02cbc060

@@ -20,30 +20,193 @@ if {{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}; err != nil {
 {{- end -}}
 
 {{- /*
-The miss: an input nothing supplied, and what the subject owes for it.
-With a declared sentinel the claim is that error and nothing else — a
-subject reporting some other failure has not reported a miss.
+One call, one errors.Is: the subject owes a named error and this asks
+whether it reported that one.
 
-Without one the claim is the value slot alone. The error is left
-unjudged on purpose: a reader that reports SOME failure for a key
-nothing wrote is behaving, it just has not named which failure, and
-demanding the call succeed first would fail every such reader for the
-one thing the declaration did not say. What no miss may do is answer
-with a value, which is what the zero comparison holds it to.
+Nothing else is judged. A subject reporting SOME other failure has not
+reported the error the declaration named, and a body that accepted any
+error would pass a store whose connection dropped.
 */ -}}
-{{- define "suite.body.miss-probe" -}}
+{{- define "suite.body.reports-sentinel" -}}
 {{ if .NeedsCtx }}ctx := tb.Context()
 {{ end }}
-{{- if .Sentinel }}
-{{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}
-if !{{ renderExpr (external "errors" "Is") }}(err, {{ renderExpr .Sentinel }}) {
-	tb.Errorf("{{ .Method }} must report a miss as %v: got %v", {{ renderExpr .Sentinel }}, err)
+{{- with .Body.Prologue.Method }}
+if {{ $.ErrStmt }} {{ suite_callExpr $.Recv $.Body.Prologue }}; err != nil {
+	tb.Fatalf("{{ $.Method }} must succeed before the claim can be judged: %v", err)
 }
-{{- else if .HasErr }}
+{{ end }}
+{{- .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}
+if !{{ renderExpr (external "errors" "Is") }}(err, {{ renderExpr .Sentinel }}) {
+	tb.Errorf("{{ .Method }} must report %v: got %v", {{ renderExpr .Sentinel }}, err)
+}
+{{- end -}}
+
+{{- /*
+One call, and every value slot held to its own zero.
+
+The error is left unjudged on purpose: a reader that reports SOME
+failure for a call the declaration says answers nothing is behaving, it
+just has not named which failure, and demanding the call succeed first
+would fail every such reader for the one thing the declaration did not
+say. What it may not do is answer with a value, which is what the zero
+comparison holds it to.
+*/ -}}
+{{- define "suite.body.answers-zero" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+{{- with .Body.Bound.Method }}
+bound, boundErr := {{ suite_callExpr $.Recv $.Body.Bound }}
+if boundErr != nil {
+	tb.Fatalf("{{ . }} must answer before the edge can be asked for: %v", boundErr)
+}
+{{ end }}
+{{- if .HasErr }}
 {{ .ZeroBind }} {{ suite_callExpr .Recv .Body.Call }}
-{{ template "suite.frag.zero-judge" (.ZeroJudge false true) }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge .Body.Because true) }}
 {{- else }}
 {{ .ZeroBindNoErr }} {{ suite_callExpr .Recv .Body.Call }}
-{{ template "suite.frag.zero-judge" (.ZeroJudge false false) }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge .Body.Because false) }}
 {{- end }}
+{{- end -}}
+
+{{- /*
+A partner read either side of the call, and the two readings judged
+against each other — required to differ where the claim is an effect,
+to match where it is that the call left the observation alone.
+
+Both reads fatal rather than erroring. A subject whose observer is
+broken has a different fault from one whose effect is invisible, and
+reporting the second for the first sends a reader to the wrong method.
+The call between them fatals too: an effect nothing performed is not an
+effect nothing observed.
+*/ -}}
+{{- define "suite.body.read-act-read" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+before, beforeErr := {{ suite_callExpr .Recv .Body.Observe }}
+if beforeErr != nil {
+	tb.Fatalf("{{ .ObserveMethod }} must be readable before {{ .Method }} runs: %v", beforeErr)
+}
+
+if {{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}; err != nil {
+	tb.Fatalf("{{ .Method }} must succeed before the two readings mean anything: %v", err)
+}
+
+after, afterErr := {{ suite_callExpr .Recv .Body.Observe }}
+if afterErr != nil {
+	tb.Fatalf("{{ .ObserveMethod }} must still be readable after {{ .Method }} runs: %v", afterErr)
+}
+{{ if .Body.Unchanged }}
+if after != before {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}: read %+v before, %+v after", before, after)
+}
+{{- else }}
+if after == before {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}: both read %+v", before)
+}
+{{- end }}
+{{- end -}}
+
+{{- /*
+Two writes differing in whatever the rule varies, and the first read
+back unchanged.
+
+The reader is called at the FIRST write's arguments. Reading the second
+would ask whether the second write landed, which is the smoke check —
+what this asks is whether the second write reached the first, and the
+answer has to be no.
+
+Both writes fatal. A subject that refused either has a different fault
+from one whose write leaks, and reporting the second for the first
+sends a reader to the wrong method.
+*/ -}}
+{{- define "suite.body.write-write-read" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+if err := {{ suite_callExpr .Recv .Body.First }}; err != nil {
+	tb.Fatalf("{{ .Method }} must accept the first write before the claim can be judged: %v", err)
+}
+if err := {{ suite_callExpr .Recv .Body.Second }}; err != nil {
+	tb.Fatalf("{{ .Method }} must accept the second write: %v", err)
+}
+
+got, err := {{ suite_callExpr .Recv .Body.Read }}
+if err != nil {
+	tb.Fatalf("{{ .ObserveMethod }} must answer for what the first write carried: %v", err)
+}
+if got != {{ .Body.Want }} {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}: got %+v, want %+v",
+		got, {{ .Body.Want }})
+}
+{{- end -}}
+
+{{- /*
+Two verdicts on one drawn value, held to each other.
+
+Neither call is fatal and neither verdict is the right one: what is
+judged is that the two AGREE. A body that decided which was correct
+would need an invalid value, and the rule for what counts as invalid is
+the subject's own — the thing under test.
+*/ -}}
+{{- define "suite.body.partner-agrees" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+{{- if .Body.PartnerBool }}
+verdict, verdictErr := {{ suite_callExpr .Recv .Body.Partner }}
+if verdictErr != nil {
+	// Not a failure of either method. A predicate may have nothing to
+	// judge yet — nothing was written, so there is no state to answer
+	// about — and demanding a verdict there would fail a subject for
+	// the one thing the contract does not say. The skip is not a pass:
+	// it says this run reached no verdict to compare.
+	tb.Skipf("{{ .ObserveMethod }} could not answer for a subject nothing has written to (%v), "+
+		"so this check has no verdict to compare", verdictErr)
+}
+{{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}
+if verdict != (err == nil) {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}: {{ .ObserveMethod }} said %v, {{ .Method }} said %v",
+		verdict, err)
+}
+{{- else }}
+verdict := {{ suite_callExpr .Recv .Body.Partner }}
+{{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}
+if (verdict != nil) != (err != nil) {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}: {{ .ObserveMethod }} said %v, {{ .Method }} said %v",
+		verdict, err)
+}
+{{- end }}
+{{- end -}}
+
+{{- /*
+The hook: something registered, the work done, and the registration
+required to have run.
+
+The only body here whose observation is not a call on the subject. A
+callback is observable from inside itself and nowhere else, so this
+writes a closure over a local and reads the local afterwards.
+
+The parameters are blank and the results are named with a bare return,
+which is what lets one shape install any callback: the closure records
+that it ran and answers whatever its signature owes without this
+generator naming a type it may not be able to spell.
+
+The work fatals. A hook that did not fire because the call never
+happened is a different fault from one the call forgot.
+*/ -}}
+{{- define "suite.body.hook-fires" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+fired := false
+hook := func{{ renderParams .HookParams }} {{ renderReturns .HookReturns }} {
+	fired = true
+	return
+}
+{{ .RegisterDiscard }} {{ suite_callExpr .Recv .Body.Register }}
+
+if {{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}; err != nil {
+	tb.Fatalf("{{ .Method }} must succeed before its hooks can be judged: %v", err)
+}
+if !fired {
+	tb.Errorf("{{ .Method }} must {{ .Body.Must }}")
+}
 {{- end -}}

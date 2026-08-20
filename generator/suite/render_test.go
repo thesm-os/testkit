@@ -90,5 +90,10 @@ func backendPlaceholders() template.FuncMap {
 	invoked := func(...any) (string, error) {
 		return "", errors.New("suite: a backend helper cannot run in the parse-only harness")
 	}
-	return template.FuncMap{"renderExpr": invoked, "external": invoked}
+	return template.FuncMap{
+		"renderExpr":    invoked,
+		"external":      invoked,
+		"renderParams":  invoked,
+		"renderReturns": invoked,
+	}
 }

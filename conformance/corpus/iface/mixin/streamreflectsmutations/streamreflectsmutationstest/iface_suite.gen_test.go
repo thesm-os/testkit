@@ -57,9 +57,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -67,9 +67,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -77,9 +77,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -94,9 +94,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedRemove(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -104,9 +104,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedRemove(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -114,9 +114,9 @@ func mixedProofs() prove.Defects[streamreflectsmutationstest.Mixed] {
 			func(tb testing.TB) streamreflectsmutationstest.Mixed {
 				return streamreflectsmutationstest.NewMixedStub(tb, streamreflectsmutationstest.WithMixedRemove(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -151,4 +151,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 77fba8b4dcb0d5f9b8aa7b75b1ce6d9879a9251a3002bd5b8dc2d189bc4b78fc
+// testkit:provenance 584199ce2c5e55927dd09f7d969efd17de47f1a788f84765f8b855b91488cf84

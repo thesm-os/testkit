@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedStore(
 					func(_ context.Context, _ sticky.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedStore(
 					func(_ context.Context, _ sticky.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedStore(
 					func(_ context.Context, _ sticky.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 sticky.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 sticky.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 sticky.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func mixedProofs() prove.Defects[stickytest.Mixed] {
 			func(tb testing.TB) stickytest.Mixed {
 				return stickytest.NewMixedStub(tb, stickytest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 sticky.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = sticky.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a0c812cc5f337f65d937c3673423524c364c38e01837ab9f943d308392745566
+// testkit:provenance d17769882ab36440acfb5d2ed21b0c565132ad7c132cfe5788069b4a2c92b4c6

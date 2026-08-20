@@ -36,18 +36,13 @@ import (
 //	Put/cancel
 //	Put/deadline
 //	Put/nilcontext
+//	Put/partition
 //	Put/smoke
 //	Read/cancel
 //	Read/deadline
 //	Read/nilcontext
 //	Read/smoke
 //	Read/zero-on-error
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	partition on Put — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -234,6 +229,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Put.Cancels():      "MixedSuite.Checks.Put.Cancels()",
 	mixedCheckIndex.Put.NilContext():   "MixedSuite.Checks.Put.NilContext()",
 	mixedCheckIndex.Put.Deadline():     "MixedSuite.Checks.Put.Deadline()",
+	mixedCheckIndex.Put.Partition():    "MixedSuite.Checks.Put.Partition()",
 	mixedCheckIndex.Read.Smoke():       "MixedSuite.Checks.Read.Smoke()",
 	mixedCheckIndex.Read.Cancels():     "MixedSuite.Checks.Read.Cancels()",
 	mixedCheckIndex.Read.NilContext():  "MixedSuite.Checks.Read.NilContext()",
@@ -289,12 +285,17 @@ func (mixedPutChecks) Deadline() suite.ID {
 	return suite.MethodID(mixedPut, suite.SegDeadline)
 }
 
+func (mixedPutChecks) Partition() suite.ID {
+	return suite.MethodID(mixedPut, suite.SegPartition)
+}
+
 func (mixedPutChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedPutChecks{}.Smoke(),
 		mixedPutChecks{}.Cancels(),
 		mixedPutChecks{}.NilContext(),
 		mixedPutChecks{}.Deadline(),
+		mixedPutChecks{}.Partition(),
 	}
 }
 
@@ -400,6 +401,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Read returns zero alongside any error",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertReadZeroOnError(tb, m, fx)
+			}),
+		sig(ix.Put.Partition(), suite.ClassPartition,
+			"Put keeps one partition out of another",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertPutPartition(tb, m, fx)
 			}),
 	}
 }
@@ -521,6 +527,32 @@ func mixedAssertReadZeroOnError(
 	if got != zero {
 		tb.Errorf("Read must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// mixedAssertPutPartition asserts Put keeps one partition out of another.
+func mixedAssertPutPartition(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	if err := m.Put(ctx, fx.Partition(), fx.Key(), fx.Value()); err != nil {
+		tb.Fatalf("Put must accept the first write before the claim can be judged: %v", err)
+	}
+	if err := m.Put(ctx, fx.PartitionOther(), fx.Key(), fx.ValueOther()); err != nil {
+		tb.Fatalf("Put must accept the second write: %v", err)
+	}
+
+	got, err := m.Read(ctx, fx.Partition(), fx.Key())
+	if err != nil {
+		tb.Fatalf("Read must answer for what the first write carried: %v", err)
+	}
+	if got != fx.Value() {
+		tb.Errorf("Put must not let one partition reach another: got %+v, want %+v",
+			got, fx.Value())
 	}
 }
 
@@ -718,4 +750,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 853f93ba233c9b8713667ef743670096b5539ab524567fc2c654d075674eaea1
+// testkit:provenance bf7cabe847bfce440c3aded383775bc15fe0948b9d4149ad0ab20008f171b97d

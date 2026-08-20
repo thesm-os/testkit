@@ -80,7 +80,8 @@ func TestMethodExpressionConstructorsDelegate(t *testing.T) {
 		{"LifecycleOf", action.LifecycleOf("Close", mxIface.Close), "Close"},
 		{"EvictingReaderOf", action.EvictingReaderOf("Peek", rapid.Just("k"), mxIface.Peek), "Peek:k"},
 		{"CompositeWriterOf", action.CompositeWriterOf(
-			"Set", rapid.Just("k"), rapid.Just("v"), mxIface.Set), "Set:k=v"},
+			"Set", rapid.Just("k"), rapid.Just("v"), mxIface.Set,
+		), "Set:k=v"},
 		{"PoolOf", action.PoolOf("Cycle", mxIface.Acquire, mxIface.Release), "Release"},
 		{"StreamOf", action.StreamOf("All", mxIface.All), "All"},
 	}

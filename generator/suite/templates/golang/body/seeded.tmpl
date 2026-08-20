@@ -43,3 +43,37 @@ if got != len({{ suite_docsIdent }}) {
 	tb.Errorf("{{ .Method }} = %d, want the %d entries the run seeded", got, len({{ suite_docsIdent }}))
 }
 {{- end -}}
+
+{{- /*
+The answering write: it happened, and it answered something.
+
+Fatal on the error rather than reporting "answered the zero" — a write
+that did not happen says nothing about what it would have answered, and
+reporting the second for the first sends a reader to the wrong fault.
+
+The first slot alone. A write answering its stored state answers ONE
+thing; a second result beside it is metadata this shape makes no claim
+about.
+*/ -}}
+{{- define "suite.body.non-zero-answer" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{- if .HasErr }}
+if err != nil {
+	tb.Fatalf("{{ .Method }} must succeed before its answer can be judged: %v", err)
+}
+{{- end }}
+{{- with index .Zeros 0 }}
+{{- if .Nil }}
+if {{ .Bind }} == nil {
+	tb.Errorf("{{ $.Method }} must {{ $.Body.Must }}, and answered nothing")
+}
+{{- else }}
+var {{ .Zero }} {{ if .Type }}{{ renderExpr .Type }}{{ else }}{{ .Word }}{{ end }}
+if {{ .Bind }} == {{ .Zero }} {
+	tb.Errorf("{{ $.Method }} must {{ $.Body.Must }}: got the zero %+v", {{ .Bind }})
+}
+{{- end }}
+{{- end }}
+{{- end -}}

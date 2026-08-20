@@ -1,33 +1,27 @@
 {{/*
 The defects that break a claim by SUCCEEDING.
 
-Three variants over one shape: a method that answers where the claim
-says it must refuse. The context arms red because their primitives judge
-a nil error, and a subject that ignores the context it is handed reports
-none — which is the defect the claim is named for, not an accident of
-the double.
+One shape: a method that answers where the claim says it must refuse.
+The context arms red because their primitives judge a nil error, and a
+subject that ignores the context it is handed reports none; a dropped
+write reds because the partner reads the same value either side; a
+declared sentinel reds because nothing reported it. Which of those a
+given plant means is the defect's own clause to say, not this file's —
+so one define serves all of them.
 
 The shape is a bare `return` under named results. That is what lets this
 work for any signature: each slot yields its own zero without this file
 naming a type it may not be able to spell, and no sample value has to be
 invented for a result whose type nothing here can construct.
 */}}
-{{- define "suite.defect.ctx-swap" -}}
-{{ template "suite.frag.defect-answers" . }}
-{{- end -}}
-
-{{- define "suite.defect.accepts-nil" -}}
-{{ template "suite.frag.defect-answers" . }}
-{{- end -}}
-
-{{- define "suite.frag.defect-answers" -}}
+{{- define "suite.defect.answers-anyway" -}}
 {{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
 	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
 		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
 			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
-				// The context arrives and is not read; the bare return
-				// answers every slot's zero, which for the error slot is
-				// the nil this claim forbids.
+				// The call arrives and nothing is done with it; the bare
+				// return answers every slot's zero, which for the error
+				// slot is the nil this claim forbids.
 				return
 			}))
 	}){{ template "suite.frag.defect-reason" . }}
@@ -64,4 +58,24 @@ a weaker proof, said out loud rather than left to look identical.
 */ -}}
 {{- define "suite.frag.defect-reason" -}}
 {{- if .ReasonConst }}.Reasoned({{ renderExpr (external .Vocab .ReasonConst) }}){{ end }}
+{{- end -}}
+
+
+{{- /*
+The agreement claim's defect: everything is refused.
+
+The permissive direction cannot serve. A double that accepts everything
+agrees with a validator that passed the drawn value, and the drawn value
+is one a correct fixture has every reason to make valid — so the proof
+would pass by accident rather than by planting anything.
+*/ -}}
+{{- define "suite.defect.refuses-always" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
+				{{ .ErrSlot }} = {{ renderExpr (external "errors" "New") }}({{ printf "%q" .RefusalMessage }})
+				return
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
 {{- end -}}

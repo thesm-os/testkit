@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedStore(
 					func(_ context.Context, _ causal.Value) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedStore(
 					func(_ context.Context, _ causal.Value) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedStore(
 					func(_ context.Context, _ causal.Value) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -121,9 +121,9 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 causal.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -140,11 +140,21 @@ func mixedProofs() prove.Defects[causaltest.Mixed] {
 						return
 					}))
 			}),
+		ix.Store.Answer(): prove.One("a Mixed whose Store reports success and answers the zero",
+			func(tb testing.TB) causaltest.Mixed {
+				return causaltest.NewMixedStub(tb, causaltest.WithMixedStore(
+					func(_ context.Context, _ causal.Value) (r0 causal.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 		ix.Get.Miss(): prove.One("a Mixed whose Get answers for an input nothing wrote",
 			func(tb testing.TB) causaltest.Mixed {
 				return causaltest.NewMixedStub(tb, causaltest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 causal.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = causal.Value{Key: "other-value"}
 						return
 					}))
@@ -180,4 +190,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a4d27dd1e71a71783b55f651a6aeb4d204abd8132d3302f4a83c6c3fde19613e
+// testkit:provenance 542846b90aab1b55fc451c45e048652fcf4e9e7917f01b812d271cfdeae226dc

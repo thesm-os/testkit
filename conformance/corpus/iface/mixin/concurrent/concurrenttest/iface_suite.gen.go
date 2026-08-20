@@ -43,12 +43,6 @@ import (
 //	Count/smoke
 //	Count/zero-on-error
 //
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	concurrent on Bump — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -691,4 +685,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance c2b317f9f6ebbfa8f6aa00705eb7f4067355bd34af0f885ae2eab41ba65ef3f0
+// testkit:provenance 16ffc1eb6f9cbc819657c75f4770347e423c08d63a1999db06fb31af3024368f

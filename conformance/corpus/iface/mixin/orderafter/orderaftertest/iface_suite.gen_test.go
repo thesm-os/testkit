@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[orderaftertest.Mixed] {
 			func(tb testing.TB) orderaftertest.Mixed {
 				return orderaftertest.NewMixedStub(tb, orderaftertest.WithMixedCommit(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[orderaftertest.Mixed] {
 			func(tb testing.TB) orderaftertest.Mixed {
 				return orderaftertest.NewMixedStub(tb, orderaftertest.WithMixedCommit(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -76,9 +76,9 @@ func mixedProofs() prove.Defects[orderaftertest.Mixed] {
 			func(tb testing.TB) orderaftertest.Mixed {
 				return orderaftertest.NewMixedStub(tb, orderaftertest.WithMixedPrepare(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -86,12 +86,22 @@ func mixedProofs() prove.Defects[orderaftertest.Mixed] {
 			func(tb testing.TB) orderaftertest.Mixed {
 				return orderaftertest.NewMixedStub(tb, orderaftertest.WithMixedPrepare(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
+		ix.Commit.Orderafter(): prove.One("a Mixed whose Commit answers before its predecessor has run",
+			func(tb testing.TB) orderaftertest.Mixed {
+				return orderaftertest.NewMixedStub(tb, orderaftertest.WithMixedCommit(
+					func(_ context.Context) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 	}
 }
 
@@ -123,4 +133,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 92f24a0dd6dd1687606e3f14b4bd19a9d379982c380698a4ea26a052882d0dea
+// testkit:provenance efce5cc80383849f8eb131a15b50b24c9d75b8c183c0de27e7fd1b08993e2670

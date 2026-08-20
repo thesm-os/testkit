@@ -51,9 +51,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLookup(
 					func(_ context.Context, _ seededreader.Key) (r0 seededreader.Body, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLookup(
 					func(_ context.Context, _ seededreader.Key) (r0 seededreader.Body, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLookup(
 					func(_ context.Context, _ seededreader.Key) (r0 seededreader.Body, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -121,9 +121,9 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -144,8 +144,28 @@ func catalogProofs() prove.Defects[seededreadertest.Catalog] {
 			func(tb testing.TB) seededreadertest.Catalog {
 				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLookup(
 					func(_ context.Context, _ seededreader.Key) (r0 seededreader.Body, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = seededreader.Body("other-body")
+						return
+					}))
+			}),
+		ix.Lookup.Hit(): prove.One("a Catalog whose Lookup answers the zero for every key the run seeded",
+			func(tb testing.TB) seededreadertest.Catalog {
+				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLookup(
+					func(_ context.Context, _ seededreader.Key) (r0 seededreader.Body, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
+		ix.Len.Count(): prove.One("a Catalog whose Len reports no entries however many the run seeded",
+			func(tb testing.TB) seededreadertest.Catalog {
+				return seededreadertest.NewCatalogStub(tb, seededreadertest.WithCatalogLen(
+					func(_ context.Context) (r0 int, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -179,16 +199,5 @@ func TestCatalogInvariants(t *testing.T) {
 	suite.VerifyDistinctIDs(t, s.IDs())
 }
 
-// Argued rather than proven, for want of a defect template here:
-//
-//	Len/count
-//
-//	Lookup/hit
-//
-// Each is a claim a derivation rule reached and this generator cannot yet
-// plant evidence for. The harness stamps them Argued and says so in the
-// report, which is the difference between a claim nothing can falsify and
-// one nobody has written the falsification for.
-
 // testkit: end of generated content.
-// testkit:provenance 3504b31a073b0adc09ca7b2eefa1f3b88f526acdde31b3aa9b1e5896694a279c
+// testkit:provenance 9dc43e2ef61cb548bbb531cd3782a0dd59fedec47e87a3217eef66465434049b

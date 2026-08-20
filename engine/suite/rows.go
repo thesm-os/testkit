@@ -55,12 +55,14 @@ func (s NameSet) List() string { return strings.Join(s.names, ", ") }
 func RowID(field, method, name string, methods NameSet) (ID, error) {
 	if method == "" {
 		return "", fmt.Errorf(
-			"check %q sets %s and no Method; %s's ID needs the method scope", name, field, field)
+			"check %q sets %s and no Method; %s's ID needs the method scope", name, field, field,
+		)
 	}
 	if !methods.Has(method) {
 		return "", fmt.Errorf(
 			"check %q names method %q, which %s does not have (methods: %s)",
-			name, method, methods.Owner(), methods.List())
+			name, method, methods.Owner(), methods.List(),
+		)
 	}
 	return MethodID(method, name), nil
 }
@@ -115,7 +117,8 @@ func Falsify(row string, hasDefect bool, argued string) (Falsifiability, error) 
 	switch {
 	case hasDefect && argued != "":
 		return Falsifiability{}, fmt.Errorf(
-			"check %q is both ProvenBy and Argued; a defect in hand beats an argument — drop Argued", row)
+			"check %q is both ProvenBy and Argued; a defect in hand beats an argument — drop Argued", row,
+		)
 	case hasDefect:
 		return Proven(), nil
 	case argued != "":

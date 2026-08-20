@@ -101,3 +101,121 @@ G-20 nested builders · G-21 cancel-inflight family · G-26 generic
 interfaces · G-28 per-method zero-on-error opt-out · B4b expected-artifact
 manifest · claim-from-probe derivation (the full structural fix) ·
 G-25 clocked-oracle bundle.
+
+## The suite generator's DRY/SOLID audit
+
+Run when the plugin passed 4,400 production lines and the growth stopped
+looking like the trade the design intended. Findings and what each cost.
+
+### Fixed
+
+| Finding | Was | Now |
+|---|---|---|
+| `segAccessor` | split on `-` and exported-name'd each part | `golang.ExportedName` — the platform's splitter already treats `-` as a separator |
+| differential sequence word | `strings.ToLower(a) + "-" + strings.ToLower(b)` | `naming.Kebab`; the hand form spelled a two-word method `putall-nextpage` |
+| `companionFor` | a token-for-token copy of builder's lookup | `generator/source.Companion`, taking the suffix as an argument so the convention stays with the directive that spells it |
+| `resolveMethods` | copied verbatim between suite and stub | `generator/source.MethodSet`, with the one clause that differs passed as a `Consequence` |
+| `lawBackedStamps` | rebuilt an index from `tiers.Rules()` per Derive call | `tiers.LawsFor`, which answers the question and says so in its docblock |
+| `mixinParamsOf` | hand-enumerated twelve `(mixin, param)` pairs | the pairs come from the live registry through `mixinParamKeys` |
+| `LawParams` | re-read the stamps off `m.Source.Meta()` | reads `Method.MixinParam`, the projection that already holds them |
+| the Argued→Proven flip | four hand-written copies | `proveOrArgue`, settling both fields together as the parity gate requires |
+| `seedOf` | recomputed `fixtureArgs` for a method already carrying `ArgFields` | reads what the method carries |
+
+Three bugs surfaced under those, each fixed with its finding:
+`borrowedCall` silently dropped an argument when its two lists
+disagreed, emitting a call shorter than the method takes;
+`Inventory.Token` was documented as the ID qualifier while holding the
+Go one; and the kebab join above. Deleted with them: a 31-line docblock
+for `partnerArgs`, a function this package does not have, and two
+references to `Method.MixinPartner`, a method it does not have either.
+
+`generator/source` is where both landed, and the first attempt got it
+wrong twice: a package named for one function, justified by a
+constraint that does not exist — plugins import each other freely here,
+fault reads stub and model reads suite — and shipped without a test.
+The package earns its name by holding what no plugin owns: questions
+about the source tree a generator has to ask. Both functions' refusal
+paths are now covered, which neither copy ever was.
+
+### Declined, with the reason
+
+**The fixture's whole-value sample, derived for composed fields that
+never render it.** True as stated and not separable: `sampleFor`
+answers the sample and the alternate together, and a composed field
+still renders the alternate — the miss value a reader check needs.
+Splitting the pair to save one struct resolve at build time would buy
+microseconds for a seam where two values stop being derived together.
+
+### Deferred, with an owner
+
+**~800 production lines derive artefacts no template consumes.** The
+templates reference four projection paths; `poolsOf`, `HarnessOf` and
+`LockLines` have no production caller at all. This is the derive layer
+built ahead of its emission rather than dead code, and the honest
+resolution is to finish the bodies and let them prove which projections
+are real. Anything still unconsumed when the emission lands is a
+deletion list written from evidence.
+
+**The SRP splits.** `suite.go` carries seven jobs — plugin declaration,
+emit types, pure signature queries over `golang.Sig`, an eidos
+vocabulary alias table, stamp reading, method-set resolution and two
+derivation rules. `fixture.go` carries five, of which seed derivation is
+a separate concept from the fixture. `derive_laws.go` hides the
+cross-plugin stamp API `generator/model` imports. Each is a move rather
+than a rewrite, and each wants doing when the file it lands in is not
+also being rewritten by the emission arc.
+
+## The depguard rule that enforced the opposite of its comment
+
+The `generator` rule read "vocabulary only: engine/model and the
+property dependencies stay denied", and did neither. In
+`list-mode: strict` a deeper allow entry shadows a broader one, so
+listing `go.thesmos.sh/testkit/engine/suite` beside
+`go.thesmos.sh/testkit` refused **every** intra-testkit import in the
+module — 89 findings, every one a false positive — while the broad
+entry went on admitting `engine/model`, the one import the comment
+said was denied.
+
+Fixed by saying it the way depguard says it: the broad allow stands
+alone, and `engine/model` is a `deny` with the reason beside it. The
+rule now refuses what it always claimed to and permits what the module
+has always legitimately done.
+
+## The claim the ledger recorded wrong
+
+Under "transitional", the design doc said the corpus's 126 undefined
+`Assert*` references would clear when the rewrite's rows landed. The
+rows landed and they did not, because they could not: the orphaned
+companions call the incumbent's exported `Assert<Iface><Method><Seg>`,
+the rewrite emits the packs' unexported `<token>Assert<Method><Word>`,
+and nothing had regenerated a companion since the sweep deleted its
+template. Two different names and no writer between them.
+
+What closed it was writing the companion the plugin's second output has
+declared since the rewrite began. Recorded here because the entry read
+as self-healing for several sessions, and an item nobody owns because
+everybody believes it is about to resolve itself is worse than one
+nobody has started.
+
+## The falsifiability tier, and where its evidence lives
+
+`prove.All` holds a suite's claims and its proofs to each other in both
+directions: Proven with no defect fails, a defect naming no check
+fails, and a defect the check tolerated fails. That makes the stamp on
+an emitted row a load-bearing claim rather than a label, which forced
+two rules.
+
+A row is stamped Proven only where the companion can SPELL its defect,
+not merely where a deriver named one — `suite.ArguedCheck` exists for
+the difference. Emitting Proven and letting the parity gate find the
+hole would report a generator gap against generated code, which is the
+wrong file and the wrong reader.
+
+A proof quotes the red it expects by CONSTANT, not by text.
+`suite.RedPanicked` and its three siblings are declared where the
+message is written and the message is built from them, so rewording a
+primitive breaks the generated file's compile instead of quietly
+weakening every proof that quoted it. The families whose failure prose
+lives in a body template have no constant to name and get no
+`Reasoned` — a weaker proof, said out loud in the generated comment
+rather than left looking identical to a strong one.

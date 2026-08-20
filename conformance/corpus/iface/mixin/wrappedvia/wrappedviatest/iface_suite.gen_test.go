@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[wrappedviatest.Mixed] {
 			func(tb testing.TB) wrappedviatest.Mixed {
 				return wrappedviatest.NewMixedStub(tb, wrappedviatest.WithMixedOpen(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[wrappedviatest.Mixed] {
 			func(tb testing.TB) wrappedviatest.Mixed {
 				return wrappedviatest.NewMixedStub(tb, wrappedviatest.WithMixedOpen(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func mixedProofs() prove.Defects[wrappedviatest.Mixed] {
 			func(tb testing.TB) wrappedviatest.Mixed {
 				return wrappedviatest.NewMixedStub(tb, wrappedviatest.WithMixedOpen(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -86,9 +86,9 @@ func mixedProofs() prove.Defects[wrappedviatest.Mixed] {
 			func(tb testing.TB) wrappedviatest.Mixed {
 				return wrappedviatest.NewMixedStub(tb, wrappedviatest.WithMixedCause(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -96,9 +96,9 @@ func mixedProofs() prove.Defects[wrappedviatest.Mixed] {
 			func(tb testing.TB) wrappedviatest.Mixed {
 				return wrappedviatest.NewMixedStub(tb, wrappedviatest.WithMixedCause(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -133,4 +133,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a4608263aa058e97dcf3e7eb2bf7a6f18a4166dcc12f0bd6924365920002fe7c
+// testkit:provenance 5932080fd05557b5b740e83ca1b85aeff8ed5edcfd966c29c7e08c59f7880703

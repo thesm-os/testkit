@@ -11,6 +11,7 @@ import (
 	"errors"
 	"testing"
 
+	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/eventually/eventuallytest"
 	"go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/engine/suite/prove"
@@ -50,9 +51,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedPublish(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedPublish(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +71,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedPublish(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +88,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedSettle(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,12 +98,19 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedSettle(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
+		ix.Sync.Smoke(): prove.One("a Mixed whose Sync panics",
+			func(tb testing.TB) eventuallytest.Mixed {
+				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedSync(
+					func(_ context.Context, _ eventually.Mixed) error {
+						panic("planted: Sync panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
 		ix.Items.Smoke(): prove.One("a Mixed whose Items panics",
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedItems(
@@ -114,9 +122,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -124,9 +132,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -134,9 +142,9 @@ func mixedProofs() prove.Defects[eventuallytest.Mixed] {
 			func(tb testing.TB) eventuallytest.Mixed {
 				return eventuallytest.NewMixedStub(tb, eventuallytest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -184,4 +192,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3b031092e1531a4bc688b8edc7171176eb30c19f77995c007d1508972fe2e46d
+// testkit:provenance 60e2c0e4c34cd323fa2df4ad3d954674d3b098afbf2a59a70d2e3e80b60fc12f

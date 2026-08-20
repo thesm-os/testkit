@@ -11,3 +11,4 @@ Publish/smoke	signature/smoke	Publish survives a call with a derived item
 Settle/cancel	signature/cancel	Settle reports a cancelled context as cancelled	
 Settle/nilcontext	signature/nilcontext	Settle returns an error rather than panicking on a nil context	
 Settle/smoke	signature/smoke	Settle survives a call	
+Sync/smoke	signature/smoke	Sync survives a call with a derived mixed	

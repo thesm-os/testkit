@@ -50,9 +50,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreTouch(
 					func(_ context.Context, _ string, _ int) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreTouch(
 					func(_ context.Context, _ string, _ int) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreTouch(
 					func(_ context.Context, _ string, _ int) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreSeen(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreSeen(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreSeen(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -137,9 +137,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreMove(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -147,9 +147,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreMove(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -157,9 +157,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreMove(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -174,9 +174,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreAt(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -184,9 +184,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreAt(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -194,9 +194,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreAt(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -224,9 +224,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreEmit(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -234,9 +234,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreEmit(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -244,9 +244,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreEmit(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -261,9 +261,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreCount(
 					func(_ context.Context, _ int) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -271,9 +271,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreCount(
 					func(_ context.Context, _ int) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -281,9 +281,9 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreCount(
 					func(_ context.Context, _ int) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -300,12 +300,32 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 						return
 					}))
 			}),
+		ix.Touch.Sideeffect(): prove.One("a Store whose Touch reports success and keeps nothing",
+			func(tb testing.TB) partnernamingtest.Store {
+				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreTouch(
+					func(_ context.Context, _ string, _ int) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 		ix.Seen.Miss(): prove.One("a Store whose Seen answers for an input nothing wrote",
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreSeen(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = 2
+						return
+					}))
+			}),
+		ix.Move.Sideeffect(): prove.One("a Store whose Move reports success and keeps nothing",
+			func(tb testing.TB) partnernamingtest.Store {
+				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreMove(
+					func(_ context.Context, _ string, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -313,8 +333,18 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreAt(
 					func(_ context.Context, _ string) (r0 int, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = 2
+						return
+					}))
+			}),
+		ix.Emit.Sideeffect(): prove.One("a Store whose Emit reports success and keeps nothing",
+			func(tb testing.TB) partnernamingtest.Store {
+				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreEmit(
+					func(_ context.Context, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -322,7 +352,7 @@ func storeProofs() prove.Defects[partnernamingtest.Store] {
 			func(tb testing.TB) partnernamingtest.Store {
 				return partnernamingtest.NewStoreStub(tb, partnernamingtest.WithStoreCount(
 					func(_ context.Context, _ int) (r0 int, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = 2
 						return
 					}))
@@ -358,4 +388,4 @@ func TestStoreInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance a5f8c8d593944484c86a5779565de7e578dea130efb32e2d38a05de61a644668
+// testkit:provenance 84d67b7bc6aa21b8aac2177d6c6472d48f767c5bd167b94b11db120e061b2ee0

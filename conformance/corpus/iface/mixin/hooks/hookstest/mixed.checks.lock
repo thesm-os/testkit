@@ -1,5 +1,7 @@
 testkit-checks v2
 Fire/cancel	signature/cancel	Fire reports a cancelled context as cancelled	
 Fire/deadline	signature/deadline	Fire reports an expired deadline as exceeded	
+Fire/hooks	mixin/hooks	Fire runs what OnEvent registered	
 Fire/nilcontext	signature/nilcontext	Fire returns an error rather than panicking on a nil context	
 Fire/smoke	signature/smoke	Fire survives a call with a derived event	
+OnEvent/smoke	signature/smoke	OnEvent survives a call with a derived fn	

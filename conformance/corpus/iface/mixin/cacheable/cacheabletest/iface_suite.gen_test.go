@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[cacheabletest.Mixed] {
 			func(tb testing.TB) cacheabletest.Mixed {
 				return cacheabletest.NewMixedStub(tb, cacheabletest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[cacheabletest.Mixed] {
 			func(tb testing.TB) cacheabletest.Mixed {
 				return cacheabletest.NewMixedStub(tb, cacheabletest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[cacheabletest.Mixed] {
 			func(tb testing.TB) cacheabletest.Mixed {
 				return cacheabletest.NewMixedStub(tb, cacheabletest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -120,4 +120,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 403ecb901a19e4f875b471d57cc11d5636c943059e61fb61bb80b562d568bac1
+// testkit:provenance c3617e9b0df18c6ed785812595ed230385fb97d030ad8ab5ed661c9c1cfa9835

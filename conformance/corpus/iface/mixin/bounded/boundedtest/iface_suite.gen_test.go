@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[boundedtest.Mixed] {
 			func(tb testing.TB) boundedtest.Mixed {
 				return boundedtest.NewMixedStub(tb, boundedtest.WithMixedList(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -157,4 +157,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9b78f590e582374370e708f9d4de5e4ee9c794d49c8a2cc976ddd4f3f1a3028b
+// testkit:provenance 35fae61fc32e14105c0a69aeb896ede49392b4b34c13644a3aba8e3390359012

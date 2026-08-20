@@ -6,6 +6,8 @@ package suite_test
 import (
 	"context"
 	"errors"
+	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -64,5 +66,62 @@ func TestSignaturePrimitives(t *testing.T) {
 				return ctx.Err() // the defect: no nil guard
 			})
 		})
+	})
+
+	t.Run("ToleratesNilArgument", func(t *testing.T) {
+		t.Parallel()
+		suite.ToleratesNilArgument(t, "Method", func(context.Context) error {
+			return errors.New("refused, politely")
+		})
+		red(t, "a method that accepts nil and carries on", func(tb testing.TB) {
+			suite.ToleratesNilArgument(tb, "Method", func(context.Context) error { return nil })
+		})
+		red(t, "a method that dereferences the nil", func(tb testing.TB) {
+			suite.ToleratesNilArgument(tb, "Method", func(context.Context) error {
+				_ = *nilPayload // the defect: no nil guard
+				return nil
+			})
+		})
+	})
+}
+
+// nilPayload stands in for an argument that arrived nil.
+//
+// A package variable rather than a local because a local nil is one the
+// compiler's own analysis can fold, and folding it away would leave the
+// dereference arm asserting nothing. At run time a nil argument is
+// exactly this: a pointer whose value nothing here can see.
+var nilPayload *int
+
+// guardCase ties one exported guard name to the function it claims to
+// name.
+type guardCase struct {
+	name string
+	fn   func(testing.TB, string, func(context.Context) error)
+}
+
+func (c guardCase) Name() string { return c.name }
+
+// TestGuardNamesAreTheFunctions holds each Guard constant to the
+// identifier of the function it names.
+//
+// The generator emits `suite.ReportsCancelled(...)` from the constant
+// rather than from a literal, so the constant is the only thing standing
+// between a rename here and a generated file that calls a function this
+// package no longer exports — a break a consumer meets in their own
+// build, long after the rename. Reading the name back off the function
+// value is what makes the constant a claim rather than a comment.
+func TestGuardNamesAreTheFunctions(t *testing.T) {
+	t.Parallel()
+
+	testkit.TableTest(t, []guardCase{
+		{suite.GuardCancelled, suite.ReportsCancelled},
+		{suite.GuardDeadline, suite.ReportsDeadlineExceeded},
+		{suite.GuardNilContext, suite.ToleratesNilContext},
+		{suite.GuardNilArgument, suite.ToleratesNilArgument},
+	}, func(t *testing.T, tc guardCase) {
+		full := runtime.FuncForPC(reflect.ValueOf(tc.fn).Pointer()).Name()
+		testkit.Equal(t, full[strings.LastIndex(full, ".")+1:], tc.name,
+			"the constant is what the generator spells; a drifted one emits a call to nothing")
 	})
 }

@@ -443,6 +443,322 @@ So `Token` stays the Go qualifier and `Qualifier` joins it as the slug
 one, projected through `IDQualifier`. Both are computed once in the
 shell and carried, rather than recomputed per deriver.
 
+## Amendment: the variant set, corrected against the packs — BUILT
+
+The closed set was named for FAMILIES where the validated bodies differ
+by SHAPE, so three names covered thirteen bodies. A one-pass read of
+every assert body in the five packs corrected it:
+
+| Was | Is | Why |
+|---|---|---|
+| `ZeroOnError` | `ZeroOnMiss`, `ZeroOnCancel` | the error is induced two ways, and each is a different statement sequence |
+| `MixinProbe` | `RepeatProbe`, `MissProbe`, `HitProbe`, `CountProbe` | one name over four bodies; the repeat's two calls are a precondition and a claim, not a list |
+| `ProducedSecondarySmoke` | deleted | no instance in any pack, no construction site, duplicated `SmokeSurvives{CloseProduced}` |
+
+`LawLeg` and `DifferentialLeg` stay as plans and will never have body
+templates here: the packs put the model family's INDEX in the suite
+file — `logModelIndex` is declared in `scan_suite.gen.go` and appears
+nowhere in `scan_model.gen.go` — because the index is per package and
+`All()` must reach every ID. The bodies are the model tier's.
+
+The rule that decides between the two zero forms is not the one that
+looks right. Not "does the method take an input": the bus's Subscribe
+takes a topic, declares no miss, and answers normally for an
+unsubscribed one, so a check drawing a miss would skip every run. It is
+whether a miss is DECLARED — the `notfound=` sentinel — because only
+then does an unwritten input produce anything to inspect.
+
+Still owed on the probes: `HitProbe` and `CountProbe` read back what a
+run seeded, and the packs pass the seeded corpus in as a parameter
+(`docs map[kv.Key]kv.Value`) that no projection models. That parameter
+is the next thing to design, and it is the same question the fixture's
+three competing models raise.
+
+## Amendment: ZeroOnError needs three fields it does not have — SUPERSEDED
+
+Superseded by the variant-set correction above, which split the variant
+rather than growing it. Kept because the reasoning is what found the
+split.
+
+Found rendering it. The variant is `ZeroOnError{Call CallPlan}`, and
+the deriver fills Call from `callOf` — the standard draw. The validated
+shape needs more than that:
+
+```go
+got, err := s.Get(tb.Context(), fx.KeyOther())   // the OTHER draw
+if err == nil {
+    tb.Skipf("Get answered for %q, so this check has no error to inspect; "+
+        "seed a miss through StoreConfig.KeyPool", fx.KeyOther())
+}
+var zero kv.Value                                 // the RESULT TYPE
+if got != zero { ... }
+```
+
+Three facts the variant does not carry. The call must draw the miss
+member rather than the hit one, or the error the check exists to
+inspect never happens. The body declares a zero of each value return,
+so it needs those types as renderable references — the emitter cannot
+spell a type, only the backend can. And the skip names the pool a
+consumer would seed to close the gap, which is a config path.
+
+This is the variant growing fields the day a template renders it, which
+is the rule this document already sets — recorded because it is the
+first variant whose derivation, not just its spelling, was incomplete,
+and because "the call" turning out to mean two different calls is the
+kind of thing the other unrendered variants may also be hiding.
+
+The three context arms had no such gap: they are one line over an
+engine primitive and the standard call is the right one.
+
+## Amendment: generics, solved rather than gated — BUILT
+
+No validated pack is generic, so the shape had to come from the corpus
+rather than from a target. Three facts settled it.
+
+The alias the packs carry — `type Log = scan.Log` — takes parameters:
+Go has admitted generic type aliases since 1.24, so
+`type Store[K comparable, V any] = generic.Store[K, V]` stands, and
+every declaration below it names `Store` with its arguments exactly as
+a concrete file names the bare alias.
+
+The harness declares the subject's parameters ahead of its own, because
+`T` is constrained by the interface and Go admits no forward reference:
+`StoreHarness[K comparable, V any, T Store[K, V]]`. The list itself is
+the backend's to render — only it spells a constraint — so the template
+composes onto what `renderTypeParams` produced rather than rebuilding
+it.
+
+`Without` moves off the veneer for a generic subject. A method cannot
+introduce type parameters and a generic interface has no one
+instantiation to fix them at, so the veneer keeps only the index — which
+is not generic, an ID being a string — and dropping goes through the
+package-level `storeWithout[K, V](ids...)`. That is a Go constraint
+rather than a preference, and it is the one place a generic subject's
+surface reads differently from a concrete one.
+
+## The gap register
+
+Everything open, what blocks it, and who owns it. Written down because
+four of these lived only in a conversation, which is the same as not
+existing.
+
+### Blocked on a design decision
+
+**The seeded corpus, traced end to end.** `HitProbe` and `CountProbe`
+read back what a run seeded, and the packs pass it in —
+`catalogAssertLookupHit(tb, c, docs map[kv.Key]kv.Value)` — ranging it
+for the hit and taking `len(docs)` for the count. Following it back
+shows the chain rather than one missing parameter:
+
+`catalogCorpus()` zips `cfg.KeyPool` against `cfg.ValuePool`, so the
+corpus needs the emitted POOL CONFIG — which is what `poolsOf` derives
+and nothing consumes, the largest single orphan in the plugin. A seeded
+interface also takes a different harness: `Seed func(docs) T` and
+`StartSeed` in place of `New`/`Start`, because a reader-only subject
+cannot be populated through the surface under test, and `Subject(docs)`
+carries it through. `catalogMissKey()` is the key deliberately outside
+the corpus, which the miss body draws instead of the fixture's
+alternate.
+
+So the batch is: pool config → corpus builder → seeded harness variant
+→ the two bodies. The pool config is BUILT: `poolsOf` runs in the shell,
+its refusals join the header's, and `<Iface>Config` with
+`<token>DefaultConfig()` emits the roled pools with the member type each
+declares a slice of.
+
+**It emits nowhere, and that is a corpus gap rather than a plugin one.**
+`//testkit:role` is stamped in the gen packs and in NO conformance
+fixture, so every corpus interface derives an empty pool set — which is
+why `poolsOf` read as an orphan. The section is guarded on having pools
+rather than emitting an empty struct, and the derivation stays
+unexercised by the gate until a fixture stamps a role. `poolsOf` also
+reaches only roles on REQUEST-STRUCT FIELDS; the bare-parameter form,
+where the stamp lives on the named type declaration, is not handled and
+is what a corpus fixture would most likely exercise first.
+
+**Three fixture models, and the packs implement a fourth.** This
+plugin has `FixtureField{Sample, Other, Companion, Parts}` and
+`projection.PoolPlan{Role, Field, Members}`; the packs emit
+`<token>NewFixture(cfg)` with accessor METHODS — `fx.Key()`,
+`fx.KeyOther()`, `fx.Keys()` — plus provenance flags and a request
+builder. Every body draws through those accessors, so this decides how
+every body reads and wants settling before the bodies are final rather
+than after.
+
+**RowSugar is an empty struct standing for the consumer seam.** The
+packs' `bind` carries up to five bodies including per-method
+`Prop<Method>` fields with pooled-draw plumbing, `NewNameSet` over the
+method set, `RowID`/`HandRowID`, `OneBody` and `Falsify`. None of it is
+modeled. It is the largest single unbuilt structural piece.
+
+### The index/model seam, moved by the index fix — OWED AT RELINK
+
+The recorded design: an index is PER PACKAGE, so the suite file carries
+the model family's index entries and the model file carries its bodies.
+The packs confirm it — `logModelIndex` sits in `scan_suite.gen.go` and
+is absent from `scan_model.gen.go` — and it is why the suite generator
+derives `LawLeg` and `DifferentialLeg` plans it never bodies.
+
+The selfcheck then caught `IndexOf` naming checks the run does not
+emit: with the model tier dormant, `Suite.Checks.Model.Laws()` compiled
+and dropped nothing, which is the silent drop the typed index exists to
+prevent. The fix builds the index from the EMITTED set, and the Model
+group is now absent from all 126 generated files.
+
+Right today, wrong at relink. What the packs actually do is compose:
+
+    Checks: append(cacheSignatureChecks(fx), cacheModelChecks(fx)...)
+
+The assembler returns BOTH tiers and the index covers what the
+assembler returns — not what this generator emits. So the relink owes
+three edits, not one: `<token>Suite` appends the model tier's checks,
+`IndexOf` reads the composed set, and the selfcheck's `VerifyIndex`
+compares against it. Written down because the seam moved under a bug
+fix rather than by decision, and the emitted files no longer show what
+the design says.
+
+### The consumer doors deleted with the model options — OWED AT RELINK
+
+The sweep deleted every `<I>Model(...)` call, because the tier is
+unregistered and the option no longer exists. Most were bare. Fifteen
+carried a door: a closure stating something about the domain that no
+derivation invents, and which the relink has to get back. They are
+listed here because a deleted closure leaves no trace in the code, and
+"the model tier returns" is not enough to reconstruct them.
+
+| Fixture | Door | What it said |
+|---|---|---|
+| `mixin/eventually` | `ModelMerge` | the lattice join is set union, spelled sorted |
+| `mixin/causal` | `ModelHappensBefore` | causal order is revision order within one key |
+| `mixin/stableorder` | `ModelLess` | the stated order is key-ascending |
+| `mixin/validates` | `ModelValues` | the accepted domain is wider than the derived pair; keys stay few so draws collide |
+| `mixin/ttl`, `scheduled`, `timeout`, `windowed` | `ModelClocked` | build the subject on the run's test clock |
+| `contract/lease` | `ModelFree` | freeness is probed by acquiring and releasing |
+| `contract/pool` | `ModelStats` | the accounting identity, read through the stats role |
+| `composite/causal-chain` | `ModelEntryID`, `ModelDependsOn` | the entry's identifier and its edges |
+| `lang/generic`, `detector/reader`, and the rest | — | bare `Model()`, nothing to restore |
+
+Two tests went with the tier rather than with an option, and are owed
+back the same way: `deleteremoves`'s `TestMixedPropertyCatchesAWrongMissIdentity`
+and `tx`'s `TestTwoPhaseCompositeCatchesARefusedOwnHandle`. Both drive
+`<I>ModelProperty` against a planted defect and assert the rejection
+message, which is the saturation posture the model tier owns.
+
+### Blocked on a ruling or on upstream
+
+- **The accumulates claim has no positive name.** [AccumulatesClaim]
+  is worded and corpus-pinned, and nothing can license it. The earlier
+  note here proposed `//-testkit:mixin idempotent` and called the
+  negated form "the right spelling"; that contradicts ADR-0016, which
+  rules the negated form out of the vocabulary for the reason that
+  settles it — a mixin appears only because someone wrote the
+  directive, so deleting it IS the suppression, and there is nothing
+  to switch off. `DenyNegation` on the mixin schema is the substrate
+  agreeing. What the claim actually needs is a mixin of its own,
+  registered upstream under a positive name, if the claim is worth
+  checking at all.
+
+- **There is no sim tier yet.** `SimLeg` is a variant with no bodies
+  because the tier it belongs to is unbuilt, not because a directive
+  blocks it. Nothing here waits on it.
+
+### Divergences from the packs, chosen and reversible
+
+Each is a place the packs disagree with themselves or with a rule this
+tree holds elsewhere, so a generator had to pick one spelling.
+
+| Here | Packs | Why |
+|---|---|---|
+| `<token>PutRequest()` | `fx.Put()` | one instance, no second to infer a rule from; ours is the type name, which every other draw follows |
+| `Miss` | `ReportsAMiss` and `Miss` | the mechanical segment rule, which reaches segments the packs never exercised |
+| `suite.Survives` everywhere | Counter asserts success directly | already what this generator emits; kv's Journal is the same situation and agrees, so Counter's dialect is the pack's own variation |
+| `produced`, `borrowed` | `cur`, `c` | the naming policy's one home, against two ad-hoc locals |
+
+### Deferred with an owner, deliberately evidence-first
+
+- **~800 production lines derive artefacts no template consumes** —
+  `poolsOf`, `HarnessOf` and `LockLines` have no production caller.
+  This is the derive layer built ahead of its emission. The bodies will
+  prove which projections are real; anything still unconsumed then is a
+  deletion list written from evidence rather than guessed at now. The
+  defect layer just came off this list: `projection/defect.go` and
+  `derive_proofs.go` were the second-largest orphan and are now the
+  companion's whole input, which is evidence for waiting rather than
+  deleting.
+- **The single-responsibility splits** — `suite.go` carries seven jobs,
+  `fixture.go` five, and `derive_laws.go` hides the cross-plugin stamp
+  API `generator/model` imports. Each is a move, and each wants doing
+  when the file is not also being rewritten by the emission arc.
+
+### Transitional, and dated
+
+- Three evidence-census tests skip, carrying `expires 2026-09-18`, so
+  the skip-expiry gate holds the deferral rather than anyone's memory.
+- ~~The corpus's generated companions are orphans referencing `Assert*`
+  symbols nothing emits yet — 126 undefined references, which clear
+  when the rows land.~~ **Wrong, and closed.** They did not clear when
+  the rows landed and could not have: the incumbent's companions called
+  the exported `Assert<Iface><Method><Seg>`, while the rewrite emits the
+  packs' unexported `<token>Assert<Method><Word>`, and nothing had
+  regenerated the companion since the sweep deleted its template. What
+  closed it was emitting the companion the plugin's second output has
+  declared all along — see the proofs section below. The corpus's
+  generated files now vet clean; what is left is 122 references in
+  HAND-WRITTEN `inmemory_test.go` fixtures to `<Iface>WithoutDouble` and
+  the incumbent's assert names, which is corpus work and not the
+  plugin's.
+- ~~**This plugin has no pipeline-level test.**~~ **Closed.**
+  `generator/suite/suite_test.go` renders the harness, its companion and
+  the double into a throwaway module, then builds, vets and RUNS it. The
+  last of those is the one that matters: `prove.All` fails a claim with
+  no evidence, evidence naming no claim, and a defect the check
+  tolerated, so the emitted claims and the emitted proofs are held to
+  each other by the plugin's own test rather than by a corpus regen
+  somebody has to remember.
+
+### The proofs companion — BUILT
+
+The `_test.go` output has been declared since the rewrite began and
+written by nothing. It now carries what `derive_proofs.go` and
+`projection/defect.go` have derived all along: one planted defect per
+check the run stamps Proven, driven through that check by `prove.All`.
+
+Four of the thirteen defect variants render — `stub-panic`, `ctx-swap`,
+`accepts-nil`, `second-call-errs`. The rest need a NON-ZERO value of a
+result type (`echo-beside-error` must answer a live value beside its
+error; `invents-hit` without a declared sentinel must answer where
+nothing was written), and inventing one is the fixture's sample
+machinery, not yet wired to a return slot. Two decisions fell out of
+building it:
+
+- **A row's stamp follows its evidence, not its deriver.** A plan
+  stamped Proven whose defect variant no template spells is emitted
+  `ArguedCheck` with the reason "no defect template spells X yet". The
+  alternative — emit Proven and let `prove.All` fail — reports a
+  generator gap against the generated file. `suite.ArguedCheck` is new
+  beside `ProvenCheck` for this.
+- **A proof quotes its red by CONSTANT.** `suite.RedPanicked` and its
+  three siblings are declared where the primitive's message is written,
+  the message is built from them, and `RedConst(seg)` is what the
+  generator emits. Quoting the text would let a reworded primitive
+  silently weaken every proof reading it; naming the constant makes the
+  same reword a compile error. Segments whose failure prose is authored
+  in a BODY template — the repeat and miss probes — have no constant to
+  quote and get no `Reasoned`, which is a weaker proof and is said out
+  loud in the generated comment.
+
+The value-free trick worth remembering: a defect that must ANSWER uses
+a bare `return` under named results, so every slot yields its own zero
+without the generator naming a type it may not be able to spell.
+
+Two consequences elsewhere. `<token>Suite(fx) suite.Suite[T]` and the
+veneer's `Suite` accessor exist because the companion is an EXTERNAL
+test package and the assembler is unexported — eidos's layout shifts
+every `_test.go` into `<pkg>_test` unconditionally, so an internal
+companion (which is what the packs are) is not reachable from here. A
+generic subject gets a note instead of proofs, because a Go test
+function takes no type parameters.
+
 ## The transition: what the sweep unowned, and what buys it back
 
 The clean sweep deleted the incumbent emission before the rewrite's

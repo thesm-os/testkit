@@ -72,24 +72,3 @@ func (inv *Inventory) Verify() error {
 	}
 	return nil
 }
-
-// LockLines renders the inventory's manifest rows through the
-// runtime's own renderer — one home for the format, its validation
-// included. The suite type parameter is irrelevant to rendering, so
-// the projection uses the empty struct.
-func (inv *Inventory) LockLines() ([]string, error) {
-	s := suite.Suite[struct{}]{Name: inv.Iface}
-	for _, c := range inv.Checks {
-		id, err := c.ID.Render()
-		if err != nil {
-			return nil, err
-		}
-		s.Checks = append(s.Checks, suite.Check[struct{}]{
-			ID:    id,
-			Class: c.Class,
-			Claim: c.Claim,
-			Binds: RenderBinds(c.Binds),
-		})
-	}
-	return suite.LockLines(s)
-}

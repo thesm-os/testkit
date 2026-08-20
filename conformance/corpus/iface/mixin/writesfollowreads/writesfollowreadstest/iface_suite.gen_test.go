@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedStore(
 					func(_ context.Context, _ writesfollowreads.Value) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedStore(
 					func(_ context.Context, _ writesfollowreads.Value) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedStore(
 					func(_ context.Context, _ writesfollowreads.Value) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -121,9 +121,9 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 writesfollowreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -140,11 +140,21 @@ func mixedProofs() prove.Defects[writesfollowreadstest.Mixed] {
 						return
 					}))
 			}),
+		ix.Store.Answer(): prove.One("a Mixed whose Store reports success and answers the zero",
+			func(tb testing.TB) writesfollowreadstest.Mixed {
+				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedStore(
+					func(_ context.Context, _ writesfollowreads.Value) (r0 writesfollowreads.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}),
 		ix.Get.Miss(): prove.One("a Mixed whose Get answers for an input nothing wrote",
 			func(tb testing.TB) writesfollowreadstest.Mixed {
 				return writesfollowreadstest.NewMixedStub(tb, writesfollowreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 writesfollowreads.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = writesfollowreads.Value{Key: "other-value"}
 						return
 					}))
@@ -180,4 +190,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4c0b2e4821e628e7d93dd66a9cc7e5ef9a66740ff2d32ca9e77a670565a234d8
+// testkit:provenance 0a0b35bb3f15a1b16f75accee909c4afb052bca442823d8fba2222f5a9e599c5

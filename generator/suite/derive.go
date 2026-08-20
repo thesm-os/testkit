@@ -86,6 +86,13 @@ const (
 	// miss/hit/count set).
 	DeriverStamps DeriverName = "stamps"
 
+	// DeriverContracts derives the claims a contract stamp licenses that
+	// no mixin or detector does. Its own axis rather than a table inside
+	// [DeriverStamps] because a contract is a protocol over several
+	// methods and a rule keys on a ROLE, where every stamps rule keys on
+	// the method it is written on.
+	DeriverContracts DeriverName = "contracts"
+
 	// DeriverLaws plans the model tier's law rows — which laws tiers
 	// selects, on which legs, under which claims.
 	DeriverLaws DeriverName = "laws"
@@ -124,6 +131,7 @@ func Registry() []Deriver {
 	return []Deriver{
 		Signature{},
 		Stamps{},
+		Contracts{},
 		Laws{},
 		Differential{},
 	}
@@ -248,4 +256,38 @@ func stampedParam(m Method, mixin, param string) (string, bool) {
 	}
 	v, found := shape.MixinParamKey(mixin, param).Get(m.Source.Meta())
 	return v, found && v != ""
+}
+
+// methodNamed finds a sibling by name, nil where the interface declares
+// none — which is the author naming a partner that is not there, and a
+// refusal rather than a compile error in a consumer's file.
+func methodNamed(f Iface, name string) *Method {
+	for i := range f.Methods {
+		if f.Methods[i].Name == name {
+			return &f.Methods[i]
+		}
+	}
+	return nil
+}
+
+// sharesArgs reports whether every value the partner draws is one the
+// subject draws too.
+//
+// By fixture field, which is what the two calls actually agree on: the
+// same field yields the same value in both, so a partner drawing only
+// the subject's fields is asking about the subject's input.
+func sharesArgs(m, partner Method) bool {
+	mine := make(map[string]bool, len(m.ArgFields))
+	for _, field := range m.ArgFields {
+		mine[field] = true
+	}
+	if len(partner.ArgFields) == 0 {
+		return false
+	}
+	for _, field := range partner.ArgFields {
+		if !mine[field] {
+			return false
+		}
+	}
+	return true
 }

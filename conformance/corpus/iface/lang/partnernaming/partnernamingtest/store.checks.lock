@@ -14,10 +14,12 @@ Count/zero-on-error	signature/zero-on-error	Count returns zero alongside any err
 Emit/cancel	signature/cancel	Emit reports a cancelled context as cancelled	
 Emit/deadline	signature/deadline	Emit reports an expired deadline as exceeded	
 Emit/nilcontext	signature/nilcontext	Emit returns an error rather than panicking on a nil context	
+Emit/sideeffect	mixin/sideeffect	Emit changes what Count observes	
 Emit/smoke	signature/smoke	Emit survives a call with a derived id	
 Move/cancel	signature/cancel	Move reports a cancelled context as cancelled	
 Move/deadline	signature/deadline	Move reports an expired deadline as exceeded	
 Move/nilcontext	signature/nilcontext	Move returns an error rather than panicking on a nil context	
+Move/sideeffect	mixin/sideeffect	Move changes what At observes	
 Move/smoke	signature/smoke	Move survives a call with derived inputs	
 Seen/cancel	signature/cancel	Seen reports a cancelled context as cancelled	
 Seen/deadline	signature/deadline	Seen reports an expired deadline as exceeded	
@@ -28,4 +30,5 @@ Seen/zero-on-error	signature/zero-on-error	Seen returns zero alongside any error
 Touch/cancel	signature/cancel	Touch reports a cancelled context as cancelled	
 Touch/deadline	signature/deadline	Touch reports an expired deadline as exceeded	
 Touch/nilcontext	signature/nilcontext	Touch returns an error rather than panicking on a nil context	
+Touch/sideeffect	mixin/sideeffect	Touch changes what Seen observes	
 Touch/smoke	signature/smoke	Touch survives a call with derived inputs	

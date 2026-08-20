@@ -100,9 +100,9 @@ func TestClaimWordingsMatchTheCorpus(t *testing.T) {
 		{"zero of a channel", suite.ZeroOnErrorClaim(subscribe), "Subscribe returns a nil channel alongside any error"},
 		{"idempotent", suite.IdempotentClaim(closeM), "a second Close after a clean one changes nothing"},
 		{
-			"accumulates with its noun",
-			suite.AccumulatesClaim(incr, "increment"),
-			"two increments of one key total two, because Incr is declared not idempotent",
+			"accumulates is idempotent's mirror over the same two calls",
+			suite.AccumulatesClaim(incr),
+			"a second Incr is accepted rather than refused as a repeat",
 		},
 		{
 			"sentinel miss speaks the bare name",

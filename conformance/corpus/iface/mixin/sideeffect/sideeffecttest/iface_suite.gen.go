@@ -42,13 +42,8 @@ import (
 //	Touch/cancel
 //	Touch/deadline
 //	Touch/nilcontext
+//	Touch/sideeffect
 //	Touch/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	sideeffect on Touch — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -213,6 +208,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Touch.Cancels():        "MixedSuite.Checks.Touch.Cancels()",
 	mixedCheckIndex.Touch.NilContext():     "MixedSuite.Checks.Touch.NilContext()",
 	mixedCheckIndex.Touch.Deadline():       "MixedSuite.Checks.Touch.Deadline()",
+	mixedCheckIndex.Touch.Sideeffect():     "MixedSuite.Checks.Touch.Sideeffect()",
 	mixedCheckIndex.Observed.Smoke():       "MixedSuite.Checks.Observed.Smoke()",
 	mixedCheckIndex.Observed.Cancels():     "MixedSuite.Checks.Observed.Cancels()",
 	mixedCheckIndex.Observed.NilContext():  "MixedSuite.Checks.Observed.NilContext()",
@@ -269,12 +265,17 @@ func (mixedTouchChecks) Deadline() suite.ID {
 	return suite.MethodID(mixedTouch, suite.SegDeadline)
 }
 
+func (mixedTouchChecks) Sideeffect() suite.ID {
+	return suite.MethodID(mixedTouch, suite.SegSideEffect)
+}
+
 func (mixedTouchChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedTouchChecks{}.Smoke(),
 		mixedTouchChecks{}.Cancels(),
 		mixedTouchChecks{}.NilContext(),
 		mixedTouchChecks{}.Deadline(),
+		mixedTouchChecks{}.Sideeffect(),
 	}
 }
 
@@ -385,6 +386,11 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Observed returns zero alongside any error",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertObservedZeroOnError(tb, m, fx)
+			}),
+		sig(ix.Touch.Sideeffect(), suite.ClassSideEffect,
+			"Touch changes what Observed observes",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertTouchSideeffect(tb, m, fx)
 			}),
 		sig(ix.Observed.Miss(), suite.ClassReader,
 			"Observed reports zero for a key nothing has written",
@@ -511,6 +517,34 @@ func mixedAssertObservedZeroOnError(
 	if got != zero {
 		tb.Errorf("Observed must return the zero value alongside an error: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// mixedAssertTouchSideeffect asserts Touch changes what Observed observes.
+func mixedAssertTouchSideeffect(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	before, beforeErr := m.Observed(ctx, fx.Key())
+	if beforeErr != nil {
+		tb.Fatalf("Observed must be readable before Touch runs: %v", beforeErr)
+	}
+
+	if err := m.Touch(ctx, fx.Key()); err != nil {
+		tb.Fatalf("Touch must succeed before the two readings mean anything: %v", err)
+	}
+
+	after, afterErr := m.Observed(ctx, fx.Key())
+	if afterErr != nil {
+		tb.Fatalf("Observed must still be readable after Touch runs: %v", afterErr)
+	}
+
+	if after == before {
+		tb.Errorf("Touch must change what Observed observes: both read %+v", before)
 	}
 }
 
@@ -726,4 +760,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 99fe63a55e8fb3ad8dec1405cc2147fb851fd20ac587a66269c44ed03521213c
+// testkit:provenance c19ac736850690237a619bc4ec15819f35f6017c31a46e7226a23af35e7e701b

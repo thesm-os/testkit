@@ -51,9 +51,9 @@ func answeringWriterProofs() prove.Defects[answeringwritertest.AnsweringWriter] 
 			func(tb testing.TB) answeringwritertest.AnsweringWriter {
 				return answeringwritertest.NewAnsweringWriterStub(tb, answeringwritertest.WithAnsweringWriterPut(
 					func(_ context.Context, _ answeringwriter.Value) (r0 answeringwriter.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func answeringWriterProofs() prove.Defects[answeringwritertest.AnsweringWriter] 
 			func(tb testing.TB) answeringwritertest.AnsweringWriter {
 				return answeringwritertest.NewAnsweringWriterStub(tb, answeringwritertest.WithAnsweringWriterPut(
 					func(_ context.Context, _ answeringwriter.Value) (r0 answeringwriter.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func answeringWriterProofs() prove.Defects[answeringwritertest.AnsweringWriter] 
 			func(tb testing.TB) answeringwritertest.AnsweringWriter {
 				return answeringwritertest.NewAnsweringWriterStub(tb, answeringwritertest.WithAnsweringWriterPut(
 					func(_ context.Context, _ answeringwriter.Value) (r0 answeringwriter.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,6 +87,16 @@ func answeringWriterProofs() prove.Defects[answeringwritertest.AnsweringWriter] 
 						// violation rather than a subject that merely failed.
 						r0 = answeringwriter.Value{Key: "other-value"}
 						err = errors.New("planted: Put refused with a believable value")
+						return
+					}))
+			}),
+		ix.Put.Answer(): prove.One("an AnsweringWriter whose Put reports success and answers the zero",
+			func(tb testing.TB) answeringwritertest.AnsweringWriter {
+				return answeringwritertest.NewAnsweringWriterStub(tb, answeringwritertest.WithAnsweringWriterPut(
+					func(_ context.Context, _ answeringwriter.Value) (r0 answeringwriter.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -121,4 +131,4 @@ func TestAnsweringWriterInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ac720e25dfd9e79f45aa378b35c3becec42e5e4f4a8088d106eebb6ff88b8d62
+// testkit:provenance 0e2aed906eb59eb62292e7e66f6c744f1fd7a47045bf5ae4d1a8b44b2e52bd0d

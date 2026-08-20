@@ -27,7 +27,13 @@ import (
 type Mixed interface {
 	// Set is confined to the named scope. The law reads back from another
 	// scope to prove containment, so a reader is required.
-	//testkit:mixin scope name=tenant
+	// The naming form beside the checkable one, which is the composition
+	// the ruling describes: scope says what the axis MEANS and licenses
+	// no check, partition names the observer as well and derives the
+	// isolation. Two stamps rather than one mixin doing both, the way
+	// idempotent and accumulates sit on the effect axis.
+	//testkit:mixin scope name=tenant axis=scope
+	//testkit:mixin partition axis=scope read=Get
 	Set(ctx context.Context, scope, key, value string) error
 
 	// Get reads within a scope, which is what makes confinement observable.

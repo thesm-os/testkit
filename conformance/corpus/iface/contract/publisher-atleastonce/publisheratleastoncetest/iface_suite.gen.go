@@ -326,7 +326,6 @@ func contractSuite(fx ContractFixture) suite.Suite[Contract] {
 // run cannot yet plant is argued rather than asserted.
 func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 	sig := suite.ProvenCheck[Contract]
-	argued := suite.ArguedCheck[Contract]
 	ix := contractCheckIndex
 	return []suite.Check[Contract]{
 		sig(ix.Publish.Smoke(), suite.ClassSmoke,
@@ -369,9 +368,8 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			func(tb testing.TB, c Contract) {
 				contractAssertSubscribeHonoursDeadline(tb, c)
 			}),
-		argued(ix.Subscribe.ZeroOnError(), suite.ClassZeroValue,
+		sig(ix.Subscribe.ZeroOnError(), suite.ClassZeroValue,
 			"Subscribe returns a nil channel alongside any error",
-			"no defect template spells echo-beside-error yet, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertSubscribeZeroOnError(tb, c)
 			}),
@@ -685,4 +683,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance ab186a4f897bc1cd48606639352b17ae31793c0242948b15c3b0aa2438a74d97
+// testkit:provenance cdd7bd0971cc715651a45be085e35cb88a9d796f1b3be880884fc98796e64fea

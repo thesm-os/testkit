@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[xsssafetest.Mixed] {
 			func(tb testing.TB) xsssafetest.Mixed {
 				return xsssafetest.NewMixedStub(tb, xsssafetest.WithMixedRender(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[xsssafetest.Mixed] {
 			func(tb testing.TB) xsssafetest.Mixed {
 				return xsssafetest.NewMixedStub(tb, xsssafetest.WithMixedRender(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[xsssafetest.Mixed] {
 			func(tb testing.TB) xsssafetest.Mixed {
 				return xsssafetest.NewMixedStub(tb, xsssafetest.WithMixedRender(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -120,4 +120,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c4bb8c5a6d7ad6e7c3d0f72c8af81189e4bee1cb05ba7598a68466a24a8456ab
+// testkit:provenance b050acf5773b209ec2deed3706e364c9d9d38341959528e881d31e0d7cae5ce5

@@ -410,10 +410,9 @@ func readerAssertGetMiss(
 ) {
 	tb.Helper()
 	ctx := tb.Context()
-
 	_, err := r.Get(ctx, fx.KeyOther())
 	if !errors.Is(err, reader.ErrNotFound) {
-		tb.Errorf("Get must report a miss as %v: got %v", reader.ErrNotFound, err)
+		tb.Errorf("Get must report %v: got %v", reader.ErrNotFound, err)
 	}
 }
 
@@ -611,4 +610,4 @@ func ProveReader(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5d5f364a147c413f9b8f1a80a71a7c2bb86b1df029bb1d4b065e71365b128ca9
+// testkit:provenance f24ea25d090d1d2d23392bb2bc57084d0682c4bdc9f14b8b40991b4e90d14d85

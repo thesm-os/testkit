@@ -256,7 +256,10 @@ func panicPlan() projection.CheckPlan {
 		Class:       vocab.ClassSmoke,
 		Body:        projection.SmokeSurvives{Call: projection.CallPlan{Method: "Get"}},
 		Falsifiable: vocab.Proven(),
-		Defect:      projection.StubPanic{Option: projection.OptionName("Store", "Get")},
+		Defect: projection.StubPanic{
+			Clause: projection.Clause{Text: "Get panics"},
+			Option: projection.OptionName("Store", "Get"),
+		},
 	}
 }
 

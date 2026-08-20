@@ -8,6 +8,7 @@ package orderaftertest
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -35,16 +36,11 @@ import (
 //
 //	Commit/cancel
 //	Commit/nilcontext
+//	Commit/orderafter
 //	Commit/smoke
 //	Prepare/cancel
 //	Prepare/nilcontext
 //	Prepare/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	orderafter on Commit — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -196,6 +192,7 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Commit.Smoke():       "MixedSuite.Checks.Commit.Smoke()",
 	mixedCheckIndex.Commit.Cancels():     "MixedSuite.Checks.Commit.Cancels()",
 	mixedCheckIndex.Commit.NilContext():  "MixedSuite.Checks.Commit.NilContext()",
+	mixedCheckIndex.Commit.Orderafter():  "MixedSuite.Checks.Commit.Orderafter()",
 	mixedCheckIndex.Prepare.Smoke():      "MixedSuite.Checks.Prepare.Smoke()",
 	mixedCheckIndex.Prepare.Cancels():    "MixedSuite.Checks.Prepare.Cancels()",
 	mixedCheckIndex.Prepare.NilContext(): "MixedSuite.Checks.Prepare.NilContext()",
@@ -245,11 +242,16 @@ func (mixedCommitChecks) NilContext() suite.ID {
 	return suite.MethodID(mixedCommit, suite.SegNilContext)
 }
 
+func (mixedCommitChecks) Orderafter() suite.ID {
+	return suite.MethodID(mixedCommit, suite.SegOrderAfter)
+}
+
 func (mixedCommitChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedCommitChecks{}.Smoke(),
 		mixedCommitChecks{}.Cancels(),
 		mixedCommitChecks{}.NilContext(),
+		mixedCommitChecks{}.Orderafter(),
 	}
 }
 
@@ -331,6 +333,11 @@ func mixedSignatureChecks() []suite.Check[Mixed] {
 			func(tb testing.TB, m Mixed) {
 				mixedAssertPrepareToleratesNilContext(tb, m)
 			}),
+		sig(ix.Commit.Orderafter(), suite.ClassOrderAfter,
+			"Commit reports ErrNotReady until Prepare has run",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertCommitOrderafter(tb, m)
+			}),
 	}
 }
 
@@ -398,6 +405,19 @@ func mixedAssertPrepareToleratesNilContext(
 	suite.ToleratesNilContext(tb, mixedPrepare, func(ctx context.Context) error {
 		return m.Prepare(ctx)
 	})
+}
+
+// mixedAssertCommitOrderafter asserts Commit reports ErrNotReady until Prepare has run.
+func mixedAssertCommitOrderafter(
+	tb testing.TB,
+	m Mixed,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+	err := m.Commit(ctx)
+	if !errors.Is(err, orderafter.ErrNotReady) {
+		tb.Errorf("Commit must report %v: got %v", orderafter.ErrNotReady, err)
+	}
 }
 
 // MixedDefect is anything that can stand as a planted defect for a
@@ -594,4 +614,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance e621c6f93d44b015256199c416cb5b952e63d07e1e2a4c65f3601cd951295dfe
+// testkit:provenance 057017c2363f3c3c5002f37c6524e8f08e63c2366f68e57eb97ff134dd3f04fa

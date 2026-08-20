@@ -41,12 +41,6 @@ import (
 //	Get/smoke
 //	Get/zero-on-error
 //
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	errors on Get — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -416,10 +410,9 @@ func mixedAssertGetMiss(
 ) {
 	tb.Helper()
 	ctx := tb.Context()
-
 	_, err := m.Get(ctx, fx.KeyOther())
 	if !errors2.Is(err, errors.ErrNotFound) {
-		tb.Errorf("Get must report a miss as %v: got %v", errors.ErrNotFound, err)
+		tb.Errorf("Get must report %v: got %v", errors.ErrNotFound, err)
 	}
 }
 
@@ -617,4 +610,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 195e25eb734ed9dcbeda73e598c6622730cdd91d2f56420845d86bedbffa1ce6
+// testkit:provenance 30962bd6eb5a7ed68728eb721f5c9e2e3bf8751efad49b540a6df1b8b1296cb9

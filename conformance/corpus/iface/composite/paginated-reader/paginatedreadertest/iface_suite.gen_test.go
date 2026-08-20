@@ -51,9 +51,9 @@ func paginatedReaderProofs() prove.Defects[paginatedreadertest.PaginatedReader] 
 			func(tb testing.TB) paginatedreadertest.PaginatedReader {
 				return paginatedreadertest.NewPaginatedReaderStub(tb, paginatedreadertest.WithPaginatedReaderPage(
 					func(_ context.Context, _ int) (items []paginatedreader.Value, next int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func paginatedReaderProofs() prove.Defects[paginatedreadertest.PaginatedReader] 
 			func(tb testing.TB) paginatedreadertest.PaginatedReader {
 				return paginatedreadertest.NewPaginatedReaderStub(tb, paginatedreadertest.WithPaginatedReaderPage(
 					func(_ context.Context, _ int) (items []paginatedreader.Value, next int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func paginatedReaderProofs() prove.Defects[paginatedreadertest.PaginatedReader] 
 			func(tb testing.TB) paginatedreadertest.PaginatedReader {
 				return paginatedreadertest.NewPaginatedReaderStub(tb, paginatedreadertest.WithPaginatedReaderPage(
 					func(_ context.Context, _ int) (items []paginatedreader.Value, next int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -121,4 +121,4 @@ func TestPaginatedReaderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ef172825abaa5a7a5c47ec7c42016106d303c4343c41f2c5be2648a54218ea49
+// testkit:provenance b1eb0c7b21513a153859aa7d2705207792e750ff892a1dd4189abf99e627563f

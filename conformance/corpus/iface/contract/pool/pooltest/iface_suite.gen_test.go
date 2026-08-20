@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractGet(
 					func(_ context.Context) (r0 pool.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractGet(
 					func(_ context.Context) (r0 pool.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractGet(
 					func(_ context.Context) (r0 pool.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -108,9 +108,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractStats(
 					func(_ context.Context) (r0 pool.Stats, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -118,9 +118,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractStats(
 					func(_ context.Context) (r0 pool.Stats, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -128,9 +128,9 @@ func contractProofs() prove.Defects[pooltest.Contract] {
 			func(tb testing.TB) pooltest.Contract {
 				return pooltest.NewContractStub(tb, pooltest.WithContractStats(
 					func(_ context.Context) (r0 pool.Stats, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -178,4 +178,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b359c49144918846a0fd2c501bb1f66b1c0e46c575a46aa39ee54278251ea4db
+// testkit:provenance d6f3ea888cfca06dd90fbd05d78e1f4f59afb8d20e59e61ab2fbccd2a461d9ad

@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedStore(
 					func(_ context.Context, _ monotonicreads.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedStore(
 					func(_ context.Context, _ monotonicreads.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedStore(
 					func(_ context.Context, _ monotonicreads.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 monotonicreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 monotonicreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 monotonicreads.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func mixedProofs() prove.Defects[monotonicreadstest.Mixed] {
 			func(tb testing.TB) monotonicreadstest.Mixed {
 				return monotonicreadstest.NewMixedStub(tb, monotonicreadstest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 monotonicreads.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = monotonicreads.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ff4c8971f82b217dbcf90cca22a557d79ae5b587e901ff1ffdfcb7c7ff78b67f
+// testkit:provenance 326e39a9c0ec8e2ac949db2dd44c9ab131ffed1741fa75e0b45dbbad1ad0da2b

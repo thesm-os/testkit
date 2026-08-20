@@ -21,6 +21,10 @@ import (
 // with no case to observe.
 var ErrUnkeyed = errors.New("batchwritertest: a value needs a key")
 
+// ErrNotFound reports a key the store does not hold — the reader role's own
+// miss, and what makes "the refused write landed nowhere" readable.
+var ErrNotFound = errors.New("batchwritertest: no value under that key")
+
 // InMemory is the implementation the generated conformance harness is run
 // against.
 //
@@ -60,6 +64,24 @@ func (s *InMemory) Put(ctx context.Context, v batchwriter.Value) error {
 	}
 	s.values[v.Key] = v
 	return nil
+}
+
+// Get reads back what Put accepted, which is how `mode=atomic` is observed:
+// a refused write must leave this answering exactly as it did before.
+//
+// The zero value accompanies every error, so a caller checking the error and
+// one checking the value do not disagree about whether the read succeeded.
+func (s *InMemory) Get(ctx context.Context, key string) (batchwriter.Value, error) {
+	if err := contextErr(ctx); err != nil {
+		return batchwriter.Value{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.values[key]
+	if !ok {
+		return batchwriter.Value{}, ErrNotFound
+	}
+	return v, nil
 }
 
 // contextErr reports a cancelled or expired context, and tolerates a nil one.

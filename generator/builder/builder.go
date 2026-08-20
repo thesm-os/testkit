@@ -642,8 +642,21 @@ func classify(rv golang.Resolver, field *Field, t *sdk.TypeRef) {
 	case t.IsFunc():
 		field.Shape = Func
 		field.Returns = golang.RefsOf(t.FuncReturns)
-	case golang.IsBidirectionalChan(t):
+	case golang.IsChannel(t):
+		// Every channel, not only the bidirectional ones. A directional
+		// field used to fall through to the default arm, where the
+		// sampler refused and the check was dropped; the sampler answers
+		// now, and the default arm compares a value against a SECOND
+		// evaluation of the same expression — two distinct channels,
+		// never equal, a check that cannot pass.
+		//
+		// The sample is what the local binds, rather than a make built
+		// from the field's own reference: `make(<-chan T)` is not legal
+		// Go, and the direction lives in the reference's stamp where a
+		// render cannot drop it. What the sampler answers is the
+		// bidirectional form, which assigns to either direction.
 		field.Shape = Chan
+		field.Sample, field.Alternate = golang.SampleRefFor(t, field.Name, rv)
 	case golang.IsError(t):
 		field.Shape = Error
 	case golang.IsByteSliceAny(t):

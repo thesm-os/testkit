@@ -49,9 +49,9 @@ func contractProofs() prove.Defects[circuitbreakertest.Contract] {
 			func(tb testing.TB) circuitbreakertest.Contract {
 				return circuitbreakertest.NewContractStub(tb, circuitbreakertest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func contractProofs() prove.Defects[circuitbreakertest.Contract] {
 			func(tb testing.TB) circuitbreakertest.Contract {
 				return circuitbreakertest.NewContractStub(tb, circuitbreakertest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func contractProofs() prove.Defects[circuitbreakertest.Contract] {
 			func(tb testing.TB) circuitbreakertest.Contract {
 				return circuitbreakertest.NewContractStub(tb, circuitbreakertest.WithContractRun(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,4 +106,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e24d0630f6fb372c73134cc1a309ff8f348b562906e6cbe2e3264c0bb655d915
+// testkit:provenance ac5cd6d59e2655effa2331fd81ae7cb7a7cf7e160ae0b83b8b8edf240b3c701c

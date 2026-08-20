@@ -37,6 +37,7 @@ import (
 //	Add/deadline
 //	Add/nilcontext
 //	Add/smoke
+//	At/bound
 //	At/cancel
 //	At/deadline
 //	At/miss
@@ -48,12 +49,6 @@ import (
 //	Len/nilcontext
 //	Len/smoke
 //	Len/zero-on-error
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	indexed on At — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -239,6 +234,7 @@ var rankedIndexPath = map[suite.ID]string{
 	rankedCheckIndex.At.NilContext():   "RankedSuite.Checks.At.NilContext()",
 	rankedCheckIndex.At.Deadline():     "RankedSuite.Checks.At.Deadline()",
 	rankedCheckIndex.At.ZeroOnError():  "RankedSuite.Checks.At.ZeroOnError()",
+	rankedCheckIndex.At.Bound():        "RankedSuite.Checks.At.Bound()",
 	rankedCheckIndex.At.Miss():         "RankedSuite.Checks.At.Miss()",
 }
 
@@ -357,6 +353,10 @@ func (rankedAtChecks) ZeroOnError() suite.ID {
 	return suite.MethodID(rankedAt, suite.SegZeroValue)
 }
 
+func (rankedAtChecks) Bound() suite.ID {
+	return suite.MethodID(rankedAt, suite.SegBound)
+}
+
 func (rankedAtChecks) Miss() suite.ID {
 	return suite.MethodID(rankedAt, suite.SegMiss)
 }
@@ -368,6 +368,7 @@ func (rankedAtChecks) All() []suite.ID {
 		rankedAtChecks{}.NilContext(),
 		rankedAtChecks{}.Deadline(),
 		rankedAtChecks{}.ZeroOnError(),
+		rankedAtChecks{}.Bound(),
 		rankedAtChecks{}.Miss(),
 	}
 }
@@ -467,6 +468,11 @@ func rankedSignatureChecks(fx RankedFixture) []suite.Check[Ranked] {
 			"At returns the zero Value alongside any error",
 			func(tb testing.TB, r Ranked) {
 				rankedAssertAtZeroOnError(tb, r, fx)
+			}),
+		sig(ix.At.Bound(), suite.ClassBound,
+			"At reports no element at the size Len reports",
+			func(tb testing.TB, r Ranked) {
+				rankedAssertAtBound(tb, r, fx)
 			}),
 		sig(ix.At.Miss(), suite.ClassReader,
 			"At reports zero for a i nothing has written",
@@ -659,6 +665,29 @@ func rankedAssertAtZeroOnError(
 	var zero indexed.Value
 	if got != zero {
 		tb.Errorf("At must return the zero value alongside an error: got %+v, want %+v (err %v)",
+			got, zero, err)
+	}
+}
+
+// rankedAssertAtBound asserts At reports no element at the size Len reports.
+func rankedAssertAtBound(
+	tb testing.TB,
+	r Ranked,
+	fx RankedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	bound, boundErr := r.Len(ctx)
+	if boundErr != nil {
+		tb.Fatalf("Len must answer before the edge can be asked for: %v", boundErr)
+	}
+
+	got, err := r.At(ctx, bound)
+
+	var zero indexed.Value
+	if got != zero {
+		tb.Errorf("At must return the zero value at the size Len reports: got %+v, want %+v (err %v)",
 			got, zero, err)
 	}
 }
@@ -875,4 +904,4 @@ func ProveRanked(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 8c05427d62e7b542fe82aab7e220ee3e99f853f29926b84f21acca3e8f6d3b5b
+// testkit:provenance 0f703d699667f1688486310fe96d27bbb8dc3def5b1909098653667cda3a0d9b

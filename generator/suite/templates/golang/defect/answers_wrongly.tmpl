@@ -19,7 +19,7 @@ to prevent: where no live value derives, the row ships Argued instead.
 				// reading the error and one reading the value disagree
 				// about what happened, which is the claim's own
 				// violation rather than a subject that merely failed.
-				{{ .ValueSlot }} = {{ template "suite.defect.sample" .Echo }}
+				{{ .ValueSlot }} = {{ renderSample .Echo }}
 				{{ .ErrSlot }} = {{ renderExpr (external "errors" "New") }}({{ printf "%q" .EchoMessage }})
 				return
 			}))
@@ -27,40 +27,22 @@ to prevent: where no live value derives, the row ships Argued instead.
 {{- end -}}
 
 {{- /*
-The miss claim's defect: answering for an input nothing supplied.
+The claim a zero would STATE rather than break: the defect has to
+produce a live value.
 
-Two arms, chosen by what the read declares. With a sentinel the defect
-need only ANSWER — a subject that owed an error and gave none has
-already invented the hit — and the bare return says exactly that.
-Without one the claim is about the value, so the defect has to produce
-a live one.
+Where the claim names a sentinel this is not the shape — a subject that
+owed an error and gave none has already broken it, and the bare return
+of answers-anyway says exactly that with no value to derive.
 */ -}}
-{{- define "suite.defect.invents-hit" -}}
+{{- define "suite.defect.answers-with-value" -}}
 {{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
 	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
 		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
 			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
-{{- if .Sentinel }}
-				// The sentinel was owed and nothing is reported, so the
-				// absent key reads as present.
-{{- else }}
-				// A value for a key nothing wrote.
-				{{ .ValueSlot }} = {{ template "suite.defect.sample" .Echo }}
-{{- end }}
+				// A value for a call a correct subject answers nothing for.
+				{{ .ValueSlot }} = {{ renderSample .Echo }}
 				return
 			}))
 	}){{ template "suite.frag.defect-reason" . }}
 {{- end -}}
 
-{{- /*
-One derived value, spelled the way its type takes it. A composite
-literal and a conversion are not interchangeable, and which applies is
-a property of the type rather than of the value — so the sampler
-records it and this reads it back.
-*/ -}}
-{{- define "suite.defect.sample" -}}
-{{- if not .Ref }}{{ .Text }}
-{{- else if .Composite }}{{ renderType .Ref }}{{ .Text }}
-{{- else }}{{ renderType .Ref }}({{ .Text }})
-{{- end }}
-{{- end -}}

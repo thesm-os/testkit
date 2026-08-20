@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractPut(
 					func(_ context.Context, _ updater.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractPut(
 					func(_ context.Context, _ updater.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractPut(
 					func(_ context.Context, _ updater.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 updater.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 updater.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 updater.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func contractProofs() prove.Defects[updatertest.Contract] {
 			func(tb testing.TB) updatertest.Contract {
 				return updatertest.NewContractStub(tb, updatertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 updater.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = updater.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 955b16a1af05a8ce755f811a596586c627178d05f508162fa05f5d3e7fd5277e
+// testkit:provenance 80e58aaad717c2fc229d6870f35d87035948d28a852c8213f0b489ae81437242

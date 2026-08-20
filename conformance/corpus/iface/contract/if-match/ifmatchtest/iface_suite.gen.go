@@ -41,6 +41,7 @@ import (
 //	Match/zero-on-error
 //	Put/cancel
 //	Put/deadline
+//	Put/match
 //	Put/nilcontext
 //	Put/smoke
 //
@@ -207,6 +208,7 @@ var contractIndexPath = map[suite.ID]string{
 	contractCheckIndex.Put.Cancels():       "ContractSuite.Checks.Put.Cancels()",
 	contractCheckIndex.Put.NilContext():    "ContractSuite.Checks.Put.NilContext()",
 	contractCheckIndex.Put.Deadline():      "ContractSuite.Checks.Put.Deadline()",
+	contractCheckIndex.Put.Match():         "ContractSuite.Checks.Put.Match()",
 	contractCheckIndex.Match.Smoke():       "ContractSuite.Checks.Match.Smoke()",
 	contractCheckIndex.Match.Cancels():     "ContractSuite.Checks.Match.Cancels()",
 	contractCheckIndex.Match.NilContext():  "ContractSuite.Checks.Match.NilContext()",
@@ -263,12 +265,17 @@ func (contractPutChecks) Deadline() suite.ID {
 	return suite.MethodID(contractPut, suite.SegDeadline)
 }
 
+func (contractPutChecks) Match() suite.ID {
+	return suite.MethodID(contractPut, suite.SegMatch)
+}
+
 func (contractPutChecks) All() []suite.ID {
 	return []suite.ID{
 		contractPutChecks{}.Smoke(),
 		contractPutChecks{}.Cancels(),
 		contractPutChecks{}.NilContext(),
 		contractPutChecks{}.Deadline(),
+		contractPutChecks{}.Match(),
 	}
 }
 
@@ -378,15 +385,20 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			}),
 		argued(ix.Match.ZeroOnError(), suite.ClassZeroValue,
 			"Match returns zero alongside any error",
-			"no defect template spells echo-beside-error yet, so this run plants no evidence for the claim",
+			"the echo-beside-error defect has to answer a live value and no sample of this method's result could be derived, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertMatchZeroOnError(tb, c, fx)
 			}),
 		argued(ix.Match.Miss(), suite.ClassReader,
 			"Match reports zero for a value nothing has written",
-			"no defect template spells invents-hit yet, so this run plants no evidence for the claim",
+			"the answers-with-value defect has to answer a live value and no sample of this method's result could be derived, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertMatchMiss(tb, c, fx)
+			}),
+		sig(ix.Put.Match(), suite.ClassMatch,
+			"Put lands exactly when Match says it may",
+			func(tb testing.TB, c Contract) {
+				contractAssertPutMatch(tb, c, fx)
 			}),
 	}
 }
@@ -526,6 +538,32 @@ func contractAssertMatchMiss(
 	if got != zero {
 		tb.Errorf("Match must return the zero value for an input nothing supplied: got %+v, want %+v (err %v)",
 			got, zero, err)
+	}
+}
+
+// contractAssertPutMatch asserts Put lands exactly when Match says it may.
+func contractAssertPutMatch(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	verdict, verdictErr := c.Match(ctx, fx.Value())
+	if verdictErr != nil {
+		// Not a failure of either method. A predicate may have nothing to
+		// judge yet — nothing was written, so there is no state to answer
+		// about — and demanding a verdict there would fail a subject for
+		// the one thing the contract does not say. The skip is not a pass:
+		// it says this run reached no verdict to compare.
+		tb.Skipf("Match could not answer for a subject nothing has written to (%v), "+
+			"so this check has no verdict to compare", verdictErr)
+	}
+	err := c.Put(ctx, fx.Value())
+	if verdict != (err == nil) {
+		tb.Errorf("Put must land exactly when Match says it may: Match said %v, Put said %v",
+			verdict, err)
 	}
 }
 
@@ -723,4 +761,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9967fc651ea928bf93d07285081f5eaaa295456b51b5ba9c9898f2d520238a49
+// testkit:provenance c0bebc39ea83942433b2bc98e9db78419c41c0a614078d79e995a8595bf40dc9

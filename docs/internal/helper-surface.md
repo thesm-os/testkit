@@ -97,7 +97,7 @@ plan of record, and this note cites them rather than re-deriving them:
 ## The open decision
 
 `concurrent` and `concurrentreaders` are the suite tier's under
-[ADR-0018](../adr/0018-one-tier-owns-each-classification.md) and generate
+[ADR-0028](../adr/0028-one-tier-owns-each-obligation.md) and generate
 nothing. `concurrency.ConcurrentStress` and `stub.Gate` are the primitives a
 check would use. What blocks it is which half of the claim the gate can see.
 

@@ -50,9 +50,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceNamed(
 					func(_ context.Context, _ string) (item string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceNamed(
 					func(_ context.Context, _ string) (item string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceNamed(
 					func(_ context.Context, _ string) (item string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -100,9 +100,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceUnnamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -110,9 +110,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceUnnamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -120,9 +120,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServiceUnnamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -150,9 +150,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServicePartiallyNamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -160,9 +160,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServicePartiallyNamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -170,9 +170,9 @@ func serviceProofs() prove.Defects[namedreturnstest.Service] {
 			func(tb testing.TB) namedreturnstest.Service {
 				return namedreturnstest.NewServiceStub(tb, namedreturnstest.WithServicePartiallyNamed(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -220,4 +220,4 @@ func TestServiceInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 99a8056697afb98a99b6c4ec9d778be5847dda72aca671eda4d7746c8f8d1ceb
+// testkit:provenance e605c89ca3231bf283e1ec11a46d3d051350e18e84c3fb5078d072931f767a77

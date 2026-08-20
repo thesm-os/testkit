@@ -34,6 +34,10 @@ import (
 //
 // Every ID this package emits:
 //
+//	At/cancel
+//	At/deadline
+//	At/nilcontext
+//	At/smoke
 //	Fired/cancel
 //	Fired/deadline
 //	Fired/nilcontext
@@ -45,8 +49,6 @@ import (
 // knows what is missing and what would bring it back:
 //
 //	AUTO-SCHEDULED-FIRES-AFTER-ADVANCE for Mixed — the law rides its own leg but its claim is unworded. To close it: word it in lawid's claim table.
-//	At's signature checks — its Duration argument needs a value which this run did not resolve, so no value was derived for it. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
-//	At's stamp checks — its Duration argument needs a value which this run did not resolve, so no value was derived for it. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -81,7 +83,10 @@ func DefaultMixedFixture() MixedFixture {
 // comes from the config's pool and an unroled one from its derived
 // literal, and no check that draws should be able to tell which.
 func mixedNewFixture() MixedFixture {
-	return MixedFixture{}
+	return MixedFixture{
+		duration:      time.Duration(42),
+		durationOther: time.Duration(7),
+	}
 }
 
 // Duration is the canonical duration every check draws.
@@ -194,8 +199,8 @@ func (mixedVeneer) Without(ids ...suite.ID) MixedRunOpt {
 // The way in from outside this package: the assembler and the table it
 // builds are unexported, because a caller reaching them is doing tooling
 // and tooling wants one name rather than one per interface.
-func (mixedVeneer) Suite() suite.Suite[Mixed] {
-	return mixedSuite()
+func (mixedVeneer) Suite(fx MixedFixture) suite.Suite[Mixed] {
+	return mixedSuite(fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -204,6 +209,10 @@ func (mixedVeneer) Suite() suite.Suite[Mixed] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var mixedIndexPath = map[suite.ID]string{
+	mixedCheckIndex.At.Smoke():          "MixedSuite.Checks.At.Smoke()",
+	mixedCheckIndex.At.Cancels():        "MixedSuite.Checks.At.Cancels()",
+	mixedCheckIndex.At.NilContext():     "MixedSuite.Checks.At.NilContext()",
+	mixedCheckIndex.At.Deadline():       "MixedSuite.Checks.At.Deadline()",
 	mixedCheckIndex.Fired.Smoke():       "MixedSuite.Checks.Fired.Smoke()",
 	mixedCheckIndex.Fired.Cancels():     "MixedSuite.Checks.Fired.Cancels()",
 	mixedCheckIndex.Fired.NilContext():  "MixedSuite.Checks.Fired.NilContext()",
@@ -224,18 +233,48 @@ const (
 // mixedCheckIndex indexes every check this package emits, by
 // method and then by check.
 var mixedCheckIndex = mixedCheckIndexT{
+	At:    mixedAtChecks{},
 	Fired: mixedFiredChecks{},
 }
 
 type mixedCheckIndexT struct {
+	At    mixedAtChecks
 	Fired mixedFiredChecks
 }
 
 // All returns every ID this package emits.
 func (mixedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, mixedAtChecks{}.All()...)
 	out = append(out, mixedFiredChecks{}.All()...)
 	return out
+}
+
+type mixedAtChecks struct{}
+
+func (mixedAtChecks) Smoke() suite.ID {
+	return suite.MethodID(mixedAt, suite.SegSmoke)
+}
+
+func (mixedAtChecks) Cancels() suite.ID {
+	return suite.MethodID(mixedAt, suite.SegCancel)
+}
+
+func (mixedAtChecks) NilContext() suite.ID {
+	return suite.MethodID(mixedAt, suite.SegNilContext)
+}
+
+func (mixedAtChecks) Deadline() suite.ID {
+	return suite.MethodID(mixedAt, suite.SegDeadline)
+}
+
+func (mixedAtChecks) All() []suite.ID {
+	return []suite.ID{
+		mixedAtChecks{}.Smoke(),
+		mixedAtChecks{}.Cancels(),
+		mixedAtChecks{}.NilContext(),
+		mixedAtChecks{}.Deadline(),
+	}
 }
 
 type mixedFiredChecks struct{}
@@ -277,11 +316,11 @@ func (mixedFiredChecks) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func mixedSuite() suite.Suite[Mixed] {
+func mixedSuite(fx MixedFixture) suite.Suite[Mixed] {
 	return suite.Suite[Mixed]{
 		Name:     "Mixed",
 		DropHint: mixedDropHint,
-		Checks:   mixedSignatureChecks(),
+		Checks:   mixedSignatureChecks(fx),
 	}
 }
 
@@ -292,10 +331,30 @@ func mixedSuite() suite.Suite[Mixed] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func mixedSignatureChecks() []suite.Check[Mixed] {
+func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 	sig := suite.ProvenCheck[Mixed]
 	ix := mixedCheckIndex
 	return []suite.Check[Mixed]{
+		sig(ix.At.Smoke(), suite.ClassSmoke,
+			"At survives a call with a derived duration",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertAtSmoke(tb, m, fx)
+			}),
+		sig(ix.At.Cancels(), suite.ClassCancel,
+			"At reports a cancelled context as cancelled",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertAtCancels(tb, m, fx)
+			}),
+		sig(ix.At.NilContext(), suite.ClassNilContext,
+			"At returns an error rather than panicking on a nil context",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertAtToleratesNilContext(tb, m, fx)
+			}),
+		sig(ix.At.Deadline(), suite.ClassDeadline,
+			"At reports an expired deadline as exceeded",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertAtHonoursDeadline(tb, m, fx)
+			}),
 		sig(ix.Fired.Smoke(), suite.ClassSmoke,
 			"Fired survives a call",
 			func(tb testing.TB, m Mixed) {
@@ -322,6 +381,54 @@ func mixedSignatureChecks() []suite.Check[Mixed] {
 				mixedAssertFiredZeroOnError(tb, m)
 			}),
 	}
+}
+
+// mixedAssertAtSmoke asserts At survives a call with a derived duration.
+func mixedAssertAtSmoke(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, mixedAt, func(ctx context.Context) {
+		_ = m.At(ctx, fx.Duration())
+	})
+}
+
+// mixedAssertAtCancels asserts At reports a cancelled context as cancelled.
+func mixedAssertAtCancels(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.ReportsCancelled(tb, mixedAt, func(ctx context.Context) error {
+		return m.At(ctx, fx.Duration())
+	})
+}
+
+// mixedAssertAtToleratesNilContext asserts At returns an error rather than panicking on a nil context.
+func mixedAssertAtToleratesNilContext(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.ToleratesNilContext(tb, mixedAt, func(ctx context.Context) error {
+		return m.At(ctx, fx.Duration())
+	})
+}
+
+// mixedAssertAtHonoursDeadline asserts At reports an expired deadline as exceeded.
+func mixedAssertAtHonoursDeadline(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.ReportsDeadlineExceeded(tb, mixedAt, func(ctx context.Context) error {
+		return m.At(ctx, fx.Duration())
+	})
 }
 
 // mixedAssertFiredSmoke asserts Fired survives a call.
@@ -545,7 +652,7 @@ func RunMixed(
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunMixed")
 	suite.Run(t,
-		mixedSuite().With(rc.Extra...).Without(rc.Drops...),
+		mixedSuite(fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -585,4 +692,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 83f381ffc72dccc897b7bcbe7e8bd597c991d5fcf8dd4b464e5969b33ef8ba67
+// testkit:provenance 3aad2c9657987a6a8aaaeaabee318db64f9f9bb63d8ea29ec0e2271c50892abf

@@ -4,8 +4,4 @@ NewInput/deadline	signature/deadline	NewInput reports an expired deadline as exc
 NewInput/nilcontext	signature/nilcontext	NewInput returns an error rather than panicking on a nil context	
 NewInput/smoke	signature/smoke	NewInput survives a call	
 NewInput/zero-on-error	signature/zero-on-error	NewInput returns zero alongside any error	
-Process/cancel	signature/cancel	Process reports a cancelled context as cancelled	
-Process/deadline	signature/deadline	Process reports an expired deadline as exceeded	
-Process/nilcontext	signature/nilcontext	Process returns an error rather than panicking on a nil context	
-Process/smoke	signature/smoke	Process survives a call with a seeded input	
-Process/zero-on-error	signature/zero-on-error	Process returns zero alongside any error	
+Process/smoke	signature/smoke	Process survives a call with an input NewInput made	

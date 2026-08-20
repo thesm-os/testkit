@@ -11,6 +11,7 @@ import (
 	"errors"
 	"testing"
 
+	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/crdtmerge"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/crdtmerge/crdtmergetest"
 	"go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/engine/suite/prove"
@@ -50,9 +51,9 @@ func replicaProofs() prove.Defects[crdtmergetest.Replica] {
 			func(tb testing.TB) crdtmergetest.Replica {
 				return crdtmergetest.NewReplicaStub(tb, crdtmergetest.WithReplicaItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func replicaProofs() prove.Defects[crdtmergetest.Replica] {
 			func(tb testing.TB) crdtmergetest.Replica {
 				return crdtmergetest.NewReplicaStub(tb, crdtmergetest.WithReplicaItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +71,9 @@ func replicaProofs() prove.Defects[crdtmergetest.Replica] {
 			func(tb testing.TB) crdtmergetest.Replica {
 				return crdtmergetest.NewReplicaStub(tb, crdtmergetest.WithReplicaItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -142,6 +143,13 @@ func TestMixedProofs(t *testing.T) {
 func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 	ix := crdtmergetest.MixedSuite.Checks
 	return prove.Defects[crdtmergetest.Mixed]{
+		ix.Merge.Smoke(): prove.One("a Mixed whose Merge panics",
+			func(tb testing.TB) crdtmergetest.Mixed {
+				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedMerge(
+					func(_ context.Context, _ crdtmerge.Replica) error {
+						panic("planted: Merge panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
 		ix.Add.Smoke(): prove.One("a Mixed whose Add panics",
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedAdd(
@@ -153,9 +161,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -163,9 +171,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -173,9 +181,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedAdd(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -190,9 +198,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -200,9 +208,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -210,9 +218,9 @@ func mixedProofs() prove.Defects[crdtmergetest.Mixed] {
 			func(tb testing.TB) crdtmergetest.Mixed {
 				return crdtmergetest.NewMixedStub(tb, crdtmergetest.WithMixedItems(
 					func(_ context.Context) (r0 []string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -260,4 +268,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1ca5351e04acf7cb4f732bc817e6fc432a87392ee6d47aa1072689c62d5461b9
+// testkit:provenance a708bebdb1f9b24fa5e6443d011d7a199db97558216cf61271a1d8b1fa05c7af

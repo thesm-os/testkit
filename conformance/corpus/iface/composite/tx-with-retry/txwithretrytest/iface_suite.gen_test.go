@@ -49,9 +49,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryBegin(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryBegin(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -76,9 +76,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryCommit(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -86,9 +86,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryCommit(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -103,9 +103,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryRollback(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -113,9 +113,9 @@ func txWithRetryProofs() prove.Defects[txwithretrytest.TxWithRetry] {
 			func(tb testing.TB) txwithretrytest.TxWithRetry {
 				return txwithretrytest.NewTxWithRetryStub(tb, txwithretrytest.WithTxWithRetryRollback(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -150,4 +150,4 @@ func TestTxWithRetryInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b19086448e3ee27929e942dd1d61fc8b74cbd9a20ad211d70ee5f41a050a462c
+// testkit:provenance ceafba50d46ed5b63fa95aa0094dcfb7914b46b7aafa7d2c374bae17f76585c8

@@ -51,9 +51,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAdd(
 					func(_ context.Context, _ indexed.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAdd(
 					func(_ context.Context, _ indexed.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAdd(
 					func(_ context.Context, _ indexed.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedLen(
 					func(_ context.Context) (r0 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -138,9 +138,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAt(
 					func(_ context.Context, _ int) (r0 indexed.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -148,9 +148,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAt(
 					func(_ context.Context, _ int) (r0 indexed.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -158,9 +158,9 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAt(
 					func(_ context.Context, _ int) (r0 indexed.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -177,11 +177,20 @@ func rankedProofs() prove.Defects[indexedtest.Ranked] {
 						return
 					}))
 			}),
+		ix.At.Bound(): prove.One("a Ranked whose At answers for a position past the end",
+			func(tb testing.TB) indexedtest.Ranked {
+				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAt(
+					func(_ context.Context, _ int) (r0 indexed.Value, err error) {
+						// A value for a call a correct subject answers nothing for.
+						r0 = indexed.Value{Key: "other-value"}
+						return
+					}))
+			}),
 		ix.At.Miss(): prove.One("a Ranked whose At answers for an input nothing wrote",
 			func(tb testing.TB) indexedtest.Ranked {
 				return indexedtest.NewRankedStub(tb, indexedtest.WithRankedAt(
 					func(_ context.Context, _ int) (r0 indexed.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = indexed.Value{Key: "other-value"}
 						return
 					}))
@@ -217,4 +226,4 @@ func TestRankedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 244c700a99c62d7927abb84d7d4757e9fa66e709cc5668959d1ebd5da9e1220c
+// testkit:provenance cdca302557242e72649b9fa0d50c017b41211430d49be588144287bbd8a9dfa3

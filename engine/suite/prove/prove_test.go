@@ -231,7 +231,8 @@ func TestRapidFailFileConvention(t *testing.T) {
 		t.Fatalf("the canary property must fail; output:\n%s", out)
 	}
 	matches, globErr := filepath.Glob(filepath.Join(
-		work, "testdata", "rapid", "TestRapidFailFileConvention", "*.fail"))
+		work, "testdata", "rapid", "TestRapidFailFileConvention", "*.fail",
+	))
 	if globErr != nil || len(matches) == 0 {
 		t.Errorf("rapid did not write its reproduction file under testdata/rapid/<TestName>, "+
 			"where scrubBucket looks — the scrub is a silent no-op now (glob %v, err %v)\noutput:\n%s",

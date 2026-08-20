@@ -8,6 +8,7 @@ package batchwritertest_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	batchwriter "go.thesmos.sh/testkit/conformance/corpus/iface/contract/batch-writer"
@@ -50,9 +51,9 @@ func contractProofs() prove.Defects[batchwritertest.Contract] {
 			func(tb testing.TB) batchwritertest.Contract {
 				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractPut(
 					func(_ context.Context, _ batchwriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +61,9 @@ func contractProofs() prove.Defects[batchwritertest.Contract] {
 			func(tb testing.TB) batchwritertest.Contract {
 				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractPut(
 					func(_ context.Context, _ batchwriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,12 +71,71 @@ func contractProofs() prove.Defects[batchwritertest.Contract] {
 			func(tb testing.TB) batchwritertest.Contract {
 				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractPut(
 					func(_ context.Context, _ batchwriter.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
+		ix.Get.Smoke(): prove.One("a Contract whose Get panics",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (batchwriter.Value, error) {
+						panic("planted: Get panics")
+					}))
+			}).Reasoned(suite.RedPanicked),
+		ix.Get.Cancels(): prove.One("a Contract whose Get ignores the context it is handed",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (r0 batchwriter.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedCancelled),
+		ix.Get.NilContext(): prove.One("a Contract whose Get forgives a nil context and answers",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (r0 batchwriter.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedNilContext),
+		ix.Get.Deadline(): prove.One("a Contract whose Get ignores the context it is handed",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (r0 batchwriter.Value, err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
+						return
+					}))
+			}).Reasoned(suite.RedDeadline),
+		ix.Get.ZeroOnError(): prove.One("a Contract whose Get answers a believable value beside its error",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (r0 batchwriter.Value, err error) {
+						// A believable answer beside the refusal. A caller
+						// reading the error and one reading the value disagree
+						// about what happened, which is the claim's own
+						// violation rather than a subject that merely failed.
+						r0 = batchwriter.Value{Key: "other-value"}
+						err = errors.New("planted: Get refused with a believable value")
+						return
+					}))
+			}),
+		ix.Get.Miss(): prove.One("a Contract whose Get answers for an input nothing wrote",
+			func(tb testing.TB) batchwritertest.Contract {
+				return batchwritertest.NewContractStub(tb, batchwritertest.WithContractGet(
+					func(_ context.Context, _ string) (r0 batchwriter.Value, err error) {
+						// A value for a call a correct subject answers nothing for.
+						r0 = batchwriter.Value{Key: "other-value"}
+						return
+					}))
+			}),
 	}
 }
 
@@ -107,4 +167,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6e7705cad352fcf5551dfe7416b81774f146f585011931c1004b52be7937adc1
+// testkit:provenance 165aa367bd711a59447482c21f5a34f2022cea5496dcfb3f55f1a8e18ce9a5bf

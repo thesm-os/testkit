@@ -51,9 +51,9 @@ func multiReaderProofs() prove.Defects[multireadertest.MultiReader] {
 			func(tb testing.TB) multireadertest.MultiReader {
 				return multireadertest.NewMultiReaderStub(tb, multireadertest.WithMultiReaderGetWithMeta(
 					func(_ context.Context, _ string) (r0 multireader.Value, r1 multireader.Meta, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func multiReaderProofs() prove.Defects[multireadertest.MultiReader] {
 			func(tb testing.TB) multireadertest.MultiReader {
 				return multireadertest.NewMultiReaderStub(tb, multireadertest.WithMultiReaderGetWithMeta(
 					func(_ context.Context, _ string) (r0 multireader.Value, r1 multireader.Meta, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func multiReaderProofs() prove.Defects[multireadertest.MultiReader] {
 			func(tb testing.TB) multireadertest.MultiReader {
 				return multireadertest.NewMultiReaderStub(tb, multireadertest.WithMultiReaderGetWithMeta(
 					func(_ context.Context, _ string) (r0 multireader.Value, r1 multireader.Meta, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -121,4 +121,4 @@ func TestMultiReaderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5bac78e288874eef6f0b2cfa617ea37ba015108e36ab33f8331256f51a58732e
+// testkit:provenance c4fca53c1e2b2279a2d7f17a2de7d1c2a08fd19f3931fcce0bea390d6293c81a

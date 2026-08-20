@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedPut(
 					func(_ context.Context, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -143,7 +143,7 @@ func mixedProofs() prove.Defects[idempotenttest.Mixed] {
 			func(tb testing.TB) idempotenttest.Mixed {
 				return idempotenttest.NewMixedStub(tb, idempotenttest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = "other-"
 						return
 					}))
@@ -179,4 +179,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6b77be928a002fc60f20e3a35d47d31241e389ac4aa142dfbd66aa3b1bee9899
+// testkit:provenance f4dfaf82828cd0a231a73fc90f54c001a84cb6c4ee82a59f1cb4771ed1f17824

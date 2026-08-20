@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[poisonabletest.Mixed] {
 			func(tb testing.TB) poisonabletest.Mixed {
 				return poisonabletest.NewMixedStub(tb, poisonabletest.WithMixedFail(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[poisonabletest.Mixed] {
 			func(tb testing.TB) poisonabletest.Mixed {
 				return poisonabletest.NewMixedStub(tb, poisonabletest.WithMixedFail(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -103,4 +103,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3d0ddc355cd6f8bde222696b2a8937bb90150b17a11f4815be7541ca673a6785
+// testkit:provenance 8ba249f75591c16abc0b4650e77fd8ab992226e348d7b9430989a47f8c16c8ac

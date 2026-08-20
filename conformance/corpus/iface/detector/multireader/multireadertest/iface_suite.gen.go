@@ -39,6 +39,12 @@ import (
 //	GetWithMeta/smoke
 //	GetWithMeta/zero-on-error
 //
+// Reached by a rule and not derivable here. Each is a claim this file
+// does NOT make, so a reader counting coverage from the list above
+// knows what is missing and what would bring it back:
+//
+//	GetWithMeta's miss check — nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied. To close it: declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row.
+//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -588,4 +594,4 @@ func ProveMultiReader(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 28710a2c245e25db8ff952d9c5ebe20273776361db50e51576f20523e1e44d6c
+// testkit:provenance 8a90143e13f5e858adf9abc8f43e21718e29cb8d366e488d28b3f4252ff1c338

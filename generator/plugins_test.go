@@ -84,16 +84,18 @@ func TestEveryTemplateFuncResolves(t *testing.T) {
 // without calling bodies — so a placeholder binds as well as the real function,
 // and a variadic one binds against every call shape a template can write.
 //
-// Two of the three sources are authoritative. plugintest exports the canonical
-// reserved names, and lang/golang exports the shared Go conventions the backend
-// layers on top. [backendExtras] is the third and is hand-kept, because the
-// backend keeps that category unexported — see its own docblock.
+// All three sources are authoritative. plugintest exports the canonical
+// reserved names and the overrideable ones the backend registers, and
+// lang/golang exports the shared Go conventions layered on top. The
+// overrideable list was hand-kept here until eidos grew an accessor for it;
+// what that cost was a check that went red for a correct template every time
+// the backend added a helper.
 func reservedFuncs() template.FuncMap {
 	out := template.FuncMap{}
 	for _, name := range plugintest.ReservedTemplateFuncNames() {
 		out[name] = placeholderFunc
 	}
-	for _, name := range backendExtras {
+	for _, name := range plugintest.OverrideableTemplateFuncNames() {
 		out[name] = placeholderFunc
 	}
 	maps.Copy(out, golang.FuncMap())
@@ -104,31 +106,6 @@ func reservedFuncs() template.FuncMap {
 // calls. Variadic and untyped so it binds against any call a template writes:
 // what is under test is whether the *name* resolves.
 func placeholderFunc(...any) any { return nil }
-
-// backendExtras names the overrideable helpers the Go backend registers —
-// naming, meta-read, string and debug — which every plugin template may call.
-//
-// Hand-kept, and the only hand-kept list here. `extrasFuncMap` is unexported
-// and `plugintest.ReservedTemplateFuncNames` reports the canonical set only, so
-// there is no accessor to read. The drift this admits is loud rather than
-// silent: a helper eidos adds is one this list lacks, which fails the check for
-// a template that is in fact correct — someone fixes it the same day. The
-// opposite list, of names a template calls, is the one that drifts silently,
-// and that half is read from the parser.
-//
-// Reported upstream; delete this and pass the accessor when one ships.
-//
-//nolint:gochecknoglobals // immutable lookup table.
-var backendExtras = []string{
-	// Naming.
-	"pascal", "camel", "snake", "screaming", "exported",
-	// Meta read.
-	"meta", "metaBool", "metaStr", "hasMeta", "metaEq",
-	// String.
-	"join", "title", "upper", "lower", "trim", "split", "default", "coalesce",
-	// Debug.
-	"origin", "explain",
-}
 
 // The shape plugin is three annotators. Registering fewer is silent in a way
 // no coverage gate can see — the classifier stamps either way — so the count

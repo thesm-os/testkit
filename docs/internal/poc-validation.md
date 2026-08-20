@@ -334,7 +334,7 @@ one document.
 
 - Engine: the async fan-out concurrency lowering and the quiescence
   seam — RFC-0005-shaped design, not a mechanical fix.
-- ~~Corpus ratification~~ — DECOMPOSED and in flight. The mixin half is
+- ~~Corpus ratification~~ — DONE end to end. The mixin half is
   DONE: `mixin lifecycleafterclose` now sits on every sentinel-reporting
   operation of the gen sources (kv Put/Get/Len, cache Put/Len), the
   prose-derivation mentions are retired, and the rule row reads
@@ -342,9 +342,19 @@ one document.
   registry lives in eidos (`plugins/annotator/shape/contracts`), which
   testkit deliberately does not curate (ADR-0004) — filed as eidos#39
   (pool `stats` role) and eidos#40 (cursor `open` producer arm, riding
-  the returned-handle resolver scope eidos#29 delivered). The gen
-  sources already spell both; canon lands when the registrations
-  release and the conformance fixtures pick them up.
+  the returned-handle resolver scope eidos#29 delivered). Both registrations
+  landed in eidos main (the cursor arm via the Param.Role scoping the
+  #40 thread converged on); the three testkit modules ride the
+  pseudo-version, the conformance fixtures spell the canon (pool
+  stats=Stats with a struct-shaped accounting role; the cursor-open
+  producer fixture), the corpus regenerated clean (drift gate: 673
+  outputs), and the pool fixture's concrete-type Stats() supplied
+  wiring is retired in favor of the role. Deliberately deferred: the
+  cursor-open fixture carries no //testkit:model — the
+  produced-secondary lowering is the next-generation model plugin's,
+  proven in gen/scantest. The gate's law-manifest census also caught
+  the engine's new Ops field, now manifested KindDefault with the
+  emitter rule recorded beside it.
 - Single-domain evidence: clock/timeaware, the sim tier, and Porcupine
   still rest on kv alone.
 - ~~The `x/` vs `own/` family word~~ — DECIDED and applied: the family

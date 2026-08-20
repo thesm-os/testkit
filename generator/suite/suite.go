@@ -9,11 +9,14 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/accumulates"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/bounded"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/concurrent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/errors"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/hooks"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/idempotent"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/indexed"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/integrationonly"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/lifecycleafterclose"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/nilsafe"
@@ -21,7 +24,9 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/partition"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/scope"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sideeffect"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeaware"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/timeout"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/total"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/ttl"
@@ -241,6 +246,12 @@ type Method struct {
 	// nothing here: every check calls what it names, and a param is by
 	// definition a value with no callable in it.
 	contractRoles, contractPartners map[string]string
+
+	// contractParams holds the KV arguments a contract declares — the
+	// conflict sentinel an if-absent write reports, and whatever follows
+	// it. Apart from the two above because a param is neither a role nor
+	// a callable: nothing resolves it, so it arrives as written.
+	contractParams map[string]string
 }
 
 // HasMixin reports whether the annotator attached the named classification.
@@ -629,7 +640,7 @@ func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 	out := make([]Method, 0, len(set.Methods))
 	for _, src := range set.Methods {
 		bag := src.Meta()
-		roles, partners := contractDataOf(bag)
+		roles, partners, params := contractDataOf(bag)
 		stamped := shape.Mixins(bag)
 		out = append(out, Method{
 			Sig:              golang.SigOf(src),
@@ -640,6 +651,7 @@ func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
 			mixinParams:      mixinParamsOf(bag, stamped),
 			contractRoles:    roles,
 			contractPartners: partners,
+			contractParams:   params,
 		})
 	}
 	return out
@@ -693,28 +705,35 @@ func mixinParamsOf(bag *sdk.Bag, stamped []string) map[string]string {
 // because the reader-miss claim speaks the sentinel the ttl declaration
 // names, and wording reads the declared home rather than respelling it.
 const (
-	MixinNilSafe         = nilsafe.Name
-	MixinDeprecated      = deprecated.Name
-	MixinIntegrationOnly = integrationonly.Name
-	MixinTimeout         = timeout.Name
-	MixinTimeoutParam    = timeout.ParamDuration
-	MixinOrderAfter      = orderafter.Name
-	MixinOrderAfterParam = orderafter.ParamFn
-	MixinSideEffect      = sideeffect.Name
-	MixinSideEffectParam = sideeffect.ParamObserve
-	MixinPartition       = partition.Name
-	MixinPartitionRead   = partition.ParamRead
-	MixinPartitionAxis   = partition.ParamAxis
-	MixinHooks           = hooks.Name
-	MixinHooksParam      = hooks.ParamRegister
-	MixinSample          = sample.Name
-	MixinSampleParam     = sample.ParamBuilder
-	MixinValidates       = validates.Name
-	MixinValidatesParam  = validates.ParamFn
-	MixinWrappedVia      = wrappedvia.Name
-	MixinWrappedViaParam = wrappedvia.ParamFn
+	MixinNilSafe           = nilsafe.Name
+	MixinDeprecated        = deprecated.Name
+	MixinIntegrationOnly   = integrationonly.Name
+	MixinTimeout           = timeout.Name
+	MixinTimeoutParam      = timeout.ParamDuration
+	MixinOrderAfter        = orderafter.Name
+	MixinOrderAfterParam   = orderafter.ParamFn
+	MixinOrderAfterUnready = orderafter.ParamUnready
+	MixinSideEffect        = sideeffect.Name
+	MixinSideEffectParam   = sideeffect.ParamObserve
+	MixinPartition         = partition.Name
+	MixinPartitionRead     = partition.ParamRead
+	MixinPartitionAxis     = partition.ParamAxis
+	MixinHooks             = hooks.Name
+	MixinHooksParam        = hooks.ParamRegister
+	MixinSample            = sample.Name
+	MixinSampleParam       = sample.ParamBuilder
+	MixinValidates         = validates.Name
+	MixinValidatesParam    = validates.ParamFn
+	MixinWrappedVia        = wrappedvia.Name
+	MixinWrappedViaParam   = wrappedvia.ParamFn
 
+	MixinTimeAware          = timeaware.Name
+	MixinIndexed            = indexed.Name
+	MixinIndexedBy          = indexed.ParamBy
 	MixinIdempotent         = idempotent.Name
+	MixinAccumulates        = accumulates.Name
+	MixinErrors             = errors.Name
+	MixinScope              = scope.Name
 	MixinConcurrent         = concurrent.Name
 	MixinAfterClose         = lifecycleafterclose.Name
 	MixinAfterCloseClose    = lifecycleafterclose.ParamClose

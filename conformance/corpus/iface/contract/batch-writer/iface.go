@@ -25,6 +25,20 @@ type Value struct{ Key, Body string }
 type Contract interface {
 	// Put is the batch-writer contract's writer role, and hosts the directive
 	// that names its partners.
-	//testkit:contract batch-writer role=writer mode=atomic
+	//
+	// `mode=atomic` is a claim about state AFTER a failure, so it needs
+	// something to observe that state with — which is what the reader role
+	// is for. Without it the only statable claim is that a good write
+	// succeeds, which holds for a store that also keeps half a refused one.
+	//testkit:contract batch-writer role=writer mode=atomic reader=Get
 	Put(ctx context.Context, v Value) error
+
+	// Get is the batch-writer contract's reader role: the observation the
+	// mode's claim is read through.
+	//
+	// A role rather than a param, so the pairing is recorded on both members
+	// — a consumer holding this method can find the contract it confirms,
+	// which a one-directional `read=` could not answer.
+	//testkit:contract batch-writer role=reader
+	Get(ctx context.Context, key string) (Value, error)
 }

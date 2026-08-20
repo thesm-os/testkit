@@ -369,7 +369,7 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			}),
 		argued(ix.Watch.ZeroOnError(), suite.ClassZeroValue,
 			"Watch returns the zero Subscription alongside any error",
-			"no defect template spells echo-beside-error yet, so this run plants no evidence for the claim",
+			"the echo-beside-error defect has to answer a live value and no sample of this method's result could be derived, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertWatchZeroOnError(tb, c, fx)
 			}),
@@ -395,7 +395,7 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			}),
 		argued(ix.Watch.Miss(), suite.ClassReader,
 			"Watch reports zero for a key nothing has written",
-			"no defect template spells invents-hit yet, so this run plants no evidence for the claim",
+			"the answers-with-value defect has to answer a live value and no sample of this method's result could be derived, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertWatchMiss(tb, c, fx)
 			}),
@@ -734,4 +734,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 245430c4f129e0134534d911939872962c7368a338d12d82789b72cd76473cca
+// testkit:provenance e13c0eb95c9e848704f1cb1be43490d055975730028fb3a4b3e71c0c96fa33f2

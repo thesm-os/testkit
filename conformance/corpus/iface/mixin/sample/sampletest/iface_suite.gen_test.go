@@ -46,49 +46,6 @@ func mixedProofs() prove.Defects[sampletest.Mixed] {
 						panic("planted: Process panics")
 					}))
 			}).Reasoned(suite.RedPanicked),
-		ix.Process.Cancels(): prove.One("a Mixed whose Process ignores the context it is handed",
-			func(tb testing.TB) sampletest.Mixed {
-				return sampletest.NewMixedStub(tb, sampletest.WithMixedProcess(
-					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
-						return
-					}))
-			}).Reasoned(suite.RedCancelled),
-		ix.Process.NilContext(): prove.One("a Mixed whose Process forgives a nil context and answers",
-			func(tb testing.TB) sampletest.Mixed {
-				return sampletest.NewMixedStub(tb, sampletest.WithMixedProcess(
-					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
-						return
-					}))
-			}).Reasoned(suite.RedNilContext),
-		ix.Process.Deadline(): prove.One("a Mixed whose Process ignores the context it is handed",
-			func(tb testing.TB) sampletest.Mixed {
-				return sampletest.NewMixedStub(tb, sampletest.WithMixedProcess(
-					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
-						return
-					}))
-			}).Reasoned(suite.RedDeadline),
-		ix.Process.ZeroOnError(): prove.One("a Mixed whose Process answers a believable value beside its error",
-			func(tb testing.TB) sampletest.Mixed {
-				return sampletest.NewMixedStub(tb, sampletest.WithMixedProcess(
-					func(_ context.Context, _ string) (r0 string, err error) {
-						// A believable answer beside the refusal. A caller
-						// reading the error and one reading the value disagree
-						// about what happened, which is the claim's own
-						// violation rather than a subject that merely failed.
-						r0 = "other-"
-						err = errors.New("planted: Process refused with a believable value")
-						return
-					}))
-			}),
 		ix.NewInput.Smoke(): prove.One("a Mixed whose NewInput panics",
 			func(tb testing.TB) sampletest.Mixed {
 				return sampletest.NewMixedStub(tb, sampletest.WithMixedNewInput(
@@ -100,9 +57,9 @@ func mixedProofs() prove.Defects[sampletest.Mixed] {
 			func(tb testing.TB) sampletest.Mixed {
 				return sampletest.NewMixedStub(tb, sampletest.WithMixedNewInput(
 					func(_ context.Context) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -110,9 +67,9 @@ func mixedProofs() prove.Defects[sampletest.Mixed] {
 			func(tb testing.TB) sampletest.Mixed {
 				return sampletest.NewMixedStub(tb, sampletest.WithMixedNewInput(
 					func(_ context.Context) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -120,9 +77,9 @@ func mixedProofs() prove.Defects[sampletest.Mixed] {
 			func(tb testing.TB) sampletest.Mixed {
 				return sampletest.NewMixedStub(tb, sampletest.WithMixedNewInput(
 					func(_ context.Context) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -170,4 +127,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7ea291960b32aee555d6af89f4d2da808e82f17b83a9b9bea72fd5a8293e996f
+// testkit:provenance a7c52d04795350477b8038d323d5a3ea88752e9472be585703bfada0b8daf533

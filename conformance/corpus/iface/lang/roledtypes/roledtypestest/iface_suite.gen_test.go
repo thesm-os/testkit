@@ -51,9 +51,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStorePut(
 					func(_ context.Context, _ roledtypes.Key, _ roledtypes.Payload) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStorePut(
 					func(_ context.Context, _ roledtypes.Key, _ roledtypes.Payload) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStorePut(
 					func(_ context.Context, _ roledtypes.Key, _ roledtypes.Payload) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStoreGet(
 					func(_ context.Context, _ roledtypes.Key) (r0 roledtypes.Payload, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStoreGet(
 					func(_ context.Context, _ roledtypes.Key) (r0 roledtypes.Payload, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStoreGet(
 					func(_ context.Context, _ roledtypes.Key) (r0 roledtypes.Payload, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func storeProofs() prove.Defects[roledtypestest.Store] {
 			func(tb testing.TB) roledtypestest.Store {
 				return roledtypestest.NewStoreStub(tb, roledtypestest.WithStoreGet(
 					func(_ context.Context, _ roledtypes.Key) (r0 roledtypes.Payload, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = roledtypes.Payload{Body: "other-payload"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestStoreInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance d2009877d130274e974848270ff6637c18bc0a50e653a295e59848b41de78c8b
+// testkit:provenance 6a472824464108a7a7c34dcdac339008d2cf167adcd84b0af2c54bc50f55f9f9

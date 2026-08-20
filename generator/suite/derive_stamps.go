@@ -5,13 +5,15 @@ package suite
 
 import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/aggregator"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/answeringwriter"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/batchreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/lookup"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/multireader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/pointerreader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/reader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 
-	vocab "go.thesmos.sh/testkit/engine/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 	"go.thesmos.sh/testkit/generator/tiers"
 )
@@ -33,14 +35,21 @@ type stampRule func(f Iface, m Method, call projection.CallPlan) ([]projection.C
 // classification this deriver speaks. Adding a row is the whole cost
 // of covering a new deterministic mixin.
 //
-// The corpus's declared-not-idempotent form (`idempotent=false`, which
-// words the accumulates claim) has no row yet: eidos's mixin directive
-// requires a positional name and denies negation, so the declaration
-// cannot stamp anything today. The grammar ruling is owed upstream;
-// [AccumulatesClaim] keeps the wording ready.
+// The effect axis carries two positions and both are tabled:
+// idempotent's repeat changes nothing, accumulates' repeat is taken.
+// Neither is the other's negation — a callable carrying neither has
+// not been considered, and only a stamped position is a contract.
 func mixinRules() map[string]stampRule {
 	return map[string]stampRule{
-		MixinIdempotent: idempotentRule,
+		MixinIdempotent:  idempotentRule,
+		MixinAccumulates: accumulatesRule,
+		MixinSideEffect:  sideEffectRule,
+		MixinPartition:   partitionRule,
+		MixinNilSafe:     nilSafeRule,
+		MixinOrderAfter:  orderAfterRule,
+		MixinValidates:   validatesRule,
+		MixinIndexed:     indexedRule,
+		MixinHooks:       hooksRule,
 	}
 }
 
@@ -52,12 +61,15 @@ func mixinRules() map[string]stampRule {
 // deriver lands.
 func detectorRules() map[string]stampRule {
 	return map[string]stampRule{
-		reader.Name:         missRule,
-		readernoerror.Name:  missRule,
-		readerwithbool.Name: missRule,
-		lookup.Name:         missRule,
-		pointerreader.Name:  missRule,
-		aggregator.Name:     countRule,
+		reader.Name:          missRule,
+		readernoerror.Name:   missRule,
+		readerwithbool.Name:  missRule,
+		lookup.Name:          missRule,
+		pointerreader.Name:   missRule,
+		multireader.Name:     missRule,
+		batchreader.Name:     missRule,
+		aggregator.Name:      countRule,
+		answeringwriter.Name: answerRule,
 	}
 }
 
@@ -84,20 +96,39 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		if len(m.Mixins) == 0 && detected == "" {
 			continue
 		}
+		drawn := true
 		if r, refused := argsRefusal(DeriverStamps, f, m, "'s stamp checks"); refused {
 			refusals = append(refusals, r)
-			continue
+			drawn = false
 		}
 		call := callOf(m)
 		for _, name := range m.Mixins {
 			switch rule, tabled := mixins[name]; {
 			case tabled:
+				if !drawn && !spellsOwnArgs()[name] {
+					// The call above names fixture accessors this run
+					// has no values for. One refusal already says so;
+					// a rule spelling that call would emit a body a
+					// consumer cannot compile.
+					continue
+				}
 				ruled, refused := rule(f, m, call)
 				plans = append(plans, ruled...)
 				refusals = append(refusals, refused...)
 			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
 				// the tiers catalogue.
+			case legStamps()[name]:
+				// Claimed by the laws deriver, which covers it with a
+				// leg rather than a law binding — so tiers.LawsFor is
+				// empty for it and the case above cannot see the
+				// coverage. A third state the census needs: not "no
+				// rule", but "somebody else's rule".
+			case documentedStamps()[name]:
+				// Owes documentation rather than a check, by upstream
+				// ruling. Recognised here so the census stops reporting
+				// a gap against a classification whose own docblock says
+				// it licenses nothing falsifiable.
 			case consumedStamps()[name]:
 				// An input to another rule rather than a claim of its
 				// own. It owes no check because the check it feeds is
@@ -112,7 +143,7 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				})
 			}
 		}
-		if rule, tabled := detectors[detected]; tabled {
+		if rule, tabled := detectors[detected]; tabled && drawn {
 			ruled, refused := rule(f, m, call)
 			plans = append(plans, ruled...)
 			refusals = append(refusals, refused...)
@@ -121,17 +152,20 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 	return plans, refusals
 }
 
-// idempotentRule probes the repeat: two clean calls, the second
-// changing nothing.
-func idempotentRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
-	return []projection.CheckPlan{{
-		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegIdempotent},
-		Class:       vocab.ClassIdempotent,
-		Claim:       IdempotentClaim(m),
-		Body:        projection.RepeatProbe{Call: call},
-		Falsifiable: vocab.Proven(),
-		Defect:      projection.SecondCallErrs{Option: projection.OptionName(f.Name, m.Name)},
-	}}, nil
+// spellsOwnArgs is the rules that write at least one argument
+// themselves and so survive a draw the fixture cannot supply.
+//
+// The nil-argument check is the case that forced this: the very slot
+// the fixture had no value for is the slot it spells nil, so refusing
+// it for want of that value refuses the check on exactly the interfaces
+// it exists for — a pointer parameter is both what makes nil
+// expressible and what a literal sampler declines to invent.
+//
+// Each such rule still has to answer for the arguments it does NOT
+// spell; the deriver cannot know which those are, so the checking is
+// the rule's.
+func spellsOwnArgs() map[string]bool {
+	return map[string]bool{MixinNilSafe: true}
 }
 
 // The past-tense supply verbs a writer-fed miss claim speaks: the
@@ -167,73 +201,45 @@ func missWording(f Iface, m Method) (sentinel, verb string) {
 	return sentinel, verb
 }
 
-// missRule derives the miss, and the seeded hit beside it. The miss
-// is reached by choosing an input that is not there, so a method
-// taking nothing after its context offers nowhere to put one and the
-// rule licenses nothing.
+// legStamps are the classifications the laws deriver covers with a LEG
+// rather than with a law binding.
 //
-// The shape alone does not license it either. A codec's Encode is
-// reader-shaped down to the return pair — one input, a value and an
-// error — and nothing on the interface writes, so there is no input
-// it has not been given: every draw is as valid as the canonical one
-// and a check asserting the zero for the alternate asserts a
-// falsehood. Either the declaration names what a miss reports, or the
-// run has to be able to make one; without both the rule refuses, so
-// the gap is named in the header rather than emitted as a claim.
-func missRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
-	if !m.HasInput() {
-		return nil, nil
+// A leg runs an engine other than the property runner — linearizability
+// runs the linearize engine — so it has a segment instead of a lawid and
+// nothing in the tiers catalogue names it. That makes it invisible to
+// the law-backed case above, which asks tiers.LawsFor and gets nothing,
+// and the classification was reported as an uncovered gap while a row
+// for it was being emitted two derivers away.
+func legStamps() map[string]bool {
+	return map[string]bool{
+		// ClassConcurrent is model/concurrent and [Laws.Derive] emits
+		// the linearizable leg wherever this is stamped.
+		MixinConcurrent: true,
 	}
-	sentinel, verb := missWording(f, m)
-	if sentinel == "" && !f.supplies() {
-		return nil, []Refusal{
-			{
-				Deriver: DeriverStamps,
-				What:    m.Name + "'s miss check",
-				Why:     "nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied",
-				Remedy:  "declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row",
-			},
-		}
-	}
-	plans := []projection.CheckPlan{{
-		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegMiss},
-		Class:       vocab.ClassReader,
-		Claim:       MissClaim(m, sentinel, verb),
-		Body:        projection.MissProbe{Call: missCall(f, m), Sentinel: projection.Expr(sentinel)},
-		Falsifiable: vocab.Proven(),
-		Defect:      projection.InventsHit{Option: projection.OptionName(f.Name, m.Name)},
-	}}
-	if f.Corpus {
-		plans = append(plans, projection.CheckPlan{
-			ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegHit},
-			Class:       vocab.ClassReader,
-			Claim:       HitClaim(m),
-			Body:        projection.HitProbe{Call: hitCall(m)},
-			Falsifiable: vocab.Proven(),
-			Defect:      projection.SwapsValues{Option: projection.OptionName(f.Name, m.Name)},
-		})
-	}
-	return plans, nil
 }
 
-// countRule derives the seeded-aggregator equality. An aggregator on
-// an interface that writes has no fixed number to equal — its count
-// claims are the law catalogue's territory — and one on an interface
-// nothing seeds has no number at all, so the rule licenses nothing in
-// either case. Silent rather than refused: the count is the hit's
-// companion and the miss beside it already names the gap.
-func countRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
-	if !f.Corpus {
-		return nil, nil
+// documentedStamps are the classifications that license no falsifiable
+// claim at all, by upstream ruling rather than by our omission.
+//
+// `scope` names what an axis MEANS — request, session, tenant — which
+// a human and a grouping consumer read and no check needs. The
+// isolation it describes is `partition`'s, which names the observer
+// too; the two compose on one callable, the naming form beside the
+// checkable one, as `idempotent` and `accumulates` sit on the effect
+// axis.
+//
+// `errors` marks a callable's error returns as part of its contract
+// rather than "shouldn't happen". That changes how a reader treats
+// them and is worth declaring; it is not a claim any tier can drive.
+// Which sentinel answers which condition is a separate declaration —
+// `notfound sentinel=` and the siblings named as corpora ask for them
+// — and encoding the mapping in one value would be a graph the
+// resolver cannot check.
+func documentedStamps() map[string]bool {
+	return map[string]bool{
+		MixinErrors: true,
+		MixinScope:  true,
 	}
-	return []projection.CheckPlan{{
-		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegCount},
-		Class:       vocab.ClassReader,
-		Claim:       CountClaim(m),
-		Body:        projection.CountProbe{Call: call},
-		Falsifiable: vocab.Proven(),
-		Defect:      projection.FreezeReturn{Option: projection.OptionName(f.Name, m.Name)},
-	}}, nil
 }
 
 // consumedStamps are the classifications another derivation READS
@@ -249,25 +255,22 @@ func consumedStamps() map[string]bool {
 		// belongs to the reader shape, whose rule reads this to choose
 		// the sentinel arm of the body over the zero arm.
 		MixinNotFound: true,
-	}
-}
 
-// hitCall is [callOf] with the drawn key replaced by the loop variable
-// the hit body ranges the corpus with.
-//
-// Every seeded key, not the fixture's one. The fixture holds a member of
-// the key pool and the corpus holds all of them, so a body drawing the
-// fixture asks about the same entry once per iteration — which passes
-// for a subject that kept the first thing it was given and dropped the
-// rest, the exact failure a hit check is for.
-func hitCall(m Method) projection.CallPlan {
-	call := callOf(m)
-	for i, arg := range call.Args {
-		if arg == projection.ExprCtx {
-			continue
-		}
-		call.Args[i] = projection.ExprSeededKey
-		break
+		// Names where a member of an input space too large to enumerate
+		// comes from. Spent by the smoke, which borrows from the builder
+		// rather than drawing a literal — and the bare form, with no
+		// builder, states what this tier does by construction: it draws
+		// one value per role and has no exhaustive mode to be told not
+		// to use.
+		MixinSample: true,
+
+		// Declares that the answer moves with the clock. Spent by
+		// withholding the seeded probes: a hit compares an answer
+		// against what the run put in, and a count against how many —
+		// both of which a subject may legitimately change between the
+		// seeding and the read when time is an input. Controlling the
+		// clock so those hold again is the model tier's; what this tier
+		// owes is not to assert them.
+		MixinTimeAware: true,
 	}
-	return call
 }

@@ -35,16 +35,10 @@ import (
 //
 //	Fire/cancel
 //	Fire/deadline
+//	Fire/hooks
 //	Fire/nilcontext
 //	Fire/smoke
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	OnEvent's signature checks — its Fn argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
-//	OnEvent's stamp checks — its Fn argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
-//	hooks on Fire — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
+//	OnEvent/smoke
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -84,6 +78,10 @@ func mixedNewFixture() MixedFixture {
 	return MixedFixture{
 		event:      "test-event",
 		eventOther: "other-event",
+		fn: func(string) {
+		},
+		fnOther: func(string) {
+		},
 	}
 }
 
@@ -218,6 +216,8 @@ var mixedIndexPath = map[suite.ID]string{
 	mixedCheckIndex.Fire.Cancels():    "MixedSuite.Checks.Fire.Cancels()",
 	mixedCheckIndex.Fire.NilContext(): "MixedSuite.Checks.Fire.NilContext()",
 	mixedCheckIndex.Fire.Deadline():   "MixedSuite.Checks.Fire.Deadline()",
+	mixedCheckIndex.Fire.Hooks():      "MixedSuite.Checks.Fire.Hooks()",
+	mixedCheckIndex.OnEvent.Smoke():   "MixedSuite.Checks.OnEvent.Smoke()",
 }
 
 var mixedDropHint = suite.DropHinter(
@@ -233,17 +233,20 @@ const (
 // mixedCheckIndex indexes every check this package emits, by
 // method and then by check.
 var mixedCheckIndex = mixedCheckIndexT{
-	Fire: mixedFireChecks{},
+	Fire:    mixedFireChecks{},
+	OnEvent: mixedOnEventChecks{},
 }
 
 type mixedCheckIndexT struct {
-	Fire mixedFireChecks
+	Fire    mixedFireChecks
+	OnEvent mixedOnEventChecks
 }
 
 // All returns every ID this package emits.
 func (mixedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
 	out = append(out, mixedFireChecks{}.All()...)
+	out = append(out, mixedOnEventChecks{}.All()...)
 	return out
 }
 
@@ -265,12 +268,29 @@ func (mixedFireChecks) Deadline() suite.ID {
 	return suite.MethodID(mixedFire, suite.SegDeadline)
 }
 
+func (mixedFireChecks) Hooks() suite.ID {
+	return suite.MethodID(mixedFire, suite.SegHooks)
+}
+
 func (mixedFireChecks) All() []suite.ID {
 	return []suite.ID{
 		mixedFireChecks{}.Smoke(),
 		mixedFireChecks{}.Cancels(),
 		mixedFireChecks{}.NilContext(),
 		mixedFireChecks{}.Deadline(),
+		mixedFireChecks{}.Hooks(),
+	}
+}
+
+type mixedOnEventChecks struct{}
+
+func (mixedOnEventChecks) Smoke() suite.ID {
+	return suite.MethodID(mixedOnEvent, suite.SegSmoke)
+}
+
+func (mixedOnEventChecks) All() []suite.ID {
+	return []suite.ID{
+		mixedOnEventChecks{}.Smoke(),
 	}
 }
 
@@ -319,6 +339,16 @@ func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
 			"Fire reports an expired deadline as exceeded",
 			func(tb testing.TB, m Mixed) {
 				mixedAssertFireHonoursDeadline(tb, m, fx)
+			}),
+		sig(ix.OnEvent.Smoke(), suite.ClassSmoke,
+			"OnEvent survives a call with a derived fn",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertOnEventSmoke(tb, m, fx)
+			}),
+		sig(ix.Fire.Hooks(), suite.ClassHooks,
+			"Fire runs what OnEvent registered",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertFireHooks(tb, m, fx)
 			}),
 	}
 }
@@ -369,6 +399,42 @@ func mixedAssertFireHonoursDeadline(
 	suite.ReportsDeadlineExceeded(tb, mixedFire, func(ctx context.Context) error {
 		return m.Fire(ctx, fx.Event())
 	})
+}
+
+// mixedAssertOnEventSmoke asserts OnEvent survives a call with a derived fn.
+func mixedAssertOnEventSmoke(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, mixedOnEvent, func(ctx context.Context) {
+		m.OnEvent(fx.Fn())
+	})
+}
+
+// mixedAssertFireHooks asserts Fire runs what OnEvent registered.
+func mixedAssertFireHooks(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	fired := false
+	hook := func(_ string) {
+		fired = true
+		return
+	}
+	m.OnEvent(hook)
+
+	if err := m.Fire(ctx, fx.Event()); err != nil {
+		tb.Fatalf("Fire must succeed before its hooks can be judged: %v", err)
+	}
+	if !fired {
+		tb.Errorf("Fire must run what OnEvent registered")
+	}
 }
 
 // MixedDefect is anything that can stand as a planted defect for a
@@ -565,4 +631,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0e1ed5a391122c68ecf2af29e37e33a3adeeaea06cbc3fbfa5a38c1d1e702de3
+// testkit:provenance f82aa12e20aa4909248225616efd72bb35475a4001b830e96ecc21d73d3bed37

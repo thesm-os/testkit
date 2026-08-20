@@ -38,12 +38,11 @@ import (
 //	Flights/nilcontext
 //	Flights/smoke
 //	Flights/zero-on-error
-//
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	Run's signature checks — its Compute argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so ContractConfig carries a pool, or write the claim as a ContractChecks row.
+//	Run/cancel
+//	Run/deadline
+//	Run/nilcontext
+//	Run/smoke
+//	Run/zero-on-error
 //
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
@@ -83,6 +82,14 @@ func contractNewFixture() ContractFixture {
 	return ContractFixture{
 		key:      "test-key",
 		keyOther: "other-key",
+		compute: func() string {
+			var r0 string
+			return r0
+		},
+		computeOther: func() string {
+			var r0 string
+			return r0
+		},
 	}
 }
 
@@ -203,8 +210,8 @@ func (contractVeneer) Without(ids ...suite.ID) ContractRunOpt {
 // The way in from outside this package: the assembler and the table it
 // builds are unexported, because a caller reaching them is doing tooling
 // and tooling wants one name rather than one per interface.
-func (contractVeneer) Suite() suite.Suite[Contract] {
-	return contractSuite()
+func (contractVeneer) Suite(fx ContractFixture) suite.Suite[Contract] {
+	return contractSuite(fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -213,6 +220,11 @@ func (contractVeneer) Suite() suite.Suite[Contract] {
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
 var contractIndexPath = map[suite.ID]string{
+	contractCheckIndex.Run.Smoke():           "ContractSuite.Checks.Run.Smoke()",
+	contractCheckIndex.Run.Cancels():         "ContractSuite.Checks.Run.Cancels()",
+	contractCheckIndex.Run.NilContext():      "ContractSuite.Checks.Run.NilContext()",
+	contractCheckIndex.Run.Deadline():        "ContractSuite.Checks.Run.Deadline()",
+	contractCheckIndex.Run.ZeroOnError():     "ContractSuite.Checks.Run.ZeroOnError()",
 	contractCheckIndex.Flights.Smoke():       "ContractSuite.Checks.Flights.Smoke()",
 	contractCheckIndex.Flights.Cancels():     "ContractSuite.Checks.Flights.Cancels()",
 	contractCheckIndex.Flights.NilContext():  "ContractSuite.Checks.Flights.NilContext()",
@@ -233,18 +245,53 @@ const (
 // contractCheckIndex indexes every check this package emits, by
 // method and then by check.
 var contractCheckIndex = contractCheckIndexT{
+	Run:     contractRunChecks{},
 	Flights: contractFlightsChecks{},
 }
 
 type contractCheckIndexT struct {
+	Run     contractRunChecks
 	Flights contractFlightsChecks
 }
 
 // All returns every ID this package emits.
 func (contractCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, contractRunChecks{}.All()...)
 	out = append(out, contractFlightsChecks{}.All()...)
 	return out
+}
+
+type contractRunChecks struct{}
+
+func (contractRunChecks) Smoke() suite.ID {
+	return suite.MethodID(contractRun, suite.SegSmoke)
+}
+
+func (contractRunChecks) Cancels() suite.ID {
+	return suite.MethodID(contractRun, suite.SegCancel)
+}
+
+func (contractRunChecks) NilContext() suite.ID {
+	return suite.MethodID(contractRun, suite.SegNilContext)
+}
+
+func (contractRunChecks) Deadline() suite.ID {
+	return suite.MethodID(contractRun, suite.SegDeadline)
+}
+
+func (contractRunChecks) ZeroOnError() suite.ID {
+	return suite.MethodID(contractRun, suite.SegZeroValue)
+}
+
+func (contractRunChecks) All() []suite.ID {
+	return []suite.ID{
+		contractRunChecks{}.Smoke(),
+		contractRunChecks{}.Cancels(),
+		contractRunChecks{}.NilContext(),
+		contractRunChecks{}.Deadline(),
+		contractRunChecks{}.ZeroOnError(),
+	}
 }
 
 type contractFlightsChecks struct{}
@@ -286,11 +333,11 @@ func (contractFlightsChecks) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func contractSuite() suite.Suite[Contract] {
+func contractSuite(fx ContractFixture) suite.Suite[Contract] {
 	return suite.Suite[Contract]{
 		Name:     "Contract",
 		DropHint: contractDropHint,
-		Checks:   contractSignatureChecks(),
+		Checks:   contractSignatureChecks(fx),
 	}
 }
 
@@ -301,10 +348,35 @@ func contractSuite() suite.Suite[Contract] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func contractSignatureChecks() []suite.Check[Contract] {
+func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 	sig := suite.ProvenCheck[Contract]
 	ix := contractCheckIndex
 	return []suite.Check[Contract]{
+		sig(ix.Run.Smoke(), suite.ClassSmoke,
+			"Run survives a call with seeded inputs",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunSmoke(tb, c, fx)
+			}),
+		sig(ix.Run.Cancels(), suite.ClassCancel,
+			"Run reports a cancelled context as cancelled",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunCancels(tb, c, fx)
+			}),
+		sig(ix.Run.NilContext(), suite.ClassNilContext,
+			"Run returns an error rather than panicking on a nil context",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunToleratesNilContext(tb, c, fx)
+			}),
+		sig(ix.Run.Deadline(), suite.ClassDeadline,
+			"Run reports an expired deadline as exceeded",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunHonoursDeadline(tb, c, fx)
+			}),
+		sig(ix.Run.ZeroOnError(), suite.ClassZeroValue,
+			"Run returns zero alongside any error",
+			func(tb testing.TB, c Contract) {
+				contractAssertRunZeroOnError(tb, c, fx)
+			}),
 		sig(ix.Flights.Smoke(), suite.ClassSmoke,
 			"Flights survives a call",
 			func(tb testing.TB, c Contract) {
@@ -330,6 +402,78 @@ func contractSignatureChecks() []suite.Check[Contract] {
 			func(tb testing.TB, c Contract) {
 				contractAssertFlightsZeroOnError(tb, c)
 			}),
+	}
+}
+
+// contractAssertRunSmoke asserts Run survives a call with seeded inputs.
+func contractAssertRunSmoke(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, contractRun, func(ctx context.Context) {
+		_, _ = c.Run(ctx, fx.Key(), fx.Compute())
+	})
+}
+
+// contractAssertRunCancels asserts Run reports a cancelled context as cancelled.
+func contractAssertRunCancels(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsCancelled(tb, contractRun, func(ctx context.Context) error {
+		_, err := c.Run(ctx, fx.Key(), fx.Compute())
+		return err
+	})
+}
+
+// contractAssertRunToleratesNilContext asserts Run returns an error rather than panicking on a nil context.
+func contractAssertRunToleratesNilContext(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ToleratesNilContext(tb, contractRun, func(ctx context.Context) error {
+		_, err := c.Run(ctx, fx.Key(), fx.Compute())
+		return err
+	})
+}
+
+// contractAssertRunHonoursDeadline asserts Run reports an expired deadline as exceeded.
+func contractAssertRunHonoursDeadline(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	suite.ReportsDeadlineExceeded(tb, contractRun, func(ctx context.Context) error {
+		_, err := c.Run(ctx, fx.Key(), fx.Compute())
+		return err
+	})
+}
+
+// contractAssertRunZeroOnError asserts Run returns zero alongside any error.
+func contractAssertRunZeroOnError(
+	tb testing.TB,
+	c Contract,
+	fx ContractFixture,
+) {
+	tb.Helper()
+	ctx, cancel := context.WithCancel(tb.Context())
+	cancel()
+	got, err := c.Run(ctx, fx.Key(), fx.Compute())
+	if err == nil {
+		tb.Skip("Run answered for a cancelled context, so this check has no error to inspect")
+	}
+
+	var zero string
+	if got != zero {
+		tb.Errorf("Run must return the zero value alongside an error: got %+v, want %+v (err %v)",
+			got, zero, err)
 	}
 }
 
@@ -554,7 +698,7 @@ func RunContract(
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunContract")
 	suite.Run(t,
-		contractSuite().With(rc.Extra...).Without(rc.Drops...),
+		contractSuite(fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -594,4 +738,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 948587595c05a953f4c8d5721b7983f70523c90e282002b907cbef37d76c3c42
+// testkit:provenance 598541380f5a549b9380fe778ffb21ab2d2b50be81c854ff9ffd253e8e37b076

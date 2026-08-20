@@ -278,11 +278,13 @@ func parity[S any](checks []suite.Check[S], defects Defects[S]) []string {
 		case proven && !hasDefect:
 			msgs = append(msgs, fmt.Sprintf(
 				"%s claims Proven and no defect is planted for it; "+
-					"plant one, or downgrade the claim to Argued", c.ID))
+					"plant one, or downgrade the claim to Argued", c.ID,
+			))
 		case hasDefect && !proven:
 			msgs = append(msgs, fmt.Sprintf(
 				"%s has a planted defect but does not claim Proven; "+
-					"the evidence exists, so the claim is owed — add Proven to the check", c.ID))
+					"the evidence exists, so the claim is owed — add Proven to the check", c.ID,
+			))
 		}
 	}
 	return msgs

@@ -10,5 +10,16 @@ package generictest_test
 // concrete types and a Go test function cannot name them, so the proofs for
 // Store belong in the package that instantiates it.
 
+// Argued rather than proven, for want of a defect template here:
+//
+//	Get/smoke
+//
+//	Put/smoke
+//
+// Each is a claim a derivation rule reached and this generator cannot yet
+// plant evidence for. The harness stamps them Argued and says so in the
+// report, which is the difference between a claim nothing can falsify and
+// one nobody has written the falsification for.
+
 // testkit: end of generated content.
-// testkit:provenance bbd28a205a5132d23867dc5527ec5b269fdf4b5121571e73b0fa4342ae61d707
+// testkit:provenance 3117c6fdc6be178c02411690cc86cc60e8440f057fa9adcd8ba23b42d78a1367

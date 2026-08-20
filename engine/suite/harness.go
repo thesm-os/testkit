@@ -139,7 +139,8 @@ func DistinctPool[V comparable](field string, pool, derived []V) ([]V, error) {
 	}
 	return nil, fmt.Errorf(
 		"%s needs at least two distinct values; a pool that repeats one value "+
-			"makes every comparison that depends on two vacuous", field)
+			"makes every comparison that depends on two vacuous", field,
+	)
 }
 
 // downcast resolves s to the harness's concrete type, following

@@ -7,6 +7,7 @@
 package nilsafetest
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -32,11 +33,14 @@ import (
 //
 // Every ID this package emits:
 //
+//	Store/nilargument
+//	Store/smoke
+//
 // Reached by a rule and not derivable here. Each is a claim this file
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	Store's signature checks — its V argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
+//	Store's judging signature checks — its V argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //	Store's stamp checks — its V argument needs a value which no literal can be written for. To close it: stamp the type with //testkit:role and //testkit:default so MixedConfig carries a pool, or write the claim as a MixedChecks row.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -185,8 +189,8 @@ func (mixedVeneer) Without(ids ...suite.ID) MixedRunOpt {
 // The way in from outside this package: the assembler and the table it
 // builds are unexported, because a caller reaching them is doing tooling
 // and tooling wants one name rather than one per interface.
-func (mixedVeneer) Suite() suite.Suite[Mixed] {
-	return mixedSuite()
+func (mixedVeneer) Suite(fx MixedFixture) suite.Suite[Mixed] {
+	return mixedSuite(fx)
 }
 
 // --- Drop hints -------------------------------------------------------------
@@ -194,7 +198,10 @@ func (mixedVeneer) Suite() suite.Suite[Mixed] {
 // mixedIndexPath spells every emitted ID as the path a
 // consumer would write to drop it, so a run that declines something can
 // say what to type rather than what failed.
-var mixedIndexPath = map[suite.ID]string{}
+var mixedIndexPath = map[suite.ID]string{
+	mixedCheckIndex.Store.Smoke():       "MixedSuite.Checks.Store.Smoke()",
+	mixedCheckIndex.Store.Nilargument(): "MixedSuite.Checks.Store.Nilargument()",
+}
 
 var mixedDropHint = suite.DropHinter(
 	"MixedSuite", mixedIndexPath,
@@ -207,15 +214,36 @@ const (
 
 // mixedCheckIndex indexes every check this package emits, by
 // method and then by check.
-var mixedCheckIndex = mixedCheckIndexT{}
+var mixedCheckIndex = mixedCheckIndexT{
+	Store: mixedStoreChecks{},
+}
 
 type mixedCheckIndexT struct {
+	Store mixedStoreChecks
 }
 
 // All returns every ID this package emits.
 func (mixedCheckIndexT) All() []suite.ID {
 	var out []suite.ID
+	out = append(out, mixedStoreChecks{}.All()...)
 	return out
+}
+
+type mixedStoreChecks struct{}
+
+func (mixedStoreChecks) Smoke() suite.ID {
+	return suite.MethodID(mixedStore, suite.SegSmoke)
+}
+
+func (mixedStoreChecks) Nilargument() suite.ID {
+	return suite.MethodID(mixedStore, suite.SegNilArgument)
+}
+
+func (mixedStoreChecks) All() []suite.ID {
+	return []suite.ID{
+		mixedStoreChecks{}.Smoke(),
+		mixedStoreChecks{}.Nilargument(),
+	}
 }
 
 // mixedSuite returns the checks as data, drawn from f.
@@ -225,11 +253,11 @@ func (mixedCheckIndexT) All() []suite.ID {
 // fixture is what a check draws from; a config that derives one is the
 // pool work, and until that lands a caller passes what a default run
 // passes.
-func mixedSuite() suite.Suite[Mixed] {
+func mixedSuite(fx MixedFixture) suite.Suite[Mixed] {
 	return suite.Suite[Mixed]{
 		Name:     "Mixed",
 		DropHint: mixedDropHint,
-		Checks:   mixedSignatureChecks(),
+		Checks:   mixedSignatureChecks(fx),
 	}
 }
 
@@ -240,11 +268,45 @@ func mixedSuite() suite.Suite[Mixed] {
 // claim AND the companion beside this file spells that defect — the
 // parity gate refuses the stamp without the evidence, so a claim this
 // run cannot yet plant is argued rather than asserted.
-func mixedSignatureChecks() []suite.Check[Mixed] {
-	// Every check this interface derived is waiting on a body template;
-	// the header names which. An empty set rather than no builder, so
-	// the run surface stays the same shape whatever is spelled yet.
-	return nil
+func mixedSignatureChecks(fx MixedFixture) []suite.Check[Mixed] {
+	sig := suite.ProvenCheck[Mixed]
+	ix := mixedCheckIndex
+	return []suite.Check[Mixed]{
+		sig(ix.Store.Smoke(), suite.ClassSmoke,
+			"Store survives a call with a derived v",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertStoreSmoke(tb, m, fx)
+			}),
+		sig(ix.Store.Nilargument(), suite.ClassNilArgument,
+			"Store reports a nil v rather than panicking",
+			func(tb testing.TB, m Mixed) {
+				mixedAssertStoreNilargument(tb, m, fx)
+			}),
+	}
+}
+
+// mixedAssertStoreSmoke asserts Store survives a call with a derived v.
+func mixedAssertStoreSmoke(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.Survives(tb, mixedStore, func(ctx context.Context) {
+		_ = m.Store(ctx, fx.V())
+	})
+}
+
+// mixedAssertStoreNilargument asserts Store reports a nil v rather than panicking.
+func mixedAssertStoreNilargument(
+	tb testing.TB,
+	m Mixed,
+	fx MixedFixture,
+) {
+	tb.Helper()
+	suite.ToleratesNilArgument(tb, mixedStore, func(ctx context.Context) error {
+		return m.Store(ctx, nil)
+	})
 }
 
 // MixedDefect is anything that can stand as a planted defect for a
@@ -401,7 +463,7 @@ func RunMixed(
 	// the rest to be found a cycle at a time.
 	rc.Fail(t, "RunMixed")
 	suite.Run(t,
-		mixedSuite().With(rc.Extra...).Without(rc.Drops...),
+		mixedSuite(fx).With(rc.Extra...).Without(rc.Drops...),
 		rc.Subjects...)
 }
 
@@ -441,4 +503,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5d1b5a67c8216b529f416a3c63599f1d0b50db33258cf8f3db632660d435eb3e
+// testkit:provenance e1b31f447fdc9c36764c74ac630a157a46262e74c7542f005cd8ec0ef7d154c6

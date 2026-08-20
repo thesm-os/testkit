@@ -26,7 +26,7 @@ For the shape these decisions add up to, read
 | [0015](0015-subtest-names-carry-the-classification.md) | Subtest names carry the classification | Accepted |
 | [0016](0016-directives-are-positive-only.md) | Directives are positive-only | Accepted |
 | [0017](0017-every-classification-owes-an-assertion.md) | Every classification owes an assertion | Superseded by [0018](0018-one-tier-owns-each-classification.md) |
-| [0018](0018-one-tier-owns-each-classification.md) | One tier owns each classification | Accepted |
+| [0018](0018-one-tier-owns-each-classification.md) | One tier owns each classification | Superseded by [0028](0028-one-tier-owns-each-obligation.md) |
 | [0019](0019-suite-vocabulary-in-the-root-module.md) | The suite package lives in the root module | Accepted |
 | [0020](0020-check-ids-carry-a-case-split-grammar.md) | Check IDs have a defined grammar | Accepted |
 | [0021](0021-field-roles-resolve-generator-side.md) | Field roles resolve in the generator | Accepted |
@@ -36,3 +36,4 @@ For the shape these decisions add up to, read
 | [0025](0025-machine-formats-are-versioned-structs.md) | Machine-read formats are versioned structs | Accepted |
 | [0026](0026-role-keywords-enter-by-registry.md) | Role keywords are added by registry row, kinds by RFC | Accepted |
 | [0027](0027-optionality-lives-on-the-role.md) | Optional features are declared on the role | Accepted |
+| [0028](0028-one-tier-owns-each-obligation.md) | One tier owns each obligation | Accepted |

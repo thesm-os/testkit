@@ -49,9 +49,9 @@ func mixedProofs() prove.Defects[integrationonlytest.Mixed] {
 			func(tb testing.TB) integrationonlytest.Mixed {
 				return integrationonlytest.NewMixedStub(tb, integrationonlytest.WithMixedConnect(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -59,9 +59,9 @@ func mixedProofs() prove.Defects[integrationonlytest.Mixed] {
 			func(tb testing.TB) integrationonlytest.Mixed {
 				return integrationonlytest.NewMixedStub(tb, integrationonlytest.WithMixedConnect(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -69,9 +69,9 @@ func mixedProofs() prove.Defects[integrationonlytest.Mixed] {
 			func(tb testing.TB) integrationonlytest.Mixed {
 				return integrationonlytest.NewMixedStub(tb, integrationonlytest.WithMixedConnect(
 					func(_ context.Context, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -106,4 +106,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5e9ddf1481d50b09ed20caa61f2dca33a4760e490d44529d8932049c6fd08a42
+// testkit:provenance 257e8d700499efeaff1be9fa2acf134dc1453ecb1fe253a539641fb1561f44b6

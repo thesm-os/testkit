@@ -60,7 +60,6 @@ func renderFuncs() template.FuncMap {
 		"indexVar":          projection.IndexVar,
 		"indexType":         projection.IndexType,
 		"groupType":         projection.GroupType,
-		"ctxArm":            ctxArmOf,
 		"borrowedIdent":     func() string { return string(projection.ExprBorrowed) },
 		"producedIdent":     func() string { return string(projection.ExprProduced) },
 	}
@@ -113,6 +112,31 @@ type bodyView struct {
 	// it. That direction is free — an unused parameter compiles — while
 	// the other is a body naming a local nothing declared.
 	Draws bool
+
+	// ObserveMethod is the partner a body calls beside the subject —
+	// the observer a pair reads through, the reader an isolation check
+	// asks, the validator an agreement compares against. Carried for the
+	// messages that have to say WHICH method was involved. Empty on
+	// every body that names no partner.
+	ObserveMethod string
+
+	// HookParams and HookReturns spell the callback a hooks body
+	// declares: parameters blanked, results named so a bare return
+	// answers each slot's zero without this file naming a type it may
+	// not be able to spell. RegisterDiscard drops the registrar's own
+	// results where it has any.
+	//
+	// Emit types rather than a projection shape, because the emitted
+	// closure is a Go signature and the backend is what renders one.
+	HookParams      []*sdk.EmitParam
+	HookReturns     []*sdk.EmitReturn
+	RegisterDiscard string
+
+	// Guard is the engine primitive a guarded body delegates to, as the
+	// emitted call spells it. A plain string rather than the typed
+	// [projection.Guard] because the template hands it to the backend's
+	// reference helper, which takes the identifier as text.
+	Guard string
 
 	// Method is the name the failure messages spell. The check constant
 	// beside it is what the engine primitives take; a message is prose
@@ -201,34 +225,6 @@ func callExpr(recv string, c projection.CallPlan) string {
 	return recv + "." + c.Method + "(" + strings.Join(args, ", ") + ")"
 }
 
-// ctxArm is one context-family body's rendering context: the call, how
-// its error is bound, and the engine primitive that variant delegates
-// to.
-//
-// The three arms differ in one identifier and agree in everything else,
-// so they share a fragment rather than spelling the shape three times.
-// It takes the fields it needs rather than a view type, because the
-// same fragment renders from the emit node in a run and from the
-// parse-only harness in a test, and a fragment bound to one of those
-// shapes cannot serve the other.
-type ctxArm struct {
-	Recv, Check, ErrBind string
-	Call                 projection.CallPlan
-	Primitive            string
-
-	// Vocab is the package the primitive is declared in, carried so the
-	// fragment registers the import through the canonical helper.
-	Vocab string
-}
-
-// ctxArmOf pairs one call with the primitive that judges it.
-func ctxArmOf(recv, check, errBind string, call projection.CallPlan, primitive string) ctxArm {
-	return ctxArm{
-		Recv: recv, Check: check, ErrBind: errBind,
-		Call: call, Primitive: primitive, Vocab: Vocab,
-	}
-}
-
 // zeroJudge is the zero-comparison fragment's context: how the result's
 // zero is spelled, what the body was asking about, and whether it has an
 // error to print.
@@ -247,9 +243,14 @@ type zeroJudge struct {
 	// order.
 	Slots []zeroSlot
 
-	// Erred says an error is what put the values under judgement, which
-	// is what the message names. False words the miss instead.
-	Erred bool
+	// Because is the phrase the failure gives for why the zero was owed
+	// — "alongside an error", "for an input nothing supplied", "at the
+	// size Len reports".
+	//
+	// A phrase rather than a flag. It was a bool selecting between two
+	// hard-coded reasons, which held while two claims reached this
+	// fragment; a third arrived and the choice stopped being binary.
+	Because string
 
 	// ShowErr says an err is bound and worth printing beside the
 	// mismatch. Separate from Erred: a miss on an erroring method binds
@@ -257,17 +258,17 @@ type zeroJudge struct {
 	ShowErr bool
 }
 
-// ZeroJudge pairs this body's zero shape with what it caught.
+// ZeroJudge pairs this body's zero shape with why the zero was owed.
 //
 // A method rather than a template function because the dot inside a
 // body is the emit node, which embeds this view — so promotion hands
 // every body the same call without the funcmap carrying an entry that
 // would have to be told which of the two shapes it was given.
-func (v bodyView) ZeroJudge(erred, showErr bool) zeroJudge {
+func (v bodyView) ZeroJudge(because string, showErr bool) zeroJudge {
 	return zeroJudge{
 		Method:  v.Method,
 		Slots:   v.Zeros,
-		Erred:   erred,
+		Because: because,
 		ShowErr: showErr,
 	}
 }

@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedPut(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedPut(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedPut(
 					func(_ context.Context, _ string, _ string, _ string) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -87,9 +87,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedRead(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -97,9 +97,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedRead(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -107,9 +107,9 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 			func(tb testing.TB) partitiontest.Mixed {
 				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedRead(
 					func(_ context.Context, _ string, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -123,6 +123,16 @@ func mixedProofs() prove.Defects[partitiontest.Mixed] {
 						// violation rather than a subject that merely failed.
 						r0 = "other-"
 						err = errors.New("planted: Read refused with a believable value")
+						return
+					}))
+			}),
+		ix.Put.Partition(): prove.One("a Mixed whose Put reports success and keeps nothing",
+			func(tb testing.TB) partitiontest.Mixed {
+				return partitiontest.NewMixedStub(tb, partitiontest.WithMixedPut(
+					func(_ context.Context, _ string, _ string, _ string) (err error) {
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -157,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance f519ae762b7518b9786fe8a0c22f0eeb2888a23697d95918371c72f75adc495f
+// testkit:provenance 57154c5dd16870e35e29d166c9e22c3768a76caf6e6e3acc1510ea79d21dc2c6

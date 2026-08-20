@@ -51,9 +51,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogAppend(
 					func(_ context.Context, _ causalchain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogAppend(
 					func(_ context.Context, _ causalchain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogAppend(
 					func(_ context.Context, _ causalchain.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogReplay(
 					func(_ context.Context) (r0 []causalchain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogReplay(
 					func(_ context.Context) (r0 []causalchain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func logProofs() prove.Defects[causalchaintest.Log] {
 			func(tb testing.TB) causalchaintest.Log {
 				return causalchaintest.NewLogStub(tb, causalchaintest.WithLogReplay(
 					func(_ context.Context) (r0 []causalchain.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestLogInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 72687060f951529a0253399ac3947fa410dd3f1472f007dfba15fe4ecd916eb3
+// testkit:provenance 00fa55c106dd74e39f84a1dad758a299decb87c7e15783e7b09416d7a1d1086e

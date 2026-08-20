@@ -44,12 +44,6 @@ import (
 //	Touch/nilcontext
 //	Touch/smoke
 //
-// Reached by a rule and not derivable here. Each is a claim this file
-// does NOT make, so a reader counting coverage from the list above
-// knows what is missing and what would bring it back:
-//
-//	timeaware on AgeOf — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//
 // The compatibility handshake. A breaking change to the check surface
 // renames the witness, and every file generated against this one stops
 // compiling with the skew named rather than dispatching wrong.
@@ -726,4 +720,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 01cc22c2fcdd12447dab5cfacbd83d9640227211f905324b6292eba03ad02daf
+// testkit:provenance e144d864286d59910e7011c64228ed1ae85606521787d844f1aa73c8bd8f49b5

@@ -151,7 +151,7 @@ func TestLawsDeriveTheCursorRows(t *testing.T) {
 	shape.ContractRoleKey(ContractCursor).Set(bag, ContractCursorOpen, "test")
 	shape.ContractPartnerKey(ContractCursor, ContractCursorClose).Set(bag, "Close", "test")
 	shape.ContractPartnerKey(ContractCursor, ContractCursorNext).Set(bag, "Next", "test")
-	roles, partners := contractDataOf(bag)
+	roles, partners, params := contractDataOf(bag)
 	src := &node.Method{Name: "Scan"}
 	src.MetaBag = bag
 	opener := Method{
@@ -159,6 +159,7 @@ func TestLawsDeriveTheCursorRows(t *testing.T) {
 		Contracts:        shape.Contracts(bag),
 		contractRoles:    roles,
 		contractPartners: partners,
+		contractParams:   params,
 	}
 
 	byID, refusals := lawPlansByID(t, Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{opener}})

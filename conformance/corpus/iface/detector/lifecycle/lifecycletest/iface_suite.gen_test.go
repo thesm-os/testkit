@@ -50,9 +50,9 @@ func lifecycleProofs() prove.Defects[lifecycletest.Lifecycle] {
 			func(tb testing.TB) lifecycletest.Lifecycle {
 				return lifecycletest.NewLifecycleStub(tb, lifecycletest.WithLifecycleClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func lifecycleProofs() prove.Defects[lifecycletest.Lifecycle] {
 			func(tb testing.TB) lifecycletest.Lifecycle {
 				return lifecycletest.NewLifecycleStub(tb, lifecycletest.WithLifecycleClose(
 					func(_ context.Context) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -110,4 +110,4 @@ func TestLifecycleInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance fb2dc44dfbee4e0d7bf451046765247592fe64bbaf5e2e9288f7fb074459ef0f
+// testkit:provenance fdccf177ef0ce598a7fedffcc8b8230dfebb2d9ed3627aebb2b22d488783ceb5

@@ -18,7 +18,7 @@ if err == nil {
 	tb.Skipf("{{ .Method }} answered for an input nothing wrote, so this check has no error to "+
 		"inspect; seed a miss through {{ .Pool }}")
 }
-{{ template "suite.frag.zero-judge" (.ZeroJudge true true) }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge .Body.Because true) }}
 {{- end -}}
 
 {{- define "suite.body.zero-on-cancel" -}}
@@ -28,7 +28,7 @@ cancel()
 if err == nil {
 	tb.Skip("{{ .Method }} answered for a cancelled context, so this check has no error to inspect")
 }
-{{ template "suite.frag.zero-judge" (.ZeroJudge true true) }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge .Body.Because true) }}
 {{- end -}}
 
 {{- /*
@@ -49,25 +49,20 @@ identically to one judging both.
 {{- range $slot := .Slots }}
 {{- if $slot.Nil }}
 if {{ $slot.Bind }} != nil {
-{{- if $j.Erred }}
-	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} alongside an error (err %v)", err)
-{{- else if $j.ShowErr }}
-	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} for an input nothing supplied (err %v)", err)
+{{- if $j.ShowErr }}
+	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} {{ $j.Because }} (err %v)", err)
 {{- else }}
-	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} for an input nothing supplied")
+	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} {{ $j.Because }}")
 {{- end }}
 }
 {{- else }}
 var {{ $slot.Zero }} {{ if $slot.Type }}{{ renderExpr $slot.Type }}{{ else }}{{ $slot.Word }}{{ end }}
 if {{ $slot.Bind }} != {{ $slot.Zero }} {
-{{- if $j.Erred }}
-	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} alongside an error: got %+v, want %+v (err %v)",
-		{{ $slot.Bind }}, {{ $slot.Zero }}, err)
-{{- else if $j.ShowErr }}
-	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} for an input nothing supplied: got %+v, want %+v (err %v)",
+{{- if $j.ShowErr }}
+	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} {{ $j.Because }}: got %+v, want %+v (err %v)",
 		{{ $slot.Bind }}, {{ $slot.Zero }}, err)
 {{- else }}
-	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} for an input nothing supplied: got %+v, want %+v",
+	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} {{ $j.Because }}: got %+v, want %+v",
 		{{ $slot.Bind }}, {{ $slot.Zero }})
 {{- end }}
 }

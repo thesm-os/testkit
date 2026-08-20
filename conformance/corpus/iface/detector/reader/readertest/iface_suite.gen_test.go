@@ -51,9 +51,9 @@ func readerProofs() prove.Defects[readertest.Reader] {
 			func(tb testing.TB) readertest.Reader {
 				return readertest.NewReaderStub(tb, readertest.WithReaderGet(
 					func(_ context.Context, _ string) (r0 reader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func readerProofs() prove.Defects[readertest.Reader] {
 			func(tb testing.TB) readertest.Reader {
 				return readertest.NewReaderStub(tb, readertest.WithReaderGet(
 					func(_ context.Context, _ string) (r0 reader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func readerProofs() prove.Defects[readertest.Reader] {
 			func(tb testing.TB) readertest.Reader {
 				return readertest.NewReaderStub(tb, readertest.WithReaderGet(
 					func(_ context.Context, _ string) (r0 reader.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -94,8 +94,9 @@ func readerProofs() prove.Defects[readertest.Reader] {
 			func(tb testing.TB) readertest.Reader {
 				return readertest.NewReaderStub(tb, readertest.WithReaderGet(
 					func(_ context.Context, _ string) (r0 reader.Value, err error) {
-						// The sentinel was owed and nothing is reported, so the
-						// absent key reads as present.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}),
@@ -130,4 +131,4 @@ func TestReaderInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 5ee698b02f89e17dacdf6c7d5b92bae006bca240e367dd66dcc52671363c37a5
+// testkit:provenance 34cc68a7afb9a06edf927d33a7e68c2463c8b31c8b74080fc27f3b757a4defe4

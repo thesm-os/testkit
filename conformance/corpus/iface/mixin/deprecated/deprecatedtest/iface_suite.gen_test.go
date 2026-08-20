@@ -50,9 +50,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedOld(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedOld(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedOld(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -100,9 +100,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedNew(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -110,9 +110,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedNew(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -120,9 +120,9 @@ func mixedProofs() prove.Defects[deprecatedtest.Mixed] {
 			func(tb testing.TB) deprecatedtest.Mixed {
 				return deprecatedtest.NewMixedStub(tb, deprecatedtest.WithMixedNew(
 					func(_ context.Context, _ string) (r0 string, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -170,4 +170,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance e0a11d9fb9149c076144d7a585b3df3ec1628e319a73a4bc66b47b8ed1182b84
+// testkit:provenance 8f3ee5d50a7809406f73c11c944e1141b9ddd1d8a18d3ecf2da35f40cc2dede3

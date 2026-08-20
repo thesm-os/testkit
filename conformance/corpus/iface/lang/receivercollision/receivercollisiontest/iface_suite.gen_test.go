@@ -51,9 +51,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStorePut(
 					func(_ context.Context, _ receivercollision.Session) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStorePut(
 					func(_ context.Context, _ receivercollision.Session) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStorePut(
 					func(_ context.Context, _ receivercollision.Session) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 receivercollision.Session, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 receivercollision.Session, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 receivercollision.Session, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -138,7 +138,7 @@ func storeProofs() prove.Defects[receivercollisiontest.Store] {
 			func(tb testing.TB) receivercollisiontest.Store {
 				return receivercollisiontest.NewStoreStub(tb, receivercollisiontest.WithStoreGet(
 					func(_ context.Context, _ string) (r0 receivercollision.Session, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = receivercollision.Session{ID: "other-session"}
 						return
 					}))
@@ -174,4 +174,4 @@ func TestStoreInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance c22fde85c76008ac55a9cd672b70db21b6dd071b82dc7f4fedafb5beab5036e6
+// testkit:provenance c7f6649ca5b69ed05c695087bb8641b6d731575d0475a8142172baa2df7b0159

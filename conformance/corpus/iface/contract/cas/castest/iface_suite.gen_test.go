@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractPut(
 					func(_ context.Context, _ cas.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractPut(
 					func(_ context.Context, _ cas.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractPut(
 					func(_ context.Context, _ cas.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractGet(
 					func(_ context.Context) (r0 cas.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractGet(
 					func(_ context.Context) (r0 cas.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func contractProofs() prove.Defects[castest.Contract] {
 			func(tb testing.TB) castest.Contract {
 				return castest.NewContractStub(tb, castest.WithContractGet(
 					func(_ context.Context) (r0 cas.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 727210f90c8883d5566ced6e46f61fc2045d0d820396c0adb111b0350995de0a
+// testkit:provenance 84bf6a31a53fc6b806541861326c7ca0a8cc84951ef88eadad470697dd66f398

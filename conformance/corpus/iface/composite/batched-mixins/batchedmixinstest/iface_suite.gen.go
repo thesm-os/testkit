@@ -54,8 +54,7 @@ import (
 // does NOT make, so a reader counting coverage from the list above
 // knows what is missing and what would bring it back:
 //
-//	concurrent on Put — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
-//	sideeffect on Put — no suite-side derivation rule and no law binds it. To close it: add a rule row, a tiers binding, or record the gap in the census.
+//	Put's side-effect check — the mixin names no partner to observe the effect through. To close it: name a readable partner with //testkit:mixin sideeffect observe=…, on a line of its own — a directive naming several mixins takes no parameters, because the owner of one would be a guess.
 //	the differential leg for Batched — the bounded claim clamps what the reader answers, and a derived collection clamps nothing. To close it: override with ref=, or the twin-floor wording earns a corpus pin first.
 //
 // The compatibility handshake. A breaking change to the check surface
@@ -923,4 +922,4 @@ func ProveBatched(
 }
 
 // testkit: end of generated content.
-// testkit:provenance a213e3a14755104d1fa2ce3c128aac70bbf50f12566cb818de82ee777a0e8c8f
+// testkit:provenance d460390e48f1d7f6fc87a789075840a401538df16cb830304f6c67ddf130b9d5

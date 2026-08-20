@@ -50,9 +50,9 @@ func wideProofs() prove.Defects[multireturntest.Wide] {
 			func(tb testing.TB) multireturntest.Wide {
 				return multireturntest.NewWideStub(tb, multireturntest.WithWideQuad(
 					func(_ context.Context, _ string) (r0 string, r1 int, r2 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func wideProofs() prove.Defects[multireturntest.Wide] {
 			func(tb testing.TB) multireturntest.Wide {
 				return multireturntest.NewWideStub(tb, multireturntest.WithWideQuad(
 					func(_ context.Context, _ string) (r0 string, r1 int, r2 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func wideProofs() prove.Defects[multireturntest.Wide] {
 			func(tb testing.TB) multireturntest.Wide {
 				return multireturntest.NewWideStub(tb, multireturntest.WithWideQuad(
 					func(_ context.Context, _ string) (r0 string, r1 int, r2 bool, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -134,4 +134,4 @@ func TestWideInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance b7ad6540c30370f40c817fda35d4b5f294bee5c553c2445d15a2c0b7e8e84583
+// testkit:provenance 3d833fa07b57ca7856cd4ae3c75a8b7849c348778316b6a7c59100f78d4dc339

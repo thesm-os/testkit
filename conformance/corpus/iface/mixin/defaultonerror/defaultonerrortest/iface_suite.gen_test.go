@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedStore(
 					func(_ context.Context, _ defaultonerror.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedStore(
 					func(_ context.Context, _ defaultonerror.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedStore(
 					func(_ context.Context, _ defaultonerror.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 defaultonerror.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 defaultonerror.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 defaultonerror.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func mixedProofs() prove.Defects[defaultonerrortest.Mixed] {
 			func(tb testing.TB) defaultonerrortest.Mixed {
 				return defaultonerrortest.NewMixedStub(tb, defaultonerrortest.WithMixedGet(
 					func(_ context.Context, _ string) (r0 defaultonerror.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = defaultonerror.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1c5041a69ff9665eee47b75fd9204292166283f49050fa582c311d32b1a04e0a
+// testkit:provenance cd97b6cd35b0055bfdaeaf5d3de0cb5d831f98a9c01a0fa153706daf52c13208

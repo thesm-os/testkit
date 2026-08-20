@@ -222,49 +222,68 @@ func TestStampsHoldTheCensusPosture(t *testing.T) {
 // census data, not vocabulary: a misspelled key is an orphan the gate
 // rejects.
 //
-// PENDING entries must be empty by the flip; everything else is a
-// permanent placement with its reason.
+// Three states, and the difference between them is who owns the work.
+// A permanent placement says why the classification owes this tier no
+// row at all. A MODEL TIER entry says the obligation is real and
+// belongs to a tier that is not built yet, so the gate that closes it
+// is the model generator rather than anything here. A PENDING entry is
+// this tier's own work, undone — and must be empty by the flip, because
+// deferred work with no owner is how a census stops meaning anything.
 
 var recordedMixins = map[string]string{
-	"concurrent":        "the laws deriver lowers it to the linearizable leg; PENDING mixin-rows batch: the incumbent's concurrent smoke beside it",
-	"hooks":             "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"nilsafe":           "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"orderafter":        "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"partition":         "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"sample":            "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"sideeffect":        "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"validates":         "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"wrappedvia":        "PENDING mixin-rows batch: the incumbent's direct check, as a rule row",
-	"timeaware":         "PENDING caps deriver: lowers to the harness clock capability, not a probe",
-	"concurrentreaders": "PENDING tiers row: a concurrency claim, the model tier's to bind",
-	"indexed":           "PENDING tiers row: positions-into-collection is a law over the sizing method",
-	"retrysucceeds":     "PENDING tiers row: convergence under retry is a property, not a probe",
-	"deprecated":        "documentation stamp: colours generated prose, owes no check",
+	"concurrent": "the laws deriver lowers it to the linearizable leg. No suite row beside " +
+		"it: two goroutines and no panic is observable only under -race, which the default " +
+		"gate does not run, and a check asserting nothing there reads as coverage",
+	"wrappedvia": "MODEL TIER: fn= names the wrapper reference rather than an operation " +
+		"of the subject's own, and reaching the claim needs an input the callable FAILS " +
+		"for. Induced failure is the model tier's machinery, so the model generator binds " +
+		"it and no suite row is owed",
+	"concurrentreaders": "MODEL TIER: concurrent readers need goroutines and a race " +
+		"detector, neither of which a caller has — the model generator binds it",
+	"retrysucceeds": "MODEL TIER: convergence under retry is a property over generated " +
+		"sequences, not a fixed probe — attempts= declares the bound the property needs, " +
+		"and the model generator binds it",
+	"sample": "an input to the smoke rather than a claim of its own: builder= names " +
+		"where a member of an unenumerable input space comes from, and builtSmoke borrows " +
+		"from it instead of drawing a literal the subject may have no reason to accept. " +
+		"The bare form states what this tier does by construction — it draws one value per " +
+		"role and has no exhaustive mode to be told not to use",
+	"timeaware": "spent by WITHHOLDING rather than by asserting: the seeded hit and count " +
+		"compare an answer against what the run put in, which a subject whose answer moves " +
+		"with the clock may legitimately change in between. Controlling the clock so those " +
+		"hold again is the model tier's; this tier's obligation is not to assert them",
+	"deprecated": "documentation stamp: colours generated prose, owes no check",
 	"notfound": "an identity, not a claim: it names WHAT a miss reports, and the check " +
 		"that a miss IS reported is the reader shape's own — MissSentinel reads it, " +
 		"which is what turns that check's body from the zero arm into the sentinel arm",
 	"integrationonly": "run gate: scopes checks behind the integration env, owes none of its own",
-	"scope":           "needs a value no run can invent — the incumbent's exclusion, kept",
-	"errors":          "declares error returns contractual — a derivation input, owing no probe of its own",
+	"scope": "documentation stamp, by upstream ruling: name= says what an axis MEANS and " +
+		"licenses no check. The isolation it describes is partition's, which names the " +
+		"observer as well — the two compose on one callable, naming form beside " +
+		"checkable form",
+	"errors": "documentation stamp, by upstream ruling: it marks the error returns as " +
+		"contract rather than \"shouldn't happen\" and licenses nothing falsifiable. " +
+		"Which sentinel answers which condition is notfound sentinel= and its siblings",
 }
 
 var recordedDetectors = map[string]string{
-	"answeringwriter": "PENDING detector-rows batch: the incumbent's answer round-trip, as a rule row; a seed input meanwhile",
-	"batchreader":     "PENDING detector-rows batch: the incumbent's batch-size check, as a rule row",
-	"multireader":     "PENDING detector-rows batch: the miss family over N value slots",
-	"streamconsumer":  "PENDING contracts deriver: a stream arm, not a per-method probe",
-	"closer":          "teardown shape: the signature families cover it, the after-close laws bind the rest",
-	"voidlifecycle":   "teardown shape: the signature families cover it, the after-close laws bind the rest",
-	"mutator":         "a writer answering nothing: excluded from seeding on purpose, and the signature families cover it",
+	"streamconsumer": "the shape exists to STOP a derivation rather than license one. Its " +
+		"parameter is an interface no fixture can construct, and the detector's own reason " +
+		"for being is that letting such a callable fall to reader produced checks a drained " +
+		"stream passed vacuously. The signature families still cover the method, and the " +
+		"undeliverable-draw refusal names the pool a consumer would supply",
+	"closer":        "teardown shape: the signature families cover it, the after-close laws bind the rest",
+	"voidlifecycle": "teardown shape: the signature families cover it, the after-close laws bind the rest",
+	"mutator":       "a writer answering nothing: excluded from seeding on purpose, and the signature families cover it",
 }
 
 var recordedContracts = map[string]string{
-	"if-absent":       "PENDING contracts deriver: the incumbent's direct check, as a contract rule",
-	"if-match":        "PENDING contracts deriver: the incumbent's direct check, as a contract rule",
-	"outbox":          "PENDING contracts deriver: the incumbent's direct check, as a contract rule",
-	"circuit-breaker": "PENDING tiers row: a protocol needing induced failure, the model tier's to bind",
-	"leader-election": "PENDING tiers row: a multi-node protocol, the model tier's to bind",
-	"rate-limit":      "PENDING tiers row: a clocked budget protocol, the model tier's to bind",
+	"circuit-breaker": "MODEL TIER: the protocol only shows itself under induced failure, " +
+		"which a caller cannot cause — the model generator binds it",
+	"leader-election": "MODEL TIER: a multi-node protocol needs a second subject, which " +
+		"one harness does not have — the model generator binds it",
+	"rate-limit": "MODEL TIER: a budget over time needs a clock the suite tier does not " +
+		"control — the model generator binds it",
 }
 
 // assertCensus holds one axis's registry to the three-way partition.
@@ -329,8 +348,14 @@ func TestStampCensusCoversTheContractRegistry(t *testing.T) {
 	for _, c := range contracts.All() {
 		names = append(names, c.Name)
 	}
-	// No contract rules table exists yet — the contracts deriver is
-	// the next batch; until it lands every contract is law-backed or
-	// recorded pending.
-	assertCensus(t, names, nil, recordedContracts)
+	// The contracts deriver keys its table on a (contract, role) pair,
+	// because a rule written against the wrong member of a protocol
+	// calls the wrong method. The census asks only which contracts are
+	// tabled, so the roles are dropped here rather than widening the
+	// shared gate to a shape only one axis has.
+	tabled := make(map[string]stampRule, len(contractRules()))
+	for _, e := range contractRules() {
+		tabled[e.contract] = nil
+	}
+	assertCensus(t, names, tabled, recordedContracts)
 }

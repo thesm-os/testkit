@@ -37,6 +37,7 @@ import (
 //	Append/deadline
 //	Append/nilcontext
 //	Append/smoke
+//	Subscribe/answer
 //	Subscribe/cancel
 //	Subscribe/deadline
 //	Subscribe/nilcontext
@@ -211,6 +212,7 @@ var contractIndexPath = map[suite.ID]string{
 	contractCheckIndex.Subscribe.NilContext():  "ContractSuite.Checks.Subscribe.NilContext()",
 	contractCheckIndex.Subscribe.Deadline():    "ContractSuite.Checks.Subscribe.Deadline()",
 	contractCheckIndex.Subscribe.ZeroOnError(): "ContractSuite.Checks.Subscribe.ZeroOnError()",
+	contractCheckIndex.Subscribe.Answer():      "ContractSuite.Checks.Subscribe.Answer()",
 }
 
 var contractDropHint = suite.DropHinter(
@@ -292,6 +294,10 @@ func (contractSubscribeChecks) ZeroOnError() suite.ID {
 	return suite.MethodID(contractSubscribe, suite.SegZeroValue)
 }
 
+func (contractSubscribeChecks) Answer() suite.ID {
+	return suite.MethodID(contractSubscribe, suite.SegAnswer)
+}
+
 func (contractSubscribeChecks) All() []suite.ID {
 	return []suite.ID{
 		contractSubscribeChecks{}.Smoke(),
@@ -299,6 +305,7 @@ func (contractSubscribeChecks) All() []suite.ID {
 		contractSubscribeChecks{}.NilContext(),
 		contractSubscribeChecks{}.Deadline(),
 		contractSubscribeChecks{}.ZeroOnError(),
+		contractSubscribeChecks{}.Answer(),
 	}
 }
 
@@ -326,7 +333,6 @@ func contractSuite(fx ContractFixture) suite.Suite[Contract] {
 // run cannot yet plant is argued rather than asserted.
 func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 	sig := suite.ProvenCheck[Contract]
-	argued := suite.ArguedCheck[Contract]
 	ix := contractCheckIndex
 	return []suite.Check[Contract]{
 		sig(ix.Append.Smoke(), suite.ClassSmoke,
@@ -369,11 +375,15 @@ func contractSignatureChecks(fx ContractFixture) []suite.Check[Contract] {
 			func(tb testing.TB, c Contract) {
 				contractAssertSubscribeHonoursDeadline(tb, c)
 			}),
-		argued(ix.Subscribe.ZeroOnError(), suite.ClassZeroValue,
+		sig(ix.Subscribe.ZeroOnError(), suite.ClassZeroValue,
 			"Subscribe returns a nil channel alongside any error",
-			"no defect template spells echo-beside-error yet, so this run plants no evidence for the claim",
 			func(tb testing.TB, c Contract) {
 				contractAssertSubscribeZeroOnError(tb, c)
+			}),
+		sig(ix.Subscribe.Answer(), suite.ClassAnswer,
+			"Subscribe answers a stream a caller can receive on",
+			func(tb testing.TB, c Contract) {
+				contractAssertSubscribeAnswer(tb, c)
 			}),
 	}
 }
@@ -488,6 +498,23 @@ func contractAssertSubscribeZeroOnError(
 
 	if got != nil {
 		tb.Errorf("Subscribe must return nothing alongside an error (err %v)", err)
+	}
+}
+
+// contractAssertSubscribeAnswer asserts Subscribe answers a stream a caller can receive on.
+func contractAssertSubscribeAnswer(
+	tb testing.TB,
+	c Contract,
+) {
+	tb.Helper()
+	ctx := tb.Context()
+
+	got, err := c.Subscribe(ctx)
+	if err != nil {
+		tb.Fatalf("Subscribe must succeed before its answer can be judged: %v", err)
+	}
+	if got == nil {
+		tb.Errorf("Subscribe must answer a stream a caller can receive on, and answered nothing")
 	}
 }
 
@@ -685,4 +712,4 @@ func ProveContract(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6869dae21c41bbb3e0c8a83db713c357242ad87595efbc93b068640f15ff5751
+// testkit:provenance b1c55198227f51aa0f6460c74f5041a2b4915612eb696aa3aa9768221bf5295a

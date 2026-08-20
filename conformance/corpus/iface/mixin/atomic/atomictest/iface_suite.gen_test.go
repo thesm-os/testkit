@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedWrite(
 					func(_ context.Context, _ atomic.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedWrite(
 					func(_ context.Context, _ atomic.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedWrite(
 					func(_ context.Context, _ atomic.Entry) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 atomic.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 atomic.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 atomic.Entry, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func mixedProofs() prove.Defects[atomictest.Mixed] {
 			func(tb testing.TB) atomictest.Mixed {
 				return atomictest.NewMixedStub(tb, atomictest.WithMixedRead(
 					func(_ context.Context, _ string) (r0 atomic.Entry, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = atomic.Entry{Key: "other-entry"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 3a1afcf15e562494e1ac997b2f8477ff1861cecb20ca86de4e6ec476d1128409
+// testkit:provenance a0a8333c4b01be44644bd155be8e790d403c146345d313b7dc2d880b020a4536

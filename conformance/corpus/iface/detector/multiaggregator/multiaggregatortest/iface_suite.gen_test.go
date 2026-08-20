@@ -50,9 +50,9 @@ func multiAggregatorProofs() prove.Defects[multiaggregatortest.MultiAggregator] 
 			func(tb testing.TB) multiaggregatortest.MultiAggregator {
 				return multiaggregatortest.NewMultiAggregatorStub(tb, multiaggregatortest.WithMultiAggregatorStats(
 					func(_ context.Context) (r0 int, r1 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func multiAggregatorProofs() prove.Defects[multiaggregatortest.MultiAggregator] 
 			func(tb testing.TB) multiaggregatortest.MultiAggregator {
 				return multiaggregatortest.NewMultiAggregatorStub(tb, multiaggregatortest.WithMultiAggregatorStats(
 					func(_ context.Context) (r0 int, r1 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func multiAggregatorProofs() prove.Defects[multiaggregatortest.MultiAggregator] 
 			func(tb testing.TB) multiaggregatortest.MultiAggregator {
 				return multiaggregatortest.NewMultiAggregatorStub(tb, multiaggregatortest.WithMultiAggregatorStats(
 					func(_ context.Context) (r0 int, r1 int, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -120,4 +120,4 @@ func TestMultiAggregatorInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ca0dc825bcc5bc2a9317a34c1696fb4497acd6dd44a0a7e97d11c1b957aa78da
+// testkit:provenance 0d05aa7f9c95a02e9038aa7a51e190748920703d15a40eb26520534e1dc2eca1

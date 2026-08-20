@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractLookup(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractLookup(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractLookup(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -101,9 +101,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractFetch(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -111,9 +111,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractFetch(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -121,9 +121,9 @@ func contractProofs() prove.Defects[cachetest.Contract] {
 			func(tb testing.TB) cachetest.Contract {
 				return cachetest.NewContractStub(tb, cachetest.WithContractFetch(
 					func(_ context.Context, _ string) (r0 cache.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -171,4 +171,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance ad374011e573a956dddc34491f1c4472ed68b52aa18f134d7cbb7152eba73a0a
+// testkit:provenance 8be0bab924efb6a0f12212ff2bb6cc5f50b38409ec0da584ed96feaf33cfcaf9

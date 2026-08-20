@@ -51,9 +51,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractPut(
 					func(_ context.Context, _ persister.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractPut(
 					func(_ context.Context, _ persister.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractPut(
 					func(_ context.Context, _ persister.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 persister.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 persister.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 persister.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -131,7 +131,7 @@ func contractProofs() prove.Defects[persistertest.Contract] {
 			func(tb testing.TB) persistertest.Contract {
 				return persistertest.NewContractStub(tb, persistertest.WithContractGet(
 					func(_ context.Context, _ string) (r0 persister.Value, err error) {
-						// A value for a key nothing wrote.
+						// A value for a call a correct subject answers nothing for.
 						r0 = persister.Value{Key: "other-value"}
 						return
 					}))
@@ -167,4 +167,4 @@ func TestContractInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 9db7569f703d38c20da9d388a4ffa3570e2d3bf040d5643d90901bde708d1b83
+// testkit:provenance 69fd9056184a8ff128db9b488e693f30b6f6acfa5515362b699fb604b4a54810

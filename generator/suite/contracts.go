@@ -45,8 +45,9 @@ const (
 // literal to the registry, so a rename upstream fails a test here rather than
 // silently selecting nothing.
 const (
-	ContractIfAbsent     = ifabsent.Name
-	ContractIfAbsentRole = "writer"
+	ContractIfAbsent         = ifabsent.Name
+	ContractIfAbsentRole     = "writer"
+	ContractIfAbsentConflict = ifabsent.ParamConflict
 
 	ContractIfMatch      = ifmatch.Name
 	ContractIfMatchRole  = ifmatch.RoleWriter
@@ -93,7 +94,7 @@ const (
 // Enumerated rather than discovered. eidos exposes no "every stamp under this
 // contract" accessor — the key constructors compose one key from a pair — so
 // the list is the set of checks rather than an inventory of the registry.
-func contractDataOf(bag *sdk.Bag) (roles, partners map[string]string) {
+func contractDataOf(bag *sdk.Bag) (roles, partners, params map[string]string) {
 	set := func(dst *map[string]string, key, value string, found bool) {
 		if !found {
 			return
@@ -120,7 +121,20 @@ func contractDataOf(bag *sdk.Bag) (roles, partners map[string]string) {
 		set(&partners, w.contract+"."+w.role, v, found)
 	}
 
-	return roles, partners
+	// The params a rule reads. Opaque to the resolver — a param names a
+	// value rather than a callable, so there is nothing to resolve it
+	// against — which is why they arrive verbatim. Listed rather than
+	// swept: a contract's full param schema is its own business, and
+	// only the ones a derivation here spends are worth projecting.
+	wantedParams := [...]struct{ contract, param string }{
+		{ContractIfAbsent, ContractIfAbsentConflict},
+	}
+	for _, w := range wantedParams {
+		v, found := shape.ContractParamKey(w.contract, w.param).Get(bag)
+		set(&params, w.contract+"."+w.param, v, found)
+	}
+
+	return roles, partners, params
 }
 
 // HasContractRole reports whether the annotator stamped this method as filling
@@ -141,4 +155,16 @@ func (m Method) HasContractRole(contract, role string) bool {
 // generated call is on a subject the check already holds.
 func (m Method) ContractPartner(contract, role string) string {
 	return golang.LocalName(m.contractPartners[contract+"."+role])
+}
+
+// ContractParam returns a contract's KV argument, and whether one was written.
+//
+// Verbatim, unlike [Method.ContractPartner]: the resolver does not rewrite a
+// param, because a param names a value rather than a callable and there is
+// nothing to resolve it against. One that happens to name a package-level
+// sentinel is qualified by whoever emits it — the same treatment
+// [Method.MixinParam] gets.
+func (m Method) ContractParam(contract, param string) (string, bool) {
+	v, ok := m.contractParams[contract+"."+param]
+	return v, ok
 }

@@ -29,9 +29,10 @@ func contractMember(name, contract, role string) Method {
 	}
 	m := stampMethod(name, "")
 	m.Contracts = shape.Contracts(bag)
-	roles, partners := contractDataOf(bag)
+	roles, partners, params := contractDataOf(bag)
 	m.contractRoles = roles
 	m.contractPartners = partners
+	m.contractParams = params
 	return m
 }
 

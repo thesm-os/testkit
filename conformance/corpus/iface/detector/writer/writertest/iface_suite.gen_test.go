@@ -50,9 +50,9 @@ func writerProofs() prove.Defects[writertest.Writer] {
 			func(tb testing.TB) writertest.Writer {
 				return writertest.NewWriterStub(tb, writertest.WithWriterPut(
 					func(_ context.Context, _ writer.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -60,9 +60,9 @@ func writerProofs() prove.Defects[writertest.Writer] {
 			func(tb testing.TB) writertest.Writer {
 				return writertest.NewWriterStub(tb, writertest.WithWriterPut(
 					func(_ context.Context, _ writer.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -70,9 +70,9 @@ func writerProofs() prove.Defects[writertest.Writer] {
 			func(tb testing.TB) writertest.Writer {
 				return writertest.NewWriterStub(tb, writertest.WithWriterPut(
 					func(_ context.Context, _ writer.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -107,4 +107,4 @@ func TestWriterInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 4876399f754b5b3abf9cc07343e0a65a8cd80aef73dc18fc536992afb7395d0a
+// testkit:provenance 4cc1a53110fc2641b50a47b38095867d735ca8157707adecbb6b526a8205aa72

@@ -34,7 +34,8 @@ type Bundle[S any] struct {
 func (b *Bundle[S]) ConfigOnce(name string) bool {
 	if b.cfgSet {
 		b.errs = append(b.errs, fmt.Errorf(
-			"two %ss passed; the second would silently win — pass at most one", name))
+			"two %ss passed; the second would silently win — pass at most one", name,
+		))
 		return false
 	}
 	b.cfgSet = true

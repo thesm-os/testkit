@@ -51,9 +51,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedAdd(
 					func(_ context.Context, _ stableorder.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -61,9 +61,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedAdd(
 					func(_ context.Context, _ stableorder.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -71,9 +71,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedAdd(
 					func(_ context.Context, _ stableorder.Value) (err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -88,9 +88,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedItems(
 					func(_ context.Context) (r0 []stableorder.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedCancelled),
@@ -98,9 +98,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedItems(
 					func(_ context.Context) (r0 []stableorder.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedNilContext),
@@ -108,9 +108,9 @@ func mixedProofs() prove.Defects[stableordertest.Mixed] {
 			func(tb testing.TB) stableordertest.Mixed {
 				return stableordertest.NewMixedStub(tb, stableordertest.WithMixedItems(
 					func(_ context.Context) (r0 []stableorder.Value, err error) {
-						// The context arrives and is not read; the bare return
-						// answers every slot's zero, which for the error slot is
-						// the nil this claim forbids.
+						// The call arrives and nothing is done with it; the bare
+						// return answers every slot's zero, which for the error
+						// slot is the nil this claim forbids.
 						return
 					}))
 			}).Reasoned(suite.RedDeadline),
@@ -158,4 +158,4 @@ func TestMixedInvariants(t *testing.T) {
 }
 
 // testkit: end of generated content.
-// testkit:provenance 0541bafa8a1b2e3d5e82f0bc44df980d58ad50c99f271519f2a4bd5ba533f6c5
+// testkit:provenance 891db1dba66077b4d6dcc87cf19a04d721def19c2d4dabe6fd457a8ef036de96
