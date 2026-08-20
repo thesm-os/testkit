@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/defaults"
@@ -20,67 +21,117 @@ import (
 // gap, and it reports under this name.
 const DeriverPools DeriverName = "pools"
 
-// poolsOf projects the drawn pools from the roled fields of every
-// drawn parameter's struct: one [projection.PoolPlan] per roled
-// field, its members derived by the projection's transforms — the
-// default stamp verbatim, the distinctness swap, the hostile member.
-// Unroled fields pin config values instead and are not this walk's
-// concern. Two methods drawing one request struct share its pools.
+// poolsOf projects the drawn pools from every drawn parameter: one
+// [projection.PoolPlan] per roled declaration, its members derived by
+// the projection's transforms — the default stamp verbatim, the
+// distinctness swap, the hostile member.
 //
-// Refusals, never silence: a roled field with no default, a
+// A parameter reaches a role two ways, and both are walked. A REQUEST
+// STRUCT carries the role on the field holding the value, so the walk
+// descends into it; two methods drawing one struct share its pools. A
+// BARE PARAMETER has no field, so the role is declared on the named
+// type it is written at — `type Key string` — which is the only place
+// the parameter shape leaves. Reading only the first left every
+// interface taking `(ctx, key Key)` with no pools at all, which is
+// most of them.
+//
+// Refusals, never silence: a roled declaration with no default, a
 // qualified default (a symbol, not a literal the transforms can
-// splice), or a member a transform refuses each name the field and
-// the consumer action that closes the gap.
+// splice), or a member a transform refuses each name the declaration
+// and the consumer action that closes the gap.
 func poolsOf(r golang.Resolver, methods []Method) ([]projection.PoolPlan, []Refusal) {
 	var pools []projection.PoolPlan
 	var refusals []Refusal
 	var seen []string
 
+	keep := func(plan projection.PoolPlan, refusal *Refusal, roled bool) {
+		switch {
+		case !roled:
+		case refusal != nil:
+			refusals = append(refusals, *refusal)
+		default:
+			pools = append(pools, plan)
+		}
+	}
+
+	// Parameters AND value returns. A role names what a value IS, not
+	// which direction it travels, and the seed seam is the case that
+	// proves it: an interface nothing can write to answers its payload
+	// and never takes one, so walking arguments alone derives a key pool
+	// with no values to pair — half a corpus, and a hit check that can
+	// never be seeded.
 	for _, m := range methods {
+		sources := make([]*node.TypeRef, 0, len(m.Params)+len(m.Returns))
 		for _, p := range m.CallArgs() {
-			decl, resolved := r.Resolve(p.Source)
-			s, isStruct := decl.(*sdk.Struct)
-			if !resolved || !isStruct || slices.Contains(seen, s.Name) {
+			sources = append(sources, p.Source)
+		}
+		for _, v := range m.ValueReturns() {
+			sources = append(sources, v.Source)
+		}
+		for _, src := range sources {
+			decl, resolved := r.Resolve(src)
+			if !resolved {
 				continue
 			}
-			seen = append(seen, s.Name)
-			for _, f := range golang.ExportedFields(s) {
-				plan, refusal, roled := poolOf(s.Name, f)
-				switch {
-				case !roled:
-				case refusal != nil:
-					refusals = append(refusals, *refusal)
-				default:
-					pools = append(pools, plan)
+			switch d := decl.(type) {
+			case *sdk.Struct:
+				if slices.Contains(seen, d.Name) {
+					continue
 				}
+				seen = append(seen, d.Name)
+				for _, f := range golang.ExportedFields(d) {
+					keep(poolOf(d.Name, f.Name, f.Meta(), golang.RefFor(f.Type.Name, f.Type.Package)))
+				}
+			case *sdk.Alias:
+				if slices.Contains(seen, d.Name) {
+					continue
+				}
+				seen = append(seen, d.Name)
+				// The named type itself is what the pool holds, not what
+				// it is defined over: a `type Key string` pool is a
+				// []Key, and a []string would not be assignable to the
+				// parameter it is drawn for.
+				keep(poolOf(d.Name, d.Name, d.Meta(), golang.RefFor(d.Name, d.Package)))
 			}
 		}
 	}
 	return pools, refusals
 }
 
-// poolOf derives one field's pool; roled reports false for a field
-// this walk does not own.
-func poolOf(structName string, f *sdk.Field) (projection.PoolPlan, *Refusal, bool) {
-	role := roles.Of(f.Meta())
+// poolOf derives one roled declaration's pool; roled reports false for
+// a declaration this walk does not own.
+//
+// Takes the metadata bag rather than the node, because the two arms
+// hand it a field and a named type and everything below reads the same
+// two stamps off either.
+func poolOf(
+	owner, name string, bag *sdk.Bag, member sdk.Ref,
+) (projection.PoolPlan, *Refusal, bool) {
+	role := roles.Of(bag)
 	if role == "" {
 		return projection.PoolPlan{}, nil, false
+	}
+	// A type-level stamp names one declaration twice; saying "Key.Key"
+	// would read as a field nobody wrote.
+	what := owner + "." + name
+	if owner == name {
+		what = name
 	}
 	refuse := func(why, remedy string) (projection.PoolPlan, *Refusal, bool) {
 		return projection.PoolPlan{}, &Refusal{
 			Deriver: DeriverPools,
-			What:    "the " + role + " pool from " + structName + "." + f.Name,
+			What:    "the " + role + " pool from " + what,
 			Why:     why,
 			Remedy:  remedy,
 		}, true
 	}
 
-	stamp, stamped := defaults.MetaDefault.Get(f.Meta())
+	stamp, stamped := defaults.MetaDefault.Get(bag)
 	if !stamped || stamp == "" {
 		return refuse("the roled field declares no default, and pool[0] is the default verbatim",
 			"declare a //testkit:default beside the role")
 	}
-	if pkg, _ := defaults.MetaDefaultPkg.Get(f.Meta()); pkg != "" {
+	if pkg, _ := defaults.MetaDefaultPkg.Get(bag); pkg != "" {
 		return refuse("a qualified default names a symbol, not a literal the member transforms can splice",
 			"spell the default as a literal, or supply the pool through the config")
 	}
@@ -96,8 +147,8 @@ func poolOf(structName string, f *sdk.Field) (projection.PoolPlan, *Refusal, boo
 	}
 	return projection.PoolPlan{
 		Role:    role,
-		Field:   projection.PoolFieldName(f.Name),
+		Field:   projection.PoolFieldName(name),
 		Members: [3]projection.Expr{projection.Expr(stamp), distinct, hostile},
-		Type:    golang.RefFor(f.Type.Name, f.Type.Package),
+		Type:    member,
 	}, nil, true
 }

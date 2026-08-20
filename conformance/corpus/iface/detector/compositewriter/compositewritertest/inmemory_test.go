@@ -6,7 +6,6 @@ package compositewritertest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/compositewriter"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/compositewriter/compositewritertest"
 )
 
@@ -17,25 +16,23 @@ import (
 func TestCompositeWriterContract(t *testing.T) {
 	t.Parallel()
 
-	compositewritertest.AssertCompositeWriterContract(t,
-		compositewritertest.CompositeWriterModel(),
-		compositewritertest.CompositeWriterSubject("in-memory",
-			func() compositewriter.CompositeWriter {
-				return compositewritertest.NewInMemory()
-			}),
+	compositewritertest.RunCompositeWriter(t,
+		compositewritertest.CompositeWriterHarness[*compositewritertest.InMemory]{
+			Name: "in-memory", New: compositewritertest.NewInMemory,
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestCompositeWriterContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestCompositeWriterContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	compositewritertest.AssertCompositeWriterContract(t,
-		compositewritertest.CompositeWriterSubject("in-memory",
-			func() compositewriter.CompositeWriter {
-				return compositewritertest.NewInMemory()
-			}),
-		compositewritertest.CompositeWriterWithout("Set/smoke"),
-		compositewritertest.CompositeWriterWithoutDouble(),
+	compositewritertest.RunCompositeWriter(t,
+		compositewritertest.CompositeWriterHarness[*compositewritertest.InMemory]{
+			Name: "in-memory", New: compositewritertest.NewInMemory,
+		},
+		compositewritertest.CompositeWriterSuite.Without(compositewritertest.CompositeWriterSuite.Checks.Set.Smoke()),
 	)
 }

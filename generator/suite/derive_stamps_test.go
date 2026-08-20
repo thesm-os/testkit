@@ -22,7 +22,6 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/reader"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/writer"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
-	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
@@ -56,13 +55,19 @@ func bareMethod(name, detected string, mixins ...string) Method {
 	return m
 }
 
-// sentinelReader is the kv Get shape: a reader whose ttl declaration
-// names the miss sentinel, read through the real param key.
+// sentinelReader is the kv Get shape: a reader declaring its OWN miss
+// sentinel, read through the real param key.
 func sentinelReader() Method {
-	bag := sdk.NewBag()
-	shape.MixinParamKey(MixinTTL, MixinTTLNotFound).Set(bag, "kv.ErrNotFound", "test")
-	m := stampMethod("Get", reader.Name, MixinTTL)
-	m.mixinParams = mixinParamsOf(bag, m.Mixins)
+	m := stampMethod("Get", reader.Name, MixinNotFound)
+	// Stamped on the DECLARATION, which is where the annotator writes
+	// it, and the projected map derived from that — the order the
+	// pipeline runs in. Setting a detached bag and assigning the map
+	// from it left the declaration bare, so a reader consulting the
+	// source saw an unstamped method and the fixture pinned a claim no
+	// real run produces.
+	shape.MixinParamKey(MixinNotFound, MixinNotFoundSentinel).
+		Set(m.Source.EnsureMeta(), "kv.ErrNotFound", "test")
+	m.mixinParams = mixinParamsOf(m.Source.Meta(), m.Mixins)
 	return m
 }
 
@@ -79,11 +84,22 @@ func stampIface(methods ...Method) Iface {
 	}
 }
 
-// stampCase is one stamp shape and the ID set its rule licenses.
+// seededIface is [stampIface] for a run that zips a corpus from its
+// pools, which is what puts something there for a hit to find and
+// leaves one key out for a miss to draw.
+func seededIface(methods ...Method) Iface {
+	f := stampIface(methods...)
+	f.Corpus = true
+	return f
+}
+
+// stampCase is one stamp shape and the ID set its rule licenses,
+// beside the number of gaps the rule names rather than emitting.
 type stampCase struct {
-	name  string
-	iface Iface
-	want  []vocab.ID
+	name     string
+	iface    Iface
+	want     []vocab.ID
+	refusals int
 }
 
 func (c stampCase) Name() string { return c.name }
@@ -96,30 +112,49 @@ func TestStampsDeriveTheStampFamilies(t *testing.T) {
 			"idempotent probes the repeat",
 			stampIface(bareMethod("Close", "", MixinIdempotent)),
 			[]vocab.ID{"Close/idempotent"},
+			0,
 		},
 		{
 			"a stamped sentinel reader derives its miss",
 			stampIface(sentinelReader(), stampMethod("Put", writer.Name)),
 			[]vocab.ID{"Get/miss"},
+			0,
+		},
+		{
+			"a reader beside a writer derives its miss",
+			stampIface(stampMethod("Lookup", reader.Name), stampMethod("Put", writer.Name)),
+			[]vocab.ID{"Lookup/miss"},
+			0,
 		},
 		{
 			"a seeded reader derives miss and hit",
-			stampIface(stampMethod("Lookup", reader.Name)),
+			seededIface(stampMethod("Lookup", reader.Name)),
 			[]vocab.ID{"Lookup/miss", "Lookup/hit"},
+			0,
 		},
 		{
 			"a seeded aggregator derives its count",
-			stampIface(bareMethod("Size", aggregator.Name)),
+			seededIface(bareMethod("Size", aggregator.Name)),
 			[]vocab.ID{"Size/count"},
+			0,
 		},
 		{
 			"an aggregator beside a writer licenses nothing",
 			stampIface(bareMethod("Len", aggregator.Name), stampMethod("Put", writer.Name)),
 			nil,
+			0,
+		},
+		{
+			// A transform: reader-shaped, but nothing writes and no
+			// corpus seeds, so no draw is one nothing supplied.
+			"a reader shape with nothing to supply it refuses",
+			stampIface(stampMethod("Encode", reader.Name)),
+			nil,
+			1,
 		},
 	}, func(t *testing.T, tc stampCase) {
 		plans, refusals := Stamps{}.Derive(tc.iface)
-		testkit.Len(t, refusals, 0, "tabled stamps refuse nothing")
+		testkit.Len(t, refusals, tc.refusals, "the rule names exactly these gaps")
 		got := make([]vocab.ID, 0, len(plans))
 		for _, p := range plans {
 			id, err := p.ID.Render()
@@ -205,9 +240,12 @@ var recordedMixins = map[string]string{
 	"indexed":           "PENDING tiers row: positions-into-collection is a law over the sizing method",
 	"retrysucceeds":     "PENDING tiers row: convergence under retry is a property, not a probe",
 	"deprecated":        "documentation stamp: colours generated prose, owes no check",
-	"integrationonly":   "run gate: scopes checks behind the integration env, owes none of its own",
-	"scope":             "needs a value no run can invent — the incumbent's exclusion, kept",
-	"errors":            "declares error returns contractual — a derivation input, owing no probe of its own",
+	"notfound": "an identity, not a claim: it names WHAT a miss reports, and the check " +
+		"that a miss IS reported is the reader shape's own — MissSentinel reads it, " +
+		"which is what turns that check's body from the zero arm into the sentinel arm",
+	"integrationonly": "run gate: scopes checks behind the integration env, owes none of its own",
+	"scope":           "needs a value no run can invent — the incumbent's exclusion, kept",
+	"errors":          "declares error returns contractual — a derivation input, owing no probe of its own",
 }
 
 var recordedDetectors = map[string]string{

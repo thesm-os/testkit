@@ -4,7 +4,6 @@
 package embeddedforeigntest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -22,42 +21,47 @@ import (
 func TestStreamContract(t *testing.T) {
 	t.Parallel()
 
-	// The values the run itself uses, read rather than replaced: nothing here
-	// passes StreamWithFixture, so the derivation stands.
-	fixture := embeddedforeigntest.DefaultStreamFixture()
+	fx := embeddedforeigntest.DefaultStreamFixture()
 
-	embeddedforeigntest.AssertStreamContract(t,
-		embeddedforeigntest.StreamSubject("in-memory", func() embeddedforeign.Stream {
-			return embeddedforeigntest.NewInMemory()
-		}),
-		embeddedforeigntest.StreamSeed(func(_ context.Context, subject embeddedforeign.Stream) error {
-			// Stream declares no writer, so nothing is derived and the reader's
-			// hit path is unreachable without this. A seed may reach for the
-			// concrete subject: it runs before the double wraps it and sees
-			// what the factory made. A check may not.
-			subject.(*embeddedforeigntest.InMemory).Put(fixture.Key, "streamed")
-			return nil
-		}),
-		embeddedforeigntest.StreamOnRead("returns what was seeded", func(
-			tb testing.TB, subject embeddedforeign.Stream, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Read(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, got, "streamed", "and carries what was written")
-		}),
+	embeddedforeigntest.RunStream(t,
+		embeddedforeigntest.StreamHarness[*embeddedforeigntest.InMemory]{
+			Name: "in-memory",
+			// Stream declares no writer, so the reader's hit path is
+			// unreachable without a seeded constructor.
+			New: func() *embeddedforeigntest.InMemory {
+				s := embeddedforeigntest.NewInMemory()
+				s.Put(fx.Key(), "streamed")
+				return s
+			},
+		},
+		embeddedforeigntest.StreamChecks{
+			{
+				Method: "Read",
+				Name:   "returns-what-was-seeded",
+				Claim:  "Read returns what was seeded",
+				Run: func(tb testing.TB, s embeddedforeign.Stream, fx embeddedforeigntest.StreamFixture) {
+					tb.Helper()
+					got, err := s.Read(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a seeded key is found")
+					testkit.Equal(tb, got, "streamed", "and carries what was written")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestStreamContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestStreamContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	embeddedforeigntest.AssertStreamContract(t,
-		embeddedforeigntest.StreamSubject("in-memory", func() embeddedforeign.Stream {
-			return embeddedforeigntest.NewInMemory()
-		}),
-		embeddedforeigntest.StreamWithout("Close/smoke"),
-		embeddedforeigntest.StreamWithoutDouble(),
+	embeddedforeigntest.RunStream(
+		t,
+		embeddedforeigntest.StreamHarness[*embeddedforeigntest.InMemory]{
+			Name: "in-memory",
+			New:  embeddedforeigntest.NewInMemory,
+		},
+		embeddedforeigntest.StreamSuite.Without(embeddedforeigntest.StreamSuite.Checks.Close.Smoke()),
 	)
 }

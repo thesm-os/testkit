@@ -61,6 +61,20 @@ type FixtureField struct {
 	// is the type of the one value a check is handed.
 	Variadic bool
 
+	// Pool is the config field this value draws from, empty where the
+	// declaration carries no role.
+	//
+	// Matched by NAME rather than by a carried reference, because the two
+	// projections read the same stamp from the same declaration: a role
+	// opens `<Name>Pool` and a fixture field takes `<Name>`, so a pool
+	// and the value it feeds cannot disagree about which declaration they
+	// came from without disagreeing about its name.
+	//
+	// Set means the emitted fixture reads `cfg.<Pool>[0]` and `[1]` in
+	// place of the derived literals, which is what makes a consumer's
+	// override reach every check that draws.
+	Pool string
+
 	// Companion calls the type's `<Type>Defaults()`, and wins over Sample where
 	// the source declares one.
 	//
@@ -79,6 +93,10 @@ type FixturePart struct {
 
 	// Sample and Other are the two values for it.
 	Sample, Other golang.Sample
+
+	// Pool is the config field this part draws from, empty where the
+	// declaration carries no role. See [FixtureField.Pool].
+	Pool string
 }
 
 // Composed reports whether this field's value is built from Parts rather than
@@ -95,12 +113,23 @@ type FixtureValue struct {
 	Type  sdk.Ref
 	Value golang.Sample
 	Parts []FixtureValuePart
+
+	// Alternate is the pool index a roled part draws — 0 for the
+	// canonical member, 1 for the one that funds a miss. Carried as the
+	// index rather than as a bool because that is what the emitted
+	// subscript spells, and converting a bool at the template would put
+	// the pool's member policy in two places.
+	Alternate int
 }
 
 // FixtureValuePart is one field of a composed [FixtureValue].
 type FixtureValuePart struct {
 	Name  string
 	Value golang.Sample
+
+	// Pool is the config field this part draws from, empty for an
+	// unroled field of a composed value.
+	Pool string
 }
 
 // Choose flattens this field to one of its two values.
@@ -108,13 +137,14 @@ func (f FixtureField) Choose(alternate bool) FixtureValue {
 	out := FixtureValue{Type: f.Type, Value: f.Sample}
 	if alternate {
 		out.Value = f.Other
+		out.Alternate = 1
 	}
 	for _, p := range f.Parts {
 		v := p.Sample
 		if alternate {
 			v = p.Other
 		}
-		out.Parts = append(out.Parts, FixtureValuePart{Name: p.Name, Value: v})
+		out.Parts = append(out.Parts, FixtureValuePart{Name: p.Name, Value: v, Pool: p.Pool})
 	}
 	return out
 }
@@ -205,11 +235,15 @@ func (f Fixture) Field(name string) (FixtureField, bool) {
 // is [groupParams]. What is decided here is what each group is filled with: the
 // type's `<Type>Defaults()` where the source declares one, the composed parts of
 // a struct, and the derived pair otherwise.
-func fixtureOf(ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method) Fixture {
+func fixtureOf(
+	ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method,
+	pools []projection.PoolPlan,
+) Fixture {
 	f := Fixture{
 		TypeName: iface.Name + "Fixture",
 		CtorName: "Default" + iface.Name + "Fixture",
 	}
+	defer func() { bindPools(&f, pools) }()
 	f.groups = groupParams(methods)
 	for _, g := range f.groups {
 		// Both derivations run for every field, including a composed one
@@ -616,4 +650,33 @@ func undeliverableArgs(f Fixture, args []string) (string, FixtureField, bool) {
 		}
 	}
 	return "", FixtureField{}, false
+}
+
+// bindPools points every fixture value at the config field its role
+// opened, leaving the unroled ones on their derived literals.
+//
+// The match is by name and is exact. A pool is named for the declaration
+// that carries the role — `<Name>Pool` — and a fixture value is named
+// for the same declaration, so the correspondence is one both sides
+// already computed rather than a third mapping to keep in step. A value
+// with no matching pool keeps its literal, which is every value on an
+// interface that stamps no role at all.
+func bindPools(f *Fixture, pools []projection.PoolPlan) {
+	if len(pools) == 0 {
+		return
+	}
+	byField := make(map[string]string, len(pools))
+	for _, p := range pools {
+		byField[p.Field] = p.Field
+	}
+	for i := range f.Fields {
+		if pool, roled := byField[projection.PoolFieldName(f.Fields[i].Name)]; roled {
+			f.Fields[i].Pool = pool
+		}
+		for j := range f.Fields[i].Parts {
+			if pool, roled := byField[projection.PoolFieldName(f.Fields[i].Parts[j].Name)]; roled {
+				f.Fields[i].Parts[j].Pool = pool
+			}
+		}
+	}
 }

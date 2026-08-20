@@ -5,6 +5,7 @@ package suite
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 
 	"go.thesmos.sh/eidos/lang/golang"
@@ -32,10 +33,52 @@ type CheckEmit struct {
 	// The rows read it; the body templates read the view above.
 	Plan projection.CheckPlan
 
+	// Proven says this row claims to have been shown able to fail,
+	// which it does exactly when the proofs companion beside it can
+	// spell the defect its plan carries.
+	//
+	// Not simply the plan's own stamp. A deriver proves a claim by
+	// naming the defect that breaks it, and this file proves it by
+	// EMITTING that defect — so a plan stamped Proven whose variant no
+	// template renders would ship a claim with no evidence, and the
+	// parity gate would report it against the generated companion
+	// rather than against the generator that left it out.
+	Proven bool
+
+	// provable records whether this run could have planted evidence,
+	// which decides which of the two arguments a downgraded row gives.
+	provable bool
+
 	// The spellings the row needs, resolved once here rather than
 	// composed in the template: a row naming an accessor its own index
 	// does not declare is a compile error a consumer meets.
 	accessor, assertName, classConst string
+}
+
+// Argument is what a downgraded row says about itself, empty where the
+// row is Proven and needs none.
+//
+// The Argued stamp demands a reason, and the honest one here is not a
+// fact about the claim — it is that this generator has not spelled the
+// defect yet. Saying so keeps a reader from reading "argued" as "nothing
+// could falsify this", which is what the state means everywhere else.
+func (c *CheckEmit) Argument() string {
+	switch {
+	case c.Proven:
+		return ""
+	case c.Plan.Defect == nil:
+		// The deriver's own argument, which is a fact about the claim
+		// and belongs to it rather than to this file's coverage.
+		return c.Plan.Falsifiable.Why
+	case !c.provable:
+		return "a planted defect for a generic subject has to be built at " +
+			"concrete types and a Go test function cannot name them, so nothing " +
+			"has driven this claim"
+	default:
+		return "no defect template spells " +
+			strings.TrimPrefix(string(c.Plan.Defect.DefectKind()), projection.DefectKindPrefix) +
+			" yet, so this run plants no evidence for the claim"
+	}
 }
 
 // Group is the index member this check sits under, so a row names it
@@ -71,6 +114,8 @@ func rendered() map[projection.BodyKind]bool {
 		projection.KindZeroOnCancel:  true,
 		projection.KindRepeatProbe:   true,
 		projection.KindMissProbe:     true,
+		projection.KindHitProbe:      true,
+		projection.KindCountProbe:    true,
 	}
 }
 
@@ -88,7 +133,20 @@ func rendered() map[projection.BodyKind]bool {
 // fails in the consumer's build rather than in this run. Family-scoped
 // plans name no method and carry no body of ours, so they are not here
 // at all.
-func checkEmitsOf(base sdk.BaseEmit, iface Iface, inv projection.Inventory) []*CheckEmit {
+//
+// provable says this run can plant evidence at all, which a generic
+// subject cannot: a Go test function takes no type parameters, so its
+// companion carries a note in place of proofs and no row it stamps
+// Proven would have anything behind it.
+//
+// seeded says a corpus exists to judge. The two seeded probes read back
+// what a run put in, and an interface with a writer populates itself
+// through the surface under test rather than through a corpus — so they
+// are derived from the reader shape and rendered only where there is
+// something for them to have been seeded WITH.
+func checkEmitsOf(
+	base sdk.BaseEmit, iface Iface, inv projection.Inventory, provable, seeded bool,
+) []*CheckEmit {
 	byName := make(map[string]Method, len(iface.Methods))
 	for _, m := range iface.Methods {
 		byName[m.Name] = m
@@ -106,6 +164,9 @@ func checkEmitsOf(base sdk.BaseEmit, iface Iface, inv projection.Inventory) []*C
 		if !rendered()[plan.Body.BodyKind()] {
 			continue
 		}
+		if !seeded && seedsCorpusBody(plan.Body) {
+			continue
+		}
 		acc, err := projection.AccessorOf(plan.ID)
 		if err != nil {
 			// The index refused to name it, so a row naming it would
@@ -120,6 +181,7 @@ func checkEmitsOf(base sdk.BaseEmit, iface Iface, inv projection.Inventory) []*C
 		}
 		view := viewOf(iface, m)
 		view.Body = plan.Body
+		view.Seeds = seedsCorpusBody(plan.Body)
 		if miss, ok := plan.Body.(projection.ZeroOnMiss); ok {
 			view.Pool = miss.Pool
 		}
@@ -127,9 +189,15 @@ func checkEmitsOf(base sdk.BaseEmit, iface Iface, inv projection.Inventory) []*C
 			view.Sentinel = sentinelRef(iface, string(probe.Sentinel))
 		}
 		out = append(out, &CheckEmit{
-			BaseEmit:   base,
-			bodyView:   view,
-			Plan:       plan,
+			BaseEmit: base,
+			bodyView: view,
+			Plan:     plan,
+			provable: provable,
+			// Provisional: a defect variant with a template. Whether this
+			// run can actually WRITE it depends on the method's result
+			// type for two of them, which only the view knows — proofsOf
+			// downgrades the row where it cannot.
+			Proven:     provable && plan.Defect != nil && defectRendered()[plan.Defect.DefectKind()],
 			accessor:   acc.Name,
 			assertName: projection.AssertName(iface.Token, plan.ID.Method, plan.ID.Seg),
 			classConst: class,
@@ -141,20 +209,21 @@ func checkEmitsOf(base sdk.BaseEmit, iface Iface, inv projection.Inventory) []*C
 // viewOf spells the facts a body needs from one method's signature.
 func viewOf(iface Iface, m Method) bodyView {
 	return bodyView{
-		Recv:         receiverIdent(iface),
-		Check:        projection.MethodConst(iface.Token, m.Name),
-		Discard:      discardOf(m),
-		ErrBind:      errBindOf(m),
-		Draws:        len(m.ArgFields) > 0,
-		Method:       m.Name,
-		ValueBind:    valueBindOf(m),
-		ErrStmt:      errStmtOf(m),
-		ValueDiscard: valueDiscardOf(m),
-		NeedsCtx:     m.TakesContext(),
-		HasErr:       m.ReturnsError(),
-		Zero:         ZeroShapeOf(m),
-		ZeroType:     zeroTypeOf(m),
-		ZeroWord:     zeroWordOf(m),
+		Recv:          receiverIdent(iface),
+		Vocab:         Vocab,
+		Check:         projection.MethodConst(iface.Token, m.Name),
+		Discard:       discardOf(m),
+		ErrBind:       errBindOf(m),
+		Draws:         len(m.ArgFields) > 0,
+		Method:        m.Name,
+		ValueBind:     valueBindOf(m),
+		ErrStmt:       errStmtOf(m),
+		ValueDiscard:  valueDiscardOf(m),
+		NeedsCtx:      m.TakesContext(),
+		HasErr:        m.ReturnsError(),
+		Zeros:         zeroSlotsOf(m),
+		ZeroBind:      zeroBindOf(m, true),
+		ZeroBindNoErr: zeroBindOf(m, false),
 	}
 }
 
@@ -216,6 +285,48 @@ func withheldBodies(inv projection.Inventory) []string {
 	return out
 }
 
+// stampsUsed reports which of the two row constructors the table binds.
+//
+// Asked rather than binding both: an alias nothing calls is a compile
+// error in a file a consumer cannot edit, and both ends of the split are
+// reachable — an interface whose every derived check carries a spelled
+// defect needs no Argued, and one whose checks are all waiting on a
+// defect template needs no Proven.
+func stampsUsed(checks []*CheckEmit) (proven, argued bool) {
+	for _, c := range checks {
+		if c.Proven {
+			proven = true
+		} else {
+			argued = true
+		}
+	}
+	return proven, argued
+}
+
+// seedsCorpusBody reports the two variants that judge the seeded set
+// whole rather than drawing one member from the fixture.
+func seedsCorpusBody(b projection.Body) bool {
+	switch b.(type) {
+	case projection.HitProbe, projection.CountProbe:
+		return true
+	default:
+		return false
+	}
+}
+
+// seedsCorpus reports whether any check reads the run's corpus, which
+// decides whether the builder takes one — the rows close over it, so a
+// body that judges the seeded set cannot reach a corpus the builder was
+// never handed.
+func seedsCorpus(checks []*CheckEmit) bool {
+	for _, c := range checks {
+		if c.Seeds {
+			return true
+		}
+	}
+	return false
+}
+
 // drawsFixture reports whether any check reads the run's fixture, which
 // is what decides the builder's own parameter: the rows are closures
 // over it, so one that draws cannot reach a fixture the builder was
@@ -273,31 +384,104 @@ func errStmtOf(m Method) string {
 	return strings.Repeat("_, ", len(m.ValueReturns())) + "err :="
 }
 
-// zeroTypeOf is the reference a declared zero of a NAMED type needs
-// rendering, nil where the type is predeclared or compares against nil.
+// zeroSlotsOf spells every value result a zero-judging body holds to
+// its own zero.
 //
-// Through the backend rather than spelled here, because a named type
-// from another package is an import this file has to register, and only
-// the backend can register one.
-func zeroTypeOf(m Method) *sdk.Expr {
-	src := firstValueSource(m)
-	if src == nil || src.Name == "" || golang.IsPredeclared(src.Name) {
-		return nil
+// Every one, not the first: a read answering a value beside metadata
+// can zero one and leak the other, and a caller who was told the read
+// failed has been handed state anyway. The two bodies render
+// identically, so only a subject that leaks a later slot tells them
+// apart — which is why this list exists rather than a single shape.
+func zeroSlotsOf(m Method) []zeroSlot {
+	values := m.ValueReturns()
+	out := make([]zeroSlot, 0, len(values))
+	for i, ret := range values {
+		src := ret.Source
+		slot := zeroSlot{Bind: zeroBindIdent("got", i), Zero: zeroBindIdent("zero", i), Nil: zeroIsNil(src)}
+		switch {
+		case slot.Nil:
+			// nil needs no type spelled.
+		case src == nil || src.Name == "":
+			// Nothing to declare a zero of; the body cannot judge it.
+			continue
+		case golang.IsPredeclared(src.Name):
+			slot.Word = src.Name
+		default:
+			slot.Type = sdk.NewExternal(src.Package, src.Name)
+		}
+		if len(values) > 1 {
+			slot.Label = zeroSlotLabel(i, src)
+		}
+		out = append(out, slot)
 	}
-	if ZeroShapeOf(m) == ZeroNil {
-		return nil
-	}
-	return sdk.NewExternal(src.Package, src.Name)
+	return out
 }
 
-// zeroWordOf is a predeclared type's own word — `string`, `int` — which
-// needs no import and so no reference.
-func zeroWordOf(m Method) string {
-	src := firstValueSource(m)
-	if src == nil || src.Name == "" || !golang.IsPredeclared(src.Name) {
+// zeroBindIdent names one slot's local under the given stem. The first
+// keeps the bare name every single-value body has always used, so
+// widening this to a list left the common output byte for byte where it
+// was; the rest are numbered from two, as a reader counting slots would.
+func zeroBindIdent(stem string, i int) string {
+	if i == 0 {
+		return stem
+	}
+	return stem + strconv.Itoa(i+1)
+}
+
+// zeroSlotLabel names a slot in a failure message, by its own type
+// where it has a name and by position where it does not.
+func zeroSlotLabel(i int, src *node.TypeRef) string {
+	if src != nil && src.Name != "" {
+		return src.Name
+	}
+	return "result " + strconv.Itoa(i+1)
+}
+
+// zeroIsNil reports the comparability split: a slice, map, func or
+// pointer has no name to declare a zero of, and nil is what the
+// language calls its zero anyway.
+func zeroIsNil(src *node.TypeRef) bool {
+	if src == nil {
+		return false
+	}
+	switch src.TypeKind {
+	case node.TypeRefSlice, node.TypeRefMap, node.TypeRefFunc, node.TypeRefPointer:
+		return true
+	default:
+		// A channel arrives as a named ref with the frontend's own stamp
+		// on it, never as a kind of its own.
+		return golang.IsChannel(src)
+	}
+}
+
+// zeroBindOf binds every value slot, and the error beside them when the
+// method reports one.
+//
+// Distinct from [valueBindOf], which blanks past the first: the seeded
+// probes judge one answer against one seeded value, and binding a slot
+// they never read would not compile.
+func zeroBindOf(m Method, withErr bool) string {
+	slots := zeroSlotsOf(m)
+	if len(slots) == 0 {
 		return ""
 	}
-	return src.Name
+	binds := make([]string, 0, len(m.Returns))
+	next := 0
+	for _, ret := range m.Returns {
+		if ret.Error {
+			continue
+		}
+		if next < len(slots) && slots[next].Bind == zeroBindIdent("got", next) {
+			binds = append(binds, slots[next].Bind)
+			next++
+			continue
+		}
+		binds = append(binds, "_")
+	}
+	if withErr {
+		binds = append(binds, "err")
+	}
+	return strings.Join(binds, ", ") + " :="
 }
 
 // firstValueSource is the result a zero-on-error body judges.
@@ -307,4 +491,38 @@ func firstValueSource(m Method) *node.TypeRef {
 		return nil
 	}
 	return values[0].Source
+}
+
+// emittedIDs renders every identity this run declares, sorted.
+//
+// Sorted because the listing it feeds is read by a human diffing two
+// generations, and derivation order is an implementation detail that
+// would make an unrelated reordering look like a change in coverage.
+// An unrenderable plan is reported rather than skipped: the listing
+// claims to be every ID, and one silently short is worse than none.
+func emittedIDs(inv projection.Inventory) ([]string, error) {
+	out := make([]string, 0, len(inv.Checks))
+	for _, c := range inv.Checks {
+		id, err := c.ID.Render()
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, string(id))
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// emittedPlans is the plan behind every check this run renders.
+//
+// The seam between "what the derivers licensed" and "what this file
+// contains". Three projections read it — the index, the ID listing and
+// the lock — and each was reading the inventory instead, which is the
+// wider set: every one of them named checks the file does not emit.
+func emittedPlans(checks []*CheckEmit) []projection.CheckPlan {
+	out := make([]projection.CheckPlan, 0, len(checks))
+	for _, c := range checks {
+		out = append(out, c.Plan)
+	}
+	return out
 }

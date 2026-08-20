@@ -6,8 +6,6 @@ package eventuallytest_test
 import (
 	"context"
 	"errors"
-	"maps"
-	"slices"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -26,38 +24,20 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	eventuallytest.AssertMixedContract(t,
-		eventuallytest.MixedModel(
-			// The merge door: the join of this lattice is set union, spelled
-			// sorted because the subjects answer sorted — the consumer's
-			// algebra, which is the one field of the law nothing derives.
-			eventuallytest.MixedModelMerge(func(a, b []string) []string {
-				seen := map[string]bool{}
-				for _, item := range a {
-					seen[item] = true
-				}
-				for _, item := range b {
-					seen[item] = true
-				}
-				return slices.Sorted(maps.Keys(seen))
-			}),
-		),
-		eventuallytest.MixedSubject("in-memory", func() eventually.Mixed {
-			return eventuallytest.NewInMemory()
-		}),
+	eventuallytest.RunMixed(t,
+		eventuallytest.MixedHarness[*eventuallytest.InMemory]{Name: "in-memory", New: eventuallytest.NewInMemory},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	eventuallytest.AssertMixedContract(t,
-		eventuallytest.MixedSubject("in-memory", func() eventually.Mixed {
-			return eventuallytest.NewInMemory()
-		}),
-		eventuallytest.MixedWithout("Publish/smoke"),
-		eventuallytest.MixedWithoutDouble(),
+	eventuallytest.RunMixed(t,
+		eventuallytest.MixedHarness[*eventuallytest.InMemory]{Name: "in-memory", New: eventuallytest.NewInMemory},
+		eventuallytest.MixedSuite.Without(eventuallytest.MixedSuite.Checks.Publish.Smoke()),
 	)
 }
 
@@ -71,6 +51,9 @@ func (unreadablePeer) Items(context.Context) ([]string, error) {
 
 // A peer that cannot be read is a sync that reports, not one that guesses:
 // nothing lands from a partial exchange.
+//
+// Written outside the run because Sync takes another Mixed, which no literal
+// can be written for — the header refuses both its families and says so.
 func TestSyncCarriesThePeersFailure(t *testing.T) {
 	t.Parallel()
 
@@ -81,22 +64,4 @@ func TestSyncCarriesThePeersFailure(t *testing.T) {
 	items, err := replica.Items(t.Context())
 	testkit.NoError(t, err, "the replica is still readable")
 	testkit.Len(t, items, 0, "and nothing landed from the failed exchange")
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same merge door armed that arms the tier.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	eventuallytest.MixedModelSaturation(t, func() eventually.Mixed {
-		return eventuallytest.NewInMemory()
-	}, eventuallytest.MixedModelMerge(func(a, b []string) []string {
-		seen := map[string]bool{}
-		for _, item := range a {
-			seen[item] = true
-		}
-		for _, item := range b {
-			seen[item] = true
-		}
-		return slices.Sorted(maps.Keys(seen))
-	}))
 }

@@ -1,0 +1,5 @@
+testkit-checks v2
+Set/cancel	signature/cancel	Set reports a cancelled context as cancelled	
+Set/deadline	signature/deadline	Set reports an expired deadline as exceeded	
+Set/nilcontext	signature/nilcontext	Set returns an error rather than panicking on a nil context	
+Set/smoke	signature/smoke	Set survives a call with derived inputs	

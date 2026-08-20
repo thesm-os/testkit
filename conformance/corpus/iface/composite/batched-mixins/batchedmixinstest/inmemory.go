@@ -16,14 +16,6 @@ import (
 	batchedmixins "go.thesmos.sh/testkit/conformance/corpus/iface/composite/batched-mixins"
 )
 
-// listLimit is the cap `//testkit:mixin bounded limit=50` declares on List.
-//
-// Spelled here as well as in the directive, which is a duplication worth
-// stating: the directive is what the annotator reads and this is what the
-// subject obeys, and nothing binds them. A generated check for `bounded` would
-// close that gap; none exists, so the test names both.
-const listLimit = 50
-
 // ErrNotFound reports a key the store does not hold.
 var ErrNotFound = errors.New("batchedmixinstest: no value under that key")
 
@@ -36,13 +28,21 @@ var ErrNotFound = errors.New("batchedmixinstest: no value under that key")
 // being true.
 type InMemory struct {
 	mu     sync.Mutex
+	limit  int
 	values map[string]string
 }
 
 var _ batchedmixins.Batched = (*InMemory)(nil)
 
-// NewInMemory returns an empty store.
-func NewInMemory() *InMemory { return &InMemory{values: map[string]string{}} }
+// NewInMemory returns an empty store clamped at the given ceiling.
+//
+// The capacity is a parameter rather than a constant here because the harness
+// hands it over: `//testkit:mixin bounded limit=50` is read by the generator
+// and passed to every constructor, so a subject that restated the number could
+// disagree with the law measuring it.
+func NewInMemory(limit int) *InMemory {
+	return &InMemory{limit: limit, values: map[string]string{}}
+}
 
 // Put writes a value under a key.
 func (s *InMemory) Put(ctx context.Context, key, value string) error {
@@ -74,7 +74,7 @@ func (s *InMemory) Read(ctx context.Context, key string) (string, error) {
 	return v, nil
 }
 
-// List returns the keys, sorted and capped at [listLimit].
+// List returns the keys, sorted and capped at the declared limit.
 //
 // Sorted because `//testkit:mixin cacheable pure` says the answer depends on
 // the state and nothing else — Go's map iteration is deliberately unordered, so
@@ -86,8 +86,8 @@ func (s *InMemory) List(ctx context.Context) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	keys := slices.Sorted(maps.Keys(s.values))
-	if len(keys) > listLimit {
-		keys = keys[:listLimit]
+	if len(keys) > s.limit {
+		keys = keys[:s.limit]
 	}
 	return keys, nil
 }

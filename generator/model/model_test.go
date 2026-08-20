@@ -358,8 +358,8 @@ func TestActionSentinel(t *testing.T) {
 				if m.Name != "Read" {
 					continue
 				}
-				shape.MetaMixins.Set(m.EnsureMeta(), []string{"deleteremoves"}, "test")
-				shape.MixinParamKey("deleteremoves", "sentinel").
+				shape.MetaMixins.Set(m.EnsureMeta(), []string{"notfound"}, "test")
+				shape.MixinParamKey("notfound", "sentinel").
 					Set(m.EnsureMeta(), "example.com/validates.ErrGone", "test")
 			}
 		}

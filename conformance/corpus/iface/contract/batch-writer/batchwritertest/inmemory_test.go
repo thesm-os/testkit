@@ -24,35 +24,36 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	batchwritertest.AssertContractContract(t,
-		batchwritertest.ContractModel(),
-		batchwritertest.ContractSubject("in-memory", func() batchwriter.Contract {
-			return batchwritertest.NewInMemory()
-		}),
-		batchwritertest.ContractOnPut("refuses a value with nothing to file it under", func(
-			tb testing.TB, subject batchwriter.Contract, v batchwriter.Value,
-		) {
-			tb.Helper()
-			// The subject's one way to fail, and `mode=atomic` needs one: "an
-			// error leaves observable state unchanged" has no case to observe
-			// against a write that always succeeds.
-			testkit.Error(tb, subject.Put(tb.Context(), batchwriter.Value{Body: v.Body}),
-				"an unkeyed value is refused")
-			testkit.NoError(tb, subject.Put(tb.Context(), v),
-				"and the store still takes a keyed one")
-		}),
+	batchwritertest.RunContract(t,
+		batchwritertest.ContractHarness[*batchwritertest.InMemory]{Name: "in-memory", New: batchwritertest.NewInMemory},
+		batchwritertest.ContractChecks{
+			{
+				Method: "Put",
+				Name:   "refuses-unkeyed",
+				Claim:  "Put refuses a value with nothing to file it under",
+				Run: func(tb testing.TB, s batchwriter.Contract, fx batchwritertest.ContractFixture) {
+					tb.Helper()
+					// The subject's one way to fail, and `mode=atomic` needs one:
+					// "an error leaves observable state unchanged" has no case to
+					// observe against a write that always succeeds.
+					testkit.Error(tb, s.Put(tb.Context(), batchwriter.Value{Body: fx.Value().Body}),
+						"an unkeyed value is refused")
+					testkit.NoError(tb, s.Put(tb.Context(), fx.Value()),
+						"and the store still takes a keyed one")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	batchwritertest.AssertContractContract(t,
-		batchwritertest.ContractSubject("in-memory", func() batchwriter.Contract {
-			return batchwritertest.NewInMemory()
-		}),
-		batchwritertest.ContractWithout("Put/smoke"),
-		batchwritertest.ContractWithoutDouble(),
+	batchwritertest.RunContract(t,
+		batchwritertest.ContractHarness[*batchwritertest.InMemory]{Name: "in-memory", New: batchwritertest.NewInMemory},
+		batchwritertest.ContractSuite.Without(batchwritertest.ContractSuite.Checks.Put.Smoke()),
 	)
 }

@@ -9,6 +9,7 @@ import (
 
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/bounded"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/concurrent"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/deprecated"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/hooks"
@@ -16,6 +17,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/integrationonly"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/lifecycleafterclose"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/nilsafe"
+	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/notfound"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/orderafter"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/partition"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins/sample"
@@ -41,7 +43,7 @@ const Capability = "suite"
 
 // Version composes into the pipeline's plugin fingerprint. Bump it on any
 // change to what this plugin emits, the projection or the templates alike.
-const Version = "1.16.0"
+const Version = "1.17.0"
 
 // DirectiveName is the bare directive name — without the `//testkit:` prefix —
 // that opts an interface in.
@@ -348,12 +350,13 @@ type Contract struct {
 	Token     string
 	Qualifier string
 
-	// Vocab and LawIDs are the packages the emitted identities are
-	// composed from. Carried rather than spelled in the templates
-	// because an import path built inside a template is one the
-	// backend cannot register.
+	// Vocab, LawIDs and Prove are the packages the emitted identities
+	// and entry points are composed from. Carried rather than spelled
+	// in the templates because an import path built inside a template
+	// is one the backend cannot register.
 	Vocab  string
 	LawIDs string
+	Prove  string
 
 	// Inventory is every check the derivers licensed, and Index the
 	// typed surface a consumer drops one through. Both are projections
@@ -367,6 +370,26 @@ type Contract struct {
 	// and the seeded corpus is zipped from them.
 	Pools []projection.PoolPlan
 
+	// Limit is the bound //testkit:mixin bounded declares, empty where
+	// none is. Carried as the declared TEXT rather than parsed: it is
+	// emitted as a constant's value, and re-spelling a number a
+	// declaration already wrote is a second chance to write it
+	// differently.
+	Limit string
+
+	// Corpus is the seeded corpus a reader-only interface is populated
+	// through, and Seeded says the harness takes it.
+	//
+	// Two fields because they answer different questions: whether this
+	// interface must be seeded from outside (nothing on it writes) and
+	// whether this run can derive what to seed it with (both roles are
+	// stamped). An interface that needs a corpus and cannot derive one
+	// keeps the ordinary constructors and says so in the header — a
+	// harness demanding docs the suite cannot produce is worse than one
+	// that admits the gap.
+	Corpus projection.CorpusPlan
+	Seeded bool
+
 	// Harness is the run surface this interface's checks can demand —
 	// a capability field with no check behind it is a promise the run
 	// never collects on.
@@ -379,15 +402,47 @@ type Contract struct {
 	Checks   []*CheckEmit
 	Withheld []string
 
+	// EmittedIDs is every identity this package declares, sorted, for
+	// the listing at the top of the file.
+	//
+	// Read from the inventory rather than from the index: they are
+	// projections of the same plans, and taking it from the index would
+	// make the listing agree with the index by construction instead of
+	// by both agreeing with what was derived.
+	EmittedIDs []string
+
 	// DrawsFixture says the checks builder takes the run's fixture,
 	// which it does wherever any of its rows draws — the closures
 	// capture it, so a row cannot reach one the builder was not given.
 	DrawsFixture bool
 
+	// AnyProven and AnyArgued say which of the two row constructors the
+	// table binds, which is only ever the ones its rows call.
+	AnyProven, AnyArgued bool
+
+	// SeedsCorpus says the checks builder takes the run's corpus, which
+	// it does wherever a seeded probe judges it.
+	SeedsCorpus bool
+
 	// Refusals are the checks the rules reached and could not derive.
 	// They render into the header: a claim the reader cannot see
 	// refused reads as a claim this file checks.
 	Refusals []Refusal
+}
+
+// Gaps words each refusal as the header states it: what was not
+// derived, why, and what closes it.
+//
+// The three parts stay separate in [Refusal] because attribution and
+// remedy are what a census reads; they are joined here because a
+// reader of the generated file wants one sentence per gap.
+func (c *Contract) Gaps() []string {
+	out := make([]string, 0, len(c.Refusals))
+	for _, r := range c.Refusals {
+		out = append(out, r.What+" — "+r.Why+". To close it: "+r.Remedy+".")
+	}
+	slices.Sort(out)
+	return out
 }
 
 // Kind returns [KindContract].
@@ -417,7 +472,13 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		// rendered once the body and structural templates land. The
 		// incumbent's check assembly is deleted, not dormant.
 		methods := methodsOf(iface, set)
-		fixture := fixtureOf(ctx, iface, methods)
+		// Pools first: a fixture field draws from the pool its role
+		// opened, so the fixture cannot be projected before the roles
+		// are known. Both come from the same //testkit:default stamps,
+		// which is what lets them be matched by name rather than by a
+		// correspondence either side would have to invent.
+		pools, poolRefusals := poolsOf(ctx.Reader, methods)
+		fixture := fixtureOf(ctx, iface, methods, pools)
 		for i := range methods {
 			// The fixture-field correspondence the derivers draw
 			// through — populated here since the incumbent's check
@@ -425,6 +486,9 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			methods[i].ArgFields = fixtureArgs(fixture, methods[i], false)
 		}
 		seed, unseeded := seedOf(fixture, methods)
+		corpus, seeded := projection.CorpusOf(pools)
+		limit := declaredLimit(methods)
+		seeded = seeded && derivedSeeded(methods)
 
 		token, qualifier := projection.Token(iface.Name), projection.IDQualifier(iface.Name)
 		derived := Iface{
@@ -434,9 +498,9 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Qualifier: qualifier,
 			Methods:   methods,
 			Fixture:   fixture,
+			Corpus:    seeded,
 		}
 		inventory, refusals := InventoryOf(derived)
-		pools, poolRefusals := poolsOf(ctx.Reader, methods)
 		refusals = append(refusals, poolRefusals...)
 		if err := inventory.Verify(); err != nil {
 			// The run's own invariants, held before anything renders. A
@@ -446,15 +510,39 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			ctx.Diag.Errorf(iface.Pos(), "%s: %s: %v", Name, iface.Name, err)
 			continue
 		}
-		index, err := projection.IndexOf(inventory)
+		// A generic subject's companion carries a note in place of
+		// proofs, so nothing this run emits can drive its claims; the
+		// rows say Argued rather than stamping evidence that is not
+		// there.
+		provable := len(iface.TypeParams) == 0
+		checks := checkEmitsOf(sdk.EmitBase(c, iface), derived, inventory, provable, seeded)
+
+		// The index declares what this run EMITS, not what it derived.
+		//
+		// Built from the whole inventory it named every plan, including
+		// the ones whose body no template spells — so a consumer could
+		// write `Suite.Checks.Get.Hit()`, compile, and drop nothing. That
+		// is the silent drop the typed index exists to prevent, reached
+		// through the index itself. The header still names the withheld
+		// variants, so an absent entry has a stated reason.
+		index, err := projection.IndexOf(projection.Inventory{Checks: emittedPlans(checks)})
 		if err != nil {
 			ctx.Diag.Errorf(iface.Pos(), "%s: %s: %v", Name, iface.Name, err)
 			continue
 		}
+		ids, err := emittedIDs(projection.Inventory{Checks: emittedPlans(checks)})
+		if err != nil {
+			ctx.Diag.Errorf(iface.Pos(), "%s: %s: %v", Name, iface.Name, err)
+			continue
+		}
+		base := sdk.EmitBase(c, iface)
+		// Before the contract is built: this settles which rows carry
+		// evidence, and a row it downgrades must not be counted Proven.
+		defects, unproven := proofsOf(base, iface.Package, ctx.Reader, derived, checks)
+		proven, argued := stampsUsed(checks)
 
-		checks := checkEmitsOf(sdk.EmitBase(c, iface), derived, inventory)
 		contract := &Contract{
-			BaseEmit:     sdk.EmitBase(c, iface),
+			BaseEmit:     base,
 			Subject:      subjectOf(iface),
 			EntryName:    "Assert" + iface.Name + "Contract",
 			Fixture:      fixture,
@@ -465,13 +553,21 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			Qualifier:    qualifier,
 			Vocab:        Vocab,
 			LawIDs:       LawIDs,
+			Prove:        Prove,
 			Inventory:    inventory,
 			Index:        index,
 			Pools:        pools,
+			Limit:        limit,
+			Corpus:       corpus,
+			Seeded:       seeded,
 			Harness:      projection.HarnessOf(iface.Name, inventory.Checks),
 			Checks:       checks,
 			Withheld:     withheldBodies(inventory),
+			EmittedIDs:   ids,
 			DrawsFixture: drawsFixture(checks),
+			SeedsCorpus:  seedsCorpus(checks),
+			AnyProven:    proven,
+			AnyArgued:    argued,
 			Refusals:     refusals,
 		}
 		if unseeded != "" {
@@ -482,7 +578,31 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				"%s: %s derives no seed — %s; supply one with %sSeed",
 				Name, iface.Name, unseeded, iface.Name)
 		}
-		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface, contract); err != nil {
+		// Queued in one call rather than two. The pair differs only in its
+		// emit kind and output tag, and a second append is where the two
+		// would drift — which for these two means a harness stamping
+		// claims its companion does not prove.
+		if err := sdk.QueueEmit(ctx.Store.Emit(), c, SlotName, iface,
+			contract,
+			&Proofs{
+				BaseEmit: sdk.EmitBaseTagged(base, GoTestOutputTag),
+				Subject:  subjectOf(iface),
+				// Provisional. The harness is routed by Layout, which has
+				// not run; [Proofs.SetOutputPackages] corrects this and
+				// every defect under it once the target resolves.
+				Pkg:          iface.Package,
+				Token:        token,
+				Vocab:        Vocab,
+				Prove:        Prove,
+				Fixture:      fixture,
+				DrawsFixture: contract.DrawsFixture,
+				SeedsCorpus:  contract.SeedsCorpus,
+				CorpusFunc:   projection.CorpusName(token),
+				Defects:      defects,
+				Unproven:     unproven,
+				Generic:      !provable,
+			},
+		); err != nil {
 			// Wrapped even though the queue names the plugin and the slot: what
 			// it cannot name is which declaration the run was on when it failed,
 			// and that is the only part a reader needs to find the source line.
@@ -602,10 +722,30 @@ const (
 	MixinTTL                = ttl.Name
 	MixinTTLNotFound        = ttl.ParamNotFound
 
+	// MixinNotFound is a read declaring its own miss sentinel, and
+	// MixinNotFoundSentinel is the error it names.
+	//
+	// The bare fact, unscoped: every other sentinel in the vocabulary
+	// belongs to a condition some other shape owns — expiry, deletion,
+	// rollback, close — and a plain reader had no way to say what an
+	// absent key reports. Without one it had to claim a TTL to get a
+	// correct miss check, and claiming one earned a clocked law it never
+	// asked for.
+	MixinNotFound         = notfound.Name
+	MixinNotFoundSentinel = notfound.ParamSentinel
+
 	// MixinTotal is read as an exclusion, not a check: totality is the
 	// declared claim that no input fails, so the zero-on-error family
 	// is not emitted against it. The law half is the model tier's.
 	MixinTotal = total.Name
+
+	// MixinBounded declares a ceiling the subject holds to, and
+	// MixinBoundedLimit is the number. Read here because the harness
+	// hands it to every constructor: a bounded subject built at some
+	// other capacity is one the bounded law measures against a limit it
+	// was not given.
+	MixinBounded      = bounded.Name
+	MixinBoundedLimit = bounded.ParamLimit
 )
 
 // teardownShaped reports the one signature "a second call answers the same"

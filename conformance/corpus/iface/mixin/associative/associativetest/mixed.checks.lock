@@ -1,0 +1,10 @@
+testkit-checks v2
+Apply/cancel	signature/cancel	Apply reports a cancelled context as cancelled	
+Apply/deadline	signature/deadline	Apply reports an expired deadline as exceeded	
+Apply/nilcontext	signature/nilcontext	Apply returns an error rather than panicking on a nil context	
+Apply/smoke	signature/smoke	Apply survives a call with a derived delta	
+Total/cancel	signature/cancel	Total reports a cancelled context as cancelled	
+Total/deadline	signature/deadline	Total reports an expired deadline as exceeded	
+Total/nilcontext	signature/nilcontext	Total returns an error rather than panicking on a nil context	
+Total/smoke	signature/smoke	Total survives a call	
+Total/zero-on-error	signature/zero-on-error	Total returns zero alongside any error	

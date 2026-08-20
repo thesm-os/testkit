@@ -4,7 +4,6 @@
 package cacheabletest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -19,62 +18,65 @@ import (
 // cached read and an uncached one return the same value, so no single call can
 // tell them apart. Observing it needs a reference to compare against, which is
 // what the model tier has and this one does not.
+//
+// Nothing on this interface writes, so the reader shape's miss check was
+// refused; the seed lives in the constructor instead, which is where a seeded
+// subject is built now.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := cacheabletest.DefaultMixedFixture()
+	fx := cacheabletest.DefaultMixedFixture()
 
-	cacheabletest.AssertMixedContract(t,
-		cacheabletest.MixedModel(),
-		cacheabletest.MixedSubject("in-memory", func() cacheable.Mixed {
-			return cacheabletest.NewInMemory()
-		}),
-		cacheabletest.MixedSeed(func(_ context.Context, subject cacheable.Mixed) error {
-			subject.(*cacheabletest.InMemory).Put(fixture.Key, "cached")
-			return nil
-		}),
-		cacheabletest.MixedOnGet("returns what was seeded", func(
-			tb testing.TB, subject cacheable.Mixed, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, got, "cached", "and carries what was written")
-		}),
-		cacheabletest.MixedOnGet("answers a repeated read from the cache", func(
-			tb testing.TB, subject cacheable.Mixed, key string,
-		) {
-			tb.Helper()
-			// The mixin's own shape: the second read must agree with the first
-			// without consulting what backs it. Both answers look alike, which
-			// is why one read cannot state this and two can.
-			first, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the first read finds the seeded key")
-			second, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "and so does the second")
-			testkit.Equal(tb, second, first, "with the same answer")
-		}),
+	cacheabletest.RunMixed(t,
+		cacheabletest.MixedHarness[*cacheabletest.InMemory]{
+			Name: "in-memory",
+			New: func() *cacheabletest.InMemory {
+				s := cacheabletest.NewInMemory()
+				s.Put(fx.Key(), "cached")
+				return s
+			},
+		},
+		cacheabletest.MixedChecks{
+			{
+				Method: "Get",
+				Name:   "returns-what-was-seeded",
+				Claim:  "Get returns what was seeded",
+				Run: func(tb testing.TB, s cacheable.Mixed, fx cacheabletest.MixedFixture) {
+					tb.Helper()
+					got, err := s.Get(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a seeded key is found")
+					testkit.Equal(tb, got, "cached", "and carries what was written")
+				},
+			},
+			{
+				Method: "Get",
+				Name:   "repeated-read-agrees",
+				Claim:  "Get answers a repeated read from the cache",
+				Run: func(tb testing.TB, s cacheable.Mixed, fx cacheabletest.MixedFixture) {
+					tb.Helper()
+					// The mixin's own shape: the second read must agree with
+					// the first without consulting what backs it. Both answers
+					// look alike, which is why one read cannot state this and
+					// two can.
+					first, err := s.Get(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "the first read finds the seeded key")
+					second, err := s.Get(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "and so does the second")
+					testkit.Equal(tb, second, first, "with the same answer")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	cacheabletest.AssertMixedContract(t,
-		cacheabletest.MixedSubject("in-memory", func() cacheable.Mixed {
-			return cacheabletest.NewInMemory()
-		}),
-		cacheabletest.MixedWithout("Get/smoke"),
-		cacheabletest.MixedWithoutDouble(),
+	cacheabletest.RunMixed(t,
+		cacheabletest.MixedHarness[*cacheabletest.InMemory]{Name: "in-memory", New: cacheabletest.NewInMemory},
+		cacheabletest.MixedSuite.Without(cacheabletest.MixedSuite.Checks.Get.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	cacheabletest.MixedModelSaturation(t, func() cacheable.Mixed {
-		return cacheabletest.NewInMemory()
-	})
 }

@@ -21,43 +21,39 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	orderaftertest.AssertMixedContract(t,
-		orderaftertest.MixedModel(),
-		orderaftertest.MixedSubject("in-memory", func() orderafter.Mixed {
-			return orderaftertest.NewInMemory()
-		}),
-		orderaftertest.MixedOnCommit("succeeds once the prerequisite has run", func(
-			tb testing.TB, subject orderafter.Mixed,
-		) {
-			tb.Helper()
-			// The other half. The generated check states that Commit is refused
-			// before Prepare; that it is *accepted* after is the half a
-			// classification cannot imply, since nothing says the constraint is
-			// the only reason a commit could fail.
-			testkit.NoError(tb, subject.Prepare(tb.Context()), "preparing succeeds")
-			testkit.NoError(tb, subject.Commit(tb.Context()), "and then so does committing")
-		}),
+	orderaftertest.RunMixed(t,
+		orderaftertest.MixedHarness[*orderaftertest.InMemory]{Name: "in-memory", New: orderaftertest.NewInMemory},
+		orderaftertest.MixedChecks{
+			{
+				Method: "Commit",
+				Name:   "accepted-after-the-prerequisite",
+				Claim:  "Commit succeeds once the prerequisite has run",
+				Run: func(tb testing.TB, s orderafter.Mixed, fx orderaftertest.MixedFixture) {
+					tb.Helper()
+					// Both halves, because the ordering claim needs both: that
+					// a commit is refused before Prepare, and that it is
+					// accepted after. Nothing says the constraint is the only
+					// reason a commit could fail, so the second half is not
+					// implied by the first.
+					testkit.Error(tb, s.Commit(tb.Context()),
+						"committing before the prerequisite is refused")
+
+					testkit.NoError(tb, s.Prepare(tb.Context()), "preparing succeeds")
+					testkit.NoError(tb, s.Commit(tb.Context()), "and then so does committing")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	orderaftertest.AssertMixedContract(t,
-		orderaftertest.MixedSubject("in-memory", func() orderafter.Mixed {
-			return orderaftertest.NewInMemory()
-		}),
-		orderaftertest.MixedWithout("Commit/smoke"),
-		orderaftertest.MixedWithoutDouble(),
+	orderaftertest.RunMixed(t,
+		orderaftertest.MixedHarness[*orderaftertest.InMemory]{Name: "in-memory", New: orderaftertest.NewInMemory},
+		orderaftertest.MixedSuite.Without(orderaftertest.MixedSuite.Checks.Commit.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	orderaftertest.MixedModelSaturation(t, func() orderafter.Mixed {
-		return orderaftertest.NewInMemory()
-	})
 }

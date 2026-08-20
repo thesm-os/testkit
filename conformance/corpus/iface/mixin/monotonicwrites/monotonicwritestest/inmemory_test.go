@@ -12,48 +12,40 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// The mixin's own law spans two sessions and needs a reference to compare
+// against, so it is the model tier's. What the suite tier can state about the
+// pair is the row below: a key Store wrote is a key Get answers for.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	monotonicwritestest.AssertMixedContract(t,
-		monotonicwritestest.MixedSubject("in-memory", func() monotonicwrites.Mixed {
-			return monotonicwritestest.NewInMemory()
-		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model/twin" beside the per-method checks — twinned,
-		// because no store oracle stamps the version member this subject assigns.
-		monotonicwritestest.MixedModel(),
-		monotonicwritestest.MixedOnGet("returns what Store wrote", func(
-			tb testing.TB, subject monotonicwrites.Mixed, key string,
-		) {
-			tb.Helper()
-			// The suite seeds through Store, so the key is already present —
-			// which is what makes this a statement about the pair rather than
-			// about Get alone.
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is present")
-			testkit.Equal(tb, got.Key, key, "and Get answers under the key it was stored with")
-		}),
+	monotonicwritestest.RunMixed(
+		t,
+		monotonicwritestest.MixedHarness[*monotonicwritestest.InMemory]{
+			Name: "in-memory",
+			New:  monotonicwritestest.NewInMemory,
+		},
+		monotonicwritestest.MixedChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-store-wrote",
+				Claim:  "Get returns what Store wrote",
+				Run: func(tb testing.TB, s monotonicwrites.Mixed, fx monotonicwritestest.MixedFixture) {
+					tb.Helper()
+					written := fx.Value()
+					// Store answers the state it wrote beside its error, which
+					// is what makes this an answering writer rather than a
+					// plain one.
+					stored, err := s.Store(tb.Context(), written)
+					testkit.NoError(tb, err, "the value is stored")
+					testkit.Equal(tb, stored.Key, written.Key, "under the key it was given")
+
+					got, err := s.Get(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "the written key is present")
+					testkit.Equal(tb, got.Key, written.Key,
+						"and Get answers under the key it was stored with")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	monotonicwritestest.AssertMixedContract(t,
-		monotonicwritestest.MixedSubject("in-memory", func() monotonicwrites.Mixed {
-			return monotonicwritestest.NewInMemory()
-		}),
-		monotonicwritestest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	monotonicwritestest.MixedModelSaturation(t, func() monotonicwrites.Mixed {
-		return monotonicwritestest.NewInMemory()
-	})
 }

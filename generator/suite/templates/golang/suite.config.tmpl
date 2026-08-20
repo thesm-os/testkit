@@ -22,10 +22,54 @@ type {{ suite_configName .IfaceName }}{{ renderTypeParams .TypeParams }} struct 
 {{- end }}
 }
 
-// {{ suite_defaultConfigName .Token }} is what this run derived.
+func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
+	// Validated here, in the option loop, so a short pool arrives as a
+	// named wiring error beside every other one rather than as a panic
+	// from inside a check. A second config is refused rather than
+	// last-wins: two configs state two intentions and silently taking
+	// one is the bug this cannot report later.
+	if !rc.ConfigOnce("{{ suite_configName .IfaceName }}") {
+		return
+	}
+	if _, err := c.normalize(); err != nil {
+		rc.AddErr(err)
+		return
+	}
+	rc.cfg = c
+}
+
+// normalize fills the derived defaults and applies the pool policy.
 //
-// Replace any pool through {{ suite_configName .IfaceName }}; the rest keep
-// these members.
+// Every pool needs three distinct members: the canonical one, a second
+// that funds a miss, and a hostile one. A consumer replacing a pool with
+// two equal members would leave every miss check hitting, which is a
+// check that runs and asserts nothing.
+func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) normalize() ({{ suite_configName .IfaceName }}{{ .TypeArgs }}, error) {
+	d := {{ suite_defaultConfigName .Token }}{{ .TypeArgs }}()
+	var err error
+{{- range $p := .Pools }}
+	if c.{{ $p.Field }}, err = {{ renderExpr (external $.Vocab "DistinctPool") }}(
+		"{{ $.IfaceName }}Config.{{ $p.Field }}", c.{{ $p.Field }}, d.{{ $p.Field }},
+	); err != nil {
+		return c, err
+	}
+{{- end }}
+	return c, nil
+}
+
+// orDefault is normalize where there is no error path to report through
+// — the suite-as-data seam, which has no testing.TB.
+func (c {{ suite_configName .IfaceName }}{{ .TypeArgs }}) orDefault() {{ suite_configName .IfaceName }}{{ .TypeArgs }} {
+	return {{ renderExpr (external $.Vocab "Must") }}(c.normalize())
+}
+
+// {{ suite_defaultConfigName .Token }} is what this run derived, and every value in it
+// has a named origin — a default with two homes drifts:
+//
+//	pool[0]  the declaration's //testkit:default stamp, verbatim
+//	pool[1]  the distinctness rule, so a miss has an input nothing wrote
+//	pool[2]  the hostile member, because a derived default that never
+//	         draws one is coverage the suite claims and does not have
 func {{ suite_defaultConfigName .Token }}{{ renderTypeParams .TypeParams }}() {{ suite_configName .IfaceName }}{{ .TypeArgs }} {
 	return {{ suite_configName .IfaceName }}{{ .TypeArgs }}{
 {{- range $p := .Pools }}

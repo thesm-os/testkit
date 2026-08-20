@@ -6,36 +6,30 @@ package writertest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/writer"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/writer/writertest"
 )
 
-// The one shape that needs no seed option: Put is classified writer, so the
-// harness populates every subject through the interface's own method before each
-// check runs.
+// The minimal consumer: a name and a constructor, and nothing else.
 //
-// No fixture either. What Put is handed is derived from Value's own fields, and
-// the whole wiring is one Subject.
+// What Put is handed is derived from Value's own fields, so no fixture is
+// supplied and no row is written — this file is what a harness costs when the
+// signature says everything.
 func TestWriterContract(t *testing.T) {
 	t.Parallel()
 
-	writertest.AssertWriterContract(t,
-		writertest.WriterModel(),
-		writertest.WriterSubject("in-memory", func() writer.Writer {
-			return writertest.NewInMemory()
-		}),
+	writertest.RunWriter(t,
+		writertest.WriterHarness[*writertest.InMemory]{Name: "in-memory", New: writertest.NewInMemory},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestWriterContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestWriterContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	writertest.AssertWriterContract(t,
-		writertest.WriterSubject("in-memory", func() writer.Writer {
-			return writertest.NewInMemory()
-		}),
-		writertest.WriterWithout("Put/smoke"),
-		writertest.WriterWithoutDouble(),
+	writertest.RunWriter(t,
+		writertest.WriterHarness[*writertest.InMemory]{Name: "in-memory", New: writertest.NewInMemory},
+		writertest.WriterSuite.Without(writertest.WriterSuite.Checks.Put.Smoke()),
 	)
 }

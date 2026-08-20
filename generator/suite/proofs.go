@@ -1,0 +1,521 @@
+// Copyright Thesmos 2026
+// SPDX-License-Identifier: MIT
+
+package suite
+
+import (
+	"sort"
+	"strings"
+
+	"go.thesmos.sh/eidos/lang/golang"
+	"go.thesmos.sh/eidos/node"
+	"go.thesmos.sh/eidos/sdk"
+
+	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/stub"
+	"go.thesmos.sh/testkit/generator/suite/projection"
+)
+
+// KindProofs is the emit kind for the falsification companion, which is
+// also its template's name.
+const KindProofs sdk.Kind = "suite.proofs"
+
+// Proofs is the companion file: one planted defect per check the run
+// stamped Proven.
+//
+// A separate emit rather than a section of [Contract] because it lands in
+// a separate output — the `_test.go` the layout shifts into the external
+// test package — and an emit is routed as a whole. Everything it needs
+// from the harness it carries a copy of; reaching back through a pointer
+// would put a cycle in a graph that gets walked.
+type Proofs struct {
+	sdk.BaseEmit
+	Subject
+
+	// Pkg is the import path of the primary output, which is where every
+	// symbol this file names is declared.
+	//
+	// The companion is always the external test package of the harness,
+	// so every reference is qualified and there is no routing under which
+	// a bare name would be right. Provisional during Generate and
+	// corrected by [Proofs.SetOutputPackages], exactly as the double's
+	// companion does it.
+	Pkg string
+
+	// Token qualifies the identifiers this file declares for itself.
+	Token string
+
+	// Vocab and Prove are the packages the emitted calls come from,
+	// carried rather than spelled in the template because an import path
+	// built inside a template is one the backend cannot register.
+	Vocab, Prove string
+
+	// Fixture is the derived input set, whose constructor the proofs bind
+	// the suite to — the same one a default run binds to, so a proof
+	// cannot pass against inputs no run uses. DrawsFixture says whether
+	// the assembler takes one at all, which follows the harness's own
+	// answer rather than being decided again here.
+	Fixture      Fixture
+	DrawsFixture bool
+
+	// SeedsCorpus says the assembler takes the run's corpus too, and
+	// CorpusFunc is the builder that makes one — both mirroring the
+	// harness's own answer rather than deciding it again.
+	SeedsCorpus bool
+	CorpusFunc  string
+
+	// Defects are the planted defects this file can render.
+	Defects []*ProofEmit
+
+	// Unproven names the checks a deriver stamped Proven and this file
+	// has no defect template for.
+	//
+	// The row is emitted Argued instead, so the parity gate stays quiet;
+	// this is what keeps that downgrade from reading as a claim nothing
+	// could ever falsify. Non-empty wherever the defect census is behind
+	// the body census, which is where the rewrite currently stands.
+	Unproven []string
+
+	// Generic reports that the subject is parameterised, which is the one
+	// case where a companion cannot be written: a Go test function takes
+	// no type parameters, so there is nothing to instantiate the defects
+	// at. It gets a note in place of its proofs rather than no file, the
+	// same contract the double's companion keeps.
+	Generic bool
+}
+
+// Kind returns [KindProofs].
+func (*Proofs) Kind() sdk.Kind { return KindProofs }
+
+// SetOutputPackages repoints [Proofs.Pkg] at wherever Layout routed the
+// harness.
+//
+// An empty path for the primary tag means the target resolved without a
+// derivable import path. The provisional value is left rather than
+// blanked: a wrong package is a compile error naming the symbol, a bare
+// name silently binds to whatever else is in scope.
+//
+// Each defect is repointed too. A defect renders standalone through the
+// backend's dispatch and holds no path back to this node, so the
+// correction has to reach every one of them rather than only the file
+// they sit in.
+func (p *Proofs) SetOutputPackages(byTag map[string]string) {
+	path, ok := sdk.PrimaryPackage(byTag)
+	if !ok {
+		return
+	}
+	p.Pkg = path
+	for _, d := range p.Defects {
+		d.Pkg = path
+	}
+}
+
+// VeneerVar is the exported value the proofs reach the check index
+// through.
+func (p *Proofs) VeneerVar() string { return projection.VeneerName(p.IfaceName) }
+
+// ProofsFunc is this file's own defect map.
+func (p *Proofs) ProofsFunc() string { return projection.ProofsName(p.Token) }
+
+// TestFunc is the test that drives them.
+func (p *Proofs) TestFunc() string { return projection.ProofsTestName(p.IfaceName) }
+
+// ProofEmit is one planted defect as its template renders it.
+//
+// The node the backend dispatches on, mirroring [CheckEmit]: its kind IS
+// the defect variant's template name, so a variant nothing spells fails
+// the render by name rather than emitting a proofs map with a hole in it
+// — which the parity gate would report against the generated file
+// instead of against the generator.
+type ProofEmit struct {
+	sdk.BaseEmit
+	defectView
+
+	// Plan is the check this defect is the evidence for. The map key
+	// reads its identity; the view beside it says how the defect is
+	// spelled.
+	Plan projection.CheckPlan
+
+	accessor string
+}
+
+// Kind returns the planted defect's variant, which is its template's
+// name.
+func (p *ProofEmit) Kind() sdk.Kind { return sdk.Kind(p.Plan.Defect.DefectKind()) }
+
+// Group is the index member the check sits under, so the map key is
+// written through the same tree a consumer drops it through.
+func (p *ProofEmit) Group() string { return golang.ExportedName(p.Plan.ID.Method) }
+
+// Accessor is the check's entry point within that member.
+func (p *ProofEmit) Accessor() string { return p.accessor }
+
+// defectView is one planted defect's rendering context: the names the
+// generated double is reached by, the signature the override is declared
+// at, and the prose the report reads.
+//
+// Every field is a fact about the METHOD or the generated package, which
+// is why they are resolved where both are still in hand rather than
+// carried through the projection — the same split [bodyView] makes.
+type defectView struct {
+	// Pkg is the harness package, which every generated name below is
+	// qualified by; Prove and Vocab are the runtime packages the defect
+	// itself is built from.
+	//
+	// Carried per defect rather than read off the file, because a defect
+	// is dispatched standalone — the backend renders it by its own kind,
+	// with no path back to the emit that holds it.
+	Pkg, Prove, Vocab string
+
+	// Subject is the interface as this file names it, and Method the
+	// method the defect overrides.
+	Subject, Method string
+
+	// Ctor is the double's constructor and Option the one-method
+	// override the defect is planted through — `NewCalculatorStub`,
+	// `WithCalculatorAdd`. Names rather than references: the template
+	// qualifies them against Pkg through the backend, which is what
+	// registers the import.
+	Ctor, Option string
+
+	// DefectName is the subject line the report prints for this defect.
+	DefectName string
+
+	// EchoMessage, PanicMessage and RepeatMessage are the planted
+	// failures' own text.
+	// Prose belonging to the defect rather than to any claim, so it has
+	// its home here and not in a runtime constant.
+	PanicMessage, RepeatMessage, EchoMessage string
+
+	// Echo is a live value of the method's first result, for the two
+	// defects that must ANSWER something a correct subject would not.
+	//
+	// Derived through the same sampler the fixture uses, so a defect and
+	// a check draw values from one rule. Its Text is empty where no
+	// sample could be derived — a func result, a channel, a type this
+	// run never read — and that empties the whole defect: a body that
+	// cannot name a live value cannot plant the wrongness it is for, so
+	// the row stays Argued rather than shipping evidence that is really
+	// the zero it was supposed to contradict.
+	Echo golang.Sample
+
+	// ReasonConst is the identifier the substring the red must contain is
+	// declared under, empty where this run has none to quote.
+	//
+	// The identifier rather than the text: quoting the message would let
+	// a reworded primitive silently weaken every proof that reads it,
+	// while naming the constant makes the same reword a compile error in
+	// the generated file. Empty for a family whose failure prose is
+	// authored in a body template, which has no constant to name yet —
+	// a weaker proof, and one the generated comment says out loud.
+	ReasonConst string
+
+	// AnonParams is the override's parameter list with every name blanked
+	// — the defect bodies read no argument, and a named parameter nothing
+	// reads is a lint finding in a file nobody can edit.
+	AnonParams []*sdk.EmitParam
+
+	// AnonReturns is the result list with every name dropped, for a body
+	// that never returns.
+	AnonReturns []*sdk.EmitReturn
+
+	// NamedReturns is the same list with a name on every slot, for a body
+	// that answers: a bare `return` then yields each slot's zero without
+	// this file having to spell a zero of a type it may not be able to
+	// name. ErrSlot is the identifier the error among them binds to, and
+	// ValueSlot the first result beside it — what an answering defect
+	// assigns its live value to.
+	NamedReturns       []*sdk.EmitReturn
+	ErrSlot, ValueSlot string
+
+	// Sentinel is the miss sentinel the check under proof expects,
+	// empty where the read declares none. An invents-hit defect against
+	// a declared sentinel need only answer; against none it has to
+	// answer a live value.
+	Sentinel string
+}
+
+// errLocal is the identifier a defect body assigns its planted error to.
+//
+// Fixed rather than derived: it names the error slot of a result list
+// whose other slots are `r0`, `r1`, …, so no signature can collide with
+// it, and a body that reads the same in every generated file is one a
+// reviewer can scan.
+const errLocal = "err"
+
+// defectRendered is the defect variants whose templates exist today.
+//
+// The mirror of [rendered]: a check whose body renders and whose defect
+// does not is emitted Argued, so the two censuses decide together what a
+// row claims about itself.
+func defectRendered() map[projection.DefectKind]bool {
+	return map[projection.DefectKind]bool{
+		projection.KindStubPanic:       true,
+		projection.KindCtxSwap:         true,
+		projection.KindAcceptsNil:      true,
+		projection.KindSecondCallErrs:  true,
+		projection.KindEchoBesideError: true,
+		projection.KindInventsHit:      true,
+	}
+}
+
+// spellsDefect reports whether this run can write the defect out.
+//
+// A template is necessary and not sufficient. The last two variants
+// have to ANSWER a live value, and whether one can be derived is a
+// property of the METHOD's result type rather than of the variant — so
+// renderability is asked per check rather than read off the census.
+// Answering wrongly in the permissive direction ships a defect that
+// returns the zero it was meant to contradict, which is a proof that
+// passes while proving the opposite.
+func spellsDefect(kind projection.DefectKind, view defectView) bool {
+	if !defectRendered()[kind] {
+		return false
+	}
+	switch kind {
+	case projection.KindEchoBesideError:
+		return view.Echo.Text != ""
+	case projection.KindInventsHit:
+		// The sentinel arm needs no value: a subject answering where a
+		// sentinel was owed is already the defect, and a bare return
+		// says it. Only the zero arm has to produce something.
+		return view.Sentinel != "" || view.Echo.Text != ""
+	default:
+		return true
+	}
+}
+
+// proofsOf pairs every check the run can render with the defect that
+// proves it, and reports which of them found none.
+//
+// Driven off the emitted checks rather than the whole inventory: a proof
+// for a check the harness does not emit is a defect naming nothing, which
+// the parity gate fails on — so the two sets are derived from one walk
+// instead of two that could disagree.
+func proofsOf(
+	base sdk.BaseEmit, pkg string, r golang.Resolver, iface Iface, checks []*CheckEmit,
+) ([]*ProofEmit, []string) {
+	byName := make(map[string]Method, len(iface.Methods))
+	for _, m := range iface.Methods {
+		byName[m.Name] = m
+	}
+
+	out := make([]*ProofEmit, 0, len(checks))
+	var unproven []string
+	for _, c := range checks {
+		m, found := byName[c.Plan.ID.Method]
+		if !found {
+			continue
+		}
+		if !c.Proven {
+			// Stamped Proven by its deriver and downgraded for want of a
+			// template. Named rather than dropped: the row says Argued
+			// and this says why, so a reader can tell a claim nothing
+			// can falsify from one nobody has spelled yet.
+			unproven = append(unproven, m.Name+"/"+c.Plan.ID.Seg)
+			continue
+		}
+		view := defectViewOf(pkg, r, iface, m, c.Plan)
+		if !spellsDefect(c.Plan.Defect.DefectKind(), view) {
+			// The template exists and this METHOD defeats it: no live
+			// value of its result type could be derived, so the defect
+			// would answer the very zero it was meant to contradict.
+			// The row loses its stamp here rather than shipping one.
+			c.Proven = false
+			unproven = append(unproven, m.Name+"/"+c.Plan.ID.Seg)
+			continue
+		}
+		out = append(out, &ProofEmit{
+			BaseEmit:   base,
+			defectView: view,
+			Plan:       c.Plan,
+			accessor:   c.Accessor(),
+		})
+	}
+	sort.Strings(unproven)
+	return out, unproven
+}
+
+// defectViewOf spells one planted defect against the method it overrides.
+func defectViewOf(
+	pkg string, r golang.Resolver, iface Iface, m Method, plan projection.CheckPlan,
+) defectView {
+	sig := m.Sig
+	reason, _ := vocab.RedConst(plan.ID.Seg)
+	sentinel, _ := MissSentinel(m)
+	echo, _ := echoSample(m, r)
+	return defectView{
+		Echo:          echo,
+		Sentinel:      sentinel,
+		ValueSlot:     valueSlot(sig),
+		Pkg:           pkg,
+		Prove:         Prove,
+		Vocab:         Vocab,
+		Subject:       iface.Name,
+		Method:        m.Name,
+		Ctor:          projection.StubCtorName(iface.Name, stub.DefaultSuffix),
+		Option:        string(projection.OptionName(iface.Name, m.Name)),
+		DefectName:    projection.DefectName(iface.Name, defectClause(m.Name, plan.Defect)),
+		PanicMessage:  plantedPrefix + m.Name + " panics",
+		RepeatMessage: plantedPrefix + m.Name + " refuses its repeat",
+		EchoMessage:   plantedPrefix + m.Name + " refused with a believable value",
+		ReasonConst:   reason,
+		AnonParams:    anonParams(sig),
+		AnonReturns:   anonReturns(sig),
+		NamedReturns:  namedReturns(sig),
+		ErrSlot:       errLocal,
+	}
+}
+
+// echoSample derives a live value of the method's first result — the
+// one an answering defect returns where a correct subject would not.
+//
+// Through the fixture's own sampler, so the value a defect plants and
+// the values a check draws come from one rule rather than two that
+// could disagree about what this type looks like. The ALTERNATE member
+// deliberately: a defect returning the same value the fixture seeds
+// would be indistinguishable from a subject that answered correctly.
+// The sample is withheld where it spells the result's own zero, which
+// is where a planted answer would BE the claim rather than break it —
+// a predicate answering bool has exactly two values and one of them is
+// what the check demands. The row ships Argued and says so.
+func echoSample(m Method, r golang.Resolver) (golang.Sample, bool) {
+	src := firstValueSource(m)
+	if src == nil {
+		return golang.Sample{}, false
+	}
+	_, alternate := derivedPair(src, projection.DrawWord(golang.Param{Source: src}), r)
+	if alternate.Text == "" || spellsZero(alternate, src) {
+		return golang.Sample{}, false
+	}
+	return alternate, true
+}
+
+// zeroLiterals are the texts a sampler writes that ARE a zero value.
+// Keyed by the predeclared type they belong to, because "0" is the zero
+// of int and a perfectly good non-zero for nothing else.
+func zeroLiterals() map[string]string {
+	return map[string]string{
+		"bool":   "false",
+		"string": `""`,
+		"int":    "0", "int8": "0", "int16": "0", "int32": "0", "int64": "0",
+		"uint": "0", "uint8": "0", "uint16": "0", "uint32": "0", "uint64": "0",
+		"uintptr": "0",
+		"float32": "0", "float64": "0",
+		"byte": "0", "rune": "0",
+	}
+}
+
+// spellsZero reports that this sample is the zero of the type it was
+// derived for, so a defect planting it would assert the claim instead
+// of violating it.
+//
+// Only predeclared types are answered. A struct sample carries its
+// fields in the text, and one whose every field happened to be its own
+// zero is a sampler that produced nothing — a different fault, and one
+// the fixture's own OK flag already reports.
+func spellsZero(s golang.Sample, src *node.TypeRef) bool {
+	if src == nil || src.Name == "" || !golang.IsPredeclared(src.Name) {
+		return false
+	}
+	zero, known := zeroLiterals()[src.Name]
+	return known && s.Text == zero
+}
+
+// valueSlot is the identifier the first result binds to under named
+// returns, empty for a method that answers nothing but an error.
+func valueSlot(sig *golang.Sig) string {
+	if sig == nil {
+		return ""
+	}
+	for _, ret := range sig.Returns {
+		if !ret.Error {
+			return ret.Local
+		}
+	}
+	return ""
+}
+
+// plantedPrefix opens every planted failure's own text.
+//
+// One word, at the front, because these strings surface in a run's output
+// beside real failures and the reader's first question is which they are
+// looking at.
+const plantedPrefix = "planted: "
+
+// defectClause words what one planted defect does, in the grammar
+// [projection.DefectName] wraps.
+//
+// A table rather than a method on each variant: the variants live in the
+// projection, which is language-neutral and holds no prose a Go file
+// reads. A variant with no clause falls back to its own kind, which reads
+// as a slug and is the visible sign that this table missed one.
+func defectClause(method string, d projection.Defect) string {
+	clauses := map[projection.DefectKind]string{
+		projection.KindStubPanic:      method + " panics",
+		projection.KindCtxSwap:        method + " ignores the context it is handed",
+		projection.KindAcceptsNil:     method + " forgives a nil context and answers",
+		projection.KindSecondCallErrs: method + " fails on the second call",
+		projection.KindEchoBesideError: method +
+			" answers a believable value beside its error",
+		projection.KindInventsHit: method + " answers for an input nothing wrote",
+	}
+	kind := d.DefectKind()
+	if c, named := clauses[kind]; named {
+		return c
+	}
+	return method + " " + strings.TrimPrefix(string(kind), projection.DefectKindPrefix)
+}
+
+// anonParams is the override's parameters with every name blanked.
+//
+// All blank rather than some: Go's grammar forbids a list that mixes
+// named and unnamed entries, and the backend's renderParams reports that
+// as an error rather than emitting it.
+func anonParams(sig *golang.Sig) []*sdk.EmitParam {
+	if sig == nil {
+		return nil
+	}
+	out := make([]*sdk.EmitParam, 0, len(sig.Params))
+	for _, p := range sig.Params {
+		out = append(out, &sdk.EmitParam{Name: "_", Type: p.Type, Variadic: p.Variadic})
+	}
+	return out
+}
+
+// anonReturns is the result list with no names, for a body that panics
+// and therefore never returns.
+func anonReturns(sig *golang.Sig) []*sdk.EmitReturn {
+	if sig == nil {
+		return nil
+	}
+	out := make([]*sdk.EmitReturn, 0, len(sig.Returns))
+	for _, r := range sig.Returns {
+		out = append(out, &sdk.EmitReturn{Type: r.Type})
+	}
+	return out
+}
+
+// namedReturns is the result list with a name on every slot, which is
+// what lets a defect body answer without spelling a zero.
+//
+// A bare `return` under named results yields each slot's zero value,
+// whatever its type — so a defect that has to answer success needs no
+// literal, no sample, and no import for a type it might not be able to
+// name. The error slot takes [errLocal] so a body can plant a failure
+// into it by name; the rest take the identifier the signature projection
+// already chose for them.
+func namedReturns(sig *golang.Sig) []*sdk.EmitReturn {
+	if sig == nil {
+		return nil
+	}
+	out := make([]*sdk.EmitReturn, 0, len(sig.Returns))
+	for _, r := range sig.Returns {
+		name := r.Local
+		if r.Error {
+			name = errLocal
+		}
+		out = append(out, &sdk.EmitReturn{Name: name, Type: r.Type})
+	}
+	return out
+}

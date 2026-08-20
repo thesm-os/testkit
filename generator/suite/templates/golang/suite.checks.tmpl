@@ -10,12 +10,41 @@ template through the backend's dispatch.
 */ -}}
 {{- define "suite.checks" -}}
 {{- $c := . }}
+// {{ suite_suiteName .Token }} returns the checks as data, drawn from f.
+//
+// The seam the proofs companion binds to, and the one a runner of your
+// own would. It takes the fixture rather than a config because the
+// fixture is what a check draws from; a config that derives one is the
+// pool work, and until that lands a caller passes what a default run
+// passes.
+func {{ suite_suiteName .Token }}{{ renderTypeParams .TypeParams }}(
+	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
+	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+	{{- if .SeedsCorpus }}{{ suite_docsIdent }} {{ suite_corpusTypeName .IfaceName }}{{ end -}}
+) {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}{{ .TypeArgs }}] {
+	return {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}{{ .TypeArgs }}]{
+		Name:     "{{ .IfaceName }}",
+		DropHint: {{ suite_dropHintName .Token }},
+		Checks: {{ suite_checksName .Token }}{{ .TypeArgs }}(
+			{{- if .DrawsFixture }}{{ suite_fixtureIdent }}{{ end }}
+			{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+			{{- if .SeedsCorpus }}{{ suite_docsIdent }}{{ end -}}
+		),
+	}
+}
+
 // {{ suite_checksName .Token }} builds every check this run derived.
 //
 // sig is the one shape they share; the literals below state only what
 // differs. Falsifiable is Proven wherever a defect rule reached the
-// claim, which the parity gate refuses to stamp without one.
-func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}({{ if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}) []{{ renderExpr (external $.Vocab "Check") }}[{{ .IfaceName }}{{ .TypeArgs }}] {
+// claim AND the companion beside this file spells that defect — the
+// parity gate refuses the stamp without the evidence, so a claim this
+// run cannot yet plant is argued rather than asserted.
+func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}(
+	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
+	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+	{{- if .SeedsCorpus }}{{ suite_docsIdent }} {{ suite_corpusTypeName .IfaceName }}{{ end -}}
+) []{{ renderExpr (external $.Vocab "Check") }}[{{ .IfaceName }}{{ .TypeArgs }}] {
 {{- if not .Checks }}
 	// Every check this interface derived is waiting on a body template;
 	// the header names which. An empty set rather than no builder, so
@@ -23,14 +52,25 @@ func {{ suite_checksName .Token }}{{ renderTypeParams .TypeParams }}({{ if .Draw
 	return nil
 }
 {{- else }}
+{{- if .AnyProven }}
 	sig := {{ renderExpr (external $.Vocab "ProvenCheck") }}[{{ .IfaceName }}{{ .TypeArgs }}]
+{{- end }}
+{{- if .AnyArgued }}
+	argued := {{ renderExpr (external $.Vocab "ArguedCheck") }}[{{ .IfaceName }}{{ .TypeArgs }}]
+{{- end }}
 	ix := {{ suite_indexVar .Token }}
 	return []{{ renderExpr (external $.Vocab "Check") }}[{{ .IfaceName }}{{ .TypeArgs }}]{
 {{- range $ck := .Checks }}
+{{- if $ck.Proven }}
 		sig(ix.{{ $ck.Group }}.{{ $ck.Accessor }}(), {{ renderExpr (external $.Vocab $ck.ClassConst) }},
 			{{ printf "%q" $ck.Plan.Claim }},
+{{- else }}
+		argued(ix.{{ $ck.Group }}.{{ $ck.Accessor }}(), {{ renderExpr (external $.Vocab $ck.ClassConst) }},
+			{{ printf "%q" $ck.Plan.Claim }},
+			{{ printf "%q" $ck.Argument }},
+{{- end }}
 			func(tb {{ renderExpr (external "testing" "TB") }}, {{ $ck.Recv }} {{ $c.IfaceName }}{{ $c.TypeArgs }}) {
-				{{ $ck.AssertName }}{{ $c.TypeArgs }}(tb, {{ $ck.Recv }}{{ if $ck.Draws }}, {{ suite_fixtureIdent }}{{ end }})
+				{{ $ck.AssertName }}{{ $c.TypeArgs }}(tb, {{ $ck.Recv }}{{ if $ck.Draws }}, {{ suite_fixtureIdent }}{{ end }}{{ if $ck.Seeds }}, {{ suite_docsIdent }}{{ end }})
 			}),
 {{- end }}
 	}
@@ -43,6 +83,9 @@ func {{ $ck.AssertName }}{{ renderTypeParams $c.TypeParams }}(
 	{{ $ck.Recv }} {{ $c.IfaceName }}{{ $c.TypeArgs }},
 {{- if $ck.Draws }}
 	{{ suite_fixtureIdent }} {{ $c.Fixture.TypeName }}{{ $c.TypeArgs }},
+{{- end }}
+{{- if $ck.Seeds }}
+	{{ suite_docsIdent }} {{ suite_corpusTypeName $c.IfaceName }},
 {{- end }}
 ) {
 	tb.Helper()

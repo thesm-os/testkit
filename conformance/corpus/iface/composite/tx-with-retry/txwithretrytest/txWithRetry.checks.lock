@@ -1,0 +1,10 @@
+testkit-checks v2
+Begin/cancel	signature/cancel	Begin reports a cancelled context as cancelled	
+Begin/nilcontext	signature/nilcontext	Begin returns an error rather than panicking on a nil context	
+Begin/smoke	signature/smoke	Begin survives a call	
+Commit/cancel	signature/cancel	Commit reports a cancelled context as cancelled	
+Commit/nilcontext	signature/nilcontext	Commit returns an error rather than panicking on a nil context	
+Commit/smoke	signature/smoke	Commit survives a call	
+Rollback/cancel	signature/cancel	Rollback reports a cancelled context as cancelled	
+Rollback/nilcontext	signature/nilcontext	Rollback returns an error rather than panicking on a nil context	
+Rollback/smoke	signature/smoke	Rollback survives a call	

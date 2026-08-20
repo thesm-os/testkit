@@ -23,39 +23,46 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	ifmatchtest.AssertContractContract(t,
-		ifmatchtest.ContractModel(),
-		ifmatchtest.ContractSubject("in-memory", func() ifmatch.Contract {
-			return ifmatchtest.NewInMemory()
-		}),
-		ifmatchtest.ContractOnPut("refuses what the predicate declines", func(
-			tb testing.TB, subject ifmatch.Contract, v ifmatch.Value,
-		) {
-			tb.Helper()
-			// The half the generated check cannot reach: both derived values
-			// are admitted, so the run only ever exercises "accepts what Match
-			// admits". A stale body is what the contract exists to catch.
-			stale := ifmatch.Value{Key: v.Key, Body: v.Body + "-stale"}
+	ifmatchtest.RunContract(t,
+		ifmatchtest.ContractHarness[*ifmatchtest.InMemory]{Name: "in-memory", New: ifmatchtest.NewInMemory},
+		ifmatchtest.ContractChecks{
+			{
+				Method: "Put",
+				Name:   "refuses-a-declined-value",
+				Claim:  "Put refuses what the predicate declines",
+				Run: func(tb testing.TB, s ifmatch.Contract, fx ifmatchtest.ContractFixture) {
+					tb.Helper()
+					// The half the generated check cannot reach: both derived
+					// values are admitted, so the run only ever exercises
+					// "accepts what Match admits". A stale body is what the
+					// contract exists to catch — and the row writes the key
+					// first, because a fresh subject holds nothing to be stale
+					// against.
+					held := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), held), "the key is written")
 
-			allowed, err := subject.Match(tb.Context(), stale)
-			testkit.NoError(tb, err, "the predicate answers about a key the seed wrote")
-			testkit.False(tb, allowed, "and declines a body the store does not hold")
+					stale := ifmatch.Value{Key: held.Key, Body: held.Body + "-stale"}
 
-			testkit.Error(tb, subject.Put(tb.Context(), stale),
-				"so the write conditional on it is refused")
-		}),
+					allowed, err := s.Match(tb.Context(), stale)
+					testkit.NoError(tb, err, "the predicate answers about a key the store holds")
+					testkit.False(tb, allowed, "and declines a body the store does not hold")
+
+					testkit.Error(tb, s.Put(tb.Context(), stale),
+						"so the write conditional on it is refused")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	ifmatchtest.AssertContractContract(t,
-		ifmatchtest.ContractSubject("in-memory", func() ifmatch.Contract {
-			return ifmatchtest.NewInMemory()
-		}),
-		ifmatchtest.ContractWithout("Put/smoke"),
-		ifmatchtest.ContractWithoutDouble(),
+	ifmatchtest.RunContract(t,
+		ifmatchtest.ContractHarness[*ifmatchtest.InMemory]{Name: "in-memory", New: ifmatchtest.NewInMemory},
+		ifmatchtest.ContractSuite.Without(ifmatchtest.ContractSuite.Checks.Put.Smoke()),
 	)
 }

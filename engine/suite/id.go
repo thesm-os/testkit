@@ -239,6 +239,33 @@ func segConsts() map[string]string {
 	}
 }
 
+// RedConst returns the identifier this package declares a segment's
+// expected failure substring under — `suite.RedCancelled` — and whether
+// this package words that segment's failure at all.
+//
+// A generated proof quotes the message its check reds with, so that a
+// defect dying on an unrelated guard stops counting as evidence. Quoting
+// the TEXT would make rewording the primitive silently weaken every
+// proof; quoting the identifier makes it a compile error instead. False
+// for a segment whose failure prose belongs to a generated body rather
+// than to a primitive here, which is a different home and not this
+// package's to name.
+func RedConst(seg string) (string, bool) {
+	name, ok := redConsts()[seg]
+	return name, ok
+}
+
+// redConsts pairs each segment with the constant wording its red, for
+// the reason [segConsts] is hand-written beside the constants.
+func redConsts() map[string]string {
+	return map[string]string{
+		SegSmoke:      "RedPanicked",
+		SegCancel:     "RedCancelled",
+		SegDeadline:   "RedDeadline",
+		SegNilContext: "RedNilContext",
+	}
+}
+
 // ClassConst returns the identifier this package declares the class
 // under, for emitted code that must name a class rather than repeat its
 // slug — `suite.ClassSmoke`, not "signature/smoke".

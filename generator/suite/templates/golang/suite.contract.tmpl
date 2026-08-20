@@ -1,29 +1,49 @@
 {{- define "suite.contract" -}}
 {{ $c := . }}
-{{- range $m := .Methods }}
-// {{ $m.CheckType }} is one assertion about {{ $m.Name }}.
+// The generated conformance surface for {{ .IfaceName }}.
 //
-// Every generated check for {{ $m.Name }} is a value of it, and so is one you
-// write — so they compose, reorder, and each runs standalone. testing.TB rather
-// than *testing.T is what lets a stand-in drive it and prove it can fail.
-{{- with $m.VariadicParam }}
+// A file-level comment rather than a package doc: three generators write
+// into this package and a package doc has one owner, so the listing
+// lives with the witness it describes.
 //
-// {{ .Name }} is one element of {{ $m.Name }}'s variadic parameter, not the list.
-// The fixture derives one value per parameter, so every generated check calls
-// {{ $m.Name }} with exactly one — which leaves everything about *several* to a
-// check written here, including the empty call no derivation reaches.
+// Entry points:
+//
+//	{{ suite_runName .IfaceName }}(t, opts...)      {{ suite_proveName .IfaceName }}(t, checks)
+//
+// A harness is a config literal ({{ suite_harnessName .IfaceName }}); your own checks are a
+// table ({{ suite_rowsName .IfaceName }}); drops are written against the typed index:
+//
+//	{{ suite_veneerVar .IfaceName }}.Checks.<Method>.<Check>()
+//
+// Every ID this package emits:
+//
+{{- range $id := .EmittedIDs }}
+//	{{ $id }}
 {{- end }}
-{{- if and $m.ReturnsError $m.ValueReturns (not $m.HasInput) }}
+{{- if .Withheld }}
 //
-// {{ $m.Name }} returns a value beside its error and takes nothing to vary, so no
-// "an error carries the zero value" check is generated for it. That check reaches
-// the failure it is about by choosing an input that misses, and this signature
-// offers none — a generated one could only demand failure from a correct
-// implementation. Write it here against a subject this package can break.
+// Derived and not yet spelled, so no ID is emitted for it:
+//
+{{- range $w := .Withheld }}
+//	{{ $w }}
 {{- end }}
-type {{ $m.CheckType }}{{ renderTypeParams $.TypeParams }} func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ renderType $c.IfaceRef }}{{ $c.TypeArgs }}
-	{{- range $m.CallArgs }}, {{ .Name }} {{ renderType .Type }}{{ end }})
-{{ end }}
+{{- end }}
+{{- if .Gaps }}
+//
+// Reached by a rule and not derivable here. Each is a claim this file
+// does NOT make, so a reader counting coverage from the list above
+// knows what is missing and what would bring it back:
+//
+{{- range $g := .Gaps }}
+//	{{ $g }}
+{{- end }}
+{{- end }}
+//
+// The compatibility handshake. A breaking change to the check surface
+// renames the witness, and every file generated against this one stops
+// compiling with the skew named rather than dispatching wrong.
+var _ = {{ renderExpr (external $.Vocab "CompatV2") }}
+
 // {{ $.Fixture.TypeName }} holds every input the generated checks run against.
 //
 // Derived from each method's parameter names and types. Every field has a
@@ -34,35 +54,56 @@ type {{ $m.CheckType }}{{ renderTypeParams $.TypeParams }} func(tb {{ renderExpr
 // A field whose type admits no literal — a func, a channel, a type from a
 // package this run never read — is declared and left at its zero value, and
 // every generated check that needed it was dropped rather than emitted against
-// a value nobody could write. Supply one through {{ $.IfaceName }}WithFixture
-// and the check a consumer writes has something to use.
+// a value nobody could write. Those drops are listed above with what closes
+// each; a row you write is handed this fixture either way.
 type {{ $.Fixture.TypeName }}{{ renderTypeParams $.TypeParams }} struct {
-{{- range $i, $f := $.Fixture.Fields }}
-{{- if $f.Variadic }}
-{{ if $i }}
-{{ end }}	// {{ $f.Name }} is one element of a variadic parameter, not the list. Every
-	// generated check passes it alone; what a method does with several is a
-	// claim only a check written by hand can make.
-{{- end }}
-	{{ $f.Name }} {{ renderType $f.Type }}
-	{{ $f.OtherName }} {{ renderType $f.Type }}
+{{- range $f := $.Fixture.Fields }}
+	{{ camel $f.Name }} {{ renderType $f.Type }}
+	{{ camel $f.OtherName }} {{ renderType $f.Type }}
 {{- end }}
 }
 
-// {{ $.Fixture.CtorName }} is what this run derived. Replace any field through
-// {{ $.IfaceName }}WithFixture; the rest keep these values.
+// {{ $.Fixture.CtorName }} is what a run with no config draws.
 func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.TypeName }}{{ $.TypeArgs }} {
+	return {{ suite_newFixtureName $.Token }}{{ $.TypeArgs }}({{ if $.Pools }}{{ suite_configName $.IfaceName }}{{ $.TypeArgs }}{}{{ end }})
+}
+
+// {{ suite_newFixtureName $.Token }} is what a run draws from, given its config.
+//
+// Read through the accessors below rather than as fields: a roled value
+// comes from the config's pool and an unroled one from its derived
+// literal, and no check that draws should be able to tell which.
+func {{ suite_newFixtureName $.Token }}{{ renderTypeParams $.TypeParams }}(
+	{{- if $.Pools }}cfg {{ suite_configName $.IfaceName }}{{ $.TypeArgs }}{{ end -}}
+) {{ $.Fixture.TypeName }}{{ $.TypeArgs }} {
+{{- if $.Pools }}
+	cfg = cfg.orDefault()
+{{- end }}
 	return {{ $.Fixture.TypeName }}{{ $.TypeArgs }}{
 {{- range $.Fixture.Fields }}
 {{- if .OK }}
-		{{ .Name }}: {{ if .Companion }}{{ renderExpr .Companion }}(){{ else }}{{ template "suite.value" (.Choose false) }}{{ end }},
-{{- if or .Composed .Other.OK }}
-		{{ .OtherName }}: {{ template "suite.value" (.Choose true) }},
+		{{ camel .Name }}: {{ if .Pool }}cfg.{{ .Pool }}[0]{{ else if .Companion }}{{ renderExpr .Companion }}(){{ else }}{{ template "suite.value" (.Choose false) }}{{ end }},
+{{- if or .Composed .Other.OK .Pool }}
+		{{ camel .OtherName }}: {{ if .Pool }}cfg.{{ .Pool }}[1]{{ else }}{{ template "suite.value" (.Choose true) }}{{ end }},
 {{- end }}
 {{- end }}
 {{- end }}
 	}
 }
+{{ range $f := $.Fixture.Fields }}
+// {{ $f.Name }} is the canonical {{ camel $f.Name }} every check draws.
+{{- if $f.Variadic }}
+//
+// One element of a variadic parameter, not the list. Every generated
+// check passes it alone; what a method does with several is a claim only
+// a check written by hand can make.
+{{- end }}
+func (f {{ $.Fixture.TypeName }}{{ $.TypeArgs }}) {{ $f.Name }}() {{ renderType $f.Type }} { return f.{{ camel $f.Name }} }
+
+// {{ $f.OtherName }} is a second {{ camel $f.Name }}, different from the first — which is
+// what lets a miss check miss and a comparison mean something.
+func (f {{ $.Fixture.TypeName }}{{ $.TypeArgs }}) {{ $f.OtherName }}() {{ renderType $f.Type }} { return f.{{ camel $f.OtherName }} }
+{{ end }}
 
 {{- if .Pools }}
 {{ template "suite.config" $c }}
@@ -74,12 +115,9 @@ func {{ $.Fixture.CtorName }}{{ renderTypeParams $.TypeParams }}() {{ $.Fixture.
 
 {{ template "suite.checks" $c }}
 
-{{ template "suite.entry" $c }}
+{{ template "suite.rows" $c }}
 
-{{/* The check rows and their assertion bodies render from the same
-     inventory the index above is projected from; the harness shell
-     is what this transitional template still owes the pipeline. */}}
-{{- template "suite.options" $c }}
+{{ template "suite.run" $c }}
 {{- end -}}
 
 {{- /*
@@ -90,7 +128,7 @@ how to spell it for this file and register the import it needs.
 */ -}}
 {{- define "suite.value" -}}
 {{- if .Parts }}{{ renderType .Type }}{
-{{- range $i, $p := .Parts }}{{ if $i }}, {{ end }}{{ $p.Name }}: {{ template "suite.sample" $p.Value }}{{ end -}} }
+{{- range $i, $p := .Parts }}{{ if $i }}, {{ end }}{{ $p.Name }}: {{ if $p.Pool }}cfg.{{ $p.Pool }}[{{ $.Alternate }}]{{ else }}{{ template "suite.sample" $p.Value }}{{ end }}{{ end -}} }
 {{- else }}{{ template "suite.sample" .Value }}{{ end }}
 {{- end -}}
 

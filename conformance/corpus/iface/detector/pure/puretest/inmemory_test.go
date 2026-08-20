@@ -20,52 +20,55 @@ import (
 func TestPureContract(t *testing.T) {
 	t.Parallel()
 
-	puretest.AssertPureContract(t,
-		puretest.PureModel(),
-		puretest.PureSubject("in-memory", func() pure.Pure {
-			return puretest.NewInMemory("first")
-		}),
-		puretest.PureSubject("in-memory, relabelled", func() pure.Pure {
-			return puretest.NewInMemory("second")
-		}),
-		puretest.PureOnDescribe("agrees with itself", func(
-			tb testing.TB, subject pure.Pure,
-		) {
-			tb.Helper()
-			// The whole of the shape's law: nothing was observed between the
-			// two calls, so nothing may differ between the two answers.
-			testkit.Equal(tb, subject.Describe(), subject.Describe(),
-				"repeated calls derive the same value from the same receiver")
-		}),
-		puretest.PureOnDescribe("says something", func(
-			tb testing.TB, subject pure.Pure,
-		) {
-			tb.Helper()
-			// Otherwise the check above is satisfied by returning "".
-			testkit.False(tb, subject.Describe() == "",
-				"a description that is empty agrees with itself and says nothing")
-		}),
+	puretest.RunPure(t,
+		puretest.PureHarness[*puretest.InMemory]{
+			Name: "in-memory",
+			New:  func() *puretest.InMemory { return puretest.NewInMemory("first") },
+		},
+		puretest.PureHarness[*puretest.InMemory]{
+			Name: "in-memory, relabelled",
+			New:  func() *puretest.InMemory { return puretest.NewInMemory("second") },
+		},
+		puretest.PureChecks{
+			{
+				Method: "Describe",
+				Name:   "agrees-with-itself",
+				Claim:  "Describe agrees with itself",
+				Run: func(tb testing.TB, s pure.Pure, fx puretest.PureFixture) {
+					tb.Helper()
+					// The whole of the shape's law: nothing was observed
+					// between the two calls, so nothing may differ between the
+					// two answers.
+					testkit.Equal(tb, s.Describe(), s.Describe(),
+						"repeated calls derive the same value from the same receiver")
+				},
+			},
+			{
+				Method: "Describe",
+				Name:   "says-something",
+				Claim:  "Describe says something",
+				Run: func(tb testing.TB, s pure.Pure, fx puretest.PureFixture) {
+					tb.Helper()
+					// Otherwise the check above is satisfied by returning "".
+					testkit.False(tb, s.Describe() == "",
+						"a description that is empty agrees with itself and says nothing")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestPureContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestPureContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	puretest.AssertPureContract(t,
-		puretest.PureSubject("in-memory", func() pure.Pure {
-			return puretest.NewInMemory("first")
-		}),
-		puretest.PureWithout("Describe/smoke"),
-		puretest.PureWithoutDouble(),
+	puretest.RunPure(t,
+		puretest.PureHarness[*puretest.InMemory]{
+			Name: "in-memory",
+			New:  func() *puretest.InMemory { return puretest.NewInMemory("first") },
+		},
+		puretest.PureSuite.Without(puretest.PureSuite.Checks.Describe.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestPureSaturation(t *testing.T) {
-	t.Parallel()
-	puretest.PureModelSaturation(t, func() pure.Pure {
-		return puretest.NewInMemory("first")
-	})
 }

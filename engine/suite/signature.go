@@ -33,6 +33,33 @@ import (
 // and deprecate the lax four is a decision for the generator era; until
 // then this paragraph is the fork's documentation.
 
+// What each primitive's failure reads, as the substring a proof holds it
+// to. Declared beside the messages rather than restated in the generator
+// that plants the defects: a proof asserting a red it cannot see is a
+// proof that counts an incidental failure as evidence, and the way that
+// happens is somebody rewording a message here without knowing the
+// generator quoted it.
+//
+// The generator emits these into [prove.Defect.Reason], so a reworded
+// message and a stale quote become a compile error rather than a proof
+// that silently stops proving.
+const (
+	// RedPanicked is what [Survives] reports.
+	RedPanicked = "panicked on a derived value"
+
+	// RedCancelled is what [ReportsCancelled] reports.
+	RedCancelled = "must report a cancelled context"
+
+	// RedDeadline is what [ReportsDeadlineExceeded] reports.
+	RedDeadline = "must report an expired deadline"
+
+	// RedNilContext is what [ToleratesNilContext] reports for a subject
+	// that answers, which is the arm a planted defect reaches. The other
+	// arm — a subject that panics — is a different failure and is not
+	// what any defect here plants.
+	RedNilContext = "returned nil on a nil context"
+)
+
 // Survives asserts the call returns rather than panicking — the weakest
 // check and the one that catches the most, because a method that panics
 // on an ordinary value is one no other check reaches.
@@ -40,7 +67,7 @@ func Survives(tb testing.TB, method string, call func(ctx context.Context)) {
 	tb.Helper()
 	defer func() {
 		if r := recover(); r != nil {
-			tb.Fatalf("%s panicked on a derived value (%v); supply one it accepts "+
+			tb.Fatalf("%s "+RedPanicked+" (%v); supply one it accepts "+
 				"through the suite config's pools", method, r)
 		}
 	}()
@@ -54,7 +81,7 @@ func ReportsCancelled(tb testing.TB, method string, call func(ctx context.Contex
 	ctx, cancel := context.WithCancel(tb.Context())
 	cancel()
 	if err := call(ctx); !errors.Is(err, context.Canceled) {
-		tb.Errorf("%s must report a cancelled context: got %v, want %v",
+		tb.Errorf("%s "+RedCancelled+": got %v, want %v",
 			method, err, context.Canceled)
 	}
 }
@@ -66,7 +93,7 @@ func ReportsDeadlineExceeded(tb testing.TB, method string, call func(ctx context
 	ctx, cancel := context.WithDeadline(tb.Context(), time.Now().Add(-time.Hour))
 	defer cancel()
 	if err := call(ctx); !errors.Is(err, context.DeadlineExceeded) {
-		tb.Errorf("%s must report an expired deadline: got %v, want %v",
+		tb.Errorf("%s "+RedDeadline+": got %v, want %v",
 			method, err, context.DeadlineExceeded)
 	}
 }
@@ -87,6 +114,6 @@ func ToleratesNilContext(tb testing.TB, method string, call func(ctx context.Con
 		// The recorded claim is "returns an error", and an assertion
 		// weaker than its claim is a silent green: accepting nil and
 		// working uncancellably is exactly what the claim rules out.
-		tb.Errorf("%s returned nil on a nil context; return an error instead", method)
+		tb.Errorf("%s "+RedNilContext+"; return an error instead", method)
 	}
 }

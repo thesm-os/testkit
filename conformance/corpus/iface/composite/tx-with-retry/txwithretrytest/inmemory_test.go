@@ -27,22 +27,66 @@ const transientCommits = 1
 //
 // `tx` is owned by no tier and `retrysucceeds` names no attempt count, so
 // nothing is generated for either. Every claim below is statable through the
-// interface, so each is a check rather than a package test — and each is a
+// interface, so each is a row rather than a package test — and each body is a
 // named function, so [TestEveryCheckRejectsANullSubject] can drive it against
 // an implementation it must reject and prove it is able to fail.
 func TestTxWithRetryContract(t *testing.T) {
 	t.Parallel()
 
-	txwithretrytest.AssertTxWithRetryContract(t,
-		txwithretrytest.TxWithRetryModel(),
-		txwithretrytest.TxWithRetrySubject("in-memory", func() txwithretry.TxWithRetry {
-			return txwithretrytest.NewInMemory(transientCommits)
-		}),
-		txwithretrytest.TxWithRetryOnCommit("retries the same terminal operation", retriesTheSameCommit),
-		txwithretrytest.TxWithRetryOnCommit("refuses a transaction that never began", refusesAnUnbegunCommit),
-		txwithretrytest.TxWithRetryOnBegin("settles once and then refuses both terminals", settlesOnce),
-		txwithretrytest.TxWithRetryOnRollback("reopens after settling", reopensAfterSettling),
-		txwithretrytest.TxWithRetryOnBegin("refuses a second open", refusesASecondOpen),
+	txwithretrytest.RunTxWithRetry(t,
+		txwithretrytest.TxWithRetryHarness[*txwithretrytest.InMemory]{
+			Name: "in-memory",
+			New: func() *txwithretrytest.InMemory {
+				return txwithretrytest.NewInMemory(transientCommits)
+			},
+		},
+		txwithretrytest.TxWithRetryChecks{
+			{
+				Method: "Commit",
+				Name:   "retries-the-same-terminal",
+				Claim:  "Commit retries the same terminal operation",
+				Run: func(tb testing.TB, s txwithretry.TxWithRetry, fx txwithretrytest.TxWithRetryFixture) {
+					tb.Helper()
+					retriesTheSameCommit(tb, s)
+				},
+			},
+			{
+				Method: "Commit",
+				Name:   "refuses-an-unbegun-transaction",
+				Claim:  "Commit refuses a transaction that never began",
+				Run: func(tb testing.TB, s txwithretry.TxWithRetry, fx txwithretrytest.TxWithRetryFixture) {
+					tb.Helper()
+					refusesAnUnbegunCommit(tb, s)
+				},
+			},
+			{
+				Method: "Begin",
+				Name:   "settles-once",
+				Claim:  "Begin settles once and then refuses both terminals",
+				Run: func(tb testing.TB, s txwithretry.TxWithRetry, fx txwithretrytest.TxWithRetryFixture) {
+					tb.Helper()
+					settlesOnce(tb, s)
+				},
+			},
+			{
+				Method: "Rollback",
+				Name:   "reopens-after-settling",
+				Claim:  "Rollback reopens after settling",
+				Run: func(tb testing.TB, s txwithretry.TxWithRetry, fx txwithretrytest.TxWithRetryFixture) {
+					tb.Helper()
+					reopensAfterSettling(tb, s)
+				},
+			},
+			{
+				Method: "Begin",
+				Name:   "refuses-a-second-open",
+				Claim:  "Begin refuses a second open",
+				Run: func(tb testing.TB, s txwithretry.TxWithRetry, fx txwithretrytest.TxWithRetryFixture) {
+					tb.Helper()
+					refusesASecondOpen(tb, s)
+				},
+			},
+		},
 	)
 }
 
@@ -184,24 +228,19 @@ func TestEveryCheckRejectsANullSubject(t *testing.T) {
 	}
 }
 
-// Declining the double is separate from dropping a check.
-func TestTxWithRetryContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestTxWithRetryContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	txwithretrytest.AssertTxWithRetryContract(t,
-		txwithretrytest.TxWithRetrySubject("in-memory", func() txwithretry.TxWithRetry {
-			return txwithretrytest.NewInMemory(transientCommits)
-		}),
-		txwithretrytest.TxWithRetryWithout("Begin/smoke"),
-		txwithretrytest.TxWithRetryWithoutDouble(),
+	txwithretrytest.RunTxWithRetry(t,
+		txwithretrytest.TxWithRetryHarness[*txwithretrytest.InMemory]{
+			Name: "in-memory",
+			New: func() *txwithretrytest.InMemory {
+				return txwithretrytest.NewInMemory(transientCommits)
+			},
+		},
+		txwithretrytest.TxWithRetrySuite.Without(txwithretrytest.TxWithRetrySuite.Checks.Begin.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestTxWithRetrySaturation(t *testing.T) {
-	t.Parallel()
-	txwithretrytest.TxWithRetryModelSaturation(t, func() txwithretry.TxWithRetry {
-		return txwithretrytest.NewInMemory(transientCommits)
-	})
 }

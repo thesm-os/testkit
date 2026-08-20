@@ -1,0 +1,8 @@
+testkit-checks v2
+Cause/cancel	signature/cancel	Cause reports a cancelled context as cancelled	
+Cause/nilcontext	signature/nilcontext	Cause returns an error rather than panicking on a nil context	
+Cause/smoke	signature/smoke	Cause survives a call	
+Open/cancel	signature/cancel	Open reports a cancelled context as cancelled	
+Open/deadline	signature/deadline	Open reports an expired deadline as exceeded	
+Open/nilcontext	signature/nilcontext	Open returns an error rather than panicking on a nil context	
+Open/smoke	signature/smoke	Open survives a call with a derived name	

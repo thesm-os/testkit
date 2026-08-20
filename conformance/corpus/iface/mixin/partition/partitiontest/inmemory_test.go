@@ -11,50 +11,52 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/partition/partitiontest"
 )
 
-// The first generated check that writes twice, and the one that took two
-// near-misses to get right.
+// `//testkit:mixin partition read=Read axis=partition` is the wiring: read
+// names what observes the isolation, axis names the parameter to vary.
 //
-// `//testkit:mixin partition read=Read axis=partition` is the wiring: read names
-// what observes the isolation, axis names the parameter to vary. Both are
-// necessary. Varying every parameter gives two writes that never collide on a
-// key, and holding the payload gives two writes an implementation can clobber
-// with an identical value — each version passes against a subject that ignores
-// partitions entirely.
-//
-// What the generated check does instead: hold every identifier the reader
-// shares, vary the axis and the payload, read the first partition back.
+// The isolation itself is the model tier's. What the row states is the miss
+// beside it: two writes that never collide would pass an isolation check
+// against a store that answers for every key, so somebody has to ask what
+// happens to a key nobody wrote.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	partitiontest.AssertMixedContract(t,
-		partitiontest.MixedModel(),
-		partitiontest.MixedSubject("in-memory", func() partition.Mixed {
-			return partitiontest.NewInMemory()
-		}),
-		partitiontest.MixedOnRead("reports a key its partition does not hold", func(
-			tb testing.TB, subject partition.Mixed, part, key string,
-		) {
-			tb.Helper()
-			// The miss, which the isolation check never reaches because both of
-			// its reads hit. A store answering for a key nobody wrote is
-			// indistinguishable from one that found it.
-			_, err := subject.Read(tb.Context(), part, key+"-absent")
-			testkit.Error(tb, err, "an unwritten key is a miss")
-		}),
+	partitiontest.RunMixed(t,
+		partitiontest.MixedHarness[*partitiontest.InMemory]{Name: "in-memory", New: partitiontest.NewInMemory},
+		partitiontest.MixedChecks{
+			{
+				Method: "Read",
+				Name:   "misses-a-key-its-partition-lacks",
+				Claim:  "Read reports a key its partition does not hold",
+				Run: func(tb testing.TB, s partition.Mixed, fx partitiontest.MixedFixture) {
+					tb.Helper()
+					// The partition is written first, so the miss below is
+					// about the key rather than about an empty store.
+					testkit.NoError(tb, s.Put(tb.Context(), fx.Partition(), fx.Key(), fx.Value()),
+						"the key is written into its partition")
+
+					got, err := s.Read(tb.Context(), fx.Partition(), fx.Key())
+					testkit.NoError(tb, err, "and reads back from it")
+					testkit.Equal(tb, got, fx.Value(), "carrying what was written")
+
+					// A store answering for a key nobody wrote is
+					// indistinguishable from one that found it.
+					_, err = s.Read(tb.Context(), fx.Partition(), fx.KeyOther())
+					testkit.Error(tb, err, "an unwritten key is a miss")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	partitiontest.AssertMixedContract(t,
-		partitiontest.MixedSubject("in-memory", func() partition.Mixed {
-			return partitiontest.NewInMemory()
-		}),
-		partitiontest.MixedWithout(
-			"Put/smoke",
-		),
-		partitiontest.MixedWithoutDouble(),
+	partitiontest.RunMixed(t,
+		partitiontest.MixedHarness[*partitiontest.InMemory]{Name: "in-memory", New: partitiontest.NewInMemory},
+		partitiontest.MixedSuite.Without(partitiontest.MixedSuite.Checks.Put.Smoke()),
 	)
 }

@@ -7,67 +7,59 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/clock"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/ttl"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/ttl/ttltest"
 )
 
-// The generated contract, run against the in-memory subject.
+// `//testkit:mixin ttl notfound=ErrExpired` is what makes Read/miss derivable:
+// the declaration names what a read owes for a key nothing holds, and expiry
+// and absence report alike here, so one sentinel covers both.
+//
+// The lapse itself is the model tier's — it needs a clock the run advances.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	ttltest.AssertMixedContract(t,
-		ttltest.MixedSubject("in-memory", func() ttl.Mixed {
-			return ttltest.NewInMemory()
-		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		ttltest.MixedModel(ttltest.MixedModelClocked(
-			func(clk *clock.TestClock) ttl.Mixed { return ttltest.NewInMemoryOn(clk) },
-		)),
-		ttltest.MixedOnRead("reports the declared sentinel for an absent key", func(
-			tb testing.TB, subject ttl.Mixed, key string,
-		) {
-			tb.Helper()
-			// The suite seeds through Put, so the seeded key is live on a
-			// clock nothing advanced. An unwritten key reports the sentinel
-			// the directive names — which is what a lapsed read reports too,
-			// so a caller cannot tell "never stored" from "stored and gone".
-			got, err := subject.Read(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is within its lifetime")
-			testkit.Equal(tb, got.Key, key, "and answers under the key it was stored with")
+	ttltest.RunMixed(t,
+		ttltest.MixedHarness[*ttltest.InMemory]{Name: "in-memory", New: ttltest.NewInMemory},
+		ttltest.MixedChecks{
+			{
+				Method: "Read",
+				Name:   "lapsed-reads-report-the-sentinel",
+				Claim:  "Read reports the declared sentinel for an entry whose lifetime has passed",
+				Run: func(tb testing.TB, s ttl.Mixed, fx ttltest.MixedFixture) {
+					tb.Helper()
+					// A live entry first, so the sentinel below is about the
+					// lapse rather than about an empty store.
+					written := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), written), "the entry stores")
 
-			_, err = subject.Read(tb.Context(), key+"-absent")
-			testkit.ErrorIs(tb, err, ttl.ErrExpired, "an absent key reports the declared sentinel")
+					got, err := s.Read(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "and is within its lifetime")
+					testkit.Equal(tb, got.Key, written.Key,
+						"answering under the key it was stored with")
 
-			// The lever: an entry stamped a lifetime ago is exactly what an
-			// elapsed one looks like, and the expiry arm is the whole claim
-			// the directive makes.
-			testkit.NoError(tb, subject.Put(tb.Context(),
-				ttl.Value{Key: ttltest.StaleKey, Body: "elapsed"}), "the entry stores")
-			_, err = subject.Read(tb.Context(), ttltest.StaleKey)
-			testkit.ErrorIs(tb, err, ttl.ErrExpired, "and a lapsed read reports the sentinel")
-		}),
+					// The lever: an entry stamped a lifetime ago is exactly
+					// what an elapsed one looks like, and the expiry arm is the
+					// whole claim the directive makes. Read/miss covers the
+					// key nothing wrote; this covers the one that lapsed.
+					testkit.NoError(tb, s.Put(tb.Context(),
+						ttl.Value{Key: ttltest.StaleKey, Body: "elapsed"}), "the stale entry stores")
+					_, err = s.Read(tb.Context(), ttltest.StaleKey)
+					testkit.ErrorIs(tb, err, ttl.ErrExpired, "and a lapsed read reports the sentinel")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	ttltest.AssertMixedContract(t,
-		ttltest.MixedSubject("in-memory", func() ttl.Mixed {
-			return ttltest.NewInMemory()
-		}),
-		ttltest.MixedWithoutDouble(),
+	ttltest.RunMixed(t,
+		ttltest.MixedHarness[*ttltest.InMemory]{Name: "in-memory", New: ttltest.NewInMemory},
+		ttltest.MixedSuite.Without(ttltest.MixedSuite.Checks.Put.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself;
-// the clocked laws skip themselves — their factory is the clock's.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	ttltest.MixedModelSaturation(t, func() ttl.Mixed {
-		return ttltest.NewInMemory()
-	})
 }

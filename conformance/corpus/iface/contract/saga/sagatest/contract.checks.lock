@@ -1,0 +1,14 @@
+testkit-checks v2
+Compensate/cancel	signature/cancel	Compensate reports a cancelled context as cancelled	
+Compensate/deadline	signature/deadline	Compensate reports an expired deadline as exceeded	
+Compensate/nilcontext	signature/nilcontext	Compensate returns an error rather than panicking on a nil context	
+Compensate/smoke	signature/smoke	Compensate survives a call with a derived value	
+State/cancel	signature/cancel	State reports a cancelled context as cancelled	
+State/deadline	signature/deadline	State reports an expired deadline as exceeded	
+State/nilcontext	signature/nilcontext	State returns an error rather than panicking on a nil context	
+State/smoke	signature/smoke	State survives a call	
+State/zero-on-error	signature/zero-on-error	State returns zero alongside any error	
+Step/cancel	signature/cancel	Step reports a cancelled context as cancelled	
+Step/deadline	signature/deadline	Step reports an expired deadline as exceeded	
+Step/nilcontext	signature/nilcontext	Step returns an error rather than panicking on a nil context	
+Step/smoke	signature/smoke	Step survives a call with a derived value	

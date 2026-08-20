@@ -4,7 +4,6 @@
 package deprecatedtest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -22,41 +21,47 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := deprecatedtest.DefaultMixedFixture()
+	fx := deprecatedtest.DefaultMixedFixture()
 
-	deprecatedtest.AssertMixedContract(t,
-		deprecatedtest.MixedModel(),
-		deprecatedtest.MixedSubject("in-memory", func() deprecated.Mixed {
-			return deprecatedtest.NewInMemory()
-		}),
-		deprecatedtest.MixedSeed(func(_ context.Context, subject deprecated.Mixed) error {
-			subject.(*deprecatedtest.InMemory).Put(fixture.Key, "stored")
-			return nil
-		}),
-		deprecatedtest.MixedOnOld("answers as the replacement does", func(
-			tb testing.TB, subject deprecated.Mixed, key string,
-		) {
-			tb.Helper()
-			// The only claim worth making about a deprecated method: that it
-			// has not quietly diverged from what replaced it.
-			old, oldErr := subject.Old(tb.Context(), key)
-			replacement, newErr := subject.New(tb.Context(), key)
-			testkit.NoError(tb, oldErr, "the deprecated spelling still works")
-			testkit.NoError(tb, newErr, "and so does the replacement")
-			testkit.Equal(tb, old, replacement, "and the two agree")
-		}),
+	deprecatedtest.RunMixed(t,
+		deprecatedtest.MixedHarness[*deprecatedtest.InMemory]{
+			Name: "in-memory",
+			// Nothing on this interface writes, so the seed is the
+			// constructor's: both spellings read, neither stores.
+			New: func() *deprecatedtest.InMemory {
+				s := deprecatedtest.NewInMemory()
+				s.Put(fx.Key(), "stored")
+				return s
+			},
+		},
+		deprecatedtest.MixedChecks{
+			{
+				Method: "Old",
+				Name:   "agrees-with-the-replacement",
+				Claim:  "Old answers as the replacement does",
+				Run: func(tb testing.TB, s deprecated.Mixed, fx deprecatedtest.MixedFixture) {
+					tb.Helper()
+					// The only claim worth making about a deprecated method:
+					// that it has not quietly diverged from what replaced it.
+					old, oldErr := s.Old(tb.Context(), fx.Key())
+					replacement, newErr := s.New(tb.Context(), fx.Key())
+					testkit.NoError(tb, oldErr, "the deprecated spelling still works")
+					testkit.NoError(tb, newErr, "and so does the replacement")
+					testkit.Equal(tb, old, replacement, "and the two agree")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	deprecatedtest.AssertMixedContract(t,
-		deprecatedtest.MixedSubject("in-memory", func() deprecated.Mixed {
-			return deprecatedtest.NewInMemory()
-		}),
-		deprecatedtest.MixedWithout("Old/smoke"),
-		deprecatedtest.MixedWithoutDouble(),
+	deprecatedtest.RunMixed(t,
+		deprecatedtest.MixedHarness[*deprecatedtest.InMemory]{Name: "in-memory", New: deprecatedtest.NewInMemory},
+		deprecatedtest.MixedSuite.Without(deprecatedtest.MixedSuite.Checks.Old.Smoke()),
 	)
 }

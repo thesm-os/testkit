@@ -4,7 +4,6 @@
 package genericboundtest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -22,50 +21,45 @@ import (
 func TestRankedContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := genericboundtest.DefaultRankedFixture[int, genericbound.Score]()
-	fixture.Key = 7
-	fixture.KeyOther = 9
-
-	genericboundtest.AssertRankedContract[int, genericbound.Score](t,
-		genericboundtest.RankedSubject[int, genericbound.Score]("in-memory",
-			func() genericbound.Ranked[int, genericbound.Score] {
-				return genericboundtest.NewInMemory[int, genericbound.Score]()
-			}),
-		// A type parameter admits no literal, so the key and the value are the
-		// consumer's to name. This is exactly what the option exists for.
-		genericboundtest.RankedWithFixture[int, genericbound.Score](fixture),
-		genericboundtest.RankedSeed[int, genericbound.Score](
-			func(_ context.Context, subject genericbound.Ranked[int, genericbound.Score]) error {
-				// A seed may reach for the concrete subject: it runs before the
-				// double wraps it and sees what the factory made. A check may
-				// not — it runs against every subject the suite is given.
-				s := subject.(*genericboundtest.InMemory[int, genericbound.Score])
-				s.Set(fixture.Key, genericbound.Score{Points: 1})
-				return nil
+	genericboundtest.RunRanked[int, genericbound.Score](t,
+		genericboundtest.RankedHarness[int, genericbound.Score, *genericboundtest.InMemory[int, genericbound.Score]]{
+			Name: "in-memory",
+			// The seed is the constructor's, and it names the key it stores —
+			// a type parameter admits no literal, so nothing derived could.
+			New: func() *genericboundtest.InMemory[int, genericbound.Score] {
+				s := genericboundtest.NewInMemory[int, genericbound.Score]()
+				s.Set(7, genericbound.Score{Points: 1})
+				return s
 			},
-		),
-		genericboundtest.RankedOnRank[int, genericbound.Score]("returns what was set",
-			func(tb testing.TB, subject genericbound.Ranked[int, genericbound.Score], key int) {
-				tb.Helper()
-				got, err := subject.Rank(tb.Context(), key)
-				testkit.NoError(tb, err, "a set key is ranked")
-				testkit.Equal(tb, got, genericbound.Score{Points: 1},
-					"and carries what was written")
-			}),
+		},
+		genericboundtest.RankedChecks[int, genericbound.Score]{
+			{
+				Method: "Rank",
+				Name:   "returns-what-was-set",
+				Claim:  "Rank returns what was set",
+				Run: func(tb testing.TB, s genericbound.Ranked[int, genericbound.Score], fx genericboundtest.RankedFixture[int, genericbound.Score]) {
+					tb.Helper()
+					got, err := s.Rank(tb.Context(), 7)
+					testkit.NoError(tb, err, "a set key is ranked")
+					testkit.Equal(tb, got, genericbound.Score{Points: 1},
+						"and carries what was written")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check, and a consumer who
-// does not use the double should not pay for a second pass over every check.
-func TestRankedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestRankedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	genericboundtest.AssertRankedContract[int, genericbound.Score](t,
-		genericboundtest.RankedSubject[int, genericbound.Score]("in-memory",
-			func() genericbound.Ranked[int, genericbound.Score] {
-				return genericboundtest.NewInMemory[int, genericbound.Score]()
-			}),
-		genericboundtest.RankedWithout[int, genericbound.Score]("Reset/smoke"),
-		genericboundtest.RankedWithoutDouble[int, genericbound.Score](),
+	genericboundtest.RunRanked[int, genericbound.Score](t,
+		genericboundtest.RankedHarness[int, genericbound.Score, *genericboundtest.InMemory[int, genericbound.Score]]{
+			Name: "in-memory",
+			New:  genericboundtest.NewInMemory[int, genericbound.Score],
+		},
+		genericboundtest.RankedWithout[int, genericbound.Score](genericboundtest.RankedSuite.Checks.Reset.Smoke()),
 	)
 }

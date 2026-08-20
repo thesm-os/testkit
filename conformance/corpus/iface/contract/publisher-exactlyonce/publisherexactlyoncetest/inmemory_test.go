@@ -21,77 +21,81 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := publisherexactlyoncetest.DefaultContractFixture()
+	publisherexactlyoncetest.RunContract(
+		t,
+		publisherexactlyoncetest.ContractHarness[*publisherexactlyoncetest.InMemory]{
+			Name: "in-memory",
+			New:  publisherexactlyoncetest.NewInMemory,
+		},
+		publisherexactlyoncetest.ContractChecks{
+			{
+				Method: "Replay",
+				Name:   "suppresses-the-duplicate",
+				Claim:  "Replay suppresses the duplicate and repairs the loss",
+				Run: func(tb testing.TB, s publisherexactlyonce.Contract, fx publisherexactlyoncetest.ContractFixture) {
+					tb.Helper()
+					stream, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-	publisherexactlyoncetest.AssertContractContract(t,
-		publisherexactlyoncetest.ContractModel(),
-		publisherexactlyoncetest.ContractSubject("in-memory", func() publisherexactlyonce.Contract {
-			return publisherexactlyoncetest.NewInMemory()
-		}),
-		publisherexactlyoncetest.ContractOnSubscribe("receives what is published after it attaches", func(
-			tb testing.TB, subject publisherexactlyonce.Contract,
-		) {
-			tb.Helper()
-			stream, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
+					testkit.NoError(tb, s.Publish(tb.Context(), fx.Value()), "the original lands")
+					testkit.NoError(tb, s.Replay(tb.Context(), fx.Value()), "a replay of it is accepted")
+					testkit.NoError(tb, s.Replay(tb.Context(), fx.ValueOther()),
+						"and so is a replay of a message that was lost")
 
-			testkit.NoError(tb, subject.Publish(tb.Context(), fixture.VOther),
-				"a message published afterwards is accepted")
-			testkit.Equal(tb, <-stream, fixture.VOther, "and reaches them")
-		}),
-		publisherexactlyoncetest.ContractOnReplay("suppresses the duplicate and repairs the loss", func(
-			tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value,
-		) {
-			tb.Helper()
-			stream, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
+					testkit.Equal(tb, <-stream, fx.Value(), "the subscriber takes the original once")
+					testkit.Equal(tb, <-stream, fx.ValueOther(),
+						"then the repaired loss — never the duplicate")
+				},
+			},
+			{
+				Method: "Subscribe",
+				Name:   "receives-what-is-published-after",
+				Claim:  "Subscribe receives what is published after it attaches",
+				Run: func(tb testing.TB, s publisherexactlyonce.Contract, fx publisherexactlyoncetest.ContractFixture) {
+					tb.Helper()
+					stream, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-			testkit.NoError(tb, subject.Publish(tb.Context(), v), "the original lands")
-			testkit.NoError(tb, subject.Replay(tb.Context(), v), "a replay of it is accepted")
-			testkit.NoError(tb, subject.Replay(tb.Context(), fixture.VOther),
-				"and so is a replay of a message that was lost")
+					testkit.NoError(tb, s.Publish(tb.Context(), fx.ValueOther()),
+						"a message published afterwards is accepted")
+					testkit.Equal(tb, <-stream, fx.ValueOther(), "and reaches them")
+				},
+			},
+			{
+				Method: "Publish",
+				Name:   "reports-an-unreachable-subscriber",
+				Claim:  "Publish reports a subscriber it can no longer reach",
+				Run: func(tb testing.TB, s publisherexactlyonce.Contract, fx publisherexactlyoncetest.ContractFixture) {
+					tb.Helper()
+					_, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-			testkit.Equal(tb, <-stream, v, "the subscriber takes the original once")
-			testkit.Equal(tb, <-stream, fixture.VOther,
-				"then the repaired loss — never the duplicate")
-		}),
-		publisherexactlyoncetest.ContractOnPublish("reports a subscriber it can no longer reach", func(
-			tb testing.TB, subject publisherexactlyonce.Contract, v publisherexactlyonce.Value,
-		) {
-			tb.Helper()
-			_, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
-
-			for range 32 {
-				if err := subject.Publish(tb.Context(), v); err != nil {
-					testkit.ErrorIs(tb, err, publisherexactlyoncetest.ErrFull,
-						"the publish says why it could not be taken")
-					return
-				}
-			}
-			tb.Fatalf("a subscriber that never reads was never reported as behind")
-		}),
+					for range 32 {
+						if err := s.Publish(tb.Context(), fx.Value()); err != nil {
+							testkit.ErrorIs(tb, err, publisherexactlyoncetest.ErrFull,
+								"the publish says why it could not be taken")
+							return
+						}
+					}
+					tb.Fatalf("a subscriber that never reads was never reported as behind")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	publisherexactlyoncetest.AssertContractContract(t,
-		publisherexactlyoncetest.ContractSubject("in-memory", func() publisherexactlyonce.Contract {
-			return publisherexactlyoncetest.NewInMemory()
-		}),
-		publisherexactlyoncetest.ContractWithout("Publish/smoke"),
-		publisherexactlyoncetest.ContractWithoutDouble(),
+	publisherexactlyoncetest.RunContract(
+		t,
+		publisherexactlyoncetest.ContractHarness[*publisherexactlyoncetest.InMemory]{
+			Name: "in-memory",
+			New:  publisherexactlyoncetest.NewInMemory,
+		},
+		publisherexactlyoncetest.ContractSuite.Without(publisherexactlyoncetest.ContractSuite.Checks.Publish.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	publisherexactlyoncetest.ContractModelSaturation(t, func() publisherexactlyonce.Contract {
-		return publisherexactlyoncetest.NewInMemory()
-	})
 }

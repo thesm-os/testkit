@@ -1,0 +1,6 @@
+testkit-checks v2
+Count/cancel	signature/cancel	Count reports a cancelled context as cancelled	
+Count/deadline	signature/deadline	Count reports an expired deadline as exceeded	
+Count/nilcontext	signature/nilcontext	Count returns an error rather than panicking on a nil context	
+Count/smoke	signature/smoke	Count survives a call	
+Count/zero-on-error	signature/zero-on-error	Count returns zero alongside any error	

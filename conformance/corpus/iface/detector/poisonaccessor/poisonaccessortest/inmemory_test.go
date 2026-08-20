@@ -11,56 +11,66 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/poisonaccessor/poisonaccessortest"
 )
 
-// One generated check, and the shape's whole point is out of its reach.
+// latches is the shape's whole law, written once and run against both births.
 //
 // A latch is a claim about two calls — the second reports what the first did —
-// and every generated check makes one call against a fresh subject. Nothing here
-// is a gap in the harness: a single call cannot observe that a state persists,
-// so the law belongs to this package and the signature owes only the smoke call.
+// and every generated check makes one call against a fresh subject. Nothing
+// here is a gap in the harness: a single call cannot observe that a state
+// persists, so the law belongs to this package and the signature owes only the
+// smoke call.
+var latches = poisonaccessortest.PoisonAccessorChecks{
+	{
+		Method: "Err",
+		Name:   "latches-what-it-reports",
+		Claim:  "Err latches whatever it reports",
+		Run: func(tb testing.TB, s poisonaccessor.PoisonAccessor, fx poisonaccessortest.PoisonAccessorFixture) {
+			tb.Helper()
+			// Stated across two births because Err is the only method:
+			// nothing a caller does moves a healthy subject into failure, so
+			// the failed state is a constructor's to build. What both share is
+			// that the answer does not change on being read.
+			first := s.Err()
+			testkit.Equal(tb, s.Err(), first,
+				"a second read reports what the first did")
+		},
+	},
+}
+
 func TestPoisonAccessorContract(t *testing.T) {
 	t.Parallel()
 
-	onErr := poisonaccessortest.PoisonAccessorOnErr("latches whatever it reports", func(
-		tb testing.TB, subject poisonaccessor.PoisonAccessor,
-	) {
-		tb.Helper()
-		// The latch, stated across two subjects because Err is the only
-		// method: nothing a caller does moves a healthy one into failure,
-		// so the failed state is a factory's to build. What both share is
-		// that the answer does not change on being read.
-		first := subject.Err()
-		testkit.Equal(tb, subject.Err(), first,
-			"a second read reports what the first did")
-	})
-
-	poisonaccessortest.AssertPoisonAccessorContract(t,
-		poisonaccessortest.PoisonAccessorModel(),
-		poisonaccessortest.PoisonAccessorSubject("in-memory", func() poisonaccessor.PoisonAccessor {
-			return poisonaccessortest.NewInMemory()
-		}),
-		onErr,
+	poisonaccessortest.RunPoisonAccessor(
+		t,
+		poisonaccessortest.PoisonAccessorHarness[*poisonaccessortest.InMemory]{
+			Name: "in-memory",
+			New:  poisonaccessortest.NewInMemory,
+		},
+		latches,
 	)
-	// The born-failed arm runs without the model tier: AUTO-POISON-NIL-ON-FRESH
-	// is the claim that a fresh instance reports nothing, and this factory
-	// exists to violate exactly that — it exercises the latch, not the birth.
-	poisonaccessortest.AssertPoisonAccessorContract(t,
-		poisonaccessortest.PoisonAccessorSubject("in-memory, already failed", func() poisonaccessor.PoisonAccessor {
-			return poisonaccessortest.Poisoned()
-		}),
-		onErr,
+	// The born-failed arm: AUTO-POISON-NIL-ON-FRESH is the claim that a fresh
+	// instance reports nothing, and this constructor exists to violate exactly
+	// that — it exercises the latch, not the birth.
+	poisonaccessortest.RunPoisonAccessor(t,
+		poisonaccessortest.PoisonAccessorHarness[*poisonaccessortest.InMemory]{
+			Name: "in-memory, already failed", New: poisonaccessortest.Poisoned,
+		},
+		latches,
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestPoisonAccessorContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestPoisonAccessorContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	poisonaccessortest.AssertPoisonAccessorContract(t,
-		poisonaccessortest.PoisonAccessorSubject("in-memory", func() poisonaccessor.PoisonAccessor {
-			return poisonaccessortest.NewInMemory()
-		}),
-		poisonaccessortest.PoisonAccessorWithout("Err/smoke"),
-		poisonaccessortest.PoisonAccessorWithoutDouble(),
+	poisonaccessortest.RunPoisonAccessor(
+		t,
+		poisonaccessortest.PoisonAccessorHarness[*poisonaccessortest.InMemory]{
+			Name: "in-memory",
+			New:  poisonaccessortest.NewInMemory,
+		},
+		poisonaccessortest.PoisonAccessorSuite.Without(poisonaccessortest.PoisonAccessorSuite.Checks.Err.Smoke()),
 	)
 }
 

@@ -4,7 +4,6 @@
 package readertest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -12,63 +11,59 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/reader/readertest"
 )
 
-// The reader shape is the commonest in any store-like interface, and its whole
-// contract here comes from the signature: a key in, a value and an error out.
-//
-// The miss check is the one that needs the pair. It calls Get with KeyOther —
-// derived to differ from Key — so a subject seeded under Key still has to
-// report a miss, and a subject that returns something for every key fails.
+// Reader declares no writer, so nothing is derived to seed through and the
+// hit path is unreachable without a seeded constructor. Which error a miss
+// reports is the reader shape's own law and no signature says it, so the
+// generated check asks only that the value beside it be the zero; the row
+// below is what pins the sentinel.
 func TestReaderContract(t *testing.T) {
 	t.Parallel()
 
-	// The values the run itself uses, read rather than replaced: nothing here
-	// passes ReaderWithFixture, so the derivation stands.
-	fixture := readertest.DefaultReaderFixture()
+	// The values the run itself uses, read rather than replaced.
+	fx := readertest.DefaultReaderFixture()
 
-	readertest.AssertReaderContract(t,
-		readertest.ReaderModel(),
-		readertest.ReaderSubject("in-memory", func() reader.Reader {
-			return readertest.NewInMemory()
-		}),
-		readertest.ReaderSeed(func(_ context.Context, subject reader.Reader) error {
-			// Reader declares no writer, so nothing is derived and the hit path
-			// is unreachable without this. A seed may reach for the concrete
-			// subject: it runs before the double wraps it and sees what the
-			// factory made. A check may not.
-			subject.(*readertest.InMemory).Put(reader.Value{Key: fixture.Key, Body: "seeded"})
-			return nil
-		}),
-		readertest.ReaderOnGet("reports the miss sentinel for a key nothing holds", func(
-			tb testing.TB, subject reader.Reader, key string,
-		) {
-			tb.Helper()
-			// Which error a miss reports is the reader shape's own law, and no
-			// signature says it. The generated check asks only that the value
-			// beside it be the zero.
-			_, err := subject.Get(tb.Context(), fixture.KeyOther)
-			testkit.ErrorIs(tb, err, reader.ErrNotFound,
-				"an absent key is a miss rather than an unlabelled failure")
-		}),
-		readertest.ReaderOnGet("returns what was seeded", func(
-			tb testing.TB, subject reader.Reader, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, got.Body, "seeded", "and carries what was written")
-		}),
+	readertest.RunReader(t,
+		readertest.ReaderHarness[*readertest.InMemory]{
+			Name: "in-memory",
+			// The seed folded into the constructor, which is where a
+			// seeded subject is built now: a factory may make any
+			// starting state, and it runs before anything wraps it.
+			New: func() *readertest.InMemory {
+				s := readertest.NewInMemory()
+				s.Put(reader.Value{Key: fx.Key(), Body: "seeded"})
+				return s
+			},
+		},
+		// Get/miss is generated and asserts the sentinel, because the read
+		// declares one. The hand-written row that used to pin it is gone
+		// with the drop that used to excuse it.
+		readertest.ReaderChecks{
+			{
+				Method: "Get",
+				Name:   "hit-returns-seeded",
+				Claim:  "Get returns what was seeded under a key that was written",
+				Run: func(tb testing.TB, s reader.Reader, fx readertest.ReaderFixture) {
+					tb.Helper()
+					got, err := s.Get(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a seeded key is found")
+					testkit.Equal(tb, got.Body, "seeded", "and carries what was written")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestReaderContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string,
+// so a check that is renamed or stops being emitted breaks this compile
+// instead of silently declining nothing.
+func TestReaderContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	readertest.AssertReaderContract(t,
-		readertest.ReaderSubject("in-memory", func() reader.Reader {
-			return readertest.NewInMemory()
-		}),
-		readertest.ReaderWithout("Get/smoke"),
-		readertest.ReaderWithoutDouble(),
+	readertest.RunReader(t,
+		readertest.ReaderHarness[*readertest.InMemory]{
+			Name: "in-memory",
+			New:  readertest.NewInMemory,
+		},
+		readertest.ReaderSuite.Without(readertest.ReaderSuite.Checks.Get.Smoke()),
 	)
 }

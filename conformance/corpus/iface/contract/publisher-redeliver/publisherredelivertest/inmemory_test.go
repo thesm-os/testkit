@@ -18,60 +18,77 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	publisherredelivertest.AssertContractContract(t,
-		publisherredelivertest.ContractModel(),
-		publisherredelivertest.ContractSubject("in-memory", func() publisherredeliver.Contract {
-			return publisherredelivertest.NewInMemory()
-		}),
-		publisherredelivertest.ContractOnRepublish("duplicates what was already delivered", func(
-			tb testing.TB, subject publisherredeliver.Contract, v publisherredeliver.Value,
-		) {
-			tb.Helper()
-			stream, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
+	publisherredelivertest.RunContract(
+		t,
+		publisherredelivertest.ContractHarness[*publisherredelivertest.InMemory]{
+			Name: "in-memory",
+			New:  publisherredelivertest.NewInMemory,
+		},
+		publisherredelivertest.ContractChecks{
+			{
+				Method: "Republish",
+				Name:   "duplicates-what-was-delivered",
+				Claim:  "Republish duplicates what was already delivered",
+				Run: func(tb testing.TB, s publisherredeliver.Contract, fx publisherredelivertest.ContractFixture) {
+					tb.Helper()
+					stream, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-			testkit.NoError(tb, subject.Publish(tb.Context(), v), "the original lands")
-			testkit.NoError(tb, subject.Republish(tb.Context(), v), "and so does the redelivery")
-			testkit.Equal(tb, <-stream, v, "the subscriber takes the original")
-			testkit.Equal(tb, <-stream, v, "and the duplicate at-least-once permits")
-		}),
-		publisherredelivertest.ContractOnPublish("reports a subscriber it can no longer reach", func(
-			tb testing.TB, subject publisherredeliver.Contract, v publisherredeliver.Value,
-		) {
-			tb.Helper()
-			_, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
+					testkit.NoError(tb, s.Publish(tb.Context(), fx.Value()), "the original lands")
+					testkit.NoError(tb, s.Republish(tb.Context(), fx.Value()), "and so does the redelivery")
+					testkit.Equal(tb, <-stream, fx.Value(), "the subscriber takes the original")
+					testkit.Equal(tb, <-stream, fx.Value(), "and the duplicate at-least-once permits")
+				},
+			},
+			{
+				Method: "Subscribe",
+				Name:   "receives-what-is-published-after",
+				Claim:  "Subscribe receives what is published after it attaches",
+				Run: func(tb testing.TB, s publisherredeliver.Contract, fx publisherredelivertest.ContractFixture) {
+					tb.Helper()
+					stream, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-			for range 32 {
-				if err := subject.Publish(tb.Context(), v); err != nil {
-					testkit.ErrorIs(tb, err, publisherredelivertest.ErrFull,
-						"the publish says why it could not be taken")
-					return
-				}
-			}
-			tb.Fatalf("a subscriber that never reads was never reported as behind")
-		}),
+					testkit.NoError(tb, s.Publish(tb.Context(), fx.ValueOther()),
+						"a message published afterwards is accepted")
+					testkit.Equal(tb, <-stream, fx.ValueOther(), "and reaches them")
+				},
+			},
+			{
+				Method: "Publish",
+				Name:   "reports-an-unreachable-subscriber",
+				Claim:  "Publish reports a subscriber it can no longer reach",
+				Run: func(tb testing.TB, s publisherredeliver.Contract, fx publisherredelivertest.ContractFixture) {
+					tb.Helper()
+					_, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
+
+					for range 32 {
+						if err := s.Publish(tb.Context(), fx.Value()); err != nil {
+							testkit.ErrorIs(tb, err, publisherredelivertest.ErrFull,
+								"the publish says why it could not be taken")
+							return
+						}
+					}
+					tb.Fatalf("a subscriber that never reads was never reported as behind")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	publisherredelivertest.AssertContractContract(t,
-		publisherredelivertest.ContractSubject("in-memory", func() publisherredeliver.Contract {
-			return publisherredelivertest.NewInMemory()
-		}),
-		publisherredelivertest.ContractWithout("Publish/smoke"),
-		publisherredelivertest.ContractWithoutDouble(),
+	publisherredelivertest.RunContract(
+		t,
+		publisherredelivertest.ContractHarness[*publisherredelivertest.InMemory]{
+			Name: "in-memory",
+			New:  publisherredelivertest.NewInMemory,
+		},
+		publisherredelivertest.ContractSuite.Without(publisherredelivertest.ContractSuite.Checks.Publish.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	publisherredelivertest.ContractModelSaturation(t, func() publisherredeliver.Contract {
-		return publisherredelivertest.NewInMemory()
-	})
 }

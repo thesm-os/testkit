@@ -56,6 +56,9 @@ const (
 // literal carries them and the generator's own source does not.
 const hostilePrefix = `"\x00hostile\xff`
 
+// missTo is the textual payload a key outside the corpus carries.
+const missTo = "unseeded"
+
 // DistinctMember is pool[1]: the stamp with its textual payload
 // swapped "test" → "other". False when the stamp carries no swap
 // point — the pool cannot fund a distinct second member, and the
@@ -67,6 +70,26 @@ func DistinctMember(stamp Expr) (Expr, bool) {
 		return "", false
 	}
 	return Expr(out), true
+}
+
+// MissMember is the key deliberately outside a seeded corpus: the
+// stamp with its textual payload swapped "test" → "unseeded".
+//
+// A third word rather than reusing pool[1]. That member is a second
+// SEEDED key — the corpus zips every member of the key pool — so a miss
+// body drawing it would hit, and the check would pass while asserting
+// the opposite of its claim. The swap point is the same one
+// [DistinctMember] uses, so a stamp that funds one funds the other.
+func MissMember(stamp Expr) Expr {
+	out := strings.Replace(string(stamp), distinctFrom, missTo, 1)
+	if out == string(stamp) {
+		// No swap point. The caller has already refused the pool for
+		// exactly this reason, so this is unreachable through
+		// [CorpusOf]; returning the stamp keeps it total rather than
+		// making a second refusal path nothing exercises.
+		return stamp
+	}
+	return Expr(out)
 }
 
 // HostileMember is pool[2]: for a quoted-string stamp, the
@@ -94,4 +117,49 @@ func HostileMember(stamp Expr, role string) (Expr, bool) {
 		return "", false
 	}
 	return Expr(s[:open+1] + s[open+1+closing:]), true
+}
+
+// RoleKey and RolePayload are the two roles a seeded corpus is zipped
+// from. Named here rather than matched as literals at each reader,
+// because the vocabulary the role directive stamps is validated by its
+// readers and this is one of them.
+const (
+	RoleKey     = "key"
+	RolePayload = "payload"
+)
+
+// CorpusPlan is the seeded corpus a reader-only interface is populated
+// through: one entry per key, values cycled.
+//
+// Derivable only where BOTH roles are stamped. An interface nothing can
+// write to and whose inputs carry no roles cannot be seeded at all — the
+// suite would have to invent both what a key is and what a value is —
+// and that is a refusal rather than an empty map, because an empty
+// corpus makes every read miss and every hit check vacuous.
+type CorpusPlan struct {
+	// Key and Value are the pools the corpus is zipped from.
+	Key, Value PoolPlan
+
+	// MissKey is the key deliberately outside it, which the miss body
+	// draws instead of the fixture's alternate — an alternate is a
+	// second SEEDED key, and a miss needs one nothing wrote.
+	MissKey Expr
+}
+
+// CorpusOf pairs the key and payload pools, false where either is absent.
+func CorpusOf(pools []PoolPlan) (CorpusPlan, bool) {
+	var key, value PoolPlan
+	var haveKey, haveValue bool
+	for _, p := range pools {
+		switch p.Role {
+		case RoleKey:
+			key, haveKey = p, true
+		case RolePayload:
+			value, haveValue = p, true
+		}
+	}
+	if !haveKey || !haveValue {
+		return CorpusPlan{}, false
+	}
+	return CorpusPlan{Key: key, Value: value, MissKey: MissMember(key.Members[0])}, true
 }

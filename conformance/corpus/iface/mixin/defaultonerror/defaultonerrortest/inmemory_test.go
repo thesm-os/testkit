@@ -12,44 +12,33 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// Store is classified writer, so Get's miss check knows what a miss means
+// here. What a key that WAS written reads back as is the row below.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	defaultonerrortest.AssertMixedContract(t,
-		defaultonerrortest.MixedSubject("in-memory", func() defaultonerror.Mixed {
-			return defaultonerrortest.NewInMemory()
-		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		defaultonerrortest.MixedModel(),
-		defaultonerrortest.MixedOnGet("returns what Store wrote", func(
-			tb testing.TB, subject defaultonerror.Mixed, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is present")
-			testkit.Equal(tb, got.Key, key, "and answers under the key it was stored with")
-		}),
+	defaultonerrortest.RunMixed(
+		t,
+		defaultonerrortest.MixedHarness[*defaultonerrortest.InMemory]{
+			Name: "in-memory",
+			New:  defaultonerrortest.NewInMemory,
+		},
+		defaultonerrortest.MixedChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-store-wrote",
+				Claim:  "Get returns what Store wrote",
+				Run: func(tb testing.TB, s defaultonerror.Mixed, fx defaultonerrortest.MixedFixture) {
+					tb.Helper()
+					written := fx.Value()
+					testkit.NoError(tb, s.Store(tb.Context(), written), "the value is stored")
+
+					got, err := s.Get(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "the written key is present")
+					testkit.Equal(tb, got, written, "and answers with what was stored")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	defaultonerrortest.AssertMixedContract(t,
-		defaultonerrortest.MixedSubject("in-memory", func() defaultonerror.Mixed {
-			return defaultonerrortest.NewInMemory()
-		}),
-		defaultonerrortest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	defaultonerrortest.MixedModelSaturation(t, func() defaultonerror.Mixed {
-		return defaultonerrortest.NewInMemory()
-	})
 }

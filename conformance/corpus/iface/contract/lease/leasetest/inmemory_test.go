@@ -9,70 +9,45 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/lease"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/lease/leasetest"
-	"go.thesmos.sh/testkit/engine/model"
 )
 
 // lease is the model tier's under ADR-0018: `AUTO-LEASE-DOUBLE-ACQUIRE-BLOCKS`
 // and `AUTO-LEASE-RELEASED-ON-CANCEL` state it.
 //
-// Acquire is classified writer, so the harness seeds every fresh subject
-// through it — which means each check meets a subject already holding the
-// derived key. That is what the smoke check runs against, and a subject that
-// panicked on a second acquire rather than refusing it fails there.
+// What the suite tier states is the row below: a key this run took is a key it
+// cannot take twice, and one nobody holds is still available. Both halves,
+// because a breaker refusing every acquire passes the first alone.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	leasetest.AssertContractContract(t,
-		leasetest.ContractModel(
-			// Freeness probed the only way the interface offers: a key that
-			// can be acquired was free, and the probe releases what it took.
-			leasetest.ContractModelFree(func(t *model.T, subject lease.Contract, k string) bool {
-				if err := subject.Acquire(t.Context(), k); err != nil {
-					return false
-				}
-				_ = subject.Release(t.Context(), k)
-				return true
-			}),
-		),
-		leasetest.ContractSubject("in-memory", func() lease.Contract {
-			return leasetest.NewInMemory()
-		}),
-		leasetest.ContractOnAcquire("refuses a key the seed already took", func(
-			tb testing.TB, subject lease.Contract, key string,
-		) {
-			tb.Helper()
-			testkit.ErrorIs(tb, subject.Acquire(tb.Context(), key), lease.ErrHeld,
-				"a held lease is refused rather than granted twice")
-			testkit.NoError(tb, subject.Acquire(tb.Context(), key+"-free"),
-				"and a key nobody holds is still available")
-		}),
+	leasetest.RunContract(t,
+		leasetest.ContractHarness[*leasetest.InMemory]{Name: "in-memory", New: leasetest.NewInMemory},
+		leasetest.ContractChecks{
+			{
+				Method: "Acquire",
+				Name:   "refuses-a-held-key",
+				Claim:  "Acquire refuses a key it already holds",
+				Run: func(tb testing.TB, s lease.Contract, fx leasetest.ContractFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Acquire(tb.Context(), fx.Key()), "a free key is taken")
+					testkit.ErrorIs(tb, s.Acquire(tb.Context(), fx.Key()), lease.ErrHeld,
+						"a held lease is refused rather than granted twice")
+					testkit.NoError(tb, s.Acquire(tb.Context(), fx.KeyOther()),
+						"and a key nobody holds is still available")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	leasetest.AssertContractContract(t,
-		leasetest.ContractSubject("in-memory", func() lease.Contract {
-			return leasetest.NewInMemory()
-		}),
-		leasetest.ContractWithout("Acquire/smoke"),
-		leasetest.ContractWithoutDouble(),
+	leasetest.RunContract(t,
+		leasetest.ContractHarness[*leasetest.InMemory]{Name: "in-memory", New: leasetest.NewInMemory},
+		leasetest.ContractSuite.Without(leasetest.ContractSuite.Checks.Acquire.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same freeness door armed that arms the tier.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	leasetest.ContractModelSaturation(t, func() lease.Contract {
-		return leasetest.NewInMemory()
-	}, leasetest.ContractModelFree(func(t *model.T, subject lease.Contract, k string) bool {
-		if err := subject.Acquire(t.Context(), k); err != nil {
-			return false
-		}
-		_ = subject.Release(t.Context(), k)
-		return true
-	}))
 }

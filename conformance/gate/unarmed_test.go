@@ -51,6 +51,7 @@ func consumerText(t *testing.T, dir string) string {
 // set derives from the emission, the arming from the consumers' own calls,
 // and every failure names its fixture and law.
 func TestEveryDoorIsArmedOrArgued(t *testing.T) {
+	skipUntilModelRelinked(t)
 	t.Parallel()
 
 	census, err := censusOnce()

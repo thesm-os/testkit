@@ -75,7 +75,7 @@ func directives() []sdk.DirectiveSchema {
 					"directive takes the last value written.",
 			).
 			Positional("value", sdk.Required()).
-			On(sdk.NodeKindField).
+			On(sdk.NodeKindField, sdk.NodeKindAlias).
 			// One positional and nothing else: the value is the whole
 			// directive, and a key beside it names something this generator
 			// has never read.
@@ -98,8 +98,15 @@ func (*Plugin) Annotate(ctx *sdk.AnnotatorContext) error {
 		// differ between them.
 		file := fileOf(ctx.Reader, s)
 		for _, f := range s.Fields {
-			annotate(ctx, file, s, f)
+			annotate(ctx, file, s.Name, f.Name, f.Directives(), f.EnsureMeta())
 		}
+	}
+	// The type-level arm, which pairs with the role annotator's: a bare
+	// parameter has no field to stamp, so both the role and the value it
+	// draws are declared on the named type instead.
+	for _, a := range ctx.Reader.Aliases().Slice() {
+		pkg, _ := ctx.Reader.PackageAt(a.Package)
+		annotate(ctx, golang.FileOf(pkg, a), a.Name, a.Name, a.Directives(), a.EnsureMeta())
 	}
 	return nil
 }
@@ -128,8 +135,14 @@ func fileOf(r *sdk.StoreReader, s *sdk.Struct) *sdk.File {
 // schema's description promises. [sdk.Field.Directive] answers "is this
 // declared" and is first-wins, which is the opposite rule — hence
 // [sdk.Last] rather than the method.
-func annotate(ctx *sdk.AnnotatorContext, file *sdk.File, s *sdk.Struct, f *sdk.Field) {
-	dir := sdk.Last(f.Directives(), DirectiveName)
+func annotate(
+	ctx *sdk.AnnotatorContext,
+	file *sdk.File,
+	owner, name string,
+	directives []*sdk.Directive,
+	bag *sdk.Bag,
+) {
+	dir := sdk.Last(directives, DirectiveName)
 	if dir == nil || len(dir.Args) == 0 {
 		return
 	}
@@ -138,12 +151,12 @@ func annotate(ctx *sdk.AnnotatorContext, file *sdk.File, s *sdk.Struct, f *sdk.F
 		// The value itself comes from the error: [Resolve] quotes it, because
 		// its other caller reads a directive key rather than a positional and
 		// has nothing else to name.
-		ctx.Diag.Errorf(dir.Pos, "%s: default on %s.%s: %v", Name, s.Name, f.Name, err)
+		ctx.Diag.Errorf(dir.Pos, "%s: default on %s.%s: %v", Name, owner, name, err)
 		return
 	}
-	MetaDefault.Set(f.EnsureMeta(), symbol, Name)
+	MetaDefault.Set(bag, symbol, Name)
 	if pkg != "" {
-		MetaDefaultPkg.Set(f.EnsureMeta(), pkg, Name)
+		MetaDefaultPkg.Set(bag, pkg, Name)
 	}
 }
 

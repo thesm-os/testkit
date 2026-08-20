@@ -18,11 +18,6 @@ import (
 // build tag" — output routing, not a template: it needs a third output whose
 // suffix carries the constraint and Layout to route it there. Until that
 // exists there is nothing for a check template to say.
-//
-// Connect is classified writer, so the harness seeds every subject through it.
-// A derived DSN is a plausible string rather than a URL, so the fixture supplies
-// one this subject accepts — which is exactly what the generated seed-failure
-// message asks for when it does not.
 func TestMixedContract(t *testing.T) {
 	// Not parallel, because t.Setenv forbids it — and the variable is the
 	// point: every check on Connect sits behind the integration guard, so a run
@@ -32,47 +27,48 @@ func TestMixedContract(t *testing.T) {
 	// stage deliberately does not.
 	t.Setenv("TESTKIT_INTEGRATION", "1")
 
-	integrationonlytest.AssertMixedContract(t,
-		integrationonlytest.MixedModel(),
-		integrationonlytest.MixedSubject("in-memory", func() integrationonly.Mixed {
-			return integrationonlytest.NewInMemory()
-		}),
-		integrationonlytest.MixedWithFixture(reachableFixture()),
-		integrationonlytest.MixedOnConnect("refuses a target it cannot parse", func(
-			tb testing.TB, subject integrationonly.Mixed, dsn string,
-		) {
-			tb.Helper()
-			// The seed supplies a reachable target; this is the other half.
-			// A subject that accepted any string would fail at first use rather
-			// than at configuration, which is the wrong end of the deployment.
-			testkit.Error(tb, subject.Connect(tb.Context(), "not-a-dsn"),
-				"a target with no scheme is refused")
-		}),
+	integrationonlytest.RunMixed(
+		t,
+		integrationonlytest.MixedHarness[*integrationonlytest.InMemory]{
+			Name: "in-memory",
+			New:  integrationonlytest.NewInMemory,
+		},
+		integrationonlytest.MixedChecks{
+			{
+				Method: "Connect",
+				Name:   "refuses-an-unparseable-target",
+				Claim:  "Connect refuses a target it cannot parse",
+				Run: func(tb testing.TB, s integrationonly.Mixed, fx integrationonlytest.MixedFixture) {
+					tb.Helper()
+					// A well-formed target is the row's to supply: the derived
+					// draw is a plausible string rather than a URL, which is
+					// the half of this claim derivation cannot reach.
+					testkit.NoError(tb, s.Connect(tb.Context(), "postgres://localhost/primary"),
+						"a target with a scheme is accepted")
+
+					// A subject that accepted any string would fail at first
+					// use rather than at configuration, which is the wrong end
+					// of the deployment.
+					testkit.ErrorIs(tb, s.Connect(tb.Context(), "not-a-dsn"), integrationonlytest.ErrBadDSN,
+						"a target with no scheme is refused")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	integrationonlytest.AssertMixedContract(t,
-		integrationonlytest.MixedSubject("in-memory", func() integrationonly.Mixed {
-			return integrationonlytest.NewInMemory()
-		}),
-		integrationonlytest.MixedWithFixture(reachableFixture()),
-		integrationonlytest.MixedWithout("Connect/smoke"),
-		integrationonlytest.MixedWithoutDouble(),
+	integrationonlytest.RunMixed(
+		t,
+		integrationonlytest.MixedHarness[*integrationonlytest.InMemory]{
+			Name: "in-memory",
+			New:  integrationonlytest.NewInMemory,
+		},
+		integrationonlytest.MixedSuite.Without(integrationonlytest.MixedSuite.Checks.Connect.Smoke()),
 	)
-}
-
-// reachableFixture supplies targets this subject parses.
-//
-// Both halves: the alternate is a second well-formed DSN rather than a broken
-// one, because it feeds checks that need a value Connect accepts and not one it
-// refuses.
-func reachableFixture() integrationonlytest.MixedFixture {
-	f := integrationonlytest.DefaultMixedFixture()
-	f.Dsn = "postgres://localhost/primary"
-	f.DsnOther = "postgres://localhost/secondary"
-	return f
 }

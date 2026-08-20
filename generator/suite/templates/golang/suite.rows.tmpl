@@ -1,0 +1,152 @@
+{{- /*
+suite.rows — the table a consumer writes their own checks in.
+
+The seam this whole surface exists to offer. A generated check and a
+hand-written one are the same runtime type, so everything that works on
+one works on the other: the same report, the same drop path, the same
+lock row, the same proof.
+
+Which body field a row fills decides what that body receives, and that
+is why they are separate fields rather than one function plus a mode: a
+body handed the subject can build two instances and move a clock
+between them, and a body handed one instance cannot. The difference is
+structural, not a flag.
+*/ -}}
+{{- define "suite.rows" -}}
+{{- $c := . }}
+// {{ suite_defectTypeName .IfaceName }} is anything that can stand as a planted defect for a
+// row — in practice a {{ suite_harnessName .IfaceName }} over the generated double.
+type {{ suite_defectTypeName .IfaceName }}{{ renderTypeParams .TypeParams }} interface {
+	Subject({{ if .Seeded }}docs {{ suite_corpusTypeName .IfaceName }}{{ end }}) ({{ .IfaceName }}Subject{{ .TypeArgs }}, error)
+}
+
+// {{ suite_brokenName .IfaceName }} names a planted defect.
+//
+// Sugar over the harness, because a defect IS a subject — one built to
+// fail exactly one claim. Its own constructor is what keeps a proofs
+// table readable beside a run's.
+{{- if .Seeded }}
+//
+// It takes the corpus, because {{ .IfaceName }}'s constructor seam does: a
+// planted defect here is a loader that betrays what it was given.
+{{- end }}
+func {{ suite_brokenName .IfaceName }}{{ suite_withParam (renderTypeParams .TypeParams) (printf "T %s%s" .IfaceName .TypeArgs) }}(
+	name string, build func({{ if .Seeded }}docs {{ suite_corpusTypeName .IfaceName }}{{ else if .Limit }}capacity int{{ end }}) T,
+) {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }} {
+	return {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}{
+		Name: name, {{ if .Seeded }}Seed{{ else }}New{{ end }}: build,
+	}
+}
+
+// {{ suite_rowsName .IfaceName }} is the table of this package's own checks.
+type {{ suite_rowsName .IfaceName }}{{ renderTypeParams .TypeParams }} []{{ suite_rowName .IfaceName }}{{ .TypeArgs }}
+
+func (c {{ suite_rowsName .IfaceName }}{{ .TypeArgs }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
+	rc.rows = append(rc.rows, c...)
+}
+
+// {{ suite_rowName .IfaceName }} is one row. The body is a plain named function; which
+// field it goes in decides what it receives.
+type {{ suite_rowName .IfaceName }}{{ renderTypeParams .TypeParams }} struct {
+	// Method scopes Run's ID: {{ with index .Methods 0 }}"{{ .Name }}" makes it {{ .Name }}/<name>{{ end }}.
+	// A body that fixes its own scope leaves this empty.
+	Method string
+
+	// Name is the ID's slug — the stable handle a drop and a rerun use.
+	Name string
+
+	// Claim is the sentence the manifest records and the report reads
+	// out. A claim wider than its assertion is the one failure this
+	// surface cannot catch for you.
+	Claim string
+
+	// Exactly one body.
+	//
+	// Run gets one fresh instance, which is nearly every check. RunWith
+	// gets the subject itself, for a claim one instance cannot state:
+	// build two, move the clock, induce a failure.
+	//
+	// Both take the fixture whether or not any DERIVED check draws one,
+	// so the row seam has one shape across every package and a fixture
+	// that later grows a field does not change a signature consumers
+	// have already written against.
+	Run     func(tb {{ renderExpr (external "testing" "TB") }}, s {{ suite_subjectType $c }}, {{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }})
+	RunWith func(tb {{ renderExpr (external "testing" "TB") }}, sub {{ .IfaceName }}Subject{{ .TypeArgs }}, {{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }})
+
+	// Class buckets the report. Empty means hand-written.
+	Class {{ renderExpr (external $.Vocab "Class") }}
+
+	// Needs declares capabilities. A harness that cannot meet one fails
+	// this check by name with the fix in the message, never skips — a
+	// check that skipped for want of wiring reads as coverage.
+	Needs {{ renderExpr (external $.Vocab "Caps") }}
+
+	// ProvenBy is the planted defect that fails this check and nothing
+	// else. Setting it is the claim AND the evidence: the row reports
+	// Proven, and {{ suite_proveName .IfaceName }} fails unless the defect turns the check
+	// red. ProvenReason, when set, is a substring that red must contain,
+	// so a defect dying on an incidental guard stops counting as one.
+	//
+	// Argued records why no defect can be constructed — the honest third
+	// answer. At most one of ProvenBy and Argued; neither means unproven,
+	// which is what the report says about a check nobody has driven
+	// against anything.
+	ProvenBy     {{ suite_defectTypeName .IfaceName }}{{ .TypeArgs }}
+	ProvenReason string
+	Argued       string
+}
+
+// {{ suite_methodsVar .Token }} is the interface's method set, for naming a Method typo
+// at run start.
+//
+// A misspelled method starts with a capital too, so the ID grammar alone
+// would file a check under a method that does not exist and report it
+// under a path no drop can name.
+var {{ suite_methodsVar .Token }} = {{ renderExpr (external $.Vocab "NewNameSet") }}("{{ .IfaceName }}"
+	{{- range .Methods }}, {{ suite_methodConst $c.Token .Name }}{{ end }})
+
+// bind lowers one row onto the runtime check type, against the run's own
+// fixture — which is what lets a row's body draw what the run draws.
+func (c {{ suite_rowName .IfaceName }}{{ .TypeArgs }}) bind(
+	{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }},
+) ({{ renderExpr (external $.Vocab "Check") }}[{{ suite_subjectType $c }}], error) {
+	out := {{ renderExpr (external $.Vocab "Check") }}[{{ suite_subjectType $c }}]{
+		Claim: c.Claim, Class: c.Class, Needs: c.Needs,
+	}
+	if out.Class == "" {
+		out.Class = {{ renderExpr (external $.Vocab "ClassHandWritten") }}
+	}
+
+	var err error
+	bodies := 0
+	if c.Run != nil {
+		bodies++
+		if out.ID, err = {{ renderExpr (external $.Vocab "RowID") }}("Run", c.Method, c.Name, {{ suite_methodsVar .Token }}); err != nil {
+			return out, err
+		}
+		run := c.Run
+		out.Run = func(tb {{ renderExpr (external "testing" "TB") }}, s {{ suite_subjectType $c }}) {
+			run(tb, s, {{ suite_fixtureIdent }})
+		}
+	}
+	if c.RunWith != nil {
+		bodies++
+		out.ID = {{ renderExpr (external $.Vocab "HandRowID") }}(c.Name)
+		rw := c.RunWith
+		out.RunWith = func(tb {{ renderExpr (external "testing" "TB") }}, sub {{ .IfaceName }}Subject{{ .TypeArgs }}) {
+			rw(tb, sub, {{ suite_fixtureIdent }})
+		}
+	}
+	if err := {{ renderExpr (external $.Vocab "OneBody") }}(c.Name, bodies, "Run, RunWith"); err != nil {
+		return out, err
+	}
+	if c.Method != "" && c.Run == nil {
+		return out, {{ renderExpr (external "fmt" "Errorf") }}(
+			"check %q sets Method, but its body fixes its own scope; drop Method", c.Name)
+	}
+	if out.Falsifiable, err = {{ renderExpr (external $.Vocab "Falsify") }}(c.Name, c.ProvenBy != nil, c.Argued); err != nil {
+		return out, err
+	}
+	return out, nil
+}
+{{- end -}}

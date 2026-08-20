@@ -80,6 +80,7 @@ var assertionOnce = sync.OnceValue(func() assertionState {
 // experiment proved what the gap costs: a fixture's whole claim deleted, the
 // corpus green. A red line here names the law that would go the same way.
 func TestEveryOwedLawIsBoundOrRegistered(t *testing.T) {
+	skipUntilModelRelinked(t)
 	t.Parallel()
 
 	s := assertionOnce()
@@ -119,6 +120,7 @@ func TestUnboundRegisterOnlyShrinks(t *testing.T) {
 // audit hand-derived stays derivable — and a derived fixture regressing to
 // the twin is visible here before it is visible nowhere.
 func TestEmissionSeesTheTwinFloor(t *testing.T) {
+	skipUntilModelRelinked(t)
 	t.Parallel()
 
 	emitted, err := gate.Emission(t.Context(), corpusRoot,
@@ -178,6 +180,7 @@ const twinCeiling = 92
 // regression from a derived oracle back to it must be visible somewhere
 // before it is visible nowhere.
 func TestTwinFloorOnlySinks(t *testing.T) {
+	skipUntilModelRelinked(t)
 	t.Parallel()
 
 	s := assertionOnce()

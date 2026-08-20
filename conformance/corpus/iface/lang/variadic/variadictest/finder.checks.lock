@@ -1,0 +1,11 @@
+testkit-checks v2
+Find/cancel	signature/cancel	Find reports a cancelled context as cancelled	
+Find/deadline	signature/deadline	Find reports an expired deadline as exceeded	
+Find/nilcontext	signature/nilcontext	Find returns an error rather than panicking on a nil context	
+Find/smoke	signature/smoke	Find survives a call with a seeded keys	
+Find/zero-on-error	signature/zero-on-error	Find returns nothing alongside any error	
+FindWithLimit/cancel	signature/cancel	FindWithLimit reports a cancelled context as cancelled	
+FindWithLimit/deadline	signature/deadline	FindWithLimit reports an expired deadline as exceeded	
+FindWithLimit/nilcontext	signature/nilcontext	FindWithLimit returns an error rather than panicking on a nil context	
+FindWithLimit/smoke	signature/smoke	FindWithLimit survives a call with seeded inputs	
+FindWithLimit/zero-on-error	signature/zero-on-error	FindWithLimit returns nothing alongside any error	

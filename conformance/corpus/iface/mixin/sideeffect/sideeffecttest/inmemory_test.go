@@ -6,7 +6,6 @@ package sideeffecttest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sideeffect/sideeffecttest"
 )
 
@@ -24,25 +23,19 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	sideeffecttest.AssertMixedContract(t,
-		sideeffecttest.MixedModel(),
-		sideeffecttest.MixedSubject("in-memory", func() sideeffect.Mixed {
-			return sideeffecttest.NewInMemory()
-		}),
+	sideeffecttest.RunMixed(t,
+		sideeffecttest.MixedHarness[*sideeffecttest.InMemory]{Name: "in-memory", New: sideeffecttest.NewInMemory},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	sideeffecttest.AssertMixedContract(t,
-		sideeffecttest.MixedSubject("in-memory", func() sideeffect.Mixed {
-			return sideeffecttest.NewInMemory()
-		}),
-		sideeffecttest.MixedWithout(
-			"Touch/smoke",
-		),
-		sideeffecttest.MixedWithoutDouble(),
+	sideeffecttest.RunMixed(t,
+		sideeffecttest.MixedHarness[*sideeffecttest.InMemory]{Name: "in-memory", New: sideeffecttest.NewInMemory},
+		sideeffecttest.MixedSuite.Without(sideeffecttest.MixedSuite.Checks.Touch.Smoke()),
 	)
 }

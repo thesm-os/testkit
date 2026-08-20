@@ -15,64 +15,66 @@ import (
 // it.
 //
 // What is stated here rather than in a package test is everything the interface
-// can be asked for, because a check runs against every subject a consumer
+// can be asked for, because a row runs against every subject a consumer
 // declares and again through the double — where a test in this package runs
 // against the one implementation it happens to hold.
-//
-// Run is classified writer, so the harness seeds through it: every check meets
-// a workflow already in Draft, and the check's own call takes it to Live.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	workflowtest.AssertContractContract(t,
-		workflowtest.ContractModel(),
-		workflowtest.ContractSubject("in-memory", func() workflow.Contract {
-			return workflowtest.NewInMemory()
-		}),
-		workflowtest.ContractOnRun("refuses a transition out of the last state", func(
-			tb testing.TB, subject workflow.Contract, key string,
-		) {
-			tb.Helper()
-			// The seed took the key to Draft, so this reaches Live — the last
-			// state `transitions=Draft>Live` declares.
-			testkit.NoError(tb, subject.Run(tb.Context(), key), "the declared transition runs")
-			testkit.ErrorIs(tb, subject.Run(tb.Context(), key), workflowtest.ErrTerminal,
-				"and there is no transition out of where it left the key")
-		}),
-		workflowtest.ContractOnRun("advances one key without advancing another", func(
-			tb testing.TB, subject workflow.Contract, key string,
-		) {
-			tb.Helper()
-			// A subject holding one state for the whole workflow rather than
-			// one per key passes every single-key check and settles every
-			// caller's work at once.
-			other := key + "-other"
-			testkit.NoError(tb, subject.Run(tb.Context(), other), "a fresh key starts")
-			testkit.NoError(tb, subject.Run(tb.Context(), other), "and advances to the last state")
-			testkit.NoError(tb, subject.Run(tb.Context(), key),
-				"while the seeded key still has its own transition left")
-		}),
+	workflowtest.RunContract(t,
+		workflowtest.ContractHarness[*workflowtest.InMemory]{Name: "in-memory", New: workflowtest.NewInMemory},
+		// A key nothing has run is in the first state, not absent: this
+		// workflow has no "unknown", so State answers Draft rather than the
+		// zero. The reader shape cannot see that, and the subject is not
+		// wrong — which is what a drop is for.
+		workflowtest.ContractSuite.Without(workflowtest.ContractSuite.Checks.State.Miss()),
+		workflowtest.ContractChecks{
+			{
+				Method: "Run",
+				Name:   "refuses-a-transition-out-of-the-last-state",
+				Claim:  "Run refuses a transition out of the last state",
+				Run: func(tb testing.TB, s workflow.Contract, fx workflowtest.ContractFixture) {
+					tb.Helper()
+					// `transitions=Draft>Live` declares two states, so the row
+					// walks the key to the last one and asks for one more.
+					testkit.NoError(tb, s.Run(tb.Context(), fx.Key()), "a fresh key starts")
+					testkit.NoError(tb, s.Run(tb.Context(), fx.Key()), "the declared transition runs")
+					testkit.ErrorIs(tb, s.Run(tb.Context(), fx.Key()), workflowtest.ErrTerminal,
+						"and there is no transition out of where it left the key")
+				},
+			},
+			{
+				Method: "Run",
+				Name:   "advances-one-key-not-another",
+				Claim:  "Run advances one key without advancing another",
+				Run: func(tb testing.TB, s workflow.Contract, fx workflowtest.ContractFixture) {
+					tb.Helper()
+					// A subject holding one state for the whole workflow rather
+					// than one per key passes every single-key check and settles
+					// every caller's work at once.
+					testkit.NoError(tb, s.Run(tb.Context(), fx.KeyOther()), "a fresh key starts")
+					testkit.NoError(tb, s.Run(tb.Context(), fx.KeyOther()),
+						"and advances to the last state")
+					testkit.NoError(tb, s.Run(tb.Context(), fx.Key()),
+						"while another key still has both its transitions left")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	workflowtest.AssertContractContract(t,
-		workflowtest.ContractSubject("in-memory", func() workflow.Contract {
-			return workflowtest.NewInMemory()
-		}),
-		workflowtest.ContractWithout("Run/smoke"),
-		workflowtest.ContractWithoutDouble(),
+	workflowtest.RunContract(t,
+		workflowtest.ContractHarness[*workflowtest.InMemory]{Name: "in-memory", New: workflowtest.NewInMemory},
+		workflowtest.ContractSuite.Without(
+			workflowtest.ContractSuite.Checks.Run.Smoke(),
+			// The same drop the run above makes, for the same reason.
+			workflowtest.ContractSuite.Checks.State.Miss(),
+		),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	workflowtest.ContractModelSaturation(t, func() workflow.Contract {
-		return workflowtest.NewInMemory()
-	})
 }

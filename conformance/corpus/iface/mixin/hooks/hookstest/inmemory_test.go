@@ -6,7 +6,6 @@ package hookstest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/hooks"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/hooks/hookstest"
 )
 
@@ -19,23 +18,19 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	hookstest.AssertMixedContract(t,
-		hookstest.MixedModel(),
-		hookstest.MixedSubject("in-memory", func() hooks.Mixed {
-			return hookstest.NewInMemory()
-		}),
+	hookstest.RunMixed(t,
+		hookstest.MixedHarness[*hookstest.InMemory]{Name: "in-memory", New: hookstest.NewInMemory},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	hookstest.AssertMixedContract(t,
-		hookstest.MixedSubject("in-memory", func() hooks.Mixed {
-			return hookstest.NewInMemory()
-		}),
-		hookstest.MixedWithout("Fire/smoke"),
-		hookstest.MixedWithoutDouble(),
+	hookstest.RunMixed(t,
+		hookstest.MixedHarness[*hookstest.InMemory]{Name: "in-memory", New: hookstest.NewInMemory},
+		hookstest.MixedSuite.Without(hookstest.MixedSuite.Checks.Fire.Smoke()),
 	)
 }

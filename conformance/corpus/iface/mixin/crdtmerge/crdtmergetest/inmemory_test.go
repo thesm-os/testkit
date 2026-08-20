@@ -13,7 +13,7 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/crdtmerge/crdtmergetest"
 )
 
-// Two interfaces, two harnesses, one implementation answering to both — which
+// Two interfaces, two runs, one implementation answering to both — which
 // is the arrangement rather than an accident: a merge needs a peer, and the
 // peer is a contract of its own precisely so a merge cannot reach into it.
 //
@@ -24,48 +24,58 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	crdtmergetest.AssertMixedContract(t,
-		crdtmergetest.MixedModel(),
-		crdtmergetest.MixedSubject("in-memory", func() crdtmerge.Mixed {
-			return crdtmergetest.NewInMemory()
-		}),
-		crdtmergetest.MixedOnMerge("folds a peer in through its own interface", func(
-			tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica,
-		) {
-			tb.Helper()
-			// The derived peer is nil — an interface parameter admits no
-			// literal — so a check wanting a real one builds it. That is what
-			// the extension point exists for.
-			other := crdtmergetest.NewInMemory()
-			testkit.NoError(tb, other.Add(tb.Context(), "theirs"), "the peer has an item")
-			testkit.NoError(tb, subject.Merge(tb.Context(), other), "merging succeeds")
+	crdtmergetest.RunMixed(t,
+		crdtmergetest.MixedHarness[*crdtmergetest.InMemory]{Name: "in-memory", New: crdtmergetest.NewInMemory},
+		crdtmergetest.MixedChecks{
+			{
+				Method: "Merge",
+				Name:   "folds-a-peer-in",
+				Claim:  "Merge folds a peer in through its own interface",
+				Run: func(tb testing.TB, s crdtmerge.Mixed, fx crdtmergetest.MixedFixture) {
+					tb.Helper()
+					// The derived peer is nil — an interface parameter admits
+					// no literal — so a check wanting a real one builds it.
+					// That is what the row table exists for.
+					testkit.NoError(tb, s.Add(tb.Context(), fx.Item()), "the subject has an item")
 
-			// Present rather than sole: Add is classified writer, so the
-			// harness has already seeded this subject through it, and a merge
-			// that discarded what was there would be a merge in name only.
-			got, err := subject.Items(tb.Context())
-			testkit.NoError(tb, err, "listing succeeds")
-			testkit.Assert(tb, got).Contains("theirs", "the peer's item arrived")
-		}),
-		crdtmergetest.MixedOnMerge("tolerates a peer that is not there", func(
-			tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica,
-		) {
-			tb.Helper()
-			// A nil peer reaches production through a replica that failed to
-			// dial, and merging with nothing is a no-op rather than a panic.
-			testkit.NoError(tb, subject.Merge(tb.Context(), nil),
-				"merging with no peer changes nothing and reports nothing")
-		}),
-		crdtmergetest.MixedOnMerge("reports a peer that cannot be read", func(
-			tb testing.TB, subject crdtmerge.Mixed, peer crdtmerge.Replica,
-		) {
-			tb.Helper()
-			// Convergence is a claim about two replicas that both answered. A
-			// merge that swallowed an unreachable peer would report agreement
-			// with something it never read.
-			testkit.ErrorIs(tb, subject.Merge(tb.Context(), failingReplica{}), errPeerUnreadable,
-				"the peer's failure is reported rather than merged over")
-		}),
+					other := crdtmergetest.NewInMemory()
+					testkit.NoError(tb, other.Add(tb.Context(), "theirs"), "the peer has one too")
+					testkit.NoError(tb, s.Merge(tb.Context(), other), "merging succeeds")
+
+					got, err := s.Items(tb.Context())
+					testkit.NoError(tb, err, "listing succeeds")
+					testkit.Assert(tb, got).Contains("theirs", "the peer's item arrived")
+					testkit.Assert(tb, got).Contains(fx.Item(),
+						"and a merge that discarded what was there would be a merge in name only")
+				},
+			},
+			{
+				Method: "Merge",
+				Name:   "tolerates-a-missing-peer",
+				Claim:  "Merge tolerates a peer that is not there",
+				Run: func(tb testing.TB, s crdtmerge.Mixed, fx crdtmergetest.MixedFixture) {
+					tb.Helper()
+					// A nil peer reaches production through a replica that
+					// failed to dial, and merging with nothing is a no-op
+					// rather than a panic.
+					testkit.NoError(tb, s.Merge(tb.Context(), nil),
+						"merging with no peer changes nothing and reports nothing")
+				},
+			},
+			{
+				Method: "Merge",
+				Name:   "reports-an-unreadable-peer",
+				Claim:  "Merge reports a peer that cannot be read",
+				Run: func(tb testing.TB, s crdtmerge.Mixed, fx crdtmergetest.MixedFixture) {
+					tb.Helper()
+					// Convergence is a claim about two replicas that both
+					// answered. A merge that swallowed an unreachable peer
+					// would report agreement with something it never read.
+					testkit.ErrorIs(tb, s.Merge(tb.Context(), failingReplica{}), errPeerUnreadable,
+						"the peer's failure is reported rather than merged over")
+				},
+			},
+		},
 	)
 }
 
@@ -75,11 +85,8 @@ func TestMixedContract(t *testing.T) {
 func TestReplicaContract(t *testing.T) {
 	t.Parallel()
 
-	crdtmergetest.AssertReplicaContract(t,
-		crdtmergetest.ReplicaModel(),
-		crdtmergetest.ReplicaSubject("in-memory", func() crdtmerge.Replica {
-			return crdtmergetest.NewInMemory()
-		}),
+	crdtmergetest.RunReplica(t,
+		crdtmergetest.ReplicaHarness[*crdtmergetest.InMemory]{Name: "in-memory", New: crdtmergetest.NewInMemory},
 	)
 }
 
@@ -91,24 +98,14 @@ type failingReplica struct{}
 
 func (failingReplica) Items(context.Context) ([]string, error) { return nil, errPeerUnreadable }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	crdtmergetest.AssertMixedContract(t,
-		crdtmergetest.MixedSubject("in-memory", func() crdtmerge.Mixed {
-			return crdtmergetest.NewInMemory()
-		}),
-		crdtmergetest.MixedWithout("Add/smoke"),
-		crdtmergetest.MixedWithoutDouble(),
+	crdtmergetest.RunMixed(t,
+		crdtmergetest.MixedHarness[*crdtmergetest.InMemory]{Name: "in-memory", New: crdtmergetest.NewInMemory},
+		crdtmergetest.MixedSuite.Without(crdtmergetest.MixedSuite.Checks.Add.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestReplicaSaturation(t *testing.T) {
-	t.Parallel()
-	crdtmergetest.ReplicaModelSaturation(t, func() crdtmerge.Replica {
-		return crdtmergetest.NewInMemory()
-	})
 }

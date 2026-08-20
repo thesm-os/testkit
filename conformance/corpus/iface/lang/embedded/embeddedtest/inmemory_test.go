@@ -4,7 +4,6 @@
 package embeddedtest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -18,121 +17,96 @@ import (
 func TestComposedContract(t *testing.T) {
 	t.Parallel()
 
-	// The values the run itself uses, read rather than replaced: nothing here
-	// passes ComposedWithFixture, so the derivation stands.
-	fixture := embeddedtest.DefaultComposedFixture()
+	fx := embeddedtest.DefaultComposedFixture()
 
-	embeddedtest.AssertComposedContract(t,
-		embeddedtest.ComposedSubject("in-memory", func() embedded.Composed {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.ComposedSeed(func(_ context.Context, subject embedded.Composed) error {
-			// A seed may reach for the concrete subject: it runs before the
-			// double wraps it and sees what the factory made. A check may not.
-			subject.(*embeddedtest.InMemory).Put(fixture.Key, "seeded")
-			return nil
-		}),
-		embeddedtest.ComposedOnGet("returns what was seeded", func(
-			tb testing.TB, subject embedded.Composed, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded identifier is found")
-			testkit.Equal(tb, got, "seeded", "and carries what was written")
-		}),
+	embeddedtest.RunComposed(t,
+		embeddedtest.ComposedHarness[*embeddedtest.InMemory]{
+			Name: "in-memory",
+			// Composed declares no writer, so the reader's hit path is
+			// unreachable without a seeded constructor.
+			New: func() *embeddedtest.InMemory {
+				s := embeddedtest.NewInMemory()
+				s.Put(fx.Key(), "seeded")
+				return s
+			},
+		},
+		embeddedtest.ComposedChecks{
+			{
+				Method: "Get",
+				Name:   "returns-what-was-seeded",
+				Claim:  "Get returns what was seeded",
+				Run: func(tb testing.TB, s embedded.Composed, fx embeddedtest.ComposedFixture) {
+					tb.Helper()
+					got, err := s.Get(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a seeded identifier is found")
+					testkit.Equal(tb, got, "seeded", "and carries what was written")
+				},
+			},
+		},
 	)
 }
 
 // The embedded interfaces are contracts in their own right, and one
 // implementation answers to all three.
 //
-// No fixture and no seed. Base exposes no state a reader observes, and passing
-// a seed that returns nil would say the same thing the absence already says.
+// No seed. Base exposes no state a reader observes, so its constructor is the
+// bare one.
 func TestBaseContract(t *testing.T) {
 	t.Parallel()
 
-	embeddedtest.AssertBaseContract(t,
-		embeddedtest.BaseSubject("in-memory", func() embedded.Base {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.BaseOnPing("succeeds on a fresh subject", func(
-			tb testing.TB, subject embedded.Base,
-		) {
-			tb.Helper()
-			testkit.NoError(tb, subject.Ping(tb.Context()), "an open subject answers a ping")
-		}),
+	embeddedtest.RunBase(t,
+		embeddedtest.BaseHarness[*embeddedtest.InMemory]{Name: "in-memory", New: embeddedtest.NewInMemory},
+		embeddedtest.BaseChecks{
+			{
+				Method: "Ping",
+				Name:   "succeeds-on-a-fresh-subject",
+				Claim:  "Ping succeeds on a fresh subject",
+				Run: func(tb testing.TB, s embedded.Base, fx embeddedtest.BaseFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Ping(tb.Context()), "an open subject answers a ping")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double for Base, which is a separate decision from dropping a
-// check and is made per contract rather than per suite.
-func TestBaseContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is per contract rather than per package: three interfaces
+// share this file and each has its own index.
+func TestBaseContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	embeddedtest.AssertBaseContract(t,
-		embeddedtest.BaseSubject("in-memory", func() embedded.Base {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.BaseWithout("Ping/smoke"),
-		embeddedtest.BaseWithoutDouble(),
+	embeddedtest.RunBase(t,
+		embeddedtest.BaseHarness[*embeddedtest.InMemory]{Name: "in-memory", New: embeddedtest.NewInMemory},
+		embeddedtest.BaseSuite.Without(embeddedtest.BaseSuite.Checks.Ping.Smoke()),
 	)
 }
 
 func TestCloserContract(t *testing.T) {
 	t.Parallel()
 
-	embeddedtest.AssertCloserContract(t,
-		embeddedtest.CloserSubject("in-memory", func() embedded.Closer {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.CloserOnClose("is idempotent", func(
-			tb testing.TB, subject embedded.Closer,
-		) {
-			tb.Helper()
-			testkit.NoError(tb, subject.Close(tb.Context()), "the first close succeeds")
-			testkit.NoError(tb, subject.Close(tb.Context()), "and so does the second")
-		}),
+	embeddedtest.RunCloser(t,
+		embeddedtest.CloserHarness[*embeddedtest.InMemory]{Name: "in-memory", New: embeddedtest.NewInMemory},
+		embeddedtest.CloserChecks{
+			{
+				Method: "Close",
+				Name:   "second-close-succeeds",
+				Claim:  "Close is idempotent",
+				Run: func(tb testing.TB, s embedded.Closer, fx embeddedtest.CloserFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Close(tb.Context()), "the first close succeeds")
+					testkit.NoError(tb, s.Close(tb.Context()), "and so does the second")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double for Closer.
-func TestCloserContractWithoutTheDouble(t *testing.T) {
+// The same, for Closer.
+func TestCloserContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	embeddedtest.AssertCloserContract(t,
-		embeddedtest.CloserSubject("in-memory", func() embedded.Closer {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.CloserWithout("Close/smoke"),
-		embeddedtest.CloserWithoutDouble(),
-	)
-}
-
-// Declining the double is separate from dropping a check, and a consumer who
-// does not use the double should not pay for a second pass over every check.
-func TestComposedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	embeddedtest.AssertComposedContract(t,
-		embeddedtest.ComposedSubject("seeded", func() embedded.Composed {
-			return embeddedtest.NewInMemory()
-		}),
-		embeddedtest.ComposedSeed(func(_ context.Context, subject embedded.Composed) error {
-			// The fixture declares no writer, so nothing is derived and the
-			// reader's hit path is unreachable without this. The key comes from
-			// the fixture rather than being written out, so the seed and the
-			// check cannot disagree about which identifier was stored.
-			subject.(*embeddedtest.InMemory).Put(embeddedtest.DefaultComposedFixture().Key, "seeded")
-			return nil
-		}),
-		embeddedtest.ComposedOnGet("returns what was seeded", func(
-			tb testing.TB, subject embedded.Composed, id string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), id)
-			testkit.NoError(tb, err, "a seeded identifier is found")
-			testkit.Equal(tb, got, "seeded", "and carries what was written")
-		}),
-		embeddedtest.ComposedWithoutDouble(),
+	embeddedtest.RunCloser(t,
+		embeddedtest.CloserHarness[*embeddedtest.InMemory]{Name: "in-memory", New: embeddedtest.NewInMemory},
+		embeddedtest.CloserSuite.Without(embeddedtest.CloserSuite.Checks.Close.Smoke()),
 	)
 }

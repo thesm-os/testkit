@@ -43,8 +43,8 @@ func TestFixtureCallPolicy(t *testing.T) {
 	t.Parallel()
 
 	testkit.TableTest(t, []fixtureCase{
-		{"the run's fixture, then the exported field", "fx", "entry", "fx.Entry"},
-		{"initialisms case the platform's way", "fx", "id", "fx.ID"},
+		{"the run's fixture, then the exported accessor", "fx", "entry", "fx.Entry()"},
+		{"initialisms case the platform's way", "fx", "id", "fx.ID()"},
 		{"an empty field degrades to the fixture itself", "fx", "", "fx"},
 	}, func(t *testing.T, tc fixtureCase) {
 		testkit.Equal(t, projection.FixtureCall(projection.Expr(tc.token), tc.field), tc.want,

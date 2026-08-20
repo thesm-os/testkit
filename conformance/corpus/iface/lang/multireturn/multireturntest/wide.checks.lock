@@ -1,0 +1,8 @@
+testkit-checks v2
+NoError/smoke	signature/smoke	NoError survives a call with a seeded id	
+Quad/cancel	signature/cancel	Quad reports a cancelled context as cancelled	
+Quad/deadline	signature/deadline	Quad reports an expired deadline as exceeded	
+Quad/nilcontext	signature/nilcontext	Quad returns an error rather than panicking on a nil context	
+Quad/smoke	signature/smoke	Quad survives a call with a seeded id	
+Quad/zero-on-error	signature/zero-on-error	Quad returns the zero string, int and bool alongside any error	
+Triple/smoke	signature/smoke	Triple survives a call with a seeded id	

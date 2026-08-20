@@ -90,6 +90,22 @@ func ProvenCheck[S any](id ID, class Class, claim string, run func(tb testing.TB
 	return Check[S]{ID: id, Class: class, Claim: claim, Falsifiable: Proven(), Run: run}
 }
 
+// ArguedCheck builds the same shape with the Argued stamp and the
+// argument for it.
+//
+// The companion to [ProvenCheck], and the reason both constructors carry
+// the stamp rather than taking it: the parity gate refuses a defect for a
+// check that does not claim Proven as firmly as it refuses the claim
+// without one. A generator that spells a check's body and not yet its
+// defect has to say so here, or the proofs file it writes beside this one
+// fails on the row it left out — which is the gate working, reported
+// against the wrong file.
+func ArguedCheck[S any](
+	id ID, class Class, claim, why string, run func(tb testing.TB, s S),
+) Check[S] {
+	return Check[S]{ID: id, Class: class, Claim: claim, Falsifiable: Argued(why), Run: run}
+}
+
 // Falsify lowers a row's falsifiability claim: a planted defect is the
 // claim and the evidence in one field, an argument is the honest record
 // that no defect can be constructed, and holding both is refused — a

@@ -1,0 +1,4 @@
+testkit-checks v2
+Add/smoke	signature/smoke	Add survives a call with seeded inputs	
+Divide/smoke	signature/smoke	Divide survives a call with seeded inputs	
+Reset/smoke	signature/smoke	Reset survives a call	

@@ -1,0 +1,20 @@
+{{/*
+The smoke family's defect: the named method panics.
+
+A panicking method is what the smoke check exists for, and the reason it
+is the weakest check that catches the most — a subject that dies on an
+ordinary value fails every other check too, but only this one reports the
+method that did it instead of a crashed run.
+
+The override's parameters are blanked because the body reads none of
+them, and its results are unnamed because it never reaches a return.
+*/}}
+{{- define "suite.defect.stub-panic" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .AnonReturns }} {
+				panic({{ printf "%q" .PanicMessage }})
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
+{{- end -}}

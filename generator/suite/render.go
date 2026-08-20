@@ -28,15 +28,32 @@ func renderFuncs() template.FuncMap {
 		"subjectType":       subjectType,
 		"withParam":         withParam,
 		"checksName":        projection.ChecksName,
+		"rowsName":          projection.RowsName,
+		"rowName":           projection.RowName,
+		"methodsVar":        projection.MethodsVar,
+		"defectTypeName":    projection.DefectTypeName,
+		"brokenName":        projection.BrokenName,
+		"suiteName":         projection.SuiteName,
+		"veneerVar":         projection.VeneerName,
 		"configName":        projection.ConfigName,
 		"defaultConfigName": projection.DefaultConfigName,
+		"newFixtureName":    projection.NewFixtureName,
+		"corpusName":        projection.CorpusName,
+		"invariantsName":    projection.InvariantsTestName,
+		"lockPath":          projection.LockPath,
+		"limitConst":        projection.LimitConst,
+		"missKeyName":       projection.MissKeyName,
+		"corpusTypeName":    projection.CorpusTypeName,
 		"fixtureIdent":      func() string { return string(projection.ExprFixture) },
+		"docsIdent":         func() string { return string(projection.ExprDocs) },
 		"runName":           projection.RunName,
 		"proveName":         projection.ProveName,
 		"runOptName":        projection.RunOptName,
 		"runConfigName":     projection.RunConfigName,
 		"dropOptName":       projection.DropOptName,
 		"withoutName":       projection.WithoutName,
+		"exportedWithout":   projection.ExportedWithoutName,
+		"exportedSuiteOf":   projection.ExportedSuiteName,
 		"veneerName":        projection.VeneerTypeName,
 		"indexPathName":     projection.IndexPathName,
 		"dropHintName":      projection.DropHintName,
@@ -59,6 +76,12 @@ type bodyView struct {
 	Recv  string
 	Check string
 
+	// Vocab is the package the engine primitives live in, carried so a
+	// body naming one registers the import through the canonical helper
+	// rather than spelling a qualifier some other section happened to
+	// have brought in.
+	Vocab string
+
 	// Discard drops a call's results where the body only asks whether
 	// the call returned: "_ =" for one result, "_, _ =" for two.
 	Discard string
@@ -73,6 +96,11 @@ type bodyView struct {
 	// spelling, and the difference between them is exactly the
 	// difference between the signatures.
 	ErrBind string
+
+	// Seeds says the emitted assert function takes the run's corpus,
+	// which the two seeded probes judge whole rather than drawing one
+	// member from.
+	Seeds bool
 
 	// Draws says the emitted assert function takes the run's fixture,
 	// which it does wherever the method has a drawable argument — the
@@ -120,20 +148,48 @@ type bodyView struct {
 	// the declaration names none, which is a different body.
 	Sentinel *sdk.Expr
 
-	// Zero says how this result's zero is compared, and ZeroType is the
-	// type a declared zero is declared of — a rendered reference for a
-	// named type, the bare word for a predeclared one. Both are read
-	// from the classification the claim is worded from.
-	Zero     ZeroShape
-	ZeroType *sdk.Expr
-	ZeroWord string
+	// Zeros is every value result a zero-judging body holds to its own
+	// zero, in declaration order.
+	//
+	// A list rather than one slot because the claim is about the whole
+	// answer: a read returning a value beside metadata that zeroes the
+	// first and leaks the second has told a caller the read failed and
+	// handed them state anyway, and a body judging the first slot
+	// renders identically to one judging both.
+	Zeros []zeroSlot
+
+	// ZeroBind binds every value slot plus the error, for a body that
+	// judges them all; ZeroBindNoErr is the same without the error, for
+	// a method that reports none.
+	ZeroBind      string
+	ZeroBindNoErr string
 
 	Body projection.Body
 }
 
-// ZeroIsNil lets the template branch on the classification without
-// knowing its numbering.
-func (v bodyView) ZeroIsNil() bool { return v.Zero == ZeroNil }
+// zeroSlot is one value result and how its zero is spelled.
+type zeroSlot struct {
+	// Bind is the identifier this slot binds to — "got" for the first,
+	// numbered past it, so a single-slot body reads as it always did.
+	// Zero is the local its declared zero binds to, numbered the same
+	// way so the two read as a pair.
+	Bind string
+	Zero string
+
+	// Nil says the slot compares against nil rather than a declared
+	// zero, which is comparability rather than spelling.
+	Nil bool
+
+	// Type is the reference a declared zero is declared of, Word the
+	// bare word for a predeclared one. At most one is set.
+	Type *sdk.Expr
+	Word string
+
+	// Label names this slot in a failure message where there is more
+	// than one, empty where the method answers a single value and the
+	// message has nothing to disambiguate.
+	Label string
+}
 
 // callExpr spells one invocation on the subject receiver, the args
 // already rendered by the derivation.
@@ -170,6 +226,49 @@ func ctxArmOf(recv, check, errBind string, call projection.CallPlan, primitive s
 	return ctxArm{
 		Recv: recv, Check: check, ErrBind: errBind,
 		Call: call, Primitive: primitive, Vocab: Vocab,
+	}
+}
+
+// zeroJudge is the zero-comparison fragment's context: how the result's
+// zero is spelled, what the body was asking about, and whether it has an
+// error to print.
+//
+// The last two are the whole reason this type exists. The fragment used
+// to read [bodyView.HasErr] — does the METHOD return an error — when the
+// question is what THIS body caught. They come apart in both directions:
+// a zero-on-error body has definitely caught one, and a miss body on a
+// method that reports errors has an err in scope it cannot claim
+// anything about, since a miss reporting a failure is exactly what the
+// check permits.
+type zeroJudge struct {
+	Method string
+
+	// Slots is every value result under judgement, in declaration
+	// order.
+	Slots []zeroSlot
+
+	// Erred says an error is what put the values under judgement, which
+	// is what the message names. False words the miss instead.
+	Erred bool
+
+	// ShowErr says an err is bound and worth printing beside the
+	// mismatch. Separate from Erred: a miss on an erroring method binds
+	// one without the error being the claim.
+	ShowErr bool
+}
+
+// ZeroJudge pairs this body's zero shape with what it caught.
+//
+// A method rather than a template function because the dot inside a
+// body is the emit node, which embeds this view — so promotion hands
+// every body the same call without the funcmap carrying an entry that
+// would have to be told which of the two shapes it was given.
+func (v bodyView) ZeroJudge(erred, showErr bool) zeroJudge {
+	return zeroJudge{
+		Method:  v.Method,
+		Slots:   v.Zeros,
+		Erred:   erred,
+		ShowErr: showErr,
 	}
 }
 

@@ -1,0 +1,17 @@
+testkit-checks v2
+List/cancel	signature/cancel	List reports a cancelled context as cancelled	
+List/deadline	signature/deadline	List reports an expired deadline as exceeded	
+List/nilcontext	signature/nilcontext	List returns an error rather than panicking on a nil context	
+List/smoke	signature/smoke	List survives a call	
+List/zero-on-error	signature/zero-on-error	List returns nothing alongside any error	
+Put/cancel	signature/cancel	Put reports a cancelled context as cancelled	
+Put/deadline	signature/deadline	Put reports an expired deadline as exceeded	
+Put/idempotent	mixin/idempotent	a second Put after a clean one changes nothing	
+Put/nilcontext	signature/nilcontext	Put returns an error rather than panicking on a nil context	
+Put/smoke	signature/smoke	Put survives a call with derived inputs	
+Read/cancel	signature/cancel	Read reports a cancelled context as cancelled	
+Read/deadline	signature/deadline	Read reports an expired deadline as exceeded	
+Read/miss	mixin/reader	Read reports zero for a key nothing has written	
+Read/nilcontext	signature/nilcontext	Read returns an error rather than panicking on a nil context	
+Read/smoke	signature/smoke	Read survives a call with a derived key	
+Read/zero-on-error	signature/zero-on-error	Read returns zero alongside any error	

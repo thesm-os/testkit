@@ -1,0 +1,13 @@
+testkit-checks v2
+Append/cancel	signature/cancel	Append reports a cancelled context as cancelled	
+Append/deadline	signature/deadline	Append reports an expired deadline as exceeded	
+Append/nilcontext	signature/nilcontext	Append returns an error rather than panicking on a nil context	
+Append/smoke	signature/smoke	Append survives a call with a derived entry	
+Replay/cancel	signature/cancel	Replay reports a cancelled context as cancelled	
+Replay/deadline	signature/deadline	Replay reports an expired deadline as exceeded	
+Replay/nilcontext	signature/nilcontext	Replay returns an error rather than panicking on a nil context	
+Replay/smoke	signature/smoke	Replay survives a call	
+Replay/zero-on-error	signature/zero-on-error	Replay returns nothing alongside any error	
+Verify/cancel	signature/cancel	Verify reports a cancelled context as cancelled	
+Verify/nilcontext	signature/nilcontext	Verify returns an error rather than panicking on a nil context	
+Verify/smoke	signature/smoke	Verify survives a call	

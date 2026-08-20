@@ -11,32 +11,37 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/wrappedvia/wrappedviatest"
 )
 
-// wrappedvia is the suite tier's and names its partner through `fn=Cause`, and
-// its check is still not generated — for a reason the subject makes plain.
+// wrappedvia names its partner through `fn=Cause`, and its check is still not
+// generated — for a reason the subject makes plain, and which the header now
+// records as a refusal.
 //
 // The claim is that what Open returns unwraps to what Cause reports. Reaching
 // it needs an input Open *fails* for, and nothing states which input that is:
 // the fixture's alternate is "a value that should not be found", which is a
-// different claim from "a value this method refuses". That is the same gap
-// `errors` has, and the same one `partition` needed an axis to close.
+// different claim from "a value this method refuses".
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	wrappedviatest.AssertMixedContract(t,
-		wrappedviatest.MixedModel(),
-		wrappedviatest.MixedSubject("in-memory", func() wrappedvia.Mixed {
-			return wrappedviatest.NewInMemory()
-		}),
-		wrappedviatest.MixedOnOpen("wraps the cause it reports", func(
-			tb testing.TB, subject wrappedvia.Mixed, name string,
-		) {
-			tb.Helper()
-			err := subject.Open(tb.Context(), wrappedviatest.FailingName())
-			testkit.ErrorIs(tb, err, wrappedviatest.ErrUnderlying,
-				"what Open returns unwraps to the cause")
-			testkit.ErrorIs(tb, subject.Cause(tb.Context()), wrappedviatest.ErrUnderlying,
-				"and Cause reports the same one")
-		}),
+	wrappedviatest.RunMixed(t,
+		wrappedviatest.MixedHarness[*wrappedviatest.InMemory]{Name: "in-memory", New: wrappedviatest.NewInMemory},
+		wrappedviatest.MixedChecks{
+			{
+				Method: "Open",
+				Name:   "wraps-the-cause",
+				Claim:  "Open wraps the cause it reports",
+				Run: func(tb testing.TB, s wrappedvia.Mixed, fx wrappedviatest.MixedFixture) {
+					tb.Helper()
+					// The failing name is the subject's, not the fixture's:
+					// which input a method refuses is exactly what no
+					// signature says.
+					err := s.Open(tb.Context(), wrappedviatest.FailingName())
+					testkit.ErrorIs(tb, err, wrappedviatest.ErrUnderlying,
+						"what Open returns unwraps to the cause")
+					testkit.ErrorIs(tb, s.Cause(tb.Context()), wrappedviatest.ErrUnderlying,
+						"and Cause reports the same one")
+				},
+			},
+		},
 	)
 }
 
@@ -55,15 +60,14 @@ func TestOpenWrapsRatherThanReplacing(t *testing.T) {
 		"and it names what was being opened")
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	wrappedviatest.AssertMixedContract(t,
-		wrappedviatest.MixedSubject("in-memory", func() wrappedvia.Mixed {
-			return wrappedviatest.NewInMemory()
-		}),
-		wrappedviatest.MixedWithout("Open/smoke"),
-		wrappedviatest.MixedWithoutDouble(),
+	wrappedviatest.RunMixed(t,
+		wrappedviatest.MixedHarness[*wrappedviatest.InMemory]{Name: "in-memory", New: wrappedviatest.NewInMemory},
+		wrappedviatest.MixedSuite.Without(wrappedviatest.MixedSuite.Checks.Open.Smoke()),
 	)
 }

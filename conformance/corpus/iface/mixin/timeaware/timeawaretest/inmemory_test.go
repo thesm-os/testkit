@@ -12,41 +12,35 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// timeaware has no suite-side rule yet — the header says so — so what the
+// classification means for this pair is the row's.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	timeawaretest.AssertMixedContract(t,
-		timeawaretest.MixedModel(),
-		timeawaretest.MixedSubject("in-memory", func() timeaware.Mixed {
-			return timeawaretest.NewInMemory()
-		}),
-		timeawaretest.MixedOnAgeOf("answers from the clock rather than the wall", func(
-			tb testing.TB, subject timeaware.Mixed, key string,
-		) {
-			tb.Helper()
-			// The suite seeds through Touch, so the key is recorded. On a
-			// clock nothing advanced, the age is zero — and reading it twice
-			// gives the same answer, which a wall-clock subject could not
-			// promise.
-			first, err := subject.AgeOf(tb.Context(), key)
-			testkit.NoError(tb, err, "the touched key has an age")
-			testkit.Equal(tb, first, int64(0), "no time has passed on this clock")
+	timeawaretest.RunMixed(t,
+		timeawaretest.MixedHarness[*timeawaretest.InMemory]{Name: "in-memory", New: timeawaretest.NewInMemory},
+		timeawaretest.MixedChecks{
+			{
+				Method: "AgeOf",
+				Name:   "answers-from-the-clock",
+				Claim:  "AgeOf answers from the clock rather than the wall",
+				Run: func(tb testing.TB, s timeaware.Mixed, fx timeawaretest.MixedFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Touch(tb.Context(), fx.Key()), "the key is recorded")
 
-			again, err := subject.AgeOf(tb.Context(), key)
-			testkit.NoError(tb, err, "and it is still readable")
-			testkit.Equal(tb, again, first, "a clock nobody advanced does not move")
-		}),
-	)
-}
+					// On a clock nothing advanced the age is zero — and reading
+					// it twice gives the same answer, which a wall-clock subject
+					// could not promise.
+					first, err := s.AgeOf(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "the touched key has an age")
+					testkit.Equal(tb, first, int64(0), "no time has passed on this clock")
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	timeawaretest.AssertMixedContract(t,
-		timeawaretest.MixedSubject("in-memory", func() timeaware.Mixed {
-			return timeawaretest.NewInMemory()
-		}),
-		timeawaretest.MixedWithoutDouble(),
+					again, err := s.AgeOf(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "and it is still readable")
+					testkit.Equal(tb, again, first, "a clock nobody advanced does not move")
+				},
+			},
+		},
 	)
 }

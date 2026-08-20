@@ -12,44 +12,31 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// Apply and Total are separate methods and nothing in either signature pairs
+// them, so that a fold shows up in the total is the row's claim to make.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	commutativetest.AssertMixedContract(t,
-		commutativetest.MixedModel(),
-		commutativetest.MixedSubject("in-memory", func() commutative.Mixed {
-			return commutativetest.NewInMemory()
-		}),
-		commutativetest.MixedOnTotal("reports what Apply folded in", func(
-			tb testing.TB, subject commutative.Mixed,
-		) {
-			tb.Helper()
-			// The suite seeds through Apply, so the fold is non-empty here —
-			// a total of zero would be a fold that dropped its input.
-			got, err := subject.Total(tb.Context())
-			testkit.NoError(tb, err, "the total is readable")
-			testkit.NotEqual(tb, got, 0, "and reflects the seeded delta")
-		}),
+	commutativetest.RunMixed(t,
+		commutativetest.MixedHarness[*commutativetest.InMemory]{Name: "in-memory", New: commutativetest.NewInMemory},
+		commutativetest.MixedChecks{
+			{
+				Method: "Total",
+				Name:   "reflects-what-apply-folded",
+				Claim:  "Total reports what Apply folded in",
+				Run: func(tb testing.TB, s commutative.Mixed, fx commutativetest.MixedFixture) {
+					tb.Helper()
+					// The row applies the delta itself: nothing seeds a subject
+					// now but its own constructor, and a total of zero against
+					// an untouched fold would state nothing.
+					testkit.NoError(tb, s.Apply(tb.Context(), fx.Delta()), "the delta is folded in")
+
+					got, err := s.Total(tb.Context())
+					testkit.NoError(tb, err, "the total is readable")
+					testkit.NotEqual(tb, got, 0, "and reflects the applied delta")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	commutativetest.AssertMixedContract(t,
-		commutativetest.MixedSubject("in-memory", func() commutative.Mixed {
-			return commutativetest.NewInMemory()
-		}),
-		commutativetest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	commutativetest.MixedModelSaturation(t, func() commutative.Mixed {
-		return commutativetest.NewInMemory()
-	})
 }

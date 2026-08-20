@@ -1,0 +1,11 @@
+testkit-checks v2
+Fetch/cancel	signature/cancel	Fetch reports a cancelled context as cancelled	
+Fetch/deadline	signature/deadline	Fetch reports an expired deadline as exceeded	
+Fetch/nilcontext	signature/nilcontext	Fetch returns an error rather than panicking on a nil context	
+Fetch/smoke	signature/smoke	Fetch survives a call with a seeded key	
+Fetch/zero-on-error	signature/zero-on-error	Fetch returns the zero Value alongside any error	
+Lookup/cancel	signature/cancel	Lookup reports a cancelled context as cancelled	
+Lookup/deadline	signature/deadline	Lookup reports an expired deadline as exceeded	
+Lookup/nilcontext	signature/nilcontext	Lookup returns an error rather than panicking on a nil context	
+Lookup/smoke	signature/smoke	Lookup survives a call with a seeded key	
+Lookup/zero-on-error	signature/zero-on-error	Lookup returns the zero Value alongside any error	

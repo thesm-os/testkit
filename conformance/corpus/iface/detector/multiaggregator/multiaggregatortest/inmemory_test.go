@@ -4,7 +4,6 @@
 package multiaggregatortest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -22,43 +21,44 @@ import (
 func TestMultiAggregatorContract(t *testing.T) {
 	t.Parallel()
 
-	multiaggregatortest.AssertMultiAggregatorContract(t,
-		multiaggregatortest.MultiAggregatorModel(),
-		multiaggregatortest.MultiAggregatorSubject("in-memory",
-			func() multiaggregator.MultiAggregator {
-				return multiaggregatortest.NewInMemory()
-			}),
-		multiaggregatortest.MultiAggregatorSeed(
-			func(_ context.Context, subject multiaggregator.MultiAggregator) error {
-				// A seed may reach for the concrete subject: it runs before the
-				// double wraps it and sees what the factory made. A check may
-				// not.
-				subject.(*multiaggregatortest.InMemory).Add(4)
-				return nil
+	multiaggregatortest.RunMultiAggregator(t,
+		multiaggregatortest.MultiAggregatorHarness[*multiaggregatortest.InMemory]{
+			Name: "in-memory",
+			New: func() *multiaggregatortest.InMemory {
+				s := multiaggregatortest.NewInMemory()
+				s.Add(4)
+				return s
 			},
-		),
-		multiaggregatortest.MultiAggregatorOnStats("reduces the collection to both numbers", func(
-			tb testing.TB, subject multiaggregator.MultiAggregator,
-		) {
-			tb.Helper()
-			count, sum, err := subject.Stats(tb.Context())
-			testkit.NoError(tb, err, "reducing a healthy collection succeeds")
-			testkit.Equal(tb, count, 1, "the count reports what the seed put there")
-			testkit.Equal(tb, sum, 4, "and the sum agrees with it")
-		}),
+		},
+		multiaggregatortest.MultiAggregatorChecks{
+			{
+				Method: "Stats",
+				Name:   "reduces-to-both-numbers",
+				Claim:  "Stats reduces the collection to both numbers",
+				Run: func(tb testing.TB, s multiaggregator.MultiAggregator, fx multiaggregatortest.MultiAggregatorFixture) {
+					tb.Helper()
+					count, sum, err := s.Stats(tb.Context())
+					testkit.NoError(tb, err, "reducing a healthy collection succeeds")
+					testkit.Equal(tb, count, 1, "the count reports what the constructor put there")
+					testkit.Equal(tb, sum, 4, "and the sum agrees with it")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMultiAggregatorContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMultiAggregatorContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	multiaggregatortest.AssertMultiAggregatorContract(t,
-		multiaggregatortest.MultiAggregatorSubject("in-memory",
-			func() multiaggregator.MultiAggregator {
-				return multiaggregatortest.NewInMemory()
-			}),
-		multiaggregatortest.MultiAggregatorWithout("Stats/smoke"),
-		multiaggregatortest.MultiAggregatorWithoutDouble(),
+	multiaggregatortest.RunMultiAggregator(
+		t,
+		multiaggregatortest.MultiAggregatorHarness[*multiaggregatortest.InMemory]{
+			Name: "in-memory",
+			New:  multiaggregatortest.NewInMemory,
+		},
+		multiaggregatortest.MultiAggregatorSuite.Without(multiaggregatortest.MultiAggregatorSuite.Checks.Stats.Smoke()),
 	)
 }

@@ -12,66 +12,47 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// The subject's stated order is key-ascending, which is the one fact no
+// derivation invents — so the row states it.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	stableordertest.AssertMixedContract(t,
-		stableordertest.MixedSubject("in-memory", func() stableorder.Mixed {
-			return stableordertest.NewInMemory()
-		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		stableordertest.MixedModel(
-			// The subject's stated order is key-ascending; the Less that
-			// arms the stable-order law is the same fact, supplied — the
-			// one field here no derivation could invent.
-			stableordertest.MixedModelLess(func(a, b stableorder.Value) bool {
-				return a.Key < b.Key
-			}),
-		),
-		stableordertest.MixedOnItems("yields what Add put in, once each", func(
-			tb testing.TB, subject stableorder.Mixed,
-		) {
-			tb.Helper()
-			// The suite seeds through Add, so one element is already present.
-			// Adding the same key again is what makes the claim testable: a
-			// drain that yielded it twice would be reporting its input rather
-			// than its contents.
-			// A second element, deliberately out of key order: with one
-			// element the drain's ordering is unobservable, and a subject
-			// that returned map order would pass.
-			testkit.NoError(tb, subject.Add(tb.Context(), stableorder.Value{Key: "zz", Body: "last"}),
-				"a second element is accepted")
-			testkit.NoError(tb, subject.Add(tb.Context(), stableorder.Value{Key: "aa", Body: "first"}),
-				"and a third that sorts ahead of it")
+	stableordertest.RunMixed(t,
+		stableordertest.MixedHarness[*stableordertest.InMemory]{Name: "in-memory", New: stableordertest.NewInMemory},
+		stableordertest.MixedChecks{
+			{
+				Method: "Items",
+				Name:   "drains-in-key-order",
+				Claim:  "Items yields what Add put in, in key order",
+				Run: func(tb testing.TB, s stableorder.Mixed, fx stableordertest.MixedFixture) {
+					tb.Helper()
+					// Deliberately out of key order: with one element the
+					// drain's ordering is unobservable, and a subject that
+					// returned map order would pass.
+					testkit.NoError(tb, s.Add(tb.Context(), stableorder.Value{Key: "zz", Body: "last"}),
+						"an element is accepted")
+					testkit.NoError(tb, s.Add(tb.Context(), stableorder.Value{Key: "aa", Body: "first"}),
+						"and a second that sorts ahead of it")
 
-			got, err := subject.Items(tb.Context())
-			testkit.NoError(tb, err, "the drain succeeds")
-			testkit.Equal(tb, len(got), 3, "each append is one element")
-			testkit.Equal(tb, got[0].Key, "aa", "and the drain is ordered rather than arbitrary")
-		}),
+					got, err := s.Items(tb.Context())
+					testkit.NoError(tb, err, "the drain succeeds")
+					testkit.Equal(tb, len(got), 2, "each append is one element")
+					testkit.Equal(tb, got[0].Key, "aa", "and the drain is ordered rather than arbitrary")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	stableordertest.AssertMixedContract(t,
-		stableordertest.MixedSubject("in-memory", func() stableorder.Mixed {
-			return stableordertest.NewInMemory()
-		}),
-		stableordertest.MixedWithoutDouble(),
+	stableordertest.RunMixed(t,
+		stableordertest.MixedHarness[*stableordertest.InMemory]{Name: "in-memory", New: stableordertest.NewInMemory},
+		stableordertest.MixedSuite.Without(stableordertest.MixedSuite.Checks.Add.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same order door armed that arms the tier.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	stableordertest.MixedModelSaturation(t, func() stableorder.Mixed {
-		return stableordertest.NewInMemory()
-	}, stableordertest.MixedModelLess(func(a, b stableorder.Value) bool {
-		return a.Key < b.Key
-	}))
 }

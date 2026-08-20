@@ -34,92 +34,21 @@ func bodyTemplates() (*template.Template, error) {
 	return t, nil
 }
 
-// renderBody executes one body variant's template — the dispatch is
-// the variant's own kind, which IS the template's name, so an
-// unregistered variant fails by name rather than rendering nothing.
-func renderBody(v bodyView) (string, error) {
-	t, err := bodyTemplates()
-	if err != nil {
-		return "", err
-	}
-	var b strings.Builder
-	if err := t.ExecuteTemplate(&b, string(v.Body.BodyKind()), v); err != nil {
-		return "", fmt.Errorf("suite: render %s: %w", v.Body.BodyKind(), err)
-	}
-	return b.String(), nil
-}
-
-// renderCase is one body variant and the text its template emits.
-type renderCase struct {
-	name string
-	view bodyView
-	want string
-}
-
-func (c renderCase) Name() string { return c.name }
-
-func TestSmokeBodiesRenderTheirArms(t *testing.T) {
-	t.Parallel()
-
-	testkit.TableTest(t, []renderCase{
-		{
-			"the plain arm calls and discards by arity",
-			bodyView{
-				Recv: "l", Check: "logAppend", Discard: "_ =",
-				Body: projection.SmokeSurvives{Call: projection.CallPlan{
-					Method: "Append",
-					Args:   []projection.Expr{projection.ExprCtx, "logEntry()"},
-				}},
-			},
-			"suite.Survives(tb, logAppend, func(ctx context.Context) {\n" +
-				"\t_ = l.Append(ctx, logEntry())\n" +
-				"})",
-		},
-		{
-			"the opener arm closes what it opens",
-			bodyView{
-				Recv: "l", Check: "logScan", Discard: "_, _ =",
-				Body: projection.SmokeSurvives{
-					Call:          projection.CallPlan{Method: "Scan", Args: []projection.Expr{projection.ExprCtx}},
-					CloseProduced: "Close",
-				},
-			},
-			"suite.Survives(tb, logScan, func(ctx context.Context) {\n" +
-				"\tproduced, err := l.Scan(ctx)\n" +
-				"\tif err != nil {\n" +
-				"\t\treturn\n" +
-				"\t}\n" +
-				"\t_ = produced.Close(ctx)\n" +
-				"})",
-		},
-		{
-			"the borrow arm borrows first and guards the failed borrow",
-			bodyView{
-				Recv: "p", Check: "poolPut", Discard: "_ =",
-				Body: projection.SmokeSurvives{
-					Call: projection.CallPlan{
-						Method: "Put",
-						Args:   []projection.Expr{projection.ExprCtx, projection.ExprBorrowed},
-					},
-					Borrow: projection.CallPlan{Method: "Get", Args: []projection.Expr{projection.ExprCtx}},
-				},
-			},
-			"suite.Survives(tb, poolPut, func(ctx context.Context) {\n" +
-				"\tborrowed, err := p.Get(ctx)\n" +
-				"\tif err != nil {\n" +
-				"\t\t// Nothing borrowed, nothing to return; the producer's own\n" +
-				"\t\t// smoke judges this path.\n" +
-				"\t\treturn\n" +
-				"\t}\n" +
-				"\t_ = p.Put(ctx, borrowed)\n" +
-				"})",
-		},
-	}, func(t *testing.T, tc renderCase) {
-		got, err := renderBody(tc.view)
-		testkit.NoError(t, err, "a registered variant renders")
-		testkit.Equal(t, got, tc.want, "the emitted body, byte for byte")
-	})
-}
+// The three smoke arms are pinned by the pipeline golden, not here.
+//
+// Each reaches the backend for its primitive and its context type — an
+// emitted reference registers its import through renderExpr, and this
+// harness cannot run one. Reimplementing them would pin bytes against a
+// second import machinery rather than against the one that ships, which
+// is the failure the placeholder below exists to make loud rather than
+// plausible.
+//
+// What moved: TestGeneratedHarnessBuildsAndItsProofsRun renders the
+// bodies through the real backend, compiles them, and runs them. It is
+// a stronger assertion than a byte comparison and a weaker one about
+// SHAPE, which is the trade — the arms a corpus fixture does not
+// exercise are covered by the corpus, and the corpus gate reads every
+// one of them.
 
 func TestBodyTemplateCensus(t *testing.T) {
 	t.Parallel()

@@ -15,51 +15,33 @@ import (
 func TestRankedContract(t *testing.T) {
 	t.Parallel()
 
-	indexedtest.AssertRankedContract(t,
-		indexedtest.RankedModel(),
-		indexedtest.RankedSubject("in-memory", func() indexed.Ranked {
-			return indexedtest.NewInMemory()
-		}),
-		indexedtest.RankedOnAt("misses a position the collection does not hold", func(
-			tb testing.TB, subject indexed.Ranked, _ int,
-		) {
-			tb.Helper()
-			// The claim the mixin exists to make checkable: a position is
-			// only meaningful against the size Len reports. Until the
-			// derivation draws inside that size, this is the check that
-			// states it — by hand, on the one subject that can.
-			n, err := subject.Len(tb.Context())
-			testkit.NoError(tb, err, "the size is readable")
+	indexedtest.RunRanked(t,
+		indexedtest.RankedHarness[*indexedtest.InMemory]{Name: "in-memory", New: indexedtest.NewInMemory},
+		indexedtest.RankedChecks{
+			{
+				Method: "At",
+				Name:   "one-past-the-end-is-not-a-position",
+				Claim:  "At misses a position the collection does not hold",
+				Run: func(tb testing.TB, s indexed.Ranked, fx indexedtest.RankedFixture) {
+					tb.Helper()
+					// The claim the mixin exists to make checkable: a position
+					// is only meaningful against the size Len reports. The row
+					// adds first, so the boundary it walks to has an element
+					// on the inside of it as well as the outside.
+					testkit.NoError(tb, s.Add(tb.Context(), fx.Value()), "an element is added")
 
-			_, err = subject.At(tb.Context(), n)
-			testkit.ErrorIs(tb, err, indexedtest.ErrOutOfRange,
-				"one past the last element is not a position")
+					n, err := s.Len(tb.Context())
+					testkit.NoError(tb, err, "the size is readable")
+					testkit.Equal(tb, n, 1, "and counts what was added")
 
-			if n > 0 {
-				_, err = subject.At(tb.Context(), n-1)
-				testkit.NoError(tb, err, "the last element is")
-			}
-		}),
+					_, err = s.At(tb.Context(), n)
+					testkit.ErrorIs(tb, err, indexedtest.ErrOutOfRange,
+						"one past the last element is not a position")
+
+					_, err = s.At(tb.Context(), n-1)
+					testkit.NoError(tb, err, "the last element is")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestRankedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	indexedtest.AssertRankedContract(t,
-		indexedtest.RankedSubject("in-memory", func() indexed.Ranked {
-			return indexedtest.NewInMemory()
-		}),
-		indexedtest.RankedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestRankedSaturation(t *testing.T) {
-	t.Parallel()
-	indexedtest.RankedModelSaturation(t, func() indexed.Ranked {
-		return indexedtest.NewInMemory()
-	})
 }

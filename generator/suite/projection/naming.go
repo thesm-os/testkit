@@ -4,6 +4,8 @@
 package projection
 
 import (
+	"strings"
+
 	"go.thesmos.sh/eidos/core/naming"
 	"go.thesmos.sh/eidos/lang/golang"
 
@@ -34,9 +36,11 @@ const ExprProduced Expr = "produced"
 // functions below so each generated identifier's spelling has one
 // home.
 const (
-	harnessSuffix = "Harness"
-	veneerSuffix  = "Suite"
-	configSuffix  = "Config"
+	harnessSuffix         = "Harness"
+	withoutSuffixExported = "Without"
+	suiteOfSuffix         = "SuiteOf"
+	veneerSuffix          = "Suite"
+	configSuffix          = "Config"
 )
 
 // HarnessName is the generated harness type's identifier — the config
@@ -69,6 +73,19 @@ type Option string
 // plugin emits: With<Iface><Method>.
 func OptionName(iface, method string) Option {
 	return Option("With" + iface + method)
+}
+
+// StubCtorName spells the double's constructor — `NewCalculatorStub`.
+//
+// The suffix is a parameter, and that is the whole difference from
+// [OptionName] above: `With<Iface><Method>` is composed from the
+// interface whatever the double is called, while the constructor is
+// named after the type, and what the type is called follows the stub
+// plugin's `suffix` option. Taking it keeps this data model from
+// importing a plugin to read a default out of it — the caller has the
+// plugin in scope and this does not.
+func StubCtorName(iface, suffix string) string {
+	return golang.ConstructorName(iface + suffix)
 }
 
 // AssertName is the generated assertion's identifier —
@@ -132,6 +149,22 @@ func DrawWord(p golang.Param) string {
 // DrawField is [DrawWord] as the fixture's exported field.
 func DrawField(p golang.Param) string { return golang.ExportedName(DrawWord(p)) }
 
+// MissKeyCall is the emitted call for the key outside the corpus.
+func MissKeyCall(token string) Expr { return Expr(MissKeyName(token) + "()") }
+
+// ExprSeededKey is the loop variable a hit probe calls with.
+//
+// The ranged key rather than a fixture draw, which is the difference
+// between judging the whole corpus and judging one entry of it: a hit
+// body drawing fx.Key() asks the same question len(docs) times and
+// passes for a subject that remembers only what it was handed first.
+const ExprSeededKey Expr = "k"
+
+// ExprDocs is the local a seeded body reads the run's corpus through.
+// The hit and count probes judge the WHOLE set rather than one drawn
+// member, so they take it beside the fixture rather than through it.
+const ExprDocs Expr = "docs"
+
 // ExprFixture is the local a body reads its draws through. The
 // generated assert function takes the fixture by this name wherever any
 // of its calls draws, and never where none does.
@@ -141,17 +174,18 @@ const ExprFixture Expr = "fx"
 // for ("fx", "value").
 //
 // Through the fixture rather than a package-level accessor, because the
-// value has to be the RUN's: a consumer replacing the fixture through
-// WithFixture must reach every check that draws, and a package function
-// returning a literal reaches none of them. The packs spell this
-// `fx.Key()` with parens because their accessors compute from the
-// config's pools; ours are fields until those pools are emitted, and
-// the parens arrive with them.
+// value has to be the RUN's: a package function returning a literal
+// reaches no check that draws.
+//
+// A call rather than a field read, which is the packs' spelling and the
+// one that survives the value's source changing: a fixture backed by a
+// literal today and by a draw from the run's pools tomorrow reads the
+// same at every site, and there are hundreds of them.
 func FixtureCall(recv Expr, field string) Expr {
 	if field == "" {
 		return recv
 	}
-	return recv + "." + Expr(golang.ExportedName(field))
+	return recv + "." + Expr(golang.ExportedName(field)) + "()"
 }
 
 // Token is the interface's qualifier in every generated identifier —
@@ -227,6 +261,20 @@ func DropOptName(token string) string { return token + dropOptSuffix }
 // WithoutName is the constructor a consumer calls to decline them.
 func WithoutName(token string) string { return token + withoutSuffix }
 
+// ExportedWithoutName is the same constructor under an exported name,
+// for a generic subject.
+//
+// The veneer carries Without for a concrete interface and cannot for a
+// generic one: a method introduces no type parameters, and there is no
+// one instantiation to fix them at. Every _test.go is an external test
+// package, so leaving the drop unexported leaves a generic consumer no
+// way to decline a check at all.
+func ExportedWithoutName(iface string) string { return iface + withoutSuffixExported }
+
+// ExportedSuiteName is the assembler under an exported name, for the
+// same reason [ExportedWithoutName] exists.
+func ExportedSuiteName(iface string) string { return iface + suiteOfSuffix }
+
 // VeneerTypeName is the veneer's type; [VeneerName] is the value a
 // consumer reads it through.
 func VeneerTypeName(token string) string { return token + veneerTypeSuffix }
@@ -236,6 +284,146 @@ func IndexPathName(token string) string { return token + indexPathSuffix }
 
 // DropHintName is the reporter that turns a dropped ID into that path.
 func DropHintName(token string) string { return token + dropHintSuffix }
+
+// SuiteName is the assembler that returns the checks as data —
+// `calculatorSuite`.
+//
+// Unexported, with [VeneerName]'s Suite method as the way in. A caller
+// outside the package composing suites is doing tooling, and tooling
+// reaches one name rather than one per interface. The same word as
+// [VeneerName], because they are the same noun read through the two
+// qualifiers — which is why it is not spelled twice.
+func SuiteName(token string) string { return token + veneerSuffix }
+
+// RowsName is the consumer's own check table — `StoreChecks`.
+func RowsName(iface string) string { return iface + checksSuffix }
+
+// RowName is one row of that table — `StoreCheck`.
+//
+// The same trailing word as a per-method extension point and not the
+// same type: that one is per method, this one is per interface, which
+// is the difference between "an assertion about Get" and "a row you
+// write".
+func RowName(iface string) string { return iface + checkSuffix }
+
+// MethodsVar is the method-name set a row's Method field is checked
+// against — `storeMethods`.
+//
+// Emitted because a misspelled method name starts with a capital too,
+// so the ID grammar alone would file a check under a method that does
+// not exist and report it under a path nothing drops.
+func MethodsVar(token string) string { return token + methodsSuffix }
+
+// DefectTypeName is what a row's planted defect must satisfy —
+// `StoreDefect`.
+func DefectTypeName(iface string) string { return iface + defectSuffix }
+
+// BrokenName is the sugar that names one — `BrokenStore`.
+func BrokenName(iface string) string { return brokenPrefix + iface }
+
+// The consumer seam's fixed words.
+const (
+	checkSuffix   = "Check"
+	methodsSuffix = "Methods"
+	defectSuffix  = "Defect"
+	brokenPrefix  = "Broken"
+)
+
+// NewFixtureName is the constructor that draws a fixture from a config.
+func NewFixtureName(token string) string { return token + newFixtureSuffix }
+
+// LimitConst is the constant a declared bound is emitted under —
+// `mixedCapacity`.
+//
+// A constant rather than the literal at each use, because the number
+// reaches three places: the harness constructors receive it, the bounded
+// law enforces it, and a consumer's own policy check needs the same one.
+// Three homes for one declared number is three chances to drift.
+func LimitConst(token string) string { return token + limitSuffix }
+
+const limitSuffix = "Capacity"
+
+// InvariantsTestName is the generated package's self-check.
+//
+// Per interface rather than per package, which is where the validated
+// packs put it. Our emission is per interface — a package holding three
+// suites queues three of these — and one shared function would need a
+// coordination point no emit has. Named for its subject, so three
+// suites give three tests rather than a redeclaration.
+func InvariantsTestName(iface string) string {
+	return golang.TestFuncName(iface, invariantsSuffix)
+}
+
+// LockPath is the manifest this interface's rows are pinned in.
+//
+// Per interface for the reason above. The packs write one checks.lock
+// per package, which reads better in review; that arrives when something
+// owns the package rather than the declaration.
+func LockPath(token string) string { return token + ".checks.lock" }
+
+const invariantsSuffix = "Invariants"
+
+// CorpusName is the seeded corpus builder — `catalogCorpus`.
+func CorpusName(token string) string { return token + corpusSuffix }
+
+// CorpusTypeName is the seeded corpus's own type — `CatalogCorpus`.
+//
+// A named alias rather than the map spelled at each use: both halves
+// render through the backend, and a template composing `map[` around two
+// renderType calls would spell the type once per appearance — five
+// times, in the harness fields, the Subject parameter and the builder.
+func CorpusTypeName(iface string) string { return iface + corpusSuffix }
+
+// MissKeyName is the key outside it — `catalogMissKey`.
+func MissKeyName(token string) string { return token + missKeySuffix }
+
+const (
+	newFixtureSuffix = "NewFixture"
+	corpusSuffix     = "Corpus"
+	missKeySuffix    = "MissKey"
+)
+
+// ProofsName is the companion's defect map — `calculatorProofs`.
+func ProofsName(token string) string { return token + proofsSuffix }
+
+// ProofsTestName is the test the companion runs the proofs from.
+//
+// Through [golang.TestFuncName] rather than composed here: what a Go
+// test function is called is a Go convention, and eidos states it once.
+func ProofsTestName(iface string) string {
+	return golang.TestFuncName(iface, proofsSuffix)
+}
+
+// DefectName words a planted defect for the report — "a Calculator whose
+// Add panics", the subject line [prove.One] takes.
+//
+// Composed here rather than in the templates because each defect
+// template spells its own clause and they must all read as one sentence;
+// the clause is the parameter, the sentence is the rule.
+//
+// The article follows the interface's first letter, which is a spelling
+// rule and not a heuristic worth apologising for: these strings are read
+// in failure output beside real ones, and "a AnsweringWriter" is the kind
+// of wrongness that makes a reader distrust the rest of the line.
+func DefectName(iface, clause string) string {
+	return article(iface) + " " + iface + " whose " + clause
+}
+
+// article picks "a" or "an" from the leading sound, approximated by the
+// leading letter.
+//
+// Vowel letters only. The exceptions English has — a European, an hour —
+// turn on pronunciation, which no rule over an identifier can reach, and
+// a table of them would be a list of words nobody names an interface.
+func article(word string) string {
+	if word == "" {
+		return "a"
+	}
+	if strings.ContainsRune("AEIOUaeiou", rune(word[0])) {
+		return "an"
+	}
+	return "a"
+}
 
 // The run surface's fixed words.
 const (
@@ -248,6 +436,7 @@ const (
 	veneerTypeSuffix = "Veneer"
 	indexPathSuffix  = "IndexPath"
 	dropHintSuffix   = "DropHint"
+	proofsSuffix     = "Proofs"
 )
 
 // QualifierConst is the generated constant holding the interface's word

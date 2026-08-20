@@ -1,0 +1,14 @@
+testkit-checks v2
+Publish/cancel	signature/cancel	Publish reports a cancelled context as cancelled	
+Publish/deadline	signature/deadline	Publish reports an expired deadline as exceeded	
+Publish/nilcontext	signature/nilcontext	Publish returns an error rather than panicking on a nil context	
+Publish/smoke	signature/smoke	Publish survives a call with a derived value	
+Replay/cancel	signature/cancel	Replay reports a cancelled context as cancelled	
+Replay/deadline	signature/deadline	Replay reports an expired deadline as exceeded	
+Replay/nilcontext	signature/nilcontext	Replay returns an error rather than panicking on a nil context	
+Replay/smoke	signature/smoke	Replay survives a call with a derived value	
+Subscribe/cancel	signature/cancel	Subscribe reports a cancelled context as cancelled	
+Subscribe/deadline	signature/deadline	Subscribe reports an expired deadline as exceeded	
+Subscribe/nilcontext	signature/nilcontext	Subscribe returns an error rather than panicking on a nil context	
+Subscribe/smoke	signature/smoke	Subscribe survives a call	
+Subscribe/zero-on-error	signature/zero-on-error	Subscribe returns a nil channel alongside any error	

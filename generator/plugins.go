@@ -101,8 +101,19 @@ func DirectiveSchemas() []sdk.DirectiveSchema {
 	for _, g := range generators {
 		out = append(out, schemasOf(g)...)
 	}
-	return out
+	// The dormant model tier's schema, registered though its generator is
+	// not. A directive is screened by this list and stamped by a plugin,
+	// and the two are separable: dropping the schema with the generator
+	// turned every `//testkit:model` already written into "no directive
+	// named model", which is the pre-screen correctly reporting a
+	// vocabulary this build no longer admits. Source that declares a
+	// model is not wrong; this build simply does not act on it.
+	return append(out, schemasOf(dormant()...)...)
 }
+
+// dormant returns the generators this build registers a vocabulary for
+// and does not run. See [Generators] for why the model tier is one.
+func dormant() []sdk.Plugin { return []sdk.Plugin{model.New()} }
 
 // schemasOf returns a plugin's declared directive schemas, empty for one that
 // declares none.
@@ -110,12 +121,16 @@ func DirectiveSchemas() []sdk.DirectiveSchema {
 // The capability is optional and detected by assertion, which is eidos's
 // convention throughout: a plugin that owns no directive simply does not
 // implement the interface.
-func schemasOf(p sdk.Plugin) []sdk.DirectiveSchema {
-	provider, declares := p.(sdk.DirectiveProvider)
-	if !declares {
-		return nil
+func schemasOf(plugins ...sdk.Plugin) []sdk.DirectiveSchema {
+	var out []sdk.DirectiveSchema
+	for _, p := range plugins {
+		provider, declares := p.(sdk.DirectiveProvider)
+		if !declares {
+			continue
+		}
+		out = append(out, provider.Directives()...)
 	}
-	return provider.Directives()
+	return out
 }
 
 // Generators returns the generator plugins this build carries.
@@ -124,11 +139,18 @@ func schemasOf(p sdk.Plugin) []sdk.DirectiveSchema {
 // from each plugin's declared priority and capabilities, so a generator that
 // must follow another says so through Requires rather than by being listed
 // later.
+//
+// The model tier is UNREGISTERED while the suite generator is rewritten. It
+// reads [suite.Contract] in forty-one places, and that node is being reshaped
+// — the fixture becomes accessors over drawn pools, the entry point changes,
+// the row table arrives — so keeping the model tier running would mean
+// rewriting it against a surface still moving under it. Its plugin source
+// stays; only the registration and its generated output are gone, so relinking
+// it is one line once the surface settles.
 func Generators() []sdk.Plugin {
 	return []sdk.Plugin{
 		builder.New(),
 		enum.New(),
-		model.New(),
 		sentinel.New(),
 		stub.New(),
 		suite.New(),

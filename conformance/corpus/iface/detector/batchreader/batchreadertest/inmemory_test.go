@@ -4,7 +4,6 @@
 package batchreadertest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -14,9 +13,9 @@ import (
 
 // secondKey is a present key this package names for itself.
 //
-// The fixture's Keys and KeysOther are a hit and a miss, and the generated
-// checks depend on that: taking KeysOther for a second present key would make
-// the miss check succeed and assert nothing.
+// The fixture's Keys and KeysOther are a hit and a miss, and the rows below
+// depend on that: taking KeysOther for a second present key would make the
+// miss row assert nothing.
 const secondKey = "second-key"
 
 // A variadic read witnesses one key per generated check, which is the narrowing
@@ -28,109 +27,106 @@ const secondKey = "second-key"
 func TestBatchReaderContract(t *testing.T) {
 	t.Parallel()
 
-	// The values the run itself uses, read rather than replaced: nothing here
-	// passes BatchReaderWithFixture, so the derivation stands.
-	fixture := batchreadertest.DefaultBatchReaderFixture()
+	fx := batchreadertest.DefaultBatchReaderFixture()
 
-	batchreadertest.AssertBatchReaderContract(t,
-		batchreadertest.BatchReaderModel(),
-		batchreadertest.BatchReaderSubject("in-memory", func() batchreader.BatchReader {
-			return batchreadertest.NewInMemory()
-		}),
-		batchreadertest.BatchReaderSeed(func(_ context.Context, subject batchreader.BatchReader) error {
-			// Keys is seeded and KeysOther deliberately is not. The alternate is
-			// the fixture's "a value that should not be found", and the
-			// generated miss check calls GetAll with it — so a seed that stored
-			// it would make that check succeed and assert nothing.
-			//
-			// A test needing a second *present* key names its own, below.
-			//
-			// A seed may reach for the concrete subject: it runs before the
-			// double wraps it and sees what the factory made. A check may not.
-			s := subject.(*batchreadertest.InMemory)
-			s.Put(batchreader.Value{Key: fixture.Keys, Body: "first"})
-			s.Put(batchreader.Value{Key: secondKey, Body: "second"})
-			return nil
-		}),
-		batchreadertest.BatchReaderOnGetAll("answers several keys in the order asked", func(
-			tb testing.TB, subject batchreader.BatchReader, keys string,
-		) {
-			tb.Helper()
-			got, err := subject.GetAll(tb.Context(), fixture.Keys, secondKey)
-			testkit.NoError(tb, err, "a batch of held keys succeeds")
-			testkit.Equal(tb, got, []batchreader.Value{
-				{Key: fixture.Keys, Body: "first"},
-				{Key: secondKey, Body: "second"},
-			}, "and comes back in the order it was asked for")
+	batchreadertest.RunBatchReader(t,
+		batchreadertest.BatchReaderHarness[*batchreadertest.InMemory]{
+			Name: "in-memory",
+			// Keys is seeded and KeysOther deliberately is not, so the
+			// all-or-nothing row below has a real absence to fail on.
+			New: func() *batchreadertest.InMemory {
+				s := batchreadertest.NewInMemory()
+				s.Put(batchreader.Value{Key: fx.Keys(), Body: "first"})
+				s.Put(batchreader.Value{Key: secondKey, Body: "second"})
+				return s
+			},
+		},
+		batchreadertest.BatchReaderChecks{
+			{
+				Method: "GetAll",
+				Name:   "answers-in-the-order-asked",
+				Claim:  "GetAll answers several keys in the order asked",
+				Run: func(tb testing.TB, s batchreader.BatchReader, fx batchreadertest.BatchReaderFixture) {
+					tb.Helper()
+					got, err := s.GetAll(tb.Context(), fx.Keys(), secondKey)
+					testkit.NoError(tb, err, "a batch of held keys succeeds")
+					testkit.Equal(tb, got, []batchreader.Value{
+						{Key: fx.Keys(), Body: "first"},
+						{Key: secondKey, Body: "second"},
+					}, "and comes back in the order it was asked for")
 
-			reversed, err := subject.GetAll(tb.Context(), secondKey, fixture.Keys)
-			testkit.NoError(tb, err, "so does the same batch reversed")
-			testkit.Equal(tb, reversed[0].Key, secondKey,
-				"and the answer follows the question rather than the store")
-		}),
-		batchreadertest.BatchReaderOnGetAll("returns nothing rather than a partial answer", func(
-			tb testing.TB, subject batchreader.BatchReader, keys string,
-		) {
-			tb.Helper()
-			// The failure mode a batch read has and a single read does not: a
-			// caller cannot tell a short result from a complete one without
-			// comparing lengths, so dropping the absent key silently is worse
-			// than failing.
-			//
-			// The absent key is named here rather than taken from the fixture's
-			// alternate. A check runs against every declared subject, and one
-			// of them holds both derived keys — so a claim resting on the
-			// alternate being absent is a claim about one subject rather than
-			// about the shape.
-			got, err := subject.GetAll(tb.Context(), fixture.Keys, "held-by-nobody")
-			testkit.ErrorIs(tb, err, batchreadertest.ErrNotFound,
-				"one absent key fails the batch")
-			testkit.True(tb, got == nil, "and nothing is returned beside the error")
-		}),
-		batchreadertest.BatchReaderOnGetAll("succeeds on the empty call", func(
-			tb testing.TB, subject batchreader.BatchReader, keys string,
-		) {
-			tb.Helper()
-			// The call no derivation reaches: a fixture holds one value per
-			// parameter, so a generated check always passes exactly one.
-			got, err := subject.GetAll(tb.Context())
-			testkit.NoError(tb, err, "asking for nothing is not a failure")
-			testkit.Len(tb, got, 0, "and answers with nothing")
-		}),
+					reversed, err := s.GetAll(tb.Context(), secondKey, fx.Keys())
+					testkit.NoError(tb, err, "so does the same batch reversed")
+					testkit.Equal(tb, reversed[0].Key, secondKey,
+						"and the answer follows the question rather than the store")
+				},
+			},
+			{
+				Method: "GetAll",
+				Name:   "nothing-rather-than-a-partial-answer",
+				Claim:  "GetAll returns nothing rather than a partial answer",
+				Run: func(tb testing.TB, s batchreader.BatchReader, fx batchreadertest.BatchReaderFixture) {
+					tb.Helper()
+					// The failure mode a batch read has and a single read does
+					// not: a caller cannot tell a short result from a complete
+					// one without comparing lengths, so dropping the absent key
+					// silently is worse than failing.
+					got, err := s.GetAll(tb.Context(), fx.Keys(), "held-by-nobody")
+					testkit.ErrorIs(tb, err, batchreadertest.ErrNotFound,
+						"one absent key fails the batch")
+					testkit.True(tb, got == nil, "and nothing is returned beside the error")
+				},
+			},
+			{
+				Method: "GetAll",
+				Name:   "empty-call-succeeds",
+				Claim:  "GetAll succeeds on the empty call",
+				Run: func(tb testing.TB, s batchreader.BatchReader, fx batchreadertest.BatchReaderFixture) {
+					tb.Helper()
+					// The call no derivation reaches: a fixture holds one value
+					// per parameter, so a generated check always passes exactly
+					// one.
+					got, err := s.GetAll(tb.Context())
+					testkit.NoError(tb, err, "asking for nothing is not a failure")
+					testkit.Len(tb, got, 0, "and answers with nothing")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestBatchReaderContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestBatchReaderContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	batchreadertest.AssertBatchReaderContract(t,
-		batchreadertest.BatchReaderSubject("in-memory", func() batchreader.BatchReader {
-			return batchreadertest.NewInMemory()
-		}),
-		batchreadertest.BatchReaderWithout("GetAll/smoke"),
-		batchreadertest.BatchReaderWithoutDouble(),
+	batchreadertest.RunBatchReader(
+		t,
+		batchreadertest.BatchReaderHarness[*batchreadertest.InMemory]{
+			Name: "in-memory",
+			New:  batchreadertest.NewInMemory,
+		},
+		batchreadertest.BatchReaderSuite.Without(batchreadertest.BatchReaderSuite.Checks.GetAll.Smoke()),
 	)
 }
 
-// The count claim needs both derived keys present, which the first run's
-// subject cannot be in — so this is a second run rather than a second subject.
-//
-// It drops nothing, and that is the correction: it used to decline two miss
-// checks this shape never emitted. A batch read reports a miss by answering
-// fewer results than keys, which the count claim already covers, so there was
-// no check to contradict and the two names asserted a suppression of nothing.
+// A subject holding BOTH derived keys, which the run above cannot be in: the
+// row that asks for a partial miss needs KeysOther absent.
 func TestBatchReaderAnswersPerKeyWhenItHoldsThemAll(t *testing.T) {
 	t.Parallel()
 
-	fixture := batchreadertest.DefaultBatchReaderFixture()
+	fx := batchreadertest.DefaultBatchReaderFixture()
 
-	batchreadertest.AssertBatchReaderContract(t,
-		batchreadertest.BatchReaderSubject("in-memory, holding both keys", func() batchreader.BatchReader {
-			s := batchreadertest.NewInMemory()
-			s.Put(batchreader.Value{Key: fixture.Keys})
-			s.Put(batchreader.Value{Key: fixture.KeysOther})
-			return s
-		}),
+	batchreadertest.RunBatchReader(t,
+		batchreadertest.BatchReaderHarness[*batchreadertest.InMemory]{
+			Name: "in-memory, holding both keys",
+			New: func() *batchreadertest.InMemory {
+				s := batchreadertest.NewInMemory()
+				s.Put(batchreader.Value{Key: fx.Keys()})
+				s.Put(batchreader.Value{Key: fx.KeysOther()})
+				return s
+			},
+		},
 	)
 }

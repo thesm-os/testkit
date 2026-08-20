@@ -41,56 +41,72 @@ var corpus = []paginatedreader.Value{
 func TestPaginatedReaderContract(t *testing.T) {
 	t.Parallel()
 
-	paginatedreadertest.AssertPaginatedReaderContract(t,
-		paginatedreadertest.PaginatedReaderModel(),
-		paginatedreadertest.PaginatedReaderSubject("in-memory", func() paginatedreader.PaginatedReader {
-			return paginatedreadertest.NewInMemory(corpus...)
-		}),
-		paginatedreadertest.PaginatedReaderSubject("in-memory, empty", func() paginatedreader.PaginatedReader {
-			return paginatedreadertest.NewInMemory()
-		}),
-		paginatedreadertest.PaginatedReaderOnPage("refuses a cursor it did not issue", func(
-			tb testing.TB, subject paginatedreader.PaginatedReader, cursor int,
-		) {
-			tb.Helper()
-			// An offset accepts any integer, so this is what separates an
-			// opaque token from one — and a reader that accepts invented
-			// cursors resumes somewhere nobody asked for.
-			items, next, err := subject.Page(tb.Context(), cursor)
-			testkit.ErrorIs(tb, err, paginatedreadertest.ErrUnknownCursor,
-				"a cursor from nowhere is refused")
-			testkit.Len(tb, items, 0, "with no page beside the error")
-			testkit.Equal(tb, next, paginatedreadertest.End, "and no cursor to continue from")
-		}),
-		paginatedreadertest.PaginatedReaderOnPage("walks every value once and terminates", func(
-			tb testing.TB, subject paginatedreader.PaginatedReader, _ int,
-		) {
-			tb.Helper()
-			seen := walk(tb, subject, paginatedreadertest.Start)
-			testkit.Equal(tb, len(dedupe(seen)), len(seen),
-				"no value is served on two pages")
-		}),
-		paginatedreadertest.PaginatedReaderOnPage("resumes where a cursor was issued", func(
-			tb testing.TB, subject paginatedreader.PaginatedReader, _ int,
-		) {
-			tb.Helper()
-			// `AUTO-PAGINATOR-RESUMABLE`'s own shape: the walk from a page
-			// start is the suffix of the full walk. A reader resuming from
-			// anywhere else passes the no-duplicates check and loses values.
-			full := walk(tb, subject, paginatedreadertest.Start)
+	paginatedreadertest.RunPaginatedReader(t,
+		paginatedreadertest.PaginatedReaderHarness[*paginatedreadertest.InMemory]{
+			Name: "in-memory",
+			New: func() *paginatedreadertest.InMemory {
+				return paginatedreadertest.NewInMemory(corpus...)
+			},
+		},
+		paginatedreadertest.PaginatedReaderHarness[*paginatedreadertest.InMemory]{
+			Name: "in-memory, empty",
+			New:  func() *paginatedreadertest.InMemory { return paginatedreadertest.NewInMemory() },
+		},
+		paginatedreadertest.PaginatedReaderChecks{
+			{
+				Method: "Page",
+				Name:   "refuses-an-unissued-cursor",
+				Claim:  "Page refuses a cursor it did not issue",
+				Run: func(tb testing.TB, s paginatedreader.PaginatedReader, fx paginatedreadertest.PaginatedReaderFixture) {
+					tb.Helper()
+					// An offset accepts any integer, so this is what separates
+					// an opaque token from one — and a reader that accepts
+					// invented cursors resumes somewhere nobody asked for.
+					items, next, err := s.Page(tb.Context(), fx.CursorOther())
+					testkit.ErrorIs(tb, err, paginatedreadertest.ErrUnknownCursor,
+						"a cursor from nowhere is refused")
+					testkit.Len(tb, items, 0, "with no page beside the error")
+					testkit.Equal(tb, next, paginatedreadertest.End, "and no cursor to continue from")
+				},
+			},
+			{
+				Method: "Page",
+				Name:   "walks-every-value-once",
+				Claim:  "Page walks every value once and terminates",
+				Run: func(tb testing.TB, s paginatedreader.PaginatedReader, fx paginatedreadertest.PaginatedReaderFixture) {
+					tb.Helper()
+					seen := walk(tb, s, paginatedreadertest.Start)
+					testkit.Equal(tb, len(dedupe(seen)), len(seen),
+						"no value is served on two pages")
+				},
+			},
+			{
+				Method: "Page",
+				Name:   "resumes-where-a-cursor-was-issued",
+				Claim:  "Page resumes where a cursor was issued",
+				Run: func(tb testing.TB, s paginatedreader.PaginatedReader, fx paginatedreadertest.PaginatedReaderFixture) {
+					tb.Helper()
+					// `AUTO-PAGINATOR-RESUMABLE`'s own shape: the walk from a
+					// page start is the suffix of the full walk. A reader
+					// resuming from anywhere else passes the no-duplicates check
+					// and loses values.
+					full := walk(tb, s, paginatedreadertest.Start)
 
-			_, second, err := subject.Page(tb.Context(), paginatedreadertest.Start)
-			testkit.NoError(tb, err, "the first page is readable")
-			if second == paginatedreadertest.End {
-				// Nothing to resume from, which is the empty subject. The claim
-				// is vacuous rather than untested — there is no second page.
-				return
-			}
+					_, second, err := s.Page(tb.Context(), paginatedreadertest.Start)
+					testkit.NoError(tb, err, "the first page is readable")
+					if second == paginatedreadertest.End {
+						// Nothing to resume from, which is the empty subject.
+						// The claim is vacuous rather than untested — there is
+						// no second page.
+						return
+					}
 
-			resumed := walk(tb, subject, second)
-			testkit.Equal(tb, resumed, full[len(full)-len(resumed):],
-				"resuming yields exactly the tail of the full walk")
-		}),
+					resumed := walk(tb, s, second)
+					testkit.Equal(tb, resumed, full[len(full)-len(resumed):],
+						"resuming yields exactly the tail of the full walk")
+				},
+			},
+		},
 	)
 }
 
@@ -133,15 +149,20 @@ func dedupe(in []paginatedreader.Value) []paginatedreader.Value {
 	return out
 }
 
-// Declining the double is separate from dropping a check.
-func TestPaginatedReaderContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestPaginatedReaderContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	paginatedreadertest.AssertPaginatedReaderContract(t,
-		paginatedreadertest.PaginatedReaderSubject("in-memory", func() paginatedreader.PaginatedReader {
-			return paginatedreadertest.NewInMemory(corpus...)
-		}),
-		paginatedreadertest.PaginatedReaderWithout("Page/smoke"),
-		paginatedreadertest.PaginatedReaderWithoutDouble(),
+	paginatedreadertest.RunPaginatedReader(t,
+		paginatedreadertest.PaginatedReaderHarness[*paginatedreadertest.InMemory]{
+			Name: "in-memory",
+			New: func() *paginatedreadertest.InMemory {
+				return paginatedreadertest.NewInMemory(corpus...)
+			},
+		},
+		paginatedreadertest.PaginatedReaderSuite.Without(
+			paginatedreadertest.PaginatedReaderSuite.Checks.Page.Smoke()),
 	)
 }

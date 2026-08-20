@@ -14,58 +14,59 @@ import (
 // cursor is the model tier's under ADR-0018: `AUTO-CURSOR-NEXT-AFTER-CLOSE` and
 // `AUTO-CURSOR-CLOSE-IDEMPOTENT` state it.
 //
-// Neither role writes, so nothing is derived to seed through — and unlike a
-// store, nothing needs to be: a cursor over an empty sequence still has to
-// report exhaustion rather than panic, which is what the signature-derived
-// family drives. The subject is built with values so the checks read something.
+// Neither role writes, and unlike a store nothing needs to: a cursor over an
+// empty sequence still has to report exhaustion rather than panic, which is
+// what the signature-derived family drives. Two subjects, so both the loaded
+// and the empty case run.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	cursortest.AssertContractContract(t,
-		cursortest.ContractModel(),
-		cursortest.ContractSubject("in-memory", func() cursor.Contract {
-			return cursortest.NewInMemory(
-				cursor.Value{Key: "a", Body: "one"},
-				cursor.Value{Key: "b", Body: "two"},
-			)
-		}),
-		cursortest.ContractSubject("in-memory, empty", func() cursor.Contract {
-			return cursortest.NewInMemory()
-		}),
-		cursortest.ContractOnNext("refuses a read after the cursor is closed", func(
-			tb testing.TB, subject cursor.Contract,
-		) {
-			tb.Helper()
-			// Exhausted is "you have everything"; closed is "you gave up the
-			// right to ask". A cursor reporting the first for the second hides
-			// a bug in the caller's own control flow.
-			testkit.NoError(tb, subject.Close(tb.Context()), "the cursor closes")
+	cursortest.RunContract(t,
+		cursortest.ContractHarness[*cursortest.InMemory]{
+			Name: "in-memory",
+			New: func() *cursortest.InMemory {
+				return cursortest.NewInMemory(
+					cursor.Value{Key: "a", Body: "one"},
+					cursor.Value{Key: "b", Body: "two"},
+				)
+			},
+		},
+		cursortest.ContractHarness[*cursortest.InMemory]{
+			Name: "in-memory, empty",
+			New:  func() *cursortest.InMemory { return cursortest.NewInMemory() },
+		},
+		cursortest.ContractChecks{
+			{
+				Method: "Next",
+				Name:   "refuses-a-read-after-close",
+				Claim:  "Next refuses a read after the cursor is closed",
+				Run: func(tb testing.TB, s cursor.Contract, fx cursortest.ContractFixture) {
+					tb.Helper()
+					// Exhausted is "you have everything"; closed is "you gave up
+					// the right to ask". A cursor reporting the first for the
+					// second hides a bug in the caller's own control flow.
+					testkit.NoError(tb, s.Close(tb.Context()), "the cursor closes")
 
-			_, ok, err := subject.Next(tb.Context())
-			testkit.ErrorIs(tb, err, cursor.ErrClosed, "and a read after it is refused")
-			testkit.False(tb, ok, "with no value beside the error")
-		}),
+					_, ok, err := s.Next(tb.Context())
+					testkit.ErrorIs(tb, err, cursor.ErrClosed, "and a read after it is refused")
+					testkit.False(tb, ok, "with no value beside the error")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	cursortest.AssertContractContract(t,
-		cursortest.ContractSubject("in-memory", func() cursor.Contract {
-			return cursortest.NewInMemory()
-		}),
-		cursortest.ContractWithout("Next/smoke"),
-		cursortest.ContractWithoutDouble(),
+	cursortest.RunContract(t,
+		cursortest.ContractHarness[*cursortest.InMemory]{
+			Name: "in-memory",
+			New:  func() *cursortest.InMemory { return cursortest.NewInMemory() },
+		},
+		cursortest.ContractSuite.Without(cursortest.ContractSuite.Checks.Next.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	cursortest.ContractModelSaturation(t, func() cursor.Contract {
-		return cursortest.NewInMemory()
-	})
 }

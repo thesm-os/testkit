@@ -1,0 +1,10 @@
+testkit-checks v2
+Close/cancel	signature/cancel	Close reports a cancelled context as cancelled	
+Close/idempotent	mixin/idempotent	a second Close after a clean one changes nothing	
+Close/nilcontext	signature/nilcontext	Close returns an error rather than panicking on a nil context	
+Close/smoke	signature/smoke	Close survives a call	
+Stats/cancel	signature/cancel	Stats reports a cancelled context as cancelled	
+Stats/deadline	signature/deadline	Stats reports an expired deadline as exceeded	
+Stats/nilcontext	signature/nilcontext	Stats returns an error rather than panicking on a nil context	
+Stats/smoke	signature/smoke	Stats survives a call	
+Stats/zero-on-error	signature/zero-on-error	Stats returns zero alongside any error	

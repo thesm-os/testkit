@@ -15,41 +15,22 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	poisonabletest.AssertMixedContract(t,
-		poisonabletest.MixedModel(),
-		poisonabletest.MixedSubject("in-memory", func() poisonable.Mixed {
-			return poisonabletest.NewInMemory()
-		}),
-		poisonabletest.MixedOnProbe("keeps reporting the state it was driven into", func(
-			tb testing.TB, subject poisonable.Mixed,
-		) {
-			tb.Helper()
-			testkit.NoError(tb, subject.Probe(), "a fresh subject is healthy")
-			testkit.NoError(tb, subject.Fail(tb.Context()), "and can be driven to fail")
+	poisonabletest.RunMixed(t,
+		poisonabletest.MixedHarness[*poisonabletest.InMemory]{Name: "in-memory", New: poisonabletest.NewInMemory},
+		poisonabletest.MixedChecks{
+			{
+				Method: "Probe",
+				Name:   "latches-the-state-it-was-driven-into",
+				Claim:  "Probe keeps reporting the state it was driven into",
+				Run: func(tb testing.TB, s poisonable.Mixed, fx poisonabletest.MixedFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Probe(), "a fresh subject is healthy")
+					testkit.NoError(tb, s.Fail(tb.Context()), "and can be driven to fail")
 
-			testkit.Error(tb, subject.Probe(), "the failure is reported")
-			testkit.Error(tb, subject.Probe(), "and reading it does not clear it")
-		}),
+					testkit.Error(tb, s.Probe(), "the failure is reported")
+					testkit.Error(tb, s.Probe(), "and reading it does not clear it")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	poisonabletest.AssertMixedContract(t,
-		poisonabletest.MixedSubject("in-memory", func() poisonable.Mixed {
-			return poisonabletest.NewInMemory()
-		}),
-		poisonabletest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	poisonabletest.MixedModelSaturation(t, func() poisonable.Mixed {
-		return poisonabletest.NewInMemory()
-	})
 }

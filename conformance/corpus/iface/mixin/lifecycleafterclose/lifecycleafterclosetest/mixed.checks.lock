@@ -1,0 +1,7 @@
+testkit-checks v2
+Close/cancel	signature/cancel	Close reports a cancelled context as cancelled	
+Close/nilcontext	signature/nilcontext	Close returns an error rather than panicking on a nil context	
+Close/smoke	signature/smoke	Close survives a call	
+Work/cancel	signature/cancel	Work reports a cancelled context as cancelled	
+Work/nilcontext	signature/nilcontext	Work returns an error rather than panicking on a nil context	
+Work/smoke	signature/smoke	Work survives a call	

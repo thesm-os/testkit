@@ -12,76 +12,68 @@ import (
 )
 
 // saga is the model tier's under ADR-0018: `AUTO-SAGA-FULL-COMPENSATION` states
-// it, and stating it needs a sequence that fails partway — which the generated
-// run arranges by stepping drawn values until one collides.
+// it, and stating it needs a sequence that fails partway.
 //
-// Step is classified writer, so the harness seeds through it and Compensate's
-// checks meet a saga with something applied. What the checks below add is the
-// fingerprint's honesty: that State reflects application order, and that a
-// compensated step leaves it.
+// What the rows add is the fingerprint's honesty: that State reflects
+// application order, and that a compensated step leaves it.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	sagatest.AssertContractContract(t,
-		sagatest.ContractModel(),
-		sagatest.ContractSubject("in-memory", func() saga.Contract {
-			return sagatest.NewInMemory()
-		}),
-		sagatest.ContractOnCompensate("undoes the step the seed applied", func(
-			tb testing.TB, subject saga.Contract, v saga.Value,
-		) {
-			tb.Helper()
-			testkit.NoError(tb, subject.Compensate(tb.Context(), v),
-				"the applied step is compensated")
-			testkit.ErrorIs(tb, subject.Compensate(tb.Context(), v), sagatest.ErrNotApplied,
-				"and compensating it again has nothing to undo")
-		}),
-		sagatest.ContractOnState("fingerprints in application order", func(
-			tb testing.TB, subject saga.Contract,
-		) {
-			tb.Helper()
-			before, err := subject.State(tb.Context())
-			testkit.NoError(tb, err, "the state is readable")
+	sagatest.RunContract(t,
+		sagatest.ContractHarness[*sagatest.InMemory]{Name: "in-memory", New: sagatest.NewInMemory},
+		sagatest.ContractChecks{
+			{
+				Method: "Compensate",
+				Name:   "undoes-an-applied-step",
+				Claim:  "Compensate undoes the step that was applied",
+				Run: func(tb testing.TB, s saga.Contract, fx sagatest.ContractFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Step(tb.Context(), fx.Value()), "a step applies")
+					testkit.NoError(tb, s.Compensate(tb.Context(), fx.Value()),
+						"the applied step is compensated")
+					testkit.ErrorIs(tb, s.Compensate(tb.Context(), fx.Value()), sagatest.ErrNotApplied,
+						"and compensating it again has nothing to undo")
+				},
+			},
+			{
+				Method: "State",
+				Name:   "fingerprints-in-application-order",
+				Claim:  "State fingerprints in application order",
+				Run: func(tb testing.TB, s saga.Contract, fx sagatest.ContractFixture) {
+					tb.Helper()
+					before, err := s.State(tb.Context())
+					testkit.NoError(tb, err, "the state is readable")
 
-			first := saga.Value{Key: "b6-first", Body: "one"}
-			second := saga.Value{Key: "b6-second", Body: "two"}
-			testkit.NoError(tb, subject.Step(tb.Context(), first), "the first step applies")
-			testkit.NoError(tb, subject.Step(tb.Context(), second), "and the second after it")
+					first, second := fx.Value(), fx.ValueOther()
+					testkit.NoError(tb, s.Step(tb.Context(), first), "the first step applies")
+					testkit.NoError(tb, s.Step(tb.Context(), second), "and the second after it")
 
-			stepped, err := subject.State(tb.Context())
-			testkit.NoError(tb, err, "the state is still readable")
-			testkit.NotEqual(tb, stepped, before, "two applied steps changed the fingerprint")
+					stepped, err := s.State(tb.Context())
+					testkit.NoError(tb, err, "the state is still readable")
+					testkit.NotEqual(tb, stepped, before, "two applied steps changed the fingerprint")
 
-			testkit.NoError(tb, subject.Compensate(tb.Context(), second),
-				"the newest step compensates")
-			testkit.NoError(tb, subject.Compensate(tb.Context(), first),
-				"then the one before it")
+					testkit.NoError(tb, s.Compensate(tb.Context(), second),
+						"the newest step compensates")
+					testkit.NoError(tb, s.Compensate(tb.Context(), first),
+						"then the one before it")
 
-			after, err := subject.State(tb.Context())
-			testkit.NoError(tb, err, "and the state is readable at the end")
-			testkit.Equal(tb, after, before, "full compensation restored the fingerprint")
-		}),
+					after, err := s.State(tb.Context())
+					testkit.NoError(tb, err, "and the state is readable at the end")
+					testkit.Equal(tb, after, before, "full compensation restored the fingerprint")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	sagatest.AssertContractContract(t,
-		sagatest.ContractSubject("in-memory", func() saga.Contract {
-			return sagatest.NewInMemory()
-		}),
-		sagatest.ContractWithout("Step/smoke"),
-		sagatest.ContractWithoutDouble(),
+	sagatest.RunContract(t,
+		sagatest.ContractHarness[*sagatest.InMemory]{Name: "in-memory", New: sagatest.NewInMemory},
+		sagatest.ContractSuite.Without(sagatest.ContractSuite.Checks.Step.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	sagatest.ContractModelSaturation(t, func() saga.Contract {
-		return sagatest.NewInMemory()
-	})
 }

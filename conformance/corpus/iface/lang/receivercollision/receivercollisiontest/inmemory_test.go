@@ -13,31 +13,38 @@ import (
 
 // Every method here names a parameter `s`, one at Session and one at string.
 //
-// The fixture keys on the name *and* the type, so the checks are handed PutS
-// and GetS rather than one value the other method could not take. The author's
-// own rule is that the two agree: what Put stored under a session's identifier
-// is what Get returns for it.
+// The fixture keys on the name *and* the type, so the checks are handed a
+// Session and a string rather than one value the other method could not take.
+// The author's own rule is that the two agree: what Put stored under a
+// session's identifier is what Get returns for it.
 func TestStoreContract(t *testing.T) {
 	t.Parallel()
 
-	// Neither the fixture nor the seed is supplied: Put is classified writer, so
-	// the run already writes fixture.PutS through it before every check. Reading
-	// the same derivation here is what lets the check below name the identifier
-	// that was stored.
-	fixture := receivercollisiontest.DefaultStoreFixture()
+	receivercollisiontest.RunStore(
+		t,
+		receivercollisiontest.StoreHarness[*receivercollisiontest.InMemory]{
+			Name: "in-memory",
+			New:  receivercollisiontest.NewInMemory,
+		},
+		receivercollisiontest.StoreChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-the-stored-session",
+				Claim:  "Get returns what Put stored under that identifier",
+				Run: func(tb testing.TB, s receivercollision.Store, fx receivercollisiontest.StoreFixture) {
+					tb.Helper()
+					// The row draws both `s` parameters from the one fixture,
+					// which is the whole point of the collision: they are
+					// different fields because they are different types.
+					stored := fx.Session()
+					testkit.NoError(tb, s.Put(tb.Context(), stored), "the session is stored")
 
-	receivercollisiontest.AssertStoreContract(t,
-		receivercollisiontest.StoreSubject("in-memory", func() receivercollision.Store {
-			return receivercollisiontest.NewInMemory()
-		}),
-		receivercollisiontest.StoreOnGet("returns what Put stored under that identifier", func(
-			tb testing.TB, subject receivercollision.Store, id string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), fixture.PutS.ID)
-			testkit.NoError(tb, err, "a stored session is found by its own identifier")
-			testkit.Equal(tb, got, fixture.PutS, "and comes back whole")
-		}),
+					got, err := s.Get(tb.Context(), stored.ID)
+					testkit.NoError(tb, err, "a stored session is found by its own identifier")
+					testkit.Equal(tb, got, stored, "and comes back whole")
+				},
+			},
+		},
 	)
 }
 
@@ -46,11 +53,12 @@ func TestStoreContract(t *testing.T) {
 func TestStoreContractSuppression(t *testing.T) {
 	t.Parallel()
 
-	receivercollisiontest.AssertStoreContract(t,
-		receivercollisiontest.StoreSubject("in-memory", func() receivercollision.Store {
-			return receivercollisiontest.NewInMemory()
-		}),
-		receivercollisiontest.StoreWithout("Touch/smoke"),
-		receivercollisiontest.StoreWithoutDouble(),
+	receivercollisiontest.RunStore(
+		t,
+		receivercollisiontest.StoreHarness[*receivercollisiontest.InMemory]{
+			Name: "in-memory",
+			New:  receivercollisiontest.NewInMemory,
+		},
+		receivercollisiontest.StoreSuite.Without(receivercollisiontest.StoreSuite.Checks.Touch.Smoke()),
 	)
 }

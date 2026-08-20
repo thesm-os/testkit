@@ -11,57 +11,42 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/sample/sampletest"
 )
 
-// The only generated check that takes no derived input, because the input is
-// the point.
-//
 // A sampled suite is exactly as good as its sampler, and a builder that drifts
 // from what the method accepts turns every run into a wall of failures about
-// the fixture rather than the subject. So the check calls the builder the mixin
-// names and feeds the result to the method — handing it a value the fixture
-// invented would test the derivation instead of the pair.
+// the fixture rather than the subject.
 //
-// Process refuses anything without the builder's own prefix, which is what
-// makes the check able to fail: a Process accepting every string would be
-// satisfied by any builder at all.
+// The mixin has no suite-side rule yet — the header says so — so the pairing
+// is written here: reach Process through NewInput, and separately show that
+// Process refuses what the builder did not produce. Without the second half a
+// Process accepting everything would pair with any builder at all.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	sampletest.AssertMixedContract(t,
-		sampletest.MixedModel(),
-		sampletest.MixedSubject("in-memory", func() sample.Mixed {
-			return sampletest.NewInMemory()
-		}),
+	sampletest.RunMixed(t,
+		sampletest.MixedHarness[*sampletest.InMemory]{Name: "in-memory", New: sampletest.NewInMemory},
 		// Process rejects the derived input, which is the fixture working
 		// rather than failing: a value the generator invents is precisely what
 		// a sampled method does not accept, and is why the mixin names a
-		// builder. Both checks below reach Process through NewInput instead.
-		sampletest.MixedWithout(
-			"Process/smoke",
-		),
-		sampletest.MixedOnProcess("refuses an input the builder did not produce", func(
-			tb testing.TB, subject sample.Mixed, input string,
-		) {
-			tb.Helper()
-			// The constraint is what makes the mixin worth having: a Process
-			// accepting anything would pair with any builder, and the check
-			// that they fit would hold for a builder producing nonsense.
-			_, err := subject.Process(tb.Context(), "unshaped-"+input)
-			testkit.Error(tb, err, "an input outside the shape is refused")
-		}),
-	)
-}
+		// builder.
+		sampletest.MixedSuite.Without(sampletest.MixedSuite.Checks.Process.Smoke()),
+		sampletest.MixedChecks{
+			{
+				Method: "Process",
+				Name:   "accepts-only-what-the-builder-made",
+				Claim:  "Process refuses an input the builder did not produce",
+				Run: func(tb testing.TB, s sample.Mixed, fx sampletest.MixedFixture) {
+					tb.Helper()
+					built, err := s.NewInput(tb.Context())
+					testkit.NoError(tb, err, "the builder produces an input")
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
+					_, err = s.Process(tb.Context(), built)
+					testkit.NoError(tb, err, "which the method accepts")
 
-	sampletest.AssertMixedContract(t,
-		sampletest.MixedSubject("in-memory", func() sample.Mixed {
-			return sampletest.NewInMemory()
-		}),
-		sampletest.MixedWithout(
-			"Process/smoke",
-		),
-		sampletest.MixedWithoutDouble(),
+					// The constraint is what makes the mixin worth having.
+					_, err = s.Process(tb.Context(), "unshaped-"+fx.Input())
+					testkit.Error(tb, err, "an input outside the shape is refused")
+				},
+			},
+		},
 	)
 }

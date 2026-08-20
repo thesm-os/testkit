@@ -1,0 +1,10 @@
+testkit-checks v2
+Put/cancel	signature/cancel	Put reports a cancelled context as cancelled	
+Put/deadline	signature/deadline	Put reports an expired deadline as exceeded	
+Put/nilcontext	signature/nilcontext	Put returns an error rather than panicking on a nil context	
+Put/smoke	signature/smoke	Put survives a call with derived inputs	
+Read/cancel	signature/cancel	Read reports a cancelled context as cancelled	
+Read/deadline	signature/deadline	Read reports an expired deadline as exceeded	
+Read/nilcontext	signature/nilcontext	Read returns an error rather than panicking on a nil context	
+Read/smoke	signature/smoke	Read survives a call with derived inputs	
+Read/zero-on-error	signature/zero-on-error	Read returns zero alongside any error	

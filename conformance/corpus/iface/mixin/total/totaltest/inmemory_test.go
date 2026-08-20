@@ -11,46 +11,33 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/total/totaltest"
 )
 
-// The generated contract, run against the in-memory subject.
+// A total method has no miss, which is what `total` says and what the header
+// now records: the reader shape's miss check was refused here rather than
+// emitted against a claim the classification denies.
+//
+// The domain's edge is the row's: the empty string.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	totaltest.AssertMixedContract(t,
-		totaltest.MixedModel(),
-		totaltest.MixedSubject("in-memory", func() total.Mixed {
-			return totaltest.NewInMemory()
-		}),
-		totaltest.MixedOnClassify("answers for the empty string as readily as for any other", func(
-			tb testing.TB, subject total.Mixed, in string,
-		) {
-			tb.Helper()
-			// The edge of the domain: a subject that refused it would be
-			// total over "non-empty strings", which is a different claim.
-			got, err := subject.Classify(tb.Context(), "")
-			testkit.NoError(tb, err, "the empty string is in the domain")
-			testkit.Equal(tb, got, "empty", "and is classified rather than refused")
-			_ = in
-		}),
+	totaltest.RunMixed(t,
+		totaltest.MixedHarness[*totaltest.InMemory]{Name: "in-memory", New: totaltest.NewInMemory},
+		totaltest.MixedChecks{
+			{
+				Method: "Classify",
+				Name:   "answers-for-the-empty-string",
+				Claim:  "Classify answers for the empty string as readily as for any other",
+				Run: func(tb testing.TB, s total.Mixed, fx totaltest.MixedFixture) {
+					tb.Helper()
+					// A subject that refused it would be total over "non-empty
+					// strings", which is a different claim.
+					got, err := s.Classify(tb.Context(), "")
+					testkit.NoError(tb, err, "the empty string is in the domain")
+					testkit.Equal(tb, got, "empty", "and is classified rather than refused")
+
+					_, err = s.Classify(tb.Context(), fx.In())
+					testkit.NoError(tb, err, "and so is anything else")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	totaltest.AssertMixedContract(t,
-		totaltest.MixedSubject("in-memory", func() total.Mixed {
-			return totaltest.NewInMemory()
-		}),
-		totaltest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	totaltest.MixedModelSaturation(t, func() total.Mixed {
-		return totaltest.NewInMemory()
-	})
 }

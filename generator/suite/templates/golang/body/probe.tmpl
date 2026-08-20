@@ -22,9 +22,14 @@ if {{ .ErrStmt }} {{ suite_callExpr .Recv .Body.Call }}; err != nil {
 {{- /*
 The miss: an input nothing supplied, and what the subject owes for it.
 With a declared sentinel the claim is that error and nothing else — a
-subject reporting some other failure has not reported a miss. Without
-one the claim is the zero, and the call has to have succeeded for the
-answer to mean anything.
+subject reporting some other failure has not reported a miss.
+
+Without one the claim is the value slot alone. The error is left
+unjudged on purpose: a reader that reports SOME failure for a key
+nothing wrote is behaving, it just has not named which failure, and
+demanding the call succeed first would fail every such reader for the
+one thing the declaration did not say. What no miss may do is answer
+with a value, which is what the zero comparison holds it to.
 */ -}}
 {{- define "suite.body.miss-probe" -}}
 {{ if .NeedsCtx }}ctx := tb.Context()
@@ -35,13 +40,10 @@ if !{{ renderExpr (external "errors" "Is") }}(err, {{ renderExpr .Sentinel }}) {
 	tb.Errorf("{{ .Method }} must report a miss as %v: got %v", {{ renderExpr .Sentinel }}, err)
 }
 {{- else if .HasErr }}
-{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
-if err != nil {
-	tb.Fatalf("{{ .Method }} for an input nothing supplied must answer: %v", err)
-}
-{{ template "suite.frag.zero-judge" . }}
+{{ .ZeroBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge false true) }}
 {{- else }}
-got{{ .ValueDiscard }} := {{ suite_callExpr .Recv .Body.Call }}
-{{ template "suite.frag.zero-judge" . }}
+{{ .ZeroBindNoErr }} {{ suite_callExpr .Recv .Body.Call }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge false false) }}
 {{- end }}
 {{- end -}}

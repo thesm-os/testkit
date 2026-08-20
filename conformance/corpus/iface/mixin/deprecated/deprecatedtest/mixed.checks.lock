@@ -1,0 +1,11 @@
+testkit-checks v2
+New/cancel	signature/cancel	New reports a cancelled context as cancelled	
+New/deadline	signature/deadline	New reports an expired deadline as exceeded	
+New/nilcontext	signature/nilcontext	New returns an error rather than panicking on a nil context	
+New/smoke	signature/smoke	New survives a call with a seeded key	
+New/zero-on-error	signature/zero-on-error	New returns zero alongside any error	
+Old/cancel	signature/cancel	Old reports a cancelled context as cancelled	
+Old/deadline	signature/deadline	Old reports an expired deadline as exceeded	
+Old/nilcontext	signature/nilcontext	Old returns an error rather than panicking on a nil context	
+Old/smoke	signature/smoke	Old survives a call with a seeded key	
+Old/zero-on-error	signature/zero-on-error	Old returns zero alongside any error	

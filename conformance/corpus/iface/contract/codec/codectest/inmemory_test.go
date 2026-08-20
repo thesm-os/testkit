@@ -12,48 +12,34 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// Nothing in either signature pairs Encode with Decode, so the round trip is
+// the row's to state: the generator derives each method's own family and has
+// no way to know one undoes the other.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	codectest.AssertContractContract(t,
-		codectest.ContractModel(),
-		codectest.ContractSubject("in-memory", func() codec.Contract {
-			return codectest.NewInMemory()
-		}),
-		codectest.ContractOnDecode("undoes exactly what Encode did", func(
-			tb testing.TB, subject codec.Contract, in string,
-		) {
-			tb.Helper()
-			// The pair, stated once. `fidelity=exact` is the claim that this
-			// round trip is the identity — a lossy codec would declare the
-			// weaker form and this assertion would be wrong for it.
-			encoded, err := subject.Encode(tb.Context(), in)
-			testkit.NoError(tb, err, "the forward transform succeeds")
+	codectest.RunContract(t,
+		codectest.ContractHarness[*codectest.InMemory]{Name: "in-memory", New: codectest.NewInMemory},
+		codectest.ContractChecks{
+			{
+				Method: "Decode",
+				Name:   "undoes-encode",
+				Claim:  "Decode undoes exactly what Encode did",
+				Run: func(tb testing.TB, s codec.Contract, fx codectest.ContractFixture) {
+					tb.Helper()
+					// The pair, stated once. `fidelity=exact` is the claim that
+					// this round trip is the identity — a lossy codec would
+					// declare the weaker form and this assertion would be wrong
+					// for it.
+					encoded, err := s.Encode(tb.Context(), fx.In())
+					testkit.NoError(tb, err, "the forward transform succeeds")
 
-			decoded, err := subject.Decode(tb.Context(), encoded)
-			testkit.NoError(tb, err, "and the inverse undoes it")
-			testkit.Equal(tb, decoded, in, "exact fidelity is the identity")
-		}),
+					decoded, err := s.Decode(tb.Context(), encoded)
+					testkit.NoError(tb, err, "and the inverse undoes it")
+					testkit.Equal(tb, decoded, fx.In(), "exact fidelity is the identity")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	codectest.AssertContractContract(t,
-		codectest.ContractSubject("in-memory", func() codec.Contract {
-			return codectest.NewInMemory()
-		}),
-		codectest.ContractWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	codectest.ContractModelSaturation(t, func() codec.Contract {
-		return codectest.NewInMemory()
-	})
 }

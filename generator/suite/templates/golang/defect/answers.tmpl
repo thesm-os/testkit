@@ -1,0 +1,67 @@
+{{/*
+The defects that break a claim by SUCCEEDING.
+
+Three variants over one shape: a method that answers where the claim
+says it must refuse. The context arms red because their primitives judge
+a nil error, and a subject that ignores the context it is handed reports
+none — which is the defect the claim is named for, not an accident of
+the double.
+
+The shape is a bare `return` under named results. That is what lets this
+work for any signature: each slot yields its own zero without this file
+naming a type it may not be able to spell, and no sample value has to be
+invented for a result whose type nothing here can construct.
+*/}}
+{{- define "suite.defect.ctx-swap" -}}
+{{ template "suite.frag.defect-answers" . }}
+{{- end -}}
+
+{{- define "suite.defect.accepts-nil" -}}
+{{ template "suite.frag.defect-answers" . }}
+{{- end -}}
+
+{{- define "suite.frag.defect-answers" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
+				// The context arrives and is not read; the bare return
+				// answers every slot's zero, which for the error slot is
+				// the nil this claim forbids.
+				return
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
+{{- end -}}
+
+{{- /*
+The idempotent claim's defect: the first call lands, the second refuses.
+
+A closure over one bool rather than a counter — the claim is about the
+repeat and nothing past it, and a counter would invite a reader to
+wonder what the third call does.
+*/ -}}
+{{- define "suite.defect.second-call-errs" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		called := false
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
+				if called {
+					{{ .ErrSlot }} = {{ renderExpr (external "errors" "New") }}({{ printf "%q" .RepeatMessage }})
+					return
+				}
+				called = true
+				return
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
+{{- end -}}
+
+{{- /*
+The substring the red must contain, appended where this generator can
+quote the message from its declared home. Absent where the failure's
+prose is authored in a body template, which has no constant to quote —
+a weaker proof, said out loud rather than left to look identical.
+*/ -}}
+{{- define "suite.frag.defect-reason" -}}
+{{- if .ReasonConst }}.Reasoned({{ renderExpr (external .Vocab .ReasonConst) }}){{ end }}
+{{- end -}}

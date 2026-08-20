@@ -9,60 +9,36 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/causal"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/causal/causaltest"
-	"go.thesmos.sh/testkit/engine/model/law"
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// Causal consistency is a claim about an order across sessions and needs a
+// reference to compare against, so it is the model tier's. What the suite tier
+// states about the pair is the row below.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	causaltest.AssertMixedContract(t,
-		causaltest.MixedSubject("in-memory", func() causal.Mixed {
-			return causaltest.NewInMemory()
-		}),
-		// The model tier: random sequences against the twin reference,
-		// reporting under "model/twin" beside the per-method checks.
-		causaltest.MixedModel(
-			// The happens-before door: this store's causal order is the
-			// revision order within one key — an earlier same-key write is
-			// the cause every later observation of that key must respect.
-			causaltest.MixedModelHappensBefore(func(a, b law.ClientOp[string]) bool {
-				return a.Write && a.Key == b.Key && a.Version < b.Version
-			}),
-		),
-		causaltest.MixedOnGet("returns what Store wrote", func(
-			tb testing.TB, subject causal.Mixed, key string,
-		) {
-			tb.Helper()
-			// The suite seeds through Store, so the key is already present —
-			// which is what makes this a statement about the pair rather than
-			// about Get alone.
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is present")
-			testkit.Equal(tb, got.Key, key, "and Get answers under the key it was stored with")
-		}),
+	causaltest.RunMixed(t,
+		causaltest.MixedHarness[*causaltest.InMemory]{Name: "in-memory", New: causaltest.NewInMemory},
+		causaltest.MixedChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-store-wrote",
+				Claim:  "Get returns what Store wrote",
+				Run: func(tb testing.TB, s causal.Mixed, fx causaltest.MixedFixture) {
+					tb.Helper()
+					written := fx.Value()
+					stored, err := s.Store(tb.Context(), written)
+					testkit.NoError(tb, err, "the value is stored")
+					testkit.Equal(tb, stored.Key, written.Key, "under the key it was given")
+
+					got, err := s.Get(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "the written key is present")
+					testkit.Equal(tb, got.Key, written.Key,
+						"and Get answers under the key it was stored with")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	causaltest.AssertMixedContract(t,
-		causaltest.MixedSubject("in-memory", func() causal.Mixed {
-			return causaltest.NewInMemory()
-		}),
-		causaltest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same door armed that arms the tier.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	causaltest.MixedModelSaturation(t, func() causal.Mixed {
-		return causaltest.NewInMemory()
-	}, causaltest.MixedModelHappensBefore(func(a, b law.ClientOp[string]) bool {
-		return a.Write && a.Key == b.Key && a.Version < b.Version
-	}))
 }

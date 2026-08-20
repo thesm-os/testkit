@@ -12,45 +12,37 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// The session-ordering law needs a reference to compare against, so it is the
+// model tier's. What the suite tier states about the pair is the row below.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	writesfollowreadstest.AssertMixedContract(t,
-		writesfollowreadstest.MixedModel(),
-		writesfollowreadstest.MixedSubject("in-memory", func() writesfollowreads.Mixed {
-			return writesfollowreadstest.NewInMemory()
-		}),
-		writesfollowreadstest.MixedOnGet("returns what Store wrote", func(
-			tb testing.TB, subject writesfollowreads.Mixed, key string,
-		) {
-			tb.Helper()
-			// The suite seeds through Store, so the key is already present —
-			// which is what makes this a statement about the pair rather than
-			// about Get alone.
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is present")
-			testkit.Equal(tb, got.Key, key, "and Get answers under the key it was stored with")
-		}),
+	writesfollowreadstest.RunMixed(
+		t,
+		writesfollowreadstest.MixedHarness[*writesfollowreadstest.InMemory]{
+			Name: "in-memory",
+			New:  writesfollowreadstest.NewInMemory,
+		},
+		writesfollowreadstest.MixedChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-store-wrote",
+				Claim:  "Get returns what Store wrote",
+				Run: func(tb testing.TB, s writesfollowreads.Mixed, fx writesfollowreadstest.MixedFixture) {
+					tb.Helper()
+					written := fx.Value()
+					// Store answers the state it wrote beside its error.
+					stored, err := s.Store(tb.Context(), written)
+					testkit.NoError(tb, err, "the value is stored")
+					testkit.Equal(tb, stored.Key, written.Key, "under the key it was given")
+
+					got, err := s.Get(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "the written key is present")
+					testkit.Equal(tb, got.Key, written.Key,
+						"and Get answers under the key it was stored with")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	writesfollowreadstest.AssertMixedContract(t,
-		writesfollowreadstest.MixedSubject("in-memory", func() writesfollowreads.Mixed {
-			return writesfollowreadstest.NewInMemory()
-		}),
-		writesfollowreadstest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	writesfollowreadstest.MixedModelSaturation(t, func() writesfollowreads.Mixed {
-		return writesfollowreadstest.NewInMemory()
-	})
 }

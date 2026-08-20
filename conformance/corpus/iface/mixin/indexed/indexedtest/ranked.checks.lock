@@ -1,0 +1,16 @@
+testkit-checks v2
+Add/cancel	signature/cancel	Add reports a cancelled context as cancelled	
+Add/deadline	signature/deadline	Add reports an expired deadline as exceeded	
+Add/nilcontext	signature/nilcontext	Add returns an error rather than panicking on a nil context	
+Add/smoke	signature/smoke	Add survives a call with a derived value	
+At/cancel	signature/cancel	At reports a cancelled context as cancelled	
+At/deadline	signature/deadline	At reports an expired deadline as exceeded	
+At/miss	mixin/reader	At reports zero for a i nothing has written	
+At/nilcontext	signature/nilcontext	At returns an error rather than panicking on a nil context	
+At/smoke	signature/smoke	At survives a call with a derived i	
+At/zero-on-error	signature/zero-on-error	At returns the zero Value alongside any error	
+Len/cancel	signature/cancel	Len reports a cancelled context as cancelled	
+Len/deadline	signature/deadline	Len reports an expired deadline as exceeded	
+Len/nilcontext	signature/nilcontext	Len returns an error rather than panicking on a nil context	
+Len/smoke	signature/smoke	Len survives a call	
+Len/zero-on-error	signature/zero-on-error	Len returns zero alongside any error	

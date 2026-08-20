@@ -21,45 +21,60 @@ import (
 func TestMultiReaderContract(t *testing.T) {
 	t.Parallel()
 
-	// The values the run itself uses, read rather than replaced: nothing here
-	// passes MultiReaderWithFixture, so the derivation stands.
-	fixture := multireadertest.DefaultMultiReaderFixture()
+	fx := multireadertest.DefaultMultiReaderFixture()
 
-	multireadertest.AssertMultiReaderContract(t,
-		multireadertest.MultiReaderModel(),
-		multireadertest.MultiReaderSubject("in-memory", func() multireader.MultiReader {
-			return multireadertest.NewInMemory()
-		}),
-		multireadertest.MultiReaderSeed(func(_ context.Context, subject multireader.MultiReader) error {
-			// MultiReader declares no writer, so nothing is derived and the hit
-			// path is unreachable without this. A seed may reach for the
-			// concrete subject: it runs before the double wraps it. A check may
-			// not.
-			subject.(*multireadertest.InMemory).Put(
-				multireader.Value{Key: fixture.Key, Body: "seeded"},
-				multireader.Meta{Revision: 7},
-			)
-			return nil
-		}),
-		multireadertest.MultiReaderOnGetWithMeta("returns both slots for a hit", func(
-			tb testing.TB, subject multireader.MultiReader, key string,
-		) {
-			tb.Helper()
-			v, m, err := subject.GetWithMeta(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, v.Body, "seeded", "the value slot carries what was written")
-			testkit.Equal(tb, m.Revision, 7, "and the metadata slot agrees")
-		}),
+	multireadertest.RunMultiReader(t,
+		multireadertest.MultiReaderHarness[*multireadertest.InMemory]{
+			Name: "in-memory",
+			// MultiReader declares no writer, so the hit path is unreachable
+			// without a seeded constructor.
+			New: func() *multireadertest.InMemory {
+				s := multireadertest.NewInMemory()
+				s.Put(
+					multireader.Value{Key: fx.Key(), Body: "seeded"},
+					multireader.Meta{Revision: 7},
+				)
+				return s
+			},
+		},
+		multireadertest.MultiReaderChecks{
+			{
+				Method: "GetWithMeta",
+				Name:   "both-slots-for-a-hit",
+				Claim:  "GetWithMeta returns both slots for a hit",
+				Run: func(tb testing.TB, s multireader.MultiReader, fx multireadertest.MultiReaderFixture) {
+					tb.Helper()
+					v, m, err := s.GetWithMeta(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a seeded key is found")
+					testkit.Equal(tb, v.Body, "seeded", "the value slot carries what was written")
+					testkit.Equal(tb, m.Revision, 7, "and the metadata slot agrees")
+				},
+			},
+		},
 	)
 }
 
 // A subject zeroing only its first slot must fail, or the generated check reads
 // one of two and reports on both.
+//
+// The check is reached as data rather than by name: the assertion functions are
+// unexported now, and Suite is the seam a runner of your own would use.
 func TestGetWithMetaZeroesEverySlot(t *testing.T) {
 	t.Parallel()
 
+	fx := multireadertest.DefaultMultiReaderFixture()
+	want := multireadertest.MultiReaderSuite.Checks.GetWithMeta.ZeroOnError()
+
+	var zeroOnError func(tb testing.TB, s multireader.MultiReader)
+	for _, c := range multireadertest.MultiReaderSuite.Suite(fx).Checks {
+		if c.ID == want {
+			zeroOnError = c.Run
+		}
+	}
+	testkit.True(t, zeroOnError != nil, "the run emits the check this test is about")
+
 	f := testkit.NewFailableTB()
-	multireadertest.AssertMultiReaderGetWithMetaZeroOnError(f, partialZero{}, "absent")
+	zeroOnError(f, partialZero{})
 
 	testkit.True(t, f.Failed(),
 		"metadata leaked beside an error must fail, whichever slot it is")
@@ -75,15 +90,18 @@ func (partialZero) GetWithMeta(
 	return multireader.Value{}, multireader.Meta{Revision: 9}, multireader.ErrNotFound
 }
 
-// Declining the double is separate from dropping a check.
-func TestMultiReaderContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMultiReaderContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	multireadertest.AssertMultiReaderContract(t,
-		multireadertest.MultiReaderSubject("in-memory", func() multireader.MultiReader {
-			return multireadertest.NewInMemory()
-		}),
-		multireadertest.MultiReaderWithout("GetWithMeta/smoke"),
-		multireadertest.MultiReaderWithoutDouble(),
+	multireadertest.RunMultiReader(
+		t,
+		multireadertest.MultiReaderHarness[*multireadertest.InMemory]{
+			Name: "in-memory",
+			New:  multireadertest.NewInMemory,
+		},
+		multireadertest.MultiReaderSuite.Without(multireadertest.MultiReaderSuite.Checks.GetWithMeta.Smoke()),
 	)
 }

@@ -112,7 +112,7 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 // declares no miss, so an unsubscribed topic answers normally and a
 // check drawing one would skip every run.
 func zeroBody(f Iface, m Method, call projection.CallPlan) projection.Body {
-	if _, declared := m.MixinParam(MixinTTL, MixinTTLNotFound); declared && m.HasInput() {
+	if _, declared := MissSentinel(m); declared && m.HasInput() {
 		return projection.ZeroOnMiss{
 			Call: missCall(f, m),
 			Pool: missPool(f, m),
@@ -128,7 +128,15 @@ func missCall(f Iface, m Method) projection.CallPlan {
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)
 	}
-	for _, field := range fixtureArgs(f.Fixture, m, true) {
+	for i, field := range fixtureArgs(f.Fixture, m, true) {
+		// The first drawn argument is what a miss varies, and where a
+		// corpus exists the fixture's alternate is no longer absent
+		// from it — the zip seeds every member of the key pool. The
+		// deliberately-omitted key is the only draw that still misses.
+		if i == 0 && f.Corpus {
+			args = append(args, projection.MissKeyCall(f.Token))
+			continue
+		}
 		args = append(args, projection.FixtureCall(projection.ExprFixture, field))
 	}
 	return projection.CallPlan{Method: m.Name, Args: args}

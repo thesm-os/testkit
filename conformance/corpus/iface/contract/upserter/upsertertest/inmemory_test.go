@@ -11,54 +11,44 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/upserter/upsertertest"
 )
 
-// upserter is the model tier's under ADR-0018: `AUTO-UPSERTER-IDEMPOTENT`
-// states it, and stating it needs an observation of the whole store rather than
-// of one read.
+// The generated contract, run against the in-memory subject.
 //
-// The suite tier gets the pairing the seed produces: Get's "an error carries
-// the zero value" check runs against a store holding something, which is what
-// makes the miss it asks about a real miss.
+// The pair to updater: identical signatures, and the difference between the
+// two contracts is what the row states — a repeated write of the SAME value
+// leaves the store where the first write left it.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	upsertertest.AssertContractContract(t,
-		upsertertest.ContractModel(),
-		upsertertest.ContractSubject("in-memory", func() upserter.Contract {
-			return upsertertest.NewInMemory()
-		}),
-		upsertertest.ContractOnPut("writes the same key the seed did", func(
-			tb testing.TB, subject upserter.Contract, v upserter.Value,
-		) {
-			tb.Helper()
-			// The seed already wrote this value, so the call under check is the
-			// repeat the contract is named for.
-			testkit.NoError(tb, subject.Put(tb.Context(), v), "the repeated write lands")
+	upsertertest.RunContract(t,
+		upsertertest.ContractHarness[*upsertertest.InMemory]{Name: "in-memory", New: upsertertest.NewInMemory},
+		upsertertest.ContractChecks{
+			{
+				Method: "Put",
+				Name:   "repeat-write-is-the-same-key",
+				Claim:  "Put writes the same key a second time rather than a new one",
+				Run: func(tb testing.TB, s upserter.Contract, fx upsertertest.ContractFixture) {
+					tb.Helper()
+					v := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), v), "the first write lands")
+					testkit.NoError(tb, s.Put(tb.Context(), v), "the repeated write lands")
 
-			got, err := subject.Get(tb.Context(), v.Key)
-			testkit.NoError(tb, err, "and the key is still there")
-			testkit.Equal(tb, got, v, "carrying what it carried before")
-		}),
+					got, err := s.Get(tb.Context(), v.Key)
+					testkit.NoError(tb, err, "and the key is still there")
+					testkit.Equal(tb, got, v, "carrying what it carried before")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	upsertertest.AssertContractContract(t,
-		upsertertest.ContractSubject("in-memory", func() upserter.Contract {
-			return upsertertest.NewInMemory()
-		}),
-		upsertertest.ContractWithout("Put/smoke"),
-		upsertertest.ContractWithoutDouble(),
+	upsertertest.RunContract(t,
+		upsertertest.ContractHarness[*upsertertest.InMemory]{Name: "in-memory", New: upsertertest.NewInMemory},
+		upsertertest.ContractSuite.Without(upsertertest.ContractSuite.Checks.Put.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	upsertertest.ContractModelSaturation(t, func() upserter.Contract {
-		return upsertertest.NewInMemory()
-	})
 }

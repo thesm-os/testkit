@@ -1,0 +1,8 @@
+testkit-checks v2
+Campaign/cancel	signature/cancel	Campaign reports a cancelled context as cancelled	
+Campaign/nilcontext	signature/nilcontext	Campaign returns an error rather than panicking on a nil context	
+Campaign/smoke	signature/smoke	Campaign survives a call	
+IsLeader/smoke	signature/smoke	IsLeader survives a call	
+Resign/cancel	signature/cancel	Resign reports a cancelled context as cancelled	
+Resign/nilcontext	signature/nilcontext	Resign returns an error rather than panicking on a nil context	
+Resign/smoke	signature/smoke	Resign survives a call	

@@ -2455,11 +2455,25 @@ func TestMissSentinelAndDisturb(t *testing.T) {
 		read := projected("Read",
 			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
 			[]golang.Return{res(namedRef("Value")), errRet})
-		read.Mixins = []string{"deleteremoves"}
-		shape.MixinParamKey("deleteremoves", "sentinel").
-			Set(read.Source.EnsureMeta(), "example.com/dr.ErrGone", "test")
+		read.Mixins = []string{"notfound"}
+		shape.MixinParamKey("notfound", "sentinel").
+			Set(read.Source.EnsureMeta(), "example.com/nf.ErrMissing", "test")
 		sym := missSentinelOf(harnessOf(read))
 		testkit.True(t, sym != nil, "the stamped sentinel is the oracle's miss")
+
+		// A sentinel scoped to somebody else's condition is not this
+		// one. deleteremoves names what a read AFTER A DELETE reports,
+		// which coincides with a miss and is not one — the scan this
+		// replaced took the first `sentinel=` it met on any mixin and
+		// would have routed it as the oracle's miss.
+		post := projected("Read",
+			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
+			[]golang.Return{res(namedRef("Value")), errRet})
+		post.Mixins = []string{"deleteremoves"}
+		shape.MixinParamKey("deleteremoves", "sentinel").
+			Set(post.Source.EnsureMeta(), "example.com/dr.ErrGone", "test")
+		testkit.True(t, missSentinelOf(harnessOf(post)) == nil,
+			"a post-delete sentinel is not the miss sentinel")
 
 		bare := projected("Read",
 			[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},

@@ -11,46 +11,31 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/mixin/conservative/conservativetest"
 )
 
-// The generated contract, run against the in-memory subject.
+// The counterpart to associative over the same two methods: there a fold is
+// expected to move the total, here it is expected not to. Neither signature
+// says which, which is why both are rows.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	conservativetest.AssertMixedContract(t,
-		conservativetest.MixedModel(),
-		conservativetest.MixedSubject("in-memory", func() conservative.Mixed {
-			return conservativetest.NewInMemory()
-		}),
-		conservativetest.MixedOnTotal("holds the conserved sum through a transfer", func(
-			tb testing.TB, subject conservative.Mixed,
-		) {
-			tb.Helper()
-			// The suite seeds through Apply, and Apply is a transfer: the
-			// conserved sum must still read as it did at birth — a non-zero
-			// total is quantity minted from nothing, the mixin's violation.
-			got, err := subject.Total(tb.Context())
-			testkit.NoError(tb, err, "the total is readable")
-			testkit.Equal(tb, got, 0, "and the transfer conserved it")
-		}),
+	conservativetest.RunMixed(t,
+		conservativetest.MixedHarness[*conservativetest.InMemory]{Name: "in-memory", New: conservativetest.NewInMemory},
+		conservativetest.MixedChecks{
+			{
+				Method: "Total",
+				Name:   "transfer-conserves-the-sum",
+				Claim:  "Total holds the conserved sum through a transfer",
+				Run: func(tb testing.TB, s conservative.Mixed, fx conservativetest.MixedFixture) {
+					tb.Helper()
+					// Apply is a transfer: the conserved sum must still read as
+					// it did at birth — a non-zero total is quantity minted
+					// from nothing, the mixin's violation.
+					testkit.NoError(tb, s.Apply(tb.Context(), fx.Delta()), "the transfer is applied")
+
+					got, err := s.Total(tb.Context())
+					testkit.NoError(tb, err, "the total is readable")
+					testkit.Equal(tb, got, 0, "and the transfer conserved it")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	conservativetest.AssertMixedContract(t,
-		conservativetest.MixedSubject("in-memory", func() conservative.Mixed {
-			return conservativetest.NewInMemory()
-		}),
-		conservativetest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	conservativetest.MixedModelSaturation(t, func() conservative.Mixed {
-		return conservativetest.NewInMemory()
-	})
 }

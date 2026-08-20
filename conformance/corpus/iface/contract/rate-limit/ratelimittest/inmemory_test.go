@@ -26,65 +26,70 @@ const period = 10 * time.Millisecond
 // to write rather than a check to invent.
 //
 // The claim needs controlled time — a limiter refuses only after the budget is
-// spent, and the budget refills as the clock moves. The harness makes a fixed
-// sequence of calls and cannot move anything, so a generated check would spend
-// a handful of tokens out of a burst of ten and report success against a
-// limiter that never refuses.
-//
-// The subject is built with the burst the directive names, so the run's calls
-// sit inside it and the family that does apply — cancellation, deadline, a nil
-// context — is exercised against a limiter behaving normally.
+// spent, and the budget refills as the clock moves. A run makes a fixed
+// sequence of calls and cannot move anything, so a derived check would spend a
+// handful of tokens out of a burst of ten and report success against a limiter
+// that never refuses. The refusal is reached by declaring a second subject
+// whose bucket is small and whose clock has already run.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	ratelimittest.AssertContractContract(t,
-		ratelimittest.ContractModel(),
-		ratelimittest.ContractSubject("in-memory", func() ratelimit.Contract {
-			return ratelimittest.NewInMemory(clock.NewTestClock(origin), 10, period)
-		}),
-		ratelimittest.ContractSubject("in-memory, one token on a clock already moved", func() ratelimit.Contract {
-			// The refusal and the refill are both out of a generated check's
-			// reach — the harness makes a fixed number of calls and holds no
-			// clock — and both are within a factory's, which may hand back a
-			// subject whose bucket is small and whose clock has already run.
-			//
-			// The seed spends the one token, so the check below meets a limiter
-			// with nothing left. That is the state the whole classification is
-			// about, and a factory is what puts a subject in it.
-			clk := clock.NewTestClock(origin)
-			s := ratelimittest.NewInMemory(clk, 1, period)
-			clk.Advance(2 * period)
-			return s
-		}),
-		ratelimittest.ContractOnRun("refuses a caller with nothing left", func(
-			tb testing.TB, subject ratelimit.Contract, key string,
-		) {
-			tb.Helper()
-			// True of the spent subject and vacuous for the generous one, which
-			// is the shape a two-subject claim takes when only one of them can
-			// be in the state under check.
-			for range 10 {
-				if err := subject.Run(tb.Context(), key); err != nil {
-					testkit.ErrorIs(tb, err, ratelimittest.ErrLimited,
-						"a refusal says the rate was the reason")
-					return
-				}
-			}
-			testkit.NoError(tb, subject.Run(tb.Context(), key),
-				"a limiter inside its burst keeps admitting")
-		}),
+	ratelimittest.RunContract(t,
+		ratelimittest.ContractHarness[*ratelimittest.InMemory]{
+			Name: "in-memory",
+			New: func() *ratelimittest.InMemory {
+				return ratelimittest.NewInMemory(clock.NewTestClock(origin), 10, period)
+			},
+		},
+		ratelimittest.ContractHarness[*ratelimittest.InMemory]{
+			Name: "in-memory, one token on a clock already moved",
+			New: func() *ratelimittest.InMemory {
+				clk := clock.NewTestClock(origin)
+				s := ratelimittest.NewInMemory(clk, 1, period)
+				clk.Advance(2 * period)
+				return s
+			},
+		},
+		ratelimittest.ContractChecks{
+			{
+				Method: "Run",
+				Name:   "refuses-a-caller-with-nothing-left",
+				Claim:  "Run refuses a caller with nothing left",
+				Run: func(tb testing.TB, s ratelimit.Contract, fx ratelimittest.ContractFixture) {
+					tb.Helper()
+					// Spend until refused, which both subjects reach: the
+					// generous one after its burst of ten, the spent one on
+					// its first call. What is asserted is that the refusal
+					// comes, and that it says the rate was the reason.
+					for range 11 {
+						err := s.Run(tb.Context(), fx.Key())
+						if err == nil {
+							continue
+						}
+						testkit.ErrorIs(tb, err, ratelimittest.ErrLimited,
+							"a refusal says the rate was the reason")
+						return
+					}
+					tb.Fatalf("a limiter that never refuses bounds nothing")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	ratelimittest.AssertContractContract(t,
-		ratelimittest.ContractSubject("in-memory", func() ratelimit.Contract {
-			return ratelimittest.NewInMemory(clock.NewTestClock(origin), 10, period)
-		}),
-		ratelimittest.ContractWithout("Run/smoke"),
-		ratelimittest.ContractWithoutDouble(),
+	ratelimittest.RunContract(t,
+		ratelimittest.ContractHarness[*ratelimittest.InMemory]{
+			Name: "in-memory",
+			New: func() *ratelimittest.InMemory {
+				return ratelimittest.NewInMemory(clock.NewTestClock(origin), 10, period)
+			},
+		},
+		ratelimittest.ContractSuite.Without(ratelimittest.ContractSuite.Checks.Run.Smoke()),
 	)
 }

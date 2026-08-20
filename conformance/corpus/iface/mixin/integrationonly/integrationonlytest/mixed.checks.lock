@@ -1,0 +1,5 @@
+testkit-checks v2
+Connect/cancel	signature/cancel	Connect reports a cancelled context as cancelled	
+Connect/deadline	signature/deadline	Connect reports an expired deadline as exceeded	
+Connect/nilcontext	signature/nilcontext	Connect returns an error rather than panicking on a nil context	
+Connect/smoke	signature/smoke	Connect survives a call with a derived dsn	

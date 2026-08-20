@@ -4,9 +4,11 @@
 package suite_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 
+	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/engine/suite"
 )
 
@@ -247,4 +249,70 @@ func TestEveryClassNamesItsConstant(t *testing.T) {
 			t.Errorf("ClassConst(%q) = %q, want %q", c, got, want)
 		}
 	}
+}
+
+// Every segment this package words a failure for names its constant, and
+// the constant it names holds the substring the failure actually
+// contains.
+//
+// Two assertions rather than one, because the two ways this table rots
+// are different. A wrong identifier is a generated file that does not
+// compile, which is loud. A right identifier over a reworded message is a
+// proof that keeps passing while proving nothing, which is the failure
+// the whole falsifiability tier exists to prevent — so the message is
+// staged here and read, rather than trusted.
+func TestEveryRedNamesItsConstantAndItsText(t *testing.T) {
+	t.Parallel()
+
+	reds := map[string][2]string{
+		suite.SegSmoke:      {"RedPanicked", suite.RedPanicked},
+		suite.SegCancel:     {"RedCancelled", suite.RedCancelled},
+		suite.SegDeadline:   {"RedDeadline", suite.RedDeadline},
+		suite.SegNilContext: {"RedNilContext", suite.RedNilContext},
+	}
+
+	for seg, want := range reds {
+		got, ok := suite.RedConst(seg)
+		if !ok {
+			t.Errorf("RedConst(%q) names no constant, so a proof for it cannot quote one", seg)
+			continue
+		}
+		if got != want[0] {
+			t.Errorf("RedConst(%q) = %q, want %q", seg, got, want[0])
+		}
+	}
+
+	t.Run("each primitive's failure contains the substring its proofs quote", func(t *testing.T) {
+		t.Parallel()
+
+		cases := []struct {
+			seg, want string
+			drive     func(tb testing.TB)
+		}{
+			{suite.SegSmoke, suite.RedPanicked, func(tb testing.TB) {
+				suite.Survives(tb, "M", func(context.Context) { panic("planted") })
+			}},
+			{suite.SegCancel, suite.RedCancelled, func(tb testing.TB) {
+				suite.ReportsCancelled(tb, "M", func(context.Context) error { return nil })
+			}},
+			{suite.SegDeadline, suite.RedDeadline, func(tb testing.TB) {
+				suite.ReportsDeadlineExceeded(tb, "M", func(context.Context) error { return nil })
+			}},
+			{suite.SegNilContext, suite.RedNilContext, func(tb testing.TB) {
+				suite.ToleratesNilContext(tb, "M", func(context.Context) error { return nil })
+			}},
+		}
+
+		for _, c := range cases {
+			t.Run(c.seg, func(t *testing.T) {
+				t.Parallel()
+
+				got := testkit.Rejects(t, "a subject that breaks the claim", c.drive)
+				if !strings.Contains(got, c.want) {
+					t.Errorf("the %s failure reads %q, which does not contain %q — "+
+						"every emitted proof quoting it has stopped proving", c.seg, got, c.want)
+				}
+			})
+		}
+	})
 }

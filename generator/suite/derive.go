@@ -6,6 +6,8 @@ package suite
 import (
 	"slices"
 
+	"go.thesmos.sh/eidos/plugins/annotator/shape"
+
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -38,6 +40,16 @@ type Iface struct {
 	// Fixture is the derived input set; a draw it cannot deliver turns
 	// a method's derived families into one refusal.
 	Fixture Fixture
+
+	// Corpus reports that this run seeds every subject from a derived
+	// corpus, which changes what a miss draws.
+	//
+	// The fixture's alternate is a second SEEDED key once a corpus
+	// exists — the zip takes every member of the key pool — so a miss
+	// body drawing it hits, and passes while asserting the opposite of
+	// its claim. Where this holds, the miss draws the key deliberately
+	// left out instead.
+	Corpus bool
 }
 
 // seeded reports the seed-seam interface: nothing on it can write, so
@@ -45,6 +57,18 @@ type Iface struct {
 // claims speak "seeded" rather than "derived".
 func (f Iface) seeded() bool {
 	return !slices.ContainsFunc(f.Methods, writesSomething)
+}
+
+// supplies reports that something on this run can put an input where a
+// read will find it — a writer to call, or a corpus the harness is
+// handed. It is what makes "an input nothing supplied" name a real case
+// rather than every input the method takes.
+//
+// Distinct from seeded, which asks the opposite question and answers
+// yes for an interface with no state at all: a codec writes nothing,
+// so it is seeded() and supplies() nothing.
+func (f Iface) supplies() bool {
+	return f.Corpus || slices.ContainsFunc(f.Methods, writesSomething)
 }
 
 // DeriverName identifies a deriver in the registry and in refusal
@@ -117,8 +141,9 @@ func argsRefusal(d DeriverName, f Iface, m Method, what string) (Refusal, bool) 
 		Deriver: d,
 		What:    m.Name + what,
 		Why:     "its " + arg + " argument needs a value " + field.Reason(),
-		Remedy: "supply the value through " + f.Name + "WithFixture and write the check as " +
-			f.Name + "On" + m.Name,
+		Remedy: "stamp the type with //testkit:role and //testkit:default so " +
+			projection.ConfigName(f.Name) + " carries a pool, or write the claim as a " +
+			projection.RowsName(f.Name) + " row",
 	}, true
 }
 
@@ -156,4 +181,71 @@ func InventoryOf(f Iface) (projection.Inventory, []Refusal) {
 		refusals = append(refusals, refused...)
 	}
 	return inv, refusals
+}
+
+// derivedSeeded reports the seed-seam interface: nothing on it can
+// write, so a run cannot populate it through the surface under test and
+// the harness has to receive the corpus instead.
+//
+// The exported half of [Iface.seeded], taken over a method slice because
+// the shell asks before it has built an Iface.
+func derivedSeeded(methods []Method) bool {
+	return !slices.ContainsFunc(methods, writesSomething)
+}
+
+// declaredLimit reports the bound any method declares, empty where none
+// does.
+//
+// The first one found. An interface stamping two different bounds has
+// declared two ceilings for one subject, which is a contradiction its
+// author has to settle — and taking either silently would build every
+// harness at a capacity half the declarations disagree with.
+func declaredLimit(methods []Method) string {
+	for _, m := range methods {
+		if v, declared := m.MixinParam(MixinBounded, MixinBoundedLimit); declared && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// MissSentinel is the error a method reports for an input nothing
+// wrote, and whether it declares one.
+//
+// Two declarations, in precedence order. A `notfound sentinel=` is the
+// read's own answer and the ordinary case. A `ttl notfound=` overrides
+// it, because expiry and absence are separate conditions that usually
+// coincide: a store whose lapsed reads report differently from its
+// missing ones says so there, and one where they agree declares only
+// the first and this falls through to it.
+//
+// The convention is documented on ttl's parameter upstream; this is its
+// one implementation, so no caller has to remember the order — and the
+// model tier reads it too, which is why it is exported. Its own version
+// scanned EVERY mixin for a `sentinel=` or `notfound=` and took the
+// first hit, so an interface stamping ttl beside lifecycleafterclose
+// could be handed a post-close sentinel as its miss sentinel.
+func MissSentinel(m Method) (string, bool) {
+	if v, declared := stampedParam(m, MixinTTL, MixinTTLNotFound); declared {
+		return v, true
+	}
+	return stampedParam(m, MixinNotFound, MixinNotFoundSentinel)
+}
+
+// stampedParam reads one mixin parameter off the DECLARATION rather
+// than off the projected map.
+//
+// The map exists because a template renders long after the node left
+// scope, and it is right for that. This is asked during derivation,
+// where the node is still in hand — and [Method.Shape] already reads
+// the same way for the same reason. Reading the declaration also means
+// a caller holding a hand-built projection, which every deriver test
+// does, gets the answer the pipeline would give rather than an empty
+// map's silence.
+func stampedParam(m Method, mixin, param string) (string, bool) {
+	if m.Source == nil {
+		return "", false
+	}
+	v, found := shape.MixinParamKey(mixin, param).Get(m.Source.Meta())
+	return v, found && v != ""
 }

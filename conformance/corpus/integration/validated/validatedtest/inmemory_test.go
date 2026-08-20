@@ -24,37 +24,39 @@ import (
 func TestStoreContract(t *testing.T) {
 	t.Parallel()
 
-	validatedtest.AssertStoreContract(t,
-		validatedtest.StoreSubject("in-memory", func() validated.Store {
-			return validatedtest.NewInMemory()
-		}),
+	validatedtest.RunStore(t,
+		validatedtest.StoreHarness[*validatedtest.InMemory]{Name: "in-memory", New: validatedtest.NewInMemory},
+		validatedtest.StoreChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-the-stored-account",
+				Claim:  "Get returns the account Put stored",
+				Run: func(tb testing.TB, s validated.Store, fx validatedtest.StoreFixture) {
+					tb.Helper()
+					// A domain rule no classification implies. It runs against
+					// every subject and through the double, from this one row.
+					want := validated.AccountDefaults()
+					testkit.NoError(tb, s.Put(tb.Context(), want), "a valid account stores")
 
-		// A domain rule no classification implies. It runs against every
-		// subject and through the double, from this one statement.
-		// The seed writes AccountDefaults, whose ID is UUID-shaped; the derived
-		// key the reader's checks are handed is "test-id". They cannot agree,
-		// so the hit path is one only a check reading the seeded account's own
-		// identifier reaches — which is the shape of every read-after-write
-		// claim, and the reason the classification that states it is the model
-		// tier's rather than something derivable here.
-		validatedtest.StoreOnGet("returns the account Put stored", func(
-			tb testing.TB, subject validated.Store, id string,
-		) {
-			tb.Helper()
-			want := validated.AccountDefaults()
-			got, err := subject.Get(tb.Context(), want.ID)
-			testkit.NoError(tb, err, "a stored account is found by its own identifier")
-			testkit.Equal(tb, got, want, "and comes back whole")
-		}),
-		validatedtest.StoreOnPut("refuses an address with no @",
-			func(tb testing.TB, subject validated.Store, a validated.Account) {
-				tb.Helper()
-				// Built from the valid account rather than written out: a
-				// literal restating every field goes stale the moment one is
-				// added, and would then be refused for the wrong reason.
-				bad := validatedtest.NewAccountFrom(a).WithEmail("no-at-sign").Build()
-				testkit.ErrorIs(tb, subject.Put(tb.Context(), bad), validatedtest.ErrInvalid,
-					"Put must refuse an account whose email is not one")
-			}),
+					got, err := s.Get(tb.Context(), want.ID)
+					testkit.NoError(tb, err, "a stored account is found by its own identifier")
+					testkit.Equal(tb, got, want, "and comes back whole")
+				},
+			},
+			{
+				Method: "Put",
+				Name:   "refuses-an-address-with-no-at",
+				Claim:  "Put refuses an address with no @",
+				Run: func(tb testing.TB, s validated.Store, fx validatedtest.StoreFixture) {
+					tb.Helper()
+					// Built from the valid account rather than written out: a
+					// literal restating every field goes stale the moment one is
+					// added, and would then be refused for the wrong reason.
+					bad := validatedtest.NewAccountFrom(fx.Account()).WithEmail("no-at-sign").Build()
+					testkit.ErrorIs(tb, s.Put(tb.Context(), bad), validatedtest.ErrInvalid,
+						"Put must refuse an account whose email is not one")
+				},
+			},
+		},
 	)
 }

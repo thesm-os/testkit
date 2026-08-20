@@ -206,7 +206,8 @@ func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 	testkit.Len(t, refusals, 1, "the whole family set folds into one refusal")
 	testkit.Equal(t, refusals[0].What, "Append's signature checks", "the refusal names the method's family set")
 	testkit.Contains(t, refusals[0].Why, "Entry", "the refusal names the draw nothing supplies")
-	testkit.Contains(t, refusals[0].Remedy, "LogWithFixture", "the remedy names the consumer seam")
+	testkit.Contains(t, refusals[0].Remedy, "LogConfig", "the remedy names where the value comes from")
+	testkit.Contains(t, refusals[0].Remedy, "LogChecks", "and where the claim goes")
 }
 
 func TestSignaturePlansSatisfyTheInventory(t *testing.T) {

@@ -16,30 +16,37 @@ import (
 // does not have, and emitting them would not compile.
 //
 // So almost everything worth checking here is the author's, which is what the
-// extension point is for.
+// row table is for. The zero divisor comes from the row rather than the
+// fixture: a generator derives plausible integers and every plausible divisor
+// divides, so the error path is one derivation cannot reach.
 func TestCalculatorContract(t *testing.T) {
 	t.Parallel()
 
-	nocontexttest.AssertCalculatorContract(t,
-		nocontexttest.CalculatorSubject("in-memory", func() nocontext.Calculator {
-			return nocontexttest.NewInMemory()
-		}),
-		nocontexttest.CalculatorWithFixture(divisibleFixture()),
-		nocontexttest.CalculatorOnAdd("is commutative", func(
-			tb testing.TB, subject nocontext.Calculator, a, b int,
-		) {
-			tb.Helper()
-			testkit.Equal(tb, subject.Add(a, b), subject.Add(b, a),
-				"addition does not depend on the order of its operands")
-		}),
-		nocontexttest.CalculatorOnDivide("reports a zero divisor", func(
-			tb testing.TB, subject nocontext.Calculator, a, b int,
-		) {
-			tb.Helper()
-			_, err := subject.Divide(a, 0)
-			testkit.ErrorIs(tb, err, nocontexttest.ErrDivideByZero,
-				"a zero divisor is an error rather than a panic")
-		}),
+	nocontexttest.RunCalculator(t,
+		nocontexttest.CalculatorHarness[*nocontexttest.InMemory]{Name: "in-memory", New: nocontexttest.NewInMemory},
+		nocontexttest.CalculatorChecks{
+			{
+				Method: "Add",
+				Name:   "is-commutative",
+				Claim:  "Add is commutative",
+				Run: func(tb testing.TB, s nocontext.Calculator, fx nocontexttest.CalculatorFixture) {
+					tb.Helper()
+					testkit.Equal(tb, s.Add(fx.A(), fx.B()), s.Add(fx.B(), fx.A()),
+						"addition does not depend on the order of its operands")
+				},
+			},
+			{
+				Method: "Divide",
+				Name:   "reports-a-zero-divisor",
+				Claim:  "Divide reports a zero divisor",
+				Run: func(tb testing.TB, s nocontext.Calculator, fx nocontexttest.CalculatorFixture) {
+					tb.Helper()
+					_, err := s.Divide(fx.A(), 0)
+					testkit.ErrorIs(tb, err, nocontexttest.ErrDivideByZero,
+						"a zero divisor is an error rather than a panic")
+				},
+			},
+		},
 	)
 }
 
@@ -48,23 +55,8 @@ func TestCalculatorContract(t *testing.T) {
 func TestCalculatorContractSuppression(t *testing.T) {
 	t.Parallel()
 
-	nocontexttest.AssertCalculatorContract(t,
-		nocontexttest.CalculatorSubject("in-memory", func() nocontext.Calculator {
-			return nocontexttest.NewInMemory()
-		}),
-		nocontexttest.CalculatorWithFixture(divisibleFixture()),
-		nocontexttest.CalculatorWithout("Add/smoke"),
-		nocontexttest.CalculatorWithoutDouble(),
+	nocontexttest.RunCalculator(t,
+		nocontexttest.CalculatorHarness[*nocontexttest.InMemory]{Name: "in-memory", New: nocontexttest.NewInMemory},
+		nocontexttest.CalculatorSuite.Without(nocontexttest.CalculatorSuite.Checks.Add.Smoke()),
 	)
-}
-
-// divisibleFixture supplies the divisor the derivation could not.
-//
-// A generator derives plausible integers, and every plausible divisor divides —
-// so the zero-value check has no way to reach the error path, and says so by
-// name rather than passing. Zero is the one divisor that misses.
-func divisibleFixture() nocontexttest.CalculatorFixture {
-	f := nocontexttest.DefaultCalculatorFixture()
-	f.BOther = 0
-	return f
 }

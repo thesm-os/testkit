@@ -545,7 +545,19 @@ var VacuityDebt = map[string]VacuityRow{
 		// 312 -> 314: the cursor producer arm's Open and the pool stats
 		// role's Stats each take only a context, which lands at its zero
 		// exactly as this row's reason describes.
-		Ceiling: 314,
+		//
+		// 314 -> 319: the roledtypes fixture, added so the pool
+		// derivation is exercised by this gate rather than by the
+		// validated packs alone. Its Put and Get each take a context,
+		// and the five findings are that context at its zero — the same
+		// class, attributed by removing the fixture and watching the
+		// count return to 314.
+		//
+		// 319 -> 322: the seededreader fixture, added so the seed seam is
+		// exercised by this gate — a harness receiving its corpus because
+		// nothing on the interface writes. Its Lookup and Len each take a
+		// context, attributed the same way.
+		Ceiling: 322,
 		Why: "what is left of the generated stub's zero arguments after pinning every one a " +
 			"literal can be written for: a context, an interface, a variadic tail, a type " +
 			"from a package the run never read. Those are handed in at their zero and the " +

@@ -4,7 +4,6 @@
 package aggregatortest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -22,47 +21,41 @@ import (
 func TestAggregatorContract(t *testing.T) {
 	t.Parallel()
 
-	aggregatortest.AssertAggregatorContract(t,
-		aggregatortest.AggregatorModel(),
-		aggregatortest.AggregatorSubject("in-memory", func() aggregator.Aggregator {
-			return aggregatortest.NewInMemory()
-		}),
-		aggregatortest.AggregatorSeed(func(_ context.Context, subject aggregator.Aggregator) error {
-			// Aggregator declares no writer, so nothing is derived. A seed may
-			// reach for the concrete subject: it runs before the double wraps
-			// it and sees what the factory made. A check may not.
-			subject.(*aggregatortest.InMemory).Add("seeded")
-			return nil
-		}),
-		aggregatortest.AggregatorOnCount("counts what the collection holds", func(
-			tb testing.TB, subject aggregator.Aggregator,
-		) {
-			tb.Helper()
-			got, err := subject.Count(tb.Context())
-			testkit.NoError(tb, err, "counting a healthy collection succeeds")
-			testkit.Equal(tb, got, 1, "and reports what the seed put there")
-		}),
+	aggregatortest.RunAggregator(t,
+		aggregatortest.AggregatorHarness[*aggregatortest.InMemory]{
+			Name: "in-memory",
+			// Aggregator declares no writer, so nothing is derived to seed
+			// through and the seed is the constructor's.
+			New: func() *aggregatortest.InMemory {
+				s := aggregatortest.NewInMemory()
+				s.Add("seeded")
+				return s
+			},
+		},
+		aggregatortest.AggregatorChecks{
+			{
+				Method: "Count",
+				Name:   "counts-what-it-holds",
+				Claim:  "Count counts what the collection holds",
+				Run: func(tb testing.TB, s aggregator.Aggregator, fx aggregatortest.AggregatorFixture) {
+					tb.Helper()
+					got, err := s.Count(tb.Context())
+					testkit.NoError(tb, err, "counting a healthy collection succeeds")
+					testkit.Equal(tb, got, 1, "and reports what the constructor put there")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestAggregatorContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestAggregatorContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	aggregatortest.AssertAggregatorContract(t,
-		aggregatortest.AggregatorSubject("in-memory", func() aggregator.Aggregator {
-			return aggregatortest.NewInMemory()
-		}),
-		aggregatortest.AggregatorWithout("Count/smoke"),
-		aggregatortest.AggregatorWithoutDouble(),
+	aggregatortest.RunAggregator(t,
+		aggregatortest.AggregatorHarness[*aggregatortest.InMemory]{Name: "in-memory", New: aggregatortest.NewInMemory},
+		aggregatortest.AggregatorSuite.Without(aggregatortest.AggregatorSuite.Checks.Count.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestAggregatorSaturation(t *testing.T) {
-	t.Parallel()
-	aggregatortest.AggregatorModelSaturation(t, func() aggregator.Aggregator {
-		return aggregatortest.NewInMemory()
-	})
 }

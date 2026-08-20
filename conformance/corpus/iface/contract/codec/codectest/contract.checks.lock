@@ -1,0 +1,11 @@
+testkit-checks v2
+Decode/cancel	signature/cancel	Decode reports a cancelled context as cancelled	
+Decode/deadline	signature/deadline	Decode reports an expired deadline as exceeded	
+Decode/nilcontext	signature/nilcontext	Decode returns an error rather than panicking on a nil context	
+Decode/smoke	signature/smoke	Decode survives a call with a seeded in	
+Decode/zero-on-error	signature/zero-on-error	Decode returns zero alongside any error	
+Encode/cancel	signature/cancel	Encode reports a cancelled context as cancelled	
+Encode/deadline	signature/deadline	Encode reports an expired deadline as exceeded	
+Encode/nilcontext	signature/nilcontext	Encode returns an error rather than panicking on a nil context	
+Encode/smoke	signature/smoke	Encode survives a call with a seeded in	
+Encode/zero-on-error	signature/zero-on-error	Encode returns zero alongside any error	

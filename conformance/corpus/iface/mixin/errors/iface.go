@@ -39,7 +39,13 @@ var (
 type Mixed interface {
 	// Get reports [ErrNotFound] and nothing else for a miss. The sentinel has
 	// to be declared in the package for the assertion to reference it.
+	//
+	// The notfound mixin is what makes the miss derivable: nothing on this
+	// interface writes, so without a declared sentinel no draw would be one
+	// nothing supplied and the rule refuses. The fault directive is a
+	// different key — it says what the DOUBLE can be told to return.
 	//testkit:mixin errors
+	//testkit:mixin notfound sentinel=ErrNotFound
 	//testkit:fault ErrNotFound ErrGone
 	Get(ctx context.Context, key string) (string, error)
 }

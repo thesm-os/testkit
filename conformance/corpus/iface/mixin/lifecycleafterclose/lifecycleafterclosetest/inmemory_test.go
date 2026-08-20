@@ -20,42 +20,42 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	lifecycleafterclosetest.AssertMixedContract(t,
-		lifecycleafterclosetest.MixedModel(),
-		lifecycleafterclosetest.MixedSubject("in-memory", func() lifecycleafterclose.Mixed {
-			return lifecycleafterclosetest.NewInMemory()
-		}),
-		lifecycleafterclosetest.MixedOnWork("refuses work after the subject closed", func(
-			tb testing.TB, subject lifecycleafterclose.Mixed,
-		) {
-			tb.Helper()
-			// The mixin's own claim, and one no single call can make: what
-			// changes is the state between the two.
-			testkit.NoError(tb, subject.Close(tb.Context()), "the subject closes")
-			testkit.Error(tb, subject.Work(tb.Context()),
-				"and work after it is refused rather than quietly done")
-		}),
+	lifecycleafterclosetest.RunMixed(
+		t,
+		lifecycleafterclosetest.MixedHarness[*lifecycleafterclosetest.InMemory]{
+			Name: "in-memory",
+			New:  lifecycleafterclosetest.NewInMemory,
+		},
+		lifecycleafterclosetest.MixedChecks{
+			{
+				Method: "Work",
+				Name:   "refused-after-close",
+				Claim:  "Work refuses work after the subject closed",
+				Run: func(tb testing.TB, s lifecycleafterclose.Mixed, fx lifecycleafterclosetest.MixedFixture) {
+					tb.Helper()
+					// The mixin's own claim, and one no single call can make:
+					// what changes is the state between the two.
+					testkit.NoError(tb, s.Close(tb.Context()), "the subject closes")
+					testkit.Error(tb, s.Work(tb.Context()),
+						"and work after it is refused rather than quietly done")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	lifecycleafterclosetest.AssertMixedContract(t,
-		lifecycleafterclosetest.MixedSubject("in-memory", func() lifecycleafterclose.Mixed {
-			return lifecycleafterclosetest.NewInMemory()
-		}),
-		lifecycleafterclosetest.MixedWithout("Work/smoke"),
-		lifecycleafterclosetest.MixedWithoutDouble(),
+	lifecycleafterclosetest.RunMixed(
+		t,
+		lifecycleafterclosetest.MixedHarness[*lifecycleafterclosetest.InMemory]{
+			Name: "in-memory",
+			New:  lifecycleafterclosetest.NewInMemory,
+		},
+		lifecycleafterclosetest.MixedSuite.Without(lifecycleafterclosetest.MixedSuite.Checks.Work.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	lifecycleafterclosetest.MixedModelSaturation(t, func() lifecycleafterclose.Mixed {
-		return lifecycleafterclosetest.NewInMemory()
-	})
 }

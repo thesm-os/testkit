@@ -6,7 +6,7 @@
   idents come through the naming policy, never spelled here.
 */}}
 {{- define "suite.body.smoke-survives" -}}
-suite.Survives(tb, {{.Check}}, func(ctx context.Context) {
+{{ renderExpr (external .Vocab "Survives") }}(tb, {{ .Check }}, func(ctx {{ renderExpr (external "context" "Context") }}) {
 {{- if .Body.Borrow.Method}}
 	{{suite_borrowedIdent}}, err := {{suite_callExpr .Recv .Body.Borrow}}
 	if err != nil {

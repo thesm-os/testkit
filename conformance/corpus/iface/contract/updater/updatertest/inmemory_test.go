@@ -11,55 +11,48 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/updater/updatertest"
 )
 
-// updater is the model tier's under ADR-0018: `AUTO-UPDATER-REPLACES` states
-// it.
+// The generated contract, run against the in-memory subject.
 //
-// The suite tier still earns the pairing, because the harness seeds through the
-// writer role: Get's "an error carries the zero value" check therefore runs
-// against a store holding something, which is what makes the miss it asks about
-// a real miss.
+// Nothing distinguishes an updater from an upserter in either signature —
+// both are Put beside Get — so what the two contracts claim differently is
+// the row's to state.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	updatertest.AssertContractContract(t,
-		updatertest.ContractModel(),
-		updatertest.ContractSubject("in-memory", func() updater.Contract {
-			return updatertest.NewInMemory()
-		}),
-		updatertest.ContractOnPut("replaces rather than accumulates", func(
-			tb testing.TB, subject updater.Contract, v updater.Value,
-		) {
-			tb.Helper()
-			// The seed already wrote this key, so this is the update the
-			// contract is named for.
-			replacement := updater.Value{Key: v.Key, Body: v.Body + "-replaced"}
-			testkit.NoError(tb, subject.Put(tb.Context(), replacement), "the update lands")
+	updatertest.RunContract(t,
+		updatertest.ContractHarness[*updatertest.InMemory]{Name: "in-memory", New: updatertest.NewInMemory},
+		updatertest.ContractChecks{
+			{
+				Method: "Put",
+				Name:   "replaces-rather-than-accumulates",
+				Claim:  "Put replaces rather than accumulates",
+				Run: func(tb testing.TB, s updater.Contract, fx updatertest.ContractFixture) {
+					tb.Helper()
+					// The row writes the key first: an update needs something
+					// to update, and a fresh subject holds nothing.
+					first := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), first), "the first write lands")
 
-			got, err := subject.Get(tb.Context(), v.Key)
-			testkit.NoError(tb, err, "and the key is still there")
-			testkit.Equal(tb, got, replacement, "carrying the newer value")
-		}),
+					replacement := updater.Value{Key: first.Key, Body: first.Body + "-replaced"}
+					testkit.NoError(tb, s.Put(tb.Context(), replacement), "the update lands")
+
+					got, err := s.Get(tb.Context(), first.Key)
+					testkit.NoError(tb, err, "and the key is still there")
+					testkit.Equal(tb, got, replacement, "carrying the newer value")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	updatertest.AssertContractContract(t,
-		updatertest.ContractSubject("in-memory", func() updater.Contract {
-			return updatertest.NewInMemory()
-		}),
-		updatertest.ContractWithout("Put/smoke"),
-		updatertest.ContractWithoutDouble(),
+	updatertest.RunContract(t,
+		updatertest.ContractHarness[*updatertest.InMemory]{Name: "in-memory", New: updatertest.NewInMemory},
+		updatertest.ContractSuite.Without(updatertest.ContractSuite.Checks.Put.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	updatertest.ContractModelSaturation(t, func() updater.Contract {
-		return updatertest.NewInMemory()
-	})
 }

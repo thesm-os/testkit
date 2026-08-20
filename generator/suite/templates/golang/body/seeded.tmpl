@@ -1,0 +1,45 @@
+{{/*
+The seeded probes: what a run put in, read back out.
+
+Both need the corpus the harness was populated with, which is why they
+take it rather than drawing from the fixture — the fixture holds one of
+each role and these judge the whole set. A hit check against one key
+would pass for a subject that answers the first thing it was given and
+loses the rest.
+*/}}
+{{- define "suite.body.hit-probe" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+for k, want := range {{ suite_docsIdent }} {
+	{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{- if .HasErr }}
+	if err != nil {
+		tb.Fatalf("{{ .Method }}(%v) was seeded and must answer: %v", k, err)
+	}
+{{- end }}
+	if got != want {
+		tb.Errorf("{{ .Method }}(%v) = %+v, want the seeded %+v", k, got, want)
+	}
+}
+{{- end -}}
+
+{{- /*
+The count: an aggregate against the size of what was seeded.
+
+A number the run knows exactly, which is what makes this checkable at
+all — an aggregate over a subject nobody seeded has no expected value,
+and asserting it is non-negative asserts nothing.
+*/ -}}
+{{- define "suite.body.count-probe" -}}
+{{ if .NeedsCtx }}ctx := tb.Context()
+{{ end }}
+{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{- if .HasErr }}
+if err != nil {
+	tb.Fatalf("{{ .Method }} must answer on a seeded subject: %v", err)
+}
+{{- end }}
+if got != len({{ suite_docsIdent }}) {
+	tb.Errorf("{{ .Method }} = %d, want the %d entries the run seeded", got, len({{ suite_docsIdent }}))
+}
+{{- end -}}

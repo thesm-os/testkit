@@ -12,45 +12,33 @@ import (
 )
 
 // The generated contract, run against the in-memory subject.
+//
+// The hostile value is the row's, not the fixture's: the derivation writes
+// plausible values and a control sequence is exactly what it will not invent.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	injectionsafetest.AssertMixedContract(t,
-		injectionsafetest.MixedModel(),
-		injectionsafetest.MixedSubject("in-memory", func() injectionsafe.Mixed {
-			return injectionsafetest.NewInMemory()
-		}),
-		injectionsafetest.MixedOnStore("round-trips a control sequence as data", func(
-			tb testing.TB, subject injectionsafe.Mixed, key, value string,
-		) {
-			tb.Helper()
-			const hostile = `'; DROP TABLE users; --`
-			testkit.NoError(tb, subject.Store(tb.Context(), key, hostile), "storing succeeds")
-			got, err := subject.Load(tb.Context(), key)
-			testkit.NoError(tb, err, "loading succeeds")
-			testkit.Equal(tb, got, hostile, "the value is data, not syntax")
-			_ = value
-		}),
+	injectionsafetest.RunMixed(
+		t,
+		injectionsafetest.MixedHarness[*injectionsafetest.InMemory]{
+			Name: "in-memory",
+			New:  injectionsafetest.NewInMemory,
+		},
+		injectionsafetest.MixedChecks{
+			{
+				Method: "Store",
+				Name:   "control-sequence-is-data",
+				Claim:  "Store round-trips a control sequence as data",
+				Run: func(tb testing.TB, s injectionsafe.Mixed, fx injectionsafetest.MixedFixture) {
+					tb.Helper()
+					const hostile = `'; DROP TABLE users; --`
+					testkit.NoError(tb, s.Store(tb.Context(), fx.Key(), hostile), "storing succeeds")
+
+					got, err := s.Load(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "loading succeeds")
+					testkit.Equal(tb, got, hostile, "the value is data, not syntax")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	injectionsafetest.AssertMixedContract(t,
-		injectionsafetest.MixedSubject("in-memory", func() injectionsafe.Mixed {
-			return injectionsafetest.NewInMemory()
-		}),
-		injectionsafetest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	injectionsafetest.MixedModelSaturation(t, func() injectionsafe.Mixed {
-		return injectionsafetest.NewInMemory()
-	})
 }

@@ -12,64 +12,48 @@ import (
 )
 
 // causal-chain is the model tier's: `AUTO-REPLAY-CAUSAL-ORDERING` walks the
-// replay against the dependency graph the two doors below spell — the
-// identifiers and edges are the domain's, which is why they are supplied
-// rather than derived.
+// replay against the dependency graph, whose identifiers and edges are the
+// domain's rather than anything derivation can invent.
 //
-// The seed is not supplied, and that is the assertion. The derived one lands
-// the fixture's own entry through Append, which a log admitting only settled
-// causes accepts precisely because the derivation leaves the cause list at its
-// zero. Both call sites here once passed a hand-written seed to work around a
-// derived entry that named a cause nothing had landed.
+// What the suite tier states is the row below: an effect cannot precede its
+// cause. The derived entry leaves the cause list at its zero, which is why a
+// log admitting only settled causes accepts it — the dangling entry is the
+// row's to build.
 func TestLogContract(t *testing.T) {
 	t.Parallel()
 
-	causalchaintest.AssertLogContract(t,
-		causalchaintest.LogModel(
-			causalchaintest.LogModelEntryID(func(e causalchain.Entry) string { return e.ID }),
-			causalchaintest.LogModelDependsOn(func(e causalchain.Entry) []string { return e.DependsOn }),
-		),
-		causalchaintest.LogSubject("in-memory", func() causalchain.Log {
-			return causalchaintest.NewInMemory()
-		}),
-		causalchaintest.LogOnAppend("refuses an entry whose cause has not landed", func(
-			tb testing.TB, subject causalchain.Log, _ causalchain.Entry,
-		) {
-			tb.Helper()
-			dangling := causalchain.Entry{ID: "b6-effect", DependsOn: []string{"b6-cause"}}
-			testkit.ErrorIs(tb, subject.Append(tb.Context(), dangling),
-				causalchaintest.ErrUnmetDependency, "the effect cannot precede its cause")
+	causalchaintest.RunLog(t,
+		causalchaintest.LogHarness[*causalchaintest.InMemory]{Name: "in-memory", New: causalchaintest.NewInMemory},
+		causalchaintest.LogChecks{
+			{
+				Method: "Append",
+				Name:   "refuses-an-unlanded-cause",
+				Claim:  "Append refuses an entry whose cause has not landed",
+				Run: func(tb testing.TB, s causalchain.Log, fx causalchaintest.LogFixture) {
+					tb.Helper()
+					dangling := causalchain.Entry{ID: "b6-effect", DependsOn: []string{"b6-cause"}}
+					testkit.ErrorIs(tb, s.Append(tb.Context(), dangling),
+						causalchaintest.ErrUnmetDependency, "the effect cannot precede its cause")
 
-			testkit.NoError(tb,
-				subject.Append(tb.Context(), causalchain.Entry{ID: "b6-cause"}),
-				"the cause lands first")
-			testkit.NoError(tb, subject.Append(tb.Context(), dangling),
-				"and then the effect is admitted")
-		}),
+					testkit.NoError(tb,
+						s.Append(tb.Context(), causalchain.Entry{ID: "b6-cause"}),
+						"the cause lands first")
+					testkit.NoError(tb, s.Append(tb.Context(), dangling),
+						"and then the effect is admitted")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestLogContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestLogContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	causalchaintest.AssertLogContract(t,
-		causalchaintest.LogSubject("in-memory", func() causalchain.Log {
-			return causalchaintest.NewInMemory()
-		}),
-		causalchaintest.LogWithout("Append/smoke"),
-		causalchaintest.LogWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same doors armed that arm the tier.
-func TestLogSaturation(t *testing.T) {
-	t.Parallel()
-	causalchaintest.LogModelSaturation(t, func() causalchain.Log {
-		return causalchaintest.NewInMemory()
-	},
-		causalchaintest.LogModelEntryID(func(e causalchain.Entry) string { return e.ID }),
-		causalchaintest.LogModelDependsOn(func(e causalchain.Entry) []string { return e.DependsOn }),
+	causalchaintest.RunLog(t,
+		causalchaintest.LogHarness[*causalchaintest.InMemory]{Name: "in-memory", New: causalchaintest.NewInMemory},
+		causalchaintest.LogSuite.Without(causalchaintest.LogSuite.Checks.Append.Smoke()),
 	)
 }

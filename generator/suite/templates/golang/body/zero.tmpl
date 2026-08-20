@@ -13,51 +13,64 @@ difference between a check that ran and a check that could not.
 */}}
 {{- define "suite.body.zero-on-miss" -}}
 ctx := tb.Context()
-{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{ .ZeroBind }} {{ suite_callExpr .Recv .Body.Call }}
 if err == nil {
 	tb.Skipf("{{ .Method }} answered for an input nothing wrote, so this check has no error to "+
 		"inspect; seed a miss through {{ .Pool }}")
 }
-{{ template "suite.frag.zero-judge" . }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge true true) }}
 {{- end -}}
 
 {{- define "suite.body.zero-on-cancel" -}}
 ctx, cancel := {{ renderExpr (external "context" "WithCancel") }}(tb.Context())
 cancel()
-{{ .ValueBind }} {{ suite_callExpr .Recv .Body.Call }}
+{{ .ZeroBind }} {{ suite_callExpr .Recv .Body.Call }}
 if err == nil {
 	tb.Skip("{{ .Method }} answered for a cancelled context, so this check has no error to inspect")
 }
-{{ template "suite.frag.zero-judge" . }}
+{{ template "suite.frag.zero-judge" (.ZeroJudge true true) }}
 {{- end -}}
 
 {{- /*
-The judgement. How the zero is compared comes from the result's own
-type, and the split is comparability rather than spelling: a slice, map
-or func may only be compared against nil, while every other type has a
-zero that can be declared and compared — a named one through the
-backend, since that is an import to register, and a predeclared one by
-its own word.
+The judgement, once per value slot. How each zero is compared comes from
+that result's own type, and the split is comparability rather than
+spelling: a slice, map or func may only be compared against nil, while
+every other type has a zero that can be declared and compared — a named
+one through the backend, since that is an import to register, and a
+predeclared one by its own word.
+
+Every slot, because the claim is about the whole answer. A read that
+zeroes its value and leaks its metadata has told the caller it failed
+and handed them state regardless, and a body judging one slot renders
+identically to one judging both.
 */ -}}
 {{- define "suite.frag.zero-judge" -}}
-{{- if .ZeroIsNil }}
-if got != nil {
-{{- if .HasErr }}
-	tb.Errorf("{{ .Method }} must return nothing alongside an error (err %v)", err)
+{{- $j := . }}
+{{- range $slot := .Slots }}
+{{- if $slot.Nil }}
+if {{ $slot.Bind }} != nil {
+{{- if $j.Erred }}
+	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} alongside an error (err %v)", err)
+{{- else if $j.ShowErr }}
+	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} for an input nothing supplied (err %v)", err)
 {{- else }}
-	tb.Errorf("{{ .Method }} must return nothing for an input nothing supplied")
+	tb.Errorf("{{ $j.Method }} must return nothing{{ with $slot.Label }} for its {{ . }}{{ end }} for an input nothing supplied")
 {{- end }}
 }
 {{- else }}
-var zero {{ if .ZeroType }}{{ renderExpr .ZeroType }}{{ else }}{{ .ZeroWord }}{{ end }}
-if got != zero {
-{{- if .HasErr }}
-	tb.Errorf("{{ .Method }} must return the zero value alongside an error: got %+v, want %+v (err %v)",
-		got, zero, err)
+var {{ $slot.Zero }} {{ if $slot.Type }}{{ renderExpr $slot.Type }}{{ else }}{{ $slot.Word }}{{ end }}
+if {{ $slot.Bind }} != {{ $slot.Zero }} {
+{{- if $j.Erred }}
+	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} alongside an error: got %+v, want %+v (err %v)",
+		{{ $slot.Bind }}, {{ $slot.Zero }}, err)
+{{- else if $j.ShowErr }}
+	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} for an input nothing supplied: got %+v, want %+v (err %v)",
+		{{ $slot.Bind }}, {{ $slot.Zero }}, err)
 {{- else }}
-	tb.Errorf("{{ .Method }} must return the zero value for an input nothing supplied: got %+v, want %+v",
-		got, zero)
+	tb.Errorf("{{ $j.Method }} must return the zero {{ with $slot.Label }}{{ . }}{{ else }}value{{ end }} for an input nothing supplied: got %+v, want %+v",
+		{{ $slot.Bind }}, {{ $slot.Zero }})
 {{- end }}
 }
+{{- end }}
 {{- end }}
 {{- end -}}

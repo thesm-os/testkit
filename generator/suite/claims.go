@@ -90,6 +90,12 @@ func ZeroOnErrorClaim(m Method) string {
 	if len(values) == 0 {
 		return ""
 	}
+	if len(values) > 1 {
+		// The whole answer, because that is what the body judges. A
+		// claim naming one slot of two is the understatement a subject
+		// leaking its metadata slips through.
+		return m.Name + " returns " + zeroNouns(values) + " alongside any error"
+	}
 	src := values[0].Source
 	switch {
 	case src != nil && golang.IsChannel(src):
@@ -156,6 +162,28 @@ func ZeroShapeOf(m Method) ZeroShape {
 		}
 		return ZeroDeclared
 	}
+}
+
+// zeroNouns words what a multi-slot answer owes a zero of.
+//
+// The slots are named where naming them helps — "the zero Value and
+// Meta" tells a reader which two results the check compares. Where a
+// slot has no type name, or two share one, the names stop
+// distinguishing anything and the claim says "every result" instead:
+// "the zero int and int" is worse than saying nothing about which.
+func zeroNouns(values []golang.Return) string {
+	names := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, ret := range values {
+		src := ret.Source
+		if src == nil || src.Name == "" || seen[src.Name] {
+			return "the zero for every result"
+		}
+		seen[src.Name] = true
+		names = append(names, src.Name)
+	}
+	last := len(names) - 1
+	return "the zero " + strings.Join(names[:last], ", ") + " and " + names[last]
 }
 
 // IdempotentClaim words the second-call claim.

@@ -25,5 +25,7 @@ var AdapterDebt = map[string]string{
 	"nocontext":         "the driven closures forward a context the methods refuse to take",
 	"partnernaming":     "the axis proves which relational checks the generator can write down; a model tier states laws about the subject and would say nothing about that",
 	"receivercollision": "the axis proves receiver naming under collision; a model tier would add sequences to a fixture about identifiers",
+	"seededreader":      "the axis proves the seed seam — a harness receiving its corpus because nothing on the interface writes; a model tier drives sequences through a writer, which is the one thing this fixture does not have",
+	"roledtypes":        "the axis proves where a role can be WRITTEN — on a named type for a bare parameter, on a field for a request struct — which is a fact about the declaration shape; a model tier states laws about a subject and would say nothing about that",
 	"variadic":          "a variadic tail has no single argument type for a pool to draw",
 }

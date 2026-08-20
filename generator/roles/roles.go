@@ -78,29 +78,42 @@ func directives() []sdk.DirectiveSchema {
 					"vocabulary and refuses an unknown role by name.",
 			).
 			Positional("role", sdk.Required()).
-			On(sdk.NodeKindField).
+			On(sdk.NodeKindField, sdk.NodeKindAlias).
 			DenyKeys().
 			DenyNegation().
 			Build(),
 	}
 }
 
-// Annotate stamps every roled field, last write wins — a field
-// carrying the directive twice states two intentions, and taking the
-// last matches how a reader scans a line list.
+// Annotate stamps every roled declaration, last write wins — a
+// declaration carrying the directive twice states two intentions, and
+// taking the last matches how a reader scans a line list.
 //
-// The type-level arm — a role on a named type declaration, which the
-// bus and cache fixtures use for roled bare parameters — is recorded
-// in the suite design doc and lands with that corpus slice.
+// Two arms, because a drawn input reaches a method two ways. A request
+// struct carries the role on the FIELD that holds the value. A bare
+// parameter has no field to stamp, so the role goes on the named TYPE
+// the parameter is declared at — `type Key string` above a
+// `//testkit:role key`. The second is not a convenience: an interface
+// whose methods take `(ctx, key Key, v Value)` offers no other place to
+// say which of the two is the key, and refusing to read it there would
+// leave every such interface drawing from no pool at all.
 func (*Plugin) Annotate(ctx *sdk.AnnotatorContext) error {
 	for _, s := range ctx.Reader.Structs().Slice() {
 		for _, f := range s.Fields {
-			dir := sdk.Last(f.Directives(), DirectiveName)
-			if dir == nil || len(dir.Args) == 0 {
-				continue
-			}
-			MetaRole.Set(f.EnsureMeta(), dir.Args[0], Name)
+			stamp(f.Directives(), f.EnsureMeta())
 		}
 	}
+	for _, a := range ctx.Reader.Aliases().Slice() {
+		stamp(a.Directives(), a.EnsureMeta())
+	}
 	return nil
+}
+
+// stamp records one declaration's role, if it declared one.
+func stamp(directives []*sdk.Directive, bag *sdk.Bag) {
+	dir := sdk.Last(directives, DirectiveName)
+	if dir == nil || len(dir.Args) == 0 {
+		return
+	}
+	MetaRole.Set(bag, dir.Args[0], Name)
 }

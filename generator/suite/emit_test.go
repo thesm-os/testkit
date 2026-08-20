@@ -105,7 +105,7 @@ func TestCheckEmitsPairWithTheirMethod(t *testing.T) {
 		},
 	}
 
-	got := checkEmitsOf(sdk.BaseEmit{}, iface, inv)
+	got := checkEmitsOf(sdk.BaseEmit{}, iface, inv, true, false)
 	testkit.Len(t, got, 1, "the declared method pairs; the absent one and the family scope do not")
 	testkit.Equal(t, got[0].Check, "storeGet", "and the check names the method through its constant")
 	testkit.Equal(t, got[0].Recv, "s", "called through the subject's own initial")
@@ -115,4 +115,44 @@ func TestCheckEmitsPairWithTheirMethod(t *testing.T) {
 		"and it carries the assertion the row names")
 	testkit.Equal(t, got[0].ClassConst(), "ClassSmoke",
 		"with the class named rather than spelled as a slug")
+}
+
+// A generic subject's rows claim Argued whatever their deriver stamped.
+//
+// The companion cannot instantiate a planted defect at concrete types —
+// a Go test function takes no type parameters — so a Proven stamp there
+// would be a claim with nothing behind it, and nothing would catch it:
+// the parity gate only runs where a companion emitted a test.
+func TestCheckEmitsArgueWhereNothingCanBePlanted(t *testing.T) {
+	t.Parallel()
+
+	iface := Iface{
+		Name:  "Store",
+		Token: "store",
+		Methods: []Method{
+			{Sig: &golang.Sig{Name: "Get", Returns: []golang.Return{{Error: true}}}},
+		},
+	}
+	inv := projection.Inventory{
+		Checks: []projection.CheckPlan{
+			{
+				ID:          projection.IDPlan{Method: "Get", Seg: vocab.SegSmoke},
+				Class:       vocab.ClassSmoke,
+				Body:        projection.SmokeSurvives{Call: projection.CallPlan{Method: "Get"}},
+				Falsifiable: vocab.Proven(),
+				Defect:      projection.StubPanic{Option: projection.OptionName("Store", "Get")},
+			},
+		},
+	}
+
+	concrete := checkEmitsOf(sdk.BaseEmit{}, iface, inv, true, false)
+	testkit.Len(t, concrete, 1, "the row emits either way")
+	testkit.True(t, concrete[0].Proven,
+		"a concrete subject's smoke check has a defect this generator spells")
+
+	generic := checkEmitsOf(sdk.BaseEmit{}, iface, inv, false, false)
+	testkit.False(t, generic[0].Proven,
+		"the same check claims nothing where no companion can drive it")
+	testkit.Assert(t, generic[0].Argument()).
+		Contains("cannot name them", "and says which fact stopped it")
 }

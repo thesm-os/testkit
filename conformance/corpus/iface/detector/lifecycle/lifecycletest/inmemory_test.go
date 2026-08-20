@@ -11,49 +11,37 @@ import (
 	"go.thesmos.sh/testkit/conformance/corpus/iface/detector/lifecycle/lifecycletest"
 )
 
-// A failable teardown earns the context family and nothing else: Close returns
-// an error alone, so there is no value to hold to the zero.
-//
-// Everything the shape is actually about — that Close is idempotent, that later
-// operations report the sentinel — is a law over two calls or two methods, which
-// no single-call check states. The first is written here; the second needs a
-// method the interface does not declare, and is below.
+// Close carries the idempotent mixin, so Close/idempotent is derived and the
+// row below is the same claim written by hand — kept as the worked example of
+// a row standing beside the generated check it duplicates.
 func TestLifecycleContract(t *testing.T) {
 	t.Parallel()
 
-	lifecycletest.AssertLifecycleContract(t,
-		lifecycletest.LifecycleModel(),
-		lifecycletest.LifecycleSubject("in-memory", func() lifecycle.Lifecycle {
-			return lifecycletest.NewInMemory()
-		}),
-		lifecycletest.LifecycleOnClose("is idempotent", func(
-			tb testing.TB, subject lifecycle.Lifecycle,
-		) {
-			tb.Helper()
-			testkit.NoError(tb, subject.Close(tb.Context()), "the first close succeeds")
-			testkit.NoError(tb, subject.Close(tb.Context()), "and so does the second")
-		}),
+	lifecycletest.RunLifecycle(t,
+		lifecycletest.LifecycleHarness[*lifecycletest.InMemory]{Name: "in-memory", New: lifecycletest.NewInMemory},
+		lifecycletest.LifecycleChecks{
+			{
+				Method: "Close",
+				Name:   "second-close-succeeds",
+				Claim:  "Close is idempotent",
+				Run: func(tb testing.TB, s lifecycle.Lifecycle, fx lifecycletest.LifecycleFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Close(tb.Context()), "the first close succeeds")
+					testkit.NoError(tb, s.Close(tb.Context()), "and so does the second")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestLifecycleContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestLifecycleContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	lifecycletest.AssertLifecycleContract(t,
-		lifecycletest.LifecycleSubject("in-memory", func() lifecycle.Lifecycle {
-			return lifecycletest.NewInMemory()
-		}),
-		lifecycletest.LifecycleWithout("Close/smoke"),
-		lifecycletest.LifecycleWithoutDouble(),
+	lifecycletest.RunLifecycle(t,
+		lifecycletest.LifecycleHarness[*lifecycletest.InMemory]{Name: "in-memory", New: lifecycletest.NewInMemory},
+		lifecycletest.LifecycleSuite.Without(lifecycletest.LifecycleSuite.Checks.Close.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestLifecycleSaturation(t *testing.T) {
-	t.Parallel()
-	lifecycletest.LifecycleModelSaturation(t, func() lifecycle.Lifecycle {
-		return lifecycletest.NewInMemory()
-	})
 }

@@ -22,7 +22,12 @@ import (
 // mixin refuses loudly, a law-backed one is recognized through tiers
 // (the one home of law-backed-ness), and the conformance census holds
 // table ∪ tiers ∪ refusals equal to the registry.
-type stampRule func(f Iface, m Method, call projection.CallPlan) []projection.CheckPlan
+//
+// A rule answers with refusals as well as plans, because a stamp can
+// be recognized and still be unstateable on the interface carrying it:
+// the reader shape is a signature, and a signature does not say
+// whether anything can supply the input a miss withholds.
+type stampRule func(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal)
 
 // mixinRules is the mixin-axis derivation table: one row per attached
 // classification this deriver speaks. Adding a row is the whole cost
@@ -87,10 +92,17 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		for _, name := range m.Mixins {
 			switch rule, tabled := mixins[name]; {
 			case tabled:
-				plans = append(plans, rule(f, m, call)...)
+				ruled, refused := rule(f, m, call)
+				plans = append(plans, ruled...)
+				refusals = append(refusals, refused...)
 			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
 				// the tiers catalogue.
+			case consumedStamps()[name]:
+				// An input to another rule rather than a claim of its
+				// own. It owes no check because the check it feeds is
+				// already derived — and refusing it would report a gap
+				// against a stamp that closed one.
 			default:
 				refusals = append(refusals, Refusal{
 					Deriver: DeriverStamps,
@@ -101,7 +113,9 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 			}
 		}
 		if rule, tabled := detectors[detected]; tabled {
-			plans = append(plans, rule(f, m, call)...)
+			ruled, refused := rule(f, m, call)
+			plans = append(plans, ruled...)
+			refusals = append(refusals, refused...)
 		}
 	}
 	return plans, refusals
@@ -109,7 +123,7 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 
 // idempotentRule probes the repeat: two clean calls, the second
 // changing nothing.
-func idempotentRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPlan {
+func idempotentRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	return []projection.CheckPlan{{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegIdempotent},
 		Class:       vocab.ClassIdempotent,
@@ -117,7 +131,7 @@ func idempotentRule(f Iface, m Method, call projection.CallPlan) []projection.Ch
 		Body:        projection.RepeatProbe{Call: call},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.SecondCallErrs{Option: projection.OptionName(f.Name, m.Name)},
-	}}
+	}}, nil
 }
 
 // The past-tense supply verbs a writer-fed miss claim speaks: the
@@ -134,10 +148,16 @@ const (
 // where one is stamped — the ttl declaration's notfound param is the
 // one stamped home today — and the supply verb from how the subject
 // is populated.
+//
+// Keyed on Corpus rather than on seeded(): the two agree on every
+// interface that has a key and a payload to zip, and diverge on one
+// that writes nothing and has no pools either — a codec — where
+// seeded() is vacuously true and no run seeds anything. "Nothing has
+// seeded" is not what a transform's miss would mean.
 func missWording(f Iface, m Method) (sentinel, verb string) {
-	sentinel, _ = m.MixinParam(MixinTTL, MixinTTLNotFound)
+	sentinel, _ = MissSentinel(m)
 	switch {
-	case f.seeded():
+	case f.Corpus:
 		verb = supplySeeded
 	case sentinel == "":
 		verb = missVerbWritten
@@ -151,11 +171,30 @@ func missWording(f Iface, m Method) (sentinel, verb string) {
 // is reached by choosing an input that is not there, so a method
 // taking nothing after its context offers nowhere to put one and the
 // rule licenses nothing.
-func missRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPlan {
+//
+// The shape alone does not license it either. A codec's Encode is
+// reader-shaped down to the return pair — one input, a value and an
+// error — and nothing on the interface writes, so there is no input
+// it has not been given: every draw is as valid as the canonical one
+// and a check asserting the zero for the alternate asserts a
+// falsehood. Either the declaration names what a miss reports, or the
+// run has to be able to make one; without both the rule refuses, so
+// the gap is named in the header rather than emitted as a claim.
+func missRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	if !m.HasInput() {
-		return nil
+		return nil, nil
 	}
 	sentinel, verb := missWording(f, m)
+	if sentinel == "" && !f.supplies() {
+		return nil, []Refusal{
+			{
+				Deriver: DeriverStamps,
+				What:    m.Name + "'s miss check",
+				Why:     "nothing on this interface writes and no corpus seeds it, so no input is one nothing supplied",
+				Remedy:  "declare what a miss reports with //testkit:mixin notfound sentinel=Err…, or write the claim as a row",
+			},
+		}
+	}
 	plans := []projection.CheckPlan{{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegMiss},
 		Class:       vocab.ClassReader,
@@ -164,26 +203,28 @@ func missRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPla
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.InventsHit{Option: projection.OptionName(f.Name, m.Name)},
 	}}
-	if f.seeded() {
+	if f.Corpus {
 		plans = append(plans, projection.CheckPlan{
 			ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegHit},
 			Class:       vocab.ClassReader,
 			Claim:       HitClaim(m),
-			Body:        projection.HitProbe{Call: call},
+			Body:        projection.HitProbe{Call: hitCall(m)},
 			Falsifiable: vocab.Proven(),
 			Defect:      projection.SwapsValues{Option: projection.OptionName(f.Name, m.Name)},
 		})
 	}
-	return plans
+	return plans, nil
 }
 
 // countRule derives the seeded-aggregator equality. An aggregator on
 // an interface that writes has no fixed number to equal — its count
-// claims are the law catalogue's territory — so the rule licenses
-// nothing there.
-func countRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPlan {
-	if !f.seeded() {
-		return nil
+// claims are the law catalogue's territory — and one on an interface
+// nothing seeds has no number at all, so the rule licenses nothing in
+// either case. Silent rather than refused: the count is the hit's
+// companion and the miss beside it already names the gap.
+func countRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+	if !f.Corpus {
+		return nil, nil
 	}
 	return []projection.CheckPlan{{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegCount},
@@ -192,5 +233,41 @@ func countRule(f Iface, m Method, call projection.CallPlan) []projection.CheckPl
 		Body:        projection.CountProbe{Call: call},
 		Falsifiable: vocab.Proven(),
 		Defect:      projection.FreezeReturn{Option: projection.OptionName(f.Name, m.Name)},
-	}}
+	}}, nil
+}
+
+// consumedStamps are the classifications another derivation READS
+// rather than deriving a check from.
+//
+// The category the census had no name for. A stamp usually states a
+// claim and owes a check; these state an identity some other rule needs
+// — and a stamp that closed a gap being reported AS a gap is the
+// refusal list saying the opposite of what happened.
+func consumedStamps() map[string]bool {
+	return map[string]bool{
+		// Names WHAT a miss reports. The claim that a miss IS reported
+		// belongs to the reader shape, whose rule reads this to choose
+		// the sentinel arm of the body over the zero arm.
+		MixinNotFound: true,
+	}
+}
+
+// hitCall is [callOf] with the drawn key replaced by the loop variable
+// the hit body ranges the corpus with.
+//
+// Every seeded key, not the fixture's one. The fixture holds a member of
+// the key pool and the corpus holds all of them, so a body drawing the
+// fixture asks about the same entry once per iteration — which passes
+// for a subject that kept the first thing it was given and dropped the
+// rest, the exact failure a hit check is for.
+func hitCall(m Method) projection.CallPlan {
+	call := callOf(m)
+	for i, arg := range call.Args {
+		if arg == projection.ExprCtx {
+			continue
+		}
+		call.Args[i] = projection.ExprSeededKey
+		break
+	}
+	return call
 }

@@ -1,0 +1,16 @@
+testkit-checks v2
+Named/cancel	signature/cancel	Named reports a cancelled context as cancelled	
+Named/deadline	signature/deadline	Named reports an expired deadline as exceeded	
+Named/nilcontext	signature/nilcontext	Named returns an error rather than panicking on a nil context	
+Named/smoke	signature/smoke	Named survives a call with a seeded id	
+Named/zero-on-error	signature/zero-on-error	Named returns zero alongside any error	
+PartiallyNamed/cancel	signature/cancel	PartiallyNamed reports a cancelled context as cancelled	
+PartiallyNamed/deadline	signature/deadline	PartiallyNamed reports an expired deadline as exceeded	
+PartiallyNamed/nilcontext	signature/nilcontext	PartiallyNamed returns an error rather than panicking on a nil context	
+PartiallyNamed/smoke	signature/smoke	PartiallyNamed survives a call with a seeded id	
+PartiallyNamed/zero-on-error	signature/zero-on-error	PartiallyNamed returns zero alongside any error	
+Unnamed/cancel	signature/cancel	Unnamed reports a cancelled context as cancelled	
+Unnamed/deadline	signature/deadline	Unnamed reports an expired deadline as exceeded	
+Unnamed/nilcontext	signature/nilcontext	Unnamed returns an error rather than panicking on a nil context	
+Unnamed/smoke	signature/smoke	Unnamed survives a call with a seeded id	
+Unnamed/zero-on-error	signature/zero-on-error	Unnamed returns zero alongside any error	

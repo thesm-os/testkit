@@ -1,0 +1,111 @@
+{{- /*
+suite.proofs — the falsification companion.
+
+One planted defect per check the harness stamped Proven, driven through
+the check that claims it. A conformance run that says "44 legs, 44
+passed" does not distinguish a suite that works from one that asserts
+nothing; this file is where that distinction is earned, and prove.All
+holds the two halves to each other in both directions — a claim with no
+defect fails, and a defect naming no claim fails too.
+
+It sits in the external test package, so every name it reaches is
+qualified. That is not a cost: it means the proofs drive the harness
+across the same boundary a consumer does, and a symbol they cannot see is
+one the proofs cannot use either.
+*/ -}}
+{{- define "suite.proofs" -}}
+{{- $p := . }}
+{{- if .Generic }}
+{{/* A Go test function takes no type parameters, so there is nothing to
+     instantiate the defects at. The note is emitted rather than an empty
+     file: a companion that silently vanished would read as a generator
+     that failed, and this says which fact stopped it. */}}
+// Skipped: {{ .IfaceName }} is generic. A planted defect has to be built at
+// concrete types and a Go test function cannot name them, so the proofs for
+// {{ .IfaceName }} belong in the package that instantiates it.
+{{- else if not .Defects }}
+// No check this run emitted carries a defect this generator can spell,
+// so there is nothing to prove here yet. The harness beside this file
+// stamps those checks Argued rather than Proven, which is what keeps the
+// parity gate quiet and the claim honest.
+{{- else }}
+// {{ .TestFunc }} drives every planted defect through the check it is
+// evidence for.
+//
+// A red here is the expected outcome for each one; a GREEN is the finding.
+// It means a check tolerated the implementation built to break it, and a
+// check that cannot fail is a line in a report rather than a claim about
+// the subject.
+func {{ .TestFunc }}(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+	{{ renderExpr (external $.Prove "All") }}(t,
+		{{ renderExpr (external $.Pkg .VeneerVar) }}.Suite(
+			{{- if .DrawsFixture }}{{ renderExpr (external $.Pkg .Fixture.CtorName) }}(){{ end }}
+			{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+			{{- if .SeedsCorpus }}{{ renderExpr (external $.Pkg .VeneerVar) }}.Corpus(){{ end -}}
+		).Checks,
+		{{ .ProofsFunc }}())
+}
+
+// {{ .ProofsFunc }} is every defect this run derived and can spell.
+//
+// Each is the smallest implementation that breaks exactly one claim: the
+// generated double with one method overridden, and nothing else changed.
+// The reason beside it is the substring the red must contain, so a defect
+// that died on an unrelated guard stops counting as evidence.
+func {{ .ProofsFunc }}() {{ renderExpr (external $.Prove "Defects") }}[{{ renderExpr (external $.Pkg .IfaceName) }}] {
+	ix := {{ renderExpr (external $.Pkg .VeneerVar) }}.Checks
+	return {{ renderExpr (external $.Prove "Defects") }}[{{ renderExpr (external $.Pkg .IfaceName) }}]{
+{{- range $d := .Defects }}
+		ix.{{ $d.Group }}.{{ $d.Accessor }}(): {{ render $d }},
+{{- end }}
+	}
+}
+{{- end }}
+{{- if not .Generic }}
+
+// {{ suite_invariantsName .IfaceName }} holds this package to what it says about itself.
+//
+// Four claims, none of which a consumer writes and none of which any
+// other gate makes. The manifest pins the assertion SET, so a check that
+// stops being emitted reads as a removed row in review rather than as a
+// suite that quietly got smaller. The index and the drop hints pin the
+// two ways a check is NAMED — an index entry pointing at nothing
+// compiles, and a drop hint that falls back to the string form forfeits
+// exactly the compile-break the index exists to give. The distinct-ID
+// check catches two interfaces in one package claiming one identity,
+// which method-name scopes make possible.
+func {{ suite_invariantsName .IfaceName }}(t *{{ renderExpr (external "testing" "T") }}) {
+	t.Parallel()
+
+	s := {{ renderExpr (external $.Pkg .VeneerVar) }}.Suite(
+		{{- if .DrawsFixture }}{{ renderExpr (external $.Pkg .Fixture.CtorName) }}(){{ end }}
+		{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+		{{- if .SeedsCorpus }}{{ renderExpr (external $.Pkg .VeneerVar) }}.Corpus(){{ end -}}
+	)
+
+	rows, err := {{ renderExpr (external $.Vocab "LockLines") }}(s)
+	if err != nil {
+		t.Fatalf("render the manifest rows: %v", err)
+	}
+	{{ renderExpr (external $.Vocab "VerifyLock") }}(t, "{{ suite_lockPath .Token }}", rows)
+	{{ renderExpr (external $.Vocab "VerifyIndex") }}(t, "{{ .IfaceName }}",
+		{{ renderExpr (external $.Pkg .VeneerVar) }}.Checks.All(), s.IDs())
+	{{ renderExpr (external $.Vocab "VerifyDropHints") }}(t, "{{ .IfaceName }}", s.IDs(), s.DropHint)
+	{{ renderExpr (external $.Vocab "VerifyDistinctIDs") }}(t, s.IDs())
+}
+{{- end }}
+{{- if .Unproven }}
+
+// Argued rather than proven, for want of a defect template here:
+{{- range $u := .Unproven }}
+//
+//	{{ $u }}
+{{- end }}
+//
+// Each is a claim a derivation rule reached and this generator cannot yet
+// plant evidence for. The harness stamps them Argued and says so in the
+// report, which is the difference between a claim nothing can falsify and
+// one nobody has written the falsification for.
+{{- end }}
+{{- end -}}

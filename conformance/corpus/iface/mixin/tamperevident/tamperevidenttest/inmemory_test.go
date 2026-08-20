@@ -15,41 +15,29 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	tamperevidenttest.AssertMixedContract(t,
-		tamperevidenttest.MixedModel(),
-		tamperevidenttest.MixedSubject("in-memory", func() tamperevident.Mixed {
-			return tamperevidenttest.NewInMemory()
-		}),
-		tamperevidenttest.MixedOnVerify("detects a value altered behind its back", func(
-			tb testing.TB, subject tamperevident.Mixed,
-		) {
-			tb.Helper()
-			// The suite seeds through Store, so there is something to alter.
-			testkit.NoError(tb, subject.Verify(tb.Context()), "an untouched value verifies")
-			testkit.NoError(tb, subject.Corrupt(tb.Context()), "the bytes are altered")
-			testkit.Error(tb, subject.Verify(tb.Context()),
-				"and the alteration is detected rather than served")
-		}),
+	tamperevidenttest.RunMixed(
+		t,
+		tamperevidenttest.MixedHarness[*tamperevidenttest.InMemory]{
+			Name: "in-memory",
+			New:  tamperevidenttest.NewInMemory,
+		},
+		tamperevidenttest.MixedChecks{
+			{
+				Method: "Verify",
+				Name:   "detects-an-alteration",
+				Claim:  "Verify detects a value altered behind its back",
+				Run: func(tb testing.TB, s tamperevident.Mixed, fx tamperevidenttest.MixedFixture) {
+					tb.Helper()
+					// Corrupt reaches past the interface, so there has to be
+					// something stored for it to reach.
+					testkit.NoError(tb, s.Store(tb.Context(), fx.Body()), "a value is stored")
+
+					testkit.NoError(tb, s.Verify(tb.Context()), "an untouched value verifies")
+					testkit.NoError(tb, s.Corrupt(tb.Context()), "the bytes are altered")
+					testkit.Error(tb, s.Verify(tb.Context()),
+						"and the alteration is detected rather than served")
+				},
+			},
+		},
 	)
-}
-
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	tamperevidenttest.AssertMixedContract(t,
-		tamperevidenttest.MixedSubject("in-memory", func() tamperevident.Mixed {
-			return tamperevidenttest.NewInMemory()
-		}),
-		tamperevidenttest.MixedWithoutDouble(),
-	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	tamperevidenttest.MixedModelSaturation(t, func() tamperevident.Mixed {
-		return tamperevidenttest.NewInMemory()
-	})
 }

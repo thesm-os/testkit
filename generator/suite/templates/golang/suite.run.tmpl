@@ -1,0 +1,91 @@
+{{- /*
+suite.run — the two entry points.
+
+Run drives every check, generated and yours, against every declared
+harness. Prove drives each of your rows against the defect it names.
+They take the same options and bind to the same fixture on purpose: a
+check proven against inputs no run uses is evidence about nothing.
+
+Both fold the options before doing anything, then report every wiring
+error at once. A run that failed on the first misconfiguration would
+make a consumer fix four things in four cycles.
+*/ -}}
+{{- define "suite.run" -}}
+{{- $c := . }}
+// {{ suite_runName .IfaceName }} runs every check — generated and yours — against every
+// harness.
+//
+//	{{ suite_runName .IfaceName }}(t,
+//		{{ suite_harnessName .IfaceName }}[*InMemory]{Name: "in-memory", New: NewInMemory},
+//		{{ if .TypeParams }}{{ suite_exportedWithout .IfaceName }}{{ .TypeArgs }}{{ else }}{{ suite_veneerVar .IfaceName }}.Without{{ end }}({{ suite_veneerVar .IfaceName }}.Checks{{ with index .Methods 0 }}.{{ .Name }}.Smoke(){{ end }}),
+//	)
+func {{ suite_runName .IfaceName }}{{ renderTypeParams .TypeParams }}(
+	t *{{ renderExpr (external "testing" "T") }}, opts ...{{ suite_runOptName .IfaceName }}{{ .TypeArgs }},
+) {
+	t.Helper()
+	var rc {{ suite_runConfigName .Token }}{{ .TypeArgs }}
+	for _, o := range opts {
+		o.applyTo(&rc)
+	}
+	{{ suite_fixtureIdent }} := {{ suite_newFixtureName .Token }}{{ .TypeArgs }}({{ if .Pools }}rc.cfg{{ end }})
+	for _, row := range rc.rows {
+		rc.AddCheck(row.bind({{ suite_fixtureIdent }}))
+	}
+	// Between folding and running: a misused run reports every fix it
+	// needs and executes nothing, rather than reporting one and leaving
+	// the rest to be found a cycle at a time.
+	rc.Fail(t, "{{ suite_runName .IfaceName }}")
+	{{ renderExpr (external $.Vocab "Run") }}(t,
+		{{ suite_suiteName .Token }}{{ .TypeArgs }}(
+			{{- if .DrawsFixture }}{{ suite_fixtureIdent }}{{ end }}
+			{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+			{{- if .SeedsCorpus }}{{ suite_corpusName .Token }}({{ if .Pools }}rc.cfg{{ end }}){{ end -}}
+		).With(rc.Extra...).Without(rc.Drops...),
+		rc.Subjects...)
+}
+
+// {{ suite_proveName .IfaceName }} drives each of your rows against the defect it names.
+//
+// A row with no ProvenBy is not skipped — it is held to saying why
+// through Argued. The parity gate refuses a Proven claim with no
+// evidence and evidence for a claim nobody made, in both directions, so
+// this is where "proven able to fail" stops being prose.
+func {{ suite_proveName .IfaceName }}{{ renderTypeParams .TypeParams }}(
+	t *{{ renderExpr (external "testing" "T") }}, checks {{ suite_rowsName .IfaceName }}{{ .TypeArgs }},
+	{{- if .Pools }} cfg ...{{ suite_configName .IfaceName }}{{ .TypeArgs }},{{ end }}
+) {
+	t.Helper()
+{{- if .Pools }}
+	if len(cfg) > 1 {
+		t.Fatalf("{{ suite_proveName .IfaceName }}: %d configs passed; pass at most one", len(cfg))
+	}
+	var c {{ suite_configName .IfaceName }}{{ .TypeArgs }}
+	if len(cfg) == 1 {
+		c = cfg[0]
+	}
+{{- end }}
+	// The RUN's config, not the derived one: a check proven at default
+	// pools carries no evidence about the pools a run actually uses.
+	{{ suite_fixtureIdent }} := {{ suite_newFixtureName .Token }}{{ .TypeArgs }}({{ if .Pools }}c{{ end }})
+	bound := make([]{{ renderExpr (external $.Vocab "Check") }}[{{ suite_subjectType $c }}], 0, len(checks))
+	defects := {{ renderExpr (external $.Prove "Defects") }}[{{ suite_subjectType $c }}]{}
+	for _, row := range checks {
+		bd, err := row.bind({{ suite_fixtureIdent }})
+		if err != nil {
+			t.Fatalf("{{ suite_proveName .IfaceName }}: %v", err)
+		}
+		bound = append(bound, bd)
+		if row.ProvenBy == nil {
+			continue
+		}
+		sub, err := row.ProvenBy.Subject({{ if .Seeded }}{{ suite_corpusName .Token }}({{ if .Pools }}c{{ end }}){{ end }})
+		if err != nil {
+			t.Fatalf("{{ suite_proveName .IfaceName }}: check %q: defect: %v", bd.ID, err)
+		}
+		defects[bd.ID] = {{ renderExpr (external $.Prove "Defect") }}[{{ suite_subjectType $c }}]{
+			Subject: sub, Reason: row.ProvenReason,
+		}
+	}
+	{{ renderExpr (external $.Prove "All") }}(t, bound, defects)
+}
+{{- end -}}

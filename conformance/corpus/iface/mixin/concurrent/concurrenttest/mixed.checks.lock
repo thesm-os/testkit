@@ -1,0 +1,10 @@
+testkit-checks v2
+Bump/cancel	signature/cancel	Bump reports a cancelled context as cancelled	
+Bump/deadline	signature/deadline	Bump reports an expired deadline as exceeded	
+Bump/nilcontext	signature/nilcontext	Bump returns an error rather than panicking on a nil context	
+Bump/smoke	signature/smoke	Bump survives a call with a derived key	
+Count/cancel	signature/cancel	Count reports a cancelled context as cancelled	
+Count/deadline	signature/deadline	Count reports an expired deadline as exceeded	
+Count/nilcontext	signature/nilcontext	Count returns an error rather than panicking on a nil context	
+Count/smoke	signature/smoke	Count survives a call	
+Count/zero-on-error	signature/zero-on-error	Count returns zero alongside any error	

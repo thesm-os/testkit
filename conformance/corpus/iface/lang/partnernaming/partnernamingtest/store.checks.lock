@@ -1,0 +1,31 @@
+testkit-checks v2
+At/cancel	signature/cancel	At reports a cancelled context as cancelled	
+At/deadline	signature/deadline	At reports an expired deadline as exceeded	
+At/miss	mixin/reader	At reports zero for a where nothing has written	
+At/nilcontext	signature/nilcontext	At returns an error rather than panicking on a nil context	
+At/smoke	signature/smoke	At survives a call with a derived where	
+At/zero-on-error	signature/zero-on-error	At returns zero alongside any error	
+Count/cancel	signature/cancel	Count reports a cancelled context as cancelled	
+Count/deadline	signature/deadline	Count reports an expired deadline as exceeded	
+Count/miss	mixin/reader	Count reports zero for a bucket nothing has written	
+Count/nilcontext	signature/nilcontext	Count returns an error rather than panicking on a nil context	
+Count/smoke	signature/smoke	Count survives a call with a derived bucket	
+Count/zero-on-error	signature/zero-on-error	Count returns zero alongside any error	
+Emit/cancel	signature/cancel	Emit reports a cancelled context as cancelled	
+Emit/deadline	signature/deadline	Emit reports an expired deadline as exceeded	
+Emit/nilcontext	signature/nilcontext	Emit returns an error rather than panicking on a nil context	
+Emit/smoke	signature/smoke	Emit survives a call with a derived id	
+Move/cancel	signature/cancel	Move reports a cancelled context as cancelled	
+Move/deadline	signature/deadline	Move reports an expired deadline as exceeded	
+Move/nilcontext	signature/nilcontext	Move returns an error rather than panicking on a nil context	
+Move/smoke	signature/smoke	Move survives a call with derived inputs	
+Seen/cancel	signature/cancel	Seen reports a cancelled context as cancelled	
+Seen/deadline	signature/deadline	Seen reports an expired deadline as exceeded	
+Seen/miss	mixin/reader	Seen reports zero for a k nothing has written	
+Seen/nilcontext	signature/nilcontext	Seen returns an error rather than panicking on a nil context	
+Seen/smoke	signature/smoke	Seen survives a call with a derived k	
+Seen/zero-on-error	signature/zero-on-error	Seen returns zero alongside any error	
+Touch/cancel	signature/cancel	Touch reports a cancelled context as cancelled	
+Touch/deadline	signature/deadline	Touch reports an expired deadline as exceeded	
+Touch/nilcontext	signature/nilcontext	Touch returns an error rather than panicking on a nil context	
+Touch/smoke	signature/smoke	Touch survives a call with derived inputs	

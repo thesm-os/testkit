@@ -16,11 +16,30 @@ the plans for exactly that reason.
 // since 1.24 — so every declaration below names {{ .IfaceName }} and
 // the arguments follow, exactly as they do for a concrete one.
 type {{ .IfaceName }}{{ renderTypeParams .TypeParams }} = {{ renderType .IfaceRef }}{{ .TypeArgs }}
+{{- if .Limit }}
 
-{{/* The <Iface>Subject alias the packs carry waits on the options
-     shell it collides with: that shell spells <Iface>Subject as the
-     function a consumer declares a subject through, and both cannot
-     stand. It returns with the entry points that replace it. */}}
+// {{ suite_limitConst .Token }} is the bound //testkit:mixin bounded limit={{ .Limit }}
+// declares: the ceiling the bounded law enforces, and the capacity every
+// harness constructor is handed.
+//
+// Passed to the constructors rather than left for a consumer to repeat,
+// because a subject built at some other capacity is one the law measures
+// against a limit it was never given — and that reads as a passing check.
+const {{ suite_limitConst .Token }} = {{ .Limit }}
+{{- end }}
+{{- if .Seeded }}
+
+// {{ suite_corpusTypeName .IfaceName }} is what a seeded harness is handed: the run's keys
+// mapped to the values it drew for them.
+type {{ suite_corpusTypeName .IfaceName }} = map[{{ renderType .Corpus.Key.Type }}]{{ renderType .Corpus.Value.Type }}
+{{- end }}
+
+// {{ .IfaceName }}Subject is the runtime subject a RunWith body receives.
+//
+// Aliased rather than named through the engine, so a consumer writing a
+// row against the subject stays inside this package's vocabulary.
+type {{ .IfaceName }}Subject{{ renderTypeParams .TypeParams }} = {{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}]
+
 // {{ suite_runOptName .IfaceName }} is one thing you can pass to {{ suite_runName .IfaceName }}.
 type {{ suite_runOptName .IfaceName }}{{ renderTypeParams .TypeParams }} interface {
 	applyTo(*{{ suite_runConfigName .Token }}{{ .TypeArgs }})
@@ -29,18 +48,49 @@ type {{ suite_runOptName .IfaceName }}{{ renderTypeParams .TypeParams }} interfa
 type {{ suite_runConfigName .Token }}{{ renderTypeParams .TypeParams }} struct {
 	{{ renderExpr (external $.Vocab "Bundle") }}[{{ suite_subjectType $c }}]
 
-	{{/* rows <Iface>Checks joins this the day the consumer seam is
-	     emitted; the bundle above is what the generated checks and the
-	     drops already ride. */}}
+	// rows are the consumer's own checks, bound against the run's
+	// fixture once the options are folded — which is why they are held
+	// here rather than lowered on arrival: a row bound before the
+	// fixture is known would draw from a fixture no run uses.
+	rows {{ suite_rowsName $c.IfaceName }}{{ $c.TypeArgs }}
+{{- if .Pools }}
+
+	// cfg is the pools this run draws from, the zero value meaning the
+	// derived ones. Held rather than applied, for the same reason the
+	// rows are: the fixture is built once, after every option has had
+	// its say.
+	cfg {{ suite_configName $c.IfaceName }}{{ $c.TypeArgs }}
+{{- end }}
 }
 
+{{- if .Harness.Induce }}
+// Inductions maps sentinels to triggers. The type has one home in the
+// engine, aliased here so a consumer stays inside this package's
+// vocabulary rather than importing the runtime to name a field.
+type Inductions[T any] = {{ renderExpr (external $.Vocab "Inductions") }}[T]
+
+{{ end }}
 // {{ suite_harnessName .IfaceName }} declares one {{ .IfaceName }} implementation under test.
 type {{ suite_harnessName .IfaceName }}{{ suite_withParam (renderTypeParams .TypeParams) (printf "T %s%s" .IfaceName .TypeArgs) }} struct {
 	Name string
+{{- if .Seeded }}
 
-	// Exactly one constructor.
-	New   func() T
-	Start func(tb {{ renderExpr (external "testing" "TB") }}) T
+	// Exactly one constructor, and both receive the corpus. The suite
+	// decides WHAT is seeded — it is zipped from the run's own pools —
+	// and the harness decides HOW loading happens.
+	//
+	// Nothing on {{ .IfaceName }} writes, so a run cannot populate a subject
+	// through the surface under test. A read against an empty one cannot
+	// tell a miss from a bug, which is the whole reason this seam exists
+	// rather than an ordinary constructor.
+	Seed      func(docs {{ suite_corpusTypeName $c.IfaceName }}) T
+	StartSeed func(tb {{ renderExpr (external "testing" "TB") }}, docs {{ suite_corpusTypeName $c.IfaceName }}) T
+{{- else }}
+
+	// Exactly one constructor{{ if .Limit }}, and both receive the derived bound{{ end }}.
+	New   func({{ if .Limit }}capacity int{{ end }}) T
+	Start func(tb {{ renderExpr (external "testing" "TB") }}{{ if .Limit }}, capacity int{{ end }}) T
+{{- end }}
 
 	// Excuse lists checks this subject structurally cannot take.
 	Excuse []{{ renderExpr (external $.Vocab "ID") }}
@@ -58,8 +108,14 @@ type {{ suite_harnessName .IfaceName }}{{ suite_withParam (renderTypeParams .Typ
 {{- end }}
 {{- if .Harness.Induce }}
 
-	// Induce puts the subject into the failure a check judges it by.
-	Induce func(tb {{ renderExpr (external "testing" "TB") }}, subject {{ suite_subjectType $c }}) error
+	// Induce maps a sentinel to the trigger that puts the subject into
+	// the state that sentinel names.
+	//
+	// A map rather than one function, because a check judging a poisoned
+	// subject and one judging a closed subject need different states and
+	// both name the state by its error. One trigger would make the
+	// harness guess which check was asking.
+	Induce Inductions[T]
 {{- end }}
 {{- if .Harness.Recover }}
 
@@ -74,8 +130,34 @@ type {{ suite_harnessName .IfaceName }}{{ suite_withParam (renderTypeParams .Typ
 }
 
 // Subject lowers the declaration into what the runner consumes.
-func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) Subject() ({{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}], error) {
+func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) Subject(
+	{{- if .Seeded }}docs {{ suite_corpusTypeName $c.IfaceName }}{{ end -}}
+) ({{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}], error) {
+{{- if .Seeded }}
+	var plain func() T
+	if h.Seed != nil {
+		plain = func() T { return h.Seed(docs) }
+	}
+	var start func(tb {{ renderExpr (external "testing" "TB") }}) T
+	if h.StartSeed != nil {
+		start = func(tb {{ renderExpr (external "testing" "TB") }}) T { return h.StartSeed(tb, docs) }
+	}
+	build, err := {{ renderExpr (external $.Vocab "OneCtor") }}(h.Name, plain, start)
+{{- else if .Limit }}
+	// The declared bound closed over before the one-ctor rule judges the
+	// pair, so a harness sees the same capacity the law does.
+	var plain func() T
+	if h.New != nil {
+		plain = func() T { return h.New({{ suite_limitConst .Token }}) }
+	}
+	var start func(tb {{ renderExpr (external "testing" "TB") }}) T
+	if h.Start != nil {
+		start = func(tb {{ renderExpr (external "testing" "TB") }}) T { return h.Start(tb, {{ suite_limitConst .Token }}) }
+	}
+	build, err := {{ renderExpr (external $.Vocab "OneCtor") }}(h.Name, plain, start)
+{{- else }}
 	build, err := {{ renderExpr (external $.Vocab "OneCtor") }}(h.Name, h.New, h.Start)
+{{- end }}
 	if err != nil {
 		return {{ renderExpr (external $.Vocab "Subject") }}[{{ suite_subjectType $c }}]{}, err
 	}
@@ -86,11 +168,14 @@ func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) S
 		Oracle:   h.Oracle,
 		Serial:   h.Serial,
 		Excused:  {{ renderExpr (external $.Vocab "ExcuseSet") }}(h.Excuse),
+{{- if .Harness.Induce }}
+		Induces:  {{ renderExpr (external $.Vocab "LowerInductions") }}[{{ suite_subjectType $c }}](h.Name, h.Induce),
+{{- end }}
 	}, nil
 }
 
 func (h {{ suite_harnessName .IfaceName }}{{ suite_withParam .TypeArgs "T" }}) applyTo(rc *{{ suite_runConfigName .Token }}{{ .TypeArgs }}) {
-	rc.AddSubject(h.Subject())
+	rc.AddSubject(h.Subject({{ if .Seeded }}{{ suite_corpusName .Token }}({{ if .Pools }}rc.cfg{{ end }}){{ end }}))
 }
 
 type {{ suite_dropOptName .Token }}{{ renderTypeParams .TypeParams }} []{{ renderExpr (external $.Vocab "ID") }}
@@ -104,10 +189,39 @@ func {{ suite_withoutName .Token }}{{ renderTypeParams .TypeParams }}(ids ...{{ 
 	return {{ suite_dropOptName .Token }}{{ .TypeArgs }}(ids)
 }
 
+{{- if .Seeded }}
+
+// {{ suite_corpusName .Token }} is what every subject is seeded with: one entry per key
+// the run draws, values cycled where the pools differ in length.
+//
+// Derived rather than asked for, so two harnesses of the same run are
+// populated identically — a differential comparison between subjects
+// seeded differently measures the seeding.
+func {{ suite_corpusName .Token }}({{ if .Pools }}cfg {{ suite_configName .IfaceName }}{{ end }}) {{ suite_corpusTypeName $c.IfaceName }} {
+{{- if .Pools }}
+	cfg = cfg.orDefault()
+{{- end }}
+	docs := make({{ suite_corpusTypeName $c.IfaceName }}, len(cfg.{{ .Corpus.Key.Field }}))
+	for i, k := range cfg.{{ .Corpus.Key.Field }} {
+		docs[k] = cfg.{{ .Corpus.Value.Field }}[i%len(cfg.{{ .Corpus.Value.Field }})]
+	}
+	return docs
+}
+
+// {{ suite_missKeyName .Token }} is the key deliberately outside that corpus.
+//
+// A miss check draws this rather than the fixture's alternate: the
+// corpus zips EVERY member of the key pool, so the alternate is a second
+// seeded key and a body drawing it would hit while claiming to miss.
+func {{ suite_missKeyName .Token }}() {{ renderType .Corpus.Key.Type }} {
+	return {{ .Corpus.MissKey }}
+}
+{{- end }}
+
 // --- The veneer -------------------------------------------------------------
 
-// {{ .IfaceName }}Suite is the entry a consumer names checks through.
-var {{ .IfaceName }}Suite = {{ suite_veneerName .Token }}{Checks: {{ suite_indexVar .Token }}}
+// {{ suite_veneerVar .IfaceName }} is the entry a consumer names checks through.
+var {{ suite_veneerVar .IfaceName }} = {{ suite_veneerName .Token }}{Checks: {{ suite_indexVar .Token }}}
 
 type {{ suite_veneerName .Token }} struct {
 	// Checks is the check index — the constants a Without call is
@@ -116,15 +230,94 @@ type {{ suite_veneerName .Token }} struct {
 }
 
 {{- if .TypeParams }}
-{{/* A method cannot introduce type parameters, and a generic interface
-     has no one instantiation to fix them at — so Without is the
-     package-level {{ suite_withoutName .Token }} for a generic subject.
-     The index above it is not generic (an ID is a string), so naming a
-     check reads the same either way. */}}
+// {{ suite_exportedWithout .IfaceName }} drops a check by ID.
+//
+// A function rather than a method on the veneer: a method introduces no
+// type parameters, and a generic interface has no one instantiation to
+// fix them at. The index above is not generic — an ID is a string — so
+// naming a check reads the same either way.
+func {{ suite_exportedWithout .IfaceName }}{{ renderTypeParams .TypeParams }}(
+	ids ...{{ renderExpr (external $.Vocab "ID") }},
+) {{ suite_runOptName .IfaceName }}{{ .TypeArgs }} {
+	return {{ suite_withoutName .Token }}{{ .TypeArgs }}(ids...)
+}
+
+// {{ suite_exportedSuiteOf .IfaceName }} returns the checks as data, for tooling or a runner
+// of your own — the generic subject's form of the veneer's Suite method,
+// and there for the same reason {{ suite_exportedWithout .IfaceName }} is.
+func {{ suite_exportedSuiteOf .IfaceName }}{{ renderTypeParams .TypeParams }}(
+	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ .TypeArgs }}{{ end }}
+	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+	{{- if .SeedsCorpus }}{{ suite_docsIdent }} {{ suite_corpusTypeName .IfaceName }}{{ end -}}
+) {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}{{ .TypeArgs }}] {
+	return {{ suite_suiteName .Token }}{{ .TypeArgs }}(
+		{{- if .DrawsFixture }}{{ suite_fixtureIdent }}{{ end }}
+		{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+		{{- if .SeedsCorpus }}{{ suite_docsIdent }}{{ end -}}
+	)
+}
 {{- else }}
 // Without drops a check by ID.
 func ({{ suite_veneerName .Token }}) Without(ids ...{{ renderExpr (external $.Vocab "ID") }}) {{ suite_runOptName .IfaceName }} {
 	return {{ suite_withoutName .Token }}(ids...)
+}
+
+// Suite returns the checks as data, for tooling or a runner of your own.
+//
+// The way in from outside this package: the assembler and the table it
+// builds are unexported, because a caller reaching them is doing tooling
+// and tooling wants one name rather than one per interface.
+func ({{ suite_veneerName .Token }}) Suite(
+	{{- if .DrawsFixture }}{{ suite_fixtureIdent }} {{ .Fixture.TypeName }}{{ end }}
+	{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+	{{- if .SeedsCorpus }}{{ suite_docsIdent }} {{ suite_corpusTypeName .IfaceName }}{{ end -}}
+) {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}] {
+	return {{ suite_suiteName .Token }}(
+		{{- if .DrawsFixture }}{{ suite_fixtureIdent }}{{ end }}
+		{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+		{{- if .SeedsCorpus }}{{ suite_docsIdent }}{{ end -}}
+	)
+}
+{{- if .Pools }}
+
+// DefaultConfig is the pools this run derived, for a consumer composing
+// one from them rather than from nothing.
+func ({{ suite_veneerName .Token }}) DefaultConfig() {{ suite_configName .IfaceName }} {
+	return {{ suite_defaultConfigName .Token }}()
+}
+
+{{- if .Limit }}
+
+// DeclaredLimit is the bound //testkit:mixin bounded declares — exported
+// so a consumer artifact needing the number reads it from the
+// declaration's one home instead of restating it to drift.
+func ({{ suite_veneerName .Token }}) DeclaredLimit() int { return {{ suite_limitConst .Token }} }
+{{- end }}
+
+// TrySuite is Suite with the config validated instead of trusted.
+//
+// The suite-as-data path has no testing.TB to report through, so a bad
+// config there panics; a caller composing suites outside a run — a
+// negative control with its own pools — wants the error.
+func ({{ suite_veneerName .Token }}) TrySuite(cfg {{ suite_configName .IfaceName }}) ({{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}], error) {
+	if _, err := cfg.normalize(); err != nil {
+		return {{ renderExpr (external $.Vocab "Suite") }}[{{ .IfaceName }}]{}, err
+	}
+	return {{ suite_suiteName .Token }}(
+		{{- if .DrawsFixture }}{{ suite_newFixtureName .Token }}(cfg){{ end }}
+		{{- if and .DrawsFixture .SeedsCorpus }}, {{ end }}
+		{{- if .SeedsCorpus }}{{ suite_corpusName .Token }}(cfg){{ end -}}
+	), nil
+}
+{{- end }}
+{{- end }}
+
+{{- if .Seeded }}
+
+// Corpus is what a default run seeds every subject with — the way in
+// from outside this package, for tooling and for the proofs beside it.
+func ({{ suite_veneerName .Token }}) Corpus() {{ suite_corpusTypeName .IfaceName }} {
+	return {{ suite_corpusName .Token }}({{ if .Pools }}{{ suite_defaultConfigName .Token }}(){{ end }})
 }
 {{- end }}
 
@@ -136,12 +329,12 @@ func ({{ suite_veneerName .Token }}) Without(ids ...{{ renderExpr (external $.Vo
 var {{ suite_indexPathName .Token }} = map[{{ renderExpr (external $.Vocab "ID") }}]string{
 {{- range $g := .Index.Groups }}
 {{- range $a := $g.Accessors }}
-	{{ suite_indexVar $c.Token }}.{{ $g.Field }}.{{ $a.Name }}(): "{{ $c.IfaceName }}Suite.Checks.{{ $g.Field }}.{{ $a.Name }}()",
+	{{ suite_indexVar $c.Token }}.{{ $g.Field }}.{{ $a.Name }}(): "{{ suite_veneerVar $c.IfaceName }}.Checks.{{ $g.Field }}.{{ $a.Name }}()",
 {{- end }}
 {{- end }}
 }
 
 var {{ suite_dropHintName .Token }} = {{ renderExpr (external $.Vocab "DropHinter") }}(
-	"{{ .IfaceName }}Suite", {{ suite_indexPathName .Token }},
+	"{{ suite_veneerVar .IfaceName }}", {{ suite_indexPathName .Token }},
 )
 {{- end -}}

@@ -18,33 +18,42 @@ import (
 func TestVoidLifecycleContract(t *testing.T) {
 	t.Parallel()
 
-	voidlifecycletest.AssertVoidLifecycleContract(t,
-		voidlifecycletest.VoidLifecycleModel(),
-		voidlifecycletest.VoidLifecycleSubject("in-memory", func() voidlifecycle.VoidLifecycle {
-			return voidlifecycletest.NewInMemory()
-		}),
-		voidlifecycletest.VoidLifecycleOnStop("is idempotent", func(
-			tb testing.TB, subject voidlifecycle.VoidLifecycle,
-		) {
-			tb.Helper()
-			// All that is left of the lifecycle law once the error return goes:
-			// a second Stop must be safe, and safe is all it can be, since
-			// there is nothing to report.
-			subject.Stop()
-			subject.Stop()
-		}),
+	voidlifecycletest.RunVoidLifecycle(
+		t,
+		voidlifecycletest.VoidLifecycleHarness[*voidlifecycletest.InMemory]{
+			Name: "in-memory",
+			New:  voidlifecycletest.NewInMemory,
+		},
+		voidlifecycletest.VoidLifecycleChecks{
+			{
+				Method: "Stop",
+				Name:   "second-stop-is-safe",
+				Claim:  "Stop is idempotent",
+				Run: func(tb testing.TB, s voidlifecycle.VoidLifecycle, fx voidlifecycletest.VoidLifecycleFixture) {
+					tb.Helper()
+					// All that is left of the lifecycle law once the error
+					// return goes: a second Stop must be safe, and safe is all
+					// it can be, since there is nothing to report.
+					s.Stop()
+					s.Stop()
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestVoidLifecycleContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestVoidLifecycleContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	voidlifecycletest.AssertVoidLifecycleContract(t,
-		voidlifecycletest.VoidLifecycleSubject("in-memory", func() voidlifecycle.VoidLifecycle {
-			return voidlifecycletest.NewInMemory()
-		}),
-		voidlifecycletest.VoidLifecycleWithout("Stop/smoke"),
-		voidlifecycletest.VoidLifecycleWithoutDouble(),
+	voidlifecycletest.RunVoidLifecycle(
+		t,
+		voidlifecycletest.VoidLifecycleHarness[*voidlifecycletest.InMemory]{
+			Name: "in-memory",
+			New:  voidlifecycletest.NewInMemory,
+		},
+		voidlifecycletest.VoidLifecycleSuite.Without(voidlifecycletest.VoidLifecycleSuite.Checks.Stop.Smoke()),
 	)
 }

@@ -14,47 +14,41 @@ import (
 // persister is the model tier's under ADR-0018: `AUTO-PERSISTER-RETRIEVABLE`
 // states it, and it needs a reference implementation to compare against.
 //
-// The suite tier still earns the pairing. Put is classified writer, so the
-// harness seeds through it and Get's "an error carries the zero value" check
-// runs against a store that holds something — which is what makes the miss it
-// asks about a real miss rather than an empty store answering nothing.
+// The suite tier still earns the pairing. Put is classified writer, so Get's
+// miss check knows what a miss means here — an input nothing wrote — and the
+// row below states the other half: what a key that WAS written reads back as.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	persistertest.AssertContractContract(t,
-		persistertest.ContractModel(),
-		persistertest.ContractSubject("in-memory", func() persister.Contract {
-			return persistertest.NewInMemory()
-		}),
-		persistertest.ContractOnGet("returns what the seed wrote", func(
-			tb testing.TB, subject persister.Contract, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "the seeded key is found")
-			testkit.Equal(tb, got.Key, key, "carrying the key it was filed under")
-		}),
+	persistertest.RunContract(t,
+		persistertest.ContractHarness[*persistertest.InMemory]{Name: "in-memory", New: persistertest.NewInMemory},
+		persistertest.ContractChecks{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-put-wrote",
+				Claim:  "Get returns what Put wrote under that key",
+				Run: func(tb testing.TB, s persister.Contract, fx persistertest.ContractFixture) {
+					tb.Helper()
+					written := fx.Value()
+					testkit.NoError(tb, s.Put(tb.Context(), written), "the value is stored")
+
+					got, err := s.Get(tb.Context(), written.Key)
+					testkit.NoError(tb, err, "the written key is found")
+					testkit.Equal(tb, got, written, "carrying what was filed under it")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	persistertest.AssertContractContract(t,
-		persistertest.ContractSubject("in-memory", func() persister.Contract {
-			return persistertest.NewInMemory()
-		}),
-		persistertest.ContractWithout("Put/smoke"),
-		persistertest.ContractWithoutDouble(),
+	persistertest.RunContract(t,
+		persistertest.ContractHarness[*persistertest.InMemory]{Name: "in-memory", New: persistertest.NewInMemory},
+		persistertest.ContractSuite.Without(persistertest.ContractSuite.Checks.Put.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	persistertest.ContractModelSaturation(t, func() persister.Contract {
-		return persistertest.NewInMemory()
-	})
 }

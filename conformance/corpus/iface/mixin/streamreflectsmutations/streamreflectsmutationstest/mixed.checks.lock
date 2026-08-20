@@ -1,0 +1,10 @@
+testkit-checks v2
+Add/cancel	signature/cancel	Add reports a cancelled context as cancelled	
+Add/deadline	signature/deadline	Add reports an expired deadline as exceeded	
+Add/nilcontext	signature/nilcontext	Add returns an error rather than panicking on a nil context	
+Add/smoke	signature/smoke	Add survives a call with a derived item	
+Remove/cancel	signature/cancel	Remove reports a cancelled context as cancelled	
+Remove/deadline	signature/deadline	Remove reports an expired deadline as exceeded	
+Remove/nilcontext	signature/nilcontext	Remove returns an error rather than panicking on a nil context	
+Remove/smoke	signature/smoke	Remove survives a call with a derived item	
+Stream/smoke	signature/smoke	Stream survives a call	

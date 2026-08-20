@@ -1,0 +1,12 @@
+testkit-checks v2
+Acquire/cancel	signature/cancel	Acquire reports a cancelled context as cancelled	
+Acquire/nilcontext	signature/nilcontext	Acquire returns an error rather than panicking on a nil context	
+Acquire/smoke	signature/smoke	Acquire survives a call	
+Outstanding/cancel	signature/cancel	Outstanding reports a cancelled context as cancelled	
+Outstanding/deadline	signature/deadline	Outstanding reports an expired deadline as exceeded	
+Outstanding/nilcontext	signature/nilcontext	Outstanding returns an error rather than panicking on a nil context	
+Outstanding/smoke	signature/smoke	Outstanding survives a call	
+Outstanding/zero-on-error	signature/zero-on-error	Outstanding returns zero alongside any error	
+Release/cancel	signature/cancel	Release reports a cancelled context as cancelled	
+Release/nilcontext	signature/nilcontext	Release returns an error rather than panicking on a nil context	
+Release/smoke	signature/smoke	Release survives a call	

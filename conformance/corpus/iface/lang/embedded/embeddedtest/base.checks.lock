@@ -1,0 +1,4 @@
+testkit-checks v2
+Ping/cancel	signature/cancel	Ping reports a cancelled context as cancelled	
+Ping/nilcontext	signature/nilcontext	Ping returns an error rather than panicking on a nil context	
+Ping/smoke	signature/smoke	Ping survives a call	

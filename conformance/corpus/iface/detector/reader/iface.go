@@ -28,5 +28,6 @@ type Value struct{ Key, Body string }
 //testkit:suite
 //testkit:model
 type Reader interface {
+	//testkit:mixin notfound sentinel=ErrNotFound
 	Get(ctx context.Context, key string) (Value, error)
 }

@@ -6,7 +6,6 @@ package appendertest_test
 import (
 	"testing"
 
-	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/appender/appendertest"
 )
 
@@ -14,37 +13,24 @@ import (
 // it, and the suite tier implements no property a law already carries.
 //
 // So what the harness generates here is the signature-derived family, and it is
-// not nothing — a log that panicked on a derived key, or applied a write for a
+// not nothing — a log that panicked on a derived value, or applied a write for a
 // cancelled caller, fails before any law runs.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	appendertest.AssertContractContract(t,
-		appendertest.ContractModel(),
-		appendertest.ContractSubject("in-memory", func() appender.Contract {
-			return appendertest.NewInMemory()
-		}),
+	appendertest.RunContract(t,
+		appendertest.ContractHarness[*appendertest.InMemory]{Name: "in-memory", New: appendertest.NewInMemory},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	appendertest.AssertContractContract(t,
-		appendertest.ContractSubject("in-memory", func() appender.Contract {
-			return appendertest.NewInMemory()
-		}),
-		appendertest.ContractWithout("Run/smoke"),
-		appendertest.ContractWithoutDouble(),
+	appendertest.RunContract(t,
+		appendertest.ContractHarness[*appendertest.InMemory]{Name: "in-memory", New: appendertest.NewInMemory},
+		appendertest.ContractSuite.Without(appendertest.ContractSuite.Checks.Run.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	appendertest.ContractModelSaturation(t, func() appender.Contract {
-		return appendertest.NewInMemory()
-	})
 }

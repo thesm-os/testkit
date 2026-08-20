@@ -1,0 +1,6 @@
+testkit-checks v2
+Flights/cancel	signature/cancel	Flights reports a cancelled context as cancelled	
+Flights/deadline	signature/deadline	Flights reports an expired deadline as exceeded	
+Flights/nilcontext	signature/nilcontext	Flights returns an error rather than panicking on a nil context	
+Flights/smoke	signature/smoke	Flights survives a call	
+Flights/zero-on-error	signature/zero-on-error	Flights returns zero alongside any error	

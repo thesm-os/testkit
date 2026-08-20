@@ -1,0 +1,11 @@
+testkit-checks v2
+Corrupt/cancel	signature/cancel	Corrupt reports a cancelled context as cancelled	
+Corrupt/nilcontext	signature/nilcontext	Corrupt returns an error rather than panicking on a nil context	
+Corrupt/smoke	signature/smoke	Corrupt survives a call	
+Store/cancel	signature/cancel	Store reports a cancelled context as cancelled	
+Store/deadline	signature/deadline	Store reports an expired deadline as exceeded	
+Store/nilcontext	signature/nilcontext	Store returns an error rather than panicking on a nil context	
+Store/smoke	signature/smoke	Store survives a call with a derived body	
+Verify/cancel	signature/cancel	Verify reports a cancelled context as cancelled	
+Verify/nilcontext	signature/nilcontext	Verify returns an error rather than panicking on a nil context	
+Verify/smoke	signature/smoke	Verify survives a call	

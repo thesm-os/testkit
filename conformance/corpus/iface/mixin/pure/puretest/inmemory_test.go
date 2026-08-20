@@ -20,35 +20,35 @@ import (
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	puretest.AssertMixedContract(t,
-		puretest.MixedModel(),
-		puretest.MixedSubject("in-memory", func() pure.Mixed {
-			return puretest.NewInMemory()
-		}),
-		puretest.MixedSubject("in-memory, second instance", func() pure.Mixed {
-			return puretest.NewInMemory()
-		}),
-		puretest.MixedOnDerive("agrees with itself", func(
-			tb testing.TB, subject pure.Mixed, input string,
-		) {
-			tb.Helper()
-			// The whole of the mixin's law, and a claim one call cannot make:
-			// nothing was observed between the two, so nothing may differ.
-			testkit.Equal(tb, subject.Derive(input), subject.Derive(input),
-				"repeated calls on one input agree")
-		}),
+	puretest.RunMixed(t,
+		puretest.MixedHarness[*puretest.InMemory]{Name: "in-memory", New: puretest.NewInMemory},
+		puretest.MixedHarness[*puretest.InMemory]{Name: "in-memory, second instance", New: puretest.NewInMemory},
+		puretest.MixedChecks{
+			{
+				Method: "Derive",
+				Name:   "agrees-with-itself",
+				Claim:  "Derive agrees with itself",
+				Run: func(tb testing.TB, s pure.Mixed, fx puretest.MixedFixture) {
+					tb.Helper()
+					// The whole of the mixin's law, and a claim one call cannot
+					// make: nothing was observed between the two, so nothing may
+					// differ.
+					testkit.Equal(tb, s.Derive(fx.Input()), s.Derive(fx.Input()),
+						"repeated calls on one input agree")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	puretest.AssertMixedContract(t,
-		puretest.MixedSubject("in-memory", func() pure.Mixed {
-			return puretest.NewInMemory()
-		}),
-		puretest.MixedWithout("Derive/smoke"),
-		puretest.MixedWithoutDouble(),
+	puretest.RunMixed(t,
+		puretest.MixedHarness[*puretest.InMemory]{Name: "in-memory", New: puretest.NewInMemory},
+		puretest.MixedSuite.Without(puretest.MixedSuite.Checks.Derive.Smoke()),
 	)
 }

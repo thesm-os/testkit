@@ -10,53 +10,48 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/pool"
 	"go.thesmos.sh/testkit/conformance/corpus/iface/contract/pool/pooltest"
-	"go.thesmos.sh/testkit/engine/model"
 )
 
 // pool is the model tier's under ADR-0018: `AUTO-POOL-BALANCED` and
 // `AUTO-POOL-LEAK-FREE` state it, and both are claims about a sequence rather
 // than about a call.
 //
-// Put is classified writer, so the harness seeds through it — which is what
-// makes Get's smoke check meet a pool with something in it. An empty pool would
-// exercise only the exhausted path, and the contract's ordinary case would go
-// unrun.
+// The row below is the bound, stated through the interface: it puts one value
+// in and asks for two.
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	pooltest.AssertContractContract(t,
-		pooltest.ContractModel(
-			// The accounting identity, read through the stats ROLE the
-			// directive names — no concrete-type downcast, because the
-			// numbers' home is the interface now. The leak-free door stays
-			// unarmed: its claim holds at quiescence, and the shared walk
-			// checks between steps, where a taken value is legitimately
-			// still out.
-			pooltest.ContractModelStats(func(rt *model.T, subject pool.Contract) (int, int, int) {
-				st, err := subject.Stats(rt.Context())
-				if err != nil {
-					return 0, 0, 0 // a refused read is trivially balanced; the smoke owns Stats errors
-				}
-				return st.Gets, st.Puts, st.Outstanding
-			}),
-		),
-		pooltest.ContractSubject("in-memory", func() pool.Contract {
-			return pooltest.NewInMemory()
-		}),
-		pooltest.ContractOnGet("hands out what it holds and no more", handsOutWhatItHolds),
+	pooltest.RunContract(t,
+		pooltest.ContractHarness[*pooltest.InMemory]{
+			Name: "in-memory",
+			New:  func() *pooltest.InMemory { return pooltest.NewInMemory() },
+		},
+		pooltest.ContractChecks{
+			{
+				Method: "Get",
+				Name:   "hands-out-what-it-holds",
+				Claim:  "Get hands out what it holds and no more",
+				Run: func(tb testing.TB, s pool.Contract, fx pooltest.ContractFixture) {
+					tb.Helper()
+					handsOutWhatItHolds(tb, s, fx.Value())
+				},
+			},
+		},
 	)
 }
 
 // handsOutWhatItHolds is the pool's bound, stated through the interface.
 //
 // It ends on a refusal rather than on a successful Get, and that is what makes
-// it a check: the seed put exactly one value in, so a pool that manufactures on
-// demand — or one whose methods return nil and nothing else — answers the
-// second Get too. [TestEveryCheckRejectsAnUnboundedPool] drives exactly that.
-func handsOutWhatItHolds(tb testing.TB, subject pool.Contract) {
+// it a check: exactly one value goes in, so a pool that manufactures on demand —
+// or one whose methods return nil and nothing else — answers the second Get too.
+// [TestEveryCheckRejectsAnUnboundedPool] drives exactly that.
+func handsOutWhatItHolds(tb testing.TB, subject pool.Contract, seed pool.Value) {
 	tb.Helper()
+	testkit.NoError(tb, subject.Put(tb.Context(), seed), "one value goes in")
+
 	got, err := subject.Get(tb.Context())
-	testkit.NoError(tb, err, "the seeded value is available")
+	testkit.NoError(tb, err, "and is available")
 
 	_, err = subject.Get(tb.Context())
 	testkit.Error(tb, err, "and the pool it came from is then empty")
@@ -90,36 +85,23 @@ func TestEveryCheckRejectsAnUnboundedPool(t *testing.T) {
 
 	got := testkit.Rejects(t, "a pool with no bound", func(tb testing.TB) {
 		tb.Helper()
-		handsOutWhatItHolds(tb, unboundedPool{})
+		handsOutWhatItHolds(tb, unboundedPool{}, pooltest.DefaultContractFixture().Value())
 	})
 	testkit.Assert(t, got).Contains("the pool it came from is then empty",
 		"rejected for the reason the check is about")
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	pooltest.AssertContractContract(t,
-		pooltest.ContractSubject("in-memory", func() pool.Contract {
-			return pooltest.NewInMemory()
-		}),
-		pooltest.ContractWithout("Get/smoke"),
-		pooltest.ContractWithoutDouble(),
+	pooltest.RunContract(t,
+		pooltest.ContractHarness[*pooltest.InMemory]{
+			Name: "in-memory",
+			New:  func() *pooltest.InMemory { return pooltest.NewInMemory() },
+		},
+		pooltest.ContractSuite.Without(pooltest.ContractSuite.Checks.Get.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// with the same accounting door armed that arms the tier.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	pooltest.ContractModelSaturation(t, func() pool.Contract {
-		return pooltest.NewInMemory()
-	}, pooltest.ContractModelStats(func(rt *model.T, subject pool.Contract) (int, int, int) {
-		st, err := subject.Stats(rt.Context())
-		if err != nil {
-			return 0, 0, 0
-		}
-		return st.Gets, st.Puts, st.Outstanding
-	}))
 }

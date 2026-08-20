@@ -1516,16 +1516,12 @@ func historyDrained(harness *suite.Contract) bool {
 func missSentinelOf(harness *suite.Contract) *sdk.Expr {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
-		for _, mx := range m.Mixins {
-			for _, key := range []string{"sentinel", "notfound"} {
-				v, stamped := shape.MixinParamKey(mx, key).Get(m.Source.Meta())
-				if !stamped || v == "" {
-					continue
-				}
-				if pkg, name, qualified := splitQualified(v); qualified {
-					return sdk.NewExternal(pkg, name)
-				}
-			}
+		v, declared := suite.MissSentinel(*m)
+		if !declared {
+			continue
+		}
+		if pkg, name, qualified := splitQualified(v); qualified {
+			return sdk.NewExternal(pkg, name)
 		}
 	}
 	return nil

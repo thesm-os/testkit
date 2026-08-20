@@ -4,7 +4,6 @@
 package generictest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -18,49 +17,46 @@ import (
 // — but every declaration it emits can, and naming the types here is the same
 // thing a consumer does when they construct the implementation. Nothing is
 // derived at witnesses: the caller already knows which instantiation they run.
+//
+// Which is also why nothing is derived at all: a type parameter admits no
+// literal, so every family the rules reached was refused and the header lists
+// them. The values come from the row, which is the one place they can.
 func TestStoreContract(t *testing.T) {
 	t.Parallel()
 
-	generictest.AssertStoreContract[string, int](t,
-		// The model tier rides the witnesses: witness=string,int on the
-		// directive is what makes StoreModel a [string, int] option, and an
-		// instantiation at any other types cannot accept it — the property,
-		// its pools and its derived oracle are all spelled at the witnesses.
-		generictest.StoreModel(),
-		generictest.StoreSubject[string, int]("in-memory", func() generic.Store[string, int] {
-			return generictest.NewInMemory[string, int]()
-		}),
-	)
-}
+	generictest.RunStore[string, int](t,
+		generictest.StoreHarness[string, int, *generictest.InMemory[string, int]]{
+			Name: "in-memory",
+			New:  generictest.NewInMemory[string, int],
+		},
+		generictest.StoreChecks[string, int]{
+			{
+				Method: "Get",
+				Name:   "reads-back-what-put-wrote",
+				Claim:  "Get returns what Put wrote",
+				Run: func(tb testing.TB, s generic.Store[string, int], fx generictest.StoreFixture[string, int]) {
+					tb.Helper()
+					// The values are the row's: the fixture's K and V are the
+					// type parameters' zeros, because no literal can be written
+					// for a type nobody has instantiated yet.
+					testkit.NoError(tb, s.Put(tb.Context(), "seeded-key", 7), "the key is written")
 
-// The fixture is empty by construction: a type parameter admits no literal, so
-// K and V stay at their zero values and the miss check that reads them is not
-// generated. What a consumer supplies is exactly what derivation could not.
-func TestStoreContractWithoutTheDouble(t *testing.T) {
-	t.Parallel()
-
-	fixture := generictest.DefaultStoreFixture[string, int]()
-	fixture.Key = "seeded-key"
-	fixture.KeyOther = "absent-key"
-	fixture.Value = 7
-
-	generictest.AssertStoreContract[string, int](t,
-		generictest.StoreSubject[string, int]("supplied", func() generic.Store[string, int] {
-			return generictest.NewInMemory[string, int]()
-		}),
-		generictest.StoreWithFixture[string, int](fixture),
-		generictest.StoreSeed[string, int](func(ctx context.Context, subject generic.Store[string, int]) error {
-			return subject.Put(ctx, fixture.Key, fixture.Value)
-		}),
-		generictest.StoreOnGet[string, int]("returns what was seeded", func(
-			tb testing.TB, subject generic.Store[string, int], key string,
-		) {
-			tb.Helper()
-			got, err := subject.Get(tb.Context(), key)
-			testkit.NoError(tb, err, "a seeded key is found")
-			testkit.Equal(tb, got, fixture.Value, "and carries what was written")
-		}),
-		generictest.StoreWithout[string, int]("Put/smoke"),
-		generictest.StoreWithoutDouble[string, int](),
+					got, err := s.Get(tb.Context(), "seeded-key")
+					testkit.NoError(tb, err, "a written key is found")
+					testkit.Equal(tb, got, 7, "and carries what was written")
+				},
+			},
+			{
+				Method: "Get",
+				Name:   "miss-is-reported",
+				Claim:  "Get reports a key nothing wrote",
+				Run: func(tb testing.TB, s generic.Store[string, int], fx generictest.StoreFixture[string, int]) {
+					tb.Helper()
+					got, err := s.Get(tb.Context(), "absent-key")
+					testkit.Error(tb, err, "an unwritten key is a miss")
+					testkit.Equal(tb, got, 0, "and the value beside it is the zero")
+				},
+			},
+		},
 	)
 }

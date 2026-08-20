@@ -48,16 +48,34 @@ const GoIntegrationEnv = "TESTKIT_INTEGRATION"
 // as though it did.
 const Module = "go.thesmos.sh/testkit"
 
+// EngineModule is the module the vocabulary and the falsifiability
+// harness live in, which is not [Module].
+//
+// Named because a caller assembling a build against the generated output
+// has to require both — the emitted harness imports the root module's
+// clock and the engine module's suite package, and a go.mod naming only
+// the first fails to resolve the second with no clue that there were two.
+const EngineModule = Module + "/engine"
+
 // Vocab is the suite vocabulary's package — the ID grammar, the
 // segment and family constants, and the Check the generated rows
 // construct. Emitted code composes its identities from here rather
 // than spelling slugs, so the grammar has one home across the
 // generator and the runtime.
-const Vocab = Module + "/engine/suite"
+const Vocab = EngineModule + "/suite"
 
 // LawIDs is where a law's identifier is declared, for the index
 // accessors that name one.
 const LawIDs = Module + "/core/lawid"
+
+// Prove is the falsifiability harness the companion drives its planted
+// defects through.
+//
+// Its own package rather than part of [Vocab] because it needs the
+// captive TB from the module root, which the vocabulary a consumer's
+// non-test code composes with must not depend on. The companion is a
+// test file and pays that import happily.
+const Prove = Vocab + "/prove"
 
 // The template tree, embedded through the recursive directory form rather than
 // a `*.tmpl` glob.

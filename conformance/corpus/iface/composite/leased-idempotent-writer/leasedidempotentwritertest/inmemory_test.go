@@ -27,22 +27,17 @@ import (
 func TestLeasedWriterContract(t *testing.T) {
 	t.Parallel()
 
-	leasedidempotentwritertest.AssertLeasedWriterContract(
+	leasedidempotentwritertest.RunLeasedWriter(
 		t,
-		leasedidempotentwritertest.LeasedWriterModel(),
-		leasedidempotentwritertest.LeasedWriterSubject(
-			"in-memory",
-			func() leasedidempotentwriter.LeasedWriter {
-				return leasedidempotentwritertest.NewInMemory()
-			},
-		),
-		leasedidempotentwritertest.LeasedWriterSubject(
-			"in-memory, contended",
-			func() leasedidempotentwriter.LeasedWriter {
-				// A lease is refused only when somebody else holds it, and a check
-				// receives one subject — so the refusal is reached by handing the
-				// run a holder whose registry another already has the key in. The
-				// seed then fails for this subject, which LeasedWriterSeed answers.
+		leasedidempotentwritertest.LeasedWriterHarness[*leasedidempotentwritertest.InMemory]{
+			Name: "in-memory", New: leasedidempotentwritertest.NewInMemory,
+		},
+		leasedidempotentwritertest.LeasedWriterHarness[*leasedidempotentwritertest.InMemory]{
+			Name: "in-memory, contended",
+			// A lease is refused only when somebody else holds it, and a row
+			// receives one subject — so the refusal is reached by handing the
+			// run a holder whose registry another already has the key in.
+			New: func() *leasedidempotentwritertest.InMemory {
 				r := leasedidempotentwritertest.NewRegistry()
 				incumbent := r.Holder()
 				if err := incumbent.Acquire(t.Context(), contendedKey); err != nil {
@@ -50,28 +45,45 @@ func TestLeasedWriterContract(t *testing.T) {
 				}
 				return r.Holder()
 			},
-		),
-		leasedidempotentwritertest.LeasedWriterOnAcquire("loses a key another holder took", func(
-			tb testing.TB, subject leasedidempotentwriter.LeasedWriter, _ string,
-		) {
-			tb.Helper()
-			// True of the contended subject and vacuous for the lone one, which
-			// is the shape a two-subject claim takes when only one of them can
-			// be in the losing state.
-			if err := subject.Acquire(tb.Context(), contendedKey); err != nil {
-				testkit.ErrorIs(tb, err, leasedidempotentwriter.ErrHeld,
-					"an acquire that loses says who to")
-				return
-			}
-			testkit.NoError(tb, subject.Release(tb.Context(), contendedKey),
-				"and one that wins can give it back")
-		}),
-		leasedidempotentwritertest.LeasedWriterOnAcquire(
-			"repeats without unbalancing the lease", repeatsWithoutUnbalancing,
-		),
-		leasedidempotentwritertest.LeasedWriterOnRelease(
-			"tolerates a key nobody holds", toleratesAnUnheldKey,
-		),
+		},
+		leasedidempotentwritertest.LeasedWriterChecks{
+			{
+				Method: "Acquire",
+				Name:   "loses-a-key-another-took",
+				Claim:  "Acquire loses a key another holder took",
+				Run: func(tb testing.TB, s leasedidempotentwriter.LeasedWriter, fx leasedidempotentwritertest.LeasedWriterFixture) {
+					tb.Helper()
+					// True of the contended subject and vacuous for the lone
+					// one, which is the shape a two-subject claim takes when
+					// only one of them can be in the losing state.
+					if err := s.Acquire(tb.Context(), contendedKey); err != nil {
+						testkit.ErrorIs(tb, err, leasedidempotentwriter.ErrHeld,
+							"an acquire that loses says who to")
+						return
+					}
+					testkit.NoError(tb, s.Release(tb.Context(), contendedKey),
+						"and one that wins can give it back")
+				},
+			},
+			{
+				Method: "Acquire",
+				Name:   "repeats-without-unbalancing",
+				Claim:  "Acquire repeats without unbalancing the lease",
+				Run: func(tb testing.TB, s leasedidempotentwriter.LeasedWriter, fx leasedidempotentwritertest.LeasedWriterFixture) {
+					tb.Helper()
+					repeatsWithoutUnbalancing(tb, s, fx.Key())
+				},
+			},
+			{
+				Method: "Release",
+				Name:   "tolerates-an-unheld-key",
+				Claim:  "Release tolerates a key nobody holds",
+				Run: func(tb testing.TB, s leasedidempotentwriter.LeasedWriter, fx leasedidempotentwritertest.LeasedWriterFixture) {
+					tb.Helper()
+					toleratesAnUnheldKey(tb, s, fx.Key())
+				},
+			},
+		},
 	)
 }
 
@@ -84,15 +96,15 @@ const contendedKey = "held-by-another"
 
 // repeatsWithoutUnbalancing is the whole of the composite.
 //
-// The seed already acquired this key, so these are the repeats `idempotent`
-// asks for — and one release still has to settle them, which is what `lease`
-// asks for. The implementation it rejects is a plain lease: one that refuses
+// The row acquires first, so these are the repeats `idempotent` asks for — and
+// one release still has to settle them, which is what `lease` asks for. The implementation it rejects is a plain lease: one that refuses
 // the second acquire, which is correct for the contract alone and wrong for the
 // pair.
 func repeatsWithoutUnbalancing(
 	tb testing.TB, subject leasedidempotentwriter.LeasedWriter, key string,
 ) {
 	tb.Helper()
+	testkit.NoError(tb, subject.Acquire(tb.Context(), key), "the key is taken")
 	testkit.NoError(tb, subject.Acquire(tb.Context(), key), "re-acquiring is a no-op")
 	testkit.NoError(tb, subject.Acquire(tb.Context(), key), "however often it happens")
 
@@ -165,10 +177,7 @@ func TestEveryCheckRejectsAWrongLease(t *testing.T) {
 
 	t.Run("a plain lease refuses the repeat", func(t *testing.T) {
 		t.Parallel()
-		// The seed is the harness's, so it is restated here: the check assumes
-		// the key is already held by this caller.
 		subject := newPlainLease()
-		testkit.NoError(t, subject.Acquire(t.Context(), "k"), "the seed takes the lease")
 
 		got := testkit.Rejects(t, "a lease with no idempotence", func(tb testing.TB) {
 			tb.Helper()
@@ -189,19 +198,18 @@ func TestEveryCheckRejectsAWrongLease(t *testing.T) {
 	})
 }
 
-// Declining the double is separate from dropping a check.
-func TestLeasedWriterContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestLeasedWriterContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	leasedidempotentwritertest.AssertLeasedWriterContract(
+	leasedidempotentwritertest.RunLeasedWriter(
 		t,
-		leasedidempotentwritertest.LeasedWriterSubject(
-			"in-memory",
-			func() leasedidempotentwriter.LeasedWriter {
-				return leasedidempotentwritertest.NewInMemory()
-			},
-		),
-		leasedidempotentwritertest.LeasedWriterWithout("Acquire/smoke"),
-		leasedidempotentwritertest.LeasedWriterWithoutDouble(),
+		leasedidempotentwritertest.LeasedWriterHarness[*leasedidempotentwritertest.InMemory]{
+			Name: "in-memory", New: leasedidempotentwritertest.NewInMemory,
+		},
+		leasedidempotentwritertest.LeasedWriterSuite.Without(
+			leasedidempotentwritertest.LeasedWriterSuite.Checks.Acquire.Smoke()),
 	)
 }

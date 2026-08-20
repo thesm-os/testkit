@@ -21,61 +21,54 @@ import (
 func TestContractContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := publishertest.DefaultContractFixture()
+	publishertest.RunContract(t,
+		publishertest.ContractHarness[*publishertest.InMemory]{Name: "in-memory", New: publishertest.NewInMemory},
+		publishertest.ContractChecks{
+			{
+				Method: "Subscribe",
+				Name:   "receives-what-is-published-after",
+				Claim:  "Subscribe receives what is published after it attaches",
+				Run: func(tb testing.TB, s publisher.Contract, fx publishertest.ContractFixture) {
+					tb.Helper()
+					stream, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-	publishertest.AssertContractContract(t,
-		publishertest.ContractModel(),
-		publishertest.ContractSubject("in-memory", func() publisher.Contract {
-			return publishertest.NewInMemory()
-		}),
-		publishertest.ContractOnSubscribe("receives what is published after it attaches", func(
-			tb testing.TB, subject publisher.Contract,
-		) {
-			tb.Helper()
-			stream, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
+					testkit.NoError(tb, s.Publish(tb.Context(), fx.ValueOther()),
+						"a message published afterwards is accepted")
+					testkit.Equal(tb, <-stream, fx.ValueOther(), "and reaches them")
+				},
+			},
+			{
+				Method: "Publish",
+				Name:   "reports-an-unreachable-subscriber",
+				Claim:  "Publish reports a subscriber it can no longer reach",
+				Run: func(tb testing.TB, s publisher.Contract, fx publishertest.ContractFixture) {
+					tb.Helper()
+					_, err := s.Subscribe(tb.Context())
+					testkit.NoError(tb, err, "a subscriber attaches")
 
-			testkit.NoError(tb, subject.Publish(tb.Context(), fixture.VOther),
-				"a message published afterwards is accepted")
-			testkit.Equal(tb, <-stream, fixture.VOther, "and reaches them")
-		}),
-		publishertest.ContractOnPublish("reports a subscriber it can no longer reach", func(
-			tb testing.TB, subject publisher.Contract, v publisher.Value,
-		) {
-			tb.Helper()
-			_, err := subject.Subscribe(tb.Context())
-			testkit.NoError(tb, err, "a subscriber attaches")
-
-			for range 32 {
-				if err := subject.Publish(tb.Context(), v); err != nil {
-					testkit.ErrorIs(tb, err, publishertest.ErrFull,
-						"the publish says why it could not be taken")
-					return
-				}
-			}
-			tb.Fatalf("a subscriber that never reads was never reported as behind")
-		}),
+					for range 32 {
+						if err := s.Publish(tb.Context(), fx.Value()); err != nil {
+							testkit.ErrorIs(tb, err, publishertest.ErrFull,
+								"the publish says why it could not be taken")
+							return
+						}
+					}
+					tb.Fatalf("a subscriber that never reads was never reported as behind")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestContractContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestContractContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	publishertest.AssertContractContract(t,
-		publishertest.ContractSubject("in-memory", func() publisher.Contract {
-			return publishertest.NewInMemory()
-		}),
-		publishertest.ContractWithout("Publish/smoke"),
-		publishertest.ContractWithoutDouble(),
+	publishertest.RunContract(t,
+		publishertest.ContractHarness[*publishertest.InMemory]{Name: "in-memory", New: publishertest.NewInMemory},
+		publishertest.ContractSuite.Without(publishertest.ContractSuite.Checks.Publish.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestContractSaturation(t *testing.T) {
-	t.Parallel()
-	publishertest.ContractModelSaturation(t, func() publisher.Contract {
-		return publishertest.NewInMemory()
-	})
 }

@@ -1,0 +1,6 @@
+testkit-checks v2
+GetAll/cancel	signature/cancel	GetAll reports a cancelled context as cancelled	
+GetAll/deadline	signature/deadline	GetAll reports an expired deadline as exceeded	
+GetAll/nilcontext	signature/nilcontext	GetAll returns an error rather than panicking on a nil context	
+GetAll/smoke	signature/smoke	GetAll survives a call with a seeded keys	
+GetAll/zero-on-error	signature/zero-on-error	GetAll returns nothing alongside any error	

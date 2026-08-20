@@ -4,7 +4,6 @@
 package idempotenttest_test
 
 import (
-	"context"
 	"testing"
 
 	"go.thesmos.sh/testkit"
@@ -13,54 +12,41 @@ import (
 )
 
 // idempotent is the model tier's — AUTO-IDEMPOTENT-WRITE states it — so the
-// suite generates the signature family alone.
+// suite generates the signature family plus the repeat probe.
 //
 // That is the assignment working rather than a gap: the repeat write and the
 // single write return the same thing, so no one call can tell them apart.
 func TestMixedContract(t *testing.T) {
 	t.Parallel()
 
-	fixture := idempotenttest.DefaultMixedFixture()
+	idempotenttest.RunMixed(t,
+		idempotenttest.MixedHarness[*idempotenttest.InMemory]{Name: "in-memory", New: idempotenttest.NewInMemory},
+		idempotenttest.MixedChecks{
+			{
+				Method: "Read",
+				Name:   "reads-back-what-put-wrote",
+				Claim:  "Read returns what Put wrote",
+				Run: func(tb testing.TB, s idempotent.Mixed, fx idempotenttest.MixedFixture) {
+					tb.Helper()
+					testkit.NoError(tb, s.Put(tb.Context(), fx.Key(), fx.Value()), "the key is written")
 
-	idempotenttest.AssertMixedContract(t,
-		idempotenttest.MixedSubject("in-memory", func() idempotent.Mixed {
-			return idempotenttest.NewInMemory()
-		}),
-		// The model tier: random sequences against the derived reference,
-		// reporting under "model" beside the per-method checks.
-		idempotenttest.MixedModel(),
-		idempotenttest.MixedSeed(func(ctx context.Context, subject idempotent.Mixed) error {
-			return subject.Put(ctx, fixture.Key, fixture.Value)
-		}),
-		idempotenttest.MixedOnRead("returns what was written", func(
-			tb testing.TB, subject idempotent.Mixed, key string,
-		) {
-			tb.Helper()
-			got, err := subject.Read(tb.Context(), key)
-			testkit.NoError(tb, err, "a written key is found")
-			testkit.Equal(tb, got, fixture.Value, "and carries what was written")
-		}),
+					got, err := s.Read(tb.Context(), fx.Key())
+					testkit.NoError(tb, err, "a written key is found")
+					testkit.Equal(tb, got, fx.Value(), "and carries what was written")
+				},
+			},
+		},
 	)
 }
 
-// Declining the double is separate from dropping a check.
-func TestMixedContractWithoutTheDouble(t *testing.T) {
+// Dropping a check is written against the typed index rather than a string, so
+// a check that is renamed or stops being emitted breaks this compile instead of
+// silently declining nothing.
+func TestMixedContractWithoutSmoke(t *testing.T) {
 	t.Parallel()
 
-	idempotenttest.AssertMixedContract(t,
-		idempotenttest.MixedSubject("in-memory", func() idempotent.Mixed {
-			return idempotenttest.NewInMemory()
-		}),
-		idempotenttest.MixedWithout("Put/smoke"),
-		idempotenttest.MixedWithoutDouble(),
+	idempotenttest.RunMixed(t,
+		idempotenttest.MixedHarness[*idempotenttest.InMemory]{Name: "in-memory", New: idempotenttest.NewInMemory},
+		idempotenttest.MixedSuite.Without(idempotenttest.MixedSuite.Checks.Put.Smoke()),
 	)
-}
-
-// The saturation prover: every bound law must be able to fail as itself,
-// a defect worn on its own methods reddening the run by name.
-func TestMixedSaturation(t *testing.T) {
-	t.Parallel()
-	idempotenttest.MixedModelSaturation(t, func() idempotent.Mixed {
-		return idempotenttest.NewInMemory()
-	})
 }

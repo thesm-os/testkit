@@ -1,0 +1,66 @@
+{{/*
+The defects that break a claim by answering the WRONG thing.
+
+Both plant a live value where a correct subject produces none, which is
+why they need one derived — the sampler the fixture uses, taking its
+ALTERNATE member so the planted answer cannot be mistaken for a value
+the run legitimately seeded.
+
+A defect that returned the zero here would BE the claim rather than
+break it, which is the failure the per-check renderability guard exists
+to prevent: where no live value derives, the row ships Argued instead.
+*/}}
+{{- define "suite.defect.echo-beside-error" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
+				// A believable answer beside the refusal. A caller
+				// reading the error and one reading the value disagree
+				// about what happened, which is the claim's own
+				// violation rather than a subject that merely failed.
+				{{ .ValueSlot }} = {{ template "suite.defect.sample" .Echo }}
+				{{ .ErrSlot }} = {{ renderExpr (external "errors" "New") }}({{ printf "%q" .EchoMessage }})
+				return
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
+{{- end -}}
+
+{{- /*
+The miss claim's defect: answering for an input nothing supplied.
+
+Two arms, chosen by what the read declares. With a sentinel the defect
+need only ANSWER — a subject that owed an error and gave none has
+already invented the hit — and the bare return says exactly that.
+Without one the claim is about the value, so the defect has to produce
+a live one.
+*/ -}}
+{{- define "suite.defect.invents-hit" -}}
+{{ renderExpr (external $.Prove "One") }}({{ printf "%q" .DefectName }},
+	func(tb {{ renderExpr (external "testing" "TB") }}) {{ renderExpr (external .Pkg .Subject) }} {
+		return {{ renderExpr (external .Pkg .Ctor) }}(tb, {{ renderExpr (external .Pkg .Option) }}(
+			func{{ renderParams .AnonParams }} {{ renderReturns .NamedReturns }} {
+{{- if .Sentinel }}
+				// The sentinel was owed and nothing is reported, so the
+				// absent key reads as present.
+{{- else }}
+				// A value for a key nothing wrote.
+				{{ .ValueSlot }} = {{ template "suite.defect.sample" .Echo }}
+{{- end }}
+				return
+			}))
+	}){{ template "suite.frag.defect-reason" . }}
+{{- end -}}
+
+{{- /*
+One derived value, spelled the way its type takes it. A composite
+literal and a conversion are not interchangeable, and which applies is
+a property of the type rather than of the value — so the sampler
+records it and this reads it back.
+*/ -}}
+{{- define "suite.defect.sample" -}}
+{{- if not .Ref }}{{ .Text }}
+{{- else if .Composite }}{{ renderType .Ref }}{{ .Text }}
+{{- else }}{{ renderType .Ref }}({{ .Text }})
+{{- end }}
+{{- end -}}

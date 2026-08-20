@@ -1,0 +1,10 @@
+testkit-checks v2
+Get/cancel	signature/cancel	Get reports a cancelled context as cancelled	
+Get/deadline	signature/deadline	Get reports an expired deadline as exceeded	
+Get/nilcontext	signature/nilcontext	Get returns an error rather than panicking on a nil context	
+Get/smoke	signature/smoke	Get survives a call with derived inputs	
+Get/zero-on-error	signature/zero-on-error	Get returns zero alongside any error	
+Set/cancel	signature/cancel	Set reports a cancelled context as cancelled	
+Set/deadline	signature/deadline	Set reports an expired deadline as exceeded	
+Set/nilcontext	signature/nilcontext	Set returns an error rather than panicking on a nil context	
+Set/smoke	signature/smoke	Set survives a call with derived inputs	
