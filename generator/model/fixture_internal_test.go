@@ -11,7 +11,6 @@ import (
 
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // unstamped is a projection method whose source carries no classification
@@ -110,8 +109,8 @@ const (
 )
 
 // harnessOf wraps methods into the projection lawsOf walks.
-func harnessOf(methods ...*subject.Method) *suite.Contract {
-	h := &suite.Contract{}
+func harnessOf(methods ...*subject.Method) *subject.Projection {
+	h := &subject.Projection{}
 	for _, m := range methods {
 		h.Methods = append(h.Methods, *m)
 	}

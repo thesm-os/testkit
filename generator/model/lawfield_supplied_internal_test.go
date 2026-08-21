@@ -14,7 +14,6 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // TestSuppliedDoors pins the door builder's arms: each shape spells its
@@ -102,7 +101,7 @@ func TestSuppliedDoors(t *testing.T) {
 		agg := projected("Count", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("int")), res(namedRef("error"))})
 		stamp(agg, "aggregator", "", "")
-		h := &suite.Contract{Methods: []subject.Method{*agg}}
+		h := &subject.Projection{Methods: []subject.Method{*agg}}
 		field, reason := lawFieldOf(b, h, tiers.Rule{
 			Law:    lawid.EventualConvergence,
 			Fields: []tiers.Field{{Name: "Merge", Kind: tiers.KindSupplied, From: "merge"}},
@@ -123,7 +122,7 @@ func TestSuppliedDoors(t *testing.T) {
 			[]golang.Param{arg("ctx", ctxRef()), arg("e", pkgRef("example.com/c", "Entry"))},
 			[]golang.Return{errRet})
 		shape.ContractPartnerKey("chain", "replay").Set(carrier.Source.EnsureMeta(), "Replay", "test")
-		h := &suite.Contract{Methods: []subject.Method{*replay, *carrier}}
+		h := &subject.Projection{Methods: []subject.Method{*replay, *carrier}}
 		field, reason := lawFieldOf(b, h, tiers.Rule{
 			Law:    lawid.ReplayCausalOrdering,
 			Fields: []tiers.Field{{Name: fEntryID, Kind: tiers.KindSupplied, From: "entry-id"}},
@@ -370,7 +369,7 @@ func TestPublisherDrainDerivation(t *testing.T) {
 	t.Run("a channel-answering subscribe derives the sweep once", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []subject.Method{subscribeWith(chanReturn())}}
+		h := &subject.Projection{Methods: []subject.Method{subscribeWith(chanReturn())}}
 		m := carrier()
 		field, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], m, nil)
 		testkit.True(t, reason == "" && field != nil, "the sweep derives: "+reason)
@@ -386,7 +385,7 @@ func TestPublisherDrainDerivation(t *testing.T) {
 	t.Run("a subscription that answers no channel keeps the refusal", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []subject.Method{subscribeWith(res(pkgRef("example.com/p", "Handle")))}}
+		h := &subject.Projection{Methods: []subject.Method{subscribeWith(res(pkgRef("example.com/p", "Handle")))}}
 		_, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], carrier(), nil)
 		testkit.Assert(t, reason).Contains("no channel", "an object handle is the drain option's territory")
 	})
@@ -394,7 +393,7 @@ func TestPublisherDrainDerivation(t *testing.T) {
 	t.Run("a carrier that stamps no subscribe partner refuses", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []subject.Method{subscribeWith(chanReturn())}}
+		h := &subject.Projection{Methods: []subject.Method{subscribeWith(chanReturn())}}
 		unstampedCarrier := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{res(namedRef("error"))})
@@ -450,7 +449,7 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 		bare := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
-		h := &suite.Contract{Methods: []subject.Method{*bare}}
+		h := &subject.Projection{Methods: []subject.Method{*bare}}
 		m := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{errRet})
@@ -469,7 +468,7 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 		golang.MetaIsChannel.Set(ch.EnsureMeta(), true, "test")
 		sub := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{{Type: sdk.Builtin("sub"), Source: ch}, errRet})
-		h := &suite.Contract{Methods: []subject.Method{*sub}}
+		h := &subject.Projection{Methods: []subject.Method{*sub}}
 		m := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{errRet})

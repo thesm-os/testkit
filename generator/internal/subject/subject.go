@@ -88,6 +88,32 @@ type Subject struct {
 	TypeArgs string
 }
 
+// Projection is the whole of what a generator needs to know about the
+// interface under test: what it is called, the methods it declares, and
+// the inputs a check draws.
+//
+// Carried as one value because every satellite needs all three and none
+// of them needs a fourth. Before it existed, each satellite took the
+// harness generator's own emit value as its parameter — which reads as a
+// dependency on the harness and is not one, since what those signatures
+// touched was the projection the harness happens to embed. The
+// distinction shows the moment the harness's shape changes: a satellite
+// named on the emit value breaks, one named on this does not, and that
+// is exactly what unregistered the model tier for a month.
+//
+// The harness generator embeds it rather than restating the fields, so
+// there is one derivation and every reader sees the same one.
+type Projection struct {
+	Subject
+
+	// Fixture is the derived input set every check draws its values from.
+	Fixture Fixture
+
+	// Methods is the interface's method set in declaration order, each
+	// carrying the classifications the annotator stamped on it.
+	Methods []Method
+}
+
 // Method is one method of the subject interface, with the naming this generator
 // adds to the shared signature projection.
 type Method struct {

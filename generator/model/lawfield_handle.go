@@ -10,12 +10,11 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // handleFieldOf fills a handle the generated file constructs and shares.
 func handleFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	switch f.From {
@@ -181,7 +180,7 @@ func handleFieldOf(
 // hashElem resolves the identity hash's element: the drained element of the
 // same rule's Drain field where one exists, the values pool otherwise.
 func hashElem(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, m, keyed *subject.Method,
 ) (sdk.Ref, string) {
 	for _, f := range r.Fields {
 		if f.Kind != tiers.KindRole || (f.Name != fDrain && f.Name != "Collect") {

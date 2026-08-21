@@ -14,12 +14,11 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // roleFieldOf fills a closure field per its law's transcribed shape.
 func roleFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	role, reason := roleMethod(b, harness, f.From, m, keyed)
@@ -489,7 +488,7 @@ func roleFieldOf(
 // method's own stamp names.
 func roleMethod(
 	b *Bindings,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	from string,
 	m, keyed *subject.Method,
 ) (*subject.Method, string) {

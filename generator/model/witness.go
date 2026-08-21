@@ -10,7 +10,6 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // bindingsOf derives one interface's bindings, false where it reported why it
@@ -22,8 +21,8 @@ import (
 // it, so the rewrite clones — methods, signatures and the subject alike —
 // and the non-generic path returns the harness untouched.
 func witnessedHarness(
-	harness *suite.Contract, iface *sdk.Interface, witnesses []sdk.Ref,
-) (*suite.Contract, map[string]string) {
+	harness *subject.Projection, iface *sdk.Interface, witnesses []sdk.Ref,
+) (*subject.Projection, map[string]string) {
 	by := golang.WitnessBindings(iface.TypeParams, witnesses)
 	if by == nil {
 		return harness, nil

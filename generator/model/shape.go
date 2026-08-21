@@ -179,7 +179,7 @@ func returnsSlice(m *subject.Method) bool {
 // spells — off the selecting method first, and for a contract parameter off
 // every carrier of the same contract, because the stamp lives on the
 // directive host and any role method may be the one selecting the rule.
-func stampValue(harness *suite.Contract, m *subject.Method, key string) (string, bool) {
+func stampValue(harness *subject.Projection, m *subject.Method, key string) (string, bool) {
 	if v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(m.Source.Meta()); ok && v != "" {
 		return v, true
 	}
@@ -244,7 +244,7 @@ func paramKeys(params []shape.Param) []string {
 // in, the same type out beside the error — or nil. Structural rather than
 // stamped, so a hand-built projection in a test answers the same way the
 // annotated corpus does.
-func answeringWriterOf(harness *suite.Contract) *subject.Method {
+func answeringWriterOf(harness *subject.Projection) *subject.Method {
 	if harness == nil {
 		return nil
 	}
@@ -265,7 +265,7 @@ func answeringWriterOf(harness *suite.Contract) *subject.Method {
 
 // methodOf finds one projection method by name; the adapter was built from
 // the same list, so a miss is unreachable.
-func methodOf(harness *suite.Contract, name string) *subject.Method {
+func methodOf(harness *subject.Projection, name string) *subject.Method {
 	for i := range harness.Methods {
 		if harness.Methods[i].Name == name {
 			return &harness.Methods[i]
@@ -280,7 +280,7 @@ func methodOf(harness *suite.Contract, name string) *subject.Method {
 // it is what lets a sentinel-checking law's guard match the identity the
 // fixture declared — against a minted private error the guard never passes,
 // and the law it feeds is dead without anyone saying so.
-func missSentinelOf(harness *suite.Contract) *sdk.Expr {
+func missSentinelOf(harness *subject.Projection) *sdk.Expr {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		v, declared := suite.MissSentinel(*m)
@@ -298,7 +298,7 @@ func missSentinelOf(harness *suite.Contract) *sdk.Expr {
 // slice as an event log — the refinement that outranks every keyed
 // election, because a map oracle collapses the repeats a log faithfully
 // holds.
-func historyDrained(harness *suite.Contract) bool {
+func historyDrained(harness *subject.Projection) bool {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		drains := slices.ContainsFunc(m.Mixins, tiers.DrainsHistory) ||

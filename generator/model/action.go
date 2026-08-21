@@ -12,7 +12,6 @@ import (
 
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // Action is one method, driven and compared.
@@ -264,7 +263,7 @@ func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *subject.Method) (*Actio
 // content of that driving. A recording append keeps its recording closure:
 // the rename touches the constructor, never the history log the writer
 // template emits around it.
-func contractActionsOf(b *Bindings, harness *suite.Contract) {
+func contractActionsOf(b *Bindings, harness *subject.Projection) {
 	for i := range harness.Methods {
 		carrier := &harness.Methods[i]
 		for _, contract := range carrier.Contracts {
@@ -314,7 +313,7 @@ func contractActionsOf(b *Bindings, harness *suite.Contract) {
 // contract, nil where the interface carries none. The offset type is held
 // to int64 because the shared-history model counts in it; a log offsetting
 // otherwise keeps its sequential law and no leg.
-func appendActionOf(b *Bindings, harness *suite.Contract) (*Action, sdk.Ref) {
+func appendActionOf(b *Bindings, harness *subject.Projection) (*Action, sdk.Ref) {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if !slices.Contains(m.Contracts, "appender") {

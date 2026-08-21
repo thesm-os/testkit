@@ -13,7 +13,6 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // sessionSpecOf derives the per-client classification the session laws
@@ -26,7 +25,7 @@ import (
 // upserter-shaped write — (ctx, V) (V, error), the stored state answered —
 // and refuse otherwise with the shape that would carry them.
 func sessionSpecOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, m, keyed *subject.Method,
 ) (*SessionSpec, string) {
 	if keyed == nil {
 		return nil, "orders reads no keyed reader here answers"
@@ -100,7 +99,7 @@ type SessionSpec struct {
 // sessionVersionOf reports the first session mixin carrying a version=
 // param anywhere in the method set: the carrying method, the member it
 // names, and whether one was found.
-func sessionVersionOf(harness *suite.Contract) (carrier *subject.Method, member string, stamped bool) {
+func sessionVersionOf(harness *subject.Projection) (carrier *subject.Method, member string, stamped bool) {
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		for _, mx := range m.Mixins {

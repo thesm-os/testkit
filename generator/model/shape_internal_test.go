@@ -13,7 +13,6 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 func TestIdentityCompared(t *testing.T) {
@@ -64,12 +63,12 @@ func TestAnsweringWriterDetection(t *testing.T) {
 		[]golang.Param{arg("ctx", ctxRef()), arg("v", valueRef)},
 		[]golang.Return{res(namedRef("int64")), errRet})
 
-	h := &suite.Contract{Methods: []subject.Method{*plain, *up, *crossed}}
+	h := &subject.Projection{Methods: []subject.Method{*plain, *up, *crossed}}
 	found := answeringWriterOf(h)
 	testkit.True(t, found != nil && found.Name == "Persist",
 		"the answered-state write is the answering writer")
 
-	none := &suite.Contract{Methods: []subject.Method{*plain, *crossed}}
+	none := &subject.Projection{Methods: []subject.Method{*plain, *crossed}}
 	testkit.True(t, answeringWriterOf(none) == nil,
 		"an error-only write and a scalar-answering write both hide the stored state")
 }

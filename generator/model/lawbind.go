@@ -19,7 +19,7 @@ import (
 // classification set. A selected rule that cannot be filled lands in
 // [Bindings.Unbound] with what it is waiting on — rendered in the header,
 // because a law that quietly failed to bind reads as a claim the run checks.
-func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, keyed *subject.Method) {
+func lawsOf(b *Bindings, harness *subject.Projection, partners map[string]string, keyed *subject.Method) {
 	// Selection composes per method, but a claim holds over the interface —
 	// the sticky stamp rides the reader and negates the writer-earned
 	// observability law — so the conflict scan runs against every method's
@@ -147,7 +147,7 @@ func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, ke
 // lawOf fills one rule, false where [Bindings.Unbound] records why not.
 func lawOf(
 	b *Bindings,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	r tiers.Rule,
 	m, keyed *subject.Method,
 	inert map[string]string,

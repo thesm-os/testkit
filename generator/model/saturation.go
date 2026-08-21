@@ -12,7 +12,6 @@ import (
 
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // SatLaw is one bound law's saturation obligation: its identifier, the
@@ -146,7 +145,7 @@ func (m SatMutant) SeqDefect() string {
 // own subjects, so a worn defect never reaches the run — and a witnessed
 // interface emits no prover at all, because its wrappers would need the
 // witness instantiation the surface does not thread.
-func saturationOf(b *Bindings, harness *suite.Contract) {
+func saturationOf(b *Bindings, harness *subject.Projection) {
 	if len(b.Witnesses) > 0 {
 		return
 	}
@@ -211,7 +210,7 @@ func saturationOf(b *Bindings, harness *suite.Contract) {
 // Only the upper bound. A lower one is optional in the manifest and defaults
 // to the floor of the counting shapes it attaches to, so crossing it means
 // answering a negative count — which the shapes cannot express.
-func overshootOf(b *Bindings, harness *suite.Contract, lb *LawBinding, method string) (SatMutant, bool) {
+func overshootOf(b *Bindings, harness *subject.Projection, lb *LawBinding, method string) (SatMutant, bool) {
 	var bound, read *LawField
 	for _, f := range lb.Fields {
 		switch {

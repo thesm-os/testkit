@@ -14,7 +14,6 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // TestSessionClassifierDerivation pins the per-client classifier's arms:
@@ -67,7 +66,7 @@ func TestSessionClassifierDerivation(t *testing.T) {
 		}}
 		reader := stampedReader()
 		shape.MixinParamKey("monotonicwrites", "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
-		_, reason := lawFieldOf(b, &suite.Contract{}, r, r.Fields[0], reader, reader)
+		_, reason := lawFieldOf(b, &subject.Projection{}, r, r.Fields[0], reader, reader)
 		testkit.Assert(t, reason).Contains("answering", "the shape that would surface the stamp is named")
 	})
 
@@ -126,7 +125,7 @@ func TestSessionClassifierDerivation(t *testing.T) {
 		up := projected("Persist",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/s", "Value"))},
 			[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
-		h := &suite.Contract{Methods: []subject.Method{*up}}
+		h := &subject.Projection{Methods: []subject.Method{*up}}
 		r := tiers.Rule{Law: lawid.MonotonicReads, Needs: []string{mixinMonotonicReads}, Fields: []tiers.Field{
 			{Name: "Classify", Kind: tiers.KindHandle, From: handleClassifier},
 		}}
@@ -158,7 +157,7 @@ func TestSessionVersionScan(t *testing.T) {
 	reader.Mixins = []string{"monotonicreads"}
 	shape.MixinParamKey(mixinMonotonicReads, "version").Set(reader.Source.EnsureMeta(), "Rev", "test")
 
-	carrier, member, stamped := sessionVersionOf(&suite.Contract{Methods: []subject.Method{*reader}})
+	carrier, member, stamped := sessionVersionOf(&subject.Projection{Methods: []subject.Method{*reader}})
 	testkit.True(t, stamped && member == "Rev", "a stamped session mixin names its member")
 	testkit.True(t, carrier != nil && carrier.Name == "Get", "and the carrying method rides along")
 
@@ -166,14 +165,14 @@ func TestSessionVersionScan(t *testing.T) {
 		[]golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 		[]golang.Return{res(pkgRef("example.com/s", "Value")), errRet})
 	bare.Mixins = []string{"monotonicreads"}
-	_, _, stamped = sessionVersionOf(&suite.Contract{Methods: []subject.Method{*bare}})
+	_, _, stamped = sessionVersionOf(&subject.Projection{Methods: []subject.Method{*bare}})
 	testkit.False(t, stamped, "a session mixin without version= stamps no ordering")
 
 	other := projected("Put",
 		[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
 		[]golang.Return{errRet})
 	other.Mixins = []string{"idempotent"}
-	_, _, stamped = sessionVersionOf(&suite.Contract{Methods: []subject.Method{*other}})
+	_, _, stamped = sessionVersionOf(&subject.Projection{Methods: []subject.Method{*other}})
 	testkit.False(t, stamped, "a non-session mixin is not in the scan")
 }
 
@@ -196,7 +195,7 @@ func TestSessionConcurrentDerivation(t *testing.T) {
 		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
 		Actions: []*Action{{Method: "Get"}, {Method: "Persist"}},
 	}
-	concurrentOf(b, &suite.Contract{}, keyed, valued)
+	concurrentOf(b, &subject.Projection{}, keyed, valued)
 	testkit.Equal(t, b.ConcFamily, "session", "both halves in hand derive the stepless leg")
 
 	half := &Bindings{
@@ -204,7 +203,7 @@ func TestSessionConcurrentDerivation(t *testing.T) {
 		Session: &SessionSpec{ClassifyName: "mixedSessionClassify"},
 		Actions: []*Action{{Method: "Get"}},
 	}
-	concurrentOf(half, &suite.Contract{}, keyed, valued)
+	concurrentOf(half, &subject.Projection{}, keyed, valued)
 	testkit.Equal(t, half.ConcFamily, "", "half a pair interleaves nothing worth checking")
 	testkit.True(t, half.ConcReader == nil && half.ConcWriter == nil,
 		"and the halves are reset rather than left dangling")

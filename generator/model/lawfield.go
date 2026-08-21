@@ -8,13 +8,12 @@ import (
 
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // lawFieldOf fills one manifest entry: a field, nil for one the law defaults,
 // or the reason nothing can fill it.
 func lawFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field, m, keyed *subject.Method,
 ) (*LawField, string) {
 	field := &LawField{
 		BaseEmit: b.BaseEmit,
@@ -89,7 +88,7 @@ type observation struct {
 // key — in that order, because each earlier one sees strictly more.
 func observationOf(
 	b *Bindings,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	keyed *subject.Method,
 ) (*observation, string) {
 	var agg, keyedReader *subject.Method
@@ -142,7 +141,7 @@ func observationOf(
 
 // resolveArg lifts one binding-row argument into a renderable type.
 func resolveArg(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, a tiers.BindArg, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, a tiers.BindArg, m, keyed *subject.Method,
 ) (sdk.Ref, string) {
 	switch a {
 	case tiers.BindKey:
@@ -202,7 +201,7 @@ func resolveArg(
 // ruleFieldRole resolves a binding argument's field reference to the method
 // that fills it — the same resolution the field itself gets.
 func ruleFieldRole(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, fieldName string, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, fieldName string, m, keyed *subject.Method,
 ) (*subject.Method, string) {
 	for _, f := range r.Fields {
 		if f.Name != fieldName {

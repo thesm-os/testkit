@@ -12,7 +12,6 @@ import (
 
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // poolsOf fills the shared pools from the fixture fields the harness already
@@ -31,7 +30,7 @@ import (
 func poolsOf(
 	ctx *sdk.GeneratorContext,
 	b *Bindings,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	keyed, valued, composite *subject.Method,
 	genFunc string,
 ) {
@@ -161,7 +160,7 @@ func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite 
 // [tiers.ValueRestriction] inverts the license, and a type whose graph this
 // build cannot see to the bottom would arm a [model.Make] panic instead of a
 // deeper run; both keep the pair, and the header says which.
-func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *suite.Contract, genFunc string) bool {
+func widenValues(ctx *sdk.GeneratorContext, b *Bindings, harness *subject.Projection, genFunc string) bool {
 	// A supplied generator outranks every verdict below: the consumer
 	// authored the domain, which is more than a reflection walk or a claim
 	// scan can ever know.

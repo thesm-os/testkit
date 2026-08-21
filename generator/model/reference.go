@@ -13,7 +13,6 @@ import (
 
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // Reference is how the run builds its oracle.
@@ -153,7 +152,7 @@ type AdapterMethod struct {
 func referenceOf(
 	ctx *sdk.GeneratorContext,
 	iface *sdk.Interface,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	b *Bindings,
 	keyed, valued, composite, collector *subject.Method,
 	partners map[string]string,
@@ -337,7 +336,7 @@ func contractOf(
 	ctx *sdk.GeneratorContext,
 	iface *sdk.Interface,
 	b *Bindings,
-	harness *suite.Contract,
+	harness *subject.Projection,
 	partners map[string]string,
 	names Reference,
 ) (handled bool, lenified string, refused bool) {
@@ -446,7 +445,7 @@ func contractOf(
 // stampedSentinel resolves a contract error's declared sentinel, false where
 // the parameter is unnamed or unstamped.
 func stampedSentinel(
-	harness *suite.Contract, carrier *subject.Method, contract, param string,
+	harness *subject.Projection, carrier *subject.Method, contract, param string,
 ) (*sdk.Expr, bool) {
 	if param == "" {
 		return nil, false
@@ -467,7 +466,7 @@ func stampedSentinel(
 // the spec's ShapeOps claim forwards likewise — the cell's read is no role
 // the cas contract declares — and everything else is inert.
 func contractAdapterOf(
-	harness *suite.Contract,
+	harness *subject.Projection,
 	partners map[string]string,
 	contract string,
 	roles map[string]*subject.Method,
@@ -510,7 +509,7 @@ func contractAdapterOf(
 // oracle models — a writer of any other type stays inert, because forwarding
 // it would hand the store a value its element clause refuses to compile.
 func adapterOf(
-	b *Bindings, harness *suite.Contract, partners map[string]string, oracle Oracle, valueQ string,
+	b *Bindings, harness *subject.Projection, partners map[string]string, oracle Oracle, valueQ string,
 ) []AdapterMethod {
 	out := make([]AdapterMethod, 0, len(harness.Methods))
 	for i := range harness.Methods {
@@ -635,7 +634,7 @@ func keyFieldOf(ctx *sdk.GeneratorContext, valueQ, keyQ string) (string, string)
 // names. Both walks, because a protocol splits its directives — the chain
 // stamps append on one method and verify on another, and reading only the
 // carrier's would leave a role the interface plainly fills unresolved.
-func contractRoleMethods(harness *suite.Contract, carrier *subject.Method, contract string) map[string]*subject.Method {
+func contractRoleMethods(harness *subject.Projection, carrier *subject.Method, contract string) map[string]*subject.Method {
 	out := map[string]*subject.Method{}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]

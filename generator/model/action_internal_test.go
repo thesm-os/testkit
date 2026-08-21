@@ -11,7 +11,6 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // TestContractActionRepointGuards walks the arms that keep the composite
@@ -95,7 +94,7 @@ func TestContractActionRepointGuards(t *testing.T) {
 
 // txTrio builds a tx-stamped harness: a begin carrying the contract with the
 // given partner keys, plus whatever siblings the case declares.
-func txTrio(t *testing.T, beginReturns []golang.Return, siblings ...*subject.Method) *suite.Contract {
+func txTrio(t *testing.T, beginReturns []golang.Return, siblings ...*subject.Method) *subject.Projection {
 	t.Helper()
 	begin := projected("Begin", []golang.Param{arg("ctx", ctxRef())}, beginReturns)
 	begin.Contracts = []string{"tx"}
@@ -105,5 +104,5 @@ func txTrio(t *testing.T, beginReturns []golang.Return, siblings ...*subject.Met
 	for _, s := range siblings {
 		methods = append(methods, *s)
 	}
-	return &suite.Contract{Methods: methods}
+	return &subject.Projection{Methods: methods}
 }

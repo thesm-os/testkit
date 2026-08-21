@@ -132,13 +132,10 @@ func directives() []sdk.DirectiveSchema {
 // Contract is the emit value rendered into the primary output.
 type Contract struct {
 	sdk.BaseEmit
-	subject.Subject
+	subject.Projection
 
 	// EntryName is the identifier a consumer calls — `Assert<Iface>Contract`.
 	EntryName string
-
-	// Fixture is the derived input set every check is handed values from.
-	Fixture subject.Fixture
 
 	// Seed is the write each fresh subject is populated through, nil for an
 	// interface declaring no writer.
@@ -151,8 +148,6 @@ type Contract struct {
 	// carries the reason so the reader knows which of the three exits was
 	// taken and therefore what would close it.
 	Unseeded string
-
-	Methods []subject.Method
 
 	// Token qualifies every identifier the file emits, so the templates
 	// compose names from one word rather than each lower-casing the
@@ -377,13 +372,15 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 		proven, argued := stampsUsed(checks)
 
 		contract := &Contract{
-			BaseEmit:     base,
-			Subject:      subjectOf(iface),
+			BaseEmit: base,
+			Projection: subject.Projection{
+				Subject: subjectOf(iface),
+				Fixture: fixture,
+				Methods: methods,
+			},
 			EntryName:    "Assert" + iface.Name + "Contract",
-			Fixture:      fixture,
 			Seed:         seed,
 			Unseeded:     unseeded,
-			Methods:      methods,
 			Token:        token,
 			Qualifier:    qualifier,
 			Vocab:        Vocab,
@@ -429,9 +426,9 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 				Token:        token,
 				Vocab:        Vocab,
 				Prove:        Prove,
-				Fixture:      fixture,
 				DrawsFixture: contract.DrawsFixture,
 				SeedsCorpus:  contract.SeedsCorpus,
+				Fixture:      fixture,
 				CorpusFunc:   projection.CorpusName(token),
 				Defects:      defects,
 				Unproven:     unproven,

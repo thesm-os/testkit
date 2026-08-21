@@ -14,7 +14,6 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // valueOpField fills a single-value mutation closure: the role's one value
@@ -59,7 +58,7 @@ func valueOpField(
 // constFieldOf fills a stamped constant: a qualified sentinel, a numeric
 // literal, or the workflow's transition list.
 func constFieldOf(
-	harness *suite.Contract, r tiers.Rule, f tiers.Field, field *LawField, m *subject.Method,
+	harness *subject.Projection, r tiers.Rule, f tiers.Field, field *LawField, m *subject.Method,
 ) (*LawField, string) {
 	value, ok := stampValue(harness, m, f.From)
 	if !ok {
@@ -117,7 +116,7 @@ func constFieldOf(
 // generatorFieldOf fills a pool field: the run's shared pools, or a
 // law-declared one for a domain the sequences never draw.
 func generatorFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	switch f.From {
@@ -211,7 +210,7 @@ func generatorFieldOf(
 // role field's own input, which is the domain the stateless claim ranges
 // over.
 func lawInputElem(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, m, keyed *subject.Method,
 ) (sdk.Ref, string, string) {
 	for _, f := range r.Fields {
 		if f.Kind != tiers.KindRole {

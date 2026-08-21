@@ -17,6 +17,10 @@ import (
 // Generate queues one set of bindings per interface carrying the directive.
 func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 	c := sdk.NewProvenance(Name)
+	// The lookup names the harness generator's emit value, because that
+	// is what the store holds. Nothing below this line does: each
+	// derivation takes the projection the harness embeds, so a change to
+	// the harness's own shape reaches exactly one line of this tier.
 	harnesses := sdk.PendingByOrigin[*suite.Contract](ctx.Store.Emit())
 
 	for _, iface := range ctx.Reader.Interfaces().Slice() {
@@ -38,7 +42,7 @@ func (*Plugin) Generate(ctx *sdk.GeneratorContext) error {
 			continue
 		}
 
-		b, ok := bindingsOf(ctx, c, iface, harness, witnesses)
+		b, ok := bindingsOf(ctx, c, iface, &harness.Projection, harness.EntryName, witnesses)
 		if !ok {
 			continue
 		}
@@ -63,7 +67,8 @@ func bindingsOf(
 	ctx *sdk.GeneratorContext,
 	c *sdk.Provenance,
 	iface *sdk.Interface,
-	harness *suite.Contract,
+	harness *subject.Projection,
+	entry string,
 	witnesses []sdk.Ref,
 ) (*Bindings, bool) {
 	harness, witnessQ := witnessedHarness(harness, iface, witnesses)
@@ -74,7 +79,7 @@ func bindingsOf(
 		PropertyName:   harness.IfaceName + "ModelProperty",
 		OptionTypeName: harness.IfaceName + "ModelOption",
 		ConfigName:     strings.ToLower(harness.IfaceName[:1]) + harness.IfaceName[1:] + "ModelConfig",
-		EntryName:      harness.EntryName,
+		EntryName:      entry,
 		FixtureCtor:    harness.Fixture.CtorName,
 		Witnesses:      witnesses,
 		witnessQ:       witnessQ,
@@ -248,7 +253,7 @@ func bindingsOf(
 // order-insensitive by its own claim — linearizability over an operation
 // whose order is unobservable checks close to nothing, and the claims that
 // do bite are already bound as sequential laws.
-func concurrentOf(b *Bindings, harness *suite.Contract, keyed, valued *subject.Method) {
+func concurrentOf(b *Bindings, harness *subject.Projection, keyed, valued *subject.Method) {
 	// The lease leg: acquire and release over the shared keys pool, checked
 	// against the lease-table model — the same op vocabulary the model
 	// switches on, and the same lenient release the oracle speaks.

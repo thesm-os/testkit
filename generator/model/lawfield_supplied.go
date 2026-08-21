@@ -12,7 +12,6 @@ import (
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/suite"
 )
 
 // suppliedFieldOf builds a consumer-supplied door: the closure type spelled
@@ -20,7 +19,7 @@ import (
 // registration reads, and the option that fills it. A type the fixture
 // cannot spell keeps the refusal, naming what is missing.
 func suppliedFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	shapes, known := suppliedShapes[r.Law]
@@ -116,7 +115,7 @@ var suppliedShapes = map[string]map[string]string{
 // projection the reference keys on; where either is absent the field stays
 // omitted — the law then checks read purity alone, the claim's floor.
 func disturbFieldOf(
-	b *Bindings, harness *suite.Contract, field *LawField, m, keyed *subject.Method,
+	b *Bindings, harness *subject.Projection, field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	writer, reason := roleMethod(b, harness, "family.writer", m, keyed)
 	if reason != "" || !b.UsesValues() || !b.UsesKeys() || b.Reference.KeyField == "" {
@@ -135,7 +134,7 @@ func disturbFieldOf(
 // spells the call, and the compile gate in the armed package holds the
 // member to the shape the law's field declares.
 func memberFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
+	b *Bindings, harness *subject.Projection, r tiers.Rule, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	watch, reason := ruleFieldRole(b, harness, r, fWatch, m, keyed)
@@ -165,7 +164,7 @@ func memberFieldOf(
 }
 
 func drainFieldOf(
-	b *Bindings, harness *suite.Contract, f tiers.Field,
+	b *Bindings, harness *subject.Projection, f tiers.Field,
 	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	role, reason := roleMethod(b, harness, "publisher.subscribe", m, keyed)
