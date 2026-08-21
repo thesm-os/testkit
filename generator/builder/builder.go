@@ -11,8 +11,8 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
-	"go.thesmos.sh/testkit/generator/defaults"
 	"go.thesmos.sh/testkit/generator/internal/source"
+	"go.thesmos.sh/testkit/generator/internal/stamp"
 )
 
 // Name is the plugin's stable identifier.
@@ -520,7 +520,7 @@ func substituted(fields []Field, params []*sdk.TypeParam, witnesses []sdk.Ref) [
 
 // companionOf finds the seeding function for s, or nil when none applies.
 //
-// A `defaults=` key names one explicitly, in either notation [defaults.Resolve]
+// A `defaults=` key names one explicitly, in either notation [source.Resolve]
 // accepts, which is what lets a companion live in another package — including
 // one imported only for this directive. Absent the key, the convention applies:
 // a `<Type>Defaults()` beside the struct.
@@ -539,7 +539,7 @@ func companionOf(ctx *sdk.GeneratorContext, s *sdk.Struct) *sdk.Expr {
 		// declared the struct, so the file is what the resolver needs. Passing
 		// no file at all only ever resolved the full-path form.
 		pkgNode, _ := ctx.Reader.PackageAt(s.Package)
-		pkg, symbol, err := defaults.Resolve(
+		pkg, symbol, err := source.Resolve(
 			golang.FileOf(pkgNode, s), dir.KV[CompanionKey],
 		)
 		if err != nil {
@@ -604,9 +604,9 @@ func fieldsOf(ctx *sdk.GeneratorContext, s *sdk.Struct) []Field {
 		field := Field{
 			Name:    f.Name,
 			Type:    golang.FieldType(f),
-			Default: defaults.Of(f.Meta()),
+			Default: stamp.DefaultOf(f.Meta()),
 		}
-		if pkg := defaults.Package(f.Meta()); pkg != "" {
+		if pkg := stamp.DefaultPackage(f.Meta()); pkg != "" {
 			field.DefaultRef = sdk.NewExternal(pkg, field.Default)
 		}
 		classify(rv, &field, f.Type)

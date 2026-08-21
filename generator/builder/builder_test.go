@@ -15,8 +15,8 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/builder"
-	"go.thesmos.sh/testkit/generator/defaults"
 	"go.thesmos.sh/testkit/generator/internal/gentest"
+	"go.thesmos.sh/testkit/generator/internal/stamp"
 )
 
 // The framework conformance suites pin the static contract — stable Name,
@@ -959,9 +959,9 @@ func seededPackage() *sdk.Package {
 		}).
 		PackageNode()
 	for _, s := range pkg.Structs {
-		defaults.MetaDefault.Set(s.Fields[0].EnsureMeta(), `"seed"`, "test")
-		defaults.MetaDefault.Set(s.Fields[1].EnsureMeta(), "Region", "test")
-		defaults.MetaDefaultPkg.Set(s.Fields[1].EnsureMeta(), "example.com/seed", "test")
+		stamp.MetaDefault.Set(s.Fields[0].EnsureMeta(), `"seed"`, "test")
+		stamp.MetaDefault.Set(s.Fields[1].EnsureMeta(), "Region", "test")
+		stamp.MetaDefaultPkg.Set(s.Fields[1].EnsureMeta(), "example.com/seed", "test")
 	}
 	return pkg
 }

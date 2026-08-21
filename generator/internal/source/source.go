@@ -4,13 +4,19 @@
 // Package source answers questions about the source tree that a
 // generator needs and no generator owns.
 //
-// Plugins import each other freely here — fault reads stub, model reads
-// suite — so a helper with an owner belongs with its owner and is
-// exported from there. These have none: resolving an interface's method
-// set is not the harness generator's concept any more than the double
-// generator's, and finding the companion beside a type is not the
-// builder's just because the builder's directive can override it.
-// Each was carried in two plugins before it was carried here.
+// A plugin does not import another plugin, so a helper two plugins both
+// need has nowhere to live but here. These have no owner to go back to
+// either: resolving an interface's method set is not the harness
+// generator's concept any more than the double generator's, finding the
+// companion beside a type is not the builder's just because the
+// builder's directive can override it, and reading a package-qualified
+// symbol out of a directive's argument is neither's — the defaults
+// annotator and the builder generator each accept the notation, for
+// their own directives.
+//
+// Facts about the declaration as written. What the annotators recorded
+// ON a declaration is [go.thesmos.sh/testkit/generator/internal/stamp],
+// which reads metadata rather than source.
 package source
 
 import (

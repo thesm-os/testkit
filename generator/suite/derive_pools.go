@@ -10,9 +10,8 @@ import (
 	"go.thesmos.sh/eidos/node"
 	"go.thesmos.sh/eidos/sdk"
 
-	"go.thesmos.sh/testkit/generator/defaults"
+	"go.thesmos.sh/testkit/generator/internal/stamp"
 	"go.thesmos.sh/testkit/generator/internal/subject"
-	"go.thesmos.sh/testkit/generator/roles"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -108,7 +107,7 @@ func poolsOf(r golang.Resolver, methods []subject.Method) ([]projection.PoolPlan
 func poolOf(
 	owner, name string, bag *sdk.Bag, member sdk.Ref,
 ) (projection.PoolPlan, *Refusal, bool) {
-	role := roles.Of(bag)
+	role := stamp.RoleOf(bag)
 	if role == "" {
 		return projection.PoolPlan{}, nil, false
 	}
@@ -127,24 +126,24 @@ func poolOf(
 		}, true
 	}
 
-	stamp, stamped := defaults.MetaDefault.Get(bag)
-	if !stamped || stamp == "" {
+	value := stamp.DefaultOf(bag)
+	if value == "" {
 		return refuse("the field has a role but no default value, and the first "+
 			"value the checks use is that default",
 			"add a //testkit:default beside the role")
 	}
-	if pkg, _ := defaults.MetaDefaultPkg.Get(bag); pkg != "" {
+	if stamp.DefaultPackage(bag) != "" {
 		return refuse("the default names a symbol from another package rather than "+
 			"a value written out, so a second value cannot be derived from it",
 			"write the default as a literal, or supply the values through the config")
 	}
-	distinct, ok := projection.DistinctMember(projection.Expr(stamp))
+	distinct, ok := projection.DistinctMember(projection.Expr(value))
 	if !ok {
 		return refuse("no second value can be derived from this default that differs "+
 			"from it, and two equal values would leave every not-found check finding something",
 			"spell the default's textual payload test-*, or supply the pool through the config")
 	}
-	hostile, ok := projection.HostileMember(projection.Expr(stamp), role)
+	hostile, ok := projection.HostileMember(projection.Expr(value), role)
 	if !ok {
 		return refuse("no hostile member derives from the default's shape",
 			"supply the pool through the config, hostile member included")
@@ -152,7 +151,7 @@ func poolOf(
 	return projection.PoolPlan{
 		Role:    role,
 		Field:   projection.PoolFieldName(name),
-		Members: [3]projection.Expr{projection.Expr(stamp), distinct, hostile},
+		Members: [3]projection.Expr{projection.Expr(value), distinct, hostile},
 		Type:    member,
 	}, nil, true
 }

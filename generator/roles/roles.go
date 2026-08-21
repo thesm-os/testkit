@@ -17,11 +17,18 @@
 // The role word is stamped verbatim and validated by its readers,
 // which refuse an unknown role by name; holding the vocabulary here
 // would give it a second home beside the rules tables that act on it.
+//
+// Those readers reach the stamp through
+// [go.thesmos.sh/testkit/generator/internal/stamp], not through this
+// package. Writing a stamp needs the directive schema, the parse and a
+// version that is a cache key; reading one needs a string.
 package roles
 
 import (
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
+
+	"go.thesmos.sh/testkit/generator/internal/stamp"
 )
 
 // Name is the plugin's stable identifier.
@@ -35,19 +42,6 @@ const Version = "1.0.0"
 // DirectiveName is the directive this annotator owns, written under
 // testkit's namespace as `//testkit:role`.
 const DirectiveName sdk.DirectiveName = "role"
-
-// MetaRole holds the declared role, verbatim. Absent means the
-// declaration filled none — an unroled field draws no pool.
-//
-//nolint:gochecknoglobals // meta key registration, immutable after init.
-var MetaRole = sdk.EnsureKey("testkit.role", sdk.StringParser)
-
-// Of reads a declaration's stamped role, empty for the unroled — the
-// one read path, so no consumer touches the key directly.
-func Of(bag *sdk.Bag) string {
-	v, _ := MetaRole.Get(bag)
-	return v
-}
 
 // Plugin is the roles annotator. The zero value is unusable; go
 // through [New], which builds the embedded base.
@@ -100,20 +94,20 @@ func directives() []sdk.DirectiveSchema {
 func (*Plugin) Annotate(ctx *sdk.AnnotatorContext) error {
 	for _, s := range ctx.Reader.Structs().Slice() {
 		for _, f := range s.Fields {
-			stamp(f.Directives(), f.EnsureMeta())
+			record(f.Directives(), f.EnsureMeta())
 		}
 	}
 	for _, a := range ctx.Reader.Aliases().Slice() {
-		stamp(a.Directives(), a.EnsureMeta())
+		record(a.Directives(), a.EnsureMeta())
 	}
 	return nil
 }
 
 // stamp records one declaration's role, if it declared one.
-func stamp(directives []*sdk.Directive, bag *sdk.Bag) {
+func record(directives []*sdk.Directive, bag *sdk.Bag) {
 	dir := sdk.Last(directives, DirectiveName)
 	if dir == nil || len(dir.Args) == 0 {
 		return
 	}
-	MetaRole.Set(bag, dir.Args[0], Name)
+	stamp.MetaRole.Set(bag, dir.Args[0], Name)
 }

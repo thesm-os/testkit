@@ -11,6 +11,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/stamp"
 	"go.thesmos.sh/testkit/generator/roles"
 )
 
@@ -83,7 +84,7 @@ func read(t *testing.T, s *sdk.Store) string {
 	for _, st := range s.Nodes().Structs().Items() {
 		for _, f := range st.Fields {
 			if f.Name == "Key" {
-				return roles.Of(f.Meta())
+				return stamp.RoleOf(f.Meta())
 			}
 		}
 	}

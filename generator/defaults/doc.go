@@ -12,6 +12,14 @@
 // once per run, so declaring it inside any one generator would make the others
 // depend on that generator being registered.
 //
+// # Where the readers are
+//
+// This package writes; [go.thesmos.sh/testkit/generator/internal/stamp] reads.
+// A generator wanting the declared default wants two strings, and importing
+// the annotator to get them would also put [New] within its reach — which is
+// how a generator ends up able to register a second copy of an annotator it
+// only meant to read from.
+//
 // # The literal is carried verbatim
 //
 // The directive's argument is Go source and is stamped unparsed. `"localhost"`,
