@@ -84,19 +84,3 @@ func About(diags []diag.Diag, subject string) []diag.Diag {
 	}
 	return out
 }
-
-// Messages is the diagnostics' text, for an assertion that reads as
-// prose rather than as a walk over a struct.
-func Messages(diags []diag.Diag) []string {
-	out := make([]string, 0, len(diags))
-	for _, d := range diags {
-		out = append(out, d.Message)
-	}
-	return out
-}
-
-// Reasons is [Messages] over the diagnostics naming one subject — the
-// pairing every gap assertion actually wants.
-func Reasons(diags []diag.Diag, subject string) []string {
-	return Messages(About(diags, subject))
-}
