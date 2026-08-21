@@ -17,11 +17,12 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // contractMember stamps one method into a contract, role optional —
 // the membership is what the differential's store arm reads.
-func contractMember(name, contract, role string) Method {
+func contractMember(name, contract, role string) subject.Method {
 	bag := sdk.NewBag()
 	shape.MetaContracts.Set(bag, []string{contract}, "test")
 	if role != "" {
@@ -30,9 +31,9 @@ func contractMember(name, contract, role string) Method {
 	m := stampMethod(name, "")
 	m.Contracts = shape.Contracts(bag)
 	roles, partners, params := contractDataOf(bag)
-	m.contractRoles = roles
-	m.contractPartners = partners
-	m.contractParams = params
+	m.ContractRoles = roles
+	m.ContractPartners = partners
+	m.ContractParams = params
 	return m
 }
 
@@ -55,7 +56,7 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 			// subject" (store) and the token (journal, catalog); the
 			// token says more and every other row already speaks it.
 			"a writer beside a modelled read agrees plainly",
-			Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
+			Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []subject.Method{
 				stampMethod("Put", writer.Name),
 				stampMethod("Get", reader.Name),
 			}},
@@ -63,14 +64,14 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"a seeded read-only surface agrees with a seeded reference",
-			Iface{Name: "Catalog", Token: "catalog", Qualifier: "catalog", Methods: []Method{
+			Iface{Name: "Catalog", Token: "catalog", Qualifier: "catalog", Methods: []subject.Method{
 				stampMethod("Lookup", reader.Name),
 			}},
 			"every read sequence leaves the catalog agreeing with a reference seeded identically",
 		},
 		{
 			"an outcome-speaking contract oracle names its role pair",
-			Iface{Name: "Lease", Token: "lease", Qualifier: "lease", Methods: []Method{
+			Iface{Name: "Lease", Token: "lease", Qualifier: "lease", Methods: []subject.Method{
 				contractMember("Acquire", ContractLease, ""),
 				contractMember("Release", ContractLease, ""),
 			}},
@@ -78,14 +79,14 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"a plain contract oracle speaks operation",
-			Iface{Name: "Journal", Token: "journal", Qualifier: "journal", Methods: []Method{
+			Iface{Name: "Journal", Token: "journal", Qualifier: "journal", Methods: []subject.Method{
 				contractMember("Append", ContractChain, ""),
 			}},
 			"every operation sequence leaves the journal agreeing with the reference",
 		},
 		{
 			"a produced cursor drains, writer-opener named",
-			Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{
+			Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []subject.Method{
 				stampMethod("Append", writer.Name),
 				contractMember("Scan", ContractCursor, ContractCursorOpen),
 			}},
@@ -93,7 +94,7 @@ func TestDifferentialWordsTheReference(t *testing.T) {
 		},
 		{
 			"no oracle-shaped surface, no row",
-			Iface{Name: "Notifier", Token: "notifier", Qualifier: "notifier", Methods: []Method{
+			Iface{Name: "Notifier", Token: "notifier", Qualifier: "notifier", Methods: []subject.Method{
 				stampMethod("Ping", ""),
 			}},
 			"",
@@ -120,7 +121,7 @@ func TestDifferentialRefusesTheUnmodellable(t *testing.T) {
 
 	t.Run("an oracle-defeating mixin refuses with its reason", func(t *testing.T) {
 		t.Parallel()
-		iface := Iface{Name: "Feed", Token: "feed", Qualifier: "feed", Methods: []Method{
+		iface := Iface{Name: "Feed", Token: "feed", Qualifier: "feed", Methods: []subject.Method{
 			stampMethod("Put", writer.Name, eventually.Name),
 			stampMethod("Get", reader.Name),
 		}}
@@ -132,7 +133,7 @@ func TestDifferentialRefusesTheUnmodellable(t *testing.T) {
 
 	t.Run("two contract oracles refuse rather than choose", func(t *testing.T) {
 		t.Parallel()
-		iface := Iface{Name: "Mixed", Token: "mixed", Qualifier: "mixed", Methods: []Method{
+		iface := Iface{Name: "Mixed", Token: "mixed", Qualifier: "mixed", Methods: []subject.Method{
 			contractMember("Acquire", ContractLease, ""),
 			contractMember("Get", ContractPool, ""),
 		}}

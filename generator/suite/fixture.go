@@ -16,236 +16,28 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/builder"
-	"go.thesmos.sh/testkit/generator/source"
+	"go.thesmos.sh/testkit/generator/internal/source"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
-
-// OtherSuffix names the companion field holding a second, different value for
-// the same parameter.
-//
-// Two values rather than one, for every parameter: a check comparing a result
-// against a single input passes whenever the subject happened to be seeded with
-// it, and a miss check whose key happens to hit asserts nothing and reports
-// success. The pair is what makes both able to fail.
-const OtherSuffix = "Other"
-
-// FixtureField is one derived input, with the second value that makes a check
-// able to fail.
-type FixtureField struct {
-	// Name is the exported field the generated struct declares — the Pascal
-	// form of the parameter's identifier.
-	Name string
-
-	// Type is the parameter's type, rendered through the backend so the file
-	// registers whatever import it needs.
-	Type sdk.Ref
-
-	// Sample and Other are the two derived values, for a parameter whose type
-	// yields one whole. Empty for a struct, whose value is composed from Parts.
-	Sample, Other golang.Sample
-
-	// Parts is the per-field pair for a struct parameter, in declaration order.
-	//
-	// A struct's value is composed rather than carried as text, because a field
-	// whose own type is a struct needs its type spelled beside its braces — and
-	// only the backend knows how to spell it for this file, and to register the
-	// import it needs. Text alone renders `{F: "x"}`, which is not a value.
-	Parts []FixturePart
-
-	// Variadic reports that the parameter this field was derived from was
-	// declared `...T`, so the field holds one element rather than the list the
-	// method takes.
-	//
-	// Carried only to be said out loud in the generated file. Nothing about the
-	// derivation changes — [golang.Param] keeps Type as the element type, which
-	// is the type of the one value a check is handed.
-	Variadic bool
-
-	// Pool is the config field this value draws from, empty where the
-	// declaration carries no role.
-	//
-	// Matched by NAME rather than by a carried reference, because the two
-	// projections read the same stamp from the same declaration: a role
-	// opens `<Name>Pool` and a fixture field takes `<Name>`, so a pool
-	// and the value it feeds cannot disagree about which declaration they
-	// came from without disagreeing about its name.
-	//
-	// Set means the emitted fixture reads `cfg.<Pool>[0]` and `[1]` in
-	// place of the derived literals, which is what makes a consumer's
-	// override reach every check that draws.
-	Pool string
-
-	// Companion calls the type's `<Type>Defaults()`, and wins over Sample where
-	// the source declares one.
-	//
-	// Only the sample half. Other is "a value that should not be found", which
-	// is what a miss check needs and is a different claim from "a value this
-	// type accepts" — one function cannot answer both, and asking for a second
-	// convention to supply the alternate would cost more than the miss check
-	// gains.
-	Companion *sdk.Expr
-}
-
-// FixturePart is one field of a composed struct value.
-type FixturePart struct {
-	// Name is the field's identifier in the composite literal.
-	Name string
-
-	// Sample and Other are the two values for it.
-	Sample, Other golang.Sample
-
-	// Pool is the config field this part draws from, empty where the
-	// declaration carries no role. See [FixtureField.Pool].
-	Pool string
-}
-
-// Composed reports whether this field's value is built from Parts rather than
-// carried whole.
-func (f FixtureField) Composed() bool { return len(f.Parts) > 0 }
-
-// FixtureValue is one of a field's two values, flattened for rendering.
-//
-// The template needs "this field's sample" and "this field's alternate" spelled
-// identically, and text/template cannot pass which one it wants down to a
-// sub-template. Choosing here keeps one spelling instead of two loops that
-// could drift.
-type FixtureValue struct {
-	Type  sdk.Ref
-	Value golang.Sample
-	Parts []FixtureValuePart
-
-	// Alternate is the pool index a roled part draws — 0 for the
-	// canonical member, 1 for the one that funds a miss. Carried as the
-	// index rather than as a bool because that is what the emitted
-	// subscript spells, and converting a bool at the template would put
-	// the pool's member policy in two places.
-	Alternate int
-}
-
-// FixtureValuePart is one field of a composed [FixtureValue].
-type FixtureValuePart struct {
-	Name  string
-	Value golang.Sample
-
-	// Pool is the config field this part draws from, empty for an
-	// unroled field of a composed value.
-	Pool string
-}
-
-// Choose flattens this field to one of its two values.
-func (f FixtureField) Choose(alternate bool) FixtureValue {
-	out := FixtureValue{Type: f.Type, Value: f.Sample}
-	if alternate {
-		out.Value = f.Other
-		out.Alternate = 1
-	}
-	for _, p := range f.Parts {
-		v := p.Sample
-		if alternate {
-			v = p.Other
-		}
-		out.Parts = append(out.Parts, FixtureValuePart{Name: p.Name, Value: v, Pool: p.Pool})
-	}
-	return out
-}
-
-// OtherName is the identifier of the companion field.
-func (f FixtureField) OtherName() string { return f.Name + OtherSuffix }
-
-// OK reports whether both of this field's values could be produced: the
-// sample — a companion or a derived literal — and, separately, the alternate.
-//
-// Separately, because the companion answers only the sample half: "a value
-// that should not be found" is a different claim from "a value this type
-// accepts", and a companion accepted as proof of both let the alternate
-// render as a silent zero — which real data collides with, and which turns a
-// miss check into a comparison against nothing in particular.
-//
-// A parameter whose type admits no literal and declares no companion — a
-// channel, a func, a type from a package the run never read — yields neither,
-// and the one check whose meaning is the value is dropped rather than emitted
-// against something nobody could write.
-func (f FixtureField) OK() bool {
-	if f.Composed() {
-		return true
-	}
-	return (f.Companion != nil || f.Sample.OK()) && f.Other.OK()
-}
-
-// Reason phrases why nothing could be derived for this field.
-//
-// Only [golang.RefusedNoLiteral] is a fact about the type. The rest describe
-// this run's own input — a package the patterns did not reach, a walk that hit
-// its budget — and reporting one of those as settled sends an author to change
-// source that is already correct.
-func (f FixtureField) Reason() string {
-	if f.Sample.Refusal.Incomplete() {
-		return "which this run did not resolve, so no value was derived for it"
-	}
-	return "which no literal can be written for"
-}
-
-// Fixture is the derived input set for one interface.
-type Fixture struct {
-	// TypeName is the generated struct's identifier — `<Iface>Fixture`.
-	TypeName string
-
-	// CtorName is the identifier of the function returning the derived values,
-	// which a consumer reads to see what they would be overriding.
-	CtorName string
-
-	Fields []FixtureField
-
-	// groups records which parameter each field was derived from, so a check
-	// can name the field its own argument landed in — which is not the
-	// parameter's name wherever two types contest one.
-	groups []paramGroup
-}
-
-// FieldFor names the fixture field a method's parameter is supplied from.
-//
-// Falls back to the parameter's own name, which is what the fixture calls a
-// field no other method contests. Every caller asks about a parameter of a
-// method the fixture was built from, so the fallback answers the same thing the
-// loop would — and a `""` would compose `cfg.Fixture.` into generated source
-// rather than failing where a reader could see it.
-func (f Fixture) FieldFor(p golang.Param) string {
-	want := projection.DrawField(p)
-	for _, g := range f.groups {
-		if projection.DrawField(g.param) == want && g.param.Source.Equal(p.Source) {
-			return g.name
-		}
-	}
-	return p.Field
-}
-
-// Field returns the field of that name, and whether one was derived.
-func (f Fixture) Field(name string) (FixtureField, bool) {
-	for _, x := range f.Fields {
-		if x.Name == name {
-			return x, true
-		}
-	}
-	return FixtureField{}, false
-}
 
 // fixtureOf derives one input per distinct parameter across the method set.
 //
 // Which parameters share a field, and how a name two types contest is spelled,
-// is [groupParams]. What is decided here is what each group is filled with: the
+// is [subject.GroupParams]. What is decided here is what each group is filled with: the
 // type's `<Type>Defaults()` where the source declares one, the composed parts of
 // a struct, and the derived pair otherwise.
 func fixtureOf(
-	ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []Method,
+	ctx *sdk.GeneratorContext, iface *sdk.Interface, methods []subject.Method,
 	pools []projection.PoolPlan,
-) Fixture {
-	f := Fixture{
+) subject.Fixture {
+	f := subject.Fixture{
 		TypeName: iface.Name + "Fixture",
 		CtorName: "Default" + iface.Name + "Fixture",
 	}
 	defer func() { bindPools(&f, pools) }()
-	f.groups = groupParams(methods)
-	for _, g := range f.groups {
+	f.Groups = subject.GroupParams(methods)
+	for _, g := range f.Groups {
 		// Both derivations run for every field, including a composed one
 		// whose whole-value Sample the template never reaches. Skipping
 		// it there looks free and is not: sampleFor answers the pair, and
@@ -253,15 +45,15 @@ func fixtureOf(
 		// check needs. Splitting the pair to save one resolve at build
 		// time would buy a few microseconds for a seam where the two
 		// values stop being derived together.
-		sample, other := sampleFor(g.param, ctx.Reader)
-		f.Fields = append(f.Fields, FixtureField{
-			Name:      g.name,
-			Type:      g.param.Type,
-			Variadic:  g.param.Variadic,
+		sample, other := sampleFor(g.Param, ctx.Reader)
+		f.Fields = append(f.Fields, subject.FixtureField{
+			Name:      g.Name,
+			Type:      g.Param.Type,
+			Variadic:  g.Param.Variadic,
 			Sample:    sample,
 			Other:     other,
-			Parts:     partsFor(g.param, ctx.Reader, admitsFresh(methods, g.method)),
-			Companion: companionFor(ctx, g.param.Source),
+			Parts:     partsFor(g.Param, ctx.Reader, admitsFresh(methods, g.Method)),
+			Companion: companionFor(ctx, g.Param.Source),
 		})
 	}
 	return f
@@ -293,7 +85,7 @@ var admissionMixins = map[string]string{
 // False where the method introducing the parameter claims an admission
 // precondition over it. The composed value then drops the parts that could
 // express one — see [partsFor].
-func admitsFresh(methods []Method, method string) bool {
+func admitsFresh(methods []subject.Method, method string) bool {
 	for _, m := range methods {
 		if m.Name != method {
 			continue
@@ -305,84 +97,6 @@ func admitsFresh(methods []Method, method string) bool {
 		}
 	}
 	return true
-}
-
-// paramGroup is one fixture field: a parameter name at one type, and the first
-// method that introduced it.
-type paramGroup struct {
-	// name is the field's identifier, which is the parameter's own where no
-	// other method takes that name at a different type.
-	name string
-
-	// method is the first method in method-set order to take this pair, which
-	// is what disambiguates a name two types share.
-	method string
-
-	param golang.Param
-}
-
-// groupParams collects the interface's parameters into one field per name and
-// type, in method-set order.
-//
-// # Why the pair rather than the name
-//
-// A `key string` on the reader and one on the deleter are the same value as far
-// as a conformance run is concerned, and giving them separate fields would let a
-// consumer override one and silently not the other.
-//
-// But a name is not a type. `Put(ctx, s Session)` beside `Get(ctx, s string)` is
-// ordinary Go — nothing stops two methods naming their parameters alike — and a
-// fixture keyed on the name alone holds one of them and hands it to the method
-// that takes the other, which does not compile. An earlier version diagnosed
-// that and told the author to rename a parameter, which is bad advice about
-// correct source.
-//
-// # How a shared name is disambiguated
-//
-// By the method that introduced each type, not by the type itself: a composite
-// has no name to spell, and `SSlice` would be a spelling this package invented.
-// `PutS` and `GetS` name something the reader can find in the source. Only a
-// contested name is qualified; a name carrying one type keeps it.
-//
-// The qualified spelling can in principle meet an uncontested parameter
-// literally named `PutS`. Nothing here detects that, and nothing needs to: two
-// fields of one name is a struct the toolchain refuses, so the cost is a
-// compile error over generated source rather than a check quietly handed the
-// wrong value.
-func groupParams(methods []Method) []paramGroup {
-	var groups []paramGroup
-	byField := map[string]int{}
-	for _, m := range methods {
-		for _, p := range m.CallArgs() {
-			if findGroup(groups, p) {
-				continue
-			}
-			groups = append(groups, paramGroup{
-				name: projection.DrawField(p), method: m.Name, param: p,
-			})
-			byField[projection.DrawField(p)]++
-		}
-	}
-	// Qualify every group whose parameter name another type also claims, so
-	// neither spelling is privileged by the order the walk happened to take.
-	for i := range groups {
-		if byField[projection.DrawField(groups[i].param)] > 1 {
-			groups[i].name = groups[i].method + projection.DrawField(groups[i].param)
-		}
-	}
-	return groups
-}
-
-// findGroup reports whether a group already holds this parameter's name and
-// type.
-func findGroup(groups []paramGroup, p golang.Param) bool {
-	want := projection.DrawField(p)
-	for _, g := range groups {
-		if projection.DrawField(g.param) == want && g.param.Source.Equal(p.Source) {
-			return true
-		}
-	}
-	return false
 }
 
 // sampleFor derives one parameter's pair of values.
@@ -477,14 +191,14 @@ func derivedPair(
 // Zeroing costs the discrimination those fields would have carried, which is
 // the cheaper half of the trade: a check that compares less still runs, and a
 // seed that cannot land runs nothing at all.
-func partsFor(p golang.Param, r golang.Resolver, admissible bool) []FixturePart {
+func partsFor(p golang.Param, r golang.Resolver, admissible bool) []subject.FixturePart {
 	decl, resolved := r.Resolve(p.Source)
 	s, ok := decl.(*sdk.Struct)
 	if !resolved || !ok {
 		return nil
 	}
 
-	var parts []FixturePart
+	var parts []subject.FixturePart
 	for _, f := range golang.ExportedFields(s) {
 		if !admissible && f.Type != nil && (f.Type.IsSlice() || f.Type.IsMap()) {
 			continue
@@ -497,7 +211,7 @@ func partsFor(p golang.Param, r golang.Resolver, admissible bool) []FixturePart 
 			// parameter feeds.
 			continue
 		}
-		parts = append(parts, FixturePart{Name: f.Name, Sample: inner, Other: innerAlt})
+		parts = append(parts, subject.FixturePart{Name: f.Name, Sample: inner, Other: innerAlt})
 	}
 	return parts
 }
@@ -542,7 +256,7 @@ func companionFor(ctx *sdk.GeneratorContext, t *sdk.TypeRef) *sdk.Expr {
 // Two writers over one value type is a shape this cannot resolve — and where
 // they differ, an author who cares supplies a seed rather than being asked
 // which is meant.
-func seedOf(f Fixture, methods []Method) (*Seed, string) {
+func seedOf(f subject.Fixture, methods []subject.Method) (*Seed, string) {
 	var (
 		mute        []string
 		undelivered []string
@@ -612,7 +326,7 @@ func whyUnseeded(mute, undelivered []string) string {
 // silently leaves every check after it asserting against an empty subject. That
 // exclusion is [Seed]'s error return restated, and [seedOf]'s ReturnsError guard
 // would refuse it anyway.
-func writesSomething(m Method) bool {
+func writesSomething(m subject.Method) bool {
 	switch m.Shape() {
 	case writer.Name, compositewriter.Name, multiargwriter.Name, answeringwriter.Name:
 		return true
@@ -623,14 +337,14 @@ func writesSomething(m Method) bool {
 
 // answersState reports whether the seed's writer answers the stored state
 // beside its error, so the derived seed discards the value it does not read.
-func answersState(m Method) bool {
+func answersState(m subject.Method) bool {
 	return shape.Get(m.Source.Meta()) == answeringwriter.Name
 }
 
 // Seed is the write a harness populates each fresh subject with.
 type Seed struct {
 	// Method is the writer the seed calls.
-	Method Method
+	Method subject.Method
 
 	// Args names the fixture fields it is handed.
 	Args []string
@@ -642,14 +356,14 @@ type Seed struct {
 
 // undeliverableArgs names the first argument the fixture cannot supply, with
 // the field it would have come from so a caller can say why.
-func undeliverableArgs(f Fixture, args []string) (string, FixtureField, bool) {
+func undeliverableArgs(f subject.Fixture, args []string) (string, subject.FixtureField, bool) {
 	for _, name := range args {
-		field, found := f.Field(strings.TrimSuffix(name, OtherSuffix))
+		field, found := f.Field(strings.TrimSuffix(name, subject.OtherSuffix))
 		if !found || !field.OK() {
 			return name, field, true
 		}
 	}
-	return "", FixtureField{}, false
+	return "", subject.FixtureField{}, false
 }
 
 // bindPools points every fixture value at the config field its role
@@ -661,7 +375,7 @@ func undeliverableArgs(f Fixture, args []string) (string, FixtureField, bool) {
 // already computed rather than a third mapping to keep in step. A value
 // with no matching pool keeps its literal, which is every value on an
 // interface that stamps no role at all.
-func bindPools(f *Fixture, pools []projection.PoolPlan) {
+func bindPools(f *subject.Fixture, pools []projection.PoolPlan) {
 	if len(pools) == 0 {
 		return
 	}

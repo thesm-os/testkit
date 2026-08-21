@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/node"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -20,7 +21,7 @@ func TestAppendLegGuards(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	run := func(offset *node.TypeRef) *suite.Method {
+	run := func(offset *node.TypeRef) *subject.Method {
 		m := projected("Run",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/a", "Value"))},
 			[]golang.Return{res(offset), errRet})
@@ -31,21 +32,21 @@ func TestAppendLegGuards(t *testing.T) {
 	t.Run("a non-int64 offset keeps the sequential law alone", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Actions: []*Action{{Method: "Run", Pool: poolValues}}}
-		a, _ := appendActionOf(b, &suite.Contract{Methods: []suite.Method{*run(namedRef("string"))}})
+		a, _ := appendActionOf(b, &suite.Contract{Methods: []subject.Method{*run(namedRef("string"))}})
 		testkit.True(t, a == nil, "the shared-history model counts in int64")
 	})
 
 	t.Run("an undriven appender derives no leg", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{}
-		a, _ := appendActionOf(b, &suite.Contract{Methods: []suite.Method{*run(namedRef("int64"))}})
+		a, _ := appendActionOf(b, &suite.Contract{Methods: []subject.Method{*run(namedRef("int64"))}})
 		testkit.True(t, a == nil, "no action, nothing to interleave")
 	})
 
 	t.Run("a driven int64 appender derives the leg", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{Actions: []*Action{{Method: "Run", Pool: poolValues}}}
-		concurrentOf(b, &suite.Contract{Methods: []suite.Method{*run(namedRef("int64"))}}, nil, nil)
+		concurrentOf(b, &suite.Contract{Methods: []subject.Method{*run(namedRef("int64"))}}, nil, nil)
 		testkit.Equal(t, b.ConcFamily, concFamilyAppend, "the offsets join one shared history")
 		testkit.True(t, b.ConcEntry != nil, "typed at the method's own entry")
 	})

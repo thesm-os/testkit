@@ -11,6 +11,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -268,7 +269,7 @@ func overshootOf(b *Bindings, harness *suite.Contract, lb *LawBinding, method st
 // where the result is the pool's own type, or a waning count where it is an
 // integer. Wider vocabularies earn their kinds when a surviving law names
 // the need.
-func satMutantsOf(b *Bindings, m *suite.Method) []SatMutant {
+func satMutantsOf(b *Bindings, m *subject.Method) []SatMutant {
 	base := SatMutant{Method: m.Name, TakesCtx: m.TakesContext(), Seq: seqArity(m)}
 	for _, p := range m.Params {
 		base.Params = append(base.Params, p.Type)

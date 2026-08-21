@@ -11,6 +11,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -23,8 +24,8 @@ func deriveCtx() golang.Param {
 
 // storeGet is the fully-armed shape: context, one draw, a named
 // result beside the error — every signature family reaches it.
-func storeGet() suite.Method {
-	return suite.Method{
+func storeGet() subject.Method {
+	return subject.Method{
 		Sig: &golang.Sig{
 			Name:   "Get",
 			Params: []golang.Param{deriveCtx(), keyParam("key")},
@@ -39,10 +40,10 @@ func storeGet() suite.Method {
 
 // storeIface pairs the methods with a fixture that can deliver every
 // draw the fixtures above declare.
-func storeIface(methods ...suite.Method) suite.Iface {
+func storeIface(methods ...subject.Method) suite.Iface {
 	return suite.Iface{
 		Name: "Store", Token: "store", Qualifier: "store", Methods: methods,
-		Fixture: suite.Fixture{Fields: []suite.FixtureField{{
+		Fixture: subject.Fixture{Fields: []subject.FixtureField{{
 			Name:   "Key",
 			Sample: golang.Sample{Text: `"k"`},
 			Other:  golang.Sample{Text: `"o"`},
@@ -62,16 +63,16 @@ func (c familyCase) Name() string { return c.name }
 func TestSignatureDerivesTheFamilies(t *testing.T) {
 	t.Parallel()
 
-	closeM := suite.Method{Sig: &golang.Sig{
+	closeM := subject.Method{Sig: &golang.Sig{
 		Name:    "Close",
 		Params:  []golang.Param{deriveCtx()},
 		Returns: []golang.Return{{Error: true}},
 	}}
-	noCtx := suite.Method{Sig: &golang.Sig{
+	noCtx := subject.Method{Sig: &golang.Sig{
 		Name:    "Len",
 		Returns: []golang.Return{{Source: storefixture.Named("int")}, {Error: true}},
 	}}
-	noErr := suite.Method{
+	noErr := subject.Method{
 		Sig: &golang.Sig{
 			Name:    "Peek",
 			Params:  []golang.Param{deriveCtx(), keyParam("key")},
@@ -106,7 +107,7 @@ func TestSignatureDerivesTheFamilies(t *testing.T) {
 		},
 		{
 			"declared totality excludes the zero family alone",
-			storeIface(func() suite.Method {
+			storeIface(func() subject.Method {
 				m := storeGet()
 				m.Mixins = []string{suite.MixinTotal}
 				return m
@@ -200,7 +201,7 @@ func TestSignatureShapesTheChecks(t *testing.T) {
 func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 	t.Parallel()
 
-	entry := suite.Method{
+	entry := subject.Method{
 		Sig: &golang.Sig{
 			Name:    "Append",
 			Params:  []golang.Param{deriveCtx(), {Name: "e", Source: storefixture.Named("Entry")}},
@@ -208,7 +209,7 @@ func TestSignatureRefusesUnderivableDraws(t *testing.T) {
 		},
 		ArgFields: []string{"Entry"},
 	}
-	iface := suite.Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []suite.Method{entry}}
+	iface := suite.Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []subject.Method{entry}}
 
 	plans, refusals := suite.Signature{}.Derive(iface)
 	testkit.Len(t, plans, 1, "the smoke survives an underivable draw — it needs a value, not a chosen one")

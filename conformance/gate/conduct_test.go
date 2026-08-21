@@ -12,7 +12,7 @@ import (
 	"go.thesmos.sh/testkit/conformance/gate"
 	"go.thesmos.sh/testkit/core/lawid"
 	"go.thesmos.sh/testkit/engine/model/law"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestEveryLawHasAConduct holds the census total over the vocabulary, both

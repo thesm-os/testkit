@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -23,7 +24,7 @@ func TestContractActionRepointGuards(t *testing.T) {
 	handleRet := res(pkgRef("example.com/t", "Tx"))
 	// The annotator stamps each resolved partner with its role key, which
 	// is what the role map reads back.
-	terminal := func(name, role string) *suite.Method {
+	terminal := func(name, role string) *subject.Method {
 		m := projected(name,
 			[]golang.Param{arg("ctx", ctxRef()), arg("h", pkgRef("example.com/t", "Tx"))},
 			[]golang.Return{errRet})
@@ -94,12 +95,12 @@ func TestContractActionRepointGuards(t *testing.T) {
 
 // txTrio builds a tx-stamped harness: a begin carrying the contract with the
 // given partner keys, plus whatever siblings the case declares.
-func txTrio(t *testing.T, beginReturns []golang.Return, siblings ...*suite.Method) *suite.Contract {
+func txTrio(t *testing.T, beginReturns []golang.Return, siblings ...*subject.Method) *suite.Contract {
 	t.Helper()
 	begin := projected("Begin", []golang.Param{arg("ctx", ctxRef())}, beginReturns)
 	begin.Contracts = []string{"tx"}
 	shape.ContractRoleKey("tx").Set(begin.Source.EnsureMeta(), "begin", "test")
-	methods := make([]suite.Method, 0, 1+len(siblings))
+	methods := make([]subject.Method, 0, 1+len(siblings))
 	methods = append(methods, *begin)
 	for _, s := range siblings {
 		methods = append(methods, *s)

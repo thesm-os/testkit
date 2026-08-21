@@ -9,7 +9,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
 
-	"go.thesmos.sh/testkit/generator/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // Companion is the generated proof of the emission, routed to the test
@@ -21,7 +21,7 @@ import (
 // package that arms them.
 type Companion struct {
 	sdk.BaseEmit
-	suite.Subject
+	subject.Subject
 
 	// PropertyName, RefCtorName and ReferenceOptionName reach the bindings
 	// across the package boundary; FixtureCtor supplies the inert calls'

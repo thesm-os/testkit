@@ -17,12 +17,13 @@ import (
 	"go.thesmos.sh/eidos/node"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
 // idempotentRule probes the repeat: two clean calls, the second
 // changing nothing.
-func idempotentRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func idempotentRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	return []projection.CheckPlan{{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegIdempotent},
 		Class:       vocab.ClassIdempotent,
@@ -46,7 +47,7 @@ func idempotentRule(f Iface, m Method, call projection.CallPlan) ([]projection.C
 // one subject can settle, is whether the second call is accepted at
 // all: a store that deduplicated by refusing is wrong for this mixin
 // and right for its sibling.
-func accumulatesRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func accumulatesRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	return []projection.CheckPlan{{
 		ID:          projection.IDPlan{Method: m.Name, Seg: vocab.SegAccumulates},
 		Class:       vocab.ClassAccumulates,
@@ -68,7 +69,7 @@ func accumulatesRule(f Iface, m Method, call projection.CallPlan) ([]projection.
 // Refuses rather than guessing where the partner is absent or takes
 // draws this fixture cannot supply. A rule that fell back to some other
 // reader would be asserting a relationship the author did not declare.
-func sideEffectRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func sideEffectRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -122,7 +123,7 @@ func sideEffectRule(f Iface, m Method, call projection.CallPlan) ([]projection.C
 // derives nothing — refused by name rather than guessed at, because a
 // rule inventing either half would assert a boundary the author never
 // declared.
-func partitionRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func partitionRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -170,7 +171,7 @@ func partitionRule(f Iface, m Method, call projection.CallPlan) ([]projection.Ch
 // validator guarantees both halves spell identically — so the two
 // calls can be lined up by name rather than by position, and a writer
 // whose parameters are ordered differently from its reader still pairs.
-func isolationPlan(writer, reader Method, axis string) (projection.WriteWriteRead, bool) {
+func isolationPlan(writer, reader subject.Method, axis string) (projection.WriteWriteRead, bool) {
 	shared := make(map[string]bool, len(reader.ArgFields))
 	for _, field := range reader.ArgFields {
 		shared[field] = true
@@ -228,7 +229,7 @@ func isolationPlan(writer, reader Method, axis string) (projection.WriteWriteRea
 // By name rather than by position: two parameters of different types
 // may share a name across the pair, and the fixture keys on both — so
 // the field is what the two calls actually agree on.
-func fieldForParam(m Method, param string) string {
+func fieldForParam(m subject.Method, param string) string {
 	for i, p := range m.CallArgs() {
 		if p.Name == param && i < len(m.ArgFields) {
 			return m.ArgFields[i]
@@ -239,7 +240,7 @@ func fieldForParam(m Method, param string) string {
 
 // payloadSource is the declared type of the draw landing in one field,
 // which the isolation rule compares against the reader's answer.
-func payloadSource(m Method, field string) *node.TypeRef {
+func payloadSource(m subject.Method, field string) *node.TypeRef {
 	for i, f := range m.ArgFields {
 		if f == field && i < len(m.CallArgs()) {
 			return m.CallArgs()[i].Source
@@ -260,7 +261,7 @@ func payloadSource(m Method, field string) *node.TypeRef {
 // The callback's own results are answered by a bare return under named
 // results, so a hook that reports something is as installable as one
 // that reports nothing.
-func hooksRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func hooksRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -305,7 +306,7 @@ func hooksRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckP
 
 // callbackArg is the registrar's first function-typed parameter, and
 // its position among the drawn ones.
-func callbackArg(register Method) (int, bool) {
+func callbackArg(register subject.Method) (int, bool) {
 	for i, p := range register.CallArgs() {
 		if p.Variadic || p.Source == nil {
 			continue
@@ -319,7 +320,7 @@ func callbackArg(register Method) (int, bool) {
 
 // callbackParam is the registrar's function-typed parameter, nil where
 // it takes none.
-func callbackParam(register Method) *node.TypeRef {
+func callbackParam(register subject.Method) *node.TypeRef {
 	slot, found := callbackArg(register)
 	if !found {
 		return nil
@@ -329,7 +330,7 @@ func callbackParam(register Method) *node.TypeRef {
 
 // hookCall is [callOf] on the registrar with the callback slot spelled
 // as the local the body declares.
-func hookCall(register Method, slot int) projection.CallPlan {
+func hookCall(register subject.Method, slot int) projection.CallPlan {
 	call := callOf(register)
 	if register.TakesContext() {
 		slot++
@@ -354,7 +355,7 @@ func hookCall(register Method, slot int) projection.CallPlan {
 // point: an integer derived from its type is a magnitude, and a
 // magnitude used as a position is out of range for every collection
 // smaller than it — a broken harness rather than a failed claim.
-func indexedRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func indexedRule(f Iface, m subject.Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -401,13 +402,13 @@ func indexedRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPl
 
 // answersInteger reports whether the method's first result is an
 // integer — a count, as distinct from whatever else a sibling answers.
-func answersInteger(m Method) bool {
+func answersInteger(m subject.Method) bool {
 	values := m.ValueReturns()
 	return len(values) > 0 && values[0].Source != nil && golang.IsInteger(values[0].Source)
 }
 
 // integerArg is the first drawn argument that could hold a position.
-func integerArg(m Method) (int, bool) {
+func integerArg(m subject.Method) (int, bool) {
 	for i, p := range m.CallArgs() {
 		if p.Variadic || p.Source == nil {
 			continue
@@ -421,7 +422,7 @@ func integerArg(m Method) (int, bool) {
 
 // boundedCall is [callOf] with the positional argument spelled as the
 // sizer's answer rather than a drawn value.
-func boundedCall(m Method, slot int) projection.CallPlan {
+func boundedCall(m subject.Method, slot int) projection.CallPlan {
 	call := callOf(m)
 	if m.TakesContext() {
 		slot++
@@ -438,7 +439,7 @@ func boundedCall(m Method, slot int) projection.CallPlan {
 // whose every argument is a value type has no nil to be handed, which
 // makes the claim unstateable rather than false — refused by name, so
 // the header says so rather than the coverage list going quietly short.
-func nilSafeRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func nilSafeRule(f Iface, m subject.Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -483,7 +484,7 @@ func nilSafeRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPl
 // ELEMENT where T is nilable and an empty list where it is not, so a
 // check built on it would mean different things for different
 // signatures — and one that means two things proves neither.
-func nilableArg(m Method) (int, golang.Param, bool) {
+func nilableArg(m subject.Method) (int, golang.Param, bool) {
 	for i, p := range m.CallArgs() {
 		if p.Variadic || p.Source == nil {
 			continue
@@ -501,7 +502,7 @@ func nilableArg(m Method) (int, golang.Param, bool) {
 // One nil rather than all of them: the claim is that a nil is handled,
 // and a call with everything nil cannot say which slot the subject
 // tripped over.
-func nilArgumentCall(m Method, slot int) projection.CallPlan {
+func nilArgumentCall(m subject.Method, slot int) projection.CallPlan {
 	call := callOf(m)
 	if m.TakesContext() {
 		slot++
@@ -512,7 +513,7 @@ func nilArgumentCall(m Method, slot int) projection.CallPlan {
 
 // otherArgFields is the method's fixture fields with the nil'd slot
 // left out — the draws a nil-argument body still has to make.
-func otherArgFields(m Method, slot int) []string {
+func otherArgFields(m subject.Method, slot int) []string {
 	out := make([]string, 0, len(m.ArgFields))
 	for i, field := range m.ArgFields {
 		if i == slot {
@@ -536,7 +537,7 @@ func otherArgFields(m Method, slot int) []string {
 // subject the harness has just built, and what makes the call early is
 // that nothing has run yet. Naming it is how a misspelling fails at the
 // directive rather than in a consumer's build.
-func orderAfterRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func orderAfterRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -590,7 +591,7 @@ func orderAfterRule(f Iface, m Method, call projection.CallPlan) ([]projection.C
 // The validator has to take an argument the subject takes too. Two
 // methods drawing different fixture fields would reach verdicts about
 // different values, and a disagreement between those says nothing.
-func validatesRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func validatesRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,

@@ -5,6 +5,7 @@ package suite
 
 import (
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -140,7 +141,7 @@ func (Signature) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 // that looks right and is not: the bus's Subscribe takes a topic and
 // declares no miss, so an unsubscribed topic answers normally and a
 // check drawing one would skip every run.
-func zeroBody(f Iface, m Method, call projection.CallPlan) projection.Body {
+func zeroBody(f Iface, m subject.Method, call projection.CallPlan) projection.Body {
 	if _, declared := MissSentinel(m); declared && m.HasInput() {
 		return projection.ZeroOnMiss{
 			Call:    missCall(f, m),
@@ -153,7 +154,7 @@ func zeroBody(f Iface, m Method, call projection.CallPlan) projection.Body {
 
 // missCall is [callOf] against the alternate members: the draw nothing
 // wrote, which is what makes the miss a miss.
-func missCall(f Iface, m Method) projection.CallPlan {
+func missCall(f Iface, m subject.Method) projection.CallPlan {
 	var args []projection.Expr
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)
@@ -174,7 +175,7 @@ func missCall(f Iface, m Method) projection.CallPlan {
 
 // missPool is the config field a consumer seeds to make the drawn miss
 // answer — the remedy the skip names.
-func missPool(f Iface, m Method) string {
+func missPool(f Iface, m subject.Method) string {
 	fields := m.ArgFields
 	if len(fields) == 0 {
 		return ""
@@ -186,7 +187,7 @@ func missPool(f Iface, m Method) string {
 // double. A contract can override what the smoke must say — the
 // cursor opener closes what it opens — and the contract arm answers
 // first so the smoke ID stays single-sourced.
-func smokePlan(f Iface, m Method, call projection.CallPlan, seeded bool) projection.CheckPlan {
+func smokePlan(f Iface, m subject.Method, call projection.CallPlan, seeded bool) projection.CheckPlan {
 	if plan, overridden := openerSmoke(f, m, call); overridden {
 		return plan
 	}
@@ -209,7 +210,7 @@ func smokePlan(f Iface, m Method, call projection.CallPlan, seeded bool) project
 // error) is proven by the accepting double.
 func ctxPlan(
 	f Iface,
-	m Method,
+	m subject.Method,
 	seg string,
 	class vocab.Class,
 	claim string,

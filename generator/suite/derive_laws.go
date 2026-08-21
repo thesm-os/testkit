@@ -12,8 +12,9 @@ import (
 
 	"go.thesmos.sh/testkit/core/lawid"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Laws plans the model tier's law rows for the inventory: which laws
@@ -75,7 +76,7 @@ func (Laws) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 		plans = append(plans, lawRow(f, class, claim, bind))
 	}
 
-	if slices.ContainsFunc(f.Methods, func(m Method) bool { return m.HasMixin(MixinConcurrent) }) {
+	if slices.ContainsFunc(f.Methods, func(m subject.Method) bool { return m.HasMixin(MixinConcurrent) }) {
 		// The one non-law leg row: linearizability runs the linearize
 		// engine, not a law binding, so it has a segment instead of a
 		// lawid and the suite's own wording policy speaks it.
@@ -136,7 +137,7 @@ func lawRow(f Iface, class vocab.Class, claim string, bind projection.Bind) proj
 type lawSelection struct {
 	Law      string
 	Probes   []string
-	carriers []Method
+	carriers []subject.Method
 }
 
 // selectLaws runs the tiers catalogue over every method's whole
@@ -152,7 +153,7 @@ type lawSelection struct {
 func selectLaws(f Iface) []lawSelection {
 	var out []lawSelection
 	index := map[string]int{}
-	record := func(law string, m Method, probe bool) {
+	record := func(law string, m subject.Method, probe bool) {
 		i, held := index[law]
 		if !held {
 			index[law] = len(out)
@@ -195,7 +196,7 @@ func selectLaws(f Iface) []lawSelection {
 
 // mixinSelected reports whether the rule reaches this carrier through
 // a mixin — the axis whose multi-carrier stamps become probe sets.
-func mixinSelected(r tiers.Rule, m Method) bool {
+func mixinSelected(r tiers.Rule, m subject.Method) bool {
 	return slices.ContainsFunc(r.Needs, func(need string) bool {
 		return slices.Contains(m.Mixins, need)
 	})
@@ -205,7 +206,7 @@ func mixinSelected(r tiers.Rule, m Method) bool {
 // cannot see. A row here is the corpus's own derivation formalized;
 // its tiers home waits on the model plugin's migration, because a
 // catalogue row would change the incumbent's emission today.
-type extraRule func(m Method) (law string, licensed bool)
+type extraRule func(m subject.Method) (law string, licensed bool)
 
 func extraRules() []extraRule {
 	return []extraRule{poisonFromSentinel}
@@ -214,7 +215,7 @@ func extraRules() []extraRule {
 // poisonFromSentinel: a stamped after-close sentinel licenses the
 // poison law — the poisoned state is the closed state, which is the
 // corpus's own derivation ("from the sentinel kv.ErrClosed").
-func poisonFromSentinel(m Method) (string, bool) {
+func poisonFromSentinel(m subject.Method) (string, bool) {
 	_, stamped := m.MixinParam(MixinAfterClose, MixinAfterCloseSentinel)
 	return lawid.PoisonConsistent, stamped
 }
@@ -234,7 +235,7 @@ func suiteTabled(r tiers.Rule) bool {
 // own carriers, first-stamped wins. Over-supplying is free — an
 // absent placeholder ignores its pair — which is what keeps this
 // generic: no law names its fills, the stamps do.
-func fillsFor(f Iface, carriers []Method) []string {
+func fillsFor(f Iface, carriers []subject.Method) []string {
 	pairs := []string{lawid.PlaceSubject, f.Token}
 	seen := map[string]bool{lawid.PlaceSubject: true}
 	set := func(place, v string) {
@@ -259,23 +260,9 @@ func fillsFor(f Iface, carriers []Method) []string {
 // chainShaped reports the append-and-replay protocol, whose bundle
 // claim speaks "chain law".
 func chainShaped(f Iface) bool {
-	return slices.ContainsFunc(f.Methods, func(m Method) bool {
+	return slices.ContainsFunc(f.Methods, func(m subject.Method) bool {
 		return slices.Contains(m.Contracts, ContractChain)
 	})
-}
-
-// Classifications is the method's whole stamp set in tiers' one
-// namespace — detector shape, mixins, contract memberships. The one
-// home of the composition: the model generator selects from exactly
-// this, so the two tiers cannot disagree about what the run
-// classified.
-func (m Method) Classifications() []string {
-	var out []string
-	if s := m.Shape(); s != "" {
-		out = append(out, s)
-	}
-	out = append(out, m.Mixins...)
-	return append(out, m.Contracts...)
 }
 
 // LawParams collects the stamp parameters tiers' When clauses read,
@@ -285,8 +272,8 @@ func (m Method) Classifications() []string {
 // contract, because a protocol's parameter lives on the directive
 // host and a rule selected from another role conditions on it all
 // the same. Shared with the model generator for the same reason
-// [Method.Classifications] is.
-func LawParams(methods []Method, m Method) map[string]string {
+// [subject.Method.Classifications] is.
+func LawParams(methods []subject.Method, m subject.Method) map[string]string {
 	if m.Source == nil {
 		return nil
 	}

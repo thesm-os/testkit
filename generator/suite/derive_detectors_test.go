@@ -14,6 +14,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -35,7 +36,7 @@ import (
 type detectorCase struct {
 	name string
 	rule stampRule
-	m    Method
+	m    subject.Method
 
 	// seeded says the run zips a corpus from its pools, which is what
 	// puts something there for a hit to find.

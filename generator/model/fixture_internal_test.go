@@ -9,14 +9,15 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // unstamped is a projection method whose source carries no classification
 // parameters at all — the smallest thing a stamp read can miss on.
-func unstamped() *suite.Method {
-	return &suite.Method{Sig: &golang.Sig{Source: &node.Method{}}}
+func unstamped() *subject.Method {
+	return &subject.Method{Sig: &golang.Sig{Source: &node.Method{}}}
 }
 
 // ─── The arm walk ────────────────────────────────────────────────
@@ -51,18 +52,18 @@ func chanRef() *node.TypeRef {
 
 // projectedReturns is [projected] with the raw returns handed through — for
 // a return whose Source carries stamps the res helper cannot spell.
-func projectedReturns(name string, params []golang.Param, returns []golang.Return) *suite.Method {
+func projectedReturns(name string, params []golang.Param, returns []golang.Return) *subject.Method {
 	src := &node.Method{Name: name}
-	return &suite.Method{Sig: &golang.Sig{
+	return &subject.Method{Sig: &golang.Sig{
 		Name: name, Params: params, Returns: returns, Source: src,
 	}}
 }
 
 // projected builds a projection method by hand: the signature the arms read,
 // with the classification stamps the tests choose.
-func projected(name string, params []golang.Param, returns []golang.Return) *suite.Method {
+func projected(name string, params []golang.Param, returns []golang.Return) *subject.Method {
 	src := &node.Method{Name: name}
-	return &suite.Method{Sig: &golang.Sig{
+	return &subject.Method{Sig: &golang.Sig{
 		Name: name, Params: params, Returns: returns, Source: src,
 	}}
 }
@@ -75,7 +76,7 @@ func res(src *node.TypeRef) golang.Return {
 	return golang.Return{Type: sdk.Builtin(src.Name), Source: src, Error: golang.IsError(src)}
 }
 
-func stamp(m *suite.Method, shapeName, keyQ, valueQ string) *suite.Method {
+func stamp(m *subject.Method, shapeName, keyQ, valueQ string) *subject.Method {
 	bag := m.Source.EnsureMeta()
 	if shapeName != "" {
 		shape.MetaShape.Set(bag, shapeName, "test")
@@ -97,7 +98,7 @@ func roleRule(law, field string) tiers.Rule {
 }
 
 // bindField runs the role dispatch for one law/field/method triple.
-func bindField(b *Bindings, law, field string, m *suite.Method) (*LawField, string) {
+func bindField(b *Bindings, law, field string, m *subject.Method) (*LawField, string) {
 	r := roleRule(law, field)
 	return lawFieldOf(b, nil, r, r.Fields[0], m, nil)
 }
@@ -109,7 +110,7 @@ const (
 )
 
 // harnessOf wraps methods into the projection lawsOf walks.
-func harnessOf(methods ...*suite.Method) *suite.Contract {
+func harnessOf(methods ...*subject.Method) *suite.Contract {
 	h := &suite.Contract{}
 	for _, m := range methods {
 		h.Methods = append(h.Methods, *m)

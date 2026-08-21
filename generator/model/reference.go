@@ -11,8 +11,9 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Reference is how the run builds its oracle.
@@ -154,7 +155,7 @@ func referenceOf(
 	iface *sdk.Interface,
 	harness *suite.Contract,
 	b *Bindings,
-	keyed, valued, composite, collector *suite.Method,
+	keyed, valued, composite, collector *subject.Method,
 	partners map[string]string,
 ) bool {
 	if named, given := directiveValue(iface, RefKey); given {
@@ -445,7 +446,7 @@ func contractOf(
 // stampedSentinel resolves a contract error's declared sentinel, false where
 // the parameter is unnamed or unstamped.
 func stampedSentinel(
-	harness *suite.Contract, carrier *suite.Method, contract, param string,
+	harness *suite.Contract, carrier *subject.Method, contract, param string,
 ) (*sdk.Expr, bool) {
 	if param == "" {
 		return nil, false
@@ -469,7 +470,7 @@ func contractAdapterOf(
 	harness *suite.Contract,
 	partners map[string]string,
 	contract string,
-	roles map[string]*suite.Method,
+	roles map[string]*subject.Method,
 ) []AdapterMethod {
 	spec, _ := tiers.ContractStore(contract)
 	opOf := map[string]string{}
@@ -538,7 +539,7 @@ func adapterOf(
 // assignment first — the stamp says what a method is for, outranking what it
 // looks like — then the oracle's shape table. The second result reports the
 // mixin route, whose argument is a key no value check applies to.
-func oracleOp(oracle Oracle, m *suite.Method) (string, bool) {
+func oracleOp(oracle Oracle, m *subject.Method) (string, bool) {
 	if oracle == OracleKeyed {
 		for _, name := range m.Mixins {
 			if op, assigned := tiers.KeyedStoreMixinOp(name); assigned {
@@ -634,8 +635,8 @@ func keyFieldOf(ctx *sdk.GeneratorContext, valueQ, keyQ string) (string, string)
 // names. Both walks, because a protocol splits its directives — the chain
 // stamps append on one method and verify on another, and reading only the
 // carrier's would leave a role the interface plainly fills unresolved.
-func contractRoleMethods(harness *suite.Contract, carrier *suite.Method, contract string) map[string]*suite.Method {
-	out := map[string]*suite.Method{}
+func contractRoleMethods(harness *suite.Contract, carrier *subject.Method, contract string) map[string]*subject.Method {
+	out := map[string]*subject.Method{}
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if role, ok := shape.ContractRoleKey(contract).Get(m.Source.Meta()); ok && role != "" {
@@ -656,6 +657,6 @@ func contractRoleMethods(harness *suite.Contract, carrier *suite.Method, contrac
 
 // roleClaims reports whether the role's method carries the named mixin — the
 // stamp that flips a constructor sentinel to the oracle's lenient nil.
-func roleClaims(m *suite.Method, mixin string) bool {
+func roleClaims(m *subject.Method, mixin string) bool {
 	return m != nil && mixin != "" && slices.Contains(m.Mixins, mixin)
 }

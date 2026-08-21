@@ -13,8 +13,8 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // TestContractShapeArms pins the contract-shape closure family: a
@@ -26,7 +26,7 @@ func TestContractShapeArms(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	t.Run("a handle-answering begin binds and a flat one refuses", func(t *testing.T) {
 		t.Parallel()
@@ -51,7 +51,7 @@ func TestContractShapeArms(t *testing.T) {
 	// can then reach the law — bound, green, and unfalsifiable.
 	t.Run("a staging write threads the handle beside a key and a value", func(t *testing.T) {
 		t.Parallel()
-		staging := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		staging := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 
 		field, reason := bindField(staging, lawid.TransactionNoMidTxVisibility, "TxPut",
 			projected("Put", []golang.Param{
@@ -104,7 +104,7 @@ func TestContractShapeArms(t *testing.T) {
 		}}
 
 		pooled := &Bindings{
-			Subject: suite.Subject{IfaceName: "Contract"},
+			Subject: subject.Subject{IfaceName: "Contract"},
 			Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value"},
 			Actions: []*Action{{Method: "Step", Pool: poolValues}},
 		}
@@ -147,7 +147,7 @@ func TestContractShapeArms(t *testing.T) {
 
 	t.Run("a page-shaped read binds and each missing half refuses", func(t *testing.T) {
 		t.Parallel()
-		page := func(next, more *node.TypeRef) *suite.Method {
+		page := func(next, more *node.TypeRef) *subject.Method {
 			return projected("Page",
 				[]golang.Param{arg("ctx", ctxRef()), arg("cur", namedRef("Cursor"))},
 				[]golang.Return{res(sliceRef(namedRef("Value"))), res(next), res(more), errRet})
@@ -179,7 +179,7 @@ func TestContractShapeRefusalClauses(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	t.Run("a terminal pair's own wrong shapes refuse", func(t *testing.T) {
 		t.Parallel()
@@ -213,7 +213,7 @@ func TestContractShapeRefusalClauses(t *testing.T) {
 			{Name: fRun, Kind: tiers.KindRole, From: "saga.step"},
 		}}
 		pooled := &Bindings{
-			Subject: suite.Subject{IfaceName: "Contract"},
+			Subject: subject.Subject{IfaceName: "Contract"},
 			Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value"},
 			Actions: []*Action{{Method: "Step", Pool: poolValues}},
 		}
@@ -302,7 +302,7 @@ func TestContractShapeAnswerClauses(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	_, reason := bindField(b, lawid.TwoPhaseMutex, fBegin,
 		projected("Begin", []golang.Param{arg("ctx", ctxRef())},
@@ -322,7 +322,7 @@ func TestReplicaClosureShapes(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 
 	syncRole := projected("Sync",
 		[]golang.Param{arg("ctx", ctxRef()), arg("peer", namedRef("Mixed"))}, []golang.Return{errRet})
@@ -382,7 +382,7 @@ func TestMidTxStagingAndReadbackPool(t *testing.T) {
 	t.Run("the staging write and the pool bind at the fixture's types", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
-			Subject: suite.Subject{IfaceName: "Contract"},
+			Subject: subject.Subject{IfaceName: "Contract"},
 			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
 		}
 		field, reason := lawFieldOf(b, harnessOf(begin, put, get), r, r.Fields[1], begin, get)
@@ -398,7 +398,7 @@ func TestMidTxStagingAndReadbackPool(t *testing.T) {
 	t.Run("each anchor's absence refuses by name", func(t *testing.T) {
 		t.Parallel()
 		pooled := &Bindings{
-			Subject: suite.Subject{IfaceName: "Contract"},
+			Subject: subject.Subject{IfaceName: "Contract"},
 			Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
 		}
 		_, reason := lawFieldOf(pooled, harnessOf(begin, get), r, r.Fields[1], begin, get)
@@ -416,7 +416,7 @@ func TestMidTxStagingAndReadbackPool(t *testing.T) {
 func TestStampedSentinel(t *testing.T) {
 	t.Parallel()
 
-	carrier := &suite.Method{Sig: &golang.Sig{Source: &node.Method{}}}
+	carrier := &subject.Method{Sig: &golang.Sig{Source: &node.Method{}}}
 	carrier.Contracts = []string{"lease"}
 
 	t.Run("an unnamed parameter mints", func(t *testing.T) {
@@ -433,7 +433,7 @@ func TestStampedSentinel(t *testing.T) {
 
 	t.Run("an unqualified stamp mints", func(t *testing.T) {
 		t.Parallel()
-		bare := &suite.Method{Sig: &golang.Sig{Source: &node.Method{}}}
+		bare := &subject.Method{Sig: &golang.Sig{Source: &node.Method{}}}
 		bare.Contracts = []string{"lease"}
 		shape.ContractParamKey("lease", "held").Set(bare.Source.EnsureMeta(), "ErrHeld", "test")
 		_, stamped := stampedSentinel(nil, bare, "lease", "held")
@@ -442,7 +442,7 @@ func TestStampedSentinel(t *testing.T) {
 
 	t.Run("a qualified stamp is the oracle's sentinel", func(t *testing.T) {
 		t.Parallel()
-		host := &suite.Method{Sig: &golang.Sig{Source: &node.Method{}}}
+		host := &subject.Method{Sig: &golang.Sig{Source: &node.Method{}}}
 		host.Contracts = []string{"lease"}
 		shape.ContractParamKey("lease", "held").
 			Set(host.Source.EnsureMeta(), "example.com/lease.ErrHeld", "test")

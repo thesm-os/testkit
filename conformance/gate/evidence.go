@@ -15,9 +15,9 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/model"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Evidence is one classification and what, if anything, asserts it.

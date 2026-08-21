@@ -11,7 +11,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 func TestRoleFieldShapes(t *testing.T) {
@@ -21,7 +21,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("a scalar count binds, and its variants pick their spellings", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		field, reason := bindField(b, lawid.CountEqualsReference, "Count",
 			projected("Count", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{res(namedRef("int")), errRet}))
 		testkit.True(t, reason == "" && field != nil, "a nullary (int, error) counts: "+reason)
@@ -42,7 +42,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("a scalar refuses inputs, handles, and unordered bounds", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.CountEqualsReference, "Count",
 			projected("Count", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 				[]golang.Return{res(namedRef("int")), errRet}))
@@ -60,7 +60,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the bare calls hold their shapes", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.PredicateConsistent, "Call",
 			projected("IsEmpty", nil, []golang.Return{res(namedRef("bool"))}))
 		testkit.True(t, reason == "", "a bare predicate binds: "+reason)
@@ -80,7 +80,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the transformations thread one input", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		field, reason := bindField(b, lawid.TotalOver, "Call",
 			projected("Classify", []golang.Param{arg("ctx", ctxRef()), arg("in", namedRef(qStr))},
 				[]golang.Return{res(namedRef(qStr)), errRet}))
@@ -98,7 +98,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the error operations hold their shapes", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Keys: Pool{Q: qStr}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Keys: Pool{Q: qStr}}
 		_, reason := bindField(b, lawid.LifecycleRespectsContext, "Op",
 			projected("Close", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet}))
 		testkit.True(t, reason == "", "a context-taking close binds: "+reason)
@@ -133,7 +133,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the paired string write holds its shape", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.InjectionSafe, "Store",
 			projected("Store", []golang.Param{
 				arg("ctx", ctxRef()), arg("k", namedRef(qStr)), arg("v", namedRef(qStr)),
@@ -149,7 +149,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the sum and the merge hold their shapes", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.Conservative, "Sum",
 			projected("Total", []golang.Param{arg("ctx", ctxRef())},
 				[]golang.Return{res(namedRef("int")), errRet}))
@@ -181,14 +181,14 @@ func TestRoleFieldShapes(t *testing.T) {
 			[]golang.Return{errRet})
 
 		b := &Bindings{
-			Subject:   suite.Subject{IfaceName: "Mixed"},
+			Subject:   subject.Subject{IfaceName: "Mixed"},
 			Reference: Reference{KeyField: fieldKey},
 		}
 		field, reason := bindField(b, lawid.PersisterRetrievable, "Save", save)
 		testkit.True(t, reason == "" && field.KeyOfName == b.KeyOfName(),
 			"the saved identity is the shared projection: "+reason)
 
-		b = &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b = &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason = bindField(b, lawid.PersisterRetrievable, "Save", save)
 		testkit.Assert(t, reason).Contains("key projection", "no projection, no identity")
 
@@ -199,7 +199,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the offset-answering append holds its shape", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		errRet := res(namedRef("error"))
 		_, reason := bindField(b, lawid.AppenderMonotonicOffsets, "Append",
 			projected("Run", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))},
@@ -219,7 +219,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the replay adapts a slice and refuses the rest", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		errRet := res(namedRef("error"))
 		field, reason := bindField(b, lawid.AppendOnlyGrows, "Replay",
 			projected("Replay", []golang.Param{arg("ctx", ctxRef())},
@@ -239,7 +239,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("the drains pick the slice or the collect loop", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		errRet := res(namedRef("error"))
 		field, reason := bindField(b, lawid.StreamNoDuplicates, "Drain",
 			projected("List", []golang.Param{arg("ctx", ctxRef())},
@@ -255,7 +255,7 @@ func TestRoleFieldShapes(t *testing.T) {
 
 	t.Run("a rowed law's unmapped field refuses by name", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.Cacheable, "Bogus",
 			projected("Get", nil, []golang.Return{res(namedRef(qStr))}))
 		testkit.Assert(t, reason).Contains("transcribes no closure shape",
@@ -267,7 +267,7 @@ func TestRoleMethodFamilies(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Values: Pool{Q: qStr}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Values: Pool{Q: qStr}}
 
 	t.Run("the writer family is the values pool's feeder", func(t *testing.T) {
 		t.Parallel()
@@ -283,7 +283,7 @@ func TestRoleMethodFamilies(t *testing.T) {
 		_, reason = roleMethod(b, harnessOf(merge), famWriter, nil, nil)
 		testkit.Assert(t, reason).Contains("feeding the pool", "a peer-merger is not the feeder")
 
-		loose := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		loose := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		role, reason = roleMethod(loose, harnessOf(merge), famWriter, nil, nil)
 		testkit.True(t, reason == "" && role.Name == "Merge",
 			"with no pool to feed, the first writer stands: "+reason)
@@ -337,7 +337,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 
 	t.Run("the corruption operations hold their shapes", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.TamperEvident, "Tamper",
 			projected("Tamper", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet}))
 		testkit.True(t, reason == "", "a nullary tamper binds: "+reason)
@@ -357,7 +357,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 
 	t.Run("the cursor's next answers the triple", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		field, reason := bindField(b, lawid.CursorNextAfterClose, "Next",
 			projected("Next", []golang.Param{arg("ctx", ctxRef())},
 				[]golang.Return{res(namedRef(qStr)), res(namedRef("bool")), errRet}))
@@ -371,7 +371,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 
 	t.Run("the pinned write pins through the pool", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Values: Pool{Pin: fieldKey}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Values: Pool{Pin: fieldKey}}
 		field, reason := bindField(b, lawid.TTLExpiry, "Put",
 			projected("Put", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
 				[]golang.Return{errRet}))
@@ -382,7 +382,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 				[]golang.Return{errRet}))
 		testkit.Assert(t, reason).Contains("one value", "a composite put is not the shape")
 
-		unpinned := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		unpinned := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason = bindField(unpinned, lawid.TTLExpiry, "Put",
 			projected("Put", []golang.Param{arg("ctx", ctxRef()), arg("v", namedRef(qStr))},
 				[]golang.Return{errRet}))
@@ -391,7 +391,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 
 	t.Run("the deadline op anchors on the projection's fixture field", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		anchored := projected("Op", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 			[]golang.Return{errRet})
 		anchored.ArgFields = []string{"Target"}
@@ -411,7 +411,7 @@ func TestClockShapedRoleFields(t *testing.T) {
 
 	t.Run("the scheduler's pair hold their shapes", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := bindField(b, lawid.ScheduledFiresAfterAdvance, "Schedule",
 			projected("At", []golang.Param{arg("ctx", ctxRef()), arg("after", pkgRef("time", "Duration"))},
 				[]golang.Return{errRet}))

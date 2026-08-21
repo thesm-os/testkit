@@ -99,6 +99,16 @@ func TestEmittedIdentifiersCompose(t *testing.T) {
 		testkit.Equal(t, projection.IndexType(tok), "logCheckIndexT", "what nobody writes")
 	})
 
+	// The qualifier constant is the one word a family-scoped ID is built
+	// from, and the index file spells it once per family accessor. It
+	// carries the token by the same rule as the method constants, so a
+	// drift here would mint IDs no manifest row matches.
+	t.Run("the qualifier constant carries the token too", func(t *testing.T) {
+		t.Parallel()
+		testkit.Equal(t, projection.QualifierConst(tok), "logQualifier",
+			"the one home for the interface's word inside a family ID")
+	})
+
 	t.Run("both scopes' groups spell one rule", func(t *testing.T) {
 		t.Parallel()
 		testkit.Equal(t, projection.GroupType(tok, "Append"), "logAppendChecks",

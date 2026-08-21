@@ -12,7 +12,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // TestSaturationDerivation pins the prover's own derivation: the wardrobe's
@@ -26,10 +26,10 @@ func TestSaturationDerivation(t *testing.T) {
 	t.Run("the kinds follow the method's shape", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
-			Subject: suite.Subject{IfaceName: "Mixed"},
+			Subject: subject.Subject{IfaceName: "Mixed"},
 			Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value", Field: "V", OtherField: "VOther"},
 		}
-		kinds := func(m *suite.Method) []string {
+		kinds := func(m *subject.Method) []string {
 			out := make([]string, 0, 4)
 			for _, sm := range satMutantsOf(b, m) {
 				out = append(out, sm.Kind)
@@ -113,7 +113,7 @@ func TestSaturationDerivation(t *testing.T) {
 		// A stream's zero value is a nil function, and ranging over one
 		// panics — so a wear answering the zero takes the run down before
 		// the law it was worn for is asked anything.
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		seq2 := projected("List", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(pkgRef("iter", "Seq2"))})
 		for _, sm := range satMutantsOf(b, seq2) {
@@ -166,7 +166,7 @@ func TestSaturationDerivation(t *testing.T) {
 		// Built from the law's own stamped constant, so a law without one —
 		// or with one no integer can be read from — has no line to step over
 		// and earns no wear rather than a wear that steps nowhere.
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		count := projected("Count", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("int")), errRet})
 		h := harnessOf(count)
@@ -194,7 +194,7 @@ func TestSaturationDerivation(t *testing.T) {
 
 	t.Run("the surface knows its reach and its restatement", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		b.Session = &SessionSpec{Reader: "Get", Writer: "Store"}
 		b.Laws = []*LawBinding{
 			{ID: lawid.MonotonicReads, Session: true},
@@ -224,7 +224,7 @@ func TestSaturationSkipsWitnessedInterfaces(t *testing.T) {
 	t.Parallel()
 
 	b := &Bindings{
-		Subject:   suite.Subject{IfaceName: "Store"},
+		Subject:   subject.Subject{IfaceName: "Store"},
 		Witnesses: []sdk.Ref{sdk.Builtin(qStr)},
 		Laws:      []*LawBinding{{ID: lawid.ReadAfterWrite}},
 	}
@@ -238,7 +238,7 @@ func TestSaturationSkipsUnprojectedMethods(t *testing.T) {
 	t.Parallel()
 
 	b := &Bindings{
-		Subject: suite.Subject{IfaceName: "Mixed"},
+		Subject: subject.Subject{IfaceName: "Mixed"},
 		Laws: []*LawBinding{{
 			ID:     lawid.ReadAfterWrite,
 			Fields: []*LawField{{Name: "Read", Method: "Nonesuch"}},

@@ -12,7 +12,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/conformance/gate"
 	"go.thesmos.sh/testkit/engine/model/ref"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestEveryActionRowNamesAShippedConstructor closes the action table's engine

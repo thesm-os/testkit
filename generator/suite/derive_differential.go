@@ -10,8 +10,9 @@ import (
 	"go.thesmos.sh/eidos/core/naming"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Differential plans the model tier's reference-comparison row: one
@@ -155,7 +156,7 @@ func interimStores() map[string]bool {
 
 // firstWriter is the first method the shape annotator classified as a
 // write, nil where nothing writes.
-func firstWriter(methods []Method) *Method {
+func firstWriter(methods []subject.Method) *subject.Method {
 	for i := range methods {
 		if writesSomething(methods[i]) {
 			return &methods[i]
@@ -172,7 +173,7 @@ func oracleReadable(f Iface) bool {
 
 // firstOracleReader is the first non-writing method whose shape the
 // shipped oracles model. Nil where none reads.
-func firstOracleReader(f Iface) *Method {
+func firstOracleReader(f Iface) *subject.Method {
 	for i := range f.Methods {
 		m := &f.Methods[i]
 		s := m.Shape()

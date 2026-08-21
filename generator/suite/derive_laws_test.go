@@ -20,6 +20,7 @@ import (
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -27,17 +28,17 @@ import (
 // params stamped through the real keys on one bag that serves both
 // readers — the projection map the wording fills from, and the source
 // node the selection's When clauses read.
-func lawMethod(name string, mixinNames []string, stamp func(*sdk.Bag)) Method {
+func lawMethod(name string, mixinNames []string, stamp func(*sdk.Bag)) subject.Method {
 	bag := sdk.NewBag()
 	if stamp != nil {
 		stamp(bag)
 	}
 	src := &node.Method{Name: name}
 	src.MetaBag = bag
-	return Method{
+	return subject.Method{
 		Sig:         &golang.Sig{Name: name, Source: src},
 		Mixins:      mixinNames,
-		mixinParams: mixinParamsOf(bag, mixinNames),
+		MixinParams: mixinParamsOf(bag, mixinNames),
 	}
 }
 
@@ -51,16 +52,25 @@ func afterClose(bag *sdk.Bag) {
 // and after-close on the writer, after-close across the readers, a
 // concurrency claim, and a suite-owned idempotent teardown.
 func lawStore() Iface {
-	put := lawMethod("Put", []string{MixinTTL, MixinAfterClose, MixinConcurrent}, func(bag *sdk.Bag) {
-		afterClose(bag)
-		shape.MetaShape.Set(bag, writer.Name, "test")
-	})
+	put := lawMethod(
+		"Put",
+		[]string{MixinTTL, MixinAfterClose, MixinConcurrent},
+		func(bag *sdk.Bag) {
+			afterClose(bag)
+			shape.MetaShape.Set(bag, writer.Name, "test")
+		},
+	)
 	get := lawMethod("Get", []string{MixinAfterClose}, afterClose)
 	length := lawMethod("Len", []string{MixinAfterClose}, afterClose)
 	closeM := lawMethod("Close", []string{MixinIdempotent}, func(bag *sdk.Bag) {
 		shape.MetaShape.Set(bag, lifecycle.Name, "test")
 	})
-	return Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{put, get, length, closeM}}
+	return Iface{
+		Name:      "Store",
+		Token:     "store",
+		Qualifier: "store",
+		Methods:   []subject.Method{put, get, length, closeM},
+	}
 }
 
 func lawPlansByID(t *testing.T, f Iface) (map[vocab.ID]projection.CheckPlan, []Refusal) {
@@ -116,7 +126,12 @@ func TestLawsDeriveTheStoreRows(t *testing.T) {
 		p, held := byID["model/store/AUTO-LINEARIZABLE"]
 		testkit.True(t, held, "the concurrent mixin lowers to the linearize engine")
 		testkit.Equal(t, p.Class, vocab.ClassConcurrent, "under the concurrent class")
-		testkit.Equal(t, p.Claim, "concurrent operation histories are linearizable", "the leg wording")
+		testkit.Equal(
+			t,
+			p.Claim,
+			"concurrent operation histories are linearizable",
+			"the leg wording",
+		)
 	})
 
 	t.Run("a suite-tabled mixin's law has no model twin", func(t *testing.T) {
@@ -129,7 +144,7 @@ func TestLawsDeriveTheStoreRows(t *testing.T) {
 func TestLawsBundleTheObservational(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
+	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []subject.Method{
 		lawMethod("Set", []string{atomic.Name}, nil),
 	}}
 	byID, refusals := lawPlansByID(t, iface)
@@ -138,7 +153,12 @@ func TestLawsBundleTheObservational(t *testing.T) {
 	p, held := byID["model/store/laws"]
 	testkit.True(t, held, "an observational law rides the shared sequences")
 	testkit.Equal(t, p.Class, vocab.ClassLaws, "under the laws class")
-	testkit.Equal(t, p.Claim, "every bound law holds over random operation sequences", "the bundle wording")
+	testkit.Equal(
+		t,
+		p.Claim,
+		"every bound law holds over random operation sequences",
+		"the bundle wording",
+	)
 	testkit.Len(t, p.Binds, 1, "the bundle's binds itemize its laws")
 	testkit.Equal(t, p.Binds[0].Law, lawid.AtomicWrite, "the atomic mixin's law, by identifier")
 }
@@ -154,15 +174,18 @@ func TestLawsDeriveTheCursorRows(t *testing.T) {
 	roles, partners, params := contractDataOf(bag)
 	src := &node.Method{Name: "Scan"}
 	src.MetaBag = bag
-	opener := Method{
+	opener := subject.Method{
 		Sig:              &golang.Sig{Name: "Scan", Source: src},
 		Contracts:        shape.Contracts(bag),
-		contractRoles:    roles,
-		contractPartners: partners,
-		contractParams:   params,
+		ContractRoles:    roles,
+		ContractPartners: partners,
+		ContractParams:   params,
 	}
 
-	byID, refusals := lawPlansByID(t, Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{opener}})
+	byID, refusals := lawPlansByID(
+		t,
+		Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []subject.Method{opener}},
+	)
 	testkit.Len(t, refusals, 0, "the cursor partners word both laws")
 
 	t.Run("a second close changes nothing", func(t *testing.T) {
@@ -188,9 +211,10 @@ func TestLawsRefuseWhatTheyCannotWord(t *testing.T) {
 
 	// After-close with no close name: the claim template needs {close}
 	// and no stamp supplies it.
-	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []Method{
+	iface := Iface{Name: "Store", Token: "store", Qualifier: "store", Methods: []subject.Method{
 		lawMethod("Put", []string{MixinAfterClose}, func(bag *sdk.Bag) {
-			shape.MixinParamKey(MixinAfterClose, MixinAfterCloseSentinel).Set(bag, "kv.ErrClosed", "test")
+			shape.MixinParamKey(MixinAfterClose, MixinAfterCloseSentinel).
+				Set(bag, "kv.ErrClosed", "test")
 		}),
 	}}
 	byID, refusals := lawPlansByID(t, iface)
@@ -201,7 +225,12 @@ func TestLawsRefuseWhatTheyCannotWord(t *testing.T) {
 	for _, r := range refusals {
 		if r.What == lawid.LifecycleAfterClose+" for Store" {
 			found = true
-			testkit.Contains(t, r.Why, lawid.PlaceClose, "the refusal names the missing placeholder")
+			testkit.Contains(
+				t,
+				r.Why,
+				lawid.PlaceClose,
+				"the refusal names the missing placeholder",
+			)
 		}
 	}
 	testkit.True(t, found, "the refusal is attributed to the law and the interface")

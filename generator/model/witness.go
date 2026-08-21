@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -29,7 +30,7 @@ func witnessedHarness(
 	}
 	clone := *harness
 	clone.IfaceRef = sdk.External(iface.Package, iface.Name, witnesses...)
-	methods := make([]suite.Method, len(harness.Methods))
+	methods := make([]subject.Method, len(harness.Methods))
 	for i := range harness.Methods {
 		m := harness.Methods[i]
 		sig := *m.Sig

@@ -10,8 +10,9 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // poolsOf fills the shared pools from the fixture fields the harness already
@@ -31,7 +32,7 @@ func poolsOf(
 	ctx *sdk.GeneratorContext,
 	b *Bindings,
 	harness *suite.Contract,
-	keyed, valued, composite *suite.Method,
+	keyed, valued, composite *subject.Method,
 	genFunc string,
 ) {
 	switch {
@@ -40,7 +41,7 @@ func poolsOf(
 		keyQ, _ := b.keyQOf(keyed)
 		b.Keys = Pool{
 			Field:      keyed.ArgFields[0],
-			OtherField: keyed.ArgFields[0] + suite.OtherSuffix,
+			OtherField: keyed.ArgFields[0] + subject.OtherSuffix,
 			Type:       arg.Type,
 			Q:          keyQ,
 		}
@@ -51,7 +52,7 @@ func poolsOf(
 		keyQ, _ := b.keyQOf(composite)
 		b.Keys = Pool{
 			Field:      composite.ArgFields[0],
-			OtherField: composite.ArgFields[0] + suite.OtherSuffix,
+			OtherField: composite.ArgFields[0] + subject.OtherSuffix,
 			Type:       arg.Type,
 			Q:          keyQ,
 		}
@@ -62,7 +63,7 @@ func poolsOf(
 		valueQ, _ := b.valueQOf(composite)
 		b.Values = Pool{
 			Field:      composite.ArgFields[1],
-			OtherField: composite.ArgFields[1] + suite.OtherSuffix,
+			OtherField: composite.ArgFields[1] + subject.OtherSuffix,
 			Type:       arg.Type,
 			Q:          valueQ,
 		}
@@ -71,7 +72,7 @@ func poolsOf(
 		valueQ, _ := b.valueQOf(valued)
 		b.Values = Pool{
 			Field:      valued.ArgFields[0],
-			OtherField: valued.ArgFields[0] + suite.OtherSuffix,
+			OtherField: valued.ArgFields[0] + subject.OtherSuffix,
 			Type:       arg.Type,
 			Q:          valueQ,
 		}
@@ -127,7 +128,7 @@ type Pool struct {
 // store, and wide values keyed afresh would never collide with a key the
 // reads revisit — where the twin stays wide: its comparisons are twin against
 // twin, and two twins agree about a miss as readily as a hit.
-func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite *suite.Method) {
+func pinValues(ctx *sdk.GeneratorContext, b *Bindings, keyed, valued, composite *subject.Method) {
 	pin := b.Reference.KeyField
 	if pin == "" && !b.Reference.Derived() && keyed != nil && valued != nil && composite == nil {
 		keyQ, _ := b.keyQOf(keyed)
@@ -250,7 +251,7 @@ var scalarKinds = map[string]bool{
 // with the reader — or, with no reader, with the collector's element — else
 // the first in declaration order, so the choice never depends on where a
 // method sits in the source.
-func feederOf(b *Bindings, keyed, collector *suite.Method, writers []*suite.Method) *suite.Method {
+func feederOf(b *Bindings, keyed, collector *subject.Method, writers []*subject.Method) *subject.Method {
 	if len(writers) == 0 {
 		return nil
 	}
@@ -282,7 +283,7 @@ func feederOf(b *Bindings, keyed, collector *suite.Method, writers []*suite.Meth
 // let a composite type the pool while the guard measured against a writer —
 // admitting a drawer that mismatched and refusing one that matched, both
 // silently, and both surfacing only as generated code that will not compile.
-func valueSourceOf(valued, composite, valueFallback *suite.Method) *suite.Method {
+func valueSourceOf(valued, composite, valueFallback *subject.Method) *subject.Method {
 	switch {
 	case composite != nil:
 		return composite

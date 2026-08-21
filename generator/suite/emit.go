@@ -13,6 +13,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -175,7 +176,7 @@ func rendered() map[projection.BodyKind]bool {
 func checkEmitsOf(
 	base sdk.BaseEmit, iface Iface, inv projection.Inventory, provable, seeded bool,
 ) []*CheckEmit {
-	byName := make(map[string]Method, len(iface.Methods))
+	byName := make(map[string]subject.Method, len(iface.Methods))
 	for _, m := range iface.Methods {
 		byName[m.Name] = m
 	}
@@ -264,7 +265,7 @@ func checkEmitsOf(
 }
 
 // viewOf spells the facts a body needs from one method's signature.
-func viewOf(iface Iface, m Method) bodyView {
+func viewOf(iface Iface, m subject.Method) bodyView {
 	return bodyView{
 		Recv:          receiverIdent(iface),
 		Vocab:         Vocab,
@@ -298,7 +299,7 @@ func receiverIdent(iface Iface) string {
 
 // discardOf drops a call's results where the body only asks whether the
 // call returned: one blank per result.
-func discardOf(m Method) string {
+func discardOf(m subject.Method) string {
 	n := len(m.Returns)
 	if n == 0 {
 		return ""
@@ -309,7 +310,7 @@ func discardOf(m Method) string {
 // errBindOf binds the error a body inspects, and is empty where the
 // error is the only result — which the packs return directly rather
 // than binding to a local used once on the next line.
-func errBindOf(m Method) string {
+func errBindOf(m subject.Method) string {
 	values := len(m.ValueReturns())
 	if values == 0 {
 		return ""
@@ -399,7 +400,7 @@ func drawsFixture(checks []*CheckEmit) bool {
 
 // valueBindOf binds a call's results where the body judges the first of
 // them: `got, err :=`, one blank per result between.
-func valueBindOf(m Method) string {
+func valueBindOf(m subject.Method) string {
 	values := len(m.ValueReturns())
 	if values == 0 {
 		return ""
@@ -412,7 +413,7 @@ func valueBindOf(m Method) string {
 //
 // Empty where the method answers nothing: no body judges a result that
 // does not exist, and the count would otherwise go negative.
-func valueDiscardOf(m Method) string {
+func valueDiscardOf(m subject.Method) string {
 	if len(m.Returns) < 2 {
 		return ""
 	}
@@ -423,7 +424,7 @@ func valueDiscardOf(m Method) string {
 // names it through.
 //
 // The annotator hands the parameter back QUALIFIED — which is right for
-// identity and wrong for a call site, as [Method.MixinParam] says — so
+// identity and wrong for a call site, as [subject.Method.MixinParam] says — so
 // the qualifier is split back off and handed to the backend, which is
 // what registers the import. A bare name means the interface's own
 // package, which is where the declaration wrote it.
@@ -437,7 +438,7 @@ func sentinelRef(iface Iface, declared string) *sdk.Expr {
 
 // errStmtOf binds the error inside an if-statement's init, where a body
 // judges it in the condition rather than after it.
-func errStmtOf(m Method) string {
+func errStmtOf(m subject.Method) string {
 	return strings.Repeat("_, ", len(m.ValueReturns())) + "err :="
 }
 
@@ -449,7 +450,7 @@ func errStmtOf(m Method) string {
 // failed has been handed state anyway. The two bodies render
 // identically, so only a subject that leaks a later slot tells them
 // apart — which is why this list exists rather than a single shape.
-func zeroSlotsOf(m Method) []zeroSlot {
+func zeroSlotsOf(m subject.Method) []zeroSlot {
 	values := m.ValueReturns()
 	out := make([]zeroSlot, 0, len(values))
 	for i, ret := range values {
@@ -517,7 +518,7 @@ func zeroIsNil(src *node.TypeRef) bool {
 // Distinct from [valueBindOf], which blanks past the first: the seeded
 // probes judge one answer against one seeded value, and binding a slot
 // they never read would not compile.
-func zeroBindOf(m Method, withErr bool) string {
+func zeroBindOf(m subject.Method, withErr bool) string {
 	slots := zeroSlotsOf(m)
 	if len(slots) == 0 {
 		return ""
@@ -549,7 +550,7 @@ func zeroBindOf(m Method, withErr bool) string {
 // return then answers every slot's zero, whatever the callback's
 // signature, without this generator having to name a type it may not be
 // able to spell.
-func hookSignature(register Method) ([]*sdk.EmitParam, []*sdk.EmitReturn) {
+func hookSignature(register subject.Method) ([]*sdk.EmitParam, []*sdk.EmitReturn) {
 	fn := callbackParam(register)
 	if fn == nil {
 		return nil, nil
@@ -569,7 +570,7 @@ func hookSignature(register Method) ([]*sdk.EmitParam, []*sdk.EmitReturn) {
 }
 
 // firstValueSource is the result a zero-on-error body judges.
-func firstValueSource(m Method) *node.TypeRef {
+func firstValueSource(m subject.Method) *node.TypeRef {
 	values := m.ValueReturns()
 	if len(values) == 0 {
 		return nil

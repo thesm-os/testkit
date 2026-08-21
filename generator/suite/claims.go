@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/node"
 
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -32,7 +33,7 @@ const (
 // "survives a call"; one → "survives a call with a derived <noun>";
 // several → "survives a call with derived inputs" — "seeded"
 // replacing "derived" where the interface's corpus is seeded.
-func SmokeClaim(m Method, seeded bool) string {
+func SmokeClaim(m subject.Method, seeded bool) string {
 	supply := supplyDerived
 	if seeded {
 		supply = supplySeeded
@@ -52,13 +53,13 @@ func SmokeClaim(m Method, seeded bool) string {
 // survives and the handle it opens closes. The produced noun is the
 // contract's own name — the vocabulary's one home for what the
 // handle is called.
-func OpenerSmokeClaim(m Method, produced string) string {
+func OpenerSmokeClaim(m subject.Method, produced string) string {
 	return m.Name + " survives a call and the " + produced + " it opens closes"
 }
 
 // BuiltSmokeClaim words the smoke of a method whose input its own
 // sibling mints: the call survives an input that sibling made.
-func BuiltSmokeClaim(m Method, builder string) string {
+func BuiltSmokeClaim(m subject.Method, builder string) string {
 	return m.Name + " survives a call with an input " + builder + " made"
 }
 
@@ -66,22 +67,22 @@ func BuiltSmokeClaim(m Method, builder string) string {
 // it returns was borrowed from the producing sibling. "resource" is
 // the corpus's word for the borrowed thing; a second borrowing domain
 // argues for deriving it before a rule invents one.
-func BorrowSmokeClaim(m Method) string {
+func BorrowSmokeClaim(m subject.Method) string {
 	return m.Name + " survives returning a borrowed resource"
 }
 
 // CancelClaim words the cancel family.
-func CancelClaim(m Method) string {
+func CancelClaim(m subject.Method) string {
 	return m.Name + " reports a cancelled context as cancelled"
 }
 
 // DeadlineClaim words the deadline family.
-func DeadlineClaim(m Method) string {
+func DeadlineClaim(m subject.Method) string {
 	return m.Name + " reports an expired deadline as exceeded"
 }
 
 // NilCtxClaim words the nilcontext family.
-func NilCtxClaim(m Method) string {
+func NilCtxClaim(m subject.Method) string {
 	return m.Name + " returns an error rather than panicking on a nil context"
 }
 
@@ -91,7 +92,7 @@ func NilCtxClaim(m Method) string {
 // tests build without a source type, since a shape nobody declared has
 // no name to speak. Empty for a method with no value result, which the
 // deriver gates on before wording anything.
-func ZeroOnErrorClaim(m Method) string {
+func ZeroOnErrorClaim(m subject.Method) string {
 	values := m.ValueReturns()
 	if len(values) == 0 {
 		return ""
@@ -145,7 +146,7 @@ const (
 // judgment about the same type: a claim promising "the zero Value"
 // beside a body comparing against nil is the drift a single inventory
 // exists to prevent.
-func ZeroShapeOf(m Method) ZeroShape {
+func ZeroShapeOf(m subject.Method) ZeroShape {
 	values := m.ValueReturns()
 	if len(values) == 0 {
 		return ZeroDeclared
@@ -194,7 +195,7 @@ func zeroNouns(values []golang.Return) string {
 
 // PartitionClaim words the isolation claim, naming the axis so a
 // reader knows which parameter the boundary is drawn along.
-func PartitionClaim(m Method, axis string) string {
+func PartitionClaim(m subject.Method, axis string) string {
 	return m.Name + " keeps one " + axis + " out of another"
 }
 
@@ -214,7 +215,7 @@ func PartitionRequirement(axis string) string {
 //
 // Names both members, because the claim is about the relationship and a
 // reader deciding whether it holds needs to know where to look.
-func SideEffectClaim(m Method, observer string) string {
+func SideEffectClaim(m subject.Method, observer string) string {
 	return m.Name + " changes what " + observer + " observes"
 }
 
@@ -235,104 +236,104 @@ func SideEffectRequirement(observer string) string {
 // what the double does, not what the claim wanted.
 
 // PanicsClause words the smoke family's double.
-func PanicsClause(m Method) string { return m.Name + " panics" }
+func PanicsClause(m subject.Method) string { return m.Name + " panics" }
 
 // SwallowsContextClause words the cancel and deadline families' double.
-func SwallowsContextClause(m Method) string {
+func SwallowsContextClause(m subject.Method) string {
 	return m.Name + " ignores the context it is handed"
 }
 
 // ForgivesNilContextClause words the nilcontext claim's double, whose
 // stronger arm — returns an error — is broken by answering instead.
-func ForgivesNilContextClause(m Method) string {
+func ForgivesNilContextClause(m subject.Method) string {
 	return m.Name + " forgives a nil context and answers"
 }
 
 // DropsWriteClause words the double that acknowledges a write and keeps
 // none of it.
-func DropsWriteClause(m Method) string {
+func DropsWriteClause(m subject.Method) string {
 	return m.Name + " reports success and keeps nothing"
 }
 
 // AnswersMissClause words the double that answers for an input nothing
 // supplied — the miss claim's, in both its arms.
-func AnswersMissClause(m Method) string {
+func AnswersMissClause(m subject.Method) string {
 	return m.Name + " answers for an input nothing wrote"
 }
 
 // EchoesBesideErrorClause words the zero-on-error family's double.
-func EchoesBesideErrorClause(m Method) string {
+func EchoesBesideErrorClause(m subject.Method) string {
 	return m.Name + " answers a believable value beside its error"
 }
 
 // ForgivesNilArgumentClause words the double that takes the nil and
 // carries on.
-func ForgivesNilArgumentClause(m Method) string {
+func ForgivesNilArgumentClause(m subject.Method) string {
 	return m.Name + " accepts a nil argument and answers"
 }
 
 // AnswersEarlyClause words the double that answers before its
 // predecessor has run.
-func AnswersEarlyClause(m Method) string {
+func AnswersEarlyClause(m subject.Method) string {
 	return m.Name + " answers before its predecessor has run"
 }
 
 // AnswersTheZeroClause words the double that succeeds and hands back
 // the zero.
-func AnswersTheZeroClause(m Method) string {
+func AnswersTheZeroClause(m subject.Method) string {
 	return m.Name + " reports success and answers the zero"
 }
 
 // LandsRegardlessClause words the double that writes whatever its own
 // predicate answered.
-func LandsRegardlessClause(m Method, match string) string {
+func LandsRegardlessClause(m subject.Method, match string) string {
 	return m.Name + " lands whatever " + match + " says"
 }
 
 // AnswersNoStreamClause words the double that reports success and hands
 // back nothing to receive on.
-func AnswersNoStreamClause(sub Method) string {
+func AnswersNoStreamClause(sub subject.Method) string {
 	return sub.Name + " reports success and answers no stream"
 }
 
 // AnswersPastTheEndClause words the double that answers for a position
 // the collection does not hold.
-func AnswersPastTheEndClause(m Method) string {
+func AnswersPastTheEndClause(m subject.Method) string {
 	return m.Name + " answers for a position past the end"
 }
 
 // SkipsHooksClause words the double that does its work without running
 // what was registered.
-func SkipsHooksClause(m Method) string {
+func SkipsHooksClause(m subject.Method) string {
 	return m.Name + " reports success and runs no hook"
 }
 
 // AnswersTheZeroForEverySeedClause words the double that answers the
 // zero for every key the run seeded.
-func AnswersTheZeroForEverySeedClause(m Method) string {
+func AnswersTheZeroForEverySeedClause(m subject.Method) string {
 	return m.Name + " answers the zero for every key the run seeded"
 }
 
 // CountsNothingClause words the double that reports an empty aggregate
 // over a seeded subject.
-func CountsNothingClause(m Method) string {
+func CountsNothingClause(m subject.Method) string {
 	return m.Name + " reports no entries however many the run seeded"
 }
 
 // TakesDuplicateClause words the double that accepts a write of what is
 // already there.
-func TakesDuplicateClause(m Method) string {
+func TakesDuplicateClause(m subject.Method) string {
 	return m.Name + " accepts a duplicate as though it were new"
 }
 
 // RefusesEverythingClause words the double that reports an error for
 // every call.
-func RefusesEverythingClause(m Method) string {
+func RefusesEverythingClause(m subject.Method) string {
 	return m.Name + " refuses everything it is handed"
 }
 
 // RepeatFailsClause words the idempotent claim's double.
-func RepeatFailsClause(m Method) string {
+func RepeatFailsClause(m subject.Method) string {
 	return m.Name + " fails on the second call"
 }
 
@@ -351,7 +352,7 @@ func localName(ref string) string {
 
 // NilArgumentClaim words the nil-safety claim about a value parameter,
 // naming the argument so a reader knows which slot the nil goes in.
-func NilArgumentClaim(m Method, arg golang.Param) string {
+func NilArgumentClaim(m subject.Method, arg golang.Param) string {
 	return m.Name + " reports a nil " + drawNoun(arg) + " rather than panicking"
 }
 
@@ -362,7 +363,7 @@ func NilArgumentClaim(m Method, arg golang.Param) string {
 // reports — because a reader deciding whether the claim holds has to
 // know which error counts as the refusal. A qualified sentinel speaks
 // its bare name, as [MissClaim]'s does.
-func OrderAfterClaim(m Method, predecessor, sentinel string) string {
+func OrderAfterClaim(m subject.Method, predecessor, sentinel string) string {
 	return m.Name + " reports " + localName(sentinel) + " until " + predecessor + " has run"
 }
 
@@ -375,7 +376,7 @@ func OrderAfterClaim(m Method, predecessor, sentinel string) string {
 // a suite that invented an invalid value would be guessing at the rule
 // under test. The screening's other half — that a refused value left
 // nothing behind — needs a reader the directive names no parameter for.
-func ValidatesClaim(m Method, validator string) string {
+func ValidatesClaim(m subject.Method, validator string) string {
 	return m.Name + " agrees with " + validator + " about the values this run draws"
 }
 
@@ -393,7 +394,7 @@ func ValidatesRequirement(validator string) string {
 // subject's business — the shape exists BECAUSE stores assign stamps —
 // and a claim picking either would fail the other. The zero is the one
 // answer no such write may give.
-func AnswerClaim(m Method) string {
+func AnswerClaim(m subject.Method) string {
 	return m.Name + " answers the state it kept rather than the zero"
 }
 
@@ -412,14 +413,14 @@ func SubscriberRequirement() string { return "answer a stream a caller can recei
 // That an append ARRIVES is a claim about a wait, which needs a clock;
 // that a subscriber answered something to wait on needs nothing but the
 // call.
-func SubscriberClaim(sub Method) string {
+func SubscriberClaim(sub subject.Method) string {
 	return sub.Name + " answers a stream a caller can receive on"
 }
 
 // ConflictClaim words the conditional write's refusal, naming the
 // sentinel so a reader knows which error counts as the refusal. A
 // qualified one speaks its bare name, as [MissClaim]'s does.
-func ConflictClaim(m Method, conflict string) string {
+func ConflictClaim(m subject.Method, conflict string) string {
 	return "a second " + m.Name + " of what is already there reports " + localName(conflict)
 }
 
@@ -429,7 +430,7 @@ func ConflictClaim(m Method, conflict string) string {
 // Narrower than the contract, for the reason [ValidatesClaim] is: a
 // suite has no value it knows the predicate rejects, so what it can
 // state is that the two answers line up.
-func MatchClaim(m Method, match string) string {
+func MatchClaim(m subject.Method, match string) string {
 	return m.Name + " agrees with " + match + " about the values this run draws"
 }
 
@@ -457,7 +458,7 @@ func BecausePastTheEnd(sizer string) string {
 
 // HooksClaim words the callback claim, naming the registrar so a reader
 // knows where a hook is installed.
-func HooksClaim(m Method, register string) string {
+func HooksClaim(m subject.Method, register string) string {
 	return m.Name + " runs what " + register + " registered"
 }
 
@@ -469,7 +470,7 @@ func HooksRequirement(register string) string {
 
 // BoundClaim words the positional read's edge, naming the sizer so a
 // reader knows where the bound came from.
-func BoundClaim(m Method, sizer string) string {
+func BoundClaim(m subject.Method, sizer string) string {
 	return m.Name + " reports no element at the size " + sizer + " reports"
 }
 
@@ -493,7 +494,7 @@ func BoundClaim(m Method, sizer string) string {
 //
 // Stating that the state is unchanged needs a reader, and that is the
 // model tier's to make.
-func IdempotentClaim(m Method) string {
+func IdempotentClaim(m subject.Method) string {
 	return "a second " + m.Name + " after a clean one is accepted"
 }
 
@@ -511,7 +512,7 @@ func IdempotentClaim(m Method) string {
 //
 // The mirror of [IdempotentClaim] over the same two calls: there the
 // second must change nothing, here it must be taken.
-func AccumulatesClaim(m Method) string {
+func AccumulatesClaim(m subject.Method) string {
 	return "a second " + m.Name + " is accepted rather than refused as a repeat"
 }
 
@@ -520,7 +521,7 @@ func AccumulatesClaim(m Method) string {
 // otherwise. A qualified sentinel ("kv.ErrNotFound") speaks its bare
 // name — claims read as prose, and the qualifier is the generated
 // code's concern.
-func MissClaim(m Method, sentinel, verb string) string {
+func MissClaim(m subject.Method, sentinel, verb string) string {
 	noun := missNoun(m)
 	if sentinel == "" {
 		return m.Name + " reports zero for a " + noun + " nothing has " + verb
@@ -532,12 +533,12 @@ func MissClaim(m Method, sentinel, verb string) string {
 }
 
 // HitClaim words the seeded hit.
-func HitClaim(m Method) string {
+func HitClaim(m subject.Method) string {
 	return m.Name + " returns the seeded value for every seeded " + missNoun(m)
 }
 
 // CountClaim words the seeded aggregator.
-func CountClaim(m Method) string {
+func CountClaim(m subject.Method) string {
 	return m.Name + " equals the number of seeded entries"
 }
 
@@ -593,7 +594,7 @@ func DifferentialDrainClaim(sequence string) string {
 }
 
 // missNoun is the word the reader claims call their probed input.
-func missNoun(m Method) string {
+func missNoun(m subject.Method) string {
 	if draws := m.CallArgs(); len(draws) > 0 {
 		return drawNoun(draws[0])
 	}

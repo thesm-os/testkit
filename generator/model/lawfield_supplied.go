@@ -10,8 +10,9 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // suppliedFieldOf builds a consumer-supplied door: the closure type spelled
@@ -20,7 +21,7 @@ import (
 // cannot spell keeps the refusal, naming what is missing.
 func suppliedFieldOf(
 	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
-	field *LawField, m, keyed *suite.Method,
+	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	shapes, known := suppliedShapes[r.Law]
 	sh, mapped := shapes[f.Name]
@@ -115,7 +116,7 @@ var suppliedShapes = map[string]map[string]string{
 // projection the reference keys on; where either is absent the field stays
 // omitted — the law then checks read purity alone, the claim's floor.
 func disturbFieldOf(
-	b *Bindings, harness *suite.Contract, field *LawField, m, keyed *suite.Method,
+	b *Bindings, harness *suite.Contract, field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	writer, reason := roleMethod(b, harness, "family.writer", m, keyed)
 	if reason != "" || !b.UsesValues() || !b.UsesKeys() || b.Reference.KeyField == "" {
@@ -135,7 +136,7 @@ func disturbFieldOf(
 // member to the shape the law's field declares.
 func memberFieldOf(
 	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
-	field *LawField, m, keyed *suite.Method,
+	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	watch, reason := ruleFieldRole(b, harness, r, fWatch, m, keyed)
 	if reason != "" {
@@ -165,7 +166,7 @@ func memberFieldOf(
 
 func drainFieldOf(
 	b *Bindings, harness *suite.Contract, f tiers.Field,
-	field *LawField, m, keyed *suite.Method,
+	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	role, reason := roleMethod(b, harness, "publisher.subscribe", m, keyed)
 	if reason != "" {

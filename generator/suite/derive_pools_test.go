@@ -17,6 +17,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/defaults"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/roles"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -44,7 +45,7 @@ type poolField struct {
 // poolFixture builds a request struct carrying the declared stamps
 // through the real annotators, and answers the resolver plus a
 // method drawing the struct.
-func poolFixture(t *testing.T, fields ...poolField) (golang.Resolver, []Method) {
+func poolFixture(t *testing.T, fields ...poolField) (golang.Resolver, []subject.Method) {
 	t.Helper()
 	store := storefixture.New().
 		Package("kv", "example.com/kv").
@@ -71,11 +72,11 @@ func poolFixture(t *testing.T, fields ...poolField) (golang.Resolver, []Method) 
 	for _, s := range store.Nodes().Structs().Items() {
 		resolver[s.Name] = s
 	}
-	method := Method{Sig: &golang.Sig{
+	method := subject.Method{Sig: &golang.Sig{
 		Name:   "Put",
 		Params: []golang.Param{{Name: "req", Source: storefixture.Named("PutRequest")}},
 	}}
-	return resolver, []Method{method}
+	return resolver, []subject.Method{method}
 }
 
 func TestPoolsDeriveFromRoledDefaults(t *testing.T) {
@@ -112,7 +113,7 @@ func TestPoolsShareOneStructAcrossMethods(t *testing.T) {
 	t.Parallel()
 
 	r, methods := poolFixture(t, poolField{"Key", "key", `"test-key"`})
-	second := Method{Sig: &golang.Sig{
+	second := subject.Method{Sig: &golang.Sig{
 		Name:   "Delete",
 		Params: []golang.Param{{Name: "req", Source: storefixture.Named("PutRequest")}},
 	}}

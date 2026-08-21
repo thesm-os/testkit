@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -204,7 +205,7 @@ var keyFieldConventions = []string{"ID", fieldKey}
 // Bindings is the value queued once per interface carrying the directive.
 type Bindings struct {
 	sdk.BaseEmit
-	suite.Subject
+	subject.Subject
 
 	// Witnesses are the concrete types a generic interface's property runs
 	// at, in declaration order — empty in the ordinary non-generic case. The
@@ -333,7 +334,7 @@ type Bindings struct {
 	// store's key domain, and contractKeyedRoles the role methods that draw
 	// it — a lease's acquire and release take the key, and a reader-less
 	// keyed contract would otherwise never declare the pool its laws draw.
-	contractKeySrc     *suite.Method
+	contractKeySrc     *subject.Method
 	contractKeyedRoles map[string]bool
 
 	// concAcquireName and concReleaseName are the lease leg's role methods,
@@ -558,13 +559,13 @@ func (b *Bindings) dropAction(method, reason string) {
 // meta read for the sites that distinguish absent from empty.
 //
 //nolint:unparam // mirrors valueQOf; callers today read only the spelling
-func (b *Bindings) keyQOf(m *suite.Method) (string, bool) {
+func (b *Bindings) keyQOf(m *subject.Method) (string, bool) {
 	q, stamped := shape.MetaKeyType.Get(m.Source.Meta())
 	return b.substQ(q), stamped
 }
 
 // valueQOf is [Bindings.keyQOf] for the value-type stamp.
-func (b *Bindings) valueQOf(m *suite.Method) (string, bool) {
+func (b *Bindings) valueQOf(m *subject.Method) (string, bool) {
 	q, stamped := shape.MetaValueType.Get(m.Source.Meta())
 	return b.substQ(q), stamped
 }

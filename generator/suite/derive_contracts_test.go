@@ -16,13 +16,14 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
 // openerMethod is the scan Log's producing shape: Scan(ctx) answers a
 // handle, and the cursor contract's open role names Close beside it.
 // withClose=false drops the partner stamp, the schema-gap arm.
-func openerMethod(withClose bool) Method {
+func openerMethod(withClose bool) subject.Method {
 	bag := sdk.NewBag()
 	shape.MetaContracts.Set(bag, []string{ContractCursor}, "test")
 	shape.ContractRoleKey(ContractCursor).Set(bag, ContractCursorOpen, "test")
@@ -30,7 +31,7 @@ func openerMethod(withClose bool) Method {
 		shape.ContractPartnerKey(ContractCursor, ContractCursorClose).Set(bag, "Close", "test")
 	}
 	roles, partners, params := contractDataOf(bag)
-	return Method{
+	return subject.Method{
 		Sig: &golang.Sig{
 			Name:   "Scan",
 			Params: []golang.Param{{Name: "ctx", Source: storefixture.PkgNamed("context", "Context")}},
@@ -40,16 +41,16 @@ func openerMethod(withClose bool) Method {
 			},
 		},
 		Contracts:        shape.Contracts(bag),
-		contractRoles:    roles,
-		contractPartners: partners,
-		contractParams:   params,
+		ContractRoles:    roles,
+		ContractPartners: partners,
+		ContractParams:   params,
 	}
 }
 
 func TestOpenerSmokeClosesWhatItOpens(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{openerMethod(true)}}
+	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []subject.Method{openerMethod(true)}}
 	plans, refusals := Signature{}.Derive(iface)
 	testkit.Len(t, refusals, 0, "the opener shape refuses nothing")
 
@@ -69,7 +70,7 @@ func TestOpenerSmokeClosesWhatItOpens(t *testing.T) {
 func TestOpenerWithoutClosePartnerKeepsThePlainSmoke(t *testing.T) {
 	t.Parallel()
 
-	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []Method{openerMethod(false)}}
+	iface := Iface{Name: "Log", Token: "log", Qualifier: "log", Methods: []subject.Method{openerMethod(false)}}
 	plans, _ := Signature{}.Derive(iface)
 	plain := smokeOf(t, plans)
 	testkit.Equal(t, plain.Claim, "Scan survives a call",
@@ -81,23 +82,23 @@ func TestOpenerWithoutClosePartnerKeepsThePlainSmoke(t *testing.T) {
 
 // poolRoleMethod stamps one method into the pool contract at a role,
 // through the real contract keys.
-func poolRoleMethod(sig *golang.Sig, role string, argFields ...string) Method {
+func poolRoleMethod(sig *golang.Sig, role string, argFields ...string) subject.Method {
 	bag := sdk.NewBag()
 	shape.MetaContracts.Set(bag, []string{ContractPool}, "test")
 	shape.ContractRoleKey(ContractPool).Set(bag, role, "test")
 	roles, partners, params := contractDataOf(bag)
-	return Method{
+	return subject.Method{
 		Sig:              sig,
 		ArgFields:        argFields,
 		Contracts:        shape.Contracts(bag),
-		contractRoles:    roles,
-		contractPartners: partners,
-		contractParams:   params,
+		ContractRoles:    roles,
+		ContractPartners: partners,
+		ContractParams:   params,
 	}
 }
 
 // poolPair is the borrow shape: Get answers Conn, Put returns it.
-func poolPair() []Method {
+func poolPair() []subject.Method {
 	ctx := golang.Param{Name: "ctx", Source: storefixture.PkgNamed("context", "Context")}
 	get := poolRoleMethod(&golang.Sig{
 		Name:    "Get",
@@ -109,7 +110,7 @@ func poolPair() []Method {
 		Params:  []golang.Param{ctx, {Name: "c", Source: storefixture.Named("Conn")}},
 		Returns: []golang.Return{{Error: true}},
 	}, ContractPoolPut, "C")
-	return []Method{get, put}
+	return []subject.Method{get, put}
 }
 
 func TestBorrowSmokeReturnsWhatItBorrows(t *testing.T) {

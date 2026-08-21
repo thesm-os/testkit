@@ -14,7 +14,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestSelectRequiresEveryClassification holds the AND in [tiers.Rule.Needs].

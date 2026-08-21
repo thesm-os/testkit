@@ -12,7 +12,7 @@ import (
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
 	"go.thesmos.sh/testkit/generator/defaults"
-	"go.thesmos.sh/testkit/generator/source"
+	"go.thesmos.sh/testkit/generator/internal/source"
 )
 
 // Name is the plugin's stable identifier.

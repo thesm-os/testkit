@@ -10,8 +10,9 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Action is one method, driven and compared.
@@ -102,7 +103,7 @@ type ActionArg struct {
 }
 
 // actionOf builds one method's action, or says why there is none.
-func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *suite.Method) (*Action, string) {
+func actionOf(ctx *sdk.GeneratorContext, b *Bindings, m *subject.Method) (*Action, string) {
 	name := pseudoShape(m)
 	if name == "" {
 		return nil, "the annotator classified no shape for it"
@@ -334,7 +335,7 @@ func appendActionOf(b *Bindings, harness *suite.Contract) (*Action, sdk.Ref) {
 // pseudoShape is the detector's spelling, refined by the one fact the
 // annotator does not state: an aggregator returning a slice is a collector,
 // which drains rather than compares.
-func pseudoShape(m *suite.Method) string {
+func pseudoShape(m *subject.Method) string {
 	name := shape.Get(m.Source.Meta())
 	if name == shapeAggregator && returnsSlice(m) {
 		return tiers.ShapeCollector
@@ -344,7 +345,7 @@ func pseudoShape(m *suite.Method) string {
 
 // collectorElem lifts the collector's element type into a renderable
 // reference.
-func collectorElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
+func collectorElem(b *Bindings, m *subject.Method) (sdk.Ref, string) {
 	elem := shape.GoSliceElem(m.Returns[0].Source)
 	ref, err := golang.RefForQualified(shape.QName(elem), b.IfaceName)
 	if err != nil {

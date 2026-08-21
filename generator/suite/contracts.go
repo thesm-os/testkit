@@ -4,7 +4,6 @@
 package suite
 
 import (
-	"go.thesmos.sh/eidos/lang/golang"
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/chain"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/contracts/cursor"
@@ -135,36 +134,4 @@ func contractDataOf(bag *sdk.Bag) (roles, partners, params map[string]string) {
 	}
 
 	return roles, partners, params
-}
-
-// HasContractRole reports whether the annotator stamped this method as filling
-// the named role of the named contract.
-//
-// Both halves, because a contract is a protocol rather than a property: an
-// `outbox` check written against the subscriber would call the wrong method,
-// and the role is the only thing that distinguishes the two members.
-func (m Method) HasContractRole(contract, role string) bool {
-	return m.contractRoles[contract] == role
-}
-
-// ContractPartner returns the local identifier a contract's role-keyed partner
-// names, empty where the directive named none.
-//
-// Local, for the reason [Method.MixinParam] gives: the resolver rewrites a
-// partner into a qualified name so it is unambiguous across packages, and a
-// generated call is on a subject the check already holds.
-func (m Method) ContractPartner(contract, role string) string {
-	return golang.LocalName(m.contractPartners[contract+"."+role])
-}
-
-// ContractParam returns a contract's KV argument, and whether one was written.
-//
-// Verbatim, unlike [Method.ContractPartner]: the resolver does not rewrite a
-// param, because a param names a value rather than a callable and there is
-// nothing to resolve it against. One that happens to name a package-level
-// sentinel is qualified by whoever emits it — the same treatment
-// [Method.MixinParam] gets.
-func (m Method) ContractParam(contract, param string) (string, bool) {
-	v, ok := m.contractParams[contract+"."+param]
-	return v, ok
 }

@@ -11,8 +11,8 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 func TestValueOpField(t *testing.T) {
@@ -21,7 +21,7 @@ func TestValueOpField(t *testing.T) {
 	errRet := res(namedRef("error"))
 	keysPool := func() *Bindings {
 		return &Bindings{
-			Subject: suite.Subject{IfaceName: "Mixed"},
+			Subject: subject.Subject{IfaceName: "Mixed"},
 			Keys:    Pool{Field: fieldKey, Q: qStr},
 			Actions: []*Action{{Pool: poolKeys}},
 		}
@@ -29,7 +29,7 @@ func TestValueOpField(t *testing.T) {
 
 	t.Run("a single-value write binds and a chatty one refuses", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		field, reason := bindField(b, lawid.CommutativeWrite, "Write",
 			projected("Apply", []golang.Param{arg("ctx", ctxRef()), arg("d", namedRef("Delta"))},
 				[]golang.Return{errRet}))
@@ -64,7 +64,7 @@ func TestValueOpField(t *testing.T) {
 			}, []golang.Return{res(namedRef(qStr)), errRet}), "", qStr, qStr))
 		testkit.Assert(t, reason).Contains("more than an error", "an anchored write answers its error alone")
 
-		_, reason = bindField(&Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}, lawid.IdempotentWrite, "Write",
+		_, reason = bindField(&Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}, lawid.IdempotentWrite, "Write",
 			projected("Set", []golang.Param{
 				arg("ctx", ctxRef()), arg("a", namedRef(qStr)),
 				arg("b", namedRef(qStr)), arg("c", namedRef(qStr)),
@@ -78,7 +78,7 @@ func TestGeneratorFieldArms(t *testing.T) {
 
 	errRet := res(namedRef("error"))
 	pooled := &Bindings{
-		Subject: suite.Subject{IfaceName: "Mixed"},
+		Subject: subject.Subject{IfaceName: "Mixed"},
 		Keys:    Pool{Field: fieldKey, Q: qStr},
 		Values:  Pool{Field: "Body", Q: "string"},
 		Actions: []*Action{{Pool: poolKeys}, {Pool: poolValues}},
@@ -87,7 +87,7 @@ func TestGeneratorFieldArms(t *testing.T) {
 		[]golang.Param{arg("ctx", ctxRef()), arg("in", namedRef(qStr))},
 		[]golang.Return{res(namedRef(qStr)), errRet})
 
-	genField := func(b *Bindings, law, from string, m *suite.Method, fields ...tiers.Field) (*LawField, string) {
+	genField := func(b *Bindings, law, from string, m *subject.Method, fields ...tiers.Field) (*LawField, string) {
 		r := tiers.Rule{Law: law, Fields: append(fields, tiers.Field{
 			Name: "Pool", Kind: tiers.KindGenerator, From: from,
 		})}
@@ -101,7 +101,7 @@ func TestGeneratorFieldArms(t *testing.T) {
 		field, reason = genField(pooled, lawid.Cacheable, "values", nil)
 		testkit.True(t, reason == "" && field.Pool == "values", "the values pool is shared: "+reason)
 
-		bare := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		bare := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason = genField(bare, lawid.Cacheable, "keys", nil)
 		testkit.Assert(t, reason).Contains("no action here declares", "an undeclared pool refuses")
 		_, reason = genField(bare, lawid.Cacheable, "values", nil)
@@ -110,7 +110,7 @@ func TestGeneratorFieldArms(t *testing.T) {
 
 	t.Run("the law pools declare themselves once, at one type", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		roleField := tiers.Field{Name: "Call", Kind: tiers.KindRole, From: "self"}
 
 		field, reason := genField(b, lawid.TotalOver, "inputs", classify, roleField)
@@ -146,14 +146,14 @@ func TestGeneratorFieldArms(t *testing.T) {
 func TestConstFieldArms(t *testing.T) {
 	t.Parallel()
 
-	constField := func(law, name, from string, optional bool, m *suite.Method) (*LawField, string) {
+	constField := func(law, name, from string, optional bool, m *subject.Method) (*LawField, string) {
 		r := tiers.Rule{Law: law, Fields: []tiers.Field{
 			{Name: name, Kind: tiers.KindConstant, From: from, Optional: optional},
 		}}
-		return lawFieldOf(&Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}, nil, r, r.Fields[0], m, nil)
+		return lawFieldOf(&Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}, nil, r, r.Fields[0], m, nil)
 	}
 
-	stamped := func(key, value string) *suite.Method {
+	stamped := func(key, value string) *subject.Method {
 		m := unstamped()
 		sdk.EnsureKey(key, sdk.StringParser).Set(m.Source.EnsureMeta(), value, "test")
 		return m
@@ -220,7 +220,7 @@ func TestClockConstAndTypeArms(t *testing.T) {
 		r := tiers.Rule{Law: lawid.TTLExpiry, Fields: []tiers.Field{
 			{Name: "TTL", Kind: tiers.KindConstant, From: "shape.mixin.ttl.ttl"},
 		}}
-		field, reason := lawFieldOf(&Bindings{Subject: suite.Subject{IfaceName: "Mixed"}},
+		field, reason := lawFieldOf(&Bindings{Subject: subject.Subject{IfaceName: "Mixed"}},
 			nil, r, r.Fields[0], m, nil)
 		testkit.True(t, reason == "", "a duration stamp binds: "+reason)
 		testkit.Equal(t, field.Lit, "5000000000", "as nanoseconds, assignable without an import")
@@ -228,7 +228,7 @@ func TestClockConstAndTypeArms(t *testing.T) {
 
 	t.Run("a triple-returning role instantiates at its first result", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		r := roleRule(lawid.CursorNextAfterClose, "Next")
 		next := projected("Next", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef(qStr)), res(namedRef("bool")), errRet})
@@ -245,7 +245,7 @@ func TestClockConstAndTypeArms(t *testing.T) {
 	t.Run("a value-instantiating row holds the reader to the pool's value", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
-			Subject: suite.Subject{IfaceName: "Mixed"},
+			Subject: subject.Subject{IfaceName: "Mixed"},
 			Keys:    Pool{Q: qStr},
 			Values:  Pool{Q: qStr, Pin: fieldKey},
 		}
@@ -286,7 +286,7 @@ func TestPublisherModeConstant(t *testing.T) {
 		m := unstamped()
 		sdk.EnsureKey("shape.contract.publisher.param.mode", sdk.StringParser).
 			Set(m.Source.EnsureMeta(), value, "test")
-		return lawFieldOf(&Bindings{Subject: suite.Subject{IfaceName: "Contract"}}, nil, r, r.Fields[0], m, nil)
+		return lawFieldOf(&Bindings{Subject: subject.Subject{IfaceName: "Contract"}}, nil, r, r.Fields[0], m, nil)
 	}
 
 	field, reason := modeField(lawid.PublisherAtLeastOnce, "at-least-once")

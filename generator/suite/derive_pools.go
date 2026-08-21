@@ -11,6 +11,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/generator/defaults"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/roles"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -39,7 +40,7 @@ const DeriverPools DeriverName = "pools"
 // qualified default (a symbol, not a literal the transforms can
 // splice), or a member a transform refuses each name the declaration
 // and the consumer action that closes the gap.
-func poolsOf(r golang.Resolver, methods []Method) ([]projection.PoolPlan, []Refusal) {
+func poolsOf(r golang.Resolver, methods []subject.Method) ([]projection.PoolPlan, []Refusal) {
 	var pools []projection.PoolPlan
 	var refusals []Refusal
 	var seen []string

@@ -9,7 +9,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestBindingFor pins both answers: a filled row comes back whole, and a law

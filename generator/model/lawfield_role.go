@@ -12,14 +12,15 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // roleFieldOf fills a closure field per its law's transcribed shape.
 func roleFieldOf(
 	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field,
-	field *LawField, m, keyed *suite.Method,
+	field *LawField, m, keyed *subject.Method,
 ) (*LawField, string) {
 	role, reason := roleMethod(b, harness, f.From, m, keyed)
 	if reason != "" {
@@ -490,8 +491,8 @@ func roleMethod(
 	b *Bindings,
 	harness *suite.Contract,
 	from string,
-	m, keyed *suite.Method,
-) (*suite.Method, string) {
+	m, keyed *subject.Method,
+) (*subject.Method, string) {
 	switch from {
 	case fromSelf:
 		return m, ""
@@ -502,7 +503,7 @@ func roleMethod(
 		return keyed, ""
 	case "family.writer":
 		if harness != nil {
-			var fallback *suite.Method
+			var fallback *subject.Method
 			for i := range harness.Methods {
 				candidate := &harness.Methods[i]
 				if pseudoShape(candidate) != shapeWriter {
@@ -619,7 +620,7 @@ func roleMethod(
 // `(ctx, K) (V, error)` at the pools' own types, so a role of another shape —
 // or of the right shape over other types — renders a closure that fails to
 // compile in whichever package arms it.
-func keyedReadMismatch(b *Bindings, fieldName string, role *suite.Method, strictValue bool) string {
+func keyedReadMismatch(b *Bindings, fieldName string, role *subject.Method, strictValue bool) string {
 	keyQ, _ := b.keyQOf(role)
 	valueQ, _ := b.valueQOf(role)
 	if pseudoShape(role) != shapeReader {

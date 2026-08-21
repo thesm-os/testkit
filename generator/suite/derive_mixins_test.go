@@ -14,6 +14,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // The refusals, one case per branch.
@@ -36,22 +37,22 @@ import (
 // The declaration rather than a detached bag, which is the order the
 // pipeline runs in — [sentinelReader] carries the account of what goes
 // wrong the other way round.
-func withMixinParam(m Method, mixin, param, value string) Method {
+func withMixinParam(m subject.Method, mixin, param, value string) subject.Method {
 	shape.MixinParamKey(mixin, param).Set(m.Source.EnsureMeta(), value, "test")
-	m.mixinParams = mixinParamsOf(m.Source.Meta(), m.Mixins)
+	m.MixinParams = mixinParamsOf(m.Source.Meta(), m.Mixins)
 	return m
 }
 
 // erroring gives the method an error result, which several rules
 // require before they will state a claim about a refusal.
-func erroring(m Method) Method {
+func erroring(m subject.Method) subject.Method {
 	m.Returns = append(m.Returns, golang.Return{Local: "err", Error: true})
 	return m
 }
 
 // answering gives the method a value result of the named type beside
 // whatever it already returns.
-func answering(m Method, typeName string) Method {
+func answering(m subject.Method, typeName string) subject.Method {
 	m.Returns = append([]golang.Return{{
 		Local:  "got",
 		Source: storefixture.Named(typeName),
@@ -61,7 +62,7 @@ func answering(m Method, typeName string) Method {
 
 // takingFunc gives the method a func-typed parameter, which is what a
 // hooks registrar needs before a callback can be installed through it.
-func takingFunc(m Method) Method {
+func takingFunc(m subject.Method) subject.Method {
 	m.Params = append(m.Params, golang.Param{
 		Name:   "fn",
 		Source: storefixture.Func(nil, nil),
@@ -72,7 +73,7 @@ func takingFunc(m Method) Method {
 
 // takingInt gives the method an integer parameter — a position, once
 // something declares it one.
-func takingInt(m Method) Method {
+func takingInt(m subject.Method) subject.Method {
 	m.Params = append(m.Params, golang.Param{
 		Name:   "i",
 		Source: storefixture.Named("int"),
@@ -87,7 +88,7 @@ type mixinRefusalCase struct {
 	name  string
 	rule  stampRule
 	iface Iface
-	m     Method
+	m     subject.Method
 	why   string
 }
 

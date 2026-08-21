@@ -14,8 +14,9 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readernoerror"
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors/readerwithbool"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // stampRule derives one stamp's checks. The tables below key rules by
@@ -29,7 +30,7 @@ import (
 // be recognized and still be unstateable on the interface carrying it:
 // the reader shape is a signature, and a signature does not say
 // whether anything can supply the input a miss withholds.
-type stampRule func(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal)
+type stampRule func(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal)
 
 // mixinRules is the mixin-axis derivation table: one row per attached
 // classification this deriver speaks. Adding a row is the whole cost
@@ -267,7 +268,7 @@ const (
 // that writes nothing and has no pools either — a codec — where
 // seeded() is vacuously true and no run seeds anything. "Nothing has
 // seeded" is not what a transform's miss would mean.
-func missWording(f Iface, m Method) (sentinel, verb string) {
+func missWording(f Iface, m subject.Method) (sentinel, verb string) {
 	sentinel, _ = MissSentinel(m)
 	switch {
 	case f.Corpus:

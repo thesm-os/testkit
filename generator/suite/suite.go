@@ -35,7 +35,8 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 	sdkgolang "go.thesmos.sh/eidos/sdk/golang"
 
-	"go.thesmos.sh/testkit/generator/source"
+	"go.thesmos.sh/testkit/generator/internal/source"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -128,217 +129,16 @@ func directives() []sdk.DirectiveSchema {
 	}
 }
 
-// Subject is what every emit value in this file needs to name the interface it
-// is about.
-//
-// Embedded in both the harness and each check rather than reached through a
-// back-pointer from one to the other: the emit graph is walked and versioned,
-// and a cycle in it is a hazard for the sake of three strings.
-type Subject struct {
-	// IfaceName is the source interface's identifier, which names every
-	// generated declaration.
-	IfaceName string
-
-	// IfaceRef qualifies the interface. The harness is routed into its own
-	// package in the ordinary case, where it is not reachable unqualified.
-	//
-	// A reference rather than an expression: this appears in type position —
-	// a parameter, a struct field — and the two render through different
-	// builtins. [sdk.NewExternal] builds the expression form, which is what a
-	// call site needs and what a type position rejects. [sdk.External] is the
-	// reference form and would serve; [golang.RefFor] is taken instead because
-	// it answers for a predeclared name too, so one call covers every type an
-	// interface could be named by.
-	IfaceRef sdk.Ref
-
-	// IntegrationEnv is the variable a run sets to include integration-only
-	// checks. See [GoIntegrationEnv].
-	IntegrationEnv string
-
-	// Runtime is testkit's module root, where the assertion helpers the
-	// generated checks call live. The backend's `external` builtin turns a path
-	// and a symbol into a qualified reference and registers the import, so a
-	// path is all a template needs.
-	Runtime string
-
-	// ClockRef is [clock.Clock] in type position — a config field, a parameter.
-	//
-	// Built here rather than composed in a template, because `external` yields
-	// the expression form and a type position rejects it. The two render
-	// through different builtins, and the mismatch is a render error rather
-	// than a compile one, so it surfaces as a file that came out short.
-	ClockRef sdk.Ref
-
-	// TypeParams is the source interface's type-parameter list in declaration
-	// form, which `renderTypeParams` spells as `[K comparable, V any]`. Empty
-	// for a non-generic interface, where the helper renders nothing.
-	TypeParams []*sdk.EmitTypeParam
-
-	// TypeArgs is the same list in use position — `[K, V]`, or empty.
-	//
-	// Every generated identifier naming a type that carries parameters has to
-	// carry it too, since a generic type cannot be referenced bare. That
-	// includes the subject: `Store` alone is not a type, `Store[K, V]` is.
-	TypeArgs string
-}
-
-// Method is one method of the subject interface, with the naming this generator
-// adds to the shared signature projection.
-type Method struct {
-	// Sig is the source signature in rendered form, embedded so `.Name`,
-	// `.Params`, `.Returns` and `.ReturnsError` promote onto the method.
-	//
-	// From [golang.Sig] rather than derived here, because every Go generator
-	// projects the same source the same way and four independent
-	// implementations had already disagreed about it.
-	*golang.Sig
-
-	// CheckType is the identifier of this method's extension point —
-	// `<Iface><Method>Check`. Every generated check for the method is a value
-	// of it, and so is a consumer's, which is what lets them compose.
-	CheckType string
-
-	// ArgFields names the fixture field each of the method's non-context
-	// parameters is supplied from, in order.
-	//
-	// The fixture's names rather than the parameters' own, because two methods
-	// naming one parameter at different types get a field each. Carried on the
-	// method so the extension point's call site and the generated checks read
-	// one answer: they did not, and a consumer's check was handed the other
-	// method's value.
-	ArgFields []string
-
-	// IntegrationOnly reports that this method reaches something outside the
-	// process, so its checks run only where that something exists.
-	//
-	// Carried on the projection rather than asked of the mixin list in a
-	// template, because the template's job is to spell the guard and not to
-	// know which classification implies one.
-	IntegrationOnly bool
-
-	// Mixins names the classifications the annotator attached, and Contracts
-	// the same for contract roles.
-	//
-	// Carried on the projection rather than read from the source node at each
-	// use. A check is selected once and rendered later, and the node is not in
-	// scope by then — but more to the point, two derivations of the same stamp
-	// are two chances to disagree about what the run classified.
-	Mixins, Contracts []string
-
-	// mixinParams holds each attached mixin's KV arguments, keyed
-	// `<mixin>.<param>`.
-	//
-	// Unexported with an accessor, because a template reaching a map by a
-	// composed key would spell the composition itself — and the one thing
-	// worth hiding here is that a sibling param arrives qualified and has to be
-	// cut back down to the local name a generated call can use.
-	mixinParams map[string]string
-
-	// contractRoles holds the role this method fills in each contract it belongs
-	// to, and contractPartners the role-keyed partners beside it.
-	//
-	// Two maps rather than one, because the axis keys its stamps two ways and
-	// flattening them would need a discriminator this would have to invent.
-	// Unexported with accessors for the reason mixinParams is: the composed key
-	// is spelling, and a template should ask a question rather than build one.
-	//
-	// The third stamp a contract can carry — an opaque param — is read by
-	// nothing here: every check calls what it names, and a param is by
-	// definition a value with no callable in it.
-	contractRoles, contractPartners map[string]string
-
-	// contractParams holds the KV arguments a contract declares — the
-	// conflict sentinel an if-absent write reports, and whatever follows
-	// it. Apart from the two above because a param is neither a role nor
-	// a callable: nothing resolves it, so it arrives as written.
-	contractParams map[string]string
-}
-
-// HasMixin reports whether the annotator attached the named classification.
-func (m Method) HasMixin(name string) bool { return slices.Contains(m.Mixins, name) }
-
-// MixinParam returns a mixin's KV argument, and whether one was written.
-//
-// The value verbatim. A param the mixin declares as a sibling arrives as a
-// qualified name, which is right for identity and wrong for a call site — see
-// [Method.ContractPartner] for the axis that resolves one.
-func (m Method) MixinParam(name, param string) (string, bool) {
-	v, ok := m.mixinParams[name+"."+param]
-	return v, ok
-}
-
-// TakesContext reports whether the method's first parameter is a context.
-//
-// The gate on three of the five signature-derived checks: cancellation, an
-// expired deadline and a nil context are all claims about a parameter a method
-// may not take, and emitting them for one that does not would not compile.
-func (m Method) TakesContext() bool {
-	return len(m.Params) > 0 && golang.IsContext(m.Params[0].Source)
-}
-
-// Shape returns the detector the annotator stamped on this method, empty when
-// it stamped none.
-func (m Method) Shape() string {
-	if m.Source == nil {
-		return ""
-	}
-	return shape.Get(m.Source.Meta())
-}
-
-// VariadicParam returns the method's variadic parameter, or nil.
-//
-// Go allows at most one and only in final position, so one answer covers the
-// signature. Present so the generated file can state a narrowing a reader would
-// otherwise have to infer: the fixture derives one value per parameter, so a
-// generated check calls a variadic method with exactly one element.
-func (m Method) VariadicParam() *golang.Param {
-	for i := range m.Params {
-		if m.Params[i].Variadic {
-			return &m.Params[i]
-		}
-	}
-	return nil
-}
-
-// CallArgs returns the parameters a generated call passes after the context,
-// which is every parameter for a method that takes none.
-func (m Method) CallArgs() []golang.Param {
-	if m.TakesContext() {
-		return m.Params[1:]
-	}
-	return m.Params
-}
-
-// HasInput reports whether the method takes anything after its context.
-//
-// The only lever a harness has over a subject. A parameterless method can still
-// fail — a closed store, a dropped connection — but not because of anything the
-// suite chose, so a check whose meaning is "this input misses" cannot reach the
-// failure it is about and would demand one from a correct implementation.
-func (m Method) HasInput() bool { return len(m.CallArgs()) > 0 }
-
-// ValueReturns returns the result slots that are not the error, which is what
-// a zero-value check compares.
-func (m Method) ValueReturns() []golang.Return {
-	out := make([]golang.Return, 0, len(m.Returns))
-	for _, r := range m.Returns {
-		if !r.Error {
-			out = append(out, r)
-		}
-	}
-	return out
-}
-
 // Contract is the emit value rendered into the primary output.
 type Contract struct {
 	sdk.BaseEmit
-	Subject
+	subject.Subject
 
 	// EntryName is the identifier a consumer calls — `Assert<Iface>Contract`.
 	EntryName string
 
 	// Fixture is the derived input set every check is handed values from.
-	Fixture Fixture
+	Fixture subject.Fixture
 
 	// Seed is the write each fresh subject is populated through, nil for an
 	// interface declaring no writer.
@@ -352,7 +152,7 @@ type Contract struct {
 	// taken and therefore what would close it.
 	Unseeded string
 
-	Methods []Method
+	Methods []subject.Method
 
 	// Token qualifies every identifier the file emits, so the templates
 	// compose names from one word rather than each lower-casing the
@@ -660,22 +460,22 @@ var harnessConsequence = source.Consequence{
 // Driven off the resolved set rather than the declarations: an interface that
 // embeds another declares none of what it inherits, and a harness reading only
 // declarations would cover half a contract without saying it had.
-func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []Method {
-	out := make([]Method, 0, len(set.Methods))
+func methodsOf(iface *sdk.Interface, set sdk.MethodSetResult) []subject.Method {
+	out := make([]subject.Method, 0, len(set.Methods))
 	for _, src := range set.Methods {
 		bag := src.Meta()
 		roles, partners, params := contractDataOf(bag)
 		stamped := shape.Mixins(bag)
-		out = append(out, Method{
+		out = append(out, subject.Method{
 			Sig:              golang.SigOf(src),
 			CheckType:        iface.Name + src.Name + "Check",
 			Mixins:           stamped,
 			IntegrationOnly:  slices.Contains(stamped, MixinIntegrationOnly),
 			Contracts:        shape.Contracts(bag),
-			mixinParams:      mixinParamsOf(bag, stamped),
-			contractRoles:    roles,
-			contractPartners: partners,
-			contractParams:   params,
+			MixinParams:      mixinParamsOf(bag, stamped),
+			ContractRoles:    roles,
+			ContractPartners: partners,
+			ContractParams:   params,
 		})
 	}
 	return out
@@ -793,14 +593,14 @@ const (
 
 // teardownShaped reports the one signature "a second call answers the same"
 // can be stated against without a value: context in, error out, nothing else.
-func teardownShaped(m Method) bool {
+func teardownShaped(m subject.Method) bool {
 	return m.TakesContext() && m.ReturnsError() &&
 		len(m.ValueReturns()) == 0 && !m.HasInput()
 }
 
 // subjectOf names the interface every emit value for it is about.
-func subjectOf(iface *sdk.Interface) Subject {
-	return Subject{
+func subjectOf(iface *sdk.Interface) subject.Subject {
+	return subject.Subject{
 		IfaceName:      iface.Name,
 		IfaceRef:       golang.RefFor(iface.Name, iface.Package),
 		Runtime:        Module,
@@ -813,7 +613,7 @@ func subjectOf(iface *sdk.Interface) Subject {
 
 // fixtureArgs names the fixture field per parameter the method takes after its
 // context, taking the second value of each when alternate is set.
-func fixtureArgs(f Fixture, m Method, alternate bool) []string {
+func fixtureArgs(f subject.Fixture, m subject.Method, alternate bool) []string {
 	args := m.CallArgs()
 	out := make([]string, 0, len(args))
 	for _, p := range args {
@@ -822,7 +622,7 @@ func fixtureArgs(f Fixture, m Method, alternate bool) []string {
 		// and a check has to reach its own.
 		name := f.FieldFor(p)
 		if alternate {
-			name += OtherSuffix
+			name += subject.OtherSuffix
 		}
 		out = append(out, name)
 	}

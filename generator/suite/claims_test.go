@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -26,8 +27,8 @@ func (c claimCase) Name() string { return c.name }
 // claimMethod builds the signature a claim is worded from: the draws
 // as (name, type) pairs, then the result slots. The context parameter
 // is omitted — wording never speaks it.
-func claimMethod(name string, params []golang.Param, returns ...golang.Return) suite.Method {
-	return suite.Method{Sig: &golang.Sig{Name: name, Params: params, Returns: returns}}
+func claimMethod(name string, params []golang.Param, returns ...golang.Return) subject.Method {
+	return subject.Method{Sig: &golang.Sig{Name: name, Params: params, Returns: returns}}
 }
 
 func keyParam(ident string) golang.Param {

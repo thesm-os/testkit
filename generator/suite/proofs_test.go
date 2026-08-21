@@ -12,6 +12,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -75,7 +76,7 @@ func TestProofsOfRefusesADefectItCannotGiveAValue(t *testing.T) {
 	iface := Iface{
 		Name:  "Store",
 		Token: "store",
-		Methods: []Method{{Sig: &golang.Sig{
+		Methods: []subject.Method{{Sig: &golang.Sig{
 			Name: "Get",
 			Returns: []golang.Return{
 				{Local: "r0", Source: &node.TypeRef{Name: "Handler"}},
@@ -240,7 +241,7 @@ func provableIface() Iface {
 	return Iface{
 		Name:  "Store",
 		Token: "store",
-		Methods: []Method{{Sig: &golang.Sig{
+		Methods: []subject.Method{{Sig: &golang.Sig{
 			Name: "Get",
 			Returns: []golang.Return{
 				{Local: "r0", Source: &node.TypeRef{Name: "string"}},

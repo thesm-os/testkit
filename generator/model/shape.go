@@ -13,14 +13,15 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // firstResultType is a method's first non-error result — the instantiation
 // point for a law whose closure shape returns the method's results whole,
 // where [resultType]'s single-valued strictness would refuse the method.
-func firstResultType(m *suite.Method) (sdk.Ref, string) {
+func firstResultType(m *subject.Method) (sdk.Ref, string) {
 	for i := range m.Returns {
 		ret := &m.Returns[i]
 		if ret.Source != nil && golang.IsError(ret.Source) {
@@ -32,7 +33,7 @@ func firstResultType(m *suite.Method) (sdk.Ref, string) {
 }
 
 // resultType is a method's single non-error result.
-func resultType(m *suite.Method) (sdk.Ref, *golang.Return, string) {
+func resultType(m *subject.Method) (sdk.Ref, *golang.Return, string) {
 	results := make([]*golang.Return, 0, len(m.Returns))
 	for i := range m.Returns {
 		ret := &m.Returns[i]
@@ -53,7 +54,7 @@ func resultType(m *suite.Method) (sdk.Ref, *golang.Return, string) {
 
 // scalarType is a method's scalar observation: its single non-error result,
 // or the length of the slice it returns.
-func scalarType(m *suite.Method) (ref sdk.Ref, viaLen bool, reason string) {
+func scalarType(m *subject.Method) (ref sdk.Ref, viaLen bool, reason string) {
 	if returnsSlice(m) {
 		return sdk.Builtin(builtinInt), true, ""
 	}
@@ -63,7 +64,7 @@ func scalarType(m *suite.Method) (ref sdk.Ref, viaLen bool, reason string) {
 
 // drainedElem is the element type of the stream a method drains — a slice's
 // element, or the stamped yield of an iterator.
-func drainedElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
+func drainedElem(b *Bindings, m *subject.Method) (sdk.Ref, string) {
 	if returnsSlice(m) {
 		return collectorElem(b, m)
 	}
@@ -80,7 +81,7 @@ func drainedElem(b *Bindings, m *suite.Method) (sdk.Ref, string) {
 
 // errOnly reports whether the method returns exactly one error and nothing
 // else.
-func errOnly(m *suite.Method) bool {
+func errOnly(m *subject.Method) bool {
 	return len(m.Returns) == 1 && m.Returns[0].Source != nil &&
 		golang.IsError(m.Returns[0].Source)
 }
@@ -107,7 +108,7 @@ func integerResult(ret *golang.Return) bool {
 // identityCompared reports whether the method's first result is a live
 // handle — a channel, a function, a pointer — that `!=` compares by identity,
 // which two independently built sides never share.
-func identityCompared(m *suite.Method) bool {
+func identityCompared(m *subject.Method) bool {
 	if len(m.Returns) == 0 || m.Returns[0].Source == nil {
 		return false
 	}
@@ -117,7 +118,7 @@ func identityCompared(m *suite.Method) bool {
 
 // orderedScalar reports whether the method's single result is a type `<`
 // orders — the builtin integers, floats and string.
-func orderedScalar(m *suite.Method) bool {
+func orderedScalar(m *subject.Method) bool {
 	_, ret, why := resultType(m)
 	if why != "" || ret.Source == nil {
 		return false
@@ -151,7 +152,7 @@ func transitionPairs(value string) ([][2]string, string) {
 // this is not a classification: it is the fact that the result's zero value
 // is a nil function. A defect that answers the zero for a stream hands the
 // law a nil iterator, and ranging over one panics before the law is asked.
-func seqArity(m *suite.Method) int {
+func seqArity(m *subject.Method) int {
 	if len(m.Returns) != 1 || m.Returns[0].Source == nil {
 		return 0
 	}
@@ -169,7 +170,7 @@ func seqArity(m *suite.Method) int {
 }
 
 // returnsSlice reports whether the method's first result is a slice.
-func returnsSlice(m *suite.Method) bool {
+func returnsSlice(m *subject.Method) bool {
 	return len(m.Returns) > 0 && m.Returns[0].Source != nil &&
 		shape.GoSliceElem(m.Returns[0].Source) != nil
 }
@@ -178,7 +179,7 @@ func returnsSlice(m *suite.Method) bool {
 // spells — off the selecting method first, and for a contract parameter off
 // every carrier of the same contract, because the stamp lives on the
 // directive host and any role method may be the one selecting the rule.
-func stampValue(harness *suite.Contract, m *suite.Method, key string) (string, bool) {
+func stampValue(harness *suite.Contract, m *subject.Method, key string) (string, bool) {
 	if v, ok := sdk.EnsureKey(key, sdk.StringParser).Get(m.Source.Meta()); ok && v != "" {
 		return v, true
 	}
@@ -243,7 +244,7 @@ func paramKeys(params []shape.Param) []string {
 // in, the same type out beside the error — or nil. Structural rather than
 // stamped, so a hand-built projection in a test answers the same way the
 // annotated corpus does.
-func answeringWriterOf(harness *suite.Contract) *suite.Method {
+func answeringWriterOf(harness *suite.Contract) *subject.Method {
 	if harness == nil {
 		return nil
 	}
@@ -264,7 +265,7 @@ func answeringWriterOf(harness *suite.Contract) *suite.Method {
 
 // methodOf finds one projection method by name; the adapter was built from
 // the same list, so a miss is unreachable.
-func methodOf(harness *suite.Contract, name string) *suite.Method {
+func methodOf(harness *suite.Contract, name string) *subject.Method {
 	for i := range harness.Methods {
 		if harness.Methods[i].Name == name {
 			return &harness.Methods[i]

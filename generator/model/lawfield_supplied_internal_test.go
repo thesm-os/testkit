@@ -12,8 +12,9 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // TestSuppliedDoors pins the door builder's arms: each shape spells its
@@ -24,7 +25,7 @@ func TestSuppliedDoors(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	door := func(b *Bindings, law, field, from string, m *suite.Method) (*LawField, string) {
+	door := func(b *Bindings, law, field, from string, m *subject.Method) (*LawField, string) {
 		r := tiers.Rule{Law: law, Fields: []tiers.Field{
 			{Name: field, Kind: tiers.KindSupplied, From: from},
 		}}
@@ -33,7 +34,7 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("a key-typed door needs the keys pool", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := door(b, lawid.CausalOrdering, "HappensBefore", "happens-before", nil)
 		testkit.Assert(t, reason).Contains("key no method", "ClientOp is keyed")
 
@@ -45,7 +46,7 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("an element-typed door reads the drained slice", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		scalar := projected("Items", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef(qStr)), errRet})
 		_, reason := door(b, lawid.StreamStableOrder, "Less", "order", scalar)
@@ -62,7 +63,7 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("the history door is one door for three laws", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
 		_, reason := door(b, lawid.SnapshotIsolationG0, "History", "history", nil)
 		testkit.True(t, reason == "", "the first isolation level opens the door: "+reason)
 		_, reason = door(b, lawid.SnapshotIsolationG1, "History", "history", nil)
@@ -72,7 +73,7 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("a name asked at two shapes is a conflict", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		testkit.Equal(t, b.addSuppliedOption(&SuppliedOption{Config: "x", Shape: supSubjPred}), "",
 			"the first spelling lands")
 		testkit.Assert(t, b.addSuppliedOption(&SuppliedOption{Config: "x", Shape: supStats})).
@@ -81,19 +82,19 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("the subject-only doors open unconditionally", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := door(b, lawid.PoolLeakFree, "Balanced", "balanced", nil)
 		testkit.True(t, reason == "", "the balance door: "+reason)
 		_, reason = door(b, lawid.PoolBalanced, "Stats", "stats", nil)
 		testkit.True(t, reason == "", "the stats door: "+reason)
-		free := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
+		free := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Keys: Pool{Type: sdk.Builtin(qStr)}}
 		_, reason = door(free, lawid.LeaseReleasedOnCancel, "Free", "free", nil)
 		testkit.True(t, reason == "", "the free door: "+reason)
 	})
 
 	t.Run("the merge door reads the observation", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := door(b, lawid.EventualConvergence, "Merge", "merge", nil)
 		testkit.Assert(t, reason).Contains("observes state through no method",
 			"no observation, no lattice to join")
@@ -101,7 +102,7 @@ func TestSuppliedDoors(t *testing.T) {
 		agg := projected("Count", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(namedRef("int")), res(namedRef("error"))})
 		stamp(agg, "aggregator", "", "")
-		h := &suite.Contract{Methods: []suite.Method{*agg}}
+		h := &suite.Contract{Methods: []subject.Method{*agg}}
 		field, reason := lawFieldOf(b, h, tiers.Rule{
 			Law:    lawid.EventualConvergence,
 			Fields: []tiers.Field{{Name: "Merge", Kind: tiers.KindSupplied, From: "merge"}},
@@ -114,7 +115,7 @@ func TestSuppliedDoors(t *testing.T) {
 	t.Run("the replay doors open beside the drained log", func(t *testing.T) {
 		t.Parallel()
 		errRet := res(namedRef("error"))
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		replay := projected("Replay",
 			[]golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(sliceRef(pkgRef("example.com/c", "Entry"))), errRet})
@@ -122,7 +123,7 @@ func TestSuppliedDoors(t *testing.T) {
 			[]golang.Param{arg("ctx", ctxRef()), arg("e", pkgRef("example.com/c", "Entry"))},
 			[]golang.Return{errRet})
 		shape.ContractPartnerKey("chain", "replay").Set(carrier.Source.EnsureMeta(), "Replay", "test")
-		h := &suite.Contract{Methods: []suite.Method{*replay, *carrier}}
+		h := &suite.Contract{Methods: []subject.Method{*replay, *carrier}}
 		field, reason := lawFieldOf(b, h, tiers.Rule{
 			Law:    lawid.ReplayCausalOrdering,
 			Fields: []tiers.Field{{Name: fEntryID, Kind: tiers.KindSupplied, From: "entry-id"}},
@@ -134,14 +135,14 @@ func TestSuppliedDoors(t *testing.T) {
 
 	t.Run("the replay doors need the replay role", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := door(b, lawid.ReplayCausalOrdering, fEntryID, "entry-id", unstamped())
 		testkit.True(t, reason != "", "no chain.replay stamp, no entry to identify")
 	})
 
 	t.Run("a field the table does not transcribe keeps the refusal", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		_, reason := door(b, lawid.ReadAfterWrite, "Nonesuch", "nonesuch", nil)
 		testkit.Assert(t, reason).Contains("no generated value can stand in for",
 			"an untranscribed field is not a door")
@@ -157,7 +158,7 @@ func TestWatcherMemberClosures(t *testing.T) {
 
 	errRet := res(namedRef("error"))
 	b := &Bindings{
-		Subject: suite.Subject{IfaceName: "Contract"},
+		Subject: subject.Subject{IfaceName: "Contract"},
 		Keys:    Pool{Type: sdk.Builtin(qStr), Q: qStr},
 		Values:  Pool{Type: sdk.Builtin("Value"), Q: "Value"},
 	}
@@ -237,7 +238,7 @@ func TestMemberClosureResolutionClauses(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	watch := projected("Watch",
 		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr))},
@@ -320,7 +321,7 @@ func TestMissSentinelAndDisturb(t *testing.T) {
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))},
 			[]golang.Return{errRet}), "writer", "", "Value")
 		b := &Bindings{
-			Subject:   suite.Subject{IfaceName: "Mixed"},
+			Subject:   subject.Subject{IfaceName: "Mixed"},
 			Values:    Pool{Type: sdk.Builtin("Value"), Q: "Value"},
 			Keys:      Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Key"},
 			Actions:   []*Action{{Method: "Store", Pool: poolValues}, {Method: "Get", Pool: poolKeys}},
@@ -331,7 +332,7 @@ func TestMissSentinelAndDisturb(t *testing.T) {
 		testkit.True(t, reason == "" && got != nil, "the writer-fed disturbance binds: "+reason)
 		testkit.Equal(t, string(got.Kind()), "model.lawfield.DisturbWrite", "as the adjacent-key write")
 
-		keyless := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		keyless := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		omitted, reason := disturbFieldOf(keyless, harnessOf(writer), field, nil, nil)
 		testkit.True(t, omitted == nil && reason == "",
 			"no pools, no projection — the field stays omitted, never guessed")
@@ -354,11 +355,11 @@ func TestPublisherDrainDerivation(t *testing.T) {
 		golang.MetaChanElem.Set(ch.EnsureMeta(), "example.com/p.Value", "test")
 		return golang.Return{Type: sdk.Builtin("sub"), Source: ch}
 	}
-	subscribeWith := func(ret golang.Return) suite.Method {
+	subscribeWith := func(ret golang.Return) subject.Method {
 		return *projectedReturns("Subscribe",
 			[]golang.Param{arg("ctx", ctxRef())}, []golang.Return{ret, errRet})
 	}
-	carrier := func() *suite.Method {
+	carrier := func() *subject.Method {
 		m := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{errRet})
@@ -368,8 +369,8 @@ func TestPublisherDrainDerivation(t *testing.T) {
 
 	t.Run("a channel-answering subscribe derives the sweep once", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []suite.Method{subscribeWith(chanReturn())}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []subject.Method{subscribeWith(chanReturn())}}
 		m := carrier()
 		field, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], m, nil)
 		testkit.True(t, reason == "" && field != nil, "the sweep derives: "+reason)
@@ -384,16 +385,16 @@ func TestPublisherDrainDerivation(t *testing.T) {
 
 	t.Run("a subscription that answers no channel keeps the refusal", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []suite.Method{subscribeWith(res(pkgRef("example.com/p", "Handle")))}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []subject.Method{subscribeWith(res(pkgRef("example.com/p", "Handle")))}}
 		_, reason := lawFieldOf(b, h, drainRule, drainRule.Fields[0], carrier(), nil)
 		testkit.Assert(t, reason).Contains("no channel", "an object handle is the drain option's territory")
 	})
 
 	t.Run("a carrier that stamps no subscribe partner refuses", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
-		h := &suite.Contract{Methods: []suite.Method{subscribeWith(chanReturn())}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
+		h := &suite.Contract{Methods: []subject.Method{subscribeWith(chanReturn())}}
 		unstampedCarrier := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{res(namedRef("error"))})
@@ -414,7 +415,7 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 	t.Run("messages ride the values pool", func(t *testing.T) {
 		t.Parallel()
 		b := &Bindings{
-			Subject: suite.Subject{IfaceName: "Contract"},
+			Subject: subject.Subject{IfaceName: "Contract"},
 			Values:  Pool{Type: sdk.Builtin(qStr), Q: qStr, Field: "Body"},
 			Actions: []*Action{{Method: "Publish", Pool: "values"}},
 		}
@@ -428,7 +429,7 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 
 	t.Run("a law pool redeclared at a second type refuses", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 		b.LawPools = append(b.LawPools, LawPool{Name: "payloads", Q: "int", Elem: sdk.Builtin("int")})
 		r := tiers.Rule{Law: lawid.XSSSafe, Fields: []tiers.Field{
 			{Name: "Payloads", Kind: tiers.KindGenerator, From: "payloads"},
@@ -436,7 +437,7 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 		_, reason := lawFieldOf(b, nil, r, r.Fields[0], nil, nil)
 		testkit.True(t, reason != "", "two laws asking one name at two types are caught")
 
-		b2 := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b2 := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 		b2.LawPools = append(b2.LawPools, LawPool{Name: "offsets", Q: builtin64, Elem: sdk.Builtin(builtin64)})
 		r2 := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
 			{Name: "Offsets", Kind: tiers.KindGenerator, From: "offsets"},
@@ -447,9 +448,9 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 
 	t.Run("a subscription answering nothing refuses the drain", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 		bare := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())}, []golang.Return{errRet})
-		h := &suite.Contract{Methods: []suite.Method{*bare}}
+		h := &suite.Contract{Methods: []subject.Method{*bare}}
 		m := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{errRet})
@@ -463,12 +464,12 @@ func TestPublisherPoolAndDrainRefusals(t *testing.T) {
 
 	t.Run("a channel whose element no stamp names refuses", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 		ch := namedRef("chan")
 		golang.MetaIsChannel.Set(ch.EnsureMeta(), true, "test")
 		sub := projectedReturns("Subscribe", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{{Type: sdk.Builtin("sub"), Source: ch}, errRet})
-		h := &suite.Contract{Methods: []suite.Method{*sub}}
+		h := &suite.Contract{Methods: []subject.Method{*sub}}
 		m := projected("Publish",
 			[]golang.Param{arg("ctx", ctxRef()), arg("v", pkgRef("example.com/p", "Value"))},
 			[]golang.Return{errRet})

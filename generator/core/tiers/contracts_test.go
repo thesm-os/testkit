@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestContractStoresAreInternallyCoherent holds the two contract tables to

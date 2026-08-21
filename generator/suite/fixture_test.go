@@ -18,6 +18,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/generator/internal/gentest"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -356,7 +357,7 @@ func TestUndeliverableReason(t *testing.T) {
 }
 
 // fieldOf returns the fixture's field of that name, failing when absent.
-func fieldOf(t *testing.T, f suite.Fixture, name string) suite.FixtureField {
+func fieldOf(t *testing.T, f subject.Fixture, name string) subject.FixtureField {
 	t.Helper()
 	got, ok := f.Field(name)
 	if !ok {
@@ -366,7 +367,7 @@ func fieldOf(t *testing.T, f suite.Fixture, name string) suite.FixtureField {
 }
 
 // partNames returns the fields a composed value sets, in order.
-func partNames(f suite.FixtureField) []string {
+func partNames(f subject.FixtureField) []string {
 	out := make([]string, 0, len(f.Parts))
 	for _, p := range f.Parts {
 		out = append(out, p.Name)
@@ -375,7 +376,7 @@ func partNames(f suite.FixtureField) []string {
 }
 
 // methodNamed returns the contract's method of that name, failing when absent.
-func methodNamed(t *testing.T, c *suite.Contract, name string) suite.Method {
+func methodNamed(t *testing.T, c *suite.Contract, name string) subject.Method {
 	t.Helper()
 	for _, m := range c.Methods {
 		if m.Name == name {
@@ -383,11 +384,11 @@ func methodNamed(t *testing.T, c *suite.Contract, name string) suite.Method {
 		}
 	}
 	t.Fatalf("the contract carries no method %q", name)
-	return suite.Method{}
+	return subject.Method{}
 }
 
 // partNamed returns the composed part of that name, failing when absent.
-func partNamed(t *testing.T, f suite.FixtureField, name string) suite.FixturePart {
+func partNamed(t *testing.T, f subject.FixtureField, name string) subject.FixturePart {
 	t.Helper()
 	for _, p := range f.Parts {
 		if p.Name == name {
@@ -395,7 +396,7 @@ func partNamed(t *testing.T, f suite.FixtureField, name string) suite.FixturePar
 		}
 	}
 	t.Fatalf("the value composes no part %q; it sets %v", name, partNames(f))
-	return suite.FixturePart{}
+	return subject.FixturePart{}
 }
 
 // nestedStruct declares a struct one of whose fields is itself a struct, which

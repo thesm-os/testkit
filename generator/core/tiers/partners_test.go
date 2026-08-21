@@ -10,7 +10,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/mixins"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestEverySiblingReferenceIsClassified holds the partner tables total and

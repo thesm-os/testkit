@@ -12,6 +12,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/stub"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -30,7 +31,7 @@ const KindProofs sdk.Kind = "suite.proofs"
 // would put a cycle in a graph that gets walked.
 type Proofs struct {
 	sdk.BaseEmit
-	Subject
+	subject.Subject
 
 	// Pkg is the import path of the primary output, which is where every
 	// symbol this file names is declared.
@@ -55,7 +56,7 @@ type Proofs struct {
 	// cannot pass against inputs no run uses. DrawsFixture says whether
 	// the assembler takes one at all, which follows the harness's own
 	// answer rather than being decided again here.
-	Fixture      Fixture
+	Fixture      subject.Fixture
 	DrawsFixture bool
 
 	// SeedsCorpus says the assembler takes the run's corpus too, and
@@ -293,7 +294,7 @@ func spellsDefect(kind projection.DefectKind, view defectView) bool {
 func proofsOf(
 	base sdk.BaseEmit, pkg string, r golang.Resolver, iface Iface, checks []*CheckEmit,
 ) ([]*ProofEmit, []string) {
-	byName := make(map[string]Method, len(iface.Methods))
+	byName := make(map[string]subject.Method, len(iface.Methods))
 	for _, m := range iface.Methods {
 		byName[m.Name] = m
 	}
@@ -340,7 +341,7 @@ func proofsOf(
 
 // defectViewOf spells one planted defect against the method it overrides.
 func defectViewOf(
-	pkg string, r golang.Resolver, iface Iface, m Method, plan projection.CheckPlan,
+	pkg string, r golang.Resolver, iface Iface, m subject.Method, plan projection.CheckPlan,
 ) defectView {
 	sig := m.Sig
 	reason, _ := vocab.RedConst(plan.ID.Seg)
@@ -381,7 +382,7 @@ func defectViewOf(
 // is where a planted answer would BE the claim rather than break it —
 // a predicate answering bool has exactly two values and one of them is
 // what the check demands. The row ships Argued and says so.
-func echoSample(m Method, r golang.Resolver) (golang.Sample, bool) {
+func echoSample(m subject.Method, r golang.Resolver) (golang.Sample, bool) {
 	src := firstValueSource(m)
 	if src == nil {
 		return golang.Sample{}, false

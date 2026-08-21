@@ -9,6 +9,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -44,7 +45,7 @@ func TestInventoryOfFoldsEveryDeriver(t *testing.T) {
 
 	iface := suite.Iface{
 		Name: "Log", Token: "log", Qualifier: "log",
-		Methods: []suite.Method{{Sig: &golang.Sig{Name: "Append"}}},
+		Methods: []subject.Method{{Sig: &golang.Sig{Name: "Append"}}},
 	}
 
 	inv, _ := suite.InventoryOf(iface)

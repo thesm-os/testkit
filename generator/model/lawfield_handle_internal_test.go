@@ -12,17 +12,17 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 func TestHandleFieldArms(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}, Values: Pool{Q: qStr}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}, Values: Pool{Q: qStr}}
 
-	handle := func(b *Bindings, law, name, from string, m *suite.Method, extra ...tiers.Field) (*LawField, string) {
+	handle := func(b *Bindings, law, name, from string, m *subject.Method, extra ...tiers.Field) (*LawField, string) {
 		r := tiers.Rule{Law: law, Fields: append(extra, tiers.Field{
 			Name: name, Kind: tiers.KindHandle, From: from,
 		})}
@@ -63,7 +63,7 @@ func TestHandleFieldArms(t *testing.T) {
 	t.Run("the observation handle picks its spelling", func(t *testing.T) {
 		t.Parallel()
 		pooled := &Bindings{
-			Subject: suite.Subject{IfaceName: "Mixed"},
+			Subject: subject.Subject{IfaceName: "Mixed"},
 			Keys:    Pool{Field: fieldKey, Q: qStr},
 			Actions: []*Action{{Pool: poolKeys}},
 		}
@@ -112,7 +112,7 @@ func TestCoalesceHandlesAndIdentityKey(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 	run := projected("Run",
 		[]golang.Param{arg("ctx", ctxRef()), arg("key", namedRef(qStr)), arg("compute", funcRef())},
 		[]golang.Return{res(namedRef(qStr)), errRet})
@@ -164,7 +164,7 @@ func TestVersionStampAndHistoryHandles(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	t.Run("the version stamp reads the cell and names its member", func(t *testing.T) {
 		t.Parallel()
@@ -222,7 +222,7 @@ func TestVersionStampAndHistoryRefusals(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	get := projected("Get", []golang.Param{arg("ctx", ctxRef())},
 		[]golang.Return{res(namedRef("Value")), errRet})
@@ -277,7 +277,7 @@ func TestVersionStampCellAndReplayResolution(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 
 	put := projected("Put",
 		[]golang.Param{arg("ctx", ctxRef()), arg("v", namedRef("Value"))}, []golang.Return{errRet})

@@ -8,68 +8,9 @@ import (
 
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
-
-// Iface is one interface as the derivers read it: the projections the
-// plugin already computes — [Method], [Fixture] — plus the directive
-// facts no projection carries. It exists so derivation is
-// unit-testable without the eidos pipeline, and it invents nothing:
-// every field is either an incumbent projection or a directive the
-// plugin shell reads once.
-type Iface struct {
-	// Name is the interface's exported name ("Log"); Token its Go
-	// identifier qualifier ("log", "paginatedReader"), which every
-	// emitted declaration is named from.
-	Name  string
-	Token string
-
-	// Package is the interface's own import path, which a body naming
-	// something declared beside it — a miss sentinel — resolves
-	// against.
-	Package string
-
-	// Qualifier is the interface's word inside a family-scoped ID
-	// ("log", "paginated-reader"). Slug rather than identifier: the
-	// grammar admits a-z, 0-9 and '-' only, so the two qualifiers
-	// diverge the moment an interface name has two words.
-	Qualifier string
-
-	Methods []Method
-
-	// Fixture is the derived input set; a draw it cannot deliver turns
-	// a method's derived families into one refusal.
-	Fixture Fixture
-
-	// Corpus reports that this run seeds every subject from a derived
-	// corpus, which changes what a miss draws.
-	//
-	// The fixture's alternate is a second SEEDED key once a corpus
-	// exists — the zip takes every member of the key pool — so a miss
-	// body drawing it hits, and passes while asserting the opposite of
-	// its claim. Where this holds, the miss draws the key deliberately
-	// left out instead.
-	Corpus bool
-}
-
-// seeded reports the seed-seam interface: nothing on it can write, so
-// the harness receives its corpus from the pools and the derived
-// claims speak "seeded" rather than "derived".
-func (f Iface) seeded() bool {
-	return !slices.ContainsFunc(f.Methods, writesSomething)
-}
-
-// supplies reports that something on this run can put an input where a
-// read will find it — a writer to call, or a corpus the harness is
-// handed. It is what makes "an input nothing supplied" name a real case
-// rather than every input the method takes.
-//
-// Distinct from seeded, which asks the opposite question and answers
-// yes for an interface with no state at all: a codec writes nothing,
-// so it is seeded() and supplies() nothing.
-func (f Iface) supplies() bool {
-	return f.Corpus || slices.ContainsFunc(f.Methods, writesSomething)
-}
 
 // DeriverName identifies a deriver in the registry and in refusal
 // attributions.
@@ -174,7 +115,7 @@ func Registry() []Deriver {
 // argsRefusal folds a method whose draws the fixture cannot supply
 // into the one refusal its whole derived family set shares, false
 // when every draw has a supplier.
-func argsRefusal(d DeriverName, f Iface, m Method, what string) (Refusal, bool) {
+func argsRefusal(d DeriverName, f Iface, m subject.Method, what string) (Refusal, bool) {
 	arg, field, missing := undeliverableArgs(f.Fixture, m.ArgFields)
 	if !missing {
 		return Refusal{}, false
@@ -191,7 +132,7 @@ func argsRefusal(d DeriverName, f Iface, m Method, what string) (Refusal, bool) 
 
 // callOf renders the method's invocation: the context first when the
 // method takes one, then every draw through the fixture policy.
-func callOf(m Method) projection.CallPlan {
+func callOf(m subject.Method) projection.CallPlan {
 	var args []projection.Expr
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)
@@ -231,7 +172,7 @@ func InventoryOf(f Iface) (projection.Inventory, []Refusal) {
 //
 // The exported half of [Iface.seeded], taken over a method slice because
 // the shell asks before it has built an Iface.
-func derivedSeeded(methods []Method) bool {
+func derivedSeeded(methods []subject.Method) bool {
 	return !slices.ContainsFunc(methods, writesSomething)
 }
 
@@ -242,7 +183,7 @@ func derivedSeeded(methods []Method) bool {
 // declared two ceilings for one subject, which is a contradiction its
 // author has to settle — and taking either silently would build every
 // harness at a capacity half the declarations disagree with.
-func declaredLimit(methods []Method) string {
+func declaredLimit(methods []subject.Method) string {
 	for _, m := range methods {
 		if v, declared := m.MixinParam(MixinBounded, MixinBoundedLimit); declared && v != "" {
 			return v
@@ -267,7 +208,7 @@ func declaredLimit(methods []Method) string {
 // scanned EVERY mixin for a `sentinel=` or `notfound=` and took the
 // first hit, so an interface stamping ttl beside lifecycleafterclose
 // could be handed a post-close sentinel as its miss sentinel.
-func MissSentinel(m Method) (string, bool) {
+func MissSentinel(m subject.Method) (string, bool) {
 	if v, declared := stampedParam(m, MixinTTL, MixinTTLNotFound); declared {
 		return v, true
 	}
@@ -279,12 +220,12 @@ func MissSentinel(m Method) (string, bool) {
 //
 // The map exists because a template renders long after the node left
 // scope, and it is right for that. This is asked during derivation,
-// where the node is still in hand — and [Method.Shape] already reads
+// where the node is still in hand — and [subject.Method.Shape] already reads
 // the same way for the same reason. Reading the declaration also means
 // a caller holding a hand-built projection, which every deriver test
 // does, gets the answer the pipeline would give rather than an empty
 // map's silence.
-func stampedParam(m Method, mixin, param string) (string, bool) {
+func stampedParam(m subject.Method, mixin, param string) (string, bool) {
 	if m.Source == nil {
 		return "", false
 	}
@@ -295,7 +236,7 @@ func stampedParam(m Method, mixin, param string) (string, bool) {
 // methodNamed finds a sibling by name, nil where the interface declares
 // none — which is the author naming a partner that is not there, and a
 // refusal rather than a compile error in a consumer's file.
-func methodNamed(f Iface, name string) *Method {
+func methodNamed(f Iface, name string) *subject.Method {
 	for i := range f.Methods {
 		if f.Methods[i].Name == name {
 			return &f.Methods[i]
@@ -310,7 +251,7 @@ func methodNamed(f Iface, name string) *Method {
 // By fixture field, which is what the two calls actually agree on: the
 // same field yields the same value in both, so a partner drawing only
 // the subject's fields is asking about the subject's input.
-func sharesArgs(m, partner Method) bool {
+func sharesArgs(m, partner subject.Method) bool {
 	mine := make(map[string]bool, len(m.ArgFields))
 	for _, field := range m.ArgFields {
 		mine[field] = true
@@ -324,4 +265,64 @@ func sharesArgs(m, partner Method) bool {
 		}
 	}
 	return true
+}
+
+// Iface is one interface as the derivers read it: the projections the
+// plugin already computes — [subject.Method], [subject.Fixture] — plus the directive
+// facts no projection carries. It exists so derivation is
+// unit-testable without the eidos pipeline, and it invents nothing:
+// every field is either an incumbent projection or a directive the
+// plugin shell reads once.
+type Iface struct {
+	// Name is the interface's exported name ("Log"); Token its Go
+	// identifier qualifier ("log", "paginatedReader"), which every
+	// emitted declaration is named from.
+	Name  string
+	Token string
+
+	// Package is the interface's own import path, which a body naming
+	// something declared beside it — a miss sentinel — resolves
+	// against.
+	Package string
+
+	// Qualifier is the interface's word inside a family-scoped ID
+	// ("log", "paginated-reader"). Slug rather than identifier: the
+	// grammar admits a-z, 0-9 and '-' only, so the two qualifiers
+	// diverge the moment an interface name has two words.
+	Qualifier string
+
+	Methods []subject.Method
+
+	// Fixture is the derived input set; a draw it cannot deliver turns
+	// a method's derived families into one refusal.
+	Fixture subject.Fixture
+
+	// Corpus reports that this run seeds every subject from a derived
+	// corpus, which changes what a miss draws.
+	//
+	// The fixture's alternate is a second SEEDED key once a corpus
+	// exists — the zip takes every member of the key pool — so a miss
+	// body drawing it hits, and passes while asserting the opposite of
+	// its claim. Where this holds, the miss draws the key deliberately
+	// left out instead.
+	Corpus bool
+}
+
+// seeded reports the seed-seam interface: nothing on it can write, so
+// the harness receives its corpus from the pools and the derived
+// claims speak "seeded" rather than "derived".
+func (f Iface) seeded() bool {
+	return !slices.ContainsFunc(f.Methods, writesSomething)
+}
+
+// supplies reports that something on this run can put an input where a
+// read will find it — a writer to call, or a corpus the harness is
+// handed. It is what makes "an input nothing supplied" name a real case
+// rather than every input the method takes.
+//
+// Distinct from seeded, which asks the opposite question and answers
+// yes for an interface with no state at all: a codec writes nothing,
+// so it is seeded() and supplies() nothing.
+func (f Iface) supplies() bool {
+	return f.Corpus || slices.ContainsFunc(f.Methods, writesSomething)
 }

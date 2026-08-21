@@ -10,6 +10,7 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 
 	"go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // Expr is a rendered Go expression destined for a template hole. The
@@ -153,15 +154,7 @@ const assertInfix = "Assert"
 // One home because the claim text and the fixture field are the same
 // word cased differently: "a seeded key" and Key. They were derived
 // separately, and only the claim side had the rule.
-func DrawWord(p golang.Param) string {
-	if p.Source != nil && p.Source.Name != "" && !golang.IsPredeclared(p.Source.Name) {
-		return p.Source.Name
-	}
-	return p.Name
-}
-
-// DrawField is [DrawWord] as the fixture's exported field.
-func DrawField(p golang.Param) string { return golang.ExportedName(DrawWord(p)) }
+func DrawWord(p golang.Param) string { return subject.DrawWord(p) }
 
 // MissKeyCall is the emitted call for the key outside the corpus.
 func MissKeyCall(token string) Expr { return Expr(MissKeyName(token) + "()") }

@@ -6,14 +6,15 @@ package model
 import (
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // lawFieldOf fills one manifest entry: a field, nil for one the law defaults,
 // or the reason nothing can fill it.
 func lawFieldOf(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field, m, keyed *suite.Method,
+	b *Bindings, harness *suite.Contract, r tiers.Rule, f tiers.Field, m, keyed *subject.Method,
 ) (*LawField, string) {
 	field := &LawField{
 		BaseEmit: b.BaseEmit,
@@ -77,7 +78,7 @@ func lawFieldOf(
 
 // observation is the composed whole-state read the before/after laws share.
 type observation struct {
-	Method   *suite.Method
+	Method   *subject.Method
 	Out      sdk.Ref
 	Keyed    bool
 	TakesCtx bool
@@ -89,9 +90,9 @@ type observation struct {
 func observationOf(
 	b *Bindings,
 	harness *suite.Contract,
-	keyed *suite.Method,
+	keyed *subject.Method,
 ) (*observation, string) {
-	var agg, keyedReader *suite.Method
+	var agg, keyedReader *subject.Method
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		switch pseudoShape(m) {
@@ -141,7 +142,7 @@ func observationOf(
 
 // resolveArg lifts one binding-row argument into a renderable type.
 func resolveArg(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, a tiers.BindArg, m, keyed *suite.Method,
+	b *Bindings, harness *suite.Contract, r tiers.Rule, a tiers.BindArg, m, keyed *subject.Method,
 ) (sdk.Ref, string) {
 	switch a {
 	case tiers.BindKey:
@@ -201,8 +202,8 @@ func resolveArg(
 // ruleFieldRole resolves a binding argument's field reference to the method
 // that fills it — the same resolution the field itself gets.
 func ruleFieldRole(
-	b *Bindings, harness *suite.Contract, r tiers.Rule, fieldName string, m, keyed *suite.Method,
-) (*suite.Method, string) {
+	b *Bindings, harness *suite.Contract, r tiers.Rule, fieldName string, m, keyed *subject.Method,
+) (*subject.Method, string) {
 	for _, f := range r.Fields {
 		if f.Name != fieldName {
 			continue

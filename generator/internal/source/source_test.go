@@ -11,7 +11,7 @@ import (
 	"go.thesmos.sh/eidos/sdk"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/generator/source"
+	"go.thesmos.sh/testkit/generator/internal/source"
 )
 
 // why is a caller's consequence, spelled so a failure names which

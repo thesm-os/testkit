@@ -9,8 +9,9 @@ import (
 
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Generate queues one set of bindings per interface carrying the directive.
@@ -83,8 +84,8 @@ func bindingsOf(
 	// which writer feeds it decides which writers may draw from it — a second
 	// writer taking a different type would draw values no signature accepts.
 	partners := partnerMethods(iface)
-	var keyed, composite, collector, keyFallback, valueFallback *suite.Method
-	var writers []*suite.Method
+	var keyed, composite, collector, keyFallback, valueFallback *subject.Method
+	var writers []*subject.Method
 	for i := range harness.Methods {
 		m := &harness.Methods[i]
 		if _, partner := partners[m.Name]; partner {
@@ -247,7 +248,7 @@ func bindingsOf(
 // order-insensitive by its own claim — linearizability over an operation
 // whose order is unobservable checks close to nothing, and the claims that
 // do bite are already bound as sequential laws.
-func concurrentOf(b *Bindings, harness *suite.Contract, keyed, valued *suite.Method) {
+func concurrentOf(b *Bindings, harness *suite.Contract, keyed, valued *subject.Method) {
 	// The lease leg: acquire and release over the shared keys pool, checked
 	// against the lease-table model — the same op vocabulary the model
 	// switches on, and the same lenient release the oracle speaks.

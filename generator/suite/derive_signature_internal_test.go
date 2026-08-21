@@ -17,6 +17,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -59,8 +60,8 @@ func TestZeroOnErrorPicksItsErrorSource(t *testing.T) {
 
 // zeroReader is a keyed reader answering a value beside an error,
 // declaring its miss sentinel or not.
-func zeroReader(declaresMiss bool) Method {
-	m := Method{
+func zeroReader(declaresMiss bool) subject.Method {
+	m := subject.Method{
 		Sig: &golang.Sig{
 			Name: "Get",
 			Params: []golang.Param{
@@ -83,16 +84,16 @@ func zeroReader(declaresMiss bool) Method {
 	src.MetaBag = bag
 	m.Source = src
 	m.Mixins = []string{MixinTTL}
-	m.mixinParams = mixinParamsOf(bag, m.Mixins)
+	m.MixinParams = mixinParamsOf(bag, m.Mixins)
 	return m
 }
 
 // zeroIface pairs the method with a fixture that can deliver its draw.
-func zeroIface(m Method) Iface {
+func zeroIface(m subject.Method) Iface {
 	return Iface{
 		Name: "Store", Token: "store", Qualifier: "store",
-		Methods: []Method{m},
-		Fixture: Fixture{Fields: []FixtureField{{
+		Methods: []subject.Method{m},
+		Fixture: subject.Fixture{Fields: []subject.FixtureField{{
 			Name:   "Key",
 			Sample: golang.Sample{Text: `"k"`},
 			Other:  golang.Sample{Text: `"o"`},

@@ -13,6 +13,7 @@ package suite
 
 import (
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -29,7 +30,7 @@ import (
 // falsehood. Either the declaration names what a miss reports, or the
 // run has to be able to make one; without both the rule refuses, so
 // the gap is named in the header rather than emitted as a claim.
-func missRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func missRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	if !m.HasInput() {
 		return nil, nil
 	}
@@ -81,7 +82,7 @@ func missRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPl
 // does. The same split [missDefect] makes, for the same reason — what
 // the claim is about decides both what the body judges and what a
 // double has to do to break it.
-func missBody(f Iface, m Method, sentinel string) projection.Body {
+func missBody(f Iface, m subject.Method, sentinel string) projection.Body {
 	call := missCall(f, m)
 	if sentinel != "" {
 		return projection.ReportsSentinel{Call: call, Sentinel: projection.Expr(sentinel)}
@@ -97,7 +98,7 @@ func missBody(f Iface, m Method, sentinel string) projection.Body {
 // returning the zero would STATE the claim rather than break it — so
 // that arm has to plant a live value, and where the result type yields
 // none the row ships Argued.
-func missDefect(f Iface, m Method, sentinel string) projection.Defect {
+func missDefect(f Iface, m subject.Method, sentinel string) projection.Defect {
 	clause := projection.Clause{Text: AnswersMissClause(m)}
 	option := projection.OptionName(f.Name, m.Name)
 	if sentinel != "" {
@@ -117,7 +118,7 @@ func missDefect(f Iface, m Method, sentinel string) projection.Defect {
 //
 // Nothing stronger is derivable. A store may answer what it was handed
 // or one it stamped, and a check requiring either fails the other.
-func answerRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func answerRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	if len(m.ValueReturns()) == 0 {
 		return nil, []Refusal{{
 			Deriver: DeriverStamps,
@@ -145,7 +146,7 @@ func answerRule(f Iface, m Method, call projection.CallPlan) ([]projection.Check
 // nothing seeds has no number at all, so the rule licenses nothing in
 // either case. Silent rather than refused: the count is the hit's
 // companion and the miss beside it already names the gap.
-func countRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func countRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	if !f.Corpus {
 		return nil, nil
 	}
@@ -174,7 +175,7 @@ func countRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckP
 // fixture asks about the same entry once per iteration — which passes
 // for a subject that kept the first thing it was given and dropped the
 // rest, the exact failure a hit check is for.
-func hitCall(m Method) projection.CallPlan {
+func hitCall(m subject.Method) projection.CallPlan {
 	call := callOf(m)
 	for i, arg := range call.Args {
 		if arg == projection.ExprCtx {

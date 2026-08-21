@@ -11,8 +11,8 @@ import (
 	"go.thesmos.sh/eidos/lang/golang"
 
 	"go.thesmos.sh/testkit"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/model"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // Layout composes every filename from a declared suffix and reads the language

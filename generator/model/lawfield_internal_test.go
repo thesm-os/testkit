@@ -10,8 +10,8 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // TestLawFieldRefusals pins the arms no armed fixture reaches from outside:
@@ -131,7 +131,7 @@ func TestLawFieldRefusals(t *testing.T) {
 func TestResolveArgArms(t *testing.T) {
 	t.Parallel()
 
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 
 	t.Run("the pools refuse where nothing draws them", func(t *testing.T) {
 		t.Parallel()
@@ -202,7 +202,7 @@ func TestObservationOf(t *testing.T) {
 	keyed := stamp(projected("Get", []golang.Param{arg("ctx", ctxRef()), arg("k", namedRef(qStr))},
 		[]golang.Return{res(namedRef(qStr)), errRet}), "reader", qStr, qStr)
 	pooled := &Bindings{
-		Subject: suite.Subject{IfaceName: "Mixed"},
+		Subject: subject.Subject{IfaceName: "Mixed"},
 		Keys:    Pool{Field: fieldKey, Q: qStr},
 		Actions: []*Action{{Pool: poolKeys}},
 	}

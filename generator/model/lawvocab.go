@@ -188,6 +188,6 @@ const (
 )
 
 // The classification and When-parameter composition lives on the suite
-// projection ([suite.Method.Classifications], [suite.LawParams]) — the one
+// projection ([subject.Method.Classifications], [suite.LawParams]) — the one
 // home both tiers select from, so they cannot disagree about what the run
 // classified.

@@ -8,8 +8,9 @@ import (
 
 	"go.thesmos.sh/eidos/sdk"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
 )
 
 // lawsOf selects and fills every law the interface's classifications earn.
@@ -18,7 +19,7 @@ import (
 // classification set. A selected rule that cannot be filled lands in
 // [Bindings.Unbound] with what it is waiting on — rendered in the header,
 // because a law that quietly failed to bind reads as a claim the run checks.
-func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, keyed *suite.Method) {
+func lawsOf(b *Bindings, harness *suite.Contract, partners map[string]string, keyed *subject.Method) {
 	// Selection composes per method, but a claim holds over the interface —
 	// the sticky stamp rides the reader and negates the writer-earned
 	// observability law — so the conflict scan runs against every method's
@@ -148,7 +149,7 @@ func lawOf(
 	b *Bindings,
 	harness *suite.Contract,
 	r tiers.Rule,
-	m, keyed *suite.Method,
+	m, keyed *subject.Method,
 	inert map[string]string,
 ) (*LawBinding, bool) {
 	spec, specified := tiers.BindingFor(r.Law)

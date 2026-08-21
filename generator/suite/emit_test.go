@@ -14,6 +14,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -62,7 +63,7 @@ func TestViewBindsWhatTheSignatureReturns(t *testing.T) {
 			"", "",
 		},
 	}, func(t *testing.T, tc bindCase) {
-		m := Method{Sig: &golang.Sig{Name: "Get", Returns: tc.returns}}
+		m := subject.Method{Sig: &golang.Sig{Name: "Get", Returns: tc.returns}}
 		got := viewOf(Iface{Name: "Store", Token: "store"}, m)
 		testkit.Equal(t, got.Discard, tc.discard, "the discard covers every result")
 		testkit.Equal(t, got.ErrBind, tc.errBind, tc.name)
@@ -82,7 +83,7 @@ func TestCheckEmitsPairWithTheirMethod(t *testing.T) {
 
 	iface := Iface{
 		Name: "Store", Token: "store", Qualifier: "store",
-		Methods: []Method{{Sig: &golang.Sig{Name: "Get", Returns: []golang.Return{{Error: true}}}}},
+		Methods: []subject.Method{{Sig: &golang.Sig{Name: "Get", Returns: []golang.Return{{Error: true}}}}},
 	}
 	inv := projection.Inventory{
 		Iface: "Store", Token: "store",
@@ -129,7 +130,7 @@ func TestCheckEmitsArgueWhereNothingCanBePlanted(t *testing.T) {
 	iface := Iface{
 		Name:  "Store",
 		Token: "store",
-		Methods: []Method{
+		Methods: []subject.Method{
 			{Sig: &golang.Sig{Name: "Get", Returns: []golang.Return{{Error: true}}}},
 		},
 	}

@@ -58,6 +58,70 @@ type simKindCase struct {
 
 func (c simKindCase) Name() string { return c.name }
 
+// strengthCase ties one body variant to the class of evidence its
+// generated statements gather.
+type strengthCase struct {
+	name string
+	body projection.Body
+	want suite.Strength
+}
+
+func (c strengthCase) Name() string { return c.name }
+
+// TestBodyStrength pins what each shape looks at before it passes.
+//
+// The table is written out rather than derived, because deriving it
+// from the method would assert nothing: the point is that a reader
+// who disagrees with a row has somewhere to argue. The completeness
+// subtest is what stops the table going stale — a variant added to
+// BodyKinds without a row here fails, which is the moment the
+// decision is cheapest to make.
+func TestBodyStrength(t *testing.T) {
+	t.Parallel()
+
+	testkit.TableTest(t, bodyStrengths(), func(t *testing.T, tc strengthCase) {
+		testkit.Equal(t, tc.body.Strength(), tc.want,
+			"a body's strength is what the run reports about its own reach; "+
+				"overstating it hides a check that only ever asked whether the call returned")
+	})
+
+	t.Run("covers every kind", func(t *testing.T) {
+		t.Parallel()
+		seen := map[projection.BodyKind]bool{}
+		for _, tc := range bodyStrengths() {
+			seen[tc.body.BodyKind()] = true
+		}
+		for _, k := range projection.BodyKinds() {
+			testkit.True(t, seen[k],
+				"body kind "+string(k)+" has no strength row; decide what it looks at")
+		}
+	})
+}
+
+// bodyStrengths is the table, as a function so both subtests read the
+// same rows.
+func bodyStrengths() []strengthCase {
+	return []strengthCase{
+		{"smoke survives", projection.SmokeSurvives{}, suite.StrengthErrorOnly},
+		{"guarded call", projection.GuardedCall{}, suite.StrengthErrorOnly},
+		{"repeat probe", projection.RepeatProbe{}, suite.StrengthErrorOnly},
+		{"reports sentinel", projection.ReportsSentinel{}, suite.StrengthErrorOnly},
+		{"partner agrees", projection.PartnerAgrees{}, suite.StrengthErrorOnly},
+		{"zero on miss", projection.ZeroOnMiss{}, suite.StrengthObserved},
+		{"zero on cancel", projection.ZeroOnCancel{}, suite.StrengthObserved},
+		{"answers zero", projection.AnswersZero{}, suite.StrengthObserved},
+		{"hit probe", projection.HitProbe{}, suite.StrengthObserved},
+		{"count probe", projection.CountProbe{}, suite.StrengthObserved},
+		{"hook fires", projection.HookFires{}, suite.StrengthObserved},
+		{"non-zero answer", projection.NonZeroAnswer{}, suite.StrengthObserved},
+		{"read either side of an act", projection.ReadActRead{}, suite.StrengthObserved},
+		{"read after two writes", projection.WriteWriteRead{}, suite.StrengthObserved},
+		{"law leg", projection.LawLeg{}, suite.StrengthDifferential},
+		{"differential leg", projection.DifferentialLeg{}, suite.StrengthDifferential},
+		{"sim leg", projection.SimLeg{}, suite.StrengthDifferential},
+	}
+}
+
 func TestSimKindsAreTheRuntimeVocabulary(t *testing.T) {
 	t.Parallel()
 

@@ -12,6 +12,7 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite"
 )
 
@@ -63,12 +64,12 @@ func TestAnsweringWriterDetection(t *testing.T) {
 		[]golang.Param{arg("ctx", ctxRef()), arg("v", valueRef)},
 		[]golang.Return{res(namedRef("int64")), errRet})
 
-	h := &suite.Contract{Methods: []suite.Method{*plain, *up, *crossed}}
+	h := &suite.Contract{Methods: []subject.Method{*plain, *up, *crossed}}
 	found := answeringWriterOf(h)
 	testkit.True(t, found != nil && found.Name == "Persist",
 		"the answered-state write is the answering writer")
 
-	none := &suite.Contract{Methods: []suite.Method{*plain, *crossed}}
+	none := &suite.Contract{Methods: []subject.Method{*plain, *crossed}}
 	testkit.True(t, answeringWriterOf(none) == nil,
 		"an error-only write and a scalar-answering write both hide the stored state")
 }
@@ -79,7 +80,7 @@ func TestSubscribeShape(t *testing.T) {
 	t.Parallel()
 
 	errRet := res(namedRef("error"))
-	b := &Bindings{Subject: suite.Subject{IfaceName: "Contract"}}
+	b := &Bindings{Subject: subject.Subject{IfaceName: "Contract"}}
 	field, reason := bindField(b, lawid.PublisherDelivers, "Subscribe",
 		projected("Subscribe", []golang.Param{arg("ctx", ctxRef())},
 			[]golang.Return{res(pkgRef("example.com/p", "Handle")), errRet}))

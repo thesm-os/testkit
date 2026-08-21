@@ -8,6 +8,7 @@ import (
 	"go.thesmos.sh/eidos/node"
 
 	vocab "go.thesmos.sh/testkit/engine/suite"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
 
@@ -18,7 +19,7 @@ import (
 
 // contractRule derives one contract's claims from the method filling
 // the role the table keys it under.
-type contractRule func(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal)
+type contractRule func(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal)
 
 // contractEntry is one tabled contract: the role a rule reads from, and
 // the rule.
@@ -83,7 +84,7 @@ func (Contracts) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 // fillsTabledRole reports whether any rule here would run for this
 // method, so a draw nothing can supply is named only where it cost
 // something.
-func fillsTabledRole(m Method) bool {
+func fillsTabledRole(m subject.Method) bool {
 	for _, e := range contractRules() {
 		if m.HasContractRole(e.contract, e.role) {
 			return true
@@ -99,7 +100,7 @@ func fillsTabledRole(m Method) bool {
 // "refused" cannot be told from "broken" — a subject failing on a nil
 // map would pass a check that only asked whether the second write
 // errored — which is the fixture's own argument for declaring one.
-func ifAbsentRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func ifAbsentRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why, remedy string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverContracts,
@@ -147,7 +148,7 @@ func ifAbsentRule(f Iface, m Method, call projection.CallPlan) ([]projection.Che
 // accepts is the subject's own rule — so what is checkable is that the
 // two answers line up. A write landing where its own predicate said no,
 // or refusing where it said yes, is the bug either way.
-func ifMatchRule(f Iface, m Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func ifMatchRule(f Iface, m subject.Method, call projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverContracts,
@@ -216,7 +217,7 @@ func ifMatchRule(f Iface, m Method, call projection.CallPlan) ([]projection.Chec
 // The check lands on the subscribe partner rather than on the appending
 // method carrying the directive. A contract is a protocol, and which
 // member owes which half of it is exactly what the roles say.
-func outboxRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
+func outboxRule(f Iface, m subject.Method, _ projection.CallPlan) ([]projection.CheckPlan, []Refusal) {
 	refuse := func(why string) ([]projection.CheckPlan, []Refusal) {
 		return nil, []Refusal{{
 			Deriver: DeriverContracts,
@@ -254,7 +255,7 @@ func outboxRule(f Iface, m Method, _ projection.CallPlan) ([]projection.CheckPla
 
 // answersBool reports whether the method's first result is a bool — the
 // yes a predicate gives, as distinct from an error's no.
-func answersBool(m Method) bool {
+func answersBool(m subject.Method) bool {
 	values := m.ValueReturns()
 	return len(values) > 0 && values[0].Source != nil && golang.IsBool(values[0].Source)
 }
@@ -270,7 +271,7 @@ func answersBool(m Method) bool {
 // plain smoke rather than refusing: the contract schema owns partner
 // completeness, and eidos reports that gap at annotation time where
 // the author can act on it.
-func openerSmoke(f Iface, m Method, call projection.CallPlan) (projection.CheckPlan, bool) {
+func openerSmoke(f Iface, m subject.Method, call projection.CallPlan) (projection.CheckPlan, bool) {
 	if !m.HasContractRole(ContractCursor, ContractCursorOpen) {
 		return projection.CheckPlan{}, false
 	}
@@ -298,7 +299,7 @@ func openerSmoke(f Iface, m Method, call projection.CallPlan) (projection.CheckP
 // the produced draw is the borrow's to supply. Without a get sibling
 // or a parameter taking the produced type there is nothing to borrow,
 // and the ordinary refusal names the gap instead.
-func borrowSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
+func borrowSmoke(f Iface, m subject.Method) (projection.CheckPlan, bool) {
 	if !m.HasContractRole(ContractPool, ContractPoolPut) {
 		return projection.CheckPlan{}, false
 	}
@@ -341,7 +342,7 @@ func borrowSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
 // Falls through where the builder resolves to nothing or answers a type
 // no parameter takes: the ordinary smoke and the ordinary refusal are
 // better than a call this cannot spell.
-func builtSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
+func builtSmoke(f Iface, m subject.Method) (projection.CheckPlan, bool) {
 	name, declared := m.MixinParam(MixinSample, MixinSampleParam)
 	if !declared || name == "" {
 		return projection.CheckPlan{}, false
@@ -369,7 +370,7 @@ func builtSmoke(f Iface, m Method) (projection.CheckPlan, bool) {
 
 // roleMethod finds the sibling filling a contract role, nil when none
 // does.
-func roleMethod(methods []Method, contract, role string) *Method {
+func roleMethod(methods []subject.Method, contract, role string) *subject.Method {
 	for i := range methods {
 		if methods[i].HasContractRole(contract, role) {
 			return &methods[i]
@@ -381,7 +382,7 @@ func roleMethod(methods []Method, contract, role string) *Method {
 // producedType is the producer's non-error answer — what the borrow
 // binds and the returning call passes back. Nil when the producer
 // answers nothing, which no valid pool schema stamps.
-func producedType(producer Method) *node.TypeRef {
+func producedType(producer subject.Method) *node.TypeRef {
 	values := producer.ValueReturns()
 	if len(values) == 0 {
 		return nil
@@ -392,7 +393,7 @@ func producedType(producer Method) *node.TypeRef {
 // borrowedCall renders the returning method's invocation: the context
 // first, the borrowed local where a parameter takes the produced
 // type, the fixture draw otherwise. False when no parameter takes it.
-func borrowedCall(m Method, produced *node.TypeRef) (projection.CallPlan, bool) {
+func borrowedCall(m subject.Method, produced *node.TypeRef) (projection.CallPlan, bool) {
 	var args []projection.Expr
 	if m.TakesContext() {
 		args = append(args, projection.ExprCtx)

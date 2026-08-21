@@ -8,8 +8,8 @@ import (
 
 	"go.thesmos.sh/testkit"
 	"go.thesmos.sh/testkit/core/lawid"
-	"go.thesmos.sh/testkit/generator/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // TestClockedLawBinding pins the timeaware instantiation: the ctor spelled
@@ -20,7 +20,7 @@ func TestClockedLawBinding(t *testing.T) {
 
 	t.Run("an Advance handle marks the binding clocked in the timeaware package", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		r := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
 			{Name: "Advance", Kind: tiers.KindHandle, From: "clock"},
 		}}
@@ -32,7 +32,7 @@ func TestClockedLawBinding(t *testing.T) {
 
 	t.Run("the offsets pool composes bounded durations", func(t *testing.T) {
 		t.Parallel()
-		b := &Bindings{Subject: suite.Subject{IfaceName: "Mixed"}}
+		b := &Bindings{Subject: subject.Subject{IfaceName: "Mixed"}}
 		r := tiers.Rule{Law: lawid.ScheduledFiresAfterAdvance, Fields: []tiers.Field{
 			{Name: "Offsets", Kind: tiers.KindGenerator, From: "offsets"},
 		}}

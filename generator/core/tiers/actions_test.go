@@ -9,7 +9,7 @@ import (
 	"go.thesmos.sh/eidos/plugins/annotator/shape/detectors"
 
 	"go.thesmos.sh/testkit"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
 )
 
 // TestEveryDetectorDrivesAnAction holds the action table total over the live

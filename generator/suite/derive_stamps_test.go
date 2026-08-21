@@ -25,17 +25,18 @@ import (
 
 	"go.thesmos.sh/testkit"
 	vocab "go.thesmos.sh/testkit/engine/suite"
-	"go.thesmos.sh/testkit/generator/tiers"
+	"go.thesmos.sh/testkit/generator/core/tiers"
+	"go.thesmos.sh/testkit/generator/internal/subject"
 )
 
 // stampMethod builds one key-drawing method with a detected shape and
 // attached mixins, its stamps set through the real shape keys.
-func stampMethod(name, detected string, mixins ...string) Method {
+func stampMethod(name, detected string, mixins ...string) subject.Method {
 	src := &node.Method{Name: name}
 	if detected != "" {
 		shape.MetaShape.Set(src.EnsureMeta(), detected, "test")
 	}
-	return Method{
+	return subject.Method{
 		Sig: &golang.Sig{
 			Name:   name,
 			Params: []golang.Param{{Name: "key", Source: storefixture.Named("Key")}},
@@ -48,7 +49,7 @@ func stampMethod(name, detected string, mixins ...string) Method {
 
 // bareMethod is stampMethod without a draw, the teardown and
 // aggregator shapes.
-func bareMethod(name, detected string, mixins ...string) Method {
+func bareMethod(name, detected string, mixins ...string) subject.Method {
 	m := stampMethod(name, detected, mixins...)
 	m.Params = nil
 	m.ArgFields = nil
@@ -57,7 +58,7 @@ func bareMethod(name, detected string, mixins ...string) Method {
 
 // sentinelReader is the kv Get shape: a reader declaring its OWN miss
 // sentinel, read through the real param key.
-func sentinelReader() Method {
+func sentinelReader() subject.Method {
 	m := stampMethod("Get", reader.Name, MixinNotFound)
 	// Stamped on the DECLARATION, which is where the annotator writes
 	// it, and the projected map derived from that — the order the
@@ -67,16 +68,16 @@ func sentinelReader() Method {
 	// real run produces.
 	shape.MixinParamKey(MixinNotFound, MixinNotFoundSentinel).
 		Set(m.Source.EnsureMeta(), "kv.ErrNotFound", "test")
-	m.mixinParams = mixinParamsOf(m.Source.Meta(), m.Mixins)
+	m.MixinParams = mixinParamsOf(m.Source.Meta(), m.Mixins)
 	return m
 }
 
 // stampIface pairs the methods with a fixture that can deliver the
 // key draw.
-func stampIface(methods ...Method) Iface {
+func stampIface(methods ...subject.Method) Iface {
 	return Iface{
 		Name: "Store", Token: "store", Qualifier: "store", Methods: methods,
-		Fixture: Fixture{Fields: []FixtureField{{
+		Fixture: subject.Fixture{Fields: []subject.FixtureField{{
 			Name:   "Key",
 			Sample: golang.Sample{Text: `"k"`},
 			Other:  golang.Sample{Text: `"o"`},
@@ -87,7 +88,7 @@ func stampIface(methods ...Method) Iface {
 // seededIface is [stampIface] for a run that zips a corpus from its
 // pools, which is what puts something there for a hit to find and
 // leaves one key out for a miss to draw.
-func seededIface(methods ...Method) Iface {
+func seededIface(methods ...subject.Method) Iface {
 	f := stampIface(methods...)
 	f.Corpus = true
 	return f
@@ -212,7 +213,7 @@ func TestStampsHoldTheCensusPosture(t *testing.T) {
 			Name:      "Store",
 			Token:     "store",
 			Qualifier: "store",
-			Methods:   []Method{stampMethod("Get", reader.Name)},
+			Methods:   []subject.Method{stampMethod("Get", reader.Name)},
 		}
 		plans, refusals := Stamps{}.Derive(iface)
 		testkit.Len(t, plans, 0, "no check derives over a draw nothing supplies")
