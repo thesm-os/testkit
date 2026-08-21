@@ -55,6 +55,12 @@ import (
 //	Read/smoke
 //	Read/zero-on-error
 //
+// Declared on this interface and checked by testkit's model tier rather
+// than by this file, which judges one call at a time. Nothing for you to
+// do — listed so that a directive you wrote is accounted for:
+//
+//	idempotent on Put, for call sequences this file does not write — the check above runs one fixed sequence, and your directive claims the same of every other.
+//
 // A version check, performed by the compiler. If this file was generated
 // against a testkit whose check format differs from the one you are
 // building with, this line fails to compile and names the mismatch —
@@ -863,4 +869,4 @@ func ProveMixed(
 }
 
 // testkit: end of generated content.
-// testkit:provenance a9b9c715600db00ec89014fca297740c1b23386e4ac432a373f3f5ad50145134
+// testkit:provenance 419b871b3ab9d4c91ed4073c603ff749ec9141351007893596401e0c875478c0

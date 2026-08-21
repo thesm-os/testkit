@@ -30,15 +30,15 @@ func TestEmittedImportPathsNameRealPackages(t *testing.T) {
 	testkit.TableTest(t, []pathCase{
 		{
 			"the suite vocabulary the generated rows construct",
-			suite.Vocab, reflect.TypeOf(enginesuite.Strength("")).PkgPath(),
+			suite.Vocab, reflect.TypeFor[enginesuite.Strength]().PkgPath(),
 		},
 		{
 			"the falsifiability harness the companion drives",
-			suite.Prove, reflect.TypeOf(prove.Defects[any]{}).PkgPath(),
+			suite.Prove, reflect.TypeFor[prove.Defects[any]]().PkgPath(),
 		},
 		{
 			"the law identifiers the index accessors name",
-			suite.LawIDs, reflect.TypeOf(lawid.Claim("")).PkgPath(),
+			suite.LawIDs, reflect.TypeFor[lawid.Claim]().PkgPath(),
 		},
 	}, func(t *testing.T, tc pathCase) {
 		testkit.Equal(t, tc.declared, tc.actual,

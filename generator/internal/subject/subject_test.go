@@ -181,6 +181,8 @@ func TestFixtureField(t *testing.T) {
 
 // Both halves of a field have to be derivable, because a check needs a
 // value the subject holds AND one it does not.
+//
+//nolint:thelper // the case body is the test, not a helper; see core/lawid
 func TestFixtureFieldOK(t *testing.T) {
 	t.Parallel()
 

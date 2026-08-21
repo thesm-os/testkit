@@ -66,6 +66,7 @@ import (
 //
 //	bounded on List — stating it needs sequences of calls judged against a reference, which this file does not build.
 //	cacheable on List — stating it needs sequences of calls judged against a reference, which this file does not build.
+//	idempotent on Put, for call sequences this file does not write — the check above runs one fixed sequence, and your directive claims the same of every other.
 //	pure on List — stating it needs sequences of calls judged against a reference, which this file does not build.
 //	readafterwrite on Read — stating it needs sequences of calls judged against a reference, which this file does not build.
 //
@@ -1035,4 +1036,4 @@ func ProveBatched(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 7db2d0cc7b7b98b391615c4b9dcfb52faf8d767a19d1aaa71d0f548d12ae1969
+// testkit:provenance faa6f33dff40942538de2c598a83098f578af55adc65f111f65a363e59c343cc

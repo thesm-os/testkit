@@ -110,10 +110,15 @@ func TestStampsDeriveTheStampFamilies(t *testing.T) {
 
 	testkit.TableTest(t, []stampCase{
 		{
-			"idempotent probes the repeat",
+			// One refusal beside the row, and it is not a gap in the
+			// rule: idempotent binds two laws as well, so the header
+			// has to say that the repeat was tried once here and that
+			// "N calls equal one" is the model tier's. See
+			// TestATabledMixinNamesItsOtherTiersObligation.
+			"idempotent probes the repeat, and names the rest",
 			stampIface(bareMethod("Close", "", MixinIdempotent)),
 			[]vocab.ID{"Close/idempotent"},
-			0,
+			1,
 		},
 		{
 			"a stamped sentinel reader derives its miss",
@@ -377,4 +382,52 @@ func TestStampCensusCoversTheContractRegistry(t *testing.T) {
 		tabled[e.contract] = nil
 	}
 	assertCensus(t, names, tabled, recordedContracts)
+}
+
+// A classification the suite tier covers AND a law backs is named in
+// both, which is what ADR-0028 changed.
+//
+// Under ADR-0018 the two arms were alternatives: a tabled rule won and
+// the law-backed note was never reached, so a header listed `idempotent`
+// among its checks and told the reader nothing about what was left. The
+// row settles one call repeated; the laws settle N, for any N. A reader
+// who takes the first for the second has been misled by an omission.
+func TestATabledMixinNamesItsOtherTiersObligation(t *testing.T) {
+	t.Parallel()
+
+	plans, refusals := Stamps{}.Derive(
+		stampIface(bareMethod("Close", "", MixinIdempotent)),
+	)
+
+	testkit.Len(t, plans, 1, "the suite row is still emitted")
+	testkit.Len(t, refusals, 1, "and the obligation it does not reach is named beside it")
+
+	r := refusals[0]
+	testkit.True(t, r.Elsewhere, "it is another tier's, not a gap")
+	testkit.Equal(t, r.Obligation, tiers.ObUniversal,
+		"the obligation is named by what it needs, not by the classification")
+	testkit.Contains(t, r.What, MixinIdempotent, "and the line names the directive they wrote")
+	testkit.NotContains(t, r.What, string(tiers.ObUniversal),
+		"but not the obligation's own word, which is ours and not a consumer's")
+	testkit.Contains(t, r.Remedy, string(tiers.TierModel), "with the tier that holds it")
+	testkit.Equal(t, r.Licensed.Name, MixinIdempotent,
+		"licensed to the classification, so the census reads it as accounted for")
+}
+
+// A classification the suite tier covers alone gets no note, because
+// there is nothing elsewhere to name.
+func TestASuiteOnlyMixinNamesNothingElsewhere(t *testing.T) {
+	t.Parallel()
+
+	// sideeffect carries no law: observe, call, observe is the whole
+	// claim, and a note pointing at a tier that checks nothing would be
+	// worse than silence.
+	_, refusals := Stamps{}.Derive(
+		seededIface(stampMethod("Put", writer.Name, MixinSideEffect)),
+	)
+
+	for _, r := range refusals {
+		testkit.False(t, r.Elsewhere && r.Licensed.Name == MixinSideEffect,
+			"sideeffect binds no law, so no obligation of it is another tier's")
+	}
 }

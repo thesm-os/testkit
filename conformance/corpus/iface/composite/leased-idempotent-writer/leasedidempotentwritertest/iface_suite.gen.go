@@ -53,6 +53,12 @@ import (
 //	Release/nilcontext
 //	Release/smoke
 //
+// Declared on this interface and checked by testkit's model tier rather
+// than by this file, which judges one call at a time. Nothing for you to
+// do — listed so that a directive you wrote is accounted for:
+//
+//	idempotent on Acquire, for call sequences this file does not write — the check above runs one fixed sequence, and your directive claims the same of every other.
+//
 // A version check, performed by the compiler. If this file was generated
 // against a testkit whose check format differs from the one you are
 // building with, this line fails to compile and names the mismatch —
@@ -785,4 +791,4 @@ func ProveLeasedWriter(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 6be2943eef0735e7b754fe5b8e7d6cc8b7e28b4b3a1ba56ffe4c3e0bc3c7a05d
+// testkit:provenance 9f65e13b4f304f25f51c35467ba30f75dfd6e0d7c2d31a3e938b4f0da696dc03

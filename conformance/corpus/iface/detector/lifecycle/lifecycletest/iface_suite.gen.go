@@ -48,6 +48,12 @@ import (
 //	Close/nilcontext
 //	Close/smoke
 //
+// Declared on this interface and checked by testkit's model tier rather
+// than by this file, which judges one call at a time. Nothing for you to
+// do — listed so that a directive you wrote is accounted for:
+//
+//	idempotent on Close, for call sequences this file does not write — the check above runs one fixed sequence, and your directive claims the same of every other.
+//
 // A version check, performed by the compiler. If this file was generated
 // against a testkit whose check format differs from the one you are
 // building with, this line fails to compile and names the mismatch —
@@ -637,4 +643,4 @@ func ProveLifecycle(
 }
 
 // testkit: end of generated content.
-// testkit:provenance 1e60caf87ac07d8714b5b84837e3fec9124be33e57be3cdf8c0ef5585cc6ee1d
+// testkit:provenance f75181d00b5624453258396e4854c1c825b3d3af08280343fc8c077ebdd29b23

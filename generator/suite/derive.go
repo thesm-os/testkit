@@ -8,6 +8,7 @@ import (
 
 	"go.thesmos.sh/eidos/plugins/annotator/shape"
 
+	"go.thesmos.sh/testkit/generator/core/tiers"
 	"go.thesmos.sh/testkit/generator/internal/subject"
 	"go.thesmos.sh/testkit/generator/suite/projection"
 )
@@ -73,6 +74,16 @@ type Refusal struct {
 	// that owns it ran is not this generator's to know — what it can say,
 	// and what stays true either way, is that the claim is not made here.
 	Elsewhere bool
+
+	// Obligation names WHICH claim of the classification this refusal is
+	// about, where the classification carries more than one.
+	//
+	// Empty for a refusal about the whole of one. Set where a rule here
+	// covered part and another tier holds the rest, which is the case
+	// docs/adr/0028 exists for: the census reads it to tell "nothing
+	// checks this" from "this half is checked and that half is over
+	// there", and those are different findings.
+	Obligation tiers.Obligation
 
 	// Unaccounted marks the one refusal that is not an argument: the
 	// deriver reached a classification with no rule, no law binding and

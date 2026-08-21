@@ -53,6 +53,12 @@ import (
 //	Stats/smoke
 //	Stats/zero-on-error
 //
+// Declared on this interface and checked by testkit's model tier rather
+// than by this file, which judges one call at a time. Nothing for you to
+// do — listed so that a directive you wrote is accounted for:
+//
+//	idempotent on Close, for call sequences this file does not write — the check above runs one fixed sequence, and your directive claims the same of every other.
+//
 // A version check, performed by the compiler. If this file was generated
 // against a testkit whose check format differs from the one you are
 // building with, this line fails to compile and names the mismatch —
@@ -775,4 +781,4 @@ func ProveCloser(
 }
 
 // testkit: end of generated content.
-// testkit:provenance ebf95a8cbd218cab46c3d66601f46c36e1554dbaf909d506881e72ec53a6d934
+// testkit:provenance 0f8b4e581bb67b37f75291c61b4f68835f563ddf0cf9bb9415d61fe312b45247

@@ -117,6 +117,12 @@ func (Stamps) Derive(f Iface) ([]projection.CheckPlan, []Refusal) {
 				plans = append(plans, licensed(ruled, projection.AxisMixin, name)...)
 				refusals = append(refusals,
 					licensedRefusals(refused, projection.AxisMixin, name)...)
+				// A rule here covers ONE of the classification's
+				// obligations, and a law-backed classification carries
+				// another (docs/adr/0028). Emitting the row and saying
+				// nothing about the rest reads as a file that covered
+				// the directive.
+				refusals = append(refusals, elsewhereFor(name, m.Name)...)
 			case len(tiers.LawsFor(name)) > 0:
 				// The model tier's: the laws deriver binds it through
 				// the tiers catalogue. Named rather than passed over in
@@ -353,4 +359,34 @@ func consumedStamps() map[string]bool {
 		// owes is not to assert them.
 		MixinTimeAware: true,
 	}
+}
+
+// elsewhereFor names the obligations another tier holds for a
+// classification this deriver already emitted a row for.
+//
+// The two are not alternatives. A rule here settles what a fixed call
+// sequence can settle; a law settles what needs generated ones. Where a
+// classification carries both, the header has to say so — a file
+// listing `idempotent` among its checks and nothing else has told the
+// reader that a repeat was tried once, not that N calls equal one.
+//
+// Empty for a classification the suite tier covers alone, which is the
+// ordinary case and wants no note.
+func elsewhereFor(name, method string) []Refusal {
+	obligations := tiers.ObligationsFor(name)
+	out := make([]Refusal, 0, len(obligations))
+	for _, ob := range obligations {
+		tier, _ := ob.Tier()
+		out = append(out, Refusal{
+			Deriver: DeriverStamps,
+			What:    name + " on " + method + ", for call sequences this file does not write",
+			Why: "the check above runs one fixed sequence, and your directive claims " +
+				"the same of every other",
+			Remedy:     "nothing to fix — it is checked by the " + string(tier) + " tier",
+			Obligation: ob,
+			Licensed:   projection.Licence{Axis: projection.AxisMixin, Name: name},
+			Elsewhere:  true,
+		})
+	}
+	return out
 }
